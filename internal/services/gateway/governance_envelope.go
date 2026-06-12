@@ -71,7 +71,14 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	for _, uri := range cert.URIs {
 		spiffeID := uri.String()
 
-		// For Operator sessions, verify the SPIFFE ID contains the operator_id and operator_session_id
+		// Check CLI session match — works with or without operator_id
+		if envelope.OperatorSessionID != "" {
+			if wid.MatchesCLISessionOnly(spiffeID, envelope.OperatorSessionID) {
+				return nil
+			}
+		}
+
+		// Operator cert match — requires both fields
 		if envelope.OperatorSessionID != "" && envelope.OperatorID != "" {
 			// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 			// We check if the SPIFFE ID ends with the operator_id and operator_session_id
@@ -80,10 +87,6 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 				if strings.HasPrefix(spiffeID, "spiffe://"+protocol.TrustDomain+"/operator/") {
 					return nil
 				}
-			}
-			// Also check if it matches the Operator session ID alone (for CLI certs bound to operator)
-			if wid.MatchesCLISessionOnly(spiffeID, envelope.OperatorSessionID) {
-				return nil
 			}
 		}
 
@@ -205,7 +208,8 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, governance.ErrL2KeyNotConfigured),
 		errors.Is(err, governance.ErrL3ProofMissing),
 		errors.Is(err, governance.ErrL3ProofInvalid),
-		errors.Is(err, governance.ErrL3NotaryNotConfigured):
+		errors.Is(err, governance.ErrL3NotaryNotConfigured),
+		errors.Is(err, governance.ErrTxInFlight):
 		return http.StatusForbidden
 	}
 	// Wrapped invalid-envelope decode error from ProcessEnvelope.

@@ -29,7 +29,7 @@ func TestRequest_Validate(t *testing.T) {
 			ID:      1,
 		}
 		err := req.Validate()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("missing jsonrpc version", func(t *testing.T) {
@@ -38,7 +38,7 @@ func TestRequest_Validate(t *testing.T) {
 			ID:     1,
 		}
 		err := req.Validate()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid jsonrpc version")
 	})
 
@@ -49,7 +49,7 @@ func TestRequest_Validate(t *testing.T) {
 			ID:      1,
 		}
 		err := req.Validate()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid jsonrpc version")
 	})
 
@@ -59,7 +59,7 @@ func TestRequest_Validate(t *testing.T) {
 			ID:      1,
 		}
 		err := req.Validate()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "method is required")
 	})
 
@@ -69,7 +69,7 @@ func TestRequest_Validate(t *testing.T) {
 			Method:  "tools/list",
 		}
 		err := req.Validate()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "id is required")
 	})
 
@@ -80,7 +80,7 @@ func TestRequest_Validate(t *testing.T) {
 			ID:      nil,
 		}
 		err := req.Validate()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "id is required")
 	})
 }
@@ -93,7 +93,7 @@ func TestRequest_Unmarshal(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "2.0", req.JSONRPC)
 		assert.Equal(t, "tools/list", req.Method)
-		assert.Equal(t, float64(1), req.ID)
+		assert.InEpsilon(t, 1, req.ID, 0.0)
 		assert.NotNil(t, req.Params)
 	})
 
@@ -118,7 +118,7 @@ func TestRequest_Unmarshal(t *testing.T) {
 		jsonStr := `invalid json`
 		var req Request
 		err := json.Unmarshal([]byte(jsonStr), &req)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -145,7 +145,7 @@ func TestNewSuccessResponse(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "2.0", unmarshaled["jsonrpc"])
-		assert.Equal(t, float64(1), unmarshaled["id"])
+		assert.InEpsilon(t, 1, unmarshaled["id"], 0.0)
 		assert.Nil(t, unmarshaled["error"])
 		assert.NotNil(t, unmarshaled["result"])
 	})
@@ -216,12 +216,12 @@ func TestResponse_Marshal(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, "2.0", unmarshaled["jsonrpc"])
-		assert.Equal(t, float64(1), unmarshaled["id"])
+		assert.InEpsilon(t, 1, unmarshaled["id"], 0.0)
 		assert.Nil(t, unmarshaled["result"])
 		assert.NotNil(t, unmarshaled["error"])
 
 		errorObj := unmarshaled["error"].(map[string]interface{})
-		assert.Equal(t, float64(CodeMethodNotFound), errorObj["code"])
+		assert.InEpsilon(t, CodeMethodNotFound, errorObj["code"], 0.0)
 		assert.Equal(t, "Method not found", errorObj["message"])
 	})
 }
@@ -248,6 +248,6 @@ func TestGatewayErrorCodes(t *testing.T) {
 			CodeResourceNotFound:    true,
 			CodeGatewayNotReady:     true,
 		}
-		assert.Equal(t, 11, len(codes))
+		assert.Len(t, codes, 11)
 	})
 }

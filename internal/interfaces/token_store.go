@@ -18,7 +18,6 @@ import "context"
 // TokenStore defines the interface for token persistence used by Sentinel.
 // This shared interface prevents drift between storage and sentinel packages.
 type TokenStore interface {
-	IsEnabled() bool
 	KVSet(ctx context.Context, key, value string, ttlSeconds int) error
 	KVGet(ctx context.Context, key string) (string, error)
 	KVScanPrefix(ctx context.Context, prefix string) (map[string]string, error)

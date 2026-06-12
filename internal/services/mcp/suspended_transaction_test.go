@@ -24,7 +24,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 // TestSuspendedTransactionStore_BasicOperations tests the core suspended transaction store operations

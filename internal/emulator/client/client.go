@@ -35,6 +35,10 @@ type Persona struct {
 	OperatorSessionID string
 	// CLISessionID is the CLI session ID for CLI mTLS certificate binding.
 	CLISessionID string
+	// UserID is the user ID for session binding.
+	UserID string
+	// OperatorID is the operator ID for session binding.
+	OperatorID string
 }
 
 // Exchange is a single recorded HTTP round-trip. Slices of these are the spine
@@ -126,6 +130,12 @@ func (c *Client) do(ctx context.Context, p Persona, method, url string, body []b
 	}
 	if p.CLISessionID != "" {
 		req.Header.Set(constants.HeaderCLISessionID, p.CLISessionID)
+	}
+	if p.UserID != "" {
+		req.Header.Set(constants.HeaderUserID, p.UserID)
+	}
+	if p.OperatorID != "" {
+		req.Header.Set(constants.HeaderOperatorID, p.OperatorID)
 	}
 
 	resp, err := c.http.Do(req)

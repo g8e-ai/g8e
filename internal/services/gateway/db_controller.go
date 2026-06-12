@@ -38,12 +38,12 @@ type DBController struct {
 	logger    *slog.Logger
 	db        *CanonicalDBService
 	auth      *AuthService
-	pubsub    *PubSubBroker
+	pubsub    *GatewayWebSocketHandler
 	userSvc   *UserService
 	responder *response.Writer
 }
 
-func newDBController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, pubsub *PubSubBroker, userSvc *UserService, responder *response.Writer) *DBController {
+func newDBController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, pubsub *GatewayWebSocketHandler, userSvc *UserService, responder *response.Writer) *DBController {
 	return &DBController{
 		cfg:       cfg,
 		logger:    logger,
@@ -63,7 +63,7 @@ func (c *DBController) readBody(r *http.Request) ([]byte, error) {
 func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+		doc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -85,9 +85,9 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 		}
 		var err2 error
 		if r.Method == http.MethodPut {
-			err2 = c.db.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			err2 = c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		} else {
-			_, err2 = c.db.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
+			_, err2 = c.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err2.Error())
@@ -130,7 +130,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		doc, err := c.db.DocGet(collection, id)
+		doc, err := c.db.DocStore.DocGet(collection, id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -155,7 +155,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if err := c.db.DocSet(collection, id, json.RawMessage(body)); err != nil {
+		if err := c.db.DocStore.DocSet(collection, id, json.RawMessage(body)); err != nil {
 			if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
 			} else {
@@ -179,7 +179,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		doc, err := c.db.DocUpdate(collection, id, json.RawMessage(body))
+		doc, err := c.db.DocStore.DocUpdate(collection, id, json.RawMessage(body))
 		if err != nil {
 			if errors.Is(err, constants.ErrNotFound) {
 				c.responder.Error(w, http.StatusNotFound, err.Error())
@@ -199,7 +199,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusConflict, governanceEnvelopeRedirectError)
 			return
 		}
-		deleted, err := c.db.DocDelete(collection, id)
+		deleted, err := c.db.DocStore.DocDelete(collection, id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -230,7 +230,7 @@ func (c *DBController) handleDBQuery(w http.ResponseWriter, r *http.Request, col
 		}
 	}
 
-	docs, err := c.db.DocQuery(collection, req.Filters, req.OrderBy, req.Limit)
+	docs, err := c.db.DocStore.DocQuery(collection, req.Filters, req.OrderBy, req.Limit)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -244,7 +244,7 @@ func (c *DBController) handleDBQuery(w http.ResponseWriter, r *http.Request, col
 
 func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, id string) {
 	if id == "count" && r.Method == http.MethodGet {
-		count, err := c.db.SSEEventsCount()
+		count, err := c.db.SSEStore.SSEEventsCount()
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -254,7 +254,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 	}
 
 	if id == "" && r.Method == http.MethodDelete {
-		deleted, err := c.db.SSEEventsWipe()
+		deleted, err := c.db.SSEStore.SSEEventsWipe()
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -358,10 +358,130 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 	}
 }
 
+func (c *DBController) handleAuditEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+	limitStr := r.URL.Query().Get("limit")
+	offsetStr := r.URL.Query().Get("offset")
+
+	limit := 100
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil {
+			limit = l
+		}
+	}
+	offset := 0
+	if offsetStr != "" {
+		if o, err := strconv.Atoi(offsetStr); err == nil {
+			offset = o
+		}
+	}
+
+	events, err := c.db.AuditStore.GetEvents(operatorSessionID, limit, offset)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"events":  events,
+		"count":   len(events),
+	})
+}
+
+const maxAuditQueryLimit = 10000
+
+func (c *DBController) handleAuditSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+
+	// Query events summary
+	events, err := c.db.AuditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	eventSummary := make(map[string]int)
+	for _, event := range events {
+		eventSummary[string(event.Type)]++
+	}
+
+	// Query receipts summary
+	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	receiptSummary := make(map[string]int)
+	for _, receipt := range receipts {
+		key := string(receipt.ActionType) + ":" + receipt.Status.String()
+		receiptSummary[key]++
+	}
+
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success":          true,
+		"events_summary":   eventSummary,
+		"events_total":     len(events),
+		"receipts_summary": receiptSummary,
+		"receipts_total":   len(receipts),
+		"total_records":    len(events) + len(receipts),
+	})
+}
+
+func (c *DBController) handleAuditReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	operatorSessionID := r.URL.Query().Get("operator_session_id")
+
+	// Fetch events
+	events, err := c.db.AuditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Fetch receipts
+	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Build comprehensive report
+	report := map[string]interface{}{
+		"generated_at":        time.Now().Format(time.RFC3339),
+		"operator_session_id": operatorSessionID,
+		"events":              events,
+		"events_count":        len(events),
+		"receipts":            receipts,
+		"receipts_count":      len(receipts),
+		"total_records":       len(events) + len(receipts),
+	}
+
+	c.responder.JSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"report":  report,
+	})
+}
+
 func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		signers, err := c.db.ListTrustedSigners()
+		signers, err := c.db.SignerStore.ListTrustedSigners()
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -386,7 +506,7 @@ func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Re
 			c.responder.Error(w, http.StatusBadRequest, "id and public_key_hex required")
 			return
 		}
-		if err := c.db.AddTrustedSigner(signer); err != nil {
+		if err := c.db.SignerStore.AddTrustedSigner(signer); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -406,7 +526,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 
 	switch r.Method {
 	case http.MethodGet:
-		pubKey, err := c.db.GetTrustedSigner(id)
+		pubKey, err := c.db.SignerStore.GetTrustedSigner(id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -415,7 +535,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 			c.responder.Error(w, http.StatusNotFound, "signer not found")
 			return
 		}
-		doc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
+		doc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -427,7 +547,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
 
 	case http.MethodDelete:
-		deleted, err := c.db.DeleteTrustedSigner(id)
+		deleted, err := c.db.SignerStore.DeleteTrustedSigner(id)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -465,7 +585,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 
 	if strings.HasSuffix(path, "/_ttl") {
 		key := strings.TrimSuffix(path, "/_ttl")
-		ttl := c.db.KVTTL(key)
+		ttl := c.db.KVStore.KVTTL(key)
 		c.responder.JSON(w, http.StatusOK, models.KVTTLResponse{TTL: ttl})
 		return
 	}
@@ -485,7 +605,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "ttl required and must be > 0")
 			return
 		}
-		ok := c.db.KVExpire(key, req.TTL)
+		ok := c.db.KVStore.KVExpire(key, req.TTL)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "key not found")
 			return
@@ -498,7 +618,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		value, ok := c.db.KVGet(key)
+		value, ok := c.db.KVStore.KVGet(key)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "key not found")
 			return
@@ -516,14 +636,14 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 			return
 		}
-		if err := c.db.KVSet(key, req.Value, req.TTL); err != nil {
+		if err := c.db.KVStore.KVSet(key, req.Value, req.TTL); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodDelete:
-		if err := c.db.KVDelete(key); err != nil {
+		if err := c.db.KVStore.KVDelete(key); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -550,7 +670,7 @@ func (c *DBController) handleKVKeys(w http.ResponseWriter, r *http.Request) {
 	if req.Pattern == "" {
 		req.Pattern = "*"
 	}
-	keys, err := c.db.KVKeys(req.Pattern)
+	keys, err := c.db.KVStore.KVKeys(req.Pattern)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -580,7 +700,7 @@ func (c *DBController) handleKVScan(w http.ResponseWriter, r *http.Request) {
 	if req.Count <= 0 {
 		req.Count = 100
 	}
-	nextCursor, keys, err := c.db.KVScan(req.Pattern, req.Cursor, req.Count)
+	nextCursor, keys, err := c.db.KVStore.KVScan(req.Pattern, req.Cursor, req.Count)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -606,7 +726,7 @@ func (c *DBController) handleKVDeletePattern(w http.ResponseWriter, r *http.Requ
 		c.responder.Error(w, http.StatusBadRequest, "pattern required")
 		return
 	}
-	count, err := c.db.KVDeletePattern(req.Pattern)
+	count, err := c.db.KVStore.KVDeletePattern(req.Pattern)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -647,11 +767,11 @@ func blobNamespaceAllowed(namespace string) bool {
 // extractCallerIdentity extracts the caller's identity from the request context.
 // Returns user_id, app_id, operator_session_id, cli_session_id.
 func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, string, string) {
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
 		userID = ""
 	}
-	appID, ok := r.Context().Value(appIDKey).(string)
+	appID, ok := r.Context().Value(constants.ContextKeyAppID).(string)
 	if !ok {
 		appID = ""
 	}
@@ -711,6 +831,12 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 	return fmt.Errorf("unauthorized: unknown identity type")
 }
 
+// @Summary		Get blob
+// @Description	Retrieves a blob from the data store
+// @Tags			data
+// @Produce		application/octet-stream
+// @Success		200	{file}	file
+// @Router			/api/v1/data/blobs/{namespace}/{id} [get]
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.DataBlobsPrefix)
 	if path == "" {
@@ -741,7 +867,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusForbidden, err.Error())
 			return
 		}
-		count, err := c.db.BlobDeleteNamespace(namespace)
+		count, err := c.db.BlobStore.BlobDeleteNamespace(namespace)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
@@ -766,7 +892,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 			return
 		}
-		rec, ok := c.db.BlobMeta(namespace, blobID)
+		rec, ok := c.db.BlobStore.BlobMeta(namespace, blobID)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
@@ -826,7 +952,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := c.db.BlobPut(namespace, blobID, body, contentType, ttl); err != nil {
+		if err := c.db.BlobStore.BlobPut(namespace, blobID, body, contentType, ttl); err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -834,7 +960,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodGet:
-		data, contentType, ok := c.db.BlobGet(namespace, blobID)
+		data, contentType, ok := c.db.BlobStore.BlobGet(namespace, blobID)
 		if !ok {
 			c.responder.Error(w, http.StatusNotFound, "blob not found")
 			return
@@ -879,7 +1005,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		deleted, err := c.db.BlobDelete(namespace, blobID)
+		deleted, err := c.db.BlobStore.BlobDelete(namespace, blobID)
 		if err != nil {
 			c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			return

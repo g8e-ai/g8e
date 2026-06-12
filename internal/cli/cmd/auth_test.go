@@ -63,7 +63,7 @@ func TestLoginCmd(t *testing.T) {
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
 		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "g8e Gateway is not running")
 	})
 
@@ -86,7 +86,7 @@ func TestLoginCmd(t *testing.T) {
 		t.Cleanup(func() { os.Chdir(originalWd) })
 
 		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "g8e Gateway is not running")
 	})
 }
@@ -131,7 +131,7 @@ func TestLogoutCmd(t *testing.T) {
 		defer os.Setenv("HOME", originalHome)
 
 		err := cmd.RunE(cmd, []string{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, buf.String(), "No active session found")
 	})
 

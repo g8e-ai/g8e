@@ -88,7 +88,7 @@ Host equalhost
 
 	t.Run("missing file", func(t *testing.T) {
 		blocks, err := ParseConfig("/nonexistent/.ssh/config")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Empty(t, blocks)
 	})
 
@@ -366,7 +366,7 @@ Host jump
 
 	t.Run("missing SSH config file", func(t *testing.T) {
 		_, err := ResolveHost("myserver", "/nonexistent/config", "defaultuser", "", "")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("port 22 from config is ignored", func(t *testing.T) {
@@ -424,7 +424,7 @@ func TestBuildAuthMethods(t *testing.T) {
 	t.Run("non-existent key file", func(t *testing.T) {
 		r := HostConfig{KeyFiles: []string{"/nonexistent/key"}}
 		_, err := BuildAuthMethods(r, "", "")
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("invalid key file content", func(t *testing.T) {
@@ -434,13 +434,13 @@ func TestBuildAuthMethods(t *testing.T) {
 
 		r := HostConfig{KeyFiles: []string{keyPath}}
 		_, err := BuildAuthMethods(r, "", "")
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("invalid SSH agent socket", func(t *testing.T) {
 		r := HostConfig{}
 		_, err := BuildAuthMethods(r, "/nonexistent/agent.sock", "")
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("empty key file", func(t *testing.T) {
@@ -450,7 +450,7 @@ func TestBuildAuthMethods(t *testing.T) {
 
 		r := HostConfig{KeyFiles: []string{keyPath}}
 		_, err := BuildAuthMethods(r, "", "")
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -471,6 +471,6 @@ func TestBuildHostKeyCallback(t *testing.T) {
 		require.NoError(t, os.WriteFile(khPath, []byte("invalid known_hosts content"), 0600))
 
 		_, err := BuildHostKeyCallback(khPath)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }

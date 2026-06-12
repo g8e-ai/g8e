@@ -94,12 +94,12 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	require.NoError(t, err)
-	cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
+	cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
 		Config:             cfg,
 		Logger:             testutil.NewTestLogger(),
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetPubSubBroker()),
+		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
 		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
@@ -218,7 +218,10 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	signerName := "test-signer"
 	signerPub, signerPriv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	err = ls.GetDB().AddTrustedSigner(models.TrustedSigner{
+
+	// Access SignerStoreService directly
+	signerStore := gateway.NewSignerStoreService(ls.GetDB().GetDB(), testutil.NewTestLogger())
+	err = signerStore.AddTrustedSigner(models.TrustedSigner{
 		ID:        signerName,
 		PublicKey: hex.EncodeToString(signerPub),
 		AddedAt:   time.Now().UTC(),
@@ -254,10 +257,10 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 
 	// 5. Build typed transaction payload
 	cmdReq := &operatorv1.CommandRequested{
-		Command:      "echo hello BYO",
-		ExecutionId:  "exec-1",
-		Intent:       "verify BYO client flow",
-		SentinelMode: "audit",
+		Command:     "echo hello BYO",
+		ExecutionId: "exec-1",
+		Intent:      "verify BYO client flow",
+		VaultMode:   "audit",
 	}
 	cmdPayload, _ := proto.Marshal(cmdReq)
 

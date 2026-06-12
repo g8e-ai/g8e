@@ -66,7 +66,7 @@ message CommandRequested {
   string justification = 3;
 
   // Vault scrubbing mode for output storage
-  string sentinel_mode = 4;
+  string vault_mode = 4;
 
   // Execution timeout override in seconds
   int32 timeout_seconds = 5;
@@ -100,7 +100,7 @@ message FileEditRequested {
   string patch_content = 12;
   bool create_backup = 13;
   bool create_if_missing = 14;
-  string sentinel_mode = 15;
+  string vault_mode = 15;
 }
 
 message FsListRequested {
@@ -108,14 +108,14 @@ message FsListRequested {
   string execution_id = 2;
   int32 max_depth = 3;
   int32 max_entries = 4;
-  string sentinel_mode = 5;
+  string vault_mode = 5;
 }
 
 message FsReadRequested {
   string path = 1 [(g8e.common.v1.forbidden_patterns) = "/mnt/pnfs/private/.*"];
   string execution_id = 2;
   int32 max_size = 3;
-  string sentinel_mode = 4;
+  string vault_mode = 4;
 }
 
 message HeartbeatRequested {
@@ -128,7 +128,7 @@ message FsGrepRequested {
   string pattern = 3;
   repeated string includes = 4;
   int32 max_matches = 5;
-  string sentinel_mode = 6;
+  string vault_mode = 6;
 }
 
 message CheckPortRequested {
@@ -140,7 +140,7 @@ message CheckPortRequested {
 
 message FetchLogsRequested {
   string execution_id = 1;
-  string sentinel_mode = 2;
+  string vault_mode = 2;
 }
 
 message FetchHistoryRequested {
@@ -672,7 +672,7 @@ message FetchLogsResult {
   int32 stdout_size = 7;
   int32 stderr_size = 8;
   string timestamp = 9;
-  string sentinel_mode = 10;
+  string vault_mode = 10;
   string error = 11;
 }
 

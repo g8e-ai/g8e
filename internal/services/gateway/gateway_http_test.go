@@ -73,8 +73,9 @@ func TestMCPOriginGuard(t *testing.T) {
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
-		SuspendedStore:  infra.DB,
+		SuspendedStore:  infra.SuspendedStore,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -161,8 +162,9 @@ func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
-		SuspendedStore:  infra.DB,
+		SuspendedStore:  infra.SuspendedStore,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
@@ -194,8 +196,9 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          infra.Logger,
 		Responder:       infra.Responder,
-		SuspendedStore:  infra.DB,
+		SuspendedStore:  infra.SuspendedStore,
 		MaxPayloadBytes: infra.Cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(infra.Cfg.Gateway.Posture),
 	})
 	require.NoError(t, err, "failed to create MCP gateway")
 
@@ -278,7 +281,7 @@ func TestAuthMiddleware(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	err = h.db.DocSet("settings", "platform_settings", settingsBytes)
+	err = h.db.DocStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +324,7 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 
 	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
 		t.Parallel()
-		h.db.DocDelete("settings", "platform_settings")
+		h.db.DocStore.DocDelete("settings", "platform_settings")
 
 		paths := []string{
 			"/db/settings/platform_settings",
@@ -349,7 +352,7 @@ func TestHandleHealth(t *testing.T) {
 
 	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
 		t.Parallel()
-		h.db.DocDelete("settings", "platform_settings")
+		h.db.DocStore.DocDelete("settings", "platform_settings")
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 
@@ -369,7 +372,7 @@ func TestHandleHealth(t *testing.T) {
 		}
 		settingsBytes, err := json.Marshal(settings)
 		require.NoError(t, err)
-		err = h.db.DocSet("settings", "platform_settings", settingsBytes)
+		err = h.db.DocStore.DocSet("settings", "platform_settings", settingsBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
@@ -398,7 +401,7 @@ func TestHandleHealth_StateRootFailure(t *testing.T) {
 	}
 	settingsBytes, err := json.Marshal(settings)
 	require.NoError(t, err)
-	err = h.db.DocSet("settings", "platform_settings", settingsBytes)
+	err = h.db.DocStore.DocSet("settings", "platform_settings", settingsBytes)
 	require.NoError(t, err)
 
 	// Force state root calculation to fail by dropping a table it queries
@@ -567,7 +570,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 		ExpiresAt:         time.Now().Add(24 * time.Hour),
 	}
 	b, _ := json.Marshal(cliSess)
-	require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+	require.NoError(t, h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	wid := protocol.NewWorkloadIdentity()
 	cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
@@ -611,7 +614,7 @@ func TestCLICertBoundToOperator(t *testing.T) {
 			ExpiresAt:         time.Now().Add(-1 * time.Hour),
 		}
 		eb, _ := json.Marshal(expired)
-		require.NoError(t, h.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
+		require.NoError(t, h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), "cli-expired", eb))
 		expiredURI, err := wid.CLISPIFFEURL(userID, "cli-expired")
 		require.NoError(t, err)
 		bound, err := h.auth.cliCertBoundToOperator(
@@ -658,12 +661,12 @@ func TestHTTPHandler_GetPasskeyService(t *testing.T) {
 	assert.NotNil(t, passkey, "GetPasskeyService should return non-nil service")
 }
 
-func TestHTTPHandler_GetPubSubBroker(t *testing.T) {
+func TestHTTPHandler_GetGatewayWebSocketHandler(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
-	pubsub := h.GetPubSubBroker()
-	assert.NotNil(t, pubsub, "GetPubSubBroker should return non-nil service")
+	pubsub := h.GetGatewayWebSocketHandler()
+	assert.NotNil(t, pubsub, "GetGatewayWebSocketHandler should return non-nil service")
 }
 
 func TestHTTPHandler_handleLandingPage(t *testing.T) {

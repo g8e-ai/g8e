@@ -172,7 +172,7 @@
         "default": [],
         "description": "Attachment metadata objects"
       },
-      "sentinel_mode": {
+      "vault_mode": {
         "type": "boolean",
         "required": false,
         "default": true

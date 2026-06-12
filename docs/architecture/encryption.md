@@ -27,7 +27,7 @@ Master Key (32-byte hex-encoded, user-provided or generated)
 
 ### Vault Components
 
-- **Vault Header**: Metadata including key derivation parameters, salt, and iteration count
+- **Vault Header**: Metadata including key derivation parameters, wrapped DEK, and key fingerprint. Stored at `.g8e/vault/vault.header` as JSON.
 - **Vault Data**: Encrypted DEK and encrypted data records
 - **Vault Key**: Master key (32-byte hex-encoded) used to unlock the vault
 
@@ -35,14 +35,15 @@ Master Key (32-byte hex-encoded, user-provided or generated)
 
 1. **Vault Initialization**:
    - Generate or import master key (32-byte hex-encoded)
-   - Derive Key Encryption Key (KEK) from master key using HKDF-SHA256
-   - Generate Data Encryption Key (DEK)
+   - Derive Key Encryption Key (KEK) from master key using HKDF-SHA256 with info string "g8e-lfaa-kek-v1"
+   - Generate Data Encryption Key (DEK) (32-byte random)
    - Wrap DEK with KEK using AES Key Wrap (RFC 3394)
-   - Save vault header with wrapped DEK to disk
+   - Compute key fingerprint using Argon2id (RFC 9106)
+   - Save vault header with wrapped DEK and key fingerprint to disk
 
 2. **Data Encryption**:
    - Vault must be unlocked (DEK available in memory)
-   - Generate unique nonce for each record
+   - Generate unique nonce (12-byte) for each record
    - Encrypt data with AES-256-GCM using DEK and nonce
    - Store nonce + ciphertext
 
@@ -58,8 +59,8 @@ All storage services require an unlocked vault at initialization:
 
 | Service | Vault Required | Encrypted Data |
 |---------|---------------|----------------|
-| SQLAuditStore | Yes | Audit records, governance envelopes, audit trail, compliance records |
-| ExecutionVaultService | Yes | Execution results, command outputs |
+| SQLAuditStore | Yes | content_text, command_stdout, command_stderr fields in audit records |
+| ExecutionVaultService | Yes | Execution results, command outputs, file diffs |
 | TokenStoreService | Yes | Authentication tokens, session data |
 | GitLedgerService | Yes | File content in ledger |
 
@@ -71,8 +72,17 @@ All storage services require an unlocked vault at initialization:
 # Generate new vault with auto-generated key
 ./g8e vault init
 
-# Initialize with imported key
-./g8e vault import --key-path /path/to/key
+# Initialize with custom vault directory
+./g8e vault init --vault-dir /custom/path
+
+# Initialize with custom key path
+./g8e vault init --key-path /custom/path/key
+
+# Import key from hex string
+./g8e vault import --key-hex <hex-string>
+
+# Import key from stdin
+./g8e vault import
 ```
 
 ### Unlocking
@@ -81,7 +91,10 @@ All storage services require an unlocked vault at initialization:
 # Unlock vault with key file
 ./g8e vault unlock --key-path /path/to/vault/key
 
-# Unlock with environment variable
+# Unlock with custom vault directory
+./g8e vault unlock --vault-dir /custom/path --key-path /custom/path/key
+
+# Unlock with environment variable (used by gateway/operator)
 export G8E_VAULT_KEY=/path/to/vault/key
 ./g8e gw start
 ```
@@ -91,6 +104,9 @@ export G8E_VAULT_KEY=/path/to/vault/key
 ```bash
 # Re-encrypt vault with new key
 ./g8e vault rekey --key-path /path/to/vault/key --new-key-path /path/to/new.key
+
+# Re-key with custom vault directory
+./g8e vault rekey --vault-dir /custom/path --key-path /custom/path/key --new-key-path /custom/path/key.new
 ```
 
 ### Status
@@ -98,6 +114,9 @@ export G8E_VAULT_KEY=/path/to/vault/key
 ```bash
 # Check vault status
 ./g8e vault status
+
+# Check status with custom vault directory
+./g8e vault status --vault-dir /custom/path
 ```
 
 ### Reset
@@ -105,6 +124,22 @@ export G8E_VAULT_KEY=/path/to/vault/key
 ```bash
 # Destroy vault and all encrypted data (destructive)
 ./g8e vault reset
+
+# Reset with custom vault directory
+./g8e vault reset --vault-dir /custom/path
+
+# Skip interactive confirmation (dangerous)
+./g8e vault reset --confirm
+```
+
+### Export
+
+```bash
+# Export master key in hex format
+./g8e vault export --key-path /path/to/vault/key
+
+# Export with default key path
+./g8e vault export
 ```
 
 ## Configuration
@@ -112,8 +147,10 @@ export G8E_VAULT_KEY=/path/to/vault/key
 ### CLI Flags
 
 - `--vault-dir`: Directory for vault data (default: `.g8e/vault`)
-- `--vault-key`: Path to vault private key (default: `.g8e/vault/key`)
 - `--key-path`: Path to vault key (used in vault commands)
+- `--new-key-path`: Path to save new vault key during rekey (default: `<key-path>.new`)
+- `--confirm`: Skip interactive confirmation for vault reset (dangerous)
+- `--key-hex`: Vault key as hex string for import command
 
 ### Environment Variables
 
@@ -122,10 +159,10 @@ export G8E_VAULT_KEY=/path/to/vault/key
 
 ### Configuration File
 
-Vault paths are configured in the embedded `paths_default.json` in `internal/cli/config/config.go`. The default paths are:
+Vault paths are configured in the embedded paths configuration in `internal/constants/paths.go`. The default paths are:
 
 - Vault directory: `.g8e/vault`
-- Vault key path: `.g8e/vault/key`
+- Vault key path: `.g8e/vault/key` (resolved as `.g8e/vault/key` relative to vault directory)
 
 These paths are resolved relative to the current working directory.
 
@@ -141,8 +178,9 @@ These paths are resolved relative to the current working directory.
 ### Key Management
 
 - Master keys are 32-byte hex-encoded values
+- Key fingerprints are computed using Argon2id with pepper "g8e-vault-fingerprint-v1" (16-byte output)
 - Keys can be imported/exported for backup via `g8e vault export` and `g8e vault import`
-- Re-keying rotates the DEK without data loss
+- Re-keying rotates the DEK without data loss (only the DEK wrapper changes)
 - Vault reset destroys all data irrecoverably
 
 ### Fail-Closed Behavior
@@ -156,19 +194,21 @@ These paths are resolved relative to the current working directory.
 
 ### Vault Service
 
-The vault service (`internal/services/vault/`) provides:
+The vault service (`internal/services/vault/vault.go`) provides:
 
-- `NewVault()`: Create new vault instance
+- `NewVault()`: Create new vault instance with VaultConfig
 - `Unlock()`: Unwrap DEK with master key
 - `Lock()`: Zero DEK from memory
-- `Encrypt()`: Encrypt data with AES-256-GCM
-- `Decrypt()`: Decrypt data with AES-256-GCM
+- `Close()`: Lock vault and release resources
+- `Encrypt()`: Encrypt data with AES-256-GCM (generates random nonce)
+- `Decrypt()`: Decrypt data with AES-256-GCM (expects nonce prepended to ciphertext)
 - `Rekey()`: Rotate DEK with new master key
 - `GetDEK()`: Return Data Encryption Key for database operations
 - `IsUnlocked()`: Check vault lock state
 - `IsInitialized()`: Check if vault header exists
-- `VerifyIntegrity()`: Verify vault integrity
-- `Reset()`: Destroy vault and all data
+- `VerifyIntegrity()`: Verify vault integrity by attempting to unwrap DEK
+- `Reset()`: Destroy vault and all data (requires confirmation)
+- `GetDataDir()`: Return vault data directory path
 
 ### Storage Integration
 
@@ -184,9 +224,9 @@ Vault management commands (`internal/cli/cmd/vault.go`):
 
 - `init`: Initialize new vault with generated key
 - `unlock`: Unlock vault with key
-- `rekey`: Re-encrypt with new key
+- `rekey`: Re-encrypt DEK with new key
 - `status`: Check vault status
-- `reset`: Destroy vault
+- `reset`: Destroy vault and all encrypted data
 - `export`: Export master key in hex format
 - `import`: Import master key from hex string or stdin
 
@@ -269,7 +309,8 @@ If services fail with "vault not initialized":
 
 ## References
 
-- [Vault Service](../architecture/protocol.md#vault-service)
-- [Storage Services](../architecture/operator.md#storage-layer)
-- [CLI Reference](../g8e-help.md#vault-commands)
-- [Security Documentation](../reference/compliance-alignment.md)
+- Vault Service: `internal/services/vault/vault.go`
+- Vault Header: `internal/services/vault/vault_header.go`
+- Vault Cryptography: `internal/services/vault/vault_crypto.go`
+- CLI Commands: `internal/cli/cmd/vault.go`
+- Storage Services: `internal/services/storage/`

@@ -275,7 +275,7 @@ func TestUnmarshalPayload(t *testing.T) {
 		t.Parallel()
 		largePayload := make([]byte, MaxPayloadSize+1)
 		_, err := unmarshalPayload(constants.Event.Operator.Command.Requested, largePayload)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "exceeds maximum size limit")
 	})
 
@@ -455,7 +455,7 @@ func TestUnmarshalPayload(t *testing.T) {
 		req := &operatorv1.CommandRequested{Command: "ls -la"}
 		payload, _ := proto.Marshal(req)
 		_, err := unmarshalPayload("UNKNOWN_EVENT", payload)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown event type")
 	})
 
@@ -463,6 +463,6 @@ func TestUnmarshalPayload(t *testing.T) {
 		t.Parallel()
 		invalidPayload := []byte("invalid protobuf")
 		_, err := unmarshalPayload(constants.Event.Operator.Command.Requested, invalidPayload)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }

@@ -73,10 +73,10 @@
         "default": 2,
         "description": "Severity level (integer enum). Maps to low=1, medium=2, high=3, critical=4."
       },
-      "sentinel_mode": {
+      "vault_mode": {
         "type": "boolean",
         "required": true,
-        "description": "When true, Operator output is scrubbed by Sentinel before storage and AI context. Must be explicitly set - no default."
+        "description": "When true, Operator output is scrubbed by the boundary plane before storage and AI context. Must be explicitly set - no default."
       }
     },
 

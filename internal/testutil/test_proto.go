@@ -43,7 +43,7 @@ func MustBuildCommandRequestedPayload(t *testing.T, cmd string, execID string, j
 		Command:        cmd,
 		ExecutionId:    execID,
 		Justification:  justification,
-		SentinelMode:   sentinelMode,
+		VaultMode:      sentinelMode,
 		TimeoutSeconds: int32(timeout), //nolint:gosec // test utility, timeout values bounded
 	}
 	b, err := proto.Marshal(protoCmd)

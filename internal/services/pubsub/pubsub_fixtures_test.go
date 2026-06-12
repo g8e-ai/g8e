@@ -29,7 +29,7 @@ type pubsubFixture struct {
 	Cfg        *config.Config
 	Logger     *slog.Logger
 	DB         *MockOperatorPubSubClient
-	Svc        *PubSubCommandService
+	Svc        *OperatorPubSubService
 	SignerPriv ed25519.PrivateKey
 	SignerPub  ed25519.PublicKey
 }
@@ -46,7 +46,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		},
 	}
 
-	svc, err := NewPubSubCommandService(CommandServiceConfig{
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:             cfg,
 		Logger:             logger,
 		PubSubClient:       db,
@@ -59,7 +59,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		ActuatorKeyID:      "Actuator-key",
 	})
 	if err != nil {
-		t.Fatalf("failed to create PubSubCommandService: %v", err)
+		t.Fatalf("failed to create OperatorPubSubService: %v", err)
 	}
 
 	return &pubsubFixture{

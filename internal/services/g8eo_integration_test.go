@@ -73,7 +73,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 		execSvc := execution.NewExecutionService(cfg, logger)
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 
-		cmdSvc, err := pubsub.NewPubSubCommandService(pubsub.CommandServiceConfig{
+		cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
 			Config:            cfg,
 			Logger:            logger,
 			Execution:         execSvc,

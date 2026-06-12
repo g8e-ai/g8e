@@ -1,3 +1,16 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //go:build integration
 
 package gateway
@@ -23,6 +36,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -92,6 +106,20 @@ func generateSignedJWT(t *testing.T, privKey *rsa.PrivateKey, claims map[string]
 	return signingString + "." + sigB64
 }
 
+func setupSuspendedTxService(t *testing.T, dbDir string) *storage.SuspendedTransactionService {
+	t.Helper()
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, testutil.NewTestLogger())
+	require.NoError(t, err)
+	t.Cleanup(func() { suspendedTxService.Close() })
+	return suspendedTxService
+}
+
 func TestGateway_JWTIntegration(t *testing.T) {
 	privKey, idpServer := setupTestIdP(t)
 
@@ -111,7 +139,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	backend, err := keystore.NewTestBackend()
@@ -155,11 +183,14 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
+	suspendedTxService := setupSuspendedTxService(t, dbDir)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -267,7 +298,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	backend, err := keystore.NewTestBackend()
@@ -310,11 +341,14 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
+	suspendedTxService := setupSuspendedTxService(t, dbDir)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -437,7 +471,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
 	backend, err := keystore.NewTestBackend()
@@ -480,11 +514,14 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 
+	suspendedTxService := setupSuspendedTxService(t, dbDir)
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       resp,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -640,7 +677,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "audience mismatch")
 	})
 
@@ -655,7 +692,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "issuer mismatch")
 	})
 
@@ -671,7 +708,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not yet valid")
 	})
 
@@ -687,7 +724,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		jwt, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 		assert.Equal(t, "https://test-idp.example.com", jwt.Claims.Iss)
 		assert.Equal(t, "g8e-gateway", jwt.Claims.Aud)
@@ -704,7 +741,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		jwt, err := ParseAndVerifyJWT(context.Background(), token, authNoValidation.jwks, authNoValidation.jwtRole, authNoValidation.jwtIssuer, authNoValidation.jwtAudience)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 	})
 }

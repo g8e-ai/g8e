@@ -19,6 +19,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHeartbeatSystemIdentity(t *testing.T) {
@@ -92,11 +93,11 @@ func TestHeartbeatCapabilityFlags(t *testing.T) {
 		}
 
 		data, err := json.Marshal(flags)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		var raw map[string]interface{}
 		err = json.Unmarshal(data, &raw)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		assert.Contains(t, raw, "execution_vault_enabled")
 		assert.Contains(t, raw, "git_available")
@@ -144,8 +145,8 @@ func TestHeartbeatPerformanceMetrics(t *testing.T) {
 			DiskTotalGB:    250.0,
 		}
 
-		assert.Equal(t, 25.5, metrics.CPUPercent)
-		assert.Equal(t, 60.0, metrics.MemoryPercent)
+		assert.InEpsilon(t, 25.5, metrics.CPUPercent, 0.0)
+		assert.InEpsilon(t, 60.0, metrics.MemoryPercent, 0.0)
 		assert.Equal(t, 4915, metrics.MemoryUsedMB)
 	})
 }
@@ -189,8 +190,8 @@ func TestHeartbeatDiskDetails(t *testing.T) {
 			Percent: 40.0,
 		}
 
-		assert.Equal(t, 250.0, details.TotalGB)
-		assert.Equal(t, 40.0, details.Percent)
+		assert.InEpsilon(t, 250.0, details.TotalGB, 0.0)
+		assert.InEpsilon(t, 40.0, details.Percent, 0.0)
 	})
 }
 
@@ -204,7 +205,7 @@ func TestHeartbeatMemoryDetails(t *testing.T) {
 		}
 
 		assert.Equal(t, int64(8192), details.TotalMB)
-		assert.Equal(t, 60.0, details.Percent)
+		assert.InEpsilon(t, 60.0, details.Percent, 0.0)
 	})
 }
 

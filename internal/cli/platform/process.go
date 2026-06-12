@@ -452,28 +452,60 @@ func TailLog(logPath string, follow bool) error {
 		return fmt.Errorf("failed to seek to end of file: %w", err)
 	}
 
-	reader := bufio.NewReader(file)
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
+	// Use a goroutine to read lines and send to channel
+	lineChan := make(chan string)
+	errChan := make(chan error, 1)
+	done := make(chan struct{})
+
+	go func() {
+		defer close(lineChan)
+		reader := bufio.NewReader(file)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						time.Sleep(100 * time.Millisecond)
+						continue
+					}
+					errChan <- fmt.Errorf("failed to read log line: %w", err)
+					return
+				}
+				lineChan <- line
+			}
+		}
+	}()
+
+	// Track parent PID to detect if parent has died
+	parentPID := os.Getppid()
 
 	for {
 		select {
 		case <-sigChan:
 			// Exit gracefully on interrupt signal
+			close(done)
 			return nil
-		case <-ticker.C:
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					continue
-				}
-				return fmt.Errorf("failed to read log line: %w", err)
-			}
+		case err := <-errChan:
+			close(done)
+			return err
+		case line := <-lineChan:
 			fmt.Print(line)
+		case <-time.After(100 * time.Millisecond):
+			// Check if parent process is still alive
+			// If parent died (PID changed to 1 or process doesn't exist), exit
+			currentParentPID := os.Getppid()
+			if currentParentPID != parentPID {
+				// Parent died, we were orphaned and adopted by init (PID 1)
+				close(done)
+				return nil
+			}
 		}
 	}
 }

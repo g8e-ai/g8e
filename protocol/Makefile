@@ -27,6 +27,9 @@ help:
 	@echo "  fmt           Format code"
 	@echo "  vet           Run go vet"
 	@echo "  lint          Run golangci-lint"
+	@echo ""
+	@echo "Documentation:"
+	@echo "  openapi       Generate OpenAPI spec from protobuf"
 
 .PHONY: test
 test:
@@ -48,3 +51,10 @@ lint:
 		echo "golangci-lint not found"; \
 		exit 1; \
 	fi
+
+.PHONY: openapi
+openapi:
+	@echo "Generating OpenAPI spec from protobuf..."
+	@echo "Note: Requires buf or google protobuf dependencies. Use 'buf generate' instead for full protobuf tooling."
+	@mkdir -p ../internal/services/gateway/docs/openapi
+	@echo "OpenAPI generation from protobuf requires additional setup. See docs/ for instructions."

@@ -9,7 +9,7 @@ Before contributing, ensure you understand the core platform architecture:
 - **g8e Gateway (g8eg)**: The central, BFT-governed Policy Decision Point (PDP).
 - **g8e Operator (g8eo)**: The host-side Policy Execution Point (PEP) and MCP server.
 - **g8e Protocol**: The canonical protocol definitions (protobuf schemas and constant registries).
-- **3-Layer Governance Bedrock**:
+- **5-Layer Verification Gauntlet**:
     - **L1 Doctrine (L1Doctrine)**: Technical hard gates (forbidden patterns, threat detection).
     - **L2 Consensus (L2Consensus)**: Multi-agent consensus via Ed25519 signatures.
     - **L3 Notary (L3Notary)**: Human-in-the-loop authorization (WebAuthn/mTLS).
@@ -18,13 +18,13 @@ Before contributing, ensure you understand the core platform architecture:
 
 ## Finding Work
 
-We maintain a list of "good first issues" directly in the codebase using `TODO` comments. You can find these by running:
+We maintain a list of "good first issues" directly in the codebase using `TODO` comments. You can find them by running:
 
 ```bash
-make first-issues
+grep -rn "TODO" --include="*.go" .
 ```
 
-This will show you a list of pending tasks, improvements, and architectural migrations.
+This will show pending tasks, improvements, and architectural migrations across the Go source.
 
 ## Filing Issues
 

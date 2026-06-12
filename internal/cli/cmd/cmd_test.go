@@ -258,7 +258,7 @@ func TestCommandErrorHandling(t *testing.T) {
 		setupDataTestConfig(t, tmpDir)
 
 		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		// The command will fail on authentication before flag validation
 		// Just verify it fails
 	})
@@ -286,7 +286,7 @@ func TestCommandErrorHandling(t *testing.T) {
 		}()
 
 		err := cmd.RunE(cmd, []string{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		// The command will fail on authentication before flag validation
 		// Just verify it fails
 	})

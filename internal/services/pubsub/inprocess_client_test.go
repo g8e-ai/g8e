@@ -75,7 +75,7 @@ func TestInProcessPubSubClient_Subscribe(t *testing.T) {
 
 		ctx := context.Background()
 		_, err := client.Subscribe(ctx, "test-channel")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "client is closed")
 	})
 
@@ -92,7 +92,7 @@ func TestInProcessPubSubClient_Subscribe(t *testing.T) {
 
 		ctx2 := context.Background()
 		_, err = client.Subscribe(ctx2, "test-channel")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "already subscribed")
 	})
 
@@ -130,7 +130,7 @@ func TestInProcessPubSubClient_Publish(t *testing.T) {
 
 		ctx := context.Background()
 		err := client.Publish(ctx, "test-channel", []byte("test message"))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("rejects publish when closed", func(t *testing.T) {
@@ -141,7 +141,7 @@ func TestInProcessPubSubClient_Publish(t *testing.T) {
 
 		ctx := context.Background()
 		err := client.Publish(ctx, "test-channel", []byte("test message"))
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "client is closed")
 	})
 }
@@ -166,6 +166,6 @@ func TestInProcessPubSubClient_Close(t *testing.T) {
 
 		ctx := context.Background()
 		err := client.Publish(ctx, "test-channel", []byte("test"))
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }

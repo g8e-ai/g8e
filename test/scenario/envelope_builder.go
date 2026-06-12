@@ -63,7 +63,7 @@ func (b *Builder) WithCommand(cmd string) *Builder {
 		Command:        cmd,
 		ExecutionId:    fmt.Sprintf("exec-%d", time.Now().UnixNano()),
 		Justification:  "test command",
-		SentinelMode:   "strict",
+		VaultMode:      "strict",
 		TimeoutSeconds: 30,
 	}
 	payloadBytes, _ := proto.Marshal(cmdPayload)

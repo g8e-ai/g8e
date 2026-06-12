@@ -125,7 +125,7 @@ func TestHandleRekeyVault_Success_Subprocess(t *testing.T) {
 		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err = cmd.Run()
-	assert.NoError(t, err, "successful rekey must exit with ExitSuccess (0)")
+	require.NoError(t, err, "successful rekey must exit with ExitSuccess (0)")
 }
 
 // ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ func TestHandleVerifyVault_NotInitialized_Subprocess(t *testing.T) {
 		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err := cmd.Run()
-	assert.NoError(t, err, "verify on non-initialized vault must exit 0 (ExitSuccess)")
+	require.NoError(t, err, "verify on non-initialized vault must exit 0 (ExitSuccess)")
 }
 
 // ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ func TestHandleVerifyVault_ValidKey_Subprocess(t *testing.T) {
 		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err = cmd.Run()
-	assert.NoError(t, err, "verify with correct key must exit 0 (ExitSuccess)")
+	require.NoError(t, err, "verify with correct key must exit 0 (ExitSuccess)")
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ func TestHandleResetVault_NotInitialized_Subprocess(t *testing.T) {
 		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err := cmd.Run()
-	assert.NoError(t, err, "reset on uninitialized vault must exit 0 (ExitSuccess)")
+	require.NoError(t, err, "reset on uninitialized vault must exit 0 (ExitSuccess)")
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +312,7 @@ func TestHandleResetVault_WrongConfirmation_Subprocess(t *testing.T) {
 	// Provide wrong confirmation word via stdin so fmt.Fscan reads it and returns
 	cmd.Stdin = nopCloser("NOPE\n")
 	err = cmd.Run()
-	assert.NoError(t, err, "cancelled reset must exit 0 (ExitSuccess)")
+	require.NoError(t, err, "cancelled reset must exit 0 (ExitSuccess)")
 }
 
 // ---------------------------------------------------------------------------
@@ -357,7 +357,7 @@ func TestHandleVaultCommand_VerifyVault_NotInitialized_Subprocess(t *testing.T) 
 		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err := cmd.Run()
-	assert.NoError(t, err, "verify on uninitialized vault must exit 0")
+	require.NoError(t, err, "verify on uninitialized vault must exit 0")
 }
 
 // ---------------------------------------------------------------------------
@@ -378,7 +378,7 @@ func TestHandleVaultCommand_ResetVault_NotInitialized_Subprocess(t *testing.T) {
 		"G8E_TEST_TMP_DIR"+"="+dir,
 	)
 	err := cmd.Run()
-	assert.NoError(t, err, "reset on uninitialized vault must exit 0")
+	require.NoError(t, err, "reset on uninitialized vault must exit 0")
 }
 
 // ---------------------------------------------------------------------------
@@ -474,9 +474,9 @@ func TestMain_PostureFlagsMutualExclusive_Subprocess(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGatewayPostureConstants(t *testing.T) {
-	assert.Equal(t, config.GatewayPosture("doctrine"), config.PostureDoctrine)
-	assert.Equal(t, config.GatewayPosture("consensus"), config.PostureConsensus)
-	assert.Equal(t, config.GatewayPosture("notary"), config.PostureNotary)
+	assert.Equal(t, config.PostureDoctrine, config.GatewayPosture("doctrine"))
+	assert.Equal(t, config.PostureConsensus, config.GatewayPosture("consensus"))
+	assert.Equal(t, config.PostureNotary, config.GatewayPosture("notary"))
 }
 
 // ---------------------------------------------------------------------------

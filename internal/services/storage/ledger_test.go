@@ -106,7 +106,7 @@ func TestLedgerService_NewService(t *testing.T) {
 func TestLedgerService_NewServiceWithNilConfig(t *testing.T) {
 	t.Parallel()
 	lms, err := NewGitLedgerService(nil, testutil.NewTestLogger())
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, lms)
 }
 
@@ -189,7 +189,7 @@ func TestLedgerService_MirrorFileWrite_DisabledVault(t *testing.T) {
 	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.LedgerFileWrite("operator_session", "/some/file")
-	assert.NoError(t, err) // Graceful degradation: returns nil, nil when git not ready
+	require.NoError(t, err) // Graceful degradation: returns nil, nil when git not ready
 	assert.Nil(t, result)
 }
 
@@ -198,7 +198,7 @@ func TestLedgerService_CompleteMirrorWrite_NilResult(t *testing.T) {
 	lms, _ := setupTestLedger(t)
 
 	err := lms.CompleteMirrorWrite(nil, "operator_session")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestLedgerService_MirrorFileDelete(t *testing.T) {
@@ -254,7 +254,7 @@ func TestLedgerService_MirrorFileDelete_DisabledVault(t *testing.T) {
 	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.MirrorFileDelete("operator_session", "/some/file")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, result)
 }
 
@@ -299,7 +299,7 @@ func TestLedgerService_MirrorFileCreate_DisabledVault(t *testing.T) {
 	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	result, err := lms.MirrorFileCreate("operator_session", "/some/file")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, result)
 }
 
@@ -308,7 +308,7 @@ func TestLedgerService_CompleteMirrorCreate_DisabledVault(t *testing.T) {
 	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	err := lms.CompleteMirrorCreate(&LedgerResult{}, "operator_session")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestLedgerService_GetLedgerPath(t *testing.T) {
@@ -322,7 +322,7 @@ func TestLedgerService_GetLedgerPath(t *testing.T) {
 	assert.Contains(t, ledgerPath, "files")
 	// On Windows, the path will include the drive letter, so just check for the relative part
 	assert.True(t, strings.Contains(ledgerPath, "etc/nginx/nginx.conf") || strings.Contains(ledgerPath, "nginx.conf"), "path should contain nginx.conf")
-	assert.False(t, strings.Contains(ledgerPath, "//"))
+	assert.NotContains(t, ledgerPath, "//")
 
 	// Test relative path (should be converted to absolute)
 	ledgerPath = lms.getLedgerPath(ledgerDir, "relative/path/file.txt")
@@ -355,7 +355,7 @@ func TestLedgerService_CopyToLedger_NonExistentSource(t *testing.T) {
 	lms, tempDir := setupTestLedger(t)
 
 	err := lms.copyToLedger("/nonexistent/file.txt", filepath.Join(tempDir, "dst.txt"))
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to open source file")
 }
 
@@ -500,7 +500,7 @@ func TestLedgerService_GetFileHistory_NilReceiver(t *testing.T) {
 
 	assert.NotPanics(t, func() {
 		history, err := lms.GetFileHistory("/some/file", 10, "session")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, history)
 		assert.Contains(t, err.Error(), "disabled")
 	})
@@ -511,7 +511,7 @@ func TestLedgerService_GetFileHistory_DisabledVault(t *testing.T) {
 	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	history, err := lms.GetFileHistory("/some/file", 10, "session")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, history)
 	assert.Contains(t, err.Error(), "disabled")
 }
@@ -569,7 +569,7 @@ func TestLedgerService_GetFileAtCommit_DisabledVault(t *testing.T) {
 	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
 
 	content, err := lms.GetFileAtCommit("/some/file", "abc123", "session")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Empty(t, content)
 	assert.Contains(t, err.Error(), "disabled")
 }
@@ -613,7 +613,7 @@ func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 		GitPath: "/usr/bin/git",
 	}
 	_, err := NewGitLedgerService(config, testutil.NewTestLogger())
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
 }
 
@@ -624,7 +624,7 @@ func TestLedgerService_RestoreFileFromCommit_InvalidCommit(t *testing.T) {
 	testFilePath := filepath.Join(tempDir, "invalid_restore.txt")
 
 	err := lms.RestoreFileFromCommit(testFilePath, "invalidhash123", "operator_session")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestLedgerService_CompleteWorkflow(t *testing.T) {
@@ -695,11 +695,11 @@ func TestLedgerService_MultiSessionConcurrency(t *testing.T) {
 
 			// Start multi-phase operation
 			result, err := lms.MirrorFileCreate(sessionID, filePath)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			os.WriteFile(filePath, []byte(fmt.Sprintf("content from session %d", idx)), 0644)
 			err = lms.CompleteMirrorCreate(result, sessionID)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			// Verify session-specific ledger directory exists
 			sessionLedgerDir := filepath.Join(tempDir, "ledger", "sessions", sessionID)
@@ -741,7 +741,7 @@ func TestLedgerService_LargeFile(t *testing.T) {
 	// Verify file was mirrored correctly
 	mirrorContent, err := os.ReadFile(result.LedgerPath)
 	require.NoError(t, err)
-	assert.Equal(t, len(largeContent), len(mirrorContent))
+	assert.Len(t, mirrorContent, len(largeContent))
 	assert.Equal(t, largeContent, mirrorContent)
 }
 

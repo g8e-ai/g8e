@@ -387,7 +387,7 @@ func TestSecretManager_APIKeys(t *testing.T) {
 
 	// Non-existent service returns error
 	_, err = sm.GetAPIKey("nonexistent")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestSecretManager_OperatorPrivateKey(t *testing.T) {
@@ -426,7 +426,7 @@ func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = sm.GetOperatorPrivateKey()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid seed length")
 }
 
@@ -501,6 +501,6 @@ func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = sm.GetSessionToken()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid format")
 }

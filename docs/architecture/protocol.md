@@ -4,7 +4,7 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-10
+Last Updated: 2026-06-11
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -80,14 +80,29 @@ The `governance` field encapsulates all three governance layers:
 | `l3` | L3Metadata | L3 Notary proof and auto-approval flag |
 | `gateway_signed` | bool | True if signed by local gateway without full L2 consensus |
 
+### L3Proof
+
+The L3 proof structure supports both WebAuthn and CLI-based authentication:
+
+| Field | Type | Description |
+|---|---|---|
+| `client_data_json` | string | WebAuthn client data JSON (for web sessions) |
+| `authenticator_data` | string | WebAuthn authenticator data (for web sessions) |
+| `signature` | string | WebAuthn signature (for web sessions) |
+| `credential_id` | string | WebAuthn credential ID (for web sessions) |
+| `mtls_cert_fingerprint` | string | SHA-256 fingerprint of mTLS certificate (for CLI sessions) |
+| `cli_signature` | string | Ed25519 signature over transaction_hash (for CLI sessions) |
+
 ### Canonical JSON Wire Format
 
 All envelopes use canonical JSON (protojson) encoding for client-facing surfaces:
 
 - **Schema source of truth**: `.proto` files in `../../protocol/proto/`
 - **Wire format**: canonical JSON (protojson)
-- **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields
+- **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields in proto field order
 - **Internal storage**: protobuf bytes (implementation detail)
+
+The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC RFC3339Nano), and `intent_data` (canonicalized map with sorted keys). The result is hashed with SHA-256 and hex-encoded.
 
 This ensures compatibility with JSON-based ecosystems while maintaining typed schema validation.
 
@@ -133,7 +148,8 @@ Every mutation must pass through five independent layers in order. A failure at 
 ### L1 Doctrine: Technical Bedrock
 Static, deterministic checks enforced before any code executes. Validated using doctrines sourced from `../../protocol/constants/doctrine/doctrine_registry.json`. Code pattern matching and threat analysis are defined in `../../internal/services/governance/l1_doctrine.go`.
 - **Forbidden Patterns**: The custom protobuf field option `(g8e.common.v1.forbidden_patterns)` is reflected at runtime to scan typed payloads.
-- **Threat Detection**: L1 Doctrine analyzes command inputs for MITRE ATT&CK patterns, reverse shells, and injection vectors.
+- **Threat Detection**: L1 Doctrine analyzes command inputs for MITRE ATT&CK patterns, reverse shells, injection vectors, data destruction, system tampering, security bypass, malware deployment, credential access, persistence, lateral movement, defense evasion, reconnaissance, resource hijacking, and network manipulation.
+- **Critical System File Protection**: Blocks modifications to critical system paths including `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/ssh/`, `/etc/pam.d/`, `/etc/ld.so.*`, system binaries in `/bin/`, `/sbin/`, `/usr/bin/`, `/usr/sbin/`, and boot configurations.
 - **Allow/Deny Lists**: Enforces per-host policy and user settings.
 
 ### L2 Consensus: Distributed Agreement
@@ -145,15 +161,16 @@ A cryptographic proof that an independent ensemble agreed on the instruction. Si
 ### L3 Notary: Human Authorization
 Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in `../../internal/services/governance/l3_notary.go`.
 - **Web Sessions**: Real WebAuthn/FIDO2 proof with the transaction hash as the assertion challenge.
-- **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof includes the SHA-256 fingerprint of the mTLS certificate and an optional `cli_signature` over the `transaction_hash`.
+- **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof includes the SHA-256 fingerprint of the mTLS certificate (`mtls_cert_fingerprint`) and a cryptographic `cli_signature` over the `transaction_hash`. In outbound mode, transactions requiring L3 are suspended and must be approved via CLI commands such as `g8e approve <tx_hash>`.
 - **Auto-Approval**: Explicit policy permits auto-approval for benign diagnostic verbs. Auto-approval never bypasses L1 or L2 gates.
 
 ### L4 Warden: Pre-dispatch Verification
 The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in `../../internal/services/governance/l4_warden.go`.
 - **Stateless Validation**: Verifies structural integrity, payload decoding, and L1Doctrine compliance.
 - **Cryptographic Integrity**: Validates `transaction_hash` and signatures.
-- **Freshness & Replay**: Verifies `expires_at` and the `nonce` replay store.
+- **Freshness & Replay**: Verifies `expires_at` and the `nonce` replay store with early durable reservation.
 - **State Binding**: Compares `state_merkle_root` against the host ledger.
+- **Posture-Aware Validation**: Enforces L2 and L3 requirements based on governance posture (doctrine, consensus, or notary).
 
 ### L5 Actuator: Execution Boundary
 The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in `../../internal/services/governance/l5_actuator.go`.
@@ -165,31 +182,82 @@ The single fail-closed execution target that dispatches the verified payload and
 
 ## Event Types
 
-The protocol defines canonical event types in protocol/constants/events.json. Events are categorized by domain:
+The protocol defines canonical event types in `../../protocol/constants/events.json`. Events are categorized by domain:
 
 ### AI Agent Events
 - `AiAgentConflictDetected`, `AiAgentConflictResolved`
 - `AiAgentContinueApprovalRequested`, `AiAgentContinueApprovalGranted`, `AiAgentContinueApprovalRejected`
-- `AiLLMChatIterationStarted`, `AiLLMChatIterationCompleted`, `AiLLMChatIterationFailed`
-- `AiLLMChatIterationStreamStarted`, `AiLLMChatIterationStreamDeltaReceived`, `AiLLMChatIterationStreamCompleted`
-- `AiLLMChatIterationStreamFailed`, `AiLLMChatIterationTextChunkReceived`, `AiLLMChatIterationTextCompleted`
+- `AiLLMChatIterationStarted`, `AiLLMChatIterationCompleted`, `AiLLMChatIterationFailed`, `AiLLMChatIterationRetry`, `AiLLMChatIterationStopped`
+- `AiLLMChatIterationStreamStarted`, `AiLLMChatIterationStreamDeltaReceived`, `AiLLMChatIterationStreamCompleted`, `AiLLMChatIterationStreamFailed`
+- `AiLLMChatIterationTextChunkReceived`, `AiLLMChatIterationTextCompleted`, `AiLLMChatIterationTextReceived`, `AiLLMChatIterationTextTruncated`
+- `AiLLMChatIterationThinkingStarted`, `AiLLMChatIterationThinkingUpdate`, `AiLLMChatIterationThinkingEnd`
+- `AiLLMChatIterationCitationsReceived`
+- `AiLLMChatFilterEvent`, `AiLLMChatMessageDeadLettered`, `AiLLMChatMessageProcessingFailed`, `AiLLMChatMessageReplayed`, `AiLLMChatMessageSent`
+- `AiLLMChatStopHide`, `AiLLMChatStopShow`, `AiLLMChatSubmitted`
+- `AiLLMConfigFailed`, `AiLLMConfigReceived`, `AiLLMConfigRequested`
+- `AiLLMLifecycleCompleted`, `AiLLMLifecycleErrorOccurred`, `AiLLMLifecycleFailed`, `AiLLMLifecycleRequested`, `AiLLMLifecycleStarted`, `AiLLMLifecycleStopped`
+- `AiLLMToolG8eCommandConstraintsCompleted`, `AiLLMToolG8eCommandConstraintsFailed`, `AiLLMToolG8eCommandConstraintsReceived`, `AiLLMToolG8eCommandConstraintsRequested`
+- `AiLLMToolG8eInvestigationQueryCompleted`, `AiLLMToolG8eInvestigationQueryFailed`, `AiLLMToolG8eInvestigationQueryReceived`, `AiLLMToolG8eInvestigationQueryRequested`
+- `AiLLMToolG8eWebSearchCompleted`, `AiLLMToolG8eWebSearchFailed`, `AiLLMToolG8eWebSearchReceived`, `AiLLMToolG8eWebSearchRequested`
+- `AiTriageClarificationAnswered`, `AiTriageClarificationQuestions`, `AiTriageClarificationSkipped`, `AiTriageClarificationTimeout`
+
+### Application Events
+- `AppCaseAssigned`, `AppCaseCleared`, `AppCaseClosed`, `AppCaseCreated`, `AppCaseCreationRequested`, `AppCaseEscalated`, `AppCaseResolved`, `AppCaseSelected`, `AppCaseSwitched`, `AppCaseUpdateRequested`, `AppCaseUpdated`
+- `AppInvestigationChatMessageAi`, `AppInvestigationChatMessageSystem`, `AppInvestigationChatMessageUser`
+- `AppInvestigationClosed`, `AppInvestigationCreated`, `AppInvestigationEscalated`, `AppInvestigationListCompleted`, `AppInvestigationListFailed`, `AppInvestigationListReceived`, `AppInvestigationListRequested`, `AppInvestigationLoaded`, `AppInvestigationRequested`, `AppInvestigationStarted`
+- `AppInvestigationStatusUpdatedClosed`, `AppInvestigationStatusUpdatedEscalated`, `AppInvestigationStatusUpdatedOpen`, `AppInvestigationStatusUpdatedResolved`, `AppInvestigationUpdated`
+- `AppTaskAssigned`, `AppTaskCompleted`, `AppTaskCreated`, `AppTaskFailed`, `AppTaskStarted`, `AppTaskUpdated`
 
 ### Command Execution Events
-- `OperatorCommandRequested`, `OperatorCommandStarted`, `OperatorCommandCompleted`, `OperatorCommandFailed`
-- `OperatorCommandOutputReceived`, `OperatorCommandResult`
+- `OperatorCommandRequested`, `OperatorCommandStarted`, `OperatorCommandCompleted`, `OperatorCommandFailed`, `OperatorCommandExecution`, `OperatorCommandResult`
+- `OperatorCommandOutputReceived`
+- `OperatorCommandApprovalRequested`, `OperatorCommandApprovalPreparing`, `OperatorCommandApprovalGranted`, `OperatorCommandApprovalRejected`
+- `OperatorCommandCancelRequested`, `OperatorCommandCancelAcknowledged`, `OperatorCommandCancelFailed`, `OperatorCommandCancelled`
+- `OperatorCommandStatusUpdatedQueued`, `OperatorCommandStatusUpdatedRunning`, `OperatorCommandStatusUpdatedCompleted`, `OperatorCommandStatusUpdatedFailed`, `OperatorCommandStatusUpdatedCancelled`
 
 ### File System Events
-- `OperatorFilesystemReadRequested`, `OperatorFilesystemReadCompleted`, `OperatorFilesystemReadFailed`
-- `OperatorFileEditRequested`, `OperatorFileEditCompleted`, `OperatorFileEditFailed`
-- `OperatorFileHistoryFetchRequested`, `OperatorFileDiffFetchRequested`, `OperatorFileRestoreRequested`
+- `OperatorFilesystemReadRequested`, `OperatorFilesystemReadStarted`, `OperatorFilesystemReadCompleted`, `OperatorFilesystemReadFailed`, `OperatorFilesystemReadReceived`
+- `OperatorFilesystemListRequested`, `OperatorFilesystemListStarted`, `OperatorFilesystemListCompleted`, `OperatorFilesystemListFailed`, `OperatorFilesystemListReceived`
+- `OperatorFilesystemGrepRequested`, `OperatorFilesystemGrepStarted`, `OperatorFilesystemGrepCompleted`, `OperatorFilesystemGrepFailed`, `OperatorFilesystemGrepReceived`
+- `OperatorFileEditRequested`, `OperatorFileEditStarted`, `OperatorFileEditCompleted`, `OperatorFileEditFailed`, `OperatorFileEditTimeout`
+- `OperatorFileEditApprovalRequested`, `OperatorFileEditApprovalFeedback`, `OperatorFileEditApprovalGranted`, `OperatorFileEditApprovalRejected`
+- `OperatorFileHistoryFetchRequested`, `OperatorFileHistoryFetchStarted`, `OperatorFileHistoryFetchCompleted`, `OperatorFileHistoryFetchFailed`, `OperatorFileHistoryFetchReceived`
+- `OperatorFileDiffFetchRequested`, `OperatorFileDiffFetchStarted`, `OperatorFileDiffFetchCompleted`, `OperatorFileDiffFetchFailed`, `OperatorFileDiffFetchReceived`
+- `OperatorFileRestoreRequested`, `OperatorFileRestoreReceived`, `OperatorFileRestoreCompleted`, `OperatorFileRestoreFailed`
 
 ### Audit & Governance Events
-- `OperatorAuditCommandRecorded`, `OperatorAuditUserRecorded`
-- `OperatorBootstrapRequested`, `OperatorBootstrapCompleted`, `OperatorBootstrapFailed`
+- `OperatorAuditCommandRecorded`, `OperatorAuditUserRecorded`, `OperatorAuditAiRecorded`
+- `OperatorAuditDirectCommandRecorded`, `OperatorAuditDirectCommandResultRecorded`
+- `OperatorBootstrapRequested`, `OperatorBootstrapReceived`, `OperatorBootstrapConfigReceived`, `OperatorBootstrapCompleted`, `OperatorBootstrapFailed`
+- `OperatorReputationCommitmentCreated`, `OperatorReputationCommitmentFailed`, `OperatorReputationCommitmentVerified`
+- `OperatorReputationSlashTier1`, `OperatorReputationSlashTier2`, `OperatorReputationSlashTier3`, `OperatorReputationStateUpdated`
 
 ### MCP/A2A Events
 - `OperatorMcpCallRequested`
 - `OperatorA2aCallRequested`
+
+### Network Events
+- `OperatorNetworkPingRequested`, `OperatorNetworkPingReceived`, `OperatorNetworkPingCompleted`, `OperatorNetworkPingFailed`
+- `OperatorNetworkPortCheckRequested`, `OperatorNetworkPortCheckReceived`, `OperatorNetworkPortCheckStarted`, `OperatorNetworkPortCheckCompleted`, `OperatorNetworkPortCheckFailed`
+
+### Operator Lifecycle Events
+- `OperatorBound`, `OperatorDeviceRegistered`
+- `OperatorHeartbeatRequested`, `OperatorHeartbeatSent`, `OperatorHeartbeatReceived`, `OperatorHeartbeatMissed`
+- `OperatorShutdownRequested`, `OperatorShutdownAcknowledged`
+- `OperatorStatusUpdatedAvailable`, `OperatorStatusUpdatedActive`, `OperatorStatusUpdatedBound`
+- `OperatorSlotInitializationFailed`
+- `OperatorContextChanged`
+
+### Intent Events
+- `OperatorIntentRequested`, `OperatorIntentGranted`, `OperatorIntentDenied`, `OperatorIntentRevokeRequested`, `OperatorIntentRevoked`
+- `OperatorIntentApprovalRequested`, `OperatorIntentApprovalGranted`, `OperatorIntentApprovalRejected`
+
+### Other Events
+- `OperatorEvalAnswerRequested`
+- `OperatorFieldReadRequested`, `OperatorFieldReadAccessGranted`, `OperatorFieldReadAccessDenied`
+- `OperatorLogsFetchRequested`, `OperatorLogsFetchReceived`, `OperatorLogsFetchCompleted`, `OperatorLogsFetchFailed`
+- `OperatorHistoryFetchRequested`, `OperatorHistoryFetchReceived`, `OperatorHistoryFetchCompleted`, `OperatorHistoryFetchFailed`
+- `OperatorPanelListUpdated`
 
 ---
 
@@ -209,7 +277,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 ## Error Handling
 
-Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibility. Codes are defined in `../../internal/cli/errors/errors.go`.
+Protocol errors follow standardized JSON-RPC codes for MCP/A2A client compatibility. Codes are defined in `../../internal/constants/rpc_errors.go`.
 
 | Code | Label | Meaning |
 |---|---|---|
@@ -279,11 +347,13 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | Event registry | `../../protocol/constants/events.json` |
 | Channel prefixes | `../../protocol/constants/channels.json` |
 | Envelope types | `../../pkg/governance/types.go` |
-| Warden logic | `../../internal/services/governance/l4_warden.go` |
-| Actuator logic | `../../internal/services/governance/l5_actuator.go` |
+| L1 Doctrine logic | `../../internal/services/governance/l1_doctrine.go` |
+| L2 Consensus logic | `../../internal/services/governance/l2_consensus.go` |
+| L3 Notary logic | `../../internal/services/governance/l3_notary.go` |
+| L4 Warden logic | `../../internal/services/governance/l4_warden.go` |
+| L5 Actuator logic | `../../internal/services/governance/l5_actuator.go` |
 | Audit storage | `../../internal/services/storage/audit_store.go` |
 | Ledger storage | `../../internal/services/storage/ledger.go` |
-| Workload identity | `../../protocol/workload_identity.go` |
 | Network architecture | `./network.md` |
 | Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
 | Gateway HTTP routing | `../../internal/services/gateway/gateway_http.go` |
@@ -295,7 +365,8 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | Composite L3 verifier | `../../internal/services/gateway/composite_l3_verifier.go` |
 | Doctrine registry | `../../protocol/constants/doctrine/doctrine_registry.json` |
 | MCP vectors doctrine | `../../protocol/constants/doctrine/mcp_vectors_doctrine.json` |
-| Internal translation | `../../docs/architecture/network.md` |
+| Gitleaks doctrine | `../../protocol/constants/doctrine/gitleaks_doctrine.json` |
+| OWASP CRS doctrine | `../../protocol/constants/doctrine/owasp_crs_doctrine.json` |
 
 ---
 

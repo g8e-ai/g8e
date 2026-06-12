@@ -46,7 +46,6 @@ func setupTestTokenStore(t *testing.T) (*TokenStoreService, *vault.Vault, string
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
-		Enabled:              true,
 	}
 
 	ts, err := NewTokenStoreService(config, logger, testVault)
@@ -72,7 +71,6 @@ func TestDefaultTokenStoreConfig(t *testing.T) {
 	assert.Equal(t, int64(512), config.MaxDBSizeMB)
 	assert.Equal(t, 30, config.RetentionDays)
 	assert.Equal(t, 60, config.PruneIntervalMinutes)
-	assert.True(t, config.Enabled)
 }
 
 // TestNewTokenStoreService_NilConfig verifies that the constructor
@@ -96,44 +94,18 @@ func TestNewTokenStoreService_NilConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ts)
 	defer ts.Close()
-
-	assert.True(t, ts.IsEnabled())
-}
-
-// TestNewTokenStoreService_Disabled verifies that the constructor
-// returns nil when the service is disabled in config.
-func TestNewTokenStoreService_Disabled(t *testing.T) {
-	t.Parallel()
-	tempDir := t.TempDir()
-	logger := testutil.NewTestLogger()
-
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
-	testVault := createTestVault(t, vaultDir, privKey)
-	defer testVault.Close()
-
-	config := &TokenStoreConfig{
-		DBPath:  filepath.Join(tempDir, "token_store.db"),
-		Enabled: false,
-	}
-
-	ts, err := NewTokenStoreService(config, logger, testVault)
-	require.NoError(t, err)
-	assert.Nil(t, ts, "TokenStoreService should be nil when disabled")
 }
 
 // TestNewTokenStoreService_NilVault verifies that the constructor
-// fails with an error when vault is nil and service is enabled.
+// fails with an error when vault is nil.
 func TestNewTokenStoreService_NilVault(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	config := DefaultTokenStoreConfig()
-	config.Enabled = true
 
 	ts, err := NewTokenStoreService(config, logger, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "encryption vault is required")
 	assert.Nil(t, ts)
 }
@@ -158,12 +130,11 @@ func TestNewTokenStoreService_DatabaseInitFailure(t *testing.T) {
 	defer os.Remove(tempFile.Name())
 
 	config := &TokenStoreConfig{
-		DBPath:  filepath.Join(tempFile.Name(), "db", "token_store.db"),
-		Enabled: true,
+		DBPath: filepath.Join(tempFile.Name(), "db", "token_store.db"),
 	}
 
 	ts, err := NewTokenStoreService(config, logger, testVault)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to initialize database")
 	assert.Nil(t, ts)
 }
@@ -210,7 +181,7 @@ func TestTokenStoreService_KVSetWithTTL(t *testing.T) {
 
 	// Should not be retrievable after TTL
 	_, err = ts.KVGet(context.Background(), key)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVSetUpdate verifies that setting an existing key
@@ -254,7 +225,7 @@ func TestTokenStoreService_KVSetLockedVault(t *testing.T) {
 	value := "test-value"
 
 	err := ts.KVSet(context.Background(), key, value, 0)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "vault is locked")
 }
 
@@ -277,7 +248,7 @@ func TestTokenStoreService_KVGetLockedVault(t *testing.T) {
 
 	// Get should fail when vault is locked
 	_, err = ts.KVGet(context.Background(), key)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVGetNonExistent verifies that KVGet returns
@@ -288,7 +259,7 @@ func TestTokenStoreService_KVGetNonExistent(t *testing.T) {
 	defer testVault.Close()
 
 	_, err := ts.KVGet(context.Background(), "non-existent-key")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVDelete verifies that KVDelete removes
@@ -315,7 +286,7 @@ func TestTokenStoreService_KVDelete(t *testing.T) {
 
 	// Verify it's gone
 	_, err = ts.KVGet(context.Background(), key)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVDeleteNonExistent verifies that KVDelete
@@ -326,7 +297,7 @@ func TestTokenStoreService_KVDeleteNonExistent(t *testing.T) {
 	defer testVault.Close()
 
 	err := ts.KVDelete("non-existent-key")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // TestTokenStoreService_KVScanPrefix verifies that KVScanPrefix
@@ -432,32 +403,17 @@ func TestTokenStoreService_NilService(t *testing.T) {
 
 	// All methods should handle nil gracefully
 	err := ts.KVSet(context.Background(), "key", "value", 0)
-	assert.Error(t, err, "KVSet should error on nil service")
+	require.Error(t, err, "KVSet should error on nil service")
 
 	_, err = ts.KVGet(context.Background(), "key")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	result, err := ts.KVScanPrefix(context.Background(), "prefix:")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 
 	err = ts.KVDelete("key")
-	assert.Error(t, err, "KVDelete should error on nil service")
-
-	assert.False(t, ts.IsEnabled())
-}
-
-// TestTokenStoreService_IsEnabled verifies that IsEnabled returns
-// true for properly initialized service and false for nil.
-func TestTokenStoreService_IsEnabled(t *testing.T) {
-	t.Parallel()
-	ts, testVault, _ := setupTestTokenStore(t)
-	defer testVault.Close()
-
-	assert.True(t, ts.IsEnabled())
-
-	var nilTS *TokenStoreService
-	assert.False(t, nilTS.IsEnabled())
+	require.Error(t, err, "KVDelete should error on nil service")
 }
 
 // TestTokenStoreService_Wait verifies that Wait blocks until
@@ -484,14 +440,8 @@ func TestTokenStoreService_Close(t *testing.T) {
 	ts, testVault, _ := setupTestTokenStore(t)
 	defer testVault.Close()
 
-	assert.True(t, ts.IsEnabled())
-
 	err := ts.Close()
 	require.NoError(t, err)
-
-	// After close, the service should still be considered enabled (has db reference)
-	// but operations will fail due to closed database
-	assert.True(t, ts.IsEnabled())
 }
 
 // TestTokenStoreService_CloseNil verifies that Close handles
@@ -501,7 +451,7 @@ func TestTokenStoreService_CloseNil(t *testing.T) {
 	var ts *TokenStoreService
 
 	err := ts.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // TestTokenStoreService_ConcurrentOperations verifies that the service
@@ -615,7 +565,7 @@ func TestTokenStoreService_EmptyValue(t *testing.T) {
 
 	retrieved, err := ts.KVGet(context.Background(), key)
 	require.NoError(t, err)
-	assert.Equal(t, "", retrieved)
+	assert.Empty(t, retrieved)
 }
 
 // TestTokenStoreService_NegativeTTL verifies that negative TTL

@@ -58,7 +58,7 @@ func TestNowTimestamp_IsUTCRFC3339Nano(t *testing.T) {
 
 	parsed, err := time.Parse(TimestampFormat, result)
 	require.NoError(t, err)
-	assert.True(t, !parsed.Before(before) && !parsed.After(after))
+	assert.False(t, parsed.Before(before) || parsed.After(after))
 	assert.True(t, strings.HasSuffix(result, "Z"), "expected UTC suffix 'Z', got %q", result)
 }
 
@@ -124,7 +124,7 @@ func TestNowTimestamp_LexicographicOrderIsChronological(t *testing.T) {
 	t.Parallel()
 	a := NowTimestamp()
 	b := NowTimestamp()
-	assert.True(t, a <= b, "timestamps must be lexicographically non-decreasing: a=%q b=%q", a, b)
+	assert.LessOrEqual(t, a, b, "timestamps must be lexicographically non-decreasing: a=%q b=%q", a, b)
 }
 
 func TestFormatTimestamp_ParseableByStdlibRFC3339Nano(t *testing.T) {

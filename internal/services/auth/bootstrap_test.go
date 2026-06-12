@@ -97,11 +97,11 @@ func newTestBootstrapService(t *testing.T, server *httptest.Server) *BootstrapSe
 func TestRequestHTTPAuth_Success(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "POST", r.Method)
-		require.Equal(t, "/api/v1/operators/reauth", r.URL.Path)
-		require.Equal(t, "application/json", r.Header.Get(constants.HeaderContentType))
+		assert.Equal(t, "POST", r.Method)
+		assert.Equal(t, "/api/v1/operators/reauth", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get(constants.HeaderContentType))
 		// mTLS authentication - no Authorization header expected
-		require.Empty(t, r.Header.Get(constants.HeaderAuthorization))
+		assert.Empty(t, r.Header.Get(constants.HeaderAuthorization))
 
 		resp := AuthServicesResponse{
 			Success:           true,
@@ -115,7 +115,7 @@ func TestRequestHTTPAuth_Success(t *testing.T) {
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -142,7 +142,7 @@ func TestRequestHTTPAuth_PropagatesCerts(t *testing.T) {
 			OperatorCertKey:   "key-pem-data",
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -162,7 +162,7 @@ func TestRequestHTTPAuth_Failure(t *testing.T) {
 			Error:   json.RawMessage(`"invalid api key"`),
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -182,7 +182,7 @@ func TestRequestHTTPAuth_MissingSessionID(t *testing.T) {
 			Config:            &BootstrapConfig{},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -202,7 +202,7 @@ func TestRequestHTTPAuth_MissingConfig(t *testing.T) {
 			Config:            nil,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -232,7 +232,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 	var capturedBody operatorAuthRequest
 
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&capturedBody))
 		resp := AuthServicesResponse{
 			Success:           true,
 			OperatorSessionId: "sess-rc",
@@ -240,7 +240,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 			Config:            &BootstrapConfig{},
 		}
 		w.Header().Set("Content-Type", "application/json")
-		require.NoError(t, json.NewEncoder(w).Encode(resp))
+		assert.NoError(t, json.NewEncoder(w).Encode(resp))
 	}))
 	defer server.Close()
 
@@ -488,7 +488,7 @@ func TestSystemInfoTools(t *testing.T) {
 
 	t.Run("system.GetNumCPU", func(t *testing.T) {
 		t.Parallel()
-		assert.Greater(t, system.GetNumCPU(), 0)
+		assert.Positive(t, system.GetNumCPU())
 	})
 
 	t.Run("system.GetNetworkInterfaces returns non-nil", func(t *testing.T) {
@@ -540,7 +540,7 @@ func TestPerformanceMetrics(t *testing.T) {
 
 	t.Run("system.GetUptimeSeconds positive", func(t *testing.T) {
 		t.Parallel()
-		assert.Greater(t, system.GetUptimeSeconds(), int64(0))
+		assert.Positive(t, system.GetUptimeSeconds())
 	})
 
 	t.Run("system.GetConnectivityStatus non-nil", func(t *testing.T) {
@@ -572,7 +572,7 @@ func TestRebuildTransportWithOperatorCert(t *testing.T) {
 	t.Run("invalid cert/key pair", func(t *testing.T) {
 		t.Parallel()
 		err := svc.rebuildTransportWithOperatorCert("invalid-cert", "invalid-key")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to parse per-operator cert+key")
 	})
 
@@ -581,20 +581,20 @@ func TestRebuildTransportWithOperatorCert(t *testing.T) {
 		certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 		keyPEM := testutil.GenerateTestECPrivateKey(t)
 		err := svc.rebuildTransportWithOperatorCert(certPEM, keyPEM)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("only cert provided", func(t *testing.T) {
 		t.Parallel()
 		certPEM, _ := testutil.GenerateTestCertificate(t, "test-cert")
 		err := svc.rebuildTransportWithOperatorCert(certPEM, "")
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("only key provided", func(t *testing.T) {
 		t.Parallel()
 		keyPEM := testutil.GenerateTestECPrivateKey(t)
 		err := svc.rebuildTransportWithOperatorCert("", keyPEM)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }

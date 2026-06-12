@@ -233,6 +233,6 @@ func TestTrunc(t *testing.T) {
 
 	t.Run("trunc handles empty string", func(t *testing.T) {
 		result := trunc("", 5)
-		assert.Equal(t, "", result)
+		assert.Empty(t, result)
 	})
 }

@@ -102,7 +102,7 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
-		assert.Contains(t, string(published.Data), "consolidated execution vault is not enabled")
+		assert.Contains(t, string(published.Data), "consolidated execution vault is not available")
 	})
 }
 
@@ -250,7 +250,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		defer testVault.Close()
 
 		// Set executionVault directly since there's no setter method
-		mockVault := &mockExecutionVault{enabled: true}
+		mockVault := &mockExecutionVault{}
 		svc.executionVault = mockVault
 
 		msg := &PubSubCommandMessage{
@@ -285,7 +285,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		defer testVault.Close()
 
 		// Set executionVault directly since there's no setter method
-		mockVault := &mockExecutionVault{enabled: true}
+		mockVault := &mockExecutionVault{}
 		svc.executionVault = mockVault
 
 		req := &operatorv1.FetchFileDiffRequested{}

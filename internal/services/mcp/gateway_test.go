@@ -30,8 +30,10 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/response"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -77,9 +79,39 @@ func (f *fakeSuspendedStore) GetSuspendedTransaction(_ context.Context, txHash s
 	return tx, ok, nil
 }
 
+func (f *fakeSuspendedStore) ListSuspendedTransactions(_ context.Context, userID string) ([]*models.SuspendedTransaction, error) {
+	var result []*models.SuspendedTransaction
+	for _, tx := range f.txs {
+		if userID == "" || tx.UserID == userID {
+			result = append(result, tx)
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeSuspendedStore) ApproveSuspendedTransaction(_ context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+	if tx, ok := f.txs[txHash]; ok {
+		tx.ApprovedBy = approvedBy
+		tx.ApprovalSignature = approvalSignature
+		tx.ExpectedCertFingerprint = expectedCertFingerprint
+	}
+	return nil
+}
+
 func (f *fakeSuspendedStore) DeleteSuspendedTransaction(_ context.Context, txHash string) error {
 	delete(f.txs, txHash)
 	return nil
+}
+
+func (f *fakeSuspendedStore) CleanupExpiredSuspendedTransactions(_ context.Context) (int64, error) {
+	var count int64
+	for hash, tx := range f.txs {
+		if tx.ExpiresAt.Before(time.Now()) {
+			delete(f.txs, hash)
+			count++
+		}
+	}
+	return count, nil
 }
 
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
@@ -185,7 +217,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 	for k, tx := range store.txs {
 		txHash = k
 		require.Equal(t, "test-tool", tx.ToolName)
-		require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
+		require.JSONEq(t, `{"foo":"bar"}`, string(tx.ToolArguments))
 	}
 	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:%d/approve/%s to authorize via WebAuthn, then retry."}]}}`, constants.Ports.OperatorHttps, txHash)
 	require.JSONEq(t, expectedJSON, w.Body.String())
@@ -632,7 +664,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		t.Parallel()
 		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
-			require.Contains(t, string(body), "tools/list")
+			assert.Contains(t, string(body), "tools/list")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
@@ -846,7 +878,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 		t.Parallel()
 		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
-			require.Contains(t, string(body), "resources/list")
+			assert.Contains(t, string(body), "resources/list")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[]}}`))
@@ -1647,7 +1679,7 @@ func withEnvProc(proc governance.EnvelopeProcessor) testGatewayOption {
 }
 
 // withSuspendedStore sets a custom suspended store for the test GatewayService
-func withSuspendedStore(store SuspendedTransactionStore) testGatewayOption {
+func withSuspendedStore(store interfaces.SuspendedTransactionStore) testGatewayOption {
 	return func(g *GatewayService) {
 		g.suspendedStore = store
 	}
@@ -1853,7 +1885,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{"arg":"val"}`))
+		result, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{"arg":"val"}`), "test-session-id")
 		require.NoError(t, err)
 		require.Contains(t, result, "tool output")
 	})
@@ -1862,7 +1894,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withDownstreamURL(""))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "no downstream MCP server configured")
 	})
@@ -1876,7 +1908,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 			g.recordFailure()
 		}
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "circuit open")
 	})
@@ -1885,7 +1917,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withDownstreamURL("http://localhost:9999"), withCircuitBreaker(5, 1*time.Minute))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "failed to call downstream MCP server")
 	})
@@ -1899,7 +1931,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "status 500")
 	})
@@ -1915,7 +1947,7 @@ func TestGatewayService_DispatchToDownstream(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`))
+		_, err := g.DispatchToDownstream(context.Background(), "test-tool", json.RawMessage(`{}`), "test-session-id")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "MCP error")
 	})

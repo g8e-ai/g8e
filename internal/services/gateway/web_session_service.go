@@ -57,7 +57,7 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal web session: %w", err)
 	}
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
 		s.logger.Error("Failed to create web session", string(constants.ConnectionStateError), err, "userID", userID)
 		return nil, fmt.Errorf("failed to create web session: %w", err)
 	}
@@ -68,7 +68,7 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 
 // ValidateWebSession validates a web session by ID and returns the session if valid.
 func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.WebSession, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 	if err != nil {
 		return nil, fmt.Errorf("web session validation failed: %w", err)
 	}

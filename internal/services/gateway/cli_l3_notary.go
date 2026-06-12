@@ -110,7 +110,7 @@ func (v *CLIL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash
 		return false, fmt.Errorf("cli_l3_notary: verify_l3_proof: cli_session_id is required for CLI L3 verification")
 	}
 
-	doc, err := v.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := v.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		v.logger.Error("Failed to load CLI session for L3 verification", "cli_session_id", cliSessionID, "error", err)
 		return false, fmt.Errorf("cli_l3_notary: verify_l3_proof: failed to load CLI session: %w", err)

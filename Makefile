@@ -97,6 +97,11 @@ help:
 	@echo "  build-linux		Build g8e for Linux (amd64, arm64, 386)"
 	@echo "  build-windows		Build g8e for Windows (amd64, arm64)"
 	@echo "  build-darwin		Build g8e for Darwin (amd64, arm64)"
+	@echo "  build-docker		Build g8e binary in Docker (linux/amd64)"
+	@echo "  build-linux-docker		Build g8e for Linux in Docker (amd64, arm64, 386)"
+	@echo "  build-windows-docker	Build g8e for Windows in Docker (amd64, arm64)"
+	@echo "  build-darwin-docker		Build g8e for Darwin in Docker (amd64, arm64)"
+	@echo "  build-all-docker		Build g8e for all platforms in Docker"
 	@echo "  build-compressed		Build g8e for all platforms with UPX compression"
 	@echo "  build-linux-compressed	Build g8e for Linux with UPX compression"
 	@echo "  build-windows-compressed	Build g8e for Windows with UPX compression"
@@ -121,6 +126,7 @@ help:
 	@echo "  lint          Run all linting and quality checks"
 	@echo "  vulncheck     Run Operator vulnerability check"
 	@echo "  validate-doctrines Validate doctrine JSON schema"
+	@echo "  swagger-generate Generate Swagger/OpenAPI documentation from code annotations"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  clean         Remove all build artifacts and runtime state"
@@ -364,6 +370,69 @@ build-windows:
 	done
 	@echo "Windows build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
 
+.PHONY: build-docker
+build-docker:
+	@echo "Building g8e binary in Docker (linux/amd64)..."
+	@mkdir -p $(BIN_DIR)
+	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
+	@docker run --rm -e GOOS=linux -e GOARCH=amd64 -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-linux-amd64"
+	@sha256sum $(BIN_DIR)/g8e-linux-amd64 > $(BIN_DIR)/g8e-linux-amd64.sha256
+	@echo "Docker build complete. Binary: $(BIN_DIR)/g8e-linux-amd64"
+
+.PHONY: build-linux-docker
+build-linux-docker:
+	@echo "Building g8e for Linux in Docker..."
+	@mkdir -p $(BIN_DIR)
+	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
+	@for arch in $(LINUX_ARCHS); do \
+		echo "Building linux/$$arch in Docker..."; \
+		docker run --rm -e GOOS=linux -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-linux-$$arch"; \
+		sha256sum $(BIN_DIR)/g8e-linux-$$arch > $(BIN_DIR)/g8e-linux-$$arch.sha256; \
+	done
+	@echo "Linux Docker build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
+
+.PHONY: build-windows-docker
+build-windows-docker:
+	@echo "Building g8e for Windows in Docker..."
+	@mkdir -p $(BIN_DIR)
+	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
+	@for arch in $(WINDOWS_ARCHS); do \
+		echo "Building windows/$$arch in Docker..."; \
+		docker run --rm -e GOOS=windows -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-windows-$$arch.exe"; \
+		sha256sum $(BIN_DIR)/g8e-windows-$$arch.exe > $(BIN_DIR)/g8e-windows-$$arch.exe.sha256; \
+	done
+	@echo "Windows Docker build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
+
+.PHONY: build-darwin-docker
+build-darwin-docker:
+	@echo "Building g8e for Darwin in Docker..."
+	@mkdir -p $(BIN_DIR)
+	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
+	@for arch in $(DARWIN_ARCHS); do \
+		echo "Building darwin/$$arch in Docker..."; \
+		docker run --rm -e GOOS=darwin -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-darwin-$$arch"; \
+		sha256sum $(BIN_DIR)/g8e-darwin-$$arch > $(BIN_DIR)/g8e-darwin-$$arch.sha256; \
+	done
+	@echo "Darwin Docker build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
+
+.PHONY: build-all-docker
+build-all-docker:
+	@echo "Building g8e for all platforms in Docker..."
+	@mkdir -p $(BIN_DIR)
+	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
+	@for platform in $(PLATFORMS); do \
+		GOOS=$${platform%/*}; \
+		GOARCH=$${platform#*/}; \
+		NODE_BINARY=g8e-$$GOOS-$$GOARCH; \
+		if [ "$$GOOS" = "windows" ]; then \
+			NODE_BINARY=$$NODE_BINARY.exe; \
+		fi; \
+		echo "Building $$platform in Docker..."; \
+		docker run --rm -e GOOS=$$GOOS -e GOARCH=$$GOARCH -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/$$NODE_BINARY"; \
+		sha256sum $(BIN_DIR)/$$NODE_BINARY > $(BIN_DIR)/$$NODE_BINARY.sha256; \
+	done
+	@echo "All-platform Docker build complete. Binaries: $(BIN_DIR)/g8e-*"
+
 # =============================================================================
 # TEST
 # =============================================================================
@@ -439,8 +508,8 @@ test-native:
 # LINT & QUALITY
 # =============================================================================
 .PHONY: lint
-lint: lint-no-embedded-newlines vulncheck validate-doctrines
-	@golangci-lint run --build-tags=integration
+lint: lint-no-embedded-newlines vulncheck validate-doctrines swagger-generate
+	@golangci-lint run
 	@echo "All linting and quality checks complete."
 
 .PHONY: lint-no-embedded-newlines
@@ -463,6 +532,19 @@ validate-doctrines:
 		fi \
 	done
 	@echo "All doctrine files are valid JSON."
+
+.PHONY: swagger-generate
+swagger-generate:
+	@echo "Generating Swagger/OpenAPI documentation..."
+	@if command -v swag &> /dev/null || [ -f "$$(go env GOPATH)/bin/swag" ]; then \
+		SWAG_CMD=$$(command -v swag 2>/dev/null || echo "$$(go env GOPATH)/bin/swag"); \
+		$$SWAG_CMD init --dir cmd/operator,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --parseInternal; \
+	else \
+		echo "swag not found, installing via go install..."; \
+		go install github.com/swaggo/swag/cmd/swag@latest; \
+		$$(go env GOPATH)/bin/swag init --dir cmd/operator,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --parseInternal; \
+	fi
+	@echo "Swagger documentation generated successfully."
 
 
 # =============================================================================
@@ -516,7 +598,7 @@ ci: ci-platform
 	@echo "CI complete."
 
 .PHONY: ci-platform
-ci-platform: _ci-verify-proto _ci-lint _ci-vulncheck _ci-test
+ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test
 	@echo "Platform CI complete."
 
 .PHONY: _ci-verify-proto
@@ -532,6 +614,18 @@ _ci-verify-proto:
 		exit 1; \
 	fi
 	@$(MAKE) validate-doctrines
+
+.PHONY: _ci-swagger
+_ci-swagger:
+	@echo "=== swagger ==="
+	@$(MAKE) swagger-generate
+	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*internal/services/gateway/docs/" || true); \
+	if [ -n "$$CHANGES" ]; then \
+		echo "Error: Generated swagger files are out of sync with code annotations"; \
+		echo "$$CHANGES"; \
+		git diff -- $$(git status --porcelain | grep -E "^\s*M" | awk '{print $$2}'); \
+		exit 1; \
+	fi
 
 .PHONY: _ci-lint
 _ci-lint:

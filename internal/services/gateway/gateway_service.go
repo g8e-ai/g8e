@@ -29,6 +29,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
+	"github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 // GatewayModeService is the top-level orchestrator for gateway mode (operator).
@@ -50,7 +52,7 @@ type GatewayModeService struct {
 	logger *slog.Logger
 
 	db                 *CanonicalDBService
-	pubsub             *PubSubBroker
+	pubsub             *GatewayWebSocketHandler
 	auth               *AuthService
 	pki                *PKIAuthority
 	reg                *RegistrationService
@@ -59,6 +61,7 @@ type GatewayModeService struct {
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
 	webSessionSvc      *WebSessionService
+	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
 	responder          *response.Writer
 	server             *http.Server
@@ -80,7 +83,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	pubsub := NewPubSubBroker(logger)
+	pubsub := NewGatewayWebSocketHandler(logger)
 	sm, err := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("initialize secret manager: %w", err)
@@ -109,6 +112,8 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
+	// Wire up auth service to user service for cache invalidation
+	userSvc.SetAuthService(auth)
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
@@ -140,11 +145,24 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
 	}
 
+	// Initialize suspended transaction service for gateway mode
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(cfg.Gateway.DataDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       res,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
@@ -163,6 +181,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
+		suspendedTxService: suspendedTxService,
 		extraIPs:           extraIPs,
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -265,13 +284,15 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 
 // newGatewayModeServiceFromComponents assembles a GatewayModeService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *PubSubBroker) (*GatewayModeService, error) {
+func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
 	sm, _ := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
 	personaSvc := NewPersonaService(db, logger)
 	res := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, nil, "", "", "")
+	// Wire up auth service to user service for cache invalidation
+	userSvc.SetAuthService(auth)
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
@@ -285,11 +306,24 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
 
+	// Initialize suspended transaction service for gateway mode (test configuration)
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(cfg.Gateway.DataDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:          logger,
 		Responder:       res,
-		SuspendedStore:  db,
+		SuspendedStore:  suspendedTxService,
 		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
+		Posture:         string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
@@ -308,6 +342,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
+		suspendedTxService: suspendedTxService,
 		extraIPs:           nil, // Test configuration does not use extra IPs
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -356,6 +391,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		Responder:          ls.responder,
 		MCPGateway:         ls.mcpGateway,
 		AppEnrollment:      appEnrollment,
+		SuspendedStore:     ls.suspendedTxService,
 		IsReady:            ls.IsReady,
 		IsGovernanceReady:  ls.IsGovernanceReady,
 	})
@@ -500,7 +536,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 	if ls.cfg.Gateway.Posture == config.PostureDoctrine || ls.cfg.Gateway.Posture == "" {
 		return true
 	}
-	ready, err := ls.db.HasTrustedSigners()
+	ready, err := ls.db.SignerStore.HasTrustedSigners()
 	if err != nil {
 		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
 		return false
@@ -521,7 +557,7 @@ type GovernanceDeps struct {
 }
 
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
-// This enables the in-process PubSubCommandService to perform fail-closed verification.
+// This enables the in-process OperatorPubSubService to perform fail-closed verification.
 // The L3 notary is a composite that handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	// Create composite L3 notary that handles both web and CLI sessions
@@ -529,12 +565,12 @@ func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	compositeL3 := NewCompositeL3Verifier(ls.passkey, cliL3, ls.logger)
 
 	return &GovernanceDeps{
-		ReplayStore:       ls.db,
-		StateRootProvider: ls.db,
-		TransactionAudit:  ls.db,
+		ReplayStore:       ls.db.ReplayStore,
+		StateRootProvider: ls.db.StateRootSvc,
+		TransactionAudit:  ls.db.DocStore,
 		L3Notary:          compositeL3,
-		SignerStore:       ls.db,
-		AppPolicyStore:    ls.db,
+		SignerStore:       ls.db.SignerStore,
+		AppPolicyStore:    ls.db.AppPolicyStore,
 	}
 }
 
@@ -753,7 +789,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	if _, err := ls.db.DocUpdate("operators", env.OperatorID, update); err != nil {
+	if _, err := ls.db.DocStore.DocUpdate("operators", env.OperatorID, update); err != nil {
 		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.OperatorID, "error", err)
 		return
 	}

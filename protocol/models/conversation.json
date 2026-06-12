@@ -35,11 +35,11 @@
       "values": ["active", "inactive", "completed"],
       "description": "Conversation lifecycle status. See status.json conversation.status."
     },
-    "sentinel_mode": {
+    "vault_mode": {
       "type": "boolean",
       "required": true,
       "default": true,
-      "description": "Propagated to all Operator commands issued during this conversation. When true, output is Sentinel-scrubbed before storage."
+      "description": "Propagated to all Operator commands issued during this conversation. When true, output is scrubbed by the boundary plane before storage."
     },
     "created_at": {
       "type": "string",

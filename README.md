@@ -4,7 +4,7 @@
 
 ## Governance Architecture for Autonomous Agents in Trustless Environments
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v1010--core-platform) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/protocol.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v1010--core-platform) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/protocol.md)
 
 </div>
 
@@ -22,7 +22,7 @@
 * **Outbound-Only Connectivity**: Operators connect to the gateway via outbound-only mTLS tunnels; no inbound ports or root privileges are required.
 * **Multi-Host Orchestration**: All native tools support multi-host execution, enabling AI agents to run MCP tools across remote fleets without client installation or increased host-level security risk.
 
-[Position Paper](docs/core/position_paper.md) · [MCP Protocol](docs/protocols/mcp/mcp.md) · [A2A Protocol](docs/protocols/a2a/a2a.md) · [Architecture](docs/architecture/gateway.md) · [Compliance](docs/reference/compliance-alignment.md) · [Quickstart](#quickstart)
+[Position Paper](docs/core/position_paper.md) · [MCP Protocol](docs/protocols/mcp/mcp.md) · [A2A Protocol](docs/protocols/a2a/a2a.md) · [Architecture](docs/architecture/gateway.md) · [Compliance](docs/reference/compliance-alignment.md) · [Getting Started](#getting-started)
 
 </div>
 
@@ -30,38 +30,27 @@
 
 Standard protocols establish **capability** (an agent *can* act) but ignore **authority** (whether an action is *safe* to run on a specific host). Traditional solutions like token dashboards or single-model reflection fail because they lack state-awareness, structural independence, and hardware-backed verification.
 
-## QuickStart
+## Getting Started
 
 g8e is a single-binary platform. No runtime, no interpreter, no sidecar.
 
-### 1. Install & Start Gateway
-
-Use the auto-detecting setup command or OS-specific scripts:
+**Docker only** (no local toolchain required — Docker 24.0+ is the only prerequisite):
 
 ```bash
-# Auto-detect and setup
-./g8e setup
-
-# OR manual build
-make build
-./g8e gw start
+git clone https://github.com/g8e-ai/g8e.git && cd g8e
+docker build -t g8e-gateway:latest .
+docker run -d --name g8e-gateway -p 8080:8080 -p 8443:8443 \
+  -v g8e-data:/root/.g8e g8e-gateway:latest gw start
 ```
 
-**Platform Setup Scripts:**
-* **Linux**: `./scripts/linux-setup.sh`
-* **macOS**: `./scripts/macos-setup.sh`
-* **Windows**: `pwsh -ExecutionPolicy Bypass -File scripts/windows-setup.ps1`
-
-### 2. Deploy Operators
-
-Deploy to remote hosts via SSH. Operators dial *back* to your gateway; no inbound firewall changes required.
+**With Go 1.26+ installed locally:**
 
 ```bash
-# Deploy to your fleet using existing SSH config
-./g8e operator deploy --hosts host1,host2,host3
+git clone https://github.com/g8e-ai/g8e.git && cd g8e
+make build && ./g8e gw start
 ```
 
-*See the [full QuickStart](docs/guides/getting_started.md) for mTLS configuration and enrollment.*
+See the [Getting Started guide](docs/guides/getting_started.md) for build options, operator enrollment, Docker Compose demos, and full Docker instructions.
 
 ---
 

@@ -195,7 +195,7 @@ func TestGetDBSizeBytes(t *testing.T) {
 
 	size, err := db.GetSizeBytes()
 	require.NoError(t, err)
-	assert.Greater(t, size, int64(0))
+	assert.Positive(t, size)
 }
 
 func TestGetDBSizeBytes_GrowsWithData(t *testing.T) {

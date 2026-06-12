@@ -63,7 +63,7 @@
       "metadata_by_sender": {
         "user.chat": {
           "attachment_filenames": { "type": "array", "items": "string", "description": "Filenames of attachments sent with this message" },
-          "sentinel_mode": { "type": "boolean", "description": "Sentinel mode active when message was created" }
+          "vault_mode": { "type": "boolean", "description": "Vault mode active when message was created" }
         },
         "ai.primary": {
           "model": { "type": "string", "description": "AI model used" },

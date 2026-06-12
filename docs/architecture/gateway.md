@@ -86,7 +86,7 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms i
     - **Gateway API**: `POST /api/v1/governance/envelopes` is the only customer-facing mutation entry point.
     - **Document Store**: JSON document CRUD on a Collection/ID pattern via `/api/v1/db/*`.
     - **KV Store**: TTL-aware ephemeral state with `GLOB` pattern scanning via `/api/v1/kv/*`.
-    - **Blob Store**:Node Node Binary persistence for attachments and certificate material via `/api/v1/blob/*`.
+    - **Blob Store**: Binary persistence for attachments and certificate material via `/api/v1/blob/*`.
     - **Pub/Sub Broker**: High-performance WebSocket fan-out via `/ws/v1/pubsub`. Mutation channels (`cmd:*`) are governed.
     - **Root CA / PKI**: Issues mTLS certificates via CSR-based enrollment with SPIFFE URI SAN identity.
     - **Audit Authority**: Append-only encrypted log of every event and signed `ActionReceipt`.
@@ -96,7 +96,9 @@ By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms i
 
 The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
-**MCP Endpoint Availability**: MCP endpoints are exclusively available on the HTTPS port (8443) with mTLS authentication (or JWT when JWKS is configured). MCP routes are NOT available on the HTTP bootstrap port (8080), which is limited to bootstrap enrollment and PKI discovery endpoints only.
+**HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. No MCP routes are available on this port.
+
+**HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured).
 
 ---
 
@@ -122,6 +124,8 @@ The unified endpoint dispatches the following MCP methods:
 - `prompts/get`: Prompt content retrieval
 - `a2a/call`: Agent-to-agent communication
 
+The endpoint also supports SSE (Server-Sent Events) via GET requests for streaming capabilities.
+
 ### Native Tool Registry
 
 The gateway maintains a centralized tool registry via `internal/services/mcp/registry.go`. The `ToolRegistry` provides thread-safe tool registration and lookup, enforcing tool name validation and input schema compliance. All native tools implement the `NativeTool` interface with `Name()`, `Description()`, `InputSchema()`, and `Execute()` methods.
@@ -132,10 +136,17 @@ The gateway implements a comprehensive input validation system in `internal/serv
 - **SQL Query Validation**: Rejects empty queries, trailing semicolons to prevent statement chaining
 - **URL Validation**: Parses and validates URLs, restricting to http/https schemes, rejecting localhost and loopback addresses, and blocking private IP ranges to prevent SSRF attacks
 - **Protocol Validation**: Validates protocol strings for filesystem operations to prevent path traversal
+- **Git Path Validation**: Validates repository paths and references to prevent path traversal and command injection
+- **Kubernetes Validation**: Validates resource names and namespaces against K8s naming conventions
+- **Cloud Metadata Validation**: Validates cloud metadata operation types
+- **File Path Validation**: Validates file paths to prevent directory traversal and null byte injection
+- **SSH Path Validation**: Validates SSH config and known hosts paths
+- **Hostname Validation**: Validates hostnames to prevent shell injection
+- **Operator Validation**: Validates operator binary paths and arguments to prevent command injection
 
 ### Native Tool Ecosystem
 
-The gateway provides a comprehensive set of native tools covering database operations, filesystem analysis, network diagnostics, process management, and system monitoring:
+The gateway provides a comprehensive set of native tools covering database operations, filesystem analysis, network diagnostics, process management, and system monitoring. All tools are registered in `internal/services/mcp/native_tool_registry.go`.
 
 **Database Tools**:
 - `db_discover_topology`: Database schema discovery
@@ -145,19 +156,49 @@ The gateway provides a comprehensive set of native tools covering database opera
 
 **Filesystem Tools**:
 - `fs_disk_profile`: Disk usage and filesystem profiling
+- `fs_disk_usage`: Disk usage analysis
+- `fs_file_checksum`: File integrity verification via checksum
+- `file_read`: Read file contents with validation
 - `log_stream_filter`: Log stream filtering and analysis
 
 **Network Tools**:
 - `net_endpoint_ping`: Network endpoint reachability testing
 - `net_http_probe`: HTTP endpoint probing with SSRF protection
 - `net_socket_audit`: Socket state auditing with protocol validation
+- `net_dns_resolve`: DNS resolution and query
+- `net_ssh_known_hosts`: SSH known hosts management
+- `tls_cert_inspect`: TLS certificate inspection and validation
 
 **Process Tools**:
 - `proc_metric_top`: Process resource metrics and top-like analysis
 - `proc_signal_safe`: Safe process signal handling
+- `proc_tree`: Process tree visualization and analysis
 
 **System Tools**:
 - `sys_oom_detect`: Out-of-memory detection and analysis
+- `sys_info`: System information gathering
+- `sys_env_vars`: Environment variable inspection
+- `sys_service_status`: System service status checking
+- `sys_container_status`: Container status monitoring
+- `sys_time_clock`: System time and clock information
+
+**Configuration Tools**:
+- `config_diff_mask`: Configuration diffing with sensitive data masking
+
+**Cloud Tools**:
+- `cloud_metadata`: Cloud provider metadata retrieval
+
+**Kubernetes Tools**:
+- `k8s_inspect`: Kubernetes resource inspection
+
+**Git Tools**:
+- `git_ops`: Git repository operations
+
+**Operator Tools**:
+- `operator_deploy`: Operator deployment and management
+
+**Execution Tools**:
+- `run_shell_command`: Safe shell command execution
 
 ---
 
@@ -205,6 +246,7 @@ Defined in `internal/services/governance/l3_notary.go`. Enforces human-in-the-lo
 - **Web Sessions**: Use WebAuthn or Passkey proofs (FIDO2).
 - **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session.
 - **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
+- **JWT Sessions**: Use JWT tokens validated at the gateway with JIT user provisioning.
 
 ### L4 Warden (Pre-Dispatch Gating)
 Defined in `internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
@@ -224,7 +266,7 @@ Defined in `internal/services/governance/l5_actuator.go`. Performs isolated boun
 
 ## Out-of-Band (OOB) Suspension & WebAuthn Approval Flow
 
-When a standard AI client (such as Claude or Cursor) requests a mutation, it typically cannot generate an L3 Notary human signature.
+When a standard AI client (such as Claude, Codex, or Cursor) requests a mutation, it typically cannot generate an L3 Notary human signature.
 
 1.  **Suspension**: The gateway detects missing L3 Notary proof and suspends the transaction in the SQLite `suspended_transactions` store.
 2.  **Challenge**: The gateway returns an OOB WebAuthn challenge URL to the AI client.
@@ -238,14 +280,14 @@ When a standard AI client (such as Claude or Cursor) requests a mutation, it typ
 The g8e Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user provisioning flows that fully isolate the downstream g8e Operator (g8eo) from Identity Providers (IdP). The g8e Gateway (g8eg) acts as the authentication brain, while the g8e Operator (g8eo) receives a pre-validated, enriched payload via the pub/sub pipe.
 
 ### 4-Step JWT Flow
-The JWT authentication logic is implemented in `internal/services/gateway/gateway_auth.go:663`.
+The JWT authentication logic is implemented in `internal/services/gateway/gateway_auth.go` via the `JWTAuthMiddleware` function.
 
 **Step 1: Inbound HTTP Handshake & JWT Verification**
 The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS or static public keys, validates `exp` and `iss` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
 **Step 2: Edge Validation & JIT Account Management**
 Following successful token validation, the g8e Gateway (g8eg) ensures the user exists locally and maps their roles:
-- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetOrCreateBySub`. If the user does not exist, dynamically creates their user account record with default active status.
+- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetBySub`. If the user does not exist, checks for an active invitation via `userSvc.FindActiveInvitationBySub` and creates the user account via `userSvc.CreateUserFromInvitation`.
 - **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests via `personaSvc.MapRolesToPersona` to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
@@ -284,7 +326,16 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 |---|---|
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | Gateway mode entry | `internal/services/gateway/gateway_service.go:543` (`GatewayModeService.Start`) |
-| Coordination Store | `internal/services/gateway/gateway_db.go` |
+| Coordination Store (lifecycle) | `internal/services/gateway/gateway_db.go` |
+| Document Store | `internal/services/gateway/document_store_service.go` |
+| App Policy Store | `internal/services/gateway/app_policy_store_service.go` |
+| Signer Store | `internal/services/gateway/signer_store_service.go` |
+| State Root Service | `internal/services/gateway/state_root_service.go` |
+| Replay Store | `internal/services/gateway/replay_store_service.go` |
+| KV Store | `internal/services/gateway/kv_store_service.go` |
+| SSE Event Store | `internal/services/gateway/sse_event_service.go` |
+| Blob Store | `internal/services/gateway/blob_store_service.go` |
+| Suspended Transaction Store | `internal/services/storage/suspended_transaction_service.go` |
 | Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
 | L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
 | L2 Consensus | `internal/services/governance/l2_consensus.go` |
@@ -297,6 +348,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Collections registry | `internal/constants/collections.go` |
 | MCP unified endpoint | `internal/services/mcp/mcp_endpoint.go` |
 | Native tool registry | `internal/services/mcp/registry.go` |
+| Native tool registration | `internal/services/mcp/native_tool_registry.go` |
 | Input validation | `internal/services/mcp/validation.go` |
 | Database schema | `internal/services/gateway/db/schema.sql` |
 | Native handlers | `internal/services/mcp/native_handlers.go` |
@@ -319,32 +371,32 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 
 ---
 
-## Agent Integration
+### Agent Integration
 
-The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Cursor, VS Code, Cline) through the agent wrapper and gov components.
+The g8e Gateway provides zero-config ingress for agentic CLI coding tools (Claude Code, Codex, Cursor, VS Code, Cline) through the MCP agent subcommands.
 
-### Agent Wrapper
+### Agent Subcommands
 
-The agent wrapper (`internal/cli/cmd/agent.go`) is a generic wrapper that:
-- Detects tool binaries on the system
-- Verifies gateway status before execution
-- Checks CLI authentication status
-- Injects G8E_* environment variables with MCP configuration
-- Executes tools with proper process group management
+The agent integration is implemented in `internal/cli/cmd/mcp.go` with the following subcommands:
 
-The wrapper automatically configures MCP integration by setting:
-- `G8E_MCP_CONFIG`: JSON configuration for stdio transport to g8e
-- `G8E_GATEWAY_URL`: Gateway HTTPS endpoint for mTLS
-- `G8E_CLIENT_CERT`/`G8E_CLIENT_KEY`: mTLS certificate paths
-- `G8E_CA_BUNDLE`: Trust bundle path
-- `G8E_OPERATOR_SESSION_ID`: Session identity
-- `G8E_USER_ID`: User identity
+**`g8e mcp agent list`**: Lists all supported agent binaries that g8e supports for MCP integration, including Claude, Codex, Cursor, Devin, VS Code, Continue, Aider, Codeium, Tabby, Ollama, Gemini, Goose, and generic MCP-compatible agents.
+
+**`g8e mcp agent show <agent>`**: Prints MCP client configuration for connecting to the g8e Gateway from local coding tools. Displays three configuration matrices:
+- g8e.local (mTLS): For production environments with DNS configured
+- IP Address (mTLS): For environments without DNS or direct IP access
+- Stdio Transport: For direct native tool access without gateway
+
+**`g8e mcp agent run [--url <url>] [-- <command> [args...]]`**: Launches an AI agent or wraps an external MCP server with g8e governance. Supports:
+- Launching popular agents (claude, cursor, devin, aider, continue) with automatic MCP configuration
+- Wrapping external MCP servers via HTTP or subprocess for governance reverse proxy
+- Forwarding extra arguments to the agent binary
 
 ### Stdio Proxy
 
-The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the gateway HTTP endpoint:
+The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the gateway mTLS HTTPS endpoint:
 - Accepts JSON-RPC 2.0 requests over stdin/stdout
 - Proxies requests to the gateway HTTPS endpoint with mTLS
+- Attaches CLI session headers (cli_session_id, user_id, operator_id, operator_session_id)
 - Detects L3 approval responses and polls for completion
 - Auto-opens browser for L3 approval URLs
 - Implements retry logic with configurable timeout (5 minutes default)
@@ -357,7 +409,7 @@ When the gateway returns an L3 approval response, the stdio proxy:
 3. Polls the gateway every 10 seconds for up to 30 iterations
 4. Returns the final result once approval is complete
 
-The polling logic is implemented in `proxyToGatewayWithRetry` with constants:
+The polling logic is implemented in `proxySessionToGatewayWithRetry` with constants:
 - `l3ApprovalMaxIterations`: 30
 - `l3ApprovalPollInterval`: 10 seconds
 - `l3ApprovalTotalTimeout`: 5 minutes

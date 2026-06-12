@@ -164,7 +164,7 @@ func TestResolveGatewayPorts(t *testing.T) {
 	t.Run("resolves when port is taken", func(t *testing.T) {
 		h, s := ResolveGatewayPorts(takenPort, takenPort+1)
 		assert.NotEqual(t, takenPort, h)
-		assert.True(t, h > takenPort)
+		assert.Greater(t, h, takenPort)
 		assert.Equal(t, s, h+1)
 	})
 
@@ -172,8 +172,8 @@ func TestResolveGatewayPorts(t *testing.T) {
 		// Use very high ports that are likely free
 		h, s := ResolveGatewayPorts(55000, 55001)
 		// Verify ports are sequential and >= requested values
-		assert.True(t, h >= 55000)
-		assert.True(t, s >= 55001)
+		assert.GreaterOrEqual(t, h, 55000)
+		assert.GreaterOrEqual(t, s, 55001)
 		assert.Equal(t, s, h+1)
 	})
 }
@@ -204,7 +204,7 @@ func TestLoadGateway_IncrementalPorts(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.NotEqual(t, basePort, cfg.Gateway.HTTPPort)
-	assert.True(t, cfg.Gateway.HTTPPort > basePort)
+	assert.Greater(t, cfg.Gateway.HTTPPort, basePort)
 }
 
 func TestLoadGateway_Defaults(t *testing.T) {

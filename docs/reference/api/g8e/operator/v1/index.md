@@ -393,7 +393,7 @@ Payload for g8e.v1.operator.command.requested
 | command | [string](#string) |  | Shell command string to execute |
 | execution_id | [string](#string) |  | Unique execution identifier (correlation key) |
 | justification | [string](#string) |  | Justification for running this command (High-level Sage request) |
-| sentinel_mode | [string](#string) |  | Vault scrubbing mode for output storage |
+| vault_mode | [string](#string) |  | Vault scrubbing mode for output storage |
 | timeout_seconds | [int32](#int32) |  | Execution timeout override in seconds |
 | intent | [string](#string) |  | Intent: The high-level goal (The &#34;Why&#34;) |
 | environment | [CommandRequested.EnvironmentEntry](#g8e-operator-v1-CommandRequested-EnvironmentEntry) | repeated | Environment variables |
@@ -799,7 +799,7 @@ authorized to be executed.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | execution_id | [string](#string) |  |  |
-| sentinel_mode | [string](#string) |  |  |
+| vault_mode | [string](#string) |  |  |
 
 
 
@@ -823,7 +823,7 @@ authorized to be executed.
 | stdout_size | [int32](#int32) |  |  |
 | stderr_size | [int32](#int32) |  |  |
 | timestamp | [string](#string) |  |  |
-| sentinel_mode | [string](#string) |  |  |
+| vault_mode | [string](#string) |  |  |
 | error | [string](#string) |  |  |
 
 
@@ -877,7 +877,7 @@ authorized to be executed.
 | patch_content | [string](#string) |  |  |
 | create_backup | [bool](#bool) |  |  |
 | create_if_missing | [bool](#bool) |  |  |
-| sentinel_mode | [string](#string) |  |  |
+| vault_mode | [string](#string) |  |  |
 
 
 
@@ -997,7 +997,7 @@ authorized to be executed.
 | pattern | [string](#string) |  |  |
 | includes | [string](#string) | repeated |  |
 | max_matches | [int32](#int32) |  |  |
-| sentinel_mode | [string](#string) |  |  |
+| vault_mode | [string](#string) |  |  |
 
 
 
@@ -1039,7 +1039,7 @@ authorized to be executed.
 | execution_id | [string](#string) |  |  |
 | max_depth | [int32](#int32) |  |  |
 | max_entries | [int32](#int32) |  |  |
-| sentinel_mode | [string](#string) |  |  |
+| vault_mode | [string](#string) |  |  |
 
 
 
@@ -1080,7 +1080,7 @@ authorized to be executed.
 | path | [string](#string) |  |  |
 | execution_id | [string](#string) |  |  |
 | max_size | [int32](#int32) |  |  |
-| sentinel_mode | [string](#string) |  |  |
+| vault_mode | [string](#string) |  |  |
 
 
 

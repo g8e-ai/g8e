@@ -90,11 +90,6 @@ func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerS
 
 // ── State ───────────────────────────────────────────────────────────────
 
-// IsEncryptionEnabled returns whether file encryption is enabled.
-func (s *GitLedgerService) IsEncryptionEnabled() bool {
-	return s.config.EncryptionVault != nil && s.config.EncryptionVault.IsUnlocked()
-}
-
 // gitReady returns true if the ledger can perform git operations.
 // Nil-safe: a nil receiver or nil config short-circuits to false so callers
 // that forward requests to an unconfigured ledger (e.g. HistoryHandler built
@@ -236,7 +231,7 @@ func (s *GitLedgerService) copyToLedger(srcPath, dstPath string) (err error) {
 		return fmt.Errorf("ledger: failed to create mirror directory: %w", err)
 	}
 
-	if s.IsEncryptionEnabled() {
+	if s.config.EncryptionVault != nil && s.config.EncryptionVault.IsUnlocked() {
 		// For encrypted files, we currently read the whole content since the Vault API
 		// only supports byte-slice encryption (AES-GCM).
 		// We limit the size to prevent OOM.
@@ -637,7 +632,7 @@ func (s *GitLedgerService) GetFileAtCommit(filePath, commitHash, operatorSession
 
 	relPath := s.getGitRelativePath(filePath)
 
-	if !s.IsEncryptionEnabled() {
+	if s.config.EncryptionVault == nil || !s.config.EncryptionVault.IsUnlocked() {
 		return "", fmt.Errorf("ledger: vault is locked, cannot decrypt file from ledger")
 	}
 

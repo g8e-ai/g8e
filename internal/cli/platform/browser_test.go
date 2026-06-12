@@ -17,12 +17,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOpenBrowser(t *testing.T) {
 	t.Run("OpenBrowser returns error for invalid URL", func(t *testing.T) {
 		err := OpenBrowser("")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to open browser")
 	})
 

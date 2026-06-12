@@ -30,15 +30,13 @@ func containsString(s, substr string) bool {
 
 // ReplayStoreConfig holds configuration for the replay store service.
 type ReplayStoreConfig struct {
-	DBPath  string
-	Enabled bool
+	DBPath string
 }
 
 // DefaultReplayStoreConfig returns the default configuration.
 func DefaultReplayStoreConfig() *ReplayStoreConfig {
 	return &ReplayStoreConfig{
-		DBPath:  ".g8e/replay_store.db",
-		Enabled: true,
+		DBPath: ".g8e/replay_store.db",
 	}
 }
 
@@ -53,11 +51,6 @@ type SQLReplayStore struct {
 func NewSQLReplayStore(config *ReplayStoreConfig, logger *slog.Logger) (*SQLReplayStore, error) {
 	if config == nil {
 		config = DefaultReplayStoreConfig()
-	}
-
-	if !config.Enabled {
-		logger.Info("Replay store is disabled")
-		return nil, nil
 	}
 
 	cfg := sqliteutil.DefaultDBConfig(config.DBPath)

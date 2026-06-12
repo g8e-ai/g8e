@@ -97,6 +97,12 @@ func (s *StateRootService) InvalidateCache() error {
 	return nil
 }
 
+// CalculateStateRoot computes the merkle root of all authoritative state without caching or persistence.
+// This is used for initialization when the state_root table is empty.
+func (s *StateRootService) CalculateStateRoot() (string, error) {
+	return s.calculateStateRoot()
+}
+
 // calculateStateRootUncached performs a full state root calculation without caching.
 // Used as a fallback when state_version tracking is unavailable.
 func (s *StateRootService) calculateStateRootUncached() (string, error) {
@@ -189,5 +195,35 @@ func (s *StateRootService) hashTableToStream(h hash.Hash, query string, args []i
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("state_root_service: iterate rows: %w", err)
 	}
+	return nil
+}
+
+// writeRowToHash writes a row's values to the hash in a deterministic format.
+// The format matches the previous JSON structure for compatibility:
+// {"table":"table_name","values":[v1,v2,...]}
+func writeRowToHash(h hash.Hash, table string, values ...interface{}) error {
+	// Write deterministic JSON-like format directly to hash
+	// This avoids allocating intermediate JSON strings
+	h.Write([]byte(`{"table":"`))
+	h.Write([]byte(table))
+	h.Write([]byte(`","values":[`))
+
+	for i, v := range values {
+		if i > 0 {
+			h.Write([]byte(","))
+		}
+		switch val := v.(type) {
+		case string:
+			h.Write([]byte(`"`))
+			h.Write([]byte(val))
+			h.Write([]byte(`"`))
+		case int64:
+			fmt.Fprintf(h, "%d", val)
+		default:
+			return fmt.Errorf("unsupported type %T for state root hashing", v)
+		}
+	}
+
+	h.Write([]byte("]}\n"))
 	return nil
 }

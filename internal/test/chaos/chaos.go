@@ -454,7 +454,6 @@ func Run(cfg Config) {
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 		GitPath:                   gitPath,

@@ -17,10 +17,12 @@
 # =============================================================================
 
 # Stage 1: Build
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26 AS builder
 
 # Install build dependencies
-RUN apk add --no-cache git make protobuf-dev curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git make protobuf-compiler curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /build

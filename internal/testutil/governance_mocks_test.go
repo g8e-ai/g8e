@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -98,7 +99,7 @@ func TestStatefulMockReplayStore_Concurrent(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func() {
 			_, err := store.ReserveNonce(nonce, expiresAt)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			done <- true
 		}()
 	}
@@ -127,11 +128,11 @@ func TestMockStateRootProvider(t *testing.T) {
 
 func TestMockStateRootProvider_EmptyRoot(t *testing.T) {
 	provider := NewMockStateRootProvider("")
-	require.Equal(t, "", provider.Root)
+	require.Empty(t, provider.Root)
 
 	retrievedRoot, err := provider.GetCurrentStateRoot()
 	require.NoError(t, err)
-	require.Equal(t, "", retrievedRoot)
+	require.Empty(t, retrievedRoot)
 }
 
 func TestMockL3Notary(t *testing.T) {

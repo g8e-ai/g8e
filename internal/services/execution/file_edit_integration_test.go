@@ -93,7 +93,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		assert.NotNil(t, result.Content)
 		assert.Equal(t, content, *result.Content)
 		assert.NotNil(t, result.FileStats)
-		assert.Greater(t, result.FileStats.Size, int64(0))
+		assert.Positive(t, result.FileStats.Size)
 
 	})
 
@@ -593,7 +593,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result.FileStats)
 		assert.NotEmpty(t, result.FileStats.Mode)
-		assert.Greater(t, result.FileStats.Lines, 0)
+		assert.Positive(t, result.FileStats.Lines)
 		assert.NotNil(t, result.FileStats.ModTime)
 
 	})

@@ -124,7 +124,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 		Status: constants.UserStatusDisabled,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -153,7 +153,7 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session with a known fingerprint
 	cliSessionID := "cli-session-123"
@@ -172,7 +172,7 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
@@ -200,7 +200,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// No CLI session created - verification should fail
 	unknownFingerprint := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -291,7 +291,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session with a revoked certificate serial
 	cliSessionID := "cli-session-revoked"
@@ -310,7 +310,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	// Revoke the certificate
 	err = pki.RevokeCertificate("1234567890abcdef", "test revocation")
@@ -374,7 +374,7 @@ func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 		Status: constants.UserStatusActive,
 	}
 	userBytes, _ := json.Marshal(user)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, userBytes))
 
 	// Create a CLI session with a known fingerprint
 	cliSessionID := "cli-session-456"
@@ -393,7 +393,7 @@ func TestCompositeL3Verifier_DelegatesToCLI(t *testing.T) {
 		LoginMethod:       "csr",
 	}
 	cliSessionBytes, _ := json.Marshal(cliSession)
-	require.NoError(t, db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
+	require.NoError(t, db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes))
 
 	validFingerprint := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

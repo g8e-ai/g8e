@@ -59,7 +59,7 @@ func TestSubscribeToChannel_ReceivesPublishedMessage(t *testing.T) {
 	var got map[string]interface{}
 	require.NoError(t, json.Unmarshal(msg, &got))
 	assert.Equal(t, "test", got["event"])
-	assert.Equal(t, float64(42), got["value"])
+	assert.InEpsilon(t, float64(42), got["value"], 0.01)
 }
 
 func TestSubscribeToChannel_MultipleMessages(t *testing.T) {

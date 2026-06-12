@@ -50,7 +50,7 @@ func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 
 		if char == 3 {
 			fmt.Fprintln(w)
-			return "", errors.New(string(constants.SentinelStatusInterrupted))
+			return "", errors.New(string(constants.CommandExitStatusInterrupted))
 		}
 
 		if char == 127 || char == 8 {

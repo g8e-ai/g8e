@@ -82,5 +82,5 @@ func TestTruncateHash(t *testing.T) {
 	assert.Equal(t, "abcdef012345", truncateHash("abcdef0123456789"))
 	assert.Equal(t, "abcdef012345", truncateHash("abcdef012345"))
 	assert.Equal(t, "short", truncateHash("short"))
-	assert.Equal(t, "", truncateHash(""))
+	assert.Empty(t, truncateHash(""))
 }

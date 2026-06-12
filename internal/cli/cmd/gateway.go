@@ -54,10 +54,8 @@ func gatewayCmd() *cobra.Command {
 		gatewaySettingsCmd(),
 		gatewayResetCmd(),
 		gatewayCleanCmd(),
-		cliCmd(),
 		dataCmd(),
 		securityCmd(),
-		setupCmd(),
 	)
 
 	return cmd
@@ -197,7 +195,7 @@ func gatewayStartCmd() *cobra.Command {
 				cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
 				cmd.Println()
 				cmd.Println("Bootstrap Authentication:")
-				cmd.Printf("  %s gw cli auth login\n\n", getBinaryName())
+				cmd.Printf("  %s auth login\n\n", getBinaryName())
 			} else {
 				cmd.Println("[g8e] CLI authentication bootstrapped successfully!")
 				cmd.Println()
@@ -224,8 +222,7 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("  %s gw data audit list --operator-session-id <session-id>\n\n", getBinaryName())
 			cmd.Println("MCP (Operator commands):")
 			cmd.Printf("  %s mcp show    Print MCP client configuration for connecting to the gateway\n", getBinaryName())
-			cmd.Printf("  %s mcp stdio   Run Operator as MCP stdio server with native tools only (no Gateway)\n", getBinaryName())
-			cmd.Printf("  %s mcp gov     Run Operator as MCP stdio proxy to Gateway (with governance)\n", getBinaryName())
+			cmd.Printf("  %s mcp stdio   Run Operator as MCP stdio server with full L1-L5 governance\n", getBinaryName())
 
 			if runtime.GOOS == "windows" {
 				cmd.Println()
@@ -407,7 +404,7 @@ func gatewayRestartCmd() *cobra.Command {
 
 			cmd.Println("g8e Gateway restarted successfully")
 			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
-			cmd.Printf("\nNext step: Run '%s gw cli auth login' to authenticate\n", getBinaryName())
+			cmd.Printf("\nNext step: Run '%s auth login' to authenticate\n", getBinaryName())
 			return nil
 		},
 	}
@@ -554,7 +551,7 @@ func gatewayCleanCmd() *cobra.Command {
 				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
 				cmd.Println()
 				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
-				cmd.Println("You will need to run './g8e gw cli auth login' again after restarting the gateway.")
+				cmd.Println("You will need to run './g8e auth login' again after restarting the gateway.")
 				cmd.Print("\nContinue? [y/N]: ")
 				var response string
 				_, _ = fmt.Scanln(&response)

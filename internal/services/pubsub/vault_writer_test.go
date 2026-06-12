@@ -27,9 +27,7 @@ import (
 )
 
 // mockExecutionVault is a simple mock for testing VaultWriter
-type mockExecutionVault struct {
-	enabled bool
-}
+type mockExecutionVault struct{}
 
 func (m *mockExecutionVault) StoreExecution(ctx context.Context, record *models.ExecutionRecord) error {
 	return nil
@@ -49,14 +47,6 @@ func (m *mockExecutionVault) GetFileDiff(ctx context.Context, diffID string) (*m
 
 func (m *mockExecutionVault) GetFileDiffsBySession(ctx context.Context, operatorSessionID string, limit int) ([]*models.FileDiffRecord, error) {
 	return nil, nil
-}
-
-func (m *mockExecutionVault) IsEnabled() bool {
-	return m.enabled
-}
-
-func (m *mockExecutionVault) IsEncryptionEnabled() bool {
-	return true
 }
 
 func (m *mockExecutionVault) Close() error {
@@ -80,7 +70,7 @@ func TestNewVaultWriter(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		mockVault := &mockExecutionVault{enabled: true}
+		mockVault := &mockExecutionVault{}
 		svc := NewVaultWriter(cfg, logger, nil, mockVault)
 		require.NotNil(t, svc)
 		assert.Equal(t, mockVault, svc.executionVault)
@@ -88,7 +78,7 @@ func TestNewVaultWriter(t *testing.T) {
 }
 
 func TestVaultWriter_WriteExecution(t *testing.T) {
-	t.Run("skips when local store not enabled", func(t *testing.T) {
+	t.Run("handles nil vault gracefully", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -108,11 +98,11 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 		// Should not panic
 	})
 
-	t.Run("writes execution when local store enabled", func(t *testing.T) {
+	t.Run("writes execution with vault", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		mockVault := &mockExecutionVault{enabled: true}
+		mockVault := &mockExecutionVault{}
 		svc := NewVaultWriter(cfg, logger, nil, mockVault)
 
 		params := executionWriteParams{
@@ -136,7 +126,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 }
 
 func TestVaultWriter_WriteFileDiff(t *testing.T) {
-	t.Run("skips when local store not enabled", func(t *testing.T) {
+	t.Run("handles nil vault gracefully", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
@@ -157,12 +147,12 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 		// Should not panic
 	})
 
-	t.Run("writes file diff when local store enabled", func(t *testing.T) {
+	t.Run("writes file diff with vault", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		mockVault := &mockExecutionVault{enabled: true}
+		mockVault := &mockExecutionVault{}
 		svc := NewVaultWriter(cfg, logger, nil, mockVault)
 
 		params := fileDiffWriteParams{

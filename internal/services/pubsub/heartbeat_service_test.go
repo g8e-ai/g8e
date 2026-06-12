@@ -139,8 +139,8 @@ func TestHeartbeatService_Build(t *testing.T) {
 		assert.NotEmpty(t, heartbeat.SystemIdentity.Architecture)
 		assert.NotEmpty(t, heartbeat.SystemIdentity.PWD)
 		assert.NotEmpty(t, heartbeat.SystemIdentity.CurrentUser)
-		assert.Greater(t, heartbeat.SystemIdentity.CPUCount, 0)
-		assert.Greater(t, heartbeat.SystemIdentity.MemoryMB, 0)
+		assert.Positive(t, heartbeat.SystemIdentity.CPUCount)
+		assert.Positive(t, heartbeat.SystemIdentity.MemoryMB)
 	})
 
 	t.Run("includes network info", func(t *testing.T) {
@@ -190,8 +190,8 @@ func TestHeartbeatService_Build(t *testing.T) {
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.CPUPercent, 0.0)
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.MemoryPercent, 0.0)
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.DiskPercent, 0.0)
-		assert.Greater(t, heartbeat.PerformanceMetrics.MemoryUsedMB, 0)
-		assert.Greater(t, heartbeat.PerformanceMetrics.MemoryTotalMB, 0)
+		assert.Positive(t, heartbeat.PerformanceMetrics.MemoryUsedMB)
+		assert.Positive(t, heartbeat.PerformanceMetrics.MemoryTotalMB)
 		assert.GreaterOrEqual(t, heartbeat.PerformanceMetrics.DiskUsedGB, 0.0)
 		assert.Greater(t, heartbeat.PerformanceMetrics.DiskTotalGB, 0.0)
 	})
@@ -218,7 +218,7 @@ func TestHeartbeatService_Build(t *testing.T) {
 		require.NotNil(t, heartbeat.FingerprintDetails)
 		assert.NotEmpty(t, heartbeat.FingerprintDetails.OS)
 		assert.NotEmpty(t, heartbeat.FingerprintDetails.Architecture)
-		assert.Greater(t, heartbeat.FingerprintDetails.CPUCount, 0)
+		assert.Positive(t, heartbeat.FingerprintDetails.CPUCount)
 		assert.Equal(t, cfg.SystemFingerprint, heartbeat.SystemFingerprint)
 	})
 
@@ -285,8 +285,8 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
 
 		require.NotNil(t, protoHeartbeat.NetworkInfo)
-		assert.Equal(t, "", protoHeartbeat.NetworkInfo.PublicIp)
-		assert.Equal(t, "", protoHeartbeat.NetworkInfo.InternalIp)
+		assert.Empty(t, protoHeartbeat.NetworkInfo.PublicIp)
+		assert.Empty(t, protoHeartbeat.NetworkInfo.InternalIp)
 		assert.Equal(t, heartbeat.NetworkInfo.Interfaces, protoHeartbeat.NetworkInfo.Interfaces)
 		assert.Len(t, protoHeartbeat.NetworkInfo.ConnectivityStatus, len(heartbeat.NetworkInfo.ConnectivityStatus))
 	})
@@ -301,14 +301,14 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
 
 		require.NotNil(t, protoHeartbeat.PerformanceMetrics)
-		assert.Equal(t, heartbeat.PerformanceMetrics.CPUPercent, protoHeartbeat.PerformanceMetrics.CpuPercent)
-		assert.Equal(t, heartbeat.PerformanceMetrics.MemoryPercent, protoHeartbeat.PerformanceMetrics.MemoryPercent)
-		assert.Equal(t, heartbeat.PerformanceMetrics.DiskPercent, protoHeartbeat.PerformanceMetrics.DiskPercent)
-		assert.Equal(t, heartbeat.PerformanceMetrics.NetworkLatency, protoHeartbeat.PerformanceMetrics.NetworkLatency)
+		assert.InEpsilon(t, heartbeat.PerformanceMetrics.CPUPercent, protoHeartbeat.PerformanceMetrics.CpuPercent, 0.01)
+		assert.InEpsilon(t, heartbeat.PerformanceMetrics.MemoryPercent, protoHeartbeat.PerformanceMetrics.MemoryPercent, 0.01)
+		assert.InEpsilon(t, heartbeat.PerformanceMetrics.DiskPercent, protoHeartbeat.PerformanceMetrics.DiskPercent, 0.01)
+		assert.InEpsilon(t, heartbeat.PerformanceMetrics.NetworkLatency, protoHeartbeat.PerformanceMetrics.NetworkLatency, 0.01)
 		assert.Equal(t, int32(heartbeat.PerformanceMetrics.MemoryUsedMB), protoHeartbeat.PerformanceMetrics.MemoryUsedMb)
 		assert.Equal(t, int32(heartbeat.PerformanceMetrics.MemoryTotalMB), protoHeartbeat.PerformanceMetrics.MemoryTotalMb)
-		assert.Equal(t, heartbeat.PerformanceMetrics.DiskUsedGB, protoHeartbeat.PerformanceMetrics.DiskUsedGb)
-		assert.Equal(t, heartbeat.PerformanceMetrics.DiskTotalGB, protoHeartbeat.PerformanceMetrics.DiskTotalGb)
+		assert.InEpsilon(t, heartbeat.PerformanceMetrics.DiskUsedGB, protoHeartbeat.PerformanceMetrics.DiskUsedGb, 0.01)
+		assert.InEpsilon(t, heartbeat.PerformanceMetrics.DiskTotalGB, protoHeartbeat.PerformanceMetrics.DiskTotalGb, 0.01)
 	})
 
 	t.Run("converts capability flags", func(t *testing.T) {

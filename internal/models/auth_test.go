@@ -21,6 +21,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOperatorRegistrationRequest(t *testing.T) {
@@ -136,7 +137,7 @@ func TestOperatorDocumentGo(t *testing.T) {
 		}
 
 		data, err := json.Marshal(doc)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, string(data), constants.OperatorTypeSystem)
 	})
 
@@ -154,7 +155,7 @@ func TestOperatorDocumentGo(t *testing.T) {
 		}
 
 		data, err := json.Marshal(doc)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, string(data), constants.OperatorTypeSystem)
 	})
 }

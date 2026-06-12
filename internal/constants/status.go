@@ -145,20 +145,20 @@ const (
 	StreamStatusSummary   StreamStatus = "summary"
 )
 
-// SentinelStatus is a typed string for sentinel status.
-type SentinelStatus string
+// CommandExitStatus is a typed string for command exit status.
+type CommandExitStatus string
 
 const (
-	SentinelStatusError         SentinelStatus = "error"
-	SentinelStatusFailure       SentinelStatus = "failure"
-	SentinelStatusInterrupted   SentinelStatus = "interrupted"
-	SentinelStatusInvalidExit   SentinelStatus = "invalid_exit"
-	SentinelStatusKilled        SentinelStatus = "killed"
-	SentinelStatusMisuse        SentinelStatus = "misuse"
-	SentinelStatusNotExecutable SentinelStatus = "not_executable"
-	SentinelStatusNotFound      SentinelStatus = "not_found"
-	SentinelStatusSuccess       SentinelStatus = "success"
-	SentinelStatusTerminated    SentinelStatus = "terminated"
+	CommandExitStatusError         CommandExitStatus = "error"
+	CommandExitStatusFailure       CommandExitStatus = "failure"
+	CommandExitStatusInterrupted   CommandExitStatus = "interrupted"
+	CommandExitStatusInvalidExit   CommandExitStatus = "invalid_exit"
+	CommandExitStatusKilled        CommandExitStatus = "killed"
+	CommandExitStatusMisuse        CommandExitStatus = "misuse"
+	CommandExitStatusNotExecutable CommandExitStatus = "not_executable"
+	CommandExitStatusNotFound      CommandExitStatus = "not_found"
+	CommandExitStatusSuccess       CommandExitStatus = "success"
+	CommandExitStatusTerminated    CommandExitStatus = "terminated"
 )
 
 // VaultMode is a typed string for vault mode.
@@ -167,13 +167,6 @@ type VaultMode string
 const (
 	VaultModeScrubbed VaultMode = "scrubbed"
 	VaultModeRaw      VaultMode = "raw"
-)
-
-// SentinelMode is a typed string for sentinel mode.
-type SentinelMode string
-
-const (
-	SentinelModeRaw SentinelMode = "raw"
 )
 
 // ToolScope is a typed string for tool scope.

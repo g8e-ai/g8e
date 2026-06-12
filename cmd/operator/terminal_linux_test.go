@@ -158,7 +158,7 @@ func TestReadObfuscatedInput_EmptyInput(t *testing.T) {
 	result, err := readObfuscatedInput(input, &out)
 
 	require.NoError(t, err)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 }
 
 func TestReadObfuscatedInput_EOFReturnsError(t *testing.T) {

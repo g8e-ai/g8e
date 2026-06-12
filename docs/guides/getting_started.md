@@ -5,259 +5,371 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-10
+Last Updated: 2026-06-11
 Version: v1.0.11
 
 ---
 
-## Protocol Overview
+## Overview
 
-g8e is a zero-trust execution platform for agentic infrastructure. The platform enforces a core invariant: a typed, signed, state-bound transaction reaches a sovereign host agent that distrusts upstream inputs and refuses to mutate reality unless every independent proof checks out.
+g8e is a zero-trust execution platform for agentic infrastructure. It consists of two components:
 
-The platform consists of two mandatory components:
+- **g8e Gateway** — the central Policy Decision Point (PDP): PKI authority, state store, pub/sub broker, admission APIs.
+- **g8e Operator** — the host-side Policy Execution Point (PEP): outbound-only mTLS tunnel to the gateway, local audit vault, MCP server.
 
-### g8e Gateway
-
-The g8e Gateway serves as the central Policy Decision Point (PDP). It provides:
-
-- **PKI and Trust Management**: Acts as the platform Certificate Authority, issuing and revoking mTLS certificates bound to URI SANs for workload identity.
-- **Persistence Layer**: Maintains the canonical state store via SQLite, including user accounts, Operator registrations, and governance state. Implements incremental state tracking for efficient state root calculation.
-- **Messaging Broker**: Serves as the Pub/Sub broker for real-time event fan-out between clients and operators.
-- **Admission APIs**: Exposes HTTP endpoints for envelope submission and trust bundle distribution.
-- **Protocol Translation**: Translates standard MCP (Model Context Protocol) and A2A (Agent-to-Agent) requests into canonical JSON GovernanceEnvelope format via a unified endpoint architecture.
-
-The g8e Gateway runs in one of three modes, each enforcing different layers of the 5-layer verification sequence:
-
-- **Doctrine Mode**: Enforces L1Doctrine (technical bedrock: forbidden patterns, blacklist, whitelist). L2/L3 signatures not required.
-- **Consensus Mode**: Enforces L1Doctrine and L2Consensus (multi-model Byzantine consensus). L3 signature not required.
-- **Notary Mode**: Enforces L1Doctrine, L2Consensus, and L3Notary (human-in-the-loop via WebAuthn/FIDO2). L4Warden and L5Actuator are always active for execution. This is the most secure mode.
-
-### g8e Operator
-
-The g8e Operator serves as the Policy Execution Point (PEP) running on target hosts. It provides:
-
-- **Fail-Closed Execution**: Executes mutations only through L5Actuator, the single dispatch path that enforces L1/L2/L3 verification gates.
-- **Outbound-Only Connectivity**: Dials out to the Gateway via mTLS reverse tunnel, exposing no inbound ports or remote attack surface.
-- **Local-First Audit**: Writes all audit entries to a host-local Git-backed vault before execution, preserving raw data and forensic context on the host.
-- **MCP Server**: Exposes tools to standard local clients as a Model Context Protocol server for AI agent integration. Includes 13 native tools for database operations, filesystem analysis, network diagnostics, process management, and system monitoring.
-- **State Binding**: Verifies transaction state roots and enforces replay defense before executing any mutation.
-
-The g8e Operator distrusts all upstream inputs. It validates every envelope independently, checks cryptographic proofs, and refuses execution if any verification fails.
-
-### Protocol Flow
-
-1. **Client Submission**: An AI client submits a mutation request via MCP or A2A protocol to the Gateway.
-2. **Envelope Construction**: The g8e Gateway wraps the request in a canonical JSON GovernanceEnvelope with typed payload, transaction hash, nonce, expiry, and state root.
-3. **Verification Sequence**: The platform enforces the 5-layer verification sequence:
-   - L1Doctrine: Forbidden patterns, blacklist, whitelist checks.
-   - L2Consensus: Multi-model Byzantine consensus signatures (in consensus/notary modes).
-   - L3Notary: Human-in-the-loop approval via WebAuthn (in notary mode).
-   - L4Warden: Pre-dispatch integrity and state-root verification.
-   - L5Actuator: Sovereign execution boundary and signed receipt issuance.
-4. **Dispatch**: Verified envelopes are dispatched over the Pub/Sub broker to target g8e Operators.
-5. **Execution**: The g8e Operator receives the envelope, re-verifies all proofs, and executes the mutation through L5Actuator.
-6. **Receipt**: The g8e Operator emits a signed receipt and writes an audit entry to the local Git-backed vault.
+Both roles are served by the same `g8e` binary. The mode is set via the command-line subcommand.
 
 ---
 
-## Quick Start
+## Requirements
 
-**Prerequisites:** Go 1.26+ · (Optional) Python 3.14+ for agent ensembles.
+There are two ways to run g8e: **entirely in Docker** (no local toolchain required) or **natively** (compile and run directly on your machine). Choose the path that fits your environment.
 
-The platform is a single g8e Node. No runtime, no interpreter, no sidecar.
+### Docker path (no local toolchain required)
 
-### Build from source
+| Requirement | Version |
+|---|---|
+| Docker | 24.0+ |
+| Docker Compose | v2 (included in Docker Desktop 4.x and Docker Engine 24.0+) |
 
-#### 1. Clone and build
+Everything else — Go compiler, OpenSSL, Git — runs inside the container. No local toolchain is needed to build or run the gateway with Docker.
+
+### Local path (build and run natively)
+
+| Requirement | Notes |
+|---|---|
+| Go | 1.26+ — required to build from source |
+| Git | Any recent version — required for the audit vault's Git-backed ledger |
+| OpenSSL | Any recent version — required for PKI operations at runtime |
+| Python | 3.11+ — optional, required only for demo environments and protocol library development |
+
+---
+
+## Get the Source
+
+Both paths start with cloning the repository:
 
 ```bash
-git clone https://github.com/g8e-ai/g8e.git && cd g8e
+git clone https://github.com/g8e-ai/g8e.git
+cd g8e
+```
+
+---
+
+## Build
+
+### Build locally
+
+Requires Go 1.26+ installed on your machine.
+
+```bash
 make build
 ```
 
-This produces the `g8e` binary. It is self-contained and manages both g8e Gateway (PDP) and g8e Operator (PEP) roles.
+Produces the `g8e` binary in the repository root and platform-specific binaries in `bin/`. The binary is statically linked with no runtime dependencies.
 
-**Build Options:**
-- `make build`: Standard build (~35-38MB per platform)
-- `make build-compressed`: Compressed build (~15-17MB for Linux/Windows AMD64/ARM64, ~35-38MB for macOS and Windows ARM64)
+Additional build targets:
 
-#### 2. Or use the auto-detecting setup command
+| Target | Description |
+|---|---|
+| `make build` | Build for current OS/architecture |
+| `make build-all` | Build for all platforms (linux, windows, darwin) |
+| `make build-linux` | Linux: amd64, arm64, 386 |
+| `make build-darwin` | macOS: amd64, arm64 |
+| `make build-windows` | Windows: amd64, arm64 |
 
-```bash
-./g8e setup
-```
+### Advanced: Compression
+*Warning: UPX compression is highly discouraged as it triggers false-positive virus detections (e.g., Windows Defender/Trojan:Win32/Wacatac.C!ml).*
 
-This command auto-detects your OS and runs the appropriate setup script to validate dependencies and build the binary.
+| Target | Description |
+|---|---|
+| `make build-compressed` | All platforms with UPX compression (for isolated testing only) |
 
-#### 3. Or use the setup scripts directly
-
-```bash
-# Linux
-./scripts/linux-setup.sh
-
-# macOS
-./scripts/macos-setup.sh
-
-# Windows
-pwsh -ExecutionPolicy Bypass -File scripts/windows-setup.ps1
-```
-
-### 1. Deploy operators to remote hosts via SSH
+For cross-compilation:
 
 ```bash
-# Using your existing SSH config, deploy Operators across your fleet
-./g8e operator deploy --hosts host1,host2,host3
-
-# Tool calls accept a list of hosts for simultaneous fan-out execution
+GOOS=linux GOARCH=amd64 make build
+GOOS=darwin GOARCH=arm64 make build
+GOOS=windows GOARCH=amd64 make build
 ```
 
-### 2. Explore Industry Demos
+### Build in Docker
 
-The platform includes industry-specific demo scenarios for Healthcare (HIPAA/PHI), Finance (Trading Controls), and Government (CUI/CMMC). These demos demonstrate governance enforcement with Docker Compose orchestration and mock data generators.
+Requires only Docker 24.0+. No local Go installation needed.
+
+Build the binary for Linux (amd64):
 
 ```bash
-# List available demo environments
-./g8e demos list
-
-# Start a specific demo environment
-./g8e demos start healthcare
-
-# Check demo status
-./g8e demos status healthcare
-
-# Stop a demo environment
-./g8e demos stop healthcare
-
-# Run a complete demo workflow with automated steps
-./g8e demos run healthcare
+make build-docker
 ```
 
-### 3. Initialize Vault
+This builds a `g8e-builder` Docker image using the `builder` stage of the Dockerfile, then runs the Go compiler inside it. The output binary lands in `bin/g8e-linux-amd64`.
 
-The g8e Gateway requires a vault for encryption at rest. Initialize the vault before starting the gateway:
+Additional Docker build targets:
 
-```bash
-./g8e vault init
-```
+| Target | Description |
+|---|---|
+| `make build-docker` | Linux amd64 only |
+| `make build-linux-docker` | Linux: amd64, arm64, 386 |
+| `make build-darwin-docker` | macOS: amd64, arm64 |
+| `make build-windows-docker` | Windows: amd64, arm64 |
+| `make build-all-docker` | All platforms |
 
-This creates a new vault in `.g8e/vault` and generates a private key in `.g8e/secrets/vault.key`. The vault is automatically unlocked when starting the gateway.
+Binaries are placed in `bin/` with `.sha256` checksums alongside each one.
 
-### 4. Start the g8e Gateway
+---
 
-Start the sovereign g8e Gateway (PDP) in **Doctrine Mode** (L1Doctrine enforced). This bootstraps the stateless gateway with PKI, persistence, and pub/sub:
+## Run the Gateway
+
+### Run the gateway locally
+
+After building with `make build`:
 
 ```bash
 ./g8e gw start
 ```
 
-The gateway will automatically unlock the vault using the key generated in step 3. If you need to configure custom vault paths, use the `--vault-dir` and `--vault-key` flags.
-
-### 5. Authenticate CLI to g8e Gateway
-
-Authenticate the CLI to the running g8e Gateway. This bootstraps the PKI hierarchy and issues your initial mTLS credentials. Required before any CLI or Operator can connect:
+The gateway starts in Doctrine mode (L1 enforced, L2/L3 audited). To specify a security posture:
 
 ```bash
-./g8e auth login
+./g8e gw start --posture doctrine    # default
+./g8e gw start --posture consensus   # L1/L2 enforced, L3 audited
+./g8e gw start --posture notary      # L1/L2/L3 strictly enforced
 ```
 
-Credentials and trust material are stored in `.g8e/pki` and `.g8e/secrets` in the project directory.
+Default ports: `8080` (HTTP) and `8443` (HTTPS/mTLS). Override with `--http-port` and `--https-port`.
 
-### 6. Deploy an Operator
+Runtime state is written to `.g8e/` in the working directory:
 
-For remote host enforcement, use CSR-based enrollment:
+| Path | Contents |
+|---|---|
+| `.g8e/pki/` | CA hierarchy and trust bundles |
+| `.g8e/secrets/` | Bootstrap secrets and vault key |
+| `.g8e/data/` | SQLite databases and blobs |
+| `.g8e/vault/` | Encrypted audit vault |
+| `.g8e/logs/` | Component logs |
 
-```bash
-./g8e security pki enroll -e <gateway-ip>
-```
-
----
-
-## 5-Layer Verification Sequence
-
-g8e enforces a hierarchical defense-in-depth model:
-
-| Layer | Name | Mechanism | Enforcement |
-| :--- | :--- | :--- | :--- |
-| **L1** | **Technical Bedrock** | Pattern matching, allow/denylists | Hard gate (always active) |
-| **L2** | **Consensus** | Multi-model BFT agreement | Consensus/Notary modes |
-| **L3** | **Notary** | Human-in-the-loop (WebAuthn) | Notary mode |
-| **L4** | **Warden** | Pre-dispatch verification | Always active |
-| **L5** | **Actuator** | Execution boundary | Always active |
-
-## Protocol Integration
-
-### MCP (Model Context Protocol)
-Connect AI agents to the g8e Operator's toolset. The g8e Gateway translates JSON-RPC requests into signed GovernanceEnvelope before execution. The unified MCP endpoint architecture provides a single entry point for all MCP operations with comprehensive input validation for security hardening.
-
-### A2A (Agent-to-Agent)
-g8e Gateway-mediated communication between sovereign agents. Every interaction is state-bound and audit-logged to the local Git ledger.
-
----
-
-## Post-Bootstrap Actions
-
-After successful bootstrap, verify the platform and begin integration:
-
-### Verify Platform Status
+Check gateway health:
 
 ```bash
 ./g8e gw status
 ```
 
-### Explore Available Commands
+View logs in real time:
 
 ```bash
-./g8e --help
-./g8e gw --help
-./g8e security --help
-./g8e data --help
+./g8e gw logs -f
 ```
 
-### Configure Remote Operators (Multi-Host Setups)
+### Run the gateway in Docker
 
-For distributed enforcement across multiple hosts:
+Requires Docker 24.0+. No local binary needed — the Docker image builds and bundles the binary.
+
+Build the gateway image:
 
 ```bash
-./g8e security pki enroll -e <gateway-ip>
+docker build -t g8e-gateway:latest .
 ```
 
-See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for detailed enrollment steps.
-
-### Review Audit Trail
-
-Query the local audit vault to verify g8e governance enforcement:
+Run the container:
 
 ```bash
-./g8e data query --collection audit_vault
+docker run -d \
+  --name g8e-gateway \
+  -p 8080:8080 \
+  -p 8443:8443 \
+  -v g8e-data:/root/.g8e \
+  g8e-gateway:latest \
+  gw start --posture doctrine
+```
+
+The named volume `g8e-data` persists all runtime state (PKI, database, vault) across container restarts.
+
+Check gateway health:
+
+```bash
+docker inspect --format='{{.State.Health.Status}}' g8e-gateway
+```
+
+View logs:
+
+```bash
+docker logs -f g8e-gateway
+```
+
+Run gateway management commands inside the container:
+
+```bash
+docker exec g8e-gateway /g8e gw status
+docker exec g8e-gateway /g8e gw logs
+```
+
+Stop and remove the container:
+
+```bash
+docker stop g8e-gateway && docker rm g8e-gateway
 ```
 
 ---
 
-## Integration Guides
+## Connect an Operator
 
+### Authenticate the CLI
+
+After the gateway is running (locally or in Docker), authenticate the CLI to bootstrap the PKI hierarchy and issue mTLS credentials:
+
+```bash
+./g8e auth login
+```
+
+### Enroll a remote operator
+
+To connect an operator on a remote host to the gateway:
+
+```bash
+./g8e gw security pki enroll -e <gateway-ip>
+```
+
+See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment steps.
+
+### Connect a Docker operator to a local gateway
+
+The root `docker-compose.yml` configures a Dockerized g8e Operator that dials out to a gateway running on the host machine (or a remote IP). This is useful for testing the operator in an isolated container while the gateway runs locally.
+
+Note: The root `docker-compose.yml` references `Dockerfile.operator` which is not included in the repository. For working Gateway and Operator deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, or `demos/finance`.
+
+To use the demo configurations as reference:
+
+```bash
+cd demos/healthcare
+docker compose up -d
+```
+
+The operator connects to the gateway over `host` networking. The gateway must be running and reachable at the specified IP before the operator starts. The `restart: "no"` policy prevents enrollment loops if the gateway is not yet available.
+
+---
+
+## Industry Demos
+
+The `demos/` directory contains Docker Compose environments for three industry scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), and **Government** (CUI/CMMC). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+
+### What the demos use Docker for
+
+Each demo spins up a full isolated stack via Docker Compose:
+
+- **Gateway** — runs in a container on `net_perimeter` and `net_internal`
+- **Operator** — runs in a container on `net_internal` and `net_secure` (outbound-only to gateway)
+- **AI agent runtime** — simulated agent on `net_internal`
+- **Target system** — mock EHR/trading/classified-doc API on `net_secure`
+- **Observability** — log aggregator and audit viewer on `net_mgmt`
+
+The `g8e` binary should be copied to `demos/bin/g8e` before running demos. Build the binary first with `make build`, then copy it to the demos directory:
+
+```bash
+cp g8e demos/bin/g8e
+```
+
+The binary is then bind-mounted into every container. No per-demo image rebuilds are needed when the binary changes.
+
+### Prerequisites for demos
+
+- Docker 24.0+ with Docker Compose v2
+- The `g8e` binary built at the repository root (see [Build locally](#build-locally) or [Build in Docker](#build-in-docker))
+
+Build the binary first:
+
+```bash
+make build
+```
+
+### Run a demo
+
+Use the `g8e` CLI to manage demo environments:
+
+```bash
+# List available demo environments
+./g8e demos list
+
+# Start a demo
+./g8e demos start healthcare
+
+# Check status
+./g8e demos status healthcare
+
+# Run a scenario
+./g8e demos run healthcare 1   # Authorized agent submits a FHIR PA request
+./g8e demos run healthcare 4   # Bad actor PHI exfiltration blocked
+
+# Stop
+./g8e demos stop healthcare
+
+# Remove containers, volumes, and networks
+./g8e demos clean healthcare
+```
+
+Or use Docker Compose directly:
+
+```bash
+cd demos/healthcare
+docker compose up -d
+docker compose logs -f
+docker compose down -v
+```
+
+### Demo scenarios
+
+| Demo | Scenario | Description |
+|---|---|---|
+| healthcare | 1 | Authorized agent submits a FHIR PA request |
+| healthcare | 2 | Gold card auto-approval |
+| healthcare | 3 | SLA breach and OHA reporting |
+| healthcare | 4 | Bad actor PHI exfiltration blocked |
+| gov | 1 | CUI exfiltration attempt blocked |
+| finance | 1 | Unauthorized trade blocked |
+
+### Demo port mappings
+
+Each demo uses distinct host ports to allow simultaneous deployment:
+
+| Demo | HTTP | HTTPS | Demo UI |
+|---|---|---|---|
+| gov | 8080 | 8443 | 3000 |
+| healthcare | 8081 | 8444 | 3001 |
+| finance | 8082 | 8445 | 3002 |
+
+---
+
+## Post-Bootstrap Actions
+
+After the gateway is running and the CLI is authenticated:
+
+```bash
+./g8e gw status           # Gateway health and endpoint info
+./g8e gw data operators   # List enrolled operators
+./g8e gw data users       # List users
+./g8e gw data audit list  # Inspect the audit vault
+./g8e --help              # Full command reference
+```
+
+---
+
+## Governance Postures
+
+| Posture | L1 | L2 | L3 | Flag |
+|---|---|---|---|---|
+| Doctrine (default) | Enforced | Audited | Audited | `--posture doctrine` |
+| Consensus | Enforced | Enforced | Audited | `--posture consensus` |
+| Notary | Enforced | Enforced | Enforced | `--posture notary` |
+
+---
+
+## Next Steps
+
+- **[Build Gateway](build_gateway.md)** — Full gateway build reference, custom gateway implementations, and CLI flag reference
+- **[Build Operator](build_operator.md)** — Build and deploy a custom g8e Operator
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Enrollment, mTLS configuration, and session management
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Integrate application-layer adapters
+- **[Docker Gateway Guide](docker_gateway.md)** — Docker-specific configuration, volumes, and production considerations
+- **[Architecture](../architecture/gateway.md)** — Platform architecture and 5-layer verification sequence
 - **[MCP Protocol](../protocols/mcp/mcp.md)** — Connect AI clients via Model Context Protocol
 - **[A2A Protocol](../protocols/a2a/a2a.md)** — Agent-to-agent communication patterns
-- **[Connect Apps to Gateway](./connect_apps_to_gateway.md)** — Integrate application-layer adapters
-- **[Connect Operator to Gateway](./connect_operator_to_gateway.md)** — Deploy and enroll operators on remote hosts
-- **[Native Tools](../architecture/operator.md#native-tool-execution)** — Database triage, log digestion, process governance
-
----
-
-## Governance Configuration
-
-The g8e Gateway operates in three security postures:
-
-- **Doctrine Mode** (default): L1Doctrine enforced, L2/L3 audited
-- **Consensus Mode**: L1Doctrine/L2Consensus enforced, L3 audited
-- **Notary Mode**: L1Doctrine/L2Consensus/L3Notary strictly enforced
-
-Configure posture via `./g8e gw start --posture doctrine`, `--posture consensus`, or `--posture notary`.
-
----
-
-## Deep Dive Documentation
-
-- **[Architecture](../devs/codemap.md)** — Platform component structure
-- **[Operator Reference](../architecture/operator.md)** — Execution boundary and verification sequence
-- **[Security Model](../architecture/auth.md)** — PKI, mTLS, and WebAuthn details
-- **[CLI Reference](../devs/devs.md)** — Comprehensive command documentation

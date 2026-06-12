@@ -46,11 +46,15 @@ The Makefile provides several build targets:
 - `make build-linux` — Builds the g8e binary for Linux (amd64, arm64, 386).
 - `make build-windows` — Builds the g8e binary for Windows (amd64, arm64).
 - `make build-darwin` — Builds the g8e binary for Darwin (amd64, arm64).
-- `make build-compressed` — Builds the g8e binary for all platforms with UPX compression.
-- `make build-linux-compressed` — Builds the g8e binary for Linux with UPX compression.
-- `make build-windows-compressed` — Builds the g8e binary for Windows with UPX compression.
-- `make build-darwin-compressed` — Builds the g8e binary for Darwin with UPX compression.
 - `make clean` — Removes compiled binaries and test artifacts.
+
+### Advanced: Compression
+*Warning: UPX compression is highly discouraged as it triggers false-positive virus detections (e.g., Windows Defender/Trojan:Win32/Wacatac.C!ml).*
+
+- `make build-compressed` — Builds the g8e binary for all platforms with UPX compression (for isolated testing only).
+- `make build-linux-compressed` — Builds the g8e binary for Linux with UPX compression (for isolated testing only).
+- `make build-windows-compressed` — Builds the g8e binary for Windows with UPX compression (for isolated testing only).
+- `make build-darwin-compressed` — Builds the g8e binary for Darwin with UPX compression (for isolated testing only).
 
 ### Cross-Compilation
 

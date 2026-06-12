@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNowUTC(t *testing.T) {
@@ -61,35 +62,35 @@ func TestParseTimestamp(t *testing.T) {
 		input := "2026-01-02T15:04:05.123456789Z"
 		result, err := ParseTimestamp(input)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 2026, result.Year())
 		assert.Equal(t, time.January, result.Month())
 		assert.Equal(t, 2, result.Day())
-		assert.True(t, result.Location() == time.UTC)
+		assert.Same(t, time.UTC, result.Location())
 	})
 
 	t.Run("rejects empty timestamp", func(t *testing.T) {
 		_, err := ParseTimestamp("")
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "empty timestamp")
 	})
 
 	t.Run("rejects invalid format", func(t *testing.T) {
 		_, err := ParseTimestamp("invalid-timestamp")
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unrecognized timestamp format")
 	})
 
 	t.Run("converts non-UTC timestamp to UTC", func(t *testing.T) {
 		result, err := ParseTimestamp("2026-01-02T15:04:05+08:00")
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 2026, result.Year())
 		assert.Equal(t, time.January, result.Month())
 		assert.Equal(t, 2, result.Day())
 		assert.Equal(t, 7, result.Hour()) // 15:04:05+08:00 = 07:04:05 UTC
-		assert.True(t, result.Location() == time.UTC)
+		assert.Same(t, time.UTC, result.Location())
 	})
 }

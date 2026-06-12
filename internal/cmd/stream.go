@@ -26,9 +26,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
-)
 
-import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 

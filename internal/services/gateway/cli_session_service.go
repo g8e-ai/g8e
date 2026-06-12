@@ -65,7 +65,7 @@ func (s *CLISessionService) PersistCLISession(cliSessionID, operatorSessionID, u
 		return fmt.Errorf("failed to marshal CLI session: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, cliSessionBytes); err != nil {
 		s.logger.Error("Failed to persist CLI session", string(constants.ConnectionStateError), err)
 		return fmt.Errorf("failed to persist CLI session: %w", err)
 	}

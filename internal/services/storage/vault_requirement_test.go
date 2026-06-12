@@ -33,11 +33,10 @@ func TestVaultRequirement_ExecutionVaultService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	config := DefaultExecutionVaultConfig()
-	config.Enabled = true
 
-	// Test that service fails to initialize with nil vault when enabled
+	// Test that service fails to initialize with nil vault
 	evs, err := NewExecutionVaultService(config, logger, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "encryption vault is required")
 	assert.Nil(t, evs)
 }
@@ -49,11 +48,10 @@ func TestVaultRequirement_TokenStoreService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	config := DefaultTokenStoreConfig()
-	config.Enabled = true
 
-	// Test that service fails to initialize with nil vault when enabled
+	// Test that service fails to initialize with nil vault
 	tss, err := NewTokenStoreService(config, logger, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "encryption vault is required")
 	assert.Nil(t, tss)
 }
@@ -65,11 +63,10 @@ func TestVaultRequirement_SQLAuditStore(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	config := DefaultAuditStoreConfig()
-	config.Enabled = true
 
-	// Test that service fails to initialize with nil EncryptionVault when enabled
+	// Test that service fails to initialize with nil EncryptionVault
 	ass, err := NewSQLAuditStore(config, logger)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "EncryptionVault is required")
 	assert.Nil(t, ass)
 }
@@ -119,6 +116,6 @@ func TestLockedVaultHandling(t *testing.T) {
 	}
 
 	err = evs.StoreExecution(context.Background(), record)
-	assert.Error(t, err, "StoreExecution should fail when vault is locked")
+	require.Error(t, err, "StoreExecution should fail when vault is locked")
 	assert.Contains(t, err.Error(), "vault is locked", "Error should indicate vault is locked")
 }

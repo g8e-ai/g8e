@@ -1,3 +1,16 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gateway
 
 import (
@@ -52,7 +65,7 @@ func (s *InvitationService) CreateInvitation(organizationID, sub, createdBy stri
 		return nil, fmt.Errorf("invitation_service: create_invitation: failed to marshal invitation: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
 		return nil, fmt.Errorf("invitation_service: create_invitation: failed to save invitation: %w", err)
 	}
 
@@ -71,7 +84,7 @@ func (s *InvitationService) FindActiveInvitationBySub(sub string) (*models.Invit
 		{Field: "is_consumed", Op: "==", Value: json.RawMessage("false")},
 	}
 
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
 	if err != nil {
 		return nil, fmt.Errorf("invitation_service: find_active_invitation: failed to query invitations: %w", err)
 	}
@@ -113,7 +126,7 @@ func (s *InvitationService) ConsumeInvitation(id string) error {
 		return fmt.Errorf("invitation_service: consume_invitation: failed to marshal updates: %w", err)
 	}
 
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionInvitations), id, updateBytes)
+	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionInvitations), id, updateBytes)
 	if err != nil {
 		return fmt.Errorf("invitation_service: consume_invitation: failed to update invitation: %w", err)
 	}

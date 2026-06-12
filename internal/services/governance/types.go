@@ -16,14 +16,11 @@ package governance
 import (
 	"context"
 
-	"github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-// EnvelopeProcessor verifies and executes GovernanceEnvelopes synchronously,
-// returning a signed ActionReceipt or a governance verification error.
-// It is the primary entry point for the g8e Gateway's fail-closed mutation gate.
+// EnvelopeProcessor is the minimal interface for envelope processing.
+// This allows test doubles in tests while using the concrete OperatorPubSubService in production.
 type EnvelopeProcessor interface {
-	// ProcessEnvelope validates and executes a GovernanceEnvelope payload through
-	// the 5-layer verification gauntlet, returning a signed ActionReceipt on success.
 	ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error)
 }

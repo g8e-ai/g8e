@@ -54,7 +54,7 @@ const (
 )
 
 const (
-	PlatformSentinelModeChanged       = "g8e.v1.platform.sentinel.mode.changed"
+	PlatformVaultModeChanged          = "g8e.v1.platform.sentinel.mode.changed"
 	PlatformExternalServiceConfigured = "g8e.v1.platform.external.service.configured"
 )
 

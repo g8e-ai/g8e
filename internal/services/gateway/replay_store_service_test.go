@@ -56,7 +56,7 @@ func TestReplayStoreService_ReserveNonce_Concurrent(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		go func() {
 			replayed, err := svc.ReserveNonce(nonce, expiresAt)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			done <- !replayed // true if succeeded (not replay)
 		}()
 	}

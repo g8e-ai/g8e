@@ -97,6 +97,6 @@ func TestGenerateTestCSR_PEMFormat(t *testing.T) {
 
 	// Verify PEM header/footer format
 	require.True(t, strings.HasPrefix(csrPEM, "-----BEGIN CERTIFICATE REQUEST-----"), "Missing PEM header")
-	require.True(t, strings.Contains(csrPEM, "-----END CERTIFICATE REQUEST-----"), "Missing PEM footer")
+	require.Contains(t, csrPEM, "-----END CERTIFICATE REQUEST-----", "Missing PEM footer")
 	require.Contains(t, csrPEM, "\n", "PEM should contain newlines")
 }

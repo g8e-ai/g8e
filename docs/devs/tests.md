@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-10
+Last Updated: 2026-06-11
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -42,9 +42,12 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ./g8e test integration # Run Tier 2 (In-Memory Integration) tests - SQLite in-memory, local PKI
 ./g8e test e2e         # Run Tier 3 (Live Platform E2E) tests - requires running gateway
 ./g8e test scenario    # Run Tier 3 (Scenario) tests - requires running gateway
+./g8e test emulator     # Run emulator scenarios against real Gateway/Operator
+./g8e test chaos        # Generate realistic governance events for testing
+./g8e test summary      # View chaos test summary from test vault
 ```
 
-The CLI test commands map directly to the 4-tier test architecture:
+The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test unit`** - Runs unit tests without build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB). Fast feedback loop for local development.
 
@@ -53,6 +56,12 @@ The CLI test commands map directly to the 4-tier test architecture:
 - **`./g8e test e2e`** - Runs live-platform E2E tests with the `e2e` build tag. These tests require a running g8e gateway and authenticated CLI session (`./g8e gw start` and `./g8e auth login`).
 
 - **`./g8e test scenario`** - Runs scenario-specific E2E tests with the `e2e` build tag. These tests exercise end-to-end governance workflows across doctrine, consensus, and notary modes. Requires running gateway.
+
+- **`./g8e test emulator`** - Runs the universal agent emulator against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+
+- **`./g8e test chaos`** - Generates realistic governance events for testing. Creates a test vault with distributed event categories (70% Good Actor, 20% Prompt Injection, 10% MitM) to test governance pipeline behavior under various conditions.
+
+- **`./g8e test summary`** - Views aggregated chaos test results from the test vault database. Queries the chaos_events table across all test runs in the test vault directory.
 
 Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
 
@@ -260,6 +269,7 @@ Authentication and PKI tests:
 
 CLI command and configuration tests:
 - `api/client_test.go` - API client tests
+- `auth/agent_enroll_test.go` - Agent enrollment tests with SPIFFE URI SAN generation
 - `auth/client_test.go` - Auth client tests
 - `auth/windows_crypto_test.go` - Windows crypto tests
 - `cmd/agent_test.go` - Agent command tests
@@ -269,11 +279,12 @@ CLI command and configuration tests:
 - `cmd/chaos_test.go` - Chaos command tests
 - `cmd/cmd_test.go` - General command tests
 - `cmd/data_test.go` - Data command tests
+- `cmd/emulator_test.go` - Emulator command tests
 - `cmd/main_test.go` - Main command tests
 - `cmd/mcp_test.go` - MCP command tests
 - `cmd/platform_test.go` - Platform command tests
 - `cmd/security_test.go` - Security command tests
-- `cmd/setup_test.go` - Setup command tests
+- `cmd/test_paths_test.go` - Test path validation tests
 - `config/config_test.go` - Configuration loader tests
 - `errors/errors_test.go` - Error handling tests
 - `jsonrpc/types_test.go` - JSON-RPC type tests
@@ -315,7 +326,14 @@ CLI command and configuration tests:
 Test-only audit storage implementations separated from production code to avoid import cycles:
 
 - `audit_vault.go` - `TestSQLAuditStore` (test-only monolithic audit service with Git ledger integration)
-- `audit_vault_test.go` - Comprehensive tests for the test audit store
+- `audit_store_config_test.go` - Configuration tests for the test audit store
+- `audit_store_e2e_test.go` - End-to-end audit trail tests including `TestSQLAuditStore_EndToEnd_AuditTrail`
+- `audit_store_encryption_test.go` - Encryption tests for sensitive content fields
+- `audit_store_event_test.go` - Event storage and retrieval tests
+- `audit_store_mutation_test.go` - Mutation operation tests
+- `audit_store_receipt_test.go` - Receipt storage and verification tests
+- `audit_store_session_test.go` - Session management tests
+- `audit_store_test.go` - General audit store tests
 - `helpers.go` - Test helper functions (`testGitPath`, `createTestVault`)
 
 **Key distinction**: `storagetest.TestSQLAuditStore` is test infrastructure and should only be used in test code. Production code uses `storage.SQLAuditStore` from `audit_store.go`.
@@ -441,7 +459,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **Tooling** - Standard `go test` with optional `gotestsum` for dots-style output.
 - **Race detection** - Enabled via `-race` in CI and by default in `./g8e test unit` and `./g8e test ci`.
 - **Parallelism** - `-parallel 4` with `180s` timeout.
-- **Coverage** - `--coverage` flag generates reports. CI enforces 52% coverage threshold.
+- **Coverage** - `--coverage` flag generates reports. CI enforces 52% coverage threshold. Note: The Makefile help text incorrectly states 60% threshold, but the actual `COVERAGE_THRESHOLD` variable is set to 52%.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Gateway gate infrastructure.
 - **Path constants** - Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). Hardcoded path strings like `.g8e/pki` are prohibited in test code.
@@ -459,7 +477,8 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-e2e`** - Runs Tier 3 (Live Platform E2E) tests with `e2e` build tag. Requires running gateway and auth login.
 - **`make test-scenario`** - Runs Tier 3 (Scenario) tests with `e2e` build tag. Requires running gateway and auth login.
 - **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
-- **`make test-coverage`** - Runs tests with coverage and enforces 52% threshold. Use `PKG=./path/to/pkg` for specific packages, `VERBOSE=true` for verbose output.
+- **`make test-coverage`** - Runs tests with coverage and enforces 52% threshold. Use `PKG=./path/to/pkg` for specific packages, `VERBOSE=true` for verbose output. Note: The Makefile help text incorrectly states 60% threshold, but the actual `COVERAGE_THRESHOLD` variable is set to 52%.
+- **`make test-pkg-<path>`** - Note: This target is documented in the Makefile help text but is not implemented as a .PHONY target. Use `go test ./path/to/pkg` directly instead.
 - **`make test-shuffle`** - Runs all tests with randomized order.
 - **`make test-gateway`** - Runs gateway-specific tests (A2A gateway, MCP gateway, MCP stdio).
 - **`make test-mcp`** - Runs MCP tests (MCP gateway, MCP real operator, MCP stdio). Requires running gateway and auth login.
@@ -493,7 +512,12 @@ All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NE
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
-- **`verify-lint`** - Runs proto generation, linting, and vulnerability scanning.
-- **`security`** - Scans Go dependencies for known vulnerabilities.
-- **`test-unit-integration`** - Runs Tier 1 (Unit) and Tier 2 (In-Memory Integration) tests. Does not start the gateway.
-- **`test-e2e`** - Runs Tier 3 (Live Platform E2E) tests. Starts the gateway, authenticates, runs tests, and stops the gateway. Depends on `verify-lint` to save resources. Enforces 52% coverage threshold.
+- **`verify-proto`** - Runs proto generation and validates that generated files are in sync with protocol definitions.
+- **`validate-doctrines`** - Validates doctrine JSON schema against the governance policy model.
+- **`swagger-generate`** - Generates and validates Swagger/OpenAPI documentation from code annotations.
+- **`lint`** - Runs golangci-lint with build tags for integration tests.
+- **`vulncheck`** - Scans Go dependencies for known vulnerabilities using govulncheck.
+- **`test-unit`** - Runs Tier 1 (Unit) tests without build tags.
+- **`test-integration`** - Runs Tier 2 (In-Memory Integration) tests with the `integration` build tag.
+
+The CI workflow does not run Tier 3 (E2E) tests. E2E tests require manual execution with a running gateway and authenticated CLI session.

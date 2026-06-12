@@ -95,7 +95,7 @@ reports/*
 # Binaries
 g8e
 buf
-operator
+./operator
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding
@@ -133,3 +133,13 @@ protocol/proto/docs/reference/api/
 # --- Deployment ---
 .dockerignore
 /site
+
+# --- Claude Code ---
+CLAUDE.md
+.claude/
+.claude/*
+
+# --- GEMINI ---
+GEMINI.md
+.gemini/
+.gemini/*

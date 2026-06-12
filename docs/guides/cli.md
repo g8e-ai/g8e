@@ -11,6 +11,7 @@ Usage:
   g8e [command]
 
 Available Commands:
+  auth        Authentication and session management
   gateway     Manage the g8e Gateway lifecycle (alias: gw)
   mcp         MCP protocol operations (stdio transport)
   operator    Manage Operator instances
@@ -18,6 +19,7 @@ Available Commands:
   test        Run test suites (unit, integration, e2e, scenario, emulator, chaos)
   setup       Run platform setup (validate dependencies, build binary)
   demos       Manage g8e demo environments
+  swagger     Manage Swagger/OpenAPI documentation
   help        Help about any command
 
 Flags:
@@ -44,7 +46,6 @@ Available Commands:
   settings        Manage Gateway settings
   reset           Reset Gateway data and secrets (preserves CA)
   clean           Destructively remove all Gateway state
-  cli             CLI authentication and session management
   data            Administer the local platform over mTLS
   security        Security validation checks
   setup           Auto-discover and configure agentic coding tools for g8e integration
@@ -174,28 +175,12 @@ Flags:
       --yes     Skip confirmation prompt (shorthand)
 ```
 
-### gateway cli
+## auth
 ```
-CLI authentication and session management
+Authentication and session management
 
 Usage:
-  g8e gateway cli [command]
-
-Available Commands:
-  auth           Authentication and cli/web/operator session management
-
-Flags:
-  -h, --help   help for cli
-
-Use "g8e gateway cli [command] --help" for more information about a command.
-```
-
-#### gateway cli auth
-```
-Authentication and cli/web/operator session management
-
-Usage:
-  g8e gateway cli auth [command]
+  g8e auth [command]
 
 Available Commands:
   login           Authenticate CLI with the running Gateway
@@ -206,51 +191,51 @@ Available Commands:
 Flags:
   -h, --help   help for auth
 
-Use "g8e gateway cli auth [command] --help" for more information about a command.
+Use "g8e auth [command] --help" for more information about a command.
 ```
 
-##### gateway cli auth login
+### auth login
 ```
 Authenticate CLI with the running Gateway. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running. On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.
 
 Usage:
-  g8e gateway cli auth login [flags]
+  g8e auth login [flags]
 
 Flags:
   -h, --help   help for login
 ```
 
-##### gateway cli auth logout
+### auth logout
 ```
 Clear local Operator session and credentials
 
 Usage:
-  g8e gateway cli auth logout [flags]
+  g8e auth logout [flags]
 
 Flags:
   -h, --help   help for logout
 ```
 
-##### gateway cli auth enroll-windows
+### auth enroll-windows
 ```
 Enroll via Windows Certificate Store (Windows only - advanced). Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
 
-NOTE: This is now handled automatically by 'g8e gateway cli auth login' on Windows. This command is for advanced use cases or manual re-enrollment.
+NOTE: This is now handled automatically by 'g8e auth login' on Windows. This command is for advanced use cases or manual re-enrollment.
 
 Usage:
-  g8e gateway cli auth enroll-windows [flags]
+  g8e auth enroll-windows [flags]
 
 Flags:
       --tpm   Use TPM-backed key via Windows Hello for Business
   -h, --help   help for enroll-windows
 ```
 
-##### gateway cli auth approve
+### auth approve
 ```
 Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the Gateway.
 
 Usage:
-  g8e gateway cli auth approve <transaction_hash> [flags]
+  g8e auth approve <transaction_hash> [flags]
 
 Flags:
   -h, --help   help for approve
@@ -685,7 +670,7 @@ Flags:
 
 ### operator deploy
 ```
-Deploy the operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires 'g8e gateway cli auth login' first.
+Deploy the operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires 'g8e auth login' first.
 
 Usage:
   g8e operator deploy [flags]
@@ -700,7 +685,7 @@ Flags:
 
 ### operator stream
 ```
-Stream the operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires 'g8e gateway cli auth login' first.
+Stream the operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires 'g8e auth login' first.
 
 Usage:
   g8e operator stream [flags]
@@ -954,10 +939,8 @@ Usage:
   g8e mcp [command]
 
 Available Commands:
-  stdio       Run MCP stdio server with native tools only
-  gov         Proxy stdio MCP requests to the gateway HTTP endpoint
-  show        Print MCP client configuration for the Gateway
-  agent       Wrap agentic coding tools with g8e zero-trust gateway
+  stdio       Run MCP stdio server with full L1-L5 governance (proxies to gateway)
+  agent       Agent integration commands for popular AI coding tools
 
 Flags:
   -h, --help   help for mcp
@@ -967,7 +950,7 @@ Use "g8e mcp [command] --help" for more information about a command.
 
 ### mcp stdio
 ```
-Run MCP stdio server with native tools only. Run g8e as an MCP server using stdio transport for local agent integration. Exposes all native tools without requiring gateway mode.
+Proxy stdio MCP requests to gateway with full L1-L5 governance. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. All MCP calls are converted to GovernanceEnvelopes and pass through L1-L5 governance layers. This is the only supported stdio mode - all tool execution is fully governed and audited.
 
 Usage:
   g8e mcp stdio [flags]
@@ -976,51 +959,88 @@ Flags:
   -h, --help   help for stdio
 ```
 
-### mcp gov
-```
-Proxy stdio MCP requests to the gateway HTTP endpoint. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. This enables tools that only support stdio transport to use the full gateway governance layer.
-
-Usage:
-  g8e mcp gov [flags]
-
-Flags:
-  -h, --help   help for gov
-```
-
-### mcp show
-```
-Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.
-
-Usage:
-  g8e mcp show [flags]
-
-Flags:
-  -h, --help   help for show
-```
-
 ### mcp agent
 ```
-Wrap agentic coding tools with g8e zero-trust gateway. Wrap agentic coding tools (Claude Code, Cursor, VS Code, Cline) with g8e governance.
+Agent integration commands for popular AI coding tools. Configure and integrate g8e with popular AI agent binaries (Claude, Cursor, Devin, etc.) for seamless MCP tool access.
 
 Usage:
-  g8e mcp agent [tool-name] -- [tool-args]
+  g8e mcp agent [command]
 
 Available Commands:
-  claude      Execute Claude Code proxied through g8e gateway
+  list        List supported agent binaries
+  run         Govern any MCP server via g8e reverse proxy
+  show        Print MCP client configuration for the Gateway
 
 Flags:
   -h, --help   help for agent
 ```
 
-#### mcp agent claude
+#### mcp agent list
 ```
-Execute Claude Code proxied through g8e gateway. Execute Claude Code with all tool calls proxied through the g8e zero-trust gateway. Automatically configures MCP integration and handles L3 approvals.
+List all popular AI agent binaries that g8e supports for MCP integration.
 
 Usage:
-  g8e mcp agent claude -- [claude-args]
+  g8e mcp agent list [flags]
 
 Flags:
-  -h, --help   help for claude
+  -h, --help   help for list
+```
+
+#### mcp agent run
+```
+Launch an AI agent or wrap an MCP server with g8e governance.
+
+LAUNCH AN AGENT (one command does everything):
+
+  g8e mcp agent run claude       Start Claude with g8e as its governed MCP provider.
+                                  Uses 'mcp stdio' with full L1-L5 governance
+                                  (gateway must be running).
+                                  All MCP tool calls are routed exclusively through
+                                  g8e — no other MCP servers are reachable.
+                                  Agent is automatically enrolled as an app identity
+                                  for audit trail purposes.
+
+  Extra args are forwarded to the agent:
+    g8e mcp agent run claude -p "fix the failing tests"
+
+WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
+
+  g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+  g8e mcp agent run --url http://localhost:3000
+
+  Intercepts all tools/call requests, screens them through L1 doctrine
+  (MITRE ATT&CK threat detection), and blocks violations before forwarding.
+
+AUDIT TRAIL:
+  When launching an agent with 'g8e mcp agent run', the agent is automatically
+  enrolled as an external app identity (SPIFFE ID: spiffe://g8e.local/app/<agent-name>).
+  All MCP tool calls are recorded in the audit vault with this app identity,
+  enabling per-agent audit trails separate from human operator activity.
+
+  Query audit events for a specific agent:
+    g8e gateway data audit list --operator-session-id spiffe://g8e.local/app/claude
+    g8e gateway data audit summary --operator-session-id spiffe://g8e.local/app/claude
+
+  View all audit events:
+    g8e gateway data audit summary
+
+Usage:
+  g8e mcp agent run [<agent>] [--url <url>] [-- <command> [args...]] [flags]
+
+Flags:
+  -h, --help         help for run
+      --url string   URL of the downstream HTTP MCP server
+```
+
+#### mcp agent show
+```
+Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.
+
+Usage:
+  g8e mcp agent show <agent> [flags]
+
+Flags:
+  -h, --help   help for show
 ```
 
 ## Agent Integration
@@ -1034,20 +1054,39 @@ Flags:
 
 2. Authenticate your CLI:
    ```bash
-   ./g8e gateway cli auth login
+   ./g8e auth login
    ```
 
-3. Run Claude Code with g8e governance:
+3. List supported agent binaries:
    ```bash
-   ./g8e mcp agent claude -- --help
+   ./g8e mcp agent list
    ```
 
-### Supported Tools
+4. Show MCP configuration for your agent:
+   ```bash
+   ./g8e mcp agent show claude
+   ./g8e mcp agent show cursor
+   ./g8e mcp agent show devin
+   ```
 
-- Claude Code: `./g8e mcp agent claude`
-- Cursor: `./g8e mcp agent cursor`
-- VS Code: `./g8e mcp agent code`
-- Cline: `./g8e mcp agent cline`
+5. Copy the generated JSON configuration to your agent's MCP settings file.
+
+### Supported Agent Binaries
+
+- **claude** - Anthropic Claude Desktop / Claude Code
+- **codex** - OpenAI Codex AI coding assistant
+- **cursor** - Cursor AI IDE
+- **devin** - Devin AI IDE (formerly Windsurf)
+- **vscode** - Visual Studio Code with MCP extension
+- **continue** - Continue.dev AI coding assistant
+- **aider** - Aider AI pair programmer
+- **codeium** - Codeium AI assistant
+- **tabby** - Tabby AI autocomplete
+- **generic** - Generic MCP-compatible agent
+
+### Configuration Example
+
+For Claude Desktop, the configuration command displays all available connection options including g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport. Choose the appropriate configuration based on your environment.
 
 ### L3 Approval Flow
 
@@ -1057,11 +1096,96 @@ When a tool requires L3 approval, g8e will:
 3. Retry the tool call automatically
 4. Return the result to the tool
 
-### Manual MCP Configuration
+### Governance Proxy for Third-Party MCP Servers
 
-For tools that don't support the agent wrapper, use the MCP config commands:
+To wrap any external MCP server in g8e's L1 doctrine without running the full gateway, use `agent run`. It intercepts all tool calls and screens them through MITRE ATT&CK threat detection before forwarding.
 
 ```bash
-./g8e mcp show    # Print all MCP client configurations
-./g8e mcp gov     # Run as MCP stdio proxy to Gateway
+# Wrap a filesystem MCP server subprocess
+./g8e mcp agent run -- npx -y @modelcontextprotocol/server-filesystem /home/user
+
+# Wrap an HTTP MCP server
+./g8e mcp agent run --url http://localhost:3000
 ```
+
+Register the proxy as the MCP server in your agent config. The downstream tool's full `tools/list` and all pass-through methods are preserved — only `tools/call` is intercepted for governance.
+
+For full L1-L5 governance (L2 consensus, L3 human approval via WebAuthn), start the gateway and use `g8e mcp stdio`.
+
+### Manual MCP Configuration
+
+For tools that don't support the agent wrapper, use the agent show command:
+
+```bash
+./g8e mcp agent show claude    # Show all MCP client configurations for Claude
+./g8e mcp stdio               # Run as MCP stdio proxy to Gateway with full governance
+```
+
+## swagger
+```
+Manage Swagger/OpenAPI documentation for the g8e Gateway API. Commands for generating, serving, and validating Swagger/OpenAPI documentation.
+
+Usage:
+  g8e swagger [command]
+
+Available Commands:
+  init        Generate Swagger documentation from code annotations
+  serve       Serve Swagger UI for API documentation
+  validate    Validate Swagger/OpenAPI specification
+
+Flags:
+  -h, --help   help for swagger
+
+Use "g8e swagger [command] --help" for more information about a command.
+```
+
+### swagger init
+```
+Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses swaggo/swag to parse annotations and generate docs. The command will automatically use the installed `swag` binary, or fall back to running it via `go run` if not available.
+
+Usage:
+  g8e swagger init [flags]
+
+Flags:
+      --dir string      Directory to search for Swagger annotations (default: internal/services/gateway)
+      --output string   Output directory for generated docs (default: internal/services/gateway/docs)
+  -h, --help            help for init
+```
+
+The generated documentation includes:
+- `swagger.json` - OpenAPI 2.0 specification in JSON format
+- `swagger.yaml` - OpenAPI 2.0 specification in YAML format
+- `docs.go` - Go file with embedded documentation for the gateway
+
+### swagger serve
+```
+Start a local HTTP server to serve the Swagger UI for viewing and testing the API documentation. This command provides instructions for serving the Swagger UI either through the running gateway or via external tools.
+
+Usage:
+  g8e swagger serve [flags]
+
+Flags:
+      --host string   Host to bind to (default: localhost)
+      --port int      Port to serve Swagger UI on (default: 8081)
+  -h, --help          help for serve
+```
+
+The Swagger UI is also available directly from the running gateway at:
+- `https://localhost:8443/swagger/index.html`
+
+### swagger validate
+```
+Validate the generated Swagger/OpenAPI specification for errors and compliance. This command checks the swagger.json file for correctness using available validation tools.
+
+Usage:
+  g8e swagger validate [flags]
+
+Flags:
+      --file string   Path to Swagger spec file (default: internal/services/gateway/docs/swagger.json)
+  -h, --help          help for validate
+```
+
+If no validation tool is installed, the command will suggest installing one of:
+- `npm install -g @apidevtools/swagger-cli`
+- `go install github.com/go-swagger/go-swagger/cmd/swagger@latest`
+

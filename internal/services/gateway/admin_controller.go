@@ -68,7 +68,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -83,7 +83,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	policyDoc, err := c.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+	policyDoc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to check app policy")
 		return
@@ -128,7 +128,7 @@ func (c *AdminController) handleAppPolicySigner(w http.ResponseWriter, r *http.R
 		Enabled:   true,
 	}
 
-	if err := c.db.AddTrustedSigner(signer); err != nil {
+	if err := c.db.SignerStore.AddTrustedSigner(signer); err != nil {
 		c.logger.Error("failed to add trusted signer", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to add trusted signer")
 		return
@@ -145,7 +145,7 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -178,13 +178,13 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	_, err = c.db.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
+	_, err = c.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionAppPolicies), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete app policy")
 		return
 	}
 
-	_, err = c.db.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
+	_, err = c.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), req.AppID)
 	if err != nil {
 		c.responder.Error(w, http.StatusInternalServerError, "failed to delete trusted signer")
 		return

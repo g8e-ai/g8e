@@ -348,17 +348,17 @@ func TestProxyConn(t *testing.T) {
 
 	// Test Write
 	_, err = conn.Write([]byte("test"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Test Read
 	buf := make([]byte, 4)
 	n, err := conn.Read(buf)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 4, n)
 	assert.Equal(t, []byte("test"), buf)
 
 	// Test Close
-	assert.NoError(t, conn.Close())
+	require.NoError(t, conn.Close())
 
 	// Test addresses
 	assert.Equal(t, "tcp", conn.LocalAddr().Network())

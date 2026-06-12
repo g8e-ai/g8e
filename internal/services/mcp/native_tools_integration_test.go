@@ -34,6 +34,7 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -244,7 +245,7 @@ WARN: database connection failed`
 		err = json.Unmarshal([]byte(receipt.ResultSummary), &result)
 		require.NoError(t, err)
 
-		require.Greater(t, result.Count, 0)
+		require.Positive(t, result.Count)
 
 		// Verify scrubbing - sensitive patterns should be redacted
 		for _, line := range result.Lines {
@@ -294,7 +295,7 @@ func TestNativeToolsIntegration_ProcessTools(t *testing.T) {
 
 		require.NotEmpty(t, result.Processes)
 		for _, proc := range result.Processes {
-			require.Greater(t, proc.PID, 0)
+			require.Positive(t, proc.PID)
 			require.NotEmpty(t, proc.Name)
 		}
 	})
@@ -776,27 +777,27 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 	}
 
 	envelopeJSON, err := protojson.Marshal(envelope)
-	require.NoError(t, err)
+	assert.NoError(t, err) //nolint:testifylint,require-error // called from goroutine
 
 	// Submit envelope to governance endpoint
 	req, err := http.NewRequest(http.MethodPost, operatorURL+constants.APIPaths.GovernanceEnvelopes, bytes.NewReader(envelopeJSON))
-	require.NoError(t, err)
+	assert.NoError(t, err) //nolint:testifylint,require-error // called from goroutine
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+sessionID)
 	req.Header.Set("X-G8E-Source-Component", "test-integration")
 
 	resp, err := client.Do(req)
-	require.NoError(t, err)
+	assert.NoError(t, err) //nolint:testifylint,require-error // called from goroutine
 	defer resp.Body.Close()
 
-	require.Equal(t, http.StatusOK, resp.StatusCode, "envelope submission failed")
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "envelope submission failed")
 
 	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
+	assert.NoError(t, err) //nolint:testifylint,require-error // called from goroutine
 
 	var receipt operatorv1.ActionReceipt
 	err = protojson.Unmarshal(body, &receipt)
-	require.NoError(t, err)
+	assert.NoError(t, err) //nolint:testifylint,require-error // called from goroutine
 
 	return &receipt
 }

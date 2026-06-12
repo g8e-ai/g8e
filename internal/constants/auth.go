@@ -164,4 +164,8 @@ const (
 	ContextKeyTenantID ContextKey = "tenant_id"
 	// ContextKeyBindingPersona stores the binding persona identifier in context.
 	ContextKeyBindingPersona ContextKey = "binding_persona"
+	// ContextKeyOperatorID stores the operator ID in context.
+	ContextKeyOperatorID ContextKey = "operator_id"
+	// ContextKeyOperatorSessionID stores the operator session ID in context.
+	ContextKeyOperatorSessionID ContextKey = "operator_session_id"
 )

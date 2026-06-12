@@ -83,7 +83,7 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		// Will fail on certificate validation (dummy certs), but structure checks should pass
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("validate fails with missing PKI directory", func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		// Should fail due to missing PKI structure
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("validate fails with missing secrets directory", func(t *testing.T) {
@@ -125,6 +125,6 @@ func TestSecurityValidateWithTestEnvironment(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		// Should fail due to missing secrets
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }

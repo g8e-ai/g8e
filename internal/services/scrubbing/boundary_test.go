@@ -52,7 +52,6 @@ func TestNewScrubbingService(t *testing.T) {
 		t.Parallel()
 		service := NewScrubbingService(nil, logger, nil)
 		require.NotNil(t, service)
-		assert.True(t, service.config.Enabled)
 		assert.True(t, service.config.StrictMode)
 		assert.NotEmpty(t, service.scrubbers)
 	})
@@ -60,13 +59,11 @@ func TestNewScrubbingService(t *testing.T) {
 	t.Run("with custom config", func(t *testing.T) {
 		t.Parallel()
 		config := &Config{
-			Enabled:         true,
 			StrictMode:      false,
 			MaxOutputLength: 1024,
 		}
 		service := NewScrubbingService(config, logger, nil)
 		require.NotNil(t, service)
-		assert.True(t, service.config.Enabled)
 		assert.False(t, service.config.StrictMode)
 		assert.Equal(t, 1024, service.config.MaxOutputLength)
 	})
@@ -289,17 +286,17 @@ func TestScrubbingService_DetermineStatus(t *testing.T) {
 
 	tests := []struct {
 		exitCode int
-		expected constants.SentinelStatus
+		expected constants.CommandExitStatus
 	}{
-		{0, constants.SentinelStatusSuccess},
-		{1, constants.SentinelStatusFailure},
-		{2, constants.SentinelStatusMisuse},
-		{126, constants.SentinelStatusNotExecutable},
-		{127, constants.SentinelStatusNotFound},
-		{130, constants.SentinelStatusInterrupted},
-		{137, constants.SentinelStatusKilled},
-		{143, constants.SentinelStatusTerminated},
-		{139, constants.SentinelStatus("signal_11")}, // SIGSEGV
+		{0, constants.CommandExitStatusSuccess},
+		{1, constants.CommandExitStatusFailure},
+		{2, constants.CommandExitStatusMisuse},
+		{126, constants.CommandExitStatusNotExecutable},
+		{127, constants.CommandExitStatusNotFound},
+		{130, constants.CommandExitStatusInterrupted},
+		{137, constants.CommandExitStatusKilled},
+		{143, constants.CommandExitStatusTerminated},
+		{139, constants.CommandExitStatus("signal_11")}, // SIGSEGV
 	}
 
 	for _, tt := range tests {
@@ -357,10 +354,10 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := service.ScrubCommandResult(result)
 
-		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
+		assert.Equal(t, constants.CommandExitStatusSuccess, scrubbed.Status)
 		assert.Equal(t, 0, scrubbed.ExitCode)
 		assert.Equal(t, int64(150), scrubbed.DurationMs)
-		assert.Greater(t, scrubbed.OutputLines, 0)
+		assert.Positive(t, scrubbed.OutputLines)
 		assert.NotNil(t, scrubbed.RowCount)
 		assert.Empty(t, scrubbed.ErrorType)
 		assert.NotContains(t, scrubbed.Summary, "john@example.com")
@@ -378,7 +375,7 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := service.ScrubCommandResult(result)
 
-		assert.Equal(t, constants.SentinelStatusFailure, scrubbed.Status)
+		assert.Equal(t, constants.CommandExitStatusFailure, scrubbed.Status)
 		assert.Equal(t, 1, scrubbed.ExitCode)
 		assert.Equal(t, "permission_denied", scrubbed.ErrorType)
 	})
@@ -395,7 +392,7 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 
 		scrubbed := service.ScrubCommandResult(result)
 
-		assert.Equal(t, constants.SentinelStatusSuccess, scrubbed.Status)
+		assert.Equal(t, constants.CommandExitStatusSuccess, scrubbed.Status)
 		assert.NotEmpty(t, scrubbed.Warnings)
 		assert.Contains(t, scrubbed.Warnings, "deprecation_warning")
 		assert.Contains(t, scrubbed.Warnings, "security_warning")
@@ -675,7 +672,6 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	// Create TokenStore
 	storageConfig := &storage.TokenStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_tokens.db"),
-		Enabled:       true,
 		RetentionDays: 30,
 	}
 	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
@@ -685,7 +681,6 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 
 	// Create ScrubbingService with persistence
 	config := &Config{
-		Enabled:            true,
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
@@ -702,7 +697,7 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	assert.Equal(t, sensitiveValue, rehydrated)
 
 	// Verify token is persisted in TokenStore
-	key := fmt.Sprintf("sentinel_token_%s", token)
+	key := fmt.Sprintf("uei_token_%s", token)
 	storedValue, err := tokenStore.KVGet(context.Background(), key)
 	require.NoError(t, err)
 	assert.Equal(t, sensitiveValue, storedValue)
@@ -719,7 +714,6 @@ func TestScrubbingService_TokenPersistence_FailClosed(t *testing.T) {
 
 	// Create ScrubbingService with persistence required but no TokenStore
 	config := &Config{
-		Enabled:            true,
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
@@ -752,7 +746,6 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 	// Create TokenStore
 	storageConfig := &storage.TokenStoreConfig{
 		DBPath:        filepath.Join(tempDir, "test_ttl.db"),
-		Enabled:       true,
 		RetentionDays: 30,
 	}
 	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
@@ -762,7 +755,6 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 
 	// Create ScrubbingService with persistence
 	config := &Config{
-		Enabled:            true,
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
@@ -783,7 +775,7 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 
 	// Token should no longer be retrievable from storage
 	_, err = tokenStore.KVGet(context.Background(), key)
-	assert.Error(t, err, "Token should expire after TTL")
+	require.Error(t, err, "Token should expire after TTL")
 }
 
 func TestScrubbingService_ScrubText_ServiceTokens(t *testing.T) {
@@ -1014,7 +1006,7 @@ func TestScrubbingService_RehydrateText(t *testing.T) {
 	t.Run("empty input returns empty", func(t *testing.T) {
 		t.Parallel()
 		result := service.RehydrateText("")
-		assert.Equal(t, "", result)
+		assert.Empty(t, result)
 	})
 
 	t.Run("no tokens returns original", func(t *testing.T) {
@@ -1041,7 +1033,7 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 	t.Run("empty payload returns empty", func(t *testing.T) {
 		t.Parallel()
 		result, err := service.RehydratePayload([]byte{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Empty(t, result)
 	})
 
@@ -1050,7 +1042,7 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 		token := service.GetTokenForValue("secret")
 		payload := []byte("Text with " + token)
 		result, err := service.RehydratePayload(payload)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "Text with secret", string(result))
 	})
 
@@ -1059,11 +1051,11 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 		token := service.GetTokenForValue("secret")
 		payload := []byte(`{"key": "value ` + token + `", "nested": {"data": "` + token + `"}}`)
 		result, err := service.RehydratePayload(payload)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// Parse the result to verify rehydration
 		var parsed map[string]interface{}
 		err = json.Unmarshal(result, &parsed)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "value secret", parsed["key"])
 		nested := parsed["nested"].(map[string]interface{})
 		assert.Equal(t, "secret", nested["data"])
@@ -1107,7 +1099,7 @@ func TestScrubbingService_ClearTokens(t *testing.T) {
 	// Add some tokens
 	service.GetTokenForValue("secret1")
 	service.GetTokenForValue("secret2")
-	assert.Greater(t, len(service.tokenMap), 0)
+	assert.NotEmpty(t, service.tokenMap)
 
 	// Clear tokens
 	service.ClearTokens()

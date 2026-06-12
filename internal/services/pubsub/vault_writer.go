@@ -76,7 +76,7 @@ type executionWriteParams struct {
 // WriteExecution persists a command execution result to the consolidated vault.
 // All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
 func (vw *VaultWriter) WriteExecution(ctx context.Context, p executionWriteParams) {
-	if vw.executionVault != nil && vw.executionVault.IsEnabled() {
+	if vw.executionVault != nil {
 		execRecord := &models.ExecutionRecord{
 			ID:               p.id,
 			TimestampUTC:     time.Now().UTC(),
@@ -120,7 +120,7 @@ type fileDiffWriteParams struct {
 // WriteFileDiff persists a file diff to the consolidated vault.
 // All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
 func (vw *VaultWriter) WriteFileDiff(ctx context.Context, p fileDiffWriteParams) {
-	if vw.executionVault != nil && vw.executionVault.IsEnabled() {
+	if vw.executionVault != nil {
 		diffRecord := &models.FileDiffRecord{
 			ID:                p.diffID,
 			TimestampUTC:      p.timestamp,

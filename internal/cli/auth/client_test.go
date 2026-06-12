@@ -858,7 +858,7 @@ func TestBootstrap_Success(t *testing.T) {
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		var req models.BootstrapRequest
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.NotEmpty(t, req.CSR)
 		assert.NotEmpty(t, req.CLICSR)
 		assert.NotEmpty(t, req.SystemFingerprint)
@@ -953,7 +953,7 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 		assert.Equal(t, "POST", r.Method)
 
 		var req map[string]string
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.NotEmpty(t, req["csr_pem"])
 		assert.NotEmpty(t, req["cli_csr_pem"])
 		assert.NotEmpty(t, req["system_fingerprint"])

@@ -30,10 +30,10 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Minimal PubSubBroker - inlined to avoid import cycle with gateway package
+// Minimal GatewayWebSocketHandler - inlined to avoid import cycle with gateway package
 // ---------------------------------------------------------------------------
 
-type testPubSubBroker struct {
+type testGatewayWebSocketHandler struct {
 	logger      *slog.Logger
 	subscribers map[string]map[*testSubscriber]struct{}
 	mu          sync.RWMutex
@@ -48,14 +48,14 @@ var testWSUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-func newTestPubSubBroker(logger *slog.Logger) *testPubSubBroker {
-	return &testPubSubBroker{
+func newTestGatewayWebSocketHandler(logger *slog.Logger) *testGatewayWebSocketHandler {
+	return &testGatewayWebSocketHandler{
 		logger:      logger,
 		subscribers: make(map[string]map[*testSubscriber]struct{}),
 	}
 }
 
-func (b *testPubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (b *testGatewayWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := testWSUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		b.logger.Error("WebSocket upgrade failed", "error", err)
@@ -82,7 +82,7 @@ func (b *testPubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (b *testPubSubBroker) Close() {
+func (b *testGatewayWebSocketHandler) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, subs := range b.subscribers {
@@ -97,7 +97,7 @@ func (b *testPubSubBroker) Close() {
 // Helpers - minimal in-process TLS pub/sub server for unit tests
 // ---------------------------------------------------------------------------
 
-// newTLSPubSubServer starts a TLS httptest.Server backed by a real PubSubBroker.
+// newTLSPubSubServer starts a TLS httptest.Server backed by a real GatewayWebSocketHandler.
 // It returns the base wss:// URL (no path) and a *tls.Config that trusts the
 // server's leaf certificate. Callers append /ws/pubsub as needed.
 //
@@ -108,7 +108,7 @@ func (b *testPubSubBroker) Close() {
 func newTLSPubSubServer(t *testing.T) (string, *tls.Config) {
 	t.Helper()
 
-	broker := newTestPubSubBroker(NewTestLogger())
+	broker := newTestGatewayWebSocketHandler(NewTestLogger())
 	srv := httptest.NewTLSServer(http.HandlerFunc(broker.HandleWebSocket))
 	t.Cleanup(srv.Close)
 	t.Cleanup(broker.Close)

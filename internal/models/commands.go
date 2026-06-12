@@ -36,7 +36,7 @@ type ExecutionRequestPayload struct {
 	Tags              map[string]string `json:"tags,omitempty"`
 	Justification     string            `json:"justification,omitempty"`
 	Intent            string            `json:"intent,omitempty"`
-	SentinelMode      string            `json:"sentinel_mode,omitempty"`
+	VaultMode         string            `json:"vault_mode,omitempty"`
 }
 
 type ExecutionResultsPayload struct {
@@ -72,7 +72,7 @@ type CommandRequestPayload struct {
 	Command        string `json:"command"`
 	ExecutionID    string `json:"execution_id,omitempty"`
 	Justification  string `json:"justification,omitempty"`
-	SentinelMode   string `json:"sentinel_mode,omitempty"`
+	VaultMode      string `json:"vault_mode,omitempty"`
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
 }
 
@@ -84,7 +84,7 @@ type FileEditRequestPayload struct {
 	FilePath        string `json:"file_path"`
 	Operation       string `json:"operation"`
 	ExecutionID     string `json:"execution_id,omitempty"`
-	SentinelMode    string `json:"sentinel_mode,omitempty"`
+	VaultMode       string `json:"vault_mode,omitempty"`
 	Justification   string `json:"justification,omitempty"`
 	Content         string `json:"content,omitempty"`
 	OldContent      string `json:"old_content,omitempty"`
@@ -114,8 +114,8 @@ type FsGrepRequestPayload struct {
 }
 
 type FetchLogsRequestPayload struct {
-	ExecutionID  string `json:"execution_id"`
-	SentinelMode string `json:"sentinel_mode,omitempty"`
+	ExecutionID string `json:"execution_id"`
+	VaultMode   string `json:"vault_mode,omitempty"`
 }
 
 type FetchFileDiffRequestPayload struct {
