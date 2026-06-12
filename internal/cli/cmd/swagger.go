@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
 
