@@ -2,201 +2,170 @@
 
 # g8e
 
-## Governance Architecture for Autonomous Agents in Trustless Environments
+**Verify, then execute.**
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v1010--core-platform) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/protocol.md)
+g8e is a Reference Monitor for agentic infrastructure — a fail-closed admission boundary and a sovereign context plane in a single static Go binary. It governs every state-changing action on a host, and the tamper-evident record of those actions *is* the context your agents reason from. One proof chain. Both planes.
 
-</div>
+**2 Roles. 1 Binary. 0 Trust.**
 
-**g8e** is a provider-agnostic and domain-agnostic protocol, gateway, and client delivered in a single ~20MB binary. It cryptographically binds JSON payloads to local state with immutable audit trails and protocol-level policy controls. The platform implements Byzantine consensus where the user, AI, and operator sovereignly manage their respective roles under a verify-then-execute trust model.
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev)
+[![Status](https://img.shields.io/badge/status-v1.0.0-green.svg)](#status)
+[![Position Paper](https://img.shields.io/badge/read-position%20paper-black.svg)](docs/core/position_paper.md)
 
-### Platform Invariants
-
-* **Cryptographic Binding**: Binds JSON payloads to local host state with immutable audit trails.
-* **Structural Consensus**: Structural consensus provided by a third-party agentic system.
-* **Human Authorization**: WebAuthn and FIDO2 signing for authoritative human sign-off.
-* **Just-in-Time Security**: Narrowly defined JIT scope with mTLS enforcement across all communication.
-* **Data Sovereignty**: All data remains local; the platform saves no identifying information.
-* **Provider Agnostic**: Supports switching AI providers without context loss through cryptographically provable chain sections.
-* **Zero-Dependency Operators**: Remote operators are pre-compiled binaries with no dependencies, running on Linux, macOS, and Windows.
-* **Outbound-Only Connectivity**: Operators connect to the gateway via outbound-only mTLS tunnels; no inbound ports or root privileges are required.
-* **Multi-Host Orchestration**: All native tools support multi-host execution, enabling AI agents to run MCP tools across remote fleets without client installation or increased host-level security risk.
-
-[Position Paper](docs/core/position_paper.md) · [MCP Protocol](docs/protocols/mcp/mcp.md) · [A2A Protocol](docs/protocols/a2a/a2a.md) · [Architecture](docs/architecture/gateway.md) · [Compliance](docs/reference/compliance-alignment.md) · [Getting Started](#getting-started)
+[Quick start](#quick-start) · [The two planes](#the-two-planes) · [Mental model](#the-mental-model) · [Admission pipeline](#the-admission-pipeline) · [Docs](#documentation)
 
 </div>
-
-## The Problem: Capability vs. Authority
-
-Standard protocols establish **capability** (an agent *can* act) but ignore **authority** (whether an action is *safe* to run on a specific host). Traditional solutions like token dashboards or single-model reflection fail because they lack state-awareness, structural independence, and hardware-backed verification.
-
-## Getting Started
-
-g8e is a single-binary platform. No runtime, no interpreter, no sidecar.
-
-**Docker only** (no local toolchain required — Docker 24.0+ is the only prerequisite):
-
-```bash
-git clone https://github.com/g8e-ai/g8e.git && cd g8e
-docker build -t g8e-gateway:latest .
-docker run -d --name g8e-gateway -p 8080:8080 -p 8443:8443 \
-  -v g8e-data:/root/.g8e g8e-gateway:latest gw start
-```
-
-**With Go 1.26+ installed locally:**
-
-```bash
-git clone https://github.com/g8e-ai/g8e.git && cd g8e
-make build && ./g8e gw start
-```
-
-See the [Getting Started guide](docs/guides/getting_started.md) for build options, operator enrollment, Docker Compose demos, and full Docker instructions.
 
 ---
 
-## Architecture: One Binary, Two Roles
+## The problem
 
-g8e folds protocol translation, governance, and execution into a single statically-linked artifact (~20MB) with no external dependencies.
+AI agents now hold write access to terminals, cloud APIs, CI/CD, source control, and databases — wired in through MCP, A2A, and function calls. Those protocols establish **capability**: they prove an agent *can* act. They say nothing about **authority**: whether a given action, right now, on this host, is safe to execute.
 
-*   **g8e Gateway**: The **Policy Decision Point**. It admits signed envelopes, manages PKI, and provides a central audit view. Use it locally as a **Sovereign MCP Server** to bridge AI tools to local state.
-*   **g8e Operator**: The **Policy Execution Point**. Deployed via SSH to remote fleets, it listens on *no inbound ports*, dialing out to the Gateway via mTLS. It maintains **LFAA (Log File Audit Availability)**—ensuring a high-fidelity audit trail remains at the site of execution.
+The industry made a second mistake at the same time. To give agents memory, it moved context *into the provider* — managed threads, session stores, provider-side caches. Your data became someone else's state.
 
-### The Host-Local Gauntlet (L1-L5)
+g8e refuses both defaults.
 
-Every mutation passes through sequential verification layers at the Operator boundary. Compromising any single layer is not enough to cause an unauthorized mutation.
+```
+The mandatory invariant:
+A state-changing action reaches the host only as a typed, signed, state-bound
+transaction; the host verifies that transaction before it executes.
+The record of that execution never leaves the host — and becomes the
+verifiable context for the next action.
+```
 
-| Layer | Name | Mechanism | Proof Objective |
+---
+
+## What g8e is
+
+A Reference Monitor in the original Anderson Report sense: tamper-evident, always invoked, small enough to verify. Implemented as one pure-Go static binary (`CGO_ENABLED=0`, zero standing dependencies) running in two roles:
+
+- **Governance Gateway (`g8e gw`)** — the Policy Decision Point. Admits signed `GovernanceEnvelope` transactions, owns the platform PKI (mTLS, SPIFFE workload identities), enforces freshness and replay defense, and relays envelopes to operators. It holds **no privileged bypass** and no execution authority. It cannot reach into your hosts; it cannot even connect to them.
+
+- **Governed Operator (`g8e op`)** — the Policy Execution Point and the center of gravity. It dials **outbound-only** over mTLS to the Gateway — it listens on nothing, which means it governs hosts behind firewalls, in private subnets, and in air-gapped enclaves. It re-derives every proof locally against its own state, trusts nothing upstream including the Gateway, and is the only component permitted to mutate the host.
+
+g8e is actor-agnostic. It governs the **action**, not the actor. An AI agent, a human at a CLI, a CI/CD pipeline, and a cron job all submit through the same admission API with zero privilege difference. Any conformant `GovernanceEnvelope` producer is a Principal.
+
+---
+
+## The two planes
+
+Every governance product on the market is a control plane bolted onto someone else's data plane. g8e collapses them into one object, and that is the category difference.
+
+**The action plane.** Every mutation clears a five-layer admission pipeline at the host before it runs. Anything stale, unsigned, unauthorized, or off-policy is dropped at the boundary and recorded. The default is closed.
+
+**The context plane.** Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger — the Local-First Audit Architecture (LFAA) — *before* the side effect occurs. That ledger is not a compliance artifact that happens to be readable. It is the only memory tier in modern agent architecture with integrity guarantees: a cryptographically provable chain of intent, interpretation, and outcome that an agent reads to form its next action. The agent doesn't *retrieve* context from a store it must trust — it *derives* context from a chain it can independently verify, and compares it against live host state through governed tools.
+
+The same proof chain that gates execution is the substrate agents remember through. Acting and remembering are one operation on one object.
+
+**The consequence for cloud AI:** the frontier model becomes a stateless reasoning utility. Canonical state lives in the LFAA on your host. Context is composed locally. Only tokenized, scrubbed intent material ever crosses the sovereignty boundary; rehydration happens at execution, where the data already lives. The cloud sees commitments — transaction hashes, state roots, tokenized payloads — never custody. If you know Lightning, you know this geometry: minimize the expensive shared layer to commitments, keep real state in local channels, settle cryptographically. Except here the base layer isn't merely trustless — it's *untrusted*. You get frontier reasoning with on-prem data physics.
+
+---
+
+## The mental model
+
+g8e follows standard MCP topology with integrated governance:
+
+| Reference | g8e Role | Implementation |
+| --- | --- | --- |
+| **MCP server** | **Governed Operator** | Tool-calling facade where every execution clears the host-local admission pipeline. No inbound ports. Runs on remote, private, or air-gapped hosts. |
+| **MCP gateway** | **Governance Gateway** | Admits signed, state-bound envelopes; dispatches to operators; centralized audit authority with zero raw-data exposure. |
+
+The Gateway proposes. The Operator disposes. Verification happens on the host that lives with the consequences.
+
+---
+
+## The admission pipeline
+
+Five layers, two independent failure domains — semantic grading and mathematical verification, interleaved with no shared failure modes:
+
+1. **L1 Doctrine** — deterministic static analysis. Forbidden patterns, MITRE ATT&CK indicators, CUI/PHI doctrine rules. Always active, for every action, no exceptions.
+2. **L2 Consensus** — heterogeneous multi-model k-of-n Ed25519 signing over the canonical SHA-256 transaction hash. No single model's output executes.
+3. **L3 Notary** — hardware-bound human authorization. A WebAuthn/FIDO2 passkey assertion computed over the transaction hash — bound to one action, forever. Not a session. Not a scope.
+4. **L4 Warden** — the fail-closed verification authority. Re-derives every proof against local state: signatures, freshness, nonce, expiry, and the envelope's expected state Merkle root against the Operator's own ledger root.
+5. **L5 Actuator** — the single dispatch path. Handler invocation with data-sovereignty enforcement: tokenized payloads are rehydrated here, at the boundary, on the host.
+
+Compromising any single layer is insufficient to cause an unauthorized mutation. An attacker must simultaneously defeat orthogonal, independently audited proofs.
+
+---
+
+## Data sovereignty, enforced — not promised
+
+- Raw data never leaves the host. Tokenization and scrubbing happen before intent material crosses the boundary; rehydration happens at L5.
+- The transaction hash is computed over the **tokenized** payload, and the token keymap's integrity is bound into the state Merkle root — substitution at rehydration breaks the transaction.
+- Transport credentials (OAuth tokens, bearer tokens) become **evidence in the envelope**, never bypass mechanisms.
+- The audit record is written before the side effect. There is no window where something ran but nothing was recorded.
+
+---
+
+## Quick start
+
+Download the binary for your platform from [g8e.ai](https://g8e.ai) (darwin/linux/windows, amd64/arm64), or build from source:
+
+```bash
+# Start the Gateway (choose your posture)
+./g8e gw start --posture notary
+
+# Bootstrap the first user and certificates (loopback-only, empty system only)
+./g8e auth bootstrap
+
+# Enroll an Operator on any host that can dial out
+./g8e security pki enroll --endpoint <gateway-address>
+
+# Verify
+./g8e gw status
+./g8e data query --collection audit_vault
+```
+
+Three postures, one enforcement model:
+
+| Posture | L1 Doctrine | L2 Consensus | L3 Notary |
 | --- | --- | --- | --- |
-| **L1** | **Doctrine** | Reflected `forbidden_patterns` + MITRE ATT&CK heuristics | The action trips no hard gate (e.g., reverse shells, destructive disk ops). |
-| **L2** | **Consensus** | Ed25519 k-of-n over the transaction hash | An independent, heterogeneous model ensemble co-signed the intent. |
-| **L3** | **Notary** | WebAuthn (web sessions) / mTLS cert fingerprint (CLI/operator sessions) | A human authorized *this exact transaction hash*, not just a session. |
-| **L4** | **Warden** | Pre-dispatch verification gate | Hash integrity, temporal freshness, state binding, and signer trust hold true. |
-| **L5** | **Actuator** | Single fail-closed dispatch path | Mutates the host and emits a signed, Sovereignty-scrubbed `ActionReceipt`. |
+| `doctrine` | enforced | audited | audited |
+| `consensus` | enforced | enforced | audited |
+| `notary` | enforced | enforced | enforced |
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Principal as Principal<br/>(Human / AI Agent)
-    participant Ensemble as Producer<br/>(g8e-compatible ensemble)
-    participant Gateway as g8e Gateway
-    participant Operator as g8e Operator
-
-    Principal->>Ensemble: Submit intent (MCP/A2A/tool call)
-    Note over Ensemble: Reach Consensus (L2)<br/>Wrap in signed GovernanceEnvelope
-    Ensemble->>Gateway: Submit envelope for admission
-
-    Operator->>Gateway: Open outbound-only mTLS tunnel
-    Operator->>Gateway: Fetch pending GovernanceEnvelope
-
-    Note over Operator: Sequential verification (L1-L4)<br/>Execute via Actuator (L5)<br/>Anchor to local audit vault
-
-    Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
-    Gateway->>Principal: Return final safe output
-
-```
+L4 Warden and L5 Actuator are always active. There is no posture where the boundary is open.
 
 ---
 
-## The Stance
+## What g8e is not
 
-We hold this without hedging: **runtime governance and audit for AI agents are public goods, and gating them behind a paywall is incompatible with a safe AI-powered world.**
-
-If safety is a premium SKU, the cheapest path to shipping an agent is always the ungoverned one. For governance to be the default, it must be free. As agents grow more capable, the baseline for real-world infrastructure mutations must be heterogeneous consensus plus a cryptographic human signoff upstream.
-
-g8e is not an agent. It is the mandatory, open-source substrate agents must run on to be viable in production infrastructure.
-
----
-
-## Status: v1.0.11 - Multi-Industry Demo Suite Release
-
-**Operational today:**
-
-* Universal protocol translation (MCP/A2A intercepted into signed envelopes).
-* Fail-closed verification (L1, L2, L4).
-* L3 Notary (WebAuthn / mTLS human authorization).
-* Sovereign execution (git-backed ledger & local vault) with data sovereignty (PII/secret scrubbing).
-* Outbound-only mTLS for firewalled/air-gapped hosts.
-* SSH deployment & Fan-out execution across remote fleets.
-* Native Windows support parity.
-
-**In development:**
-
-* RBAC & Multi-tenancy.
-* Complex policy (dynamic intent allowlisting).
-* Gateway federation & agentic mesh gossiping.
+- **Not an agent framework.** LangChain, CrewAI, and every ensemble are Principals — intent producers submitting through the same admission API as everyone else, with zero privilege advantage.
+- **Not a cloud service.** Self-hosted, local-first, runs air-gapped. No phone-home, no SaaS dependency, no telemetry leaving your perimeter.
+- **Not a prompt filter.** g8e governs at the execution boundary with cryptographic proofs, not at the prompt with heuristics.
+- **Not paywalled.** Apache 2.0, forever. Safe AI runtime governance must never be gated by a paywall.
 
 ---
 
-## Example: GovernanceEnvelope with MCP Payload
+## Compliance posture
 
-Below is a complete example of a `GovernanceEnvelope` wrapping an MCP tool call (`fs_read`), demonstrating all fields including L1/L2/L3 governance proofs:
+Designed for environments where "trust us" is not an acceptable answer: NIST 800-207 zero trust architecture, NIST AI RMF, CMMC/CUI handling, FedRAMP-aligned deployment paths, ISO 42001, SOC 2. The LFAA ledger produces the evidence trail these frameworks ask for as a side effect of normal operation.
 
-```json
-{
-  "id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-  "timestamp": "2026-06-02T18:27:00Z",
-  "expiresAt": "2026-06-02T18:32:00Z",
-  "sourceComponent": "COMPONENT_CLIENT",
-  "operatorId": "op-prod-12345",
-  "operatorSessionId": "sess-abc-789",
-  "webSessionId": "web-xyz-456",
-  "cliSessionId": "",
-  "eventType": "g8e.v1.operator.mcp.call.requested",
-  "payload": "CgZmc19yZWFkEglleGVjLTIwMzUSCgoZmlsZTovLy9ob21lL3VzZXIvcmVhZG1lLm1kGgZzY3J1Yg==",
-  "intentData": {
-    "tool": "fs_read",
-    "path": "/home/user/readme.md",
-    "reason": "Read deployment documentation"
-  },
-  "actionType": "MCP_CALL",
-  "targetResource": "file:///home/user/readme.md",
-  "stateMerkleRoot": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
-  "nonce": "nonce-1717358820000-abc123",
-  "transactionHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-  "protocolVersion": "1.0",
-  "governance": {
-    "l1": {
-      "validated": true,
-      "violations": []
-    },
-    "l2": {
-      "consensusSignature": "4a5b6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-      "agentIds": ["agent-ensemble-1", "agent-ensemble-2", "agent-ensemble-3"],
-      "keyId": "key-ensemble-prod-abc123"
-    },
-    "l3": {
-      "proof": {
-        "clientDataJson": "{\"challenge\":\"a1b2c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
-        "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
-        "signature": "MEUCIQDWn3x4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IgE5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-        "credentialId": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1",
-        "mtlsCertFingerprint": "",
-        "cliSignature": ""
-      },
-      "autoApproved": false
-    },
-    "gatewaySigned": false
-  },
-  "caseId": "case-deploy-456",
-  "investigationId": "",
-  "taskId": "task-readme-789",
-  "systemFingerprint": "fp-linux-amd64-abc123",
-  "tenantId": "tenant-prod-xyz",
-  "bindingPersona": "default"
-}
-```
+---
 
-The `payload` field contains base64-encoded protobuf bytes of the `McpCallRequested` message, which includes the tool name (`fs_read`) and JSON arguments specifying the file path.
+## Status
+
+**v1.0.0 — shipped.** Core protocol, Gateway and Operator roles, five-layer pipeline, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, 13 native tools, multi-platform binaries.
+
+In active development: transparent interception (`g8e run <cmd>` per-process proxy and TPROXY whole-host mode), gateway federation mesh, multi-operator Byzantine fault tolerance.
 
 ---
 
 ## Documentation
 
-* [Getting Started](docs/guides/getting_started.md)
-* [Architecture: Operator](docs/architecture/operator.md) · [Gateway](docs/architecture/gateway.md) · [Auth](docs/architecture/auth.md) · [Local Translation](docs/architecture/network.md)
-* [Protocol Specification](docs/architecture/protocol.md) · [API Reference](docs/reference/)
-* [Build a g8e Operator](docs/guides/build_operator.md)
+- [Getting Started](docs/guides/getting_started.md)
+- [Position Paper](docs/core/position_paper.md)
+- [Operator Architecture](docs/architecture/operator.md)
+- [Gateway Architecture](docs/architecture/gateway.md)
+- [Security Model](docs/architecture/auth.md)
+- [MCP Integration](docs/protocols/mcp/mcp.md) · [A2A Integration](docs/protocols/a2a/a2a.md)
+- [CLI Reference](docs/guides/cli.md)
+- [Glossary](docs/reference/glossary.md)
 
 ---
 
-*Built by Lateralus Labs. Licensed Apache 2.0.*
+Apache 2.0 · Built by [Lateralus Labs](https://g8e.ai) · Veteran-owned
+
+*This ran because it proved it should — not because nothing stopped it.*
