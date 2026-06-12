@@ -18,7 +18,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -38,11 +37,11 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func TestNewPubSubCommandService(t *testing.T) {
+func TestNewOperatorPubSubService(t *testing.T) {
 	t.Run("creates service successfully", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
-		svc, err := NewPubSubCommandService(CommandServiceConfig{
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
 			PubSubClient:      NewMockOperatorPubSubClient(),
@@ -56,13 +55,13 @@ func TestNewPubSubCommandService(t *testing.T) {
 	})
 }
 
-func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *testing.T) {
+func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	tmpDir := t.TempDir()
 	cfg.PKIDir = filepath.Join(tmpDir, "pki")
 	cfg.Gateway.Posture = config.PostureConsensus // Set Consensus posture to enforce L2
-	svc, err := NewPubSubCommandService(CommandServiceConfig{
+	svc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:            cfg,
 		Logger:            testutil.NewTestLogger(),
 		PubSubClient:      NewMockOperatorPubSubClient(),
@@ -80,7 +79,7 @@ func TestNewPubSubCommandService_StartsWithoutTrustedSignersButRejectsL2(t *test
 
 	_, err = svc.l4warden.VerifyEnvelope(context.Background(), env)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, governance.ErrL2KeyNotConfigured), "expected missing L2 key error, got %v", err)
+	assert.ErrorIs(t, err, governance.ErrL2KeyNotConfigured, "expected missing L2 key error, got %v", err)
 }
 
 func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg.GovernanceEnvelope {
@@ -114,7 +113,7 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 	return env
 }
 
-func TestPubSubCommandService_handleCommandPayload(t *testing.T) {
+func TestOperatorPubSubService_handleCommandPayload(t *testing.T) {
 	t.Run("rejects oversized payload", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
@@ -132,7 +131,7 @@ func TestPubSubCommandService_handleCommandPayload(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_handleGovernanceEnvelope(t *testing.T) {
+func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 	t.Run("rejects envelope with missing payload", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
@@ -153,7 +152,7 @@ func TestPubSubCommandService_handleGovernanceEnvelope(t *testing.T) {
 	t.Run("rejects when Actuator missing", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
-		svc, err := NewPubSubCommandService(CommandServiceConfig{
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
 			PubSubClient:      NewMockOperatorPubSubClient(),
@@ -183,7 +182,7 @@ func TestPubSubCommandService_handleGovernanceEnvelope(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_dispatchCommand(t *testing.T) {
+func TestOperatorPubSubService_dispatchCommand(t *testing.T) {
 	t.Run("warns on unknown event type", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
@@ -196,7 +195,7 @@ func TestPubSubCommandService_dispatchCommand(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_ExecuteVerifiedTransaction(t *testing.T) {
+func TestOperatorPubSubService_ExecuteVerifiedTransaction(t *testing.T) {
 	f := newPubsubFixture(t)
 
 	t.Run("rejects invalid cmdMsg type", func(t *testing.T) {
@@ -218,7 +217,7 @@ func TestPubSubCommandService_ExecuteVerifiedTransaction(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_handleMcpCallRequestSync(t *testing.T) {
+func TestOperatorPubSubService_handleMcpCallRequestSync(t *testing.T) {
 	f := newPubsubFixture(t)
 
 	t.Run("rejects when MCP gateway not configured", func(t *testing.T) {
@@ -235,7 +234,7 @@ func TestPubSubCommandService_handleMcpCallRequestSync(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
+func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 	t.Run("rejects when A2A gateway not configured", func(t *testing.T) {
 		t.Parallel()
 		f := newPubsubFixture(t)
@@ -251,7 +250,7 @@ func TestPubSubCommandService_handleA2aCallRequestSync(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
+func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 	t.Run("rejects when Actuator not configured", func(t *testing.T) {
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(nil)
@@ -280,7 +279,7 @@ func TestPubSubCommandService_handleAppInvestigationCreatedSync(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
+func TestOperatorPubSubService_handleShutdownRequest(t *testing.T) {
 	f := newPubsubFixture(t)
 
 	t.Run("rejects unmarshal error", func(t *testing.T) {
@@ -340,7 +339,7 @@ func TestPubSubCommandService_handleShutdownRequest(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_handleEvalAnswerRequestSync(t *testing.T) {
+func TestOperatorPubSubService_handleEvalAnswerRequestSync(t *testing.T) {
 	f := newPubsubFixture(t)
 
 	t.Run("rejects unmarshal error", func(t *testing.T) {
@@ -355,7 +354,7 @@ func TestPubSubCommandService_handleEvalAnswerRequestSync(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_Start(t *testing.T) {
+func TestOperatorPubSubService_Start(t *testing.T) {
 
 	t.Run("rejects start when already running", func(t *testing.T) {
 		t.Parallel()
@@ -376,7 +375,7 @@ func TestPubSubCommandService_Start(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		cfg.OperatorID = ""
 		cfg.OperatorSessionId = ""
-		svc, err := NewPubSubCommandService(CommandServiceConfig{
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
 			PubSubClient:      NewMockOperatorPubSubClient(),
@@ -393,7 +392,7 @@ func TestPubSubCommandService_Start(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_Stop(t *testing.T) {
+func TestOperatorPubSubService_Stop(t *testing.T) {
 	t.Parallel()
 
 	t.Run("stops gracefully when not running", func(t *testing.T) {
@@ -404,7 +403,7 @@ func TestPubSubCommandService_Stop(t *testing.T) {
 	})
 }
 
-func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
+func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 	f := newPubsubFixture(t)
 
 	t.Run("successful synchronous processing", func(t *testing.T) {
@@ -474,7 +473,7 @@ func TestPubSubCommandService_ProcessEnvelope(t *testing.T) {
 	t.Run("rejects when transaction verifier not configured", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
-		svc, err := NewPubSubCommandService(CommandServiceConfig{
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
 			PubSubClient:      NewMockOperatorPubSubClient(),

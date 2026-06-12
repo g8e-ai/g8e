@@ -58,7 +58,7 @@ func TestApproveCmd(t *testing.T) {
 		// The cobra framework will validate args before RunE is called
 		// So we test the validation directly
 		err := cmd.Args(cmd, []string{})
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("approve fails with invalid config", func(t *testing.T) {
@@ -74,7 +74,7 @@ func TestApproveCmd(t *testing.T) {
 
 		// Don't set up config - should fail to load
 		err := cmd.RunE(cmd, []string{"abc123"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		// Config loading might fail for various reasons, just check it fails
 	})
 
@@ -93,7 +93,7 @@ func TestApproveCmd(t *testing.T) {
 		// Don't create CLI key file
 
 		err := cmd.RunE(cmd, []string{"abc123"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		// Will fail on key read or config load
 	})
 
@@ -113,7 +113,7 @@ func TestApproveCmd(t *testing.T) {
 		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("invalid pem"), 0600))
 
 		err := cmd.RunE(cmd, []string{"abc123"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		// Will fail on PEM decode or config load
 	})
 
@@ -145,7 +145,7 @@ func TestApproveCmd(t *testing.T) {
 
 		// Don't create cert file
 		err = cmd.RunE(cmd, []string{"abc123"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		// Will fail on cert read or config load
 	})
 }

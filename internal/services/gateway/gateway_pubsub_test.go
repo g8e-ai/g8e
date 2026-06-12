@@ -16,7 +16,6 @@ package gateway
 import (
 	"bytes"
 	"log/slog"
-	"strings"
 	"sync"
 	"testing"
 
@@ -37,7 +36,7 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	// Inject a subscriber with a tiny buffer and no ws so trySend's
 	// nil-guard path is exercised.
@@ -71,7 +70,7 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 	assert.Contains(t, logs, "back-pressure", "drop-oldest event must be logged")
 	assert.Contains(t, logs, "dropped_total=1", "log must include running drop counter")
 	assert.Contains(t, logs, "buffer_capacity=1", "log must include buffer capacity")
-	assert.True(t, strings.Contains(logs, "level=WARN"), "pubsub: trySend: drop-oldest must be logged at WARN level")
+	assert.Contains(t, logs, "level=WARN", "pubsub: trySend: drop-oldest must be logged at WARN level")
 }
 
 // TestPubSubBackPressureKeepsSubscriptions verifies that under sustained
@@ -81,7 +80,7 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{send: make(chan []byte, 1), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
@@ -102,7 +101,7 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 func TestPubSubSessionHandler_handleAction(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{
 		send:             make(chan []byte, 10),
@@ -179,7 +178,7 @@ func TestPubSubSessionHandler_handleAction(t *testing.T) {
 func TestPubSubSessionHandler_cleanup(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{
 		send:             make(chan []byte, 10),
@@ -216,7 +215,7 @@ func TestPubSubSessionHandler_cleanup(t *testing.T) {
 func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
@@ -251,7 +250,7 @@ func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
 	broker.subscribe("ch", sub)
@@ -260,10 +259,10 @@ func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
 	assert.NotContains(t, buf.String(), "back-pressure")
 }
 
-func TestNewPubSubBroker(t *testing.T) {
+func TestNewGatewayWebSocketHandler(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	assert.NotNil(t, broker)
 	assert.NotNil(t, broker.logger)
@@ -274,7 +273,7 @@ func TestNewPubSubBroker(t *testing.T) {
 func TestRegisterHandler(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	called := false
 	var receivedChannel string
@@ -306,7 +305,7 @@ func TestRegisterHandler(t *testing.T) {
 func TestSubscribe(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
-	broker := NewPubSubBroker(logger)
+	broker := NewGatewayWebSocketHandler(logger)
 
 	sub := &wsSubscriber{send: make(chan []byte, 4), done: make(chan struct{})}
 

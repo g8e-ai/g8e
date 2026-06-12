@@ -60,7 +60,7 @@ func TestDeriveKEK(t *testing.T) {
 	t.Run("empty key rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := DeriveKEK([]byte{})
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -174,7 +174,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = AESKeyUnwrap(kek2, wrapped)
-		assert.ErrorIs(t, err, ErrKeyUnwrapFailed)
+		require.ErrorIs(t, err, ErrKeyUnwrapFailed)
 	})
 
 	t.Run("tampered ciphertext fails unwrap", func(t *testing.T) {
@@ -188,7 +188,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		wrapped[10] ^= 0xFF
 
 		_, err = AESKeyUnwrap(kek, wrapped)
-		assert.ErrorIs(t, err, ErrKeyUnwrapFailed)
+		require.ErrorIs(t, err, ErrKeyUnwrapFailed)
 	})
 
 	t.Run("invalid key sizes rejected", func(t *testing.T) {
@@ -197,7 +197,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		plaintext, _ := GenerateDEK()
 
 		_, err := AESKeyWrap(invalidKEK, plaintext)
-		assert.ErrorIs(t, err, ErrInvalidKeySize)
+		require.ErrorIs(t, err, ErrInvalidKeySize)
 	})
 
 	t.Run("invalid plaintext size rejected", func(t *testing.T) {
@@ -206,7 +206,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		invalidPlaintext := make([]byte, 15)
 
 		_, err := AESKeyWrap(kek, invalidPlaintext)
-		assert.ErrorIs(t, err, ErrInvalidPlaintextKey)
+		require.ErrorIs(t, err, ErrInvalidPlaintextKey)
 	})
 
 	t.Run("too short plaintext rejected", func(t *testing.T) {
@@ -215,7 +215,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		shortPlaintext := make([]byte, 8)
 
 		_, err := AESKeyWrap(kek, shortPlaintext)
-		assert.ErrorIs(t, err, ErrInvalidPlaintextKey)
+		require.ErrorIs(t, err, ErrInvalidPlaintextKey)
 	})
 }
 
@@ -262,7 +262,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = DecryptAESGCM(key, nonce, ciphertext, []byte("wrong aad"))
-		assert.ErrorIs(t, err, ErrDecryptionFailed)
+		require.ErrorIs(t, err, ErrDecryptionFailed)
 	})
 
 	t.Run("wrong key fails decryption", func(t *testing.T) {
@@ -276,7 +276,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = DecryptAESGCM(key2, nonce, ciphertext, nil)
-		assert.ErrorIs(t, err, ErrDecryptionFailed)
+		require.ErrorIs(t, err, ErrDecryptionFailed)
 	})
 
 	t.Run("tampered ciphertext fails decryption", func(t *testing.T) {
@@ -291,7 +291,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		ciphertext[5] ^= 0xFF
 
 		_, err = DecryptAESGCM(key, nonce, ciphertext, nil)
-		assert.ErrorIs(t, err, ErrDecryptionFailed)
+		require.ErrorIs(t, err, ErrDecryptionFailed)
 	})
 
 	t.Run("invalid key size rejected", func(t *testing.T) {
@@ -301,7 +301,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		plaintext := []byte("test")
 
 		_, err := EncryptAESGCM(invalidKey, nonce, plaintext, nil)
-		assert.ErrorIs(t, err, ErrInvalidKeySize)
+		require.ErrorIs(t, err, ErrInvalidKeySize)
 	})
 
 	t.Run("invalid nonce size rejected", func(t *testing.T) {
@@ -311,7 +311,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		plaintext := []byte("test")
 
 		_, err := EncryptAESGCM(key, invalidNonce, plaintext, nil)
-		assert.ErrorIs(t, err, ErrInvalidNonceSize)
+		require.ErrorIs(t, err, ErrInvalidNonceSize)
 	})
 }
 
@@ -381,7 +381,7 @@ func TestVaultHeaderUnwrapDEK(t *testing.T) {
 		defer SecureZero(dek)
 
 		_, err = header.UnwrapDEK(testPrivateKey2)
-		assert.ErrorIs(t, err, ErrKeyFingerprintMatch)
+		require.ErrorIs(t, err, ErrKeyFingerprintMatch)
 	})
 }
 
@@ -397,7 +397,7 @@ func TestVaultHeaderRekey(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = header.UnwrapDEK(testPrivateKey1)
-		assert.ErrorIs(t, err, ErrKeyFingerprintMatch)
+		require.ErrorIs(t, err, ErrKeyFingerprintMatch)
 
 		unwrappedDEK, err := header.UnwrapDEK(testPrivateKey2)
 		require.NoError(t, err)
@@ -414,7 +414,7 @@ func TestVaultHeaderRekey(t *testing.T) {
 		defer SecureZero(dek)
 
 		err = header.Rekey(testPrivateKey2, testPrivateKey2)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -442,7 +442,7 @@ func TestVaultHeaderSaveLoad(t *testing.T) {
 	t.Run("load non-existent returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := LoadVaultHeader(filepath.Join(tempDir, "nonexistent"))
-		assert.ErrorIs(t, err, ErrHeaderNotFound)
+		require.ErrorIs(t, err, ErrHeaderNotFound)
 	})
 }
 
@@ -525,7 +525,7 @@ func TestVaultUnlock(t *testing.T) {
 		defer vault2.Close()
 
 		err := vault2.Unlock(testPrivateKey2)
-		assert.ErrorIs(t, err, ErrInvalidPrivateKey)
+		require.ErrorIs(t, err, ErrInvalidPrivateKey)
 	})
 
 	t.Run("unlock non-existent vault fails", func(t *testing.T) {
@@ -537,7 +537,7 @@ func TestVaultUnlock(t *testing.T) {
 		defer vault.Close()
 
 		err := vault.Unlock(testPrivateKey1)
-		assert.ErrorIs(t, err, ErrVaultNotInit)
+		require.ErrorIs(t, err, ErrVaultNotInit)
 	})
 }
 
@@ -563,7 +563,7 @@ func TestVaultRekey(t *testing.T) {
 		require.NoError(t, err)
 
 		err = vault2.Unlock(testPrivateKey1)
-		assert.ErrorIs(t, err, ErrInvalidPrivateKey)
+		require.ErrorIs(t, err, ErrInvalidPrivateKey)
 
 		vault3, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault3.Close()
@@ -595,7 +595,7 @@ func TestVaultLock(t *testing.T) {
 		assert.False(t, vault.IsUnlocked())
 
 		_, err := vault.GetDEK()
-		assert.ErrorIs(t, err, ErrVaultLocked)
+		require.ErrorIs(t, err, ErrVaultLocked)
 	})
 }
 
@@ -632,7 +632,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 		decrypted, err := v.Decrypt(ciphertext)
 		require.NoError(t, err)
-		assert.Len(t, decrypted, 0)
+		assert.Empty(t, decrypted)
 	})
 
 	t.Run("large data", func(t *testing.T) {
@@ -658,7 +658,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 		defer v.Close()
 
 		_, err := v.Decrypt([]byte("short"))
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("encrypt fails when locked", func(t *testing.T) {
@@ -669,7 +669,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 		v.Lock()
 		_, err := v.Encrypt([]byte("test"))
-		assert.ErrorIs(t, err, ErrVaultLocked)
+		require.ErrorIs(t, err, ErrVaultLocked)
 	})
 
 	t.Run("decrypt fails when locked", func(t *testing.T) {
@@ -680,7 +680,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 		v.Lock()
 		_, err := v.Decrypt(make([]byte, 32))
-		assert.ErrorIs(t, err, ErrVaultLocked)
+		require.ErrorIs(t, err, ErrVaultLocked)
 	})
 }
 
@@ -698,7 +698,7 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 		defer vault2.Close()
 
 		err := vault2.VerifyIntegrity(testPrivateKey1)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("verify with wrong key fails", func(t *testing.T) {
@@ -707,7 +707,7 @@ func TestVaultVerifyIntegrity(t *testing.T) {
 		defer vault2.Close()
 
 		err := vault2.VerifyIntegrity(testPrivateKey2)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -721,7 +721,7 @@ func TestVaultReset(t *testing.T) {
 		vault := newTestVault(t, dataDir, testPrivateKey1)
 
 		err := vault.Reset(false)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.True(t, vault.IsInitialized())
 	})
 
@@ -770,7 +770,7 @@ func TestVaultFullLifecycle(t *testing.T) {
 
 	vault4, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 	err = vault4.Unlock(testPrivateKey1)
-	assert.ErrorIs(t, err, ErrInvalidPrivateKey)
+	require.ErrorIs(t, err, ErrInvalidPrivateKey)
 	vault4.Close()
 
 	vault5, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
@@ -789,13 +789,13 @@ func TestNewVault(t *testing.T) {
 	t.Run("nil config rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := NewVault(nil)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("empty data dir rejected", func(t *testing.T) {
 		t.Parallel()
 		_, err := NewVault(&VaultConfig{DataDir: "", Logger: testutil.NewTestLogger()})
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("nil logger uses default", func(t *testing.T) {
@@ -819,7 +819,7 @@ func TestVaultUnlockAlreadyOpen(t *testing.T) {
 		defer v.Close()
 
 		err := v.Unlock(testPrivateKey1)
-		assert.ErrorIs(t, err, ErrVaultAlreadyOpen)
+		require.ErrorIs(t, err, ErrVaultAlreadyOpen)
 	})
 }
 
@@ -845,7 +845,7 @@ func TestAESKeyUnwrapInvalidKEK(t *testing.T) {
 		wrapped := make([]byte, 40)
 
 		_, err := AESKeyUnwrap(invalidKEK, wrapped)
-		assert.ErrorIs(t, err, ErrInvalidKeySize)
+		require.ErrorIs(t, err, ErrInvalidKeySize)
 	})
 }
 
@@ -870,7 +870,7 @@ func TestDeleteVaultHeader(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
 		err := DeleteVaultHeader(filepath.Join(tempDir, "nonexistent"))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 
@@ -884,7 +884,7 @@ func TestLoadVaultHeaderCorrupted(t *testing.T) {
 		require.NoError(t, os.WriteFile(headerPath, []byte("not valid json {{{"), 0600))
 
 		_, err := LoadVaultHeader(tempDir)
-		assert.ErrorIs(t, err, ErrHeaderCorrupted)
+		require.ErrorIs(t, err, ErrHeaderCorrupted)
 	})
 }
 

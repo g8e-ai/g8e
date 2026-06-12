@@ -23,19 +23,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestShellExecuteTool_Name(t *testing.T) {
-	tool := &ShellExecuteTool{}
-	require.Equal(t, "shell_execute", tool.Name())
+func TestRunShellCommandTool_Name(t *testing.T) {
+	tool := &RunShellCommandTool{}
+	require.Equal(t, "run_shell_command", tool.Name())
 }
 
-func TestShellExecuteTool_Description(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Description(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	require.NotEmpty(t, tool.Description())
 	require.Contains(t, tool.Description(), "shell")
 }
 
-func TestShellExecuteTool_InputSchema(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_InputSchema(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	schema := tool.InputSchema()
 
 	require.Equal(t, "object", schema.Type)
@@ -65,11 +65,11 @@ func TestShellExecuteTool_InputSchema(t *testing.T) {
 	require.Equal(t, "array", hostnamesProp.Type)
 }
 
-func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_SimpleCommand(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command: "echo",
 		Args:    []string{"hello"},
 	}
@@ -80,7 +80,7 @@ func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
 
-	var shellResult ShellExecuteResult
+	var shellResult RunShellCommandResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
@@ -88,8 +88,8 @@ func TestShellExecuteTool_Execute_SimpleCommand(t *testing.T) {
 	require.False(t, shellResult.TimedOut)
 }
 
-func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_WithWorkingDir(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 	tmpDir := t.TempDir()
 
@@ -98,7 +98,7 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 		pwdCmd = "cmd.exe"
 	}
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command:    pwdCmd,
 		WorkingDir: tmpDir,
 	}
@@ -113,7 +113,7 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
 
-	var shellResult ShellExecuteResult
+	var shellResult RunShellCommandResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
@@ -123,11 +123,11 @@ func TestShellExecuteTool_Execute_WithWorkingDir(t *testing.T) {
 	require.Contains(t, normalizedStdout, normalizedTmpDir)
 }
 
-func TestShellExecuteTool_Execute_WithTimeout(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_WithTimeout(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command: "echo",
 		Args:    []string{"test"},
 		Timeout: 10,
@@ -139,17 +139,17 @@ func TestShellExecuteTool_Execute_WithTimeout(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
 
-	var shellResult ShellExecuteResult
+	var shellResult RunShellCommandResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
 }
 
-func TestShellExecuteTool_Execute_TimeoutExceedsMax(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_TimeoutExceedsMax(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command: "echo",
 		Args:    []string{"test"},
 		Timeout: 301, // Exceeds max of 300
@@ -162,11 +162,11 @@ func TestShellExecuteTool_Execute_TimeoutExceedsMax(t *testing.T) {
 	require.Contains(t, err.Error(), "timeout cannot exceed")
 }
 
-func TestShellExecuteTool_Execute_MissingCommand(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_MissingCommand(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command: "",
 	}
 	reqJSON, err := json.Marshal(req)
@@ -177,8 +177,8 @@ func TestShellExecuteTool_Execute_MissingCommand(t *testing.T) {
 	require.Contains(t, err.Error(), "command is required")
 }
 
-func TestShellExecuteTool_Execute_InvalidJSON(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_InvalidJSON(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
 	invalidJSON := json.RawMessage(`{invalid json`)
@@ -188,11 +188,11 @@ func TestShellExecuteTool_Execute_InvalidJSON(t *testing.T) {
 	require.Contains(t, err.Error(), "unmarshal arguments")
 }
 
-func TestShellExecuteTool_Execute_NonexistentCommand(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_NonexistentCommand(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command: "nonexistent_command_12345",
 	}
 	reqJSON, err := json.Marshal(req)
@@ -202,14 +202,14 @@ func TestShellExecuteTool_Execute_NonexistentCommand(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
 
-	var shellResult ShellExecuteResult
+	var shellResult RunShellCommandResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.NotEqual(t, 0, shellResult.ExitCode)
 	require.NotEmpty(t, shellResult.Error)
 }
 
-func TestShellExecuteTool_Denylist_DangerousCommands(t *testing.T) {
+func TestRunShellCommandTool_Denylist_DangerousCommands(t *testing.T) {
 	dangerousCommands := []string{
 		"rm", "dd", "mkfs", "fdisk", "killall", "pkill",
 		"reboot", "shutdown", "iptables", "mount", "umount",
@@ -225,7 +225,7 @@ func TestShellExecuteTool_Denylist_DangerousCommands(t *testing.T) {
 	}
 }
 
-func TestShellExecuteTool_Denylist_DangerousPatterns(t *testing.T) {
+func TestRunShellCommandTool_Denylist_DangerousPatterns(t *testing.T) {
 	dangerousPatterns := []string{
 		"mkfs.ext4",
 		"> /dev/sda",
@@ -244,7 +244,7 @@ func TestShellExecuteTool_Denylist_DangerousPatterns(t *testing.T) {
 	}
 }
 
-func TestShellExecuteTool_Denylist_ShellInjection(t *testing.T) {
+func TestRunShellCommandTool_Denylist_ShellInjection(t *testing.T) {
 	injectionPatterns := []string{
 		"echo $(whoami)",
 		"echo `whoami`",
@@ -261,7 +261,7 @@ func TestShellExecuteTool_Denylist_ShellInjection(t *testing.T) {
 	}
 }
 
-func TestShellExecuteTool_Denylist_AllowsSafeCommands(t *testing.T) {
+func TestRunShellCommandTool_Denylist_AllowsSafeCommands(t *testing.T) {
 	safeCommands := []struct {
 		command string
 		args    []string
@@ -285,11 +285,11 @@ func TestShellExecuteTool_Denylist_AllowsSafeCommands(t *testing.T) {
 	}
 }
 
-func TestShellExecuteTool_Execute_CommandRejected(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_CommandRejected(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command: "rm",
 		Args:    []string{"-rf", "/"},
 	}
@@ -300,7 +300,7 @@ func TestShellExecuteTool_Execute_CommandRejected(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
 
-	var shellResult ShellExecuteResult
+	var shellResult RunShellCommandResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, -1, shellResult.ExitCode)
@@ -308,11 +308,11 @@ func TestShellExecuteTool_Execute_CommandRejected(t *testing.T) {
 	require.Contains(t, strings.ToLower(shellResult.Error), "rejected by safety policy")
 }
 
-func TestShellExecuteTool_Execute_MultiHost(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_MultiHost(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command:   "echo",
 		Args:      []string{"test"},
 		Hostnames: []string{"localhost", "127.0.0.1"},
@@ -338,11 +338,11 @@ func TestShellExecuteTool_Execute_MultiHost(t *testing.T) {
 	}
 }
 
-func TestShellExecuteTool_Execute_SingleHost(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_SingleHost(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command:   "echo",
 		Args:      []string{"test"},
 		Hostnames: []string{"localhost"},
@@ -355,18 +355,18 @@ func TestShellExecuteTool_Execute_SingleHost(t *testing.T) {
 	require.Len(t, result.Content, 1)
 
 	// Single-host execution returns a single object
-	var shellResult ShellExecuteResult
+	var shellResult RunShellCommandResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)
 	require.Equal(t, "localhost", shellResult.Hostname)
 }
 
-func TestShellExecuteTool_Execute_DefaultHostname(t *testing.T) {
-	tool := &ShellExecuteTool{}
+func TestRunShellCommandTool_Execute_DefaultHostname(t *testing.T) {
+	tool := &RunShellCommandTool{}
 	ctx := context.Background()
 
-	req := ShellExecuteRequest{
+	req := RunShellCommandRequest{
 		Command: "echo",
 		Args:    []string{"test"},
 		// No hostnames specified - should default to localhost
@@ -378,7 +378,7 @@ func TestShellExecuteTool_Execute_DefaultHostname(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
 
-	var shellResult ShellExecuteResult
+	var shellResult RunShellCommandResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &shellResult)
 	require.NoError(t, err)
 	require.Equal(t, 0, shellResult.ExitCode)

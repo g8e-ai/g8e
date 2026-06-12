@@ -298,7 +298,7 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Equal(t, "", *result.Content)
+		assert.Empty(t, *result.Content)
 	})
 
 	t.Run("write empty content", func(t *testing.T) {
@@ -323,7 +323,7 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
 		data, _ := os.ReadFile(testFile)
-		assert.Equal(t, "", string(data))
+		assert.Empty(t, string(data))
 	})
 
 	t.Run("insert at beginning (position 1)", func(t *testing.T) {
@@ -427,7 +427,7 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Equal(t, "", *result.Content)
+		assert.Empty(t, *result.Content)
 	})
 
 	t.Run("replace with multiline content", func(t *testing.T) {
@@ -538,7 +538,7 @@ func TestFileEditService_PermissionsAndStats(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result.FileStats)
-		assert.Greater(t, result.FileStats.Size, int64(0))
+		assert.Positive(t, result.FileStats.Size)
 		assert.NotEmpty(t, result.FileStats.Mode)
 		assert.Equal(t, 3, result.FileStats.Lines)
 		assert.NotNil(t, result.FileStats.ModTime)

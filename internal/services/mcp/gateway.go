@@ -36,9 +36,11 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -53,19 +55,12 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
-// SuspendedTransactionStore defines the interface for persistent storage of suspended transactions.
-type SuspendedTransactionStore interface {
-	StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error
-	GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error)
-	DeleteSuspendedTransaction(ctx context.Context, txHash string) error
-}
-
 // GatewayService handles MCP/A2A protocol translation and downstream dispatch.
 // This service is shared across both gateway mode and outbound mode - the same
 // implementation is used in both contexts (truly polymorphic).
 //
 // In gateway mode, it is created by GatewayModeService as field mcpGateway.
-// In outbound mode, it is used by PubSubCommandService as field mcpGateway.
+// In outbound mode, it is used by OperatorPubSubService as field mcpGateway.
 type GatewayService struct {
 	logger            *slog.Logger
 	responder         *response.Writer
@@ -76,14 +71,16 @@ type GatewayService struct {
 	downstreamURL     string
 	a2aDownstreamURL  string
 	publicBaseURL     string
-	suspendedStore    SuspendedTransactionStore
+	suspendedStore    interfaces.SuspendedTransactionStore
 	fieldPathRegistry *FieldPathRegistry
 	dbService         interface {
 		GetField(collection, id, fieldPath string) (interface{}, error)
 	}
 	sessionValidator  SessionValidator
 	auditLogger       AuditLogger
+	auditStore        *storage.SQLAuditStore
 	nativeToolHandler *NativeToolHandler
+	posture           string // Gateway posture: doctrine, consensus, or notary
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -110,11 +107,22 @@ type AuditLogger interface {
 type Dependencies struct {
 	Logger          *slog.Logger
 	Responder       *response.Writer
-	SuspendedStore  SuspendedTransactionStore
+	SuspendedStore  interfaces.SuspendedTransactionStore
 	MaxPayloadBytes int64
+	Posture         string // Gateway posture: doctrine, consensus, or notary
 }
 
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
+	// Validate posture parameter
+	validPostures := map[string]bool{
+		"doctrine":  true,
+		"consensus": true,
+		"notary":    true,
+	}
+	if deps.Posture != "" && !validPostures[deps.Posture] {
+		return nil, fmt.Errorf("invalid posture '%s': must be one of doctrine, consensus, or notary", deps.Posture)
+	}
+
 	fieldPathRegistry, err := NewFieldPathRegistry(deps.Logger)
 	if err != nil {
 		deps.Logger.Error("Failed to initialize field path registry", "error", err)
@@ -132,6 +140,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
 		nativeToolHandler: nativeToolHandler,
+		posture:           deps.Posture,
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   deps.MaxPayloadBytes,
@@ -247,6 +256,13 @@ func (g *GatewayService) recordSuccess() {
 	g.circuitOpen = false
 }
 
+// @Summary		List MCP tools
+// @Description	Returns the list of available MCP tools
+// @Tags			mcp
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]interface{}
+// @Router			/api/v1/mcp/tools/list [get]
 func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -449,6 +465,13 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	g.responder.RPCResponse(w, 1, downstreamResult)
 }
 
+// @Summary		List MCP resources
+// @Description	Returns the list of available MCP resources
+// @Tags			mcp
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]interface{}
+// @Router			/api/v1/mcp/resources/list [get]
 func (g *GatewayService) HandleResourcesList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -580,6 +603,13 @@ func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// @Summary		Call MCP tool
+// @Description	Calls an MCP tool with the provided arguments
+// @Tags			mcp
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]interface{}
+// @Router			/api/v1/mcp/tools/call [post]
 func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "tools/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.callTool(ctx, r, params)
@@ -599,16 +629,6 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 
 	if callParams.Name == "" {
 		return nil, errors.New("tool name required")
-	}
-
-	// Handle read_field tool locally (JIT field resolution)
-	if callParams.Name == "read_field" {
-		return g.handleReadField(ctx, callParams.Arguments)
-	}
-
-	// Handle native tools within Operator's execution boundary
-	if g.isNativeTool(callParams.Name) && g.nativeToolHandler != nil {
-		return g.nativeToolHandler.HandleTool(ctx, callParams.Name, callParams.Arguments)
 	}
 
 	argumentsJSON := "{}"
@@ -781,6 +801,13 @@ func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
 	return nil
 }
 
+// @Summary		Read MCP resource
+// @Description	Reads a specific MCP resource
+// @Tags			mcp
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]interface{}
+// @Router			/api/v1/mcp/resources/read [post]
 func (g *GatewayService) HandleResourcesRead(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "resources/read", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.readResource(ctx, params)
@@ -836,6 +863,13 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 	return mcpRes, nil
 }
 
+// @Summary		List MCP prompts
+// @Description	Returns the list of available MCP prompts
+// @Tags			mcp
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]interface{}
+// @Router			/api/v1/mcp/prompts/list [get]
 func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -900,6 +934,13 @@ func (g *GatewayService) HandlePromptsList(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// @Summary		Get MCP prompt
+// @Description	Returns a specific MCP prompt template
+// @Tags			mcp
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]interface{}
+// @Router			/api/v1/mcp/prompts/get [post]
 func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "prompts/get", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.getPrompt(ctx, params)
@@ -959,6 +1000,13 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	return mcpRes, nil
 }
 
+// @Summary		Call MCP tool (SSE)
+// @Description	Calls an MCP tool with SSE streaming response
+// @Tags			mcp
+// @Accept			json
+// @Produce		text/event-stream
+// @Success		200	{string}	string
+// @Router			/api/v1/mcp/tools/call/sse [post]
 func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -1150,12 +1198,38 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		},
 	}
 
+	// In doctrine and consensus postures, L3 is audited not enforced, so we auto-approve
+	// to avoid WebAuthn prompts for local MCP agents. In notary posture, L3 is strictly
+	// enforced and requires human authorization.
+	if g.posture == "doctrine" || g.posture == "consensus" {
+		if env.Governance == nil {
+			env.Governance = &commonv1.GovernanceMetadata{}
+		}
+		env.Governance.L3 = &commonv1.L3Metadata{
+			AutoApproved: true,
+		}
+	}
+
 	// Enrich from context if present
 	if tenantID, ok := ctx.Value(constants.ContextKeyTenantID).(string); ok {
 		env.TenantId = tenantID
 	}
 	if persona, ok := ctx.Value(constants.ContextKeyBindingPersona).(string); ok {
 		env.BindingPersona = persona
+	}
+	// Inject identity as operator_id and operator_session_id for audit trail attribution.
+	// We prioritize app identity, then fallback to explicit operator/session IDs from context
+	// (e.g. from a proxied CLI session).
+	if appID, ok := ctx.Value(constants.ContextKeyAppID).(string); ok && appID != "" {
+		env.OperatorId = appID
+		env.OperatorSessionId = appID
+	} else {
+		if opID, ok := ctx.Value(constants.ContextKeyOperatorID).(string); ok && opID != "" {
+			env.OperatorId = opID
+		}
+		if opSessionID, ok := ctx.Value(constants.ContextKeyOperatorSessionID).(string); ok && opSessionID != "" {
+			env.OperatorSessionId = opSessionID
+		}
 	}
 
 	hash, err = govpkg.GenerateMessageID(env)
@@ -1186,6 +1260,13 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	return hash, envelopeBytes, nil
 }
 
+// @Summary		A2A call
+// @Description	Calls an A2A agent endpoint
+// @Tags			a2a
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]interface{}
+// @Router			/api/v1/a2a/call [post]
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 	g.handleMCPRequest(w, r, "a2a/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.a2aCall(ctx, r, params)
@@ -1418,7 +1499,54 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 
 // DispatchToDownstream forwards a verified MCP tool call to the downstream MCP server.
 // This implements the Actuator Egress phase for MCP protocol translation.
-func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage) (string, error) {
+// Native tools are executed locally so every call — native or downstream — passes through
+// the full L1-L5 governance pipeline and produces a signed receipt.
+func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName string, toolArgs json.RawMessage, operatorSessionID string) (string, error) {
+	// Handle read_field tool locally (JIT field resolution)
+	if toolName == "read_field" {
+		result, err := g.handleReadField(ctx, toolArgs)
+		if err != nil {
+			return "", fmt.Errorf("read_field execution failed: %w", err)
+		}
+		// Extract text content for summary
+		callResult, ok := result.(CallToolResult)
+		if !ok {
+			return "", fmt.Errorf("read_field returned unexpected type: %T", result)
+		}
+		var sb strings.Builder
+		for _, c := range callResult.Content {
+			if c.Type == "text" {
+				sb.WriteString(c.Text)
+				sb.WriteString("\n")
+			}
+		}
+		summary := strings.TrimRight(sb.String(), "\n")
+		if summary == "" {
+			summary = "completed"
+		}
+		return summary, nil
+	}
+
+	if g.isNativeTool(toolName) && g.nativeToolHandler != nil {
+		result, err := g.nativeToolHandler.HandleTool(ctx, toolName, toolArgs)
+		if err != nil {
+			return "", fmt.Errorf("native tool execution failed: %w", err)
+		}
+		var sb strings.Builder
+		for _, c := range result.Content {
+			if c.Type == "text" {
+				sb.WriteString(c.Text)
+				sb.WriteString("\n")
+			}
+		}
+		summary := strings.TrimRight(sb.String(), "\n")
+		if summary == "" {
+			summary = "completed"
+		}
+
+		return summary, nil
+	}
+
 	if g.downstreamURL == "" {
 		return "", fmt.Errorf("no downstream MCP server configured")
 	}
@@ -1489,6 +1617,21 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	resultSummary := summary.String()
 	if resultSummary == "" {
 		resultSummary = "completed"
+	}
+
+	// Audit downstream MCP call execution
+	if g.auditStore != nil {
+		event := &storage.Event{
+			OperatorSessionID: operatorSessionID,
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Audit.McpCall,
+			ContentText:       toolName,
+			CommandRaw:        string(toolArgs),
+			CommandStdout:     resultSummary,
+		}
+		if _, err := g.auditStore.RecordEvent(event); err != nil {
+			g.logger.Warn("Failed to record downstream MCP call event in audit store", "error", err, "tool", toolName)
+		}
 	}
 
 	return resultSummary, nil

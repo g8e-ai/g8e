@@ -219,7 +219,7 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result.FileStats)
-		assert.Greater(t, result.FileStats.Size, int64(0))
+		assert.Positive(t, result.FileStats.Size)
 	})
 }
 
@@ -486,7 +486,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 			assert.NotEmpty(t, *result.BackupPath)
 			// Verify backup exists
 			_, err := os.Stat(*result.BackupPath)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 		}
 	})
 
@@ -524,14 +524,14 @@ func TestFileEditService_ValidateFilePath(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 		err := svc.validateFilePath(filepath.Join(tmpDir, "test.txt"))
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("relative path", func(t *testing.T) {
 		t.Parallel()
 		// Even relative paths can be validated (they get resolved to absolute)
 		err := svc.validateFilePath("test.txt")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 }
 

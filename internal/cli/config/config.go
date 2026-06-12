@@ -245,6 +245,14 @@ func (c *Config) CLIKeyFile() string {
 	return filepath.Join(c.CredentialsDir, "cli.key")
 }
 
+func (c *Config) AppCertFile(name string) string {
+	return filepath.Join(c.CredentialsDir, "apps", name+".crt")
+}
+
+func (c *Config) AppKeyFile(name string) string {
+	return filepath.Join(c.CredentialsDir, "apps", name+".key")
+}
+
 func (c *Config) OperatorCertFile() string {
 	return filepath.Join(c.CredentialsDir, "operator.crt")
 }

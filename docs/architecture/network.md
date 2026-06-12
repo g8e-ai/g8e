@@ -51,7 +51,7 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 | **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
 | **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:48-50` |
 | **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:59-61` |
-| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:70-72` |
+| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:68-72` |
 | **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:139-141` |
 
 ---
@@ -230,7 +230,7 @@ The gateway provides a high-performance WebSocket fan-out via `/ws/v1/pubsub`. M
 
 The platform provides zero-config ingress for agentic CLI coding tools through:
 - **Agent Wrapper**: Detects tool binaries, verifies gateway status, and injects G8E_* environment variables with MCP configuration
-- **Stdio Proxy**: Bridges stdio MCP transport to the gateway HTTP endpoint with mTLS, handling L3 approval polling and browser opening
+- **Stdio Proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval polling and browser opening
 
 ---
 

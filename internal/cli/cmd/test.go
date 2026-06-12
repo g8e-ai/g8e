@@ -22,6 +22,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
@@ -30,8 +32,8 @@ import (
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, scenario, emulator, chaos)",
-		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Emulator runs scenarios against a real Gateway/Operator. Chaos generates governance events for testing.`,
+		Short: "Run test suites (unit, integration, e2e, scenario, lint, emulator, chaos)",
+		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Emulator runs scenarios against a real Gateway/Operator. Chaos generates governance events for testing.`,
 	}
 
 	cmd.AddCommand(
@@ -39,6 +41,7 @@ func testCmd() *cobra.Command {
 		testIntegrationCmd(),
 		testE2ECmd(),
 		testScenarioCmd(),
+		testLintCmd(),
 		emulatorCmd(),
 		chaosCmd(),
 		testSummaryCmd(),
@@ -120,7 +123,7 @@ func testE2ECmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 			fmt.Println("Note: This requires the gateway to be running and authenticated.")
-			fmt.Println("Run './g8e gw start' and './g8e gw cli auth login' first.")
+			fmt.Println("Run './g8e gw start' and './g8e auth login' first.")
 
 			testRace := ""
 			if runtime.GOOS != "windows" {
@@ -150,8 +153,28 @@ func testScenarioCmd() *cobra.Command {
 		Long:  `Run scenario-specific E2E tests with the 'e2e' build tag. These tests require a running g8e gateway and authenticated CLI session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Scenario) tests...")
-			fmt.Println("Note: This requires the gateway to be running and authenticated.")
-			fmt.Println("Run './g8e gw start' and './g8e gw cli auth login' first.")
+
+			// Check if gateway is running
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			if err != nil {
+				return fmt.Errorf("failed to create process manager: %w", err)
+			}
+
+			running, _, err := pm.OperatorStatus()
+			if err != nil {
+				return fmt.Errorf("failed to check Operator status: %w", err)
+			}
+
+			if !running {
+				fmt.Println("Error: Gateway is not running.")
+				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
+				return fmt.Errorf("gateway not running")
+			}
 
 			testRace := ""
 			if runtime.GOOS != "windows" {
@@ -167,6 +190,42 @@ func testScenarioCmd() *cobra.Command {
 			}
 
 			fmt.Println("Scenario tests completed successfully.")
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func testLintCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "lint",
+		Short: "Run linting and quality checks",
+		Long:  `Run golangci-lint with modern Go 1.26.3 best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Running linting and quality checks...")
+
+			// Check if golangci-lint is installed
+			if _, err := exec.LookPath("golangci-lint"); err != nil {
+				fmt.Println("golangci-lint not found. Installing...")
+				installCmd := exec.Command("go", "install", "github.com/golangci/golangci-lint/cmd/golangci-lint@v2.12.2")
+				installCmd.Stdout = os.Stdout
+				installCmd.Stderr = os.Stderr
+				if err := installCmd.Run(); err != nil {
+					return fmt.Errorf("failed to install golangci-lint: %w", err)
+				}
+			}
+
+			// Run golangci-lint
+			lintCmd := exec.Command("golangci-lint", "run")
+			lintCmd.Stdout = os.Stdout
+			lintCmd.Stderr = os.Stderr
+
+			if err := lintCmd.Run(); err != nil {
+				return fmt.Errorf("linting failed: %w", err)
+			}
+
+			fmt.Println("Linting completed successfully.")
 			return nil
 		},
 	}

@@ -82,6 +82,11 @@ func (s *ReplayStoreService) ReleaseNonce(nonce string) error {
 	return nil
 }
 
+// Close is a no-op; ReplayStoreService shares the DB connection managed by CanonicalDBService.
+func (s *ReplayStoreService) Close() error {
+	return nil
+}
+
 // CleanupExpiredNonces removes expired nonces from the database.
 func (s *ReplayStoreService) CleanupExpiredNonces() error {
 	now := sqliteutil.NowTimestamp()

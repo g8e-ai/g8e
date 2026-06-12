@@ -140,7 +140,7 @@ func TestRunStream_HelpFlag_Subprocess(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=TestRunStream_HelpFlag_Subprocess")
 	cmd.Env = append(os.Environ(), "G8E_TEST_STREAM_HELP=1")
 	err := cmd.Run()
-	assert.NoError(t, err, "--help must exit 0 (ExitSuccess)")
+	require.NoError(t, err, "--help must exit 0 (ExitSuccess)")
 }
 
 // ---------------------------------------------------------------------------

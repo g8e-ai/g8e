@@ -28,8 +28,8 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
-// PubSubBroker manages WebSocket-based publish/subscribe channels.
-type PubSubBroker struct {
+// GatewayWebSocketHandler manages WebSocket-based publish/subscribe channels.
+type GatewayWebSocketHandler struct {
 	logger *slog.Logger
 
 	mu          sync.RWMutex
@@ -95,9 +95,9 @@ func (s *wsSubscriber) shutdown() {
 	})
 }
 
-// NewPubSubBroker creates a new pub/sub broker.
-func NewPubSubBroker(logger *slog.Logger) *PubSubBroker {
-	return &PubSubBroker{
+// NewGatewayWebSocketHandler creates a new pub/sub broker.
+func NewGatewayWebSocketHandler(logger *slog.Logger) *GatewayWebSocketHandler {
+	return &GatewayWebSocketHandler{
 		logger:      logger,
 		subscribers: make(map[string]map[*wsSubscriber]struct{}),
 		handlers:    make(map[string]map[int64]func(string, []byte)),
@@ -106,7 +106,7 @@ func NewPubSubBroker(logger *slog.Logger) *PubSubBroker {
 
 // SetHeartbeatHandler registers a callback invoked for every publish to a
 // heartbeat:<op_id>:<session_id> channel. Replaces any prior handler.
-func (b *PubSubBroker) SetHeartbeatHandler(fn func(channel string, data []byte)) {
+func (b *GatewayWebSocketHandler) SetHeartbeatHandler(fn func(channel string, data []byte)) {
 	b.onHeartbeatMu.Lock()
 	b.onHeartbeat = fn
 	b.onHeartbeatMu.Unlock()
@@ -117,7 +117,7 @@ var wsUpgrader = websocket.Upgrader{
 }
 
 // Publish sends a message to all subscribers of a channel.
-func (b *PubSubBroker) Publish(channel string, data []byte) int {
+func (b *GatewayWebSocketHandler) Publish(channel string, data []byte) int {
 	// Snapshot targets and precomputed payloads under RLock, then release the
 	// broker lock before invoking trySend. trySend may block briefly on a
 	// per-subscriber mutex; doing that under the broker RLock would stall
@@ -180,7 +180,7 @@ func (b *PubSubBroker) Publish(channel string, data []byte) int {
 // RegisterHandler registers an in-process handler for a channel.
 // Used for governance command processing in gateway mode and SSE streaming.
 // Returns a function that unregisters the handler.
-func (b *PubSubBroker) RegisterHandler(channel string, handler func(string, []byte)) func() {
+func (b *GatewayWebSocketHandler) RegisterHandler(channel string, handler func(string, []byte)) func() {
 	b.handlersMu.Lock()
 	defer b.handlersMu.Unlock()
 
@@ -208,7 +208,7 @@ func (b *PubSubBroker) RegisterHandler(channel string, handler func(string, []by
 
 // HandleWebSocket upgrades the HTTP connection and passes it to a new session handler.
 // Extracts mTLS identity for topic ACL enforcement (Plan §5).
-func (b *PubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+func (b *GatewayWebSocketHandler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ws, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		b.logger.Error("gateway: websocket upgrade failed", "error", err)
@@ -233,7 +233,7 @@ func (b *PubSubBroker) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 // pubSubSessionHandler manages the lifecycle of a single WebSocket session.
 type pubSubSessionHandler struct {
-	broker *PubSubBroker
+	broker *GatewayWebSocketHandler
 	sub    *wsSubscriber
 }
 
@@ -299,7 +299,7 @@ func (h *pubSubSessionHandler) cleanup() {
 	h.sub.shutdown()
 }
 
-func (b *PubSubBroker) sendAck(sub *wsSubscriber, channel string) error {
+func (b *GatewayWebSocketHandler) sendAck(sub *wsSubscriber, channel string) error {
 	event := &pubsubv1.PubSubEvent{
 		Type:    constants.PubSubEventSubscribed,
 		Channel: channel,
@@ -312,7 +312,7 @@ func (b *PubSubBroker) sendAck(sub *wsSubscriber, channel string) error {
 	return nil
 }
 
-func (b *PubSubBroker) subscribe(channel string, sub *wsSubscriber) {
+func (b *GatewayWebSocketHandler) subscribe(channel string, sub *wsSubscriber) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -322,7 +322,7 @@ func (b *PubSubBroker) subscribe(channel string, sub *wsSubscriber) {
 	b.subscribers[channel][sub] = struct{}{}
 }
 
-func (b *PubSubBroker) unsubscribe(channel string, sub *wsSubscriber) {
+func (b *GatewayWebSocketHandler) unsubscribe(channel string, sub *wsSubscriber) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -334,7 +334,7 @@ func (b *PubSubBroker) unsubscribe(channel string, sub *wsSubscriber) {
 	}
 }
 
-func (b *PubSubBroker) removeSub(sub *wsSubscriber) {
+func (b *GatewayWebSocketHandler) removeSub(sub *wsSubscriber) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -346,7 +346,7 @@ func (b *PubSubBroker) removeSub(sub *wsSubscriber) {
 	}
 }
 
-func (b *PubSubBroker) trySend(sub *wsSubscriber, msg []byte) bool {
+func (b *GatewayWebSocketHandler) trySend(sub *wsSubscriber, msg []byte) bool {
 	sub.mu.Lock()
 	defer sub.mu.Unlock()
 
@@ -403,7 +403,7 @@ func (b *PubSubBroker) trySend(sub *wsSubscriber, msg []byte) bool {
 }
 
 // Close disconnects all subscribers.
-func (b *PubSubBroker) Close() {
+func (b *GatewayWebSocketHandler) Close() {
 	b.mu.Lock()
 	// Collect unique subscribers under the lock, then shutdown outside the
 	// lock. shutdown() is idempotent via sync.Once.

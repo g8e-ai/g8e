@@ -63,7 +63,7 @@ func TestMustMarshalJSON(t *testing.T) {
 func TestMustBuildCommandRequestedPayload(t *testing.T) {
 	payload := MustBuildCommandRequestedPayload(t, "ls -la", "exec-123", "test justification", "strict", 30)
 	require.NotNil(t, payload)
-	require.Greater(t, len(payload), 0)
+	require.NotEmpty(t, payload)
 
 	// Verify it can be unmarshaled
 	cmd := &operatorv1.CommandRequested{}
@@ -72,14 +72,14 @@ func TestMustBuildCommandRequestedPayload(t *testing.T) {
 	require.Equal(t, "ls -la", cmd.Command)
 	require.Equal(t, "exec-123", cmd.ExecutionId)
 	require.Equal(t, "test justification", cmd.Justification)
-	require.Equal(t, "strict", cmd.SentinelMode)
+	require.Equal(t, "strict", cmd.VaultMode)
 	require.Equal(t, int32(30), cmd.TimeoutSeconds)
 }
 
 func TestMustBuildCommandCancelRequestedPayload(t *testing.T) {
 	payload := MustBuildCommandCancelRequestedPayload(t, "exec-456")
 	require.NotNil(t, payload)
-	require.Greater(t, len(payload), 0)
+	require.NotEmpty(t, payload)
 
 	// Verify it can be unmarshaled
 	cancel := &operatorv1.CommandCancelRequested{}
@@ -94,7 +94,7 @@ func TestMustUnmarshalPayload(t *testing.T) {
 		Command:        "test",
 		ExecutionId:    "exec-789",
 		Justification:  "test",
-		SentinelMode:   "strict",
+		VaultMode:      "strict",
 		TimeoutSeconds: 30,
 	}
 	payload, err := proto.Marshal(testCmd)
@@ -270,7 +270,7 @@ func TestMustBuildDirectCommandResultAuditRequestedPayload(t *testing.T) {
 	require.Equal(t, "output", result.Output)
 	require.Equal(t, "stderr", result.Stderr)
 	require.Equal(t, int32(0), result.ExitCode)
-	require.Equal(t, float32(1.5), result.ExecutionTimeSeconds)
+	require.InEpsilon(t, float32(1.5), result.ExecutionTimeSeconds, 0.01)
 }
 
 func TestMustBuildHeartbeatRequestedPayload(t *testing.T) {

@@ -17,9 +17,13 @@ package scenario
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 )
 
 // TestConcurrencyReplayDetection tests actual replay detection with concurrent submissions.
@@ -38,12 +42,15 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		t.Fatal("gateway returned empty state root")
 	}
 
-	// Create a valid envelope with a fixed nonce for replay testing
+	// Create a valid envelope with a unique nonce for replay testing
+	// Use timestamp-based nonce to avoid conflicts with previous test runs
+	nonce := fmt.Sprintf("nonce-concurrency-test-%d", time.Now().UnixNano())
 	intentBytes, err := New().
 		WithCommand("echo hello").
+		WithOperatorID("").
 		WithOperatorSessionID(ctx.OperatorSessionID).
 		WithStateRoot(stateRoot).
-		WithNonce("nonce-concurrency-test-123").
+		WithNonce(nonce).
 		WithL2(ctx.PrivKey, true).
 		Build()
 	if err != nil {
@@ -58,7 +65,13 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			result := submitViaHTTP(t, ctx.Client, intentBytes, ctx.OperatorSessionID, ctx.CLISessionID)
+			creds := &auth.Credentials{
+				CLISessionID:      ctx.CLISessionID,
+				UserID:            "",
+				OperatorID:        "",
+				OperatorSessionID: ctx.OperatorSessionID,
+			}
+			result := submitViaHTTP(t, ctx.Client, intentBytes, creds)
 			results <- result
 		}()
 	}
@@ -112,8 +125,9 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 		t.Error("expected one result to have an error")
 	} else {
 		errMsg := rejectedResult.Error.Error()
-		if !strings.Contains(errMsg, "replay") && !strings.Contains(errMsg, "REPLAY") {
-			t.Errorf("expected rejection reason to contain 'replay', got %q", errMsg)
+		if !strings.Contains(errMsg, "replay") && !strings.Contains(errMsg, "REPLAY") &&
+			!strings.Contains(errMsg, "IN_FLIGHT") && !strings.Contains(errMsg, "in_flight") {
+			t.Errorf("expected rejection reason to contain 'replay' or 'in_flight', got %q", errMsg)
 		}
 	}
 }

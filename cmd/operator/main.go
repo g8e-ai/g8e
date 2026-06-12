@@ -13,6 +13,26 @@
 
 package main
 
+//	@title			g8e Gateway API
+//	@version		1.0
+//	@description	API documentation for the g8e Gateway public endpoints
+//	@termsOfService	https://github.com/g8e-ai/g8e
+
+//	@contact.name	g8e Team
+//	@contact.url	https://github.com/g8e-ai/g8e
+//	@contact.email	support@g8e.ai
+
+//	@license.name	Apache 2.0
+//	@license.url	http://www.apache.org/licenses/LICENSE-2.0.html
+
+//	@host		localhost:8443
+//	@BasePath	/api/v1
+
+//	@securityDefinitions.apikey	BearerAuth
+//	@in							header
+//	@name						Authorization
+//	@description				Bearer token authentication (JWT or mTLS certificate)
+
 import (
 	"bytes"
 	"context"
@@ -64,6 +84,30 @@ var (
 	buildTime string = string(constants.SystemHealthUnknown)
 	platform  string = string(constants.SystemHealthUnknown)
 )
+
+// gatewayFieldAuditLogger implements mcp.AuditLogger using the SQLAuditStore so that
+// read_field tool calls produce audit records even though they bypass the full
+// governance pipeline (they resolve field values locally without downstream dispatch).
+type gatewayFieldAuditLogger struct {
+	store  *storage.SQLAuditStore
+	logger *slog.Logger
+}
+
+func (l *gatewayFieldAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error {
+	event := &storage.Event{
+		OperatorSessionID: operatorSessionID,
+		Timestamp:         time.Now().UTC(),
+		Type:              constants.EventOperatorFieldReadRequested,
+		ContentText:       fmt.Sprintf("%s/%s.%s", collection, documentID, fieldPath),
+		CommandStdout:     fmt.Sprintf("%v", value),
+	}
+	if _, err := l.store.RecordEvent(event); err != nil {
+		l.logger.Warn("Failed to record field read in audit store", "error", err,
+			"session", operatorSessionID, "collection", collection, "field", fieldPath)
+		return err
+	}
+	return nil
+}
 
 // parseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
 func parseCertPEM(certFile string) (*x509.Certificate, error) {
@@ -520,6 +564,9 @@ func main() {
 		"vault":    true,
 		"test":     true,
 		"setup":    true,
+		"auth":     true,
+		"audit":    true,
+		"swagger":  true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
@@ -642,6 +689,9 @@ func main() {
 		"test":     true,
 		"setup":    true,
 		"demos":    true,
+		"auth":     true,
+		"audit":    true,
+		"swagger":  true,
 		"help":     true,
 		"--help":   true,
 		"-h":       true,
@@ -650,20 +700,6 @@ func main() {
 	// Show help if no arguments provided, or if first arg is a CLI command
 	if len(os.Args) == 1 || (len(os.Args) > 1 && cliCommands[os.Args[1]]) {
 		clicmd.Execute()
-		return
-	}
-
-	if showVersion {
-		printVersion()
-		os.Exit(constants.ExitSuccess)
-	}
-
-	if rekeyVault || verifyVault || resetVault {
-		vaultWorkDir := launchDir
-		if workingDir != "" {
-			vaultWorkDir = workingDir
-		}
-		handleVaultCommand(rekeyVault, verifyVault, resetVault, privateKey, oldPrivateKeyStr, logLevel, vaultWorkDir)
 		return
 	}
 
@@ -681,6 +717,50 @@ func main() {
 	if notaryMode {
 		postureCount++
 		posture = config.PostureNotary
+	}
+
+	// If we have arguments after flag parsing but they weren't recognized as CLI commands,
+	// and we're not in operator mode (no -e, no posture flags), show usage help
+	if len(os.Args) > 1 && !cliCommands[os.Args[1]] && endpointURL == "" && postureCount == 0 && !insecureMode {
+		fmt.Fprintf(os.Stderr, "Error: unrecognized command or flag '%s'\n\n", os.Args[1])
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  ./g8e [command] [flags]\n\n")
+		fmt.Fprintf(os.Stderr, "Available Commands:\n")
+		fmt.Fprintf(os.Stderr, "  gw, gateway    Gateway management (start, stop, status, logs)\n")
+		fmt.Fprintf(os.Stderr, "  auth           Authentication (login, logout)\n")
+		fmt.Fprintf(os.Stderr, "  mcp            MCP configuration and proxy\n")
+		fmt.Fprintf(os.Stderr, "  operator       Operator management (list, deploy, stream)\n")
+		fmt.Fprintf(os.Stderr, "  vault          Vault operations (encrypt, decrypt, rekey)\n")
+		fmt.Fprintf(os.Stderr, "  test           Run tests\n")
+		fmt.Fprintf(os.Stderr, "  setup          Configure AI IDE integrations\n")
+		fmt.Fprintf(os.Stderr, "  demos          Run demo applications\n")
+		fmt.Fprintf(os.Stderr, "  audit          Run audit reports for compliance\n")
+		fmt.Fprintf(os.Stderr, "  swagger        Manage Swagger/OpenAPI documentation\n\n")
+		fmt.Fprintf(os.Stderr, "Operator Mode Flags:\n")
+		fmt.Fprintf(os.Stderr, "  -e, --endpoint <host>    Gateway endpoint (for operator mode)\n")
+		fmt.Fprintf(os.Stderr, "  -k, --key <path>        Private key path\n")
+		fmt.Fprintf(os.Stderr, "  --cert <path>           Client certificate path\n")
+		fmt.Fprintf(os.Stderr, "  --trust-bundle <path>   Trust bundle path\n\n")
+		fmt.Fprintf(os.Stderr, "Gateway Mode Flags:\n")
+		fmt.Fprintf(os.Stderr, "  --doctrine               Gateway mode: L1 enforced, L2/L3 audited\n")
+		fmt.Fprintf(os.Stderr, "  --consensus             Gateway mode: L1/L2 enforced, L3 audited\n")
+		fmt.Fprintf(os.Stderr, "  --notary                Gateway mode: L1/L2/L3 strictly enforced\n\n")
+		fmt.Fprintf(os.Stderr, "Run './g8e --help' for more information\n")
+		os.Exit(constants.ExitConfigError)
+	}
+
+	if showVersion {
+		printVersion()
+		os.Exit(constants.ExitSuccess)
+	}
+
+	if rekeyVault || verifyVault || resetVault {
+		vaultWorkDir := launchDir
+		if workingDir != "" {
+			vaultWorkDir = workingDir
+		}
+		handleVaultCommand(rekeyVault, verifyVault, resetVault, privateKey, oldPrivateKeyStr, logLevel, vaultWorkDir)
+		return
 	}
 
 	if postureCount > 1 {
@@ -1332,7 +1412,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	}
 
 	// Loopback Pub/Sub for in-process command dispatch
-	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetPubSubBroker())
+	loopbackClient := pubsub.NewInProcessPubSubClient(svc.GetHTTPHandler().GetGatewayWebSocketHandler())
 
 	// Resolve the MCP gateway up-front so the pubsub command service can
 	// reach it for Actuator egress dispatch on verified MCP_CALL transactions.
@@ -1341,11 +1421,11 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// Get the GatewayDBService's AuditStore for full audit storage
 	// This ensures ActionReceipts are persisted in the receipts table
 	var auditStore *storage.SQLAuditStore
-	if svc.GetDB() != nil && svc.GetDB().AuditStore != nil && svc.GetDB().AuditStore.IsEnabled() {
+	if svc.GetDB() != nil && svc.GetDB().AuditStore != nil {
 		auditStore = svc.GetDB().AuditStore
 		logger.Info("Gateway AuditStore enabled for full audit storage")
 	} else {
-		logger.Warn("Gateway AuditStore not available or disabled - ActionReceipts will not be stored in audit store")
+		logger.Warn("Gateway AuditStore not available - ActionReceipts will not be stored in audit store")
 	}
 
 	psConfig := pubsub.CommandServiceConfig{
@@ -1372,7 +1452,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		MCPGateway:          mcpSvc,
 	}
 
-	cmdSvc, err := pubsub.NewPubSubCommandService(psConfig)
+	cmdSvc, err := pubsub.NewOperatorPubSubService(psConfig)
 	if err != nil {
 		logger.Error("Failed to initialize in-process command service", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitCodeFromError(err))
@@ -1388,6 +1468,9 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// gateway only needs the Gateway processor + signing identity here.
 	if mcpSvc != nil {
 		mcpSvc.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, cfg.Gateway.MCPDownstreamURL)
+		if auditStore != nil {
+			mcpSvc.SetAuditLogger(&gatewayFieldAuditLogger{store: auditStore, logger: logger})
+		}
 	}
 
 	go func() {

@@ -335,11 +335,11 @@ func TestCanonicalizeActionReceipt(t *testing.T) {
 	// Verify all expected fields are present
 	require.Equal(t, "test-tx-id", parsed["transaction_id"])
 	require.Equal(t, "test-hash", parsed["transaction_hash"])
-	require.Equal(t, float64(2), parsed["status"]) // EXECUTION_STATUS_COMPLETED = 2 (JSON marshals enums as float64)
+	require.InEpsilon(t, float64(2), parsed["status"], 0.0) // EXECUTION_STATUS_COMPLETED = 2 (JSON marshals enums as float64)
 	require.Equal(t, "test summary", parsed["result_summary"])
 	require.Equal(t, "root-before", parsed["state_root_before"])
 	require.Equal(t, "root-after", parsed["state_root_after"])
-	require.Equal(t, float64(1234567890), parsed["executed_at_unix_ms"])
+	require.InEpsilon(t, float64(1234567890), parsed["executed_at_unix_ms"], 0.0)
 	require.Equal(t, "test-key-id", parsed["signer_key_id"])
 }
 

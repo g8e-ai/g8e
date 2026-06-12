@@ -32,8 +32,7 @@ func setupTestReplayStore(t *testing.T) *SQLReplayStore {
 	dbPath := filepath.Join(tempDir, "test_replay_store.db")
 
 	config := &ReplayStoreConfig{
-		DBPath:  dbPath,
-		Enabled: true,
+		DBPath: dbPath,
 	}
 
 	logger := testutil.NewTestLogger()
@@ -124,7 +123,7 @@ func TestReplayStore_FinalizeNonce_NotReserved(t *testing.T) {
 
 	// Try to finalize a nonce that was never reserved
 	err := rs.FinalizeNonce(nonce)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found or not in reserved state")
 }
 
@@ -157,7 +156,7 @@ func TestReplayStore_ReleaseNonce_NotReserved(t *testing.T) {
 
 	// Try to release a nonce that was never reserved - should not error (no-op)
 	err := rs.ReleaseNonce(nonce)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestReplayStore_ReleaseNonce_AlreadyFinalized(t *testing.T) {
@@ -175,7 +174,7 @@ func TestReplayStore_ReleaseNonce_AlreadyFinalized(t *testing.T) {
 
 	// Try to release a finalized nonce - should not error (no-op)
 	err = rs.ReleaseNonce(nonce)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestReplayStore_Prune(t *testing.T) {
@@ -202,19 +201,6 @@ func TestReplayStore_Prune(t *testing.T) {
 	assert.True(t, isReplay, "nonce should still be a replay after prune (not old enough)")
 }
 
-func TestReplayStore_NewStore_Disabled(t *testing.T) {
-	t.Parallel()
-
-	config := &ReplayStoreConfig{
-		Enabled: false,
-	}
-
-	logger := testutil.NewTestLogger()
-	rs, err := NewSQLReplayStore(config, logger)
-	require.NoError(t, err)
-	assert.Nil(t, rs, "store should be nil when disabled")
-}
-
 func TestReplayStore_NewStore_NilConfig(t *testing.T) {
 	t.Parallel()
 
@@ -223,7 +209,6 @@ func TestReplayStore_NewStore_NilConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, rs)
 	assert.NotNil(t, rs.config)
-	assert.True(t, rs.config.Enabled)
 }
 
 func TestReplayStore_Close_NilStore(t *testing.T) {
@@ -231,7 +216,7 @@ func TestReplayStore_Close_NilStore(t *testing.T) {
 
 	var rs *SQLReplayStore
 	err := rs.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestReplayStore_ReserveNonce_ExpiredNonce(t *testing.T) {
@@ -284,5 +269,5 @@ func TestReplayStore_FullWorkflow(t *testing.T) {
 
 	// Step 6: Attempt to finalize again (should fail)
 	err = rs.FinalizeNonce(nonce)
-	assert.Error(t, err)
+	require.Error(t, err)
 }

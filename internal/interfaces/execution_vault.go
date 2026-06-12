@@ -49,12 +49,6 @@ type ExecutionVault interface {
 	// Returns an error if retrieval fails, wrapping the underlying error with context.
 	GetFileDiffsBySession(ctx context.Context, operatorSessionID string, limit int) ([]*models.FileDiffRecord, error)
 
-	// IsEnabled returns whether the execution vault is enabled.
-	IsEnabled() bool
-
-	// IsEncryptionEnabled returns whether content encryption is enabled.
-	IsEncryptionEnabled() bool
-
 	// Close shuts down the execution vault service.
 	// Returns an error if shutdown fails, wrapping the underlying error with context.
 	Close() error

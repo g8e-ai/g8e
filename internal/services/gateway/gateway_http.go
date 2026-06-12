@@ -30,6 +30,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
@@ -37,6 +38,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"golang.org/x/time/rate"
 )
 
@@ -47,7 +49,7 @@ type HTTPHandlerDependencies struct {
 	Cfg                *config.Config
 	Logger             *slog.Logger
 	DB                 *CanonicalDBService
-	Pubsub             *PubSubBroker
+	Pubsub             *GatewayWebSocketHandler
 	Auth               *AuthService
 	PKI                *PKIAuthority
 	CLISessionSvc      *CLISessionService
@@ -59,6 +61,7 @@ type HTTPHandlerDependencies struct {
 	Responder          *response.Writer
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
+	SuspendedStore     interfaces.SuspendedTransactionStore
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
 }
@@ -73,7 +76,7 @@ type HTTPHandler struct {
 	cfg                *config.Config
 	logger             *slog.Logger
 	db                 *CanonicalDBService
-	pubsub             *PubSubBroker
+	pubsub             *GatewayWebSocketHandler
 	auth               *AuthService
 	pki                *PKIAuthority
 	cliSessionSvc      *CLISessionService
@@ -140,7 +143,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
-	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.MCPGateway, deps.Responder)
+	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.SuspendedStore, deps.MCPGateway, deps.Responder)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
@@ -280,6 +283,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
 	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
+	mux.HandleFunc(constants.APIPaths.AuditEvents, h.dbController.handleAuditEvents)
+	mux.HandleFunc(constants.APIPaths.AuditSummary, h.dbController.handleAuditSummary)
+	mux.HandleFunc(constants.APIPaths.AuditReport, h.dbController.handleAuditReport)
 
 	// Internal SSE event bridge (used by g8e-compatible agentic ensembles to publish typed events
 	// for browser/CLI subscribers to consume). Producers are authenticated by
@@ -321,6 +327,15 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Health endpoint
 	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
 
+	// Swagger UI documentation
+	mux.Handle("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+		httpSwagger.DocExpansion("none"),
+	))
+	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "docs/swagger.json")
+	})
+
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
@@ -335,6 +350,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
 	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
 	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
+	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients
@@ -430,6 +446,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)
 	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
 	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
+	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
@@ -640,10 +657,17 @@ func (h *HTTPHandler) GetPasskeyService() *PasskeyService {
 	return h.passkey
 }
 
-func (h *HTTPHandler) GetPubSubBroker() *PubSubBroker {
+func (h *HTTPHandler) GetGatewayWebSocketHandler() *GatewayWebSocketHandler {
 	return h.pubsub
 }
 
+// @Summary		Landing page
+// @Description	Returns the public landing page for the gateway
+// @Tags			public
+// @Accept			html
+// @Produce		html
+// @Success		200	{string}	string
+// @Router			/ [get]
 func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
@@ -706,13 +730,20 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
 `, html.EscapeString(host))
 }
 
+// @Summary		Health check
+// @Description	Returns the current health status of the gateway
+// @Tags			health
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	models.HealthResponse
+// @Router			/health [get]
 func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if h.isReady != nil && !h.isReady() {
 		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")
 		return
 	}
 
-	doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
+	doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 	if err != nil {
 		h.logger.Error("Health check failed to query platform_settings", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "platform_settings not ready")
@@ -724,7 +755,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	root, err := h.db.GetCurrentStateRoot()
+	root, err := h.db.StateRootSvc.GetCurrentStateRoot()
 	if err != nil {
 		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
@@ -745,6 +776,13 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary		Bootstrap health check
+// @Description	Returns the current health status during bootstrap (no state root check)
+// @Tags			health
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	models.HealthResponse
+// @Router			/health/bootstrap [get]
 func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Request) {
 	if h.isReady != nil && !h.isReady() {
 		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")
@@ -850,7 +888,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		inner.Type = string(constants.SystemHealthUnknown)
 	}
 
-	if err := h.db.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
+	if err := h.db.SSEStore.SSEEventsAppend(route, inner.Type, string(body), appID); err != nil {
 		h.logger.Error("SSE push: failed to append event", string(constants.ConnectionStateError), err, "type", inner.Type)
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -860,7 +898,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	// The app identity extracted from the peer certificate must be associated with the target.
 	if route.WebSessionID != "" {
 		webBindKey := sessionWebBindKey(route.WebSessionID)
-		raw, ok := h.db.KVGet(webBindKey)
+		raw, ok := h.db.KVStore.KVGet(webBindKey)
 		if !ok {
 			h.logger.Warn("SSE push: target web session has no bound operators", "web_session_id", route.WebSessionID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "target session not found or not bound")
@@ -876,7 +914,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		// Check if any bound Operator session is associated with this appID
 		authorized := false
 		for _, opSessID := range operatorSessionIDs {
-			opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
+			opDoc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), opSessID)
 			if err != nil || opDoc == nil {
 				continue
 			}
@@ -901,7 +939,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	} else if route.CLISessionID != "" {
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
 			h.logger.Warn("SSE push: target CLI session not found", "cli_session_id", route.CLISessionID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "target session not found")
@@ -921,7 +959,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		}
 
 		// Verify app owns the Operator session bound to this CLI session
-		opDoc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
+		opDoc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionOperators), cliSess.OperatorSessionID)
 		if err != nil || opDoc == nil {
 			h.logger.Warn("SSE push: Operator session for CLI session not found", "operator_session_id", cliSess.OperatorSessionID, "cli_session_id", route.CLISessionID)
 			h.responder.Error(w, http.StatusForbidden, "operator session not found")
@@ -940,7 +978,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		filters := []models.DocFilter{
 			{Field: "user_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", route.UserID))},
 		}
-		docs, err := h.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
+		docs, err := h.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 100)
 		if err != nil || len(docs) == 0 {
 			h.logger.Warn("SSE push: user has no operators", "user_id", route.UserID, "app_id", appID)
 			h.responder.Error(w, http.StatusForbidden, "unauthorized for target user")
@@ -1018,7 +1056,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this cli_session_id.
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil {
 			h.logger.Error("Failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
 			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
@@ -1047,7 +1085,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		// Verify operator_session_id is bound to this web_session_id.
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
 		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "operator session does not own this web session")
 			return
@@ -1068,7 +1106,7 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	rows, err := h.db.SSEEventsListSince(route, sinceID, limit)
+	rows, err := h.db.SSEStore.SSEEventsListSince(route, sinceID, limit)
 	if err != nil {
 		h.responder.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -1107,7 +1145,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	var channel string
 	switch {
 	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
-		doc, err := h.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
 		if err != nil || doc == nil {
 			h.responder.Error(w, http.StatusForbidden, "not authorized for this cli session")
 			return
@@ -1129,7 +1167,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		channel = "sse:cli:" + route.CLISessionID
 	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
 		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, ok := h.db.KVGet(operatorBindKey)
+		boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
 		if !ok || boundWebSessionID != route.WebSessionID {
 			h.responder.Error(w, http.StatusForbidden, "not authorized for this web session")
 			return
@@ -1179,7 +1217,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 
 	// 4. Replay from DB if sinceID is provided
 	if sinceID > 0 {
-		rows, err := h.db.SSEEventsListSince(route, sinceID, 1000)
+		rows, err := h.db.SSEStore.SSEEventsListSince(route, sinceID, 1000)
 		if err == nil {
 			for _, row := range rows {
 				fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", row.ID, row.EventType, row.Payload)

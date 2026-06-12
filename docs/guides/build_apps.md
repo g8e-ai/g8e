@@ -316,7 +316,7 @@ Applications should test against the reference g8e Gateway to ensure compatibili
 
 ```bash
 ./g8e gw start
-./g8e test g8eo
+./g8e test e2e
 ```
 
 Verify that:

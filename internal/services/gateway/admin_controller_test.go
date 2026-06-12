@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
@@ -43,13 +44,13 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	bootstrapUser, err := adminController.userSvc.CreateBootstrapUser()
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { adminController.db.DocDelete("users", bootstrapUser.ID) })
+	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })
 
 	// Create a non-bootstrap user for testing
 	regularUser, err := adminController.userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { adminController.db.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", regularUser.ID) })
 
 	// Create an app policy document for testing
 	now := time.Now()
@@ -66,9 +67,9 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	}
 	policyDoc, err := json.Marshal(appPolicy)
 	require.NoError(t, err)
-	err = adminController.db.DocSet("app_policies", "test-app-id", policyDoc)
+	err = adminController.db.DocStore.DocSet("app_policies", "test-app-id", policyDoc)
 	require.NoError(t, err)
-	t.Cleanup(func() { adminController.db.DocDelete("app_policies", "test-app-id") })
+	t.Cleanup(func() { adminController.db.DocStore.DocDelete("app_policies", "test-app-id") })
 
 	// Generate a valid Ed25519 public key for testing
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -102,7 +103,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("Unauthorized - empty user_id", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, "")
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "")
 		body := []byte(`{"public_key_hex": "` + validPubKeyHex + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -112,7 +113,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("Forbidden - non-bootstrap user", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, regularUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, regularUser.ID)
 		body := []byte(`{"public_key_hex": "` + validPubKeyHex + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -122,7 +123,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("Forbidden - app policy not found", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		body := []byte(`{"public_key_hex": "` + validPubKeyHex + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/nonexistent-app/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -132,7 +133,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("BadRequest - invalid JSON", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		body := []byte(`{invalid json}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -142,7 +143,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("BadRequest - missing public_key_hex", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		body := []byte(`{}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -152,7 +153,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("BadRequest - empty public_key_hex", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		body := []byte(`{"public_key_hex": ""}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -162,7 +163,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("BadRequest - invalid hex public key", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		body := []byte(`{"public_key_hex": "not-hex"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -172,7 +173,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("BadRequest - invalid public key size", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		shortKey := hex.EncodeToString([]byte{0x01, 0x02})
 		body := []byte(`{"public_key_hex": "` + shortKey + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
@@ -183,7 +184,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 
 	t.Run("Success - valid signer registration", func(t *testing.T) {
 		t.Parallel()
-		ctx := context.WithValue(context.Background(), userIDKey, bootstrapUser.ID)
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		body := []byte(`{"public_key_hex": "` + validPubKeyHex + `"}`)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/app-policies/test-app-id/signers", bytes.NewReader(body)).WithContext(ctx)
 		rr := httptest.NewRecorder()
@@ -191,7 +192,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, rr.Code)
 
 		// Verify the signer was added to the database
-		signerDoc, err := adminController.db.DocGet("trusted_signers", "test-app-id")
+		signerDoc, err := adminController.db.DocStore.DocGet("trusted_signers", "test-app-id")
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 		assert.Equal(t, "test-app-id", signerDoc.ID)

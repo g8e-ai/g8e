@@ -33,16 +33,6 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
-// contextKey is a custom type for context keys to avoid collisions.
-type contextKey string
-
-const (
-	userIDKey         contextKey = "user_id"
-	appIDKey          contextKey = "app_id"
-	tenantIDKey       contextKey = "tenant_id"
-	bindingPersonaKey contextKey = "binding_persona"
-)
-
 // PublicRouteRegistry defines routes that bypass authentication.
 // Exact paths are matched precisely. Prefixes allow any path under the prefix.
 // This centralized registry eliminates fragile HasPrefix duplication.
@@ -142,6 +132,12 @@ func (e *AuthError) Is(target error) bool {
 	return ok
 }
 
+// cacheEntry represents a cached value with expiration time.
+type cacheEntry struct {
+	value     interface{}
+	expiresAt time.Time
+}
+
 // AuthService handles authentication for the Gateway service.
 type AuthService struct {
 	db         *CanonicalDBService
@@ -162,6 +158,9 @@ type AuthService struct {
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
 	limiters   map[string]*rate.Limiter
+
+	// Auth caching (5-minute TTL)
+	userCache sync.Map // userID -> *cacheEntry[*models.User]
 }
 
 // NewAuthService creates a new AuthService.
@@ -184,6 +183,47 @@ func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logg
 	}
 }
 
+// getCachedUser retrieves a user from cache if valid.
+func (s *AuthService) getCachedUser(userID string) *models.User {
+	if userID == "" {
+		return nil
+	}
+	entry, ok := s.userCache.Load(userID)
+	if !ok {
+		return nil
+	}
+	ce := entry.(*cacheEntry)
+	if time.Now().After(ce.expiresAt) {
+		s.userCache.Delete(userID)
+		return nil
+	}
+	return ce.value.(*models.User)
+}
+
+// cacheUser stores a user in cache with 5-minute TTL.
+func (s *AuthService) cacheUser(userID string, user *models.User) {
+	if userID == "" || user == nil {
+		return
+	}
+	s.userCache.Store(userID, &cacheEntry{
+		value:     user,
+		expiresAt: time.Now().Add(5 * time.Minute),
+	})
+}
+
+// invalidateUserCache removes a user from cache.
+func (s *AuthService) invalidateUserCache(userID string) {
+	if userID != "" {
+		s.userCache.Delete(userID)
+	}
+}
+
+// InvalidateUserCache is a public method for explicit cache invalidation.
+// Call this after user status changes (disable, delete, etc.) to ensure cache consistency.
+func (s *AuthService) InvalidateUserCache(userID string) {
+	s.invalidateUserCache(userID)
+}
+
 // ValidateOperatorSession checks if a session ID is valid and returns the Operator document.
 // Auth depends on session validity (existence + certificate revocation), not on operator
 // status liveness signals from other processes. The primary session invalidation mechanism
@@ -197,7 +237,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 	}
 
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
 		return nil, fmt.Errorf("auth: query operator session: %w", err)
 	}
@@ -240,9 +280,17 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	// This is the single chokepoint that makes retirement real - without it,
 	// a stale CLI cert can still talk to the Gateway.
 	if s.userSvc != nil && op.UserID != "" {
-		user, err := s.userSvc.GetByID(op.UserID)
-		if err != nil {
-			return nil, fmt.Errorf("auth: load user %s: %w", op.UserID, err)
+		// Try cache first
+		user := s.getCachedUser(op.UserID)
+		if user == nil {
+			var err error
+			user, err = s.userSvc.GetByID(op.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("auth: load user %s: %w", op.UserID, err)
+			}
+			if user != nil {
+				s.cacheUser(op.UserID, user)
+			}
 		}
 		if user != nil && !user.IsActive() {
 			// Return structured error for disabled users
@@ -386,8 +434,11 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 			}
 		}
 
-		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), userIDKey, op.UserID)
+		// Stamp context with user_id and operator session info
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, op.UserID)
+		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, op.OrganizationID)
+		ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, op.ID)
+		ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, operatorSessionID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 		return true
 	}
@@ -407,7 +458,7 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		wid := protocol.NewWorkloadIdentity()
 		cert := r.TLS.PeerCertificates[0]
 
-		cliDoc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+		cliDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		if err != nil {
 			s.logger.Error("auth: load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: load CLI session %s: %w", cliSessionID, err))
 			s.responder.Error(w, http.StatusInternalServerError, "failed to load session")
@@ -439,11 +490,19 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 		}
 
 		if s.userSvc != nil && cliSession.UserID != "" {
-			user, err := s.userSvc.GetByID(cliSession.UserID)
-			if err != nil {
-				s.logger.Error("auth: load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for CLI session: %w", cliSession.UserID, err))
-				s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
-				return true
+			// Try cache first
+			user := s.getCachedUser(cliSession.UserID)
+			if user == nil {
+				var err error
+				user, err = s.userSvc.GetByID(cliSession.UserID)
+				if err != nil {
+					s.logger.Error("auth: load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for CLI session: %w", cliSession.UserID, err))
+					s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
+					return true
+				}
+				if user != nil {
+					s.cacheUser(cliSession.UserID, user)
+				}
 			}
 			if user != nil && !user.IsActive() {
 				s.logger.Warn("auth: CLI session identity disabled", "user_id", cliSession.UserID)
@@ -464,8 +523,14 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
 			return true
 		}
-		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), userIDKey, cliSession.UserID)
+		// Stamp context with user_id and optional operator session info (for MCP proxying)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, cliSession.UserID)
+		if opID := r.Header.Get(constants.HeaderOperatorID); opID != "" {
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, opID)
+		}
+		if opSessionID := r.Header.Get(constants.HeaderOperatorSessionID); opSessionID != "" {
+			ctx = context.WithValue(ctx, constants.ContextKeyOperatorSessionID, opSessionID)
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 		return true
 	}
@@ -481,7 +546,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 			uriStr := uri.String()
 			if strings.HasPrefix(uriStr, "spiffe://"+protocol.TrustDomain+"/app/") {
 				appID := uriStr
-				doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
+				doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 				if err != nil || doc == nil {
 					s.logger.Warn("auth: app policy not found", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("auth: load app policy %s: %w", appID, err))
 					s.responder.Error(w, http.StatusForbidden, "app policy not found")
@@ -512,7 +577,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 					return true
 				}
 
-				ctx := context.WithValue(r.Context(), appIDKey, appID)
+				ctx := context.WithValue(r.Context(), constants.ContextKeyAppID, appID)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return true
 			}
@@ -599,7 +664,7 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	if !uriMatch {
 		return false, nil
 	}
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		return false, fmt.Errorf("auth: load CLI session %s for cert binding: %w", cliSessionID, err)
 	}
@@ -644,7 +709,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 		}
 
 		// Validate web session
-		doc, err := db.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+		doc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 		if err != nil {
 			s.logger.Error("auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: load web session %s: %w", webSessionID, err))
 			s.responder.Error(w, http.StatusUnauthorized, "web session validation failed")
@@ -676,11 +741,19 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 
 		// Check if the user is active (plan §4.6)
 		if s.userSvc != nil {
-			user, err := s.userSvc.GetByID(webSession.UserID)
-			if err != nil {
-				s.logger.Error("auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for web session: %w", webSession.UserID, err))
-				s.responder.Error(w, http.StatusUnauthorized, "user validation failed")
-				return
+			// Try cache first
+			user := s.getCachedUser(webSession.UserID)
+			if user == nil {
+				var err error
+				user, err = s.userSvc.GetByID(webSession.UserID)
+				if err != nil {
+					s.logger.Error("auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for web session: %w", webSession.UserID, err))
+					s.responder.Error(w, http.StatusUnauthorized, "user validation failed")
+					return
+				}
+				if user != nil {
+					s.cacheUser(webSession.UserID, user)
+				}
 			}
 			if user != nil && !user.IsActive() {
 				s.responder.Error(w, http.StatusUnauthorized, "identity disabled")
@@ -689,7 +762,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 		}
 
 		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), userIDKey, webSession.UserID)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, webSession.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -734,11 +807,19 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// JIT User Provisioning: get or create user by subject
-		user, err := s.userSvc.GetBySub(jwt.Claims.Sub)
-		if err != nil {
-			s.logger.Error("auth: JIT user lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("auth: lookup user by sub %s: %w", jwt.Claims.Sub, err))
-			s.responder.Error(w, http.StatusInternalServerError, "user lookup failed")
-			return
+		// Try cache first
+		user := s.getCachedUser(jwt.Claims.Sub)
+		if user == nil {
+			var err error
+			user, err = s.userSvc.GetBySub(jwt.Claims.Sub)
+			if err != nil {
+				s.logger.Error("auth: JIT user lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("auth: lookup user by sub %s: %w", jwt.Claims.Sub, err))
+				s.responder.Error(w, http.StatusInternalServerError, "user lookup failed")
+				return
+			}
+			if user != nil {
+				s.cacheUser(jwt.Claims.Sub, user)
+			}
 		}
 		if user == nil {
 			// User doesn't exist, check for an active invitation
@@ -759,6 +840,8 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 				s.responder.Error(w, http.StatusInternalServerError, "user creation failed")
 				return
 			}
+			// Cache the newly created user
+			s.cacheUser(jwt.Claims.Sub, user)
 		}
 
 		if !user.IsActive() {
@@ -780,7 +863,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Stamp context with identity and persona
-		ctx := context.WithValue(r.Context(), userIDKey, user.ID)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, user.ID)
 		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, tenantID)
 		ctx = context.WithValue(ctx, constants.ContextKeyBindingPersona, bindingPersona)
 

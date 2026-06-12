@@ -621,7 +621,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 			// Process was killed (by us on timeout/cancel, or externally)
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr("Command was terminated")
-			result.ErrorType = system.StringPtr(string(constants.SentinelStatusKilled))
+			result.ErrorType = system.StringPtr(string(constants.CommandExitStatusKilled))
 			result.ReturnCode = system.IntPtr(137)
 		} else {
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED

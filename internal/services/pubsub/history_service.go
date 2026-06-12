@@ -70,9 +70,9 @@ func (hs *HistoryService) HandleFetchLogsRequest(ctx context.Context, msg *PubSu
 }
 
 func (hs *HistoryService) handleFetchFromConsolidatedVault(ctx context.Context, msg *PubSubCommandMessage, executionID string) {
-	if hs.executionVault == nil || !hs.executionVault.IsEnabled() {
+	if hs.executionVault == nil {
 		hs.logger.Warn("Consolidated execution vault not available")
-		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "consolidated execution vault is not enabled on this operator")
+		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchLogs.Failed, "consolidated execution vault is not available on this operator")
 		return
 	}
 
@@ -115,7 +115,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg *PubSu
 func (hs *HistoryService) HandleFetchHistoryRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	hs.logger.Info("FETCH_HISTORY requested (LFAA)")
 
-	if hs.historyHandler == nil || !hs.historyHandler.IsEnabled() {
+	if hs.historyHandler == nil {
 		hs.logger.Warn("History handler not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchHistory.Failed,
 			"history handler not available on this operator")
@@ -143,7 +143,7 @@ func (hs *HistoryService) HandleFetchFileHistoryRequest(ctx context.Context, msg
 	}
 	hs.logger.Info("FETCH_FILE_HISTORY requested (LFAA, via Protobuf)", "file_path", protoFetch.FilePath)
 
-	if hs.historyHandler == nil || !hs.historyHandler.IsEnabled() {
+	if hs.historyHandler == nil {
 		hs.logger.Warn("History handler not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileHistory.Failed,
 			"history handler not available on this operator")
@@ -171,7 +171,7 @@ func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg *Pub
 	}
 	hs.logger.Info("RESTORE_FILE requested (LFAA, via Protobuf)", "file_path", protoRestore.FilePath, "commit_hash", protoRestore.CommitHash)
 
-	if hs.historyHandler == nil || !hs.historyHandler.IsEnabled() {
+	if hs.historyHandler == nil {
 		hs.logger.Warn("History handler not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.RestoreFile.Failed,
 			"history handler not available on this operator")
@@ -193,7 +193,7 @@ func (hs *HistoryService) HandleRestoreFileRequest(ctx context.Context, msg *Pub
 func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	hs.logger.Info("FETCH_FILE_DIFF requested (LFAA, via Protobuf)")
 
-	if hs.executionVault == nil || !hs.executionVault.IsEnabled() {
+	if hs.executionVault == nil {
 		hs.logger.Warn("Execution vault not available")
 		publishLFAAErrorTo(ctx, hs.client, hs.config, hs.logger, msg, constants.Event.Operator.FetchFileDiff.Failed,
 			"execution vault not available on this operator")

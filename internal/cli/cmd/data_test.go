@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -131,8 +130,8 @@ func TestDataCommandsRequireAuthentication(t *testing.T) {
 			setupDataTestConfig(t, tmpDir)
 
 			err := cmd.RunE(cmd, []string{})
-			assert.Error(t, err)
-			assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
+			require.Error(t, err)
+			require.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
 		})
 	}
 }

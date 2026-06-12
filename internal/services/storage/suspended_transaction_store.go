@@ -33,7 +33,6 @@ type SuspendedTransactionConfig struct {
 	MaxDBSizeMB          int64
 	RetentionDays        int
 	PruneIntervalMinutes int
-	Enabled              bool
 }
 
 // DefaultSuspendedTransactionConfig returns the default configuration.
@@ -43,7 +42,6 @@ func DefaultSuspendedTransactionConfig() *SuspendedTransactionConfig {
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
-		Enabled:              true,
 	}
 }
 
@@ -65,11 +63,6 @@ var _ interfaces.SuspendedTransactionStore = (*SuspendedTransactionService)(nil)
 func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *slog.Logger) (*SuspendedTransactionService, error) {
 	if config == nil {
 		config = DefaultSuspendedTransactionConfig()
-	}
-
-	if !config.Enabled {
-		logger.Info("Suspended transaction store is disabled")
-		return nil, nil
 	}
 
 	cfg := sqliteutil.DefaultDBConfig(config.DBPath)

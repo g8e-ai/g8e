@@ -115,7 +115,7 @@ func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
 	require.NoError(t, err)
 
 	err = ks.Initialize()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid length")
 }
 
@@ -190,7 +190,7 @@ func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
 	require.NoError(t, ks.Initialize())
 
 	_, err = ks.DecryptSecret("nonexistent-secret")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read encrypted secret")
 }
 
@@ -211,7 +211,7 @@ func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ks.DecryptSecret("test-secret")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal encrypted secret")
 }
 
@@ -272,7 +272,7 @@ func TestKeystore_Purge(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = backend.RetrieveMasterKey()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, ErrKeyNotFound, err)
 
 	entries, err := os.ReadDir(secretsDir)
@@ -409,7 +409,7 @@ func TestKeystore_Decrypt_InvalidBase64(t *testing.T) {
 	require.NoError(t, ks.Initialize())
 
 	_, err = ks.Decrypt("not-valid-base64!!!")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "decode base64")
 }
 
@@ -426,7 +426,7 @@ func TestKeystore_Decrypt_InvalidJSON(t *testing.T) {
 
 	invalidJSON := base64.StdEncoding.EncodeToString([]byte(`{invalid json`))
 	_, err = ks.Decrypt(invalidJSON)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal encrypted value")
 }
 
@@ -451,7 +451,7 @@ func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString(data)
 
 	_, err = ks.Decrypt(encoded)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported secret version")
 }
 
@@ -476,7 +476,7 @@ func TestKeystore_Decrypt_InvalidCiphertext(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString(data)
 
 	_, err = ks.Decrypt(encoded)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid ciphertext")
 }
 
@@ -497,7 +497,7 @@ func TestKeystore_Encrypt_EmptyPlaintext(t *testing.T) {
 
 	decrypted, err := ks.Decrypt(encoded)
 	require.NoError(t, err)
-	assert.Equal(t, "", decrypted)
+	assert.Empty(t, decrypted)
 }
 
 func TestKeystore_Encrypt_LargePlaintext(t *testing.T) {
@@ -541,7 +541,7 @@ func TestKeystore_DecryptSecret_InvalidJSON(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ks.DecryptSecret("test-secret")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal encrypted secret")
 }
 
@@ -568,7 +568,7 @@ func TestKeystore_DecryptSecret_UnsupportedVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ks.DecryptSecret("test-secret")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported secret version")
 }
 

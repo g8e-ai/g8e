@@ -173,7 +173,7 @@ func NewStdioConfig(g8eBinaryPath string) (*Config, error) {
 }
 
 // SimpleStdioServerConfig represents a simplified MCP server configuration for stdio transport.
-// This format is compatible with Cursor/Windsurf MCP clients.
+// This format is compatible with Cursor/Devin MCP clients.
 type SimpleStdioServerConfig struct {
 	Command  string   `json:"command"`
 	Args     []string `json:"args"`
@@ -186,7 +186,7 @@ type SimpleConfig struct {
 }
 
 // NewStdioConfigSimple creates a simplified stdio transport MCP configuration for local native tools.
-// This format is compatible with Cursor/Windsurf MCP clients.
+// This format is compatible with Cursor/Devin MCP clients.
 func NewStdioConfigSimple(g8eBinaryPath string) (*SimpleConfig, error) {
 	if g8eBinaryPath == "" {
 		return nil, fmt.Errorf("g8e binary path cannot be empty")

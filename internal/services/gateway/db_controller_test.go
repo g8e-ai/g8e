@@ -116,8 +116,8 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query", func(t *testing.T) {
-		db.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
-		db.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
+		db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]int{"val": 10}))
+		db.DocStore.DocSet("items", "i2", mustDocJSON(t, map[string]int{"val": 20}))
 
 		query := models.DocQueryRequest{
 			Limit: 1,
@@ -200,7 +200,7 @@ func TestDBControllerHandleDB(t *testing.T) {
 
 	t.Run("SSE Events count", func(t *testing.T) {
 		t.Parallel()
-		db.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}", "")
+		db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}", "")
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/_sse_events/count", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleSSEEvents(rr, req, "count")
@@ -253,8 +253,8 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("Scan and DeletePattern", func(t *testing.T) {
-		db.KVSet("pref:1", "a", 0)
-		db.KVSet("pref:2", "b", 0)
+		db.KVStore.KVSet("pref:1", "a", 0)
+		db.KVStore.KVSet("pref:2", "b", 0)
 
 		reqScan := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_scan", bytes.NewReader(mustDocJSON(t, models.KVPatternRequest{Pattern: "pref:*"})))
 		rrScan := httptest.NewRecorder()
@@ -287,7 +287,7 @@ func TestDBControllerHandleKV(t *testing.T) {
 
 	t.Run("KV Keys", func(t *testing.T) {
 		t.Parallel()
-		db.KVSet("key1", "val1", 0)
+		db.KVStore.KVSet("key1", "val1", 0)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{"pattern":"key*"}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKVKeys(rr, req)
@@ -344,7 +344,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		content := []byte("blob-data")
 		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/putget-b1", bytes.NewReader(content))
 		reqPut.Header.Set("Content-Type", "text/plain")
-		reqPut = reqPut.WithContext(context.WithValue(reqPut.Context(), userIDKey, "user-1"))
+		reqPut = reqPut.WithContext(context.WithValue(reqPut.Context(), constants.ContextKeyUserID, "user-1"))
 		rrPut := httptest.NewRecorder()
 		dbController.handleBlob(rrPut, reqPut)
 		assert.Equal(t, http.StatusOK, rrPut.Code)
@@ -362,7 +362,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		content := []byte("blob-data")
 		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/cache/meta-b2", bytes.NewReader(content))
 		reqPut.Header.Set("Content-Type", "text/plain")
-		reqPut = reqPut.WithContext(context.WithValue(reqPut.Context(), userIDKey, "user-1"))
+		reqPut = reqPut.WithContext(context.WithValue(reqPut.Context(), constants.ContextKeyUserID, "user-1"))
 		rrPut := httptest.NewRecorder()
 		dbController.handleBlob(rrPut, reqPut)
 		assert.Equal(t, http.StatusOK, rrPut.Code)
@@ -379,7 +379,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		largeBody := make([]byte, maxBlobBodySize+1)
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/large-test", bytes.NewReader(largeBody))
 		req.Header.Set("Content-Type", "application/octet-stream")
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-1"))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
 		assert.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
@@ -398,7 +398,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/ttl-invalid", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		req.Header.Set("X-Blob-TTL", "invalid")
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-1"))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -409,7 +409,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/ttl-valid", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		req.Header.Set("X-Blob-TTL", "3600")
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-1"))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
@@ -419,7 +419,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/empty-body", bytes.NewReader([]byte{}))
 		req.Header.Set("Content-Type", "text/plain")
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-1"))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -457,21 +457,21 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		content := []byte("blob-data")
 		reqPut1 := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/scratch/del-b1", bytes.NewReader(content))
 		reqPut1.Header.Set("Content-Type", "text/plain")
-		reqPut1 = reqPut1.WithContext(context.WithValue(reqPut1.Context(), userIDKey, "user-1"))
+		reqPut1 = reqPut1.WithContext(context.WithValue(reqPut1.Context(), constants.ContextKeyUserID, "user-1"))
 		rrPut1 := httptest.NewRecorder()
 		dbController.handleBlob(rrPut1, reqPut1)
 		assert.Equal(t, http.StatusOK, rrPut1.Code)
 
 		reqPut2 := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/scratch/del-b2", bytes.NewReader(content))
 		reqPut2.Header.Set("Content-Type", "text/plain")
-		reqPut2 = reqPut2.WithContext(context.WithValue(reqPut2.Context(), userIDKey, "user-1"))
+		reqPut2 = reqPut2.WithContext(context.WithValue(reqPut2.Context(), constants.ContextKeyUserID, "user-1"))
 		rrPut2 := httptest.NewRecorder()
 		dbController.handleBlob(rrPut2, reqPut2)
 		assert.Equal(t, http.StatusOK, rrPut2.Code)
 
 		// Delete the namespace
 		reqDel := httptest.NewRequest(http.MethodDelete, "/api/v1/blobs/scratch", nil)
-		reqDel = reqDel.WithContext(context.WithValue(reqDel.Context(), userIDKey, "user-1"))
+		reqDel = reqDel.WithContext(context.WithValue(reqDel.Context(), constants.ContextKeyUserID, "user-1"))
 		rrDel := httptest.NewRecorder()
 		dbController.handleBlob(rrDel, reqDel)
 		assert.Equal(t, http.StatusOK, rrDel.Code)
@@ -485,7 +485,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	t.Run("Missing_Content-Type", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/missing-ct", bytes.NewReader([]byte("data")))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-1"))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
@@ -518,7 +518,7 @@ func TestDBControllerHandleBlob(t *testing.T) {
 		// Use a non-allowlisted namespace
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/governed-ns/b1", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, "user-1"))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
 		assert.Equal(t, http.StatusConflict, rr.Code) // Non-allowlisted namespace
@@ -596,12 +596,12 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 	bootstrapUser, err := userSvc.CreateBootstrapUser()
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
-	t.Cleanup(func() { db.DocDelete("users", bootstrapUser.ID) })
+	t.Cleanup(func() { db.DocStore.DocDelete("users", bootstrapUser.ID) })
 
 	regularUser, err := userSvc.CreateUser()
 	require.NoError(t, err)
 	require.NotNil(t, regularUser)
-	t.Cleanup(func() { db.DocDelete("users", regularUser.ID) })
+	t.Cleanup(func() { db.DocStore.DocDelete("users", regularUser.ID) })
 
 	t.Run("reject app revocation without admin authorization", func(t *testing.T) {
 		appID := "spiffe://g8e.local/app/test-no-auth"
@@ -614,14 +614,14 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocSet("app_policies", appID, policyBytes)
+		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { db.DocStore.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, regularUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, regularUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
@@ -641,9 +641,9 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocSet("app_policies", appID, policyBytes)
+		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocDelete("app_policies", appID) })
+		t.Cleanup(func() { db.DocStore.DocDelete("app_policies", appID) })
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
@@ -660,7 +660,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 		reqBody := map[string]string{}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
@@ -680,24 +680,24 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocSet("app_policies", appID, policyBytes)
+		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := db.DocGet("app_policies", appID)
+		policyDoc, err := db.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = db.DocGet("app_policies", appID)
+		policyDoc, err = db.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 	})
@@ -713,7 +713,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocSet("app_policies", appID, policyBytes)
+		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -723,32 +723,32 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = db.DocSet("trusted_signers", appID, signerBytes)
+		err = db.DocStore.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
-		policyDoc, err := db.DocGet("app_policies", appID)
+		policyDoc, err := db.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		require.NotNil(t, policyDoc)
 
-		signerDoc, err := db.DocGet("trusted_signers", appID)
+		signerDoc, err := db.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		require.NotNil(t, signerDoc)
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err = db.DocGet("app_policies", appID)
+		policyDoc, err = db.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err = db.DocGet("trusted_signers", appID)
+		signerDoc, err = db.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -764,7 +764,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			UpdatedAt:          time.Now().UTC(),
 		}
 		policyBytes := mustMarshalJSON(t, policy)
-		err := db.DocSet("app_policies", appID, policyBytes)
+		err := db.DocStore.DocSet("app_policies", appID, policyBytes)
 		require.NoError(t, err)
 
 		signer := models.TrustedSigner{
@@ -774,24 +774,24 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err = db.DocSet("trusted_signers", appID, signerBytes)
+		err = db.DocStore.DocSet("trusted_signers", appID, signerBytes)
 		require.NoError(t, err)
 
 		reqBody := map[string]string{"app_id": appID}
 		bodyBytes := mustMarshalJSON(t, reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/apps/revoke", bytes.NewReader(bodyBytes))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, bootstrapUser.ID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, bootstrapUser.ID))
 
 		rr := httptest.NewRecorder()
 		adminController.handleRevokeApp(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 
-		policyDoc, err := db.DocGet("app_policies", appID)
+		policyDoc, err := db.DocStore.DocGet("app_policies", appID)
 		require.NoError(t, err)
 		assert.Nil(t, policyDoc)
 
-		signerDoc, err := db.DocGet("trusted_signers", appID)
+		signerDoc, err := db.DocStore.DocGet("trusted_signers", appID)
 		require.NoError(t, err)
 		assert.Nil(t, signerDoc)
 	})
@@ -828,16 +828,16 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// Create a request with app identity
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/app/"+appID+"/test.txt", nil)
-		req = req.WithContext(context.WithValue(req.Context(), appIDKey, appID))
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, userID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyAppID, appID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, userID))
 
 		// App should be able to write to its own namespace
 		err := dbController.verifyBlobOwnership(req, "app/"+appID)
-		assert.NoError(t, err, "App should be able to write to its own namespace")
+		require.NoError(t, err, "App should be able to write to its own namespace")
 
 		// App should not be able to write to another app's namespace
 		err = dbController.verifyBlobOwnership(req, "app/other-app")
-		assert.Error(t, err, "App should not be able to write to another app's namespace")
+		require.Error(t, err, "App should not be able to write to another app's namespace")
 	})
 
 	t.Run("blob ownership verification - user identity", func(t *testing.T) {
@@ -846,15 +846,15 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// Create a request with user identity
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/user/"+userID+"/test.txt", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, userID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, userID))
 
 		// User should be able to write to their own namespace
 		err := dbController.verifyBlobOwnership(req, "user/"+userID)
-		assert.NoError(t, err, "User should be able to write to their own namespace")
+		require.NoError(t, err, "User should be able to write to their own namespace")
 
 		// User should not be able to write to another user's namespace
 		err = dbController.verifyBlobOwnership(req, "user/other-user")
-		assert.Error(t, err, "User should not be able to write to another user's namespace")
+		require.Error(t, err, "User should not be able to write to another user's namespace")
 	})
 
 	t.Run("blob ownership verification - allowlisted namespace", func(t *testing.T) {
@@ -863,14 +863,14 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// Create a request with user identity
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/test.txt", nil)
-		req = req.WithContext(context.WithValue(req.Context(), userIDKey, userID))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, userID))
 
 		// Any authenticated identity should be able to write to allowlisted namespaces
 		err := dbController.verifyBlobOwnership(req, "temp")
-		assert.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
+		require.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
 
 		err = dbController.verifyBlobOwnership(req, "uploads")
-		assert.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
+		require.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
 	})
 
 	t.Run("blob ownership verification - no identity rejected", func(t *testing.T) {
@@ -880,7 +880,7 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// Request without identity should be rejected
 		err := dbController.verifyBlobOwnership(req, "temp")
-		assert.Error(t, err, "Request without identity should be rejected")
+		require.Error(t, err, "Request without identity should be rejected")
 	})
 }
 
@@ -890,9 +890,9 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 	t.Run("GET - success", func(t *testing.T) {
 		// First create settings
 		settings := map[string]string{"mode": "test"}
-		err := db.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := db.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { db.DocStore.DocDelete("settings", "platform_settings") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/settings", nil)
 		rr := httptest.NewRecorder()
@@ -907,13 +907,13 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { db.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { db.DocStore.DocDelete("settings", "platform_settings") })
 	})
 
 	t.Run("PATCH - success", func(t *testing.T) {
 		// First create settings
 		settings := map[string]string{"mode": "test"}
-		err := db.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
+		err := db.DocStore.DocSet("settings", "platform_settings", mustDocJSON(t, settings))
 		require.NoError(t, err)
 
 		patch := map[string]string{"mode": "production"}
@@ -921,7 +921,7 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleDataSettings(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
-		t.Cleanup(func() { db.DocDelete("settings", "platform_settings") })
+		t.Cleanup(func() { db.DocStore.DocDelete("settings", "platform_settings") })
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
@@ -1055,7 +1055,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
 		assert.Equal(t, http.StatusCreated, rr.Code)
-		t.Cleanup(func() { db.DocDelete("trusted_signers", "test-signer-1") })
+		t.Cleanup(func() { db.DocStore.DocDelete("trusted_signers", "test-signer-1") })
 	})
 
 	t.Run("POST - missing id", func(t *testing.T) {
@@ -1122,9 +1122,9 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := db.DocSet("trusted_signers", "test-signer-get", signerBytes)
+		err := db.DocStore.DocSet("trusted_signers", "test-signer-get", signerBytes)
 		require.NoError(t, err)
-		t.Cleanup(func() { db.DocDelete("trusted_signers", "test-signer-get") })
+		t.Cleanup(func() { db.DocStore.DocDelete("trusted_signers", "test-signer-get") })
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/test-signer-get", nil)
 		rr := httptest.NewRecorder()
@@ -1143,7 +1143,7 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 			Enabled:   true,
 		}
 		signerBytes := mustMarshalJSON(t, signer)
-		err := db.DocSet("trusted_signers", "test-signer-delete", signerBytes)
+		err := db.DocStore.DocSet("trusted_signers", "test-signer-delete", signerBytes)
 		require.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers/test-signer-delete", nil)

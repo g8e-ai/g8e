@@ -284,7 +284,7 @@ func TestL2Consensus_verifyPayloadHash_Valid(t *testing.T) {
 	env.Id = id
 
 	err = consensus.verifyPayloadHash(env)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestL2Consensus_verifyPayloadHash_Mismatch(t *testing.T) {

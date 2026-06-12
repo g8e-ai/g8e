@@ -32,8 +32,9 @@ import (
 // UserService handles user management in the Operator Gateway.
 // This replaces client's UserService as the authoritative user source.
 type UserService struct {
-	db     *CanonicalDBService
-	logger *slog.Logger
+	db      *CanonicalDBService
+	logger  *slog.Logger
+	authSvc *AuthService // Optional: for cache invalidation on user changes
 }
 
 // NewUserService creates a new UserService.
@@ -42,6 +43,12 @@ func NewUserService(db *CanonicalDBService, logger *slog.Logger) *UserService {
 		db:     db,
 		logger: logger,
 	}
+}
+
+// SetAuthService sets the auth service for cache invalidation.
+// This is optional; if nil, cache invalidation is skipped.
+func (s *UserService) SetAuthService(authSvc *AuthService) {
+	s.authSvc = authSvc
 }
 
 // CreateUser creates a new active user with a generated ID.
@@ -133,7 +140,7 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 		return nil, fmt.Errorf("failed to marshal user: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -160,7 +167,7 @@ func (s *UserService) ensureWebAuthnUserID(user *models.User) error {
 		return fmt.Errorf("failed to marshal user for migration: %w", err)
 	}
 
-	if _, err := s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), user.ID, data); err != nil {
+	if _, err := s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), user.ID, data); err != nil {
 		return fmt.Errorf("failed to migrate user to WebAuthn v4 format: %w", err)
 	}
 
@@ -203,6 +210,11 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		return fmt.Errorf("failed to disable user %s: %w", userID, err)
 	}
 
+	// Invalidate auth cache for this user
+	if s.authSvc != nil {
+		s.authSvc.InvalidateUserCache(userID)
+	}
+
 	if err := s.appendAdminAudit(models.AdminAuditEntry{
 		Action:     models.AdminAuditActionRetireLocalOwner,
 		Actor:      actorUserID,
@@ -230,7 +242,7 @@ func (s *UserService) FindBootstrapUser() (*models.User, error) {
 	filters := []models.DocFilter{
 		{Field: "is_bootstrap", Op: "==", Value: json.RawMessage("true")},
 	}
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), filters, "", 2)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionUsers), filters, "", 2)
 	if err != nil {
 		return nil, err
 	}
@@ -254,12 +266,12 @@ func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal admin audit entry: %w", err)
 	}
-	return s.db.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
+	return s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
 }
 
 // GetByID retrieves a user by ID.
 func (s *UserService) GetByID(userID string) (*models.User, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +336,7 @@ func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.In
 		return nil, fmt.Errorf("failed to marshal user: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), sub, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), sub, data); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -349,7 +361,7 @@ func (s *UserService) updateUserStatus(userID string, status constants.UserStatu
 		return fmt.Errorf("failed to marshal status update: %w", err)
 	}
 
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
+	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
 		return fmt.Errorf("failed to update user status: %w", err)
 	}
@@ -369,7 +381,7 @@ func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []mode
 		return fmt.Errorf("failed to marshal credentials update: %w", err)
 	}
 
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
+	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
 		return fmt.Errorf("failed to update user credentials: %w", err)
 	}
@@ -379,7 +391,7 @@ func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []mode
 
 // HasAnyUsers checks whether any users exist in the system.
 func (s *UserService) HasAnyUsers() (bool, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
 	if err != nil {
 		return false, err
 	}
@@ -388,12 +400,17 @@ func (s *UserService) HasAnyUsers() (bool, error) {
 
 // DeleteUser removes a user by ID.
 func (s *UserService) DeleteUser(userID string) error {
-	deleted, err := s.db.DocDelete(marshaler.CollectionName(constants.CollectionUsers), userID)
+	deleted, err := s.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return err
 	}
 	if !deleted {
 		return fmt.Errorf("user not found: %s", userID)
+	}
+
+	// Invalidate auth cache for this user
+	if s.authSvc != nil {
+		s.authSvc.InvalidateUserCache(userID)
 	}
 
 	s.logger.Info("[USER-SERVICE] User deleted", "user_id", userID)
@@ -476,7 +493,7 @@ func (s *PersonaService) CreatePersona(persona *models.Persona) error {
 		return fmt.Errorf("failed to marshal persona %s: %w", persona.ID, err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
 		return fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
 	}
 
@@ -486,7 +503,7 @@ func (s *PersonaService) CreatePersona(persona *models.Persona) error {
 
 // GetByID retrieves a persona by ID.
 func (s *PersonaService) GetByID(id string) (*models.Persona, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionPersonas), id)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionPersonas), id)
 	if err != nil {
 		return nil, err
 	}
@@ -499,7 +516,7 @@ func (s *PersonaService) GetByID(id string) (*models.Persona, error) {
 
 // GetAll retrieves all personas.
 func (s *PersonaService) GetAll() ([]models.Persona, error) {
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionPersonas), []models.DocFilter{}, "", 100)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionPersonas), []models.DocFilter{}, "", 100)
 	if err != nil {
 		return nil, err
 	}
@@ -574,7 +591,7 @@ func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation,
 		{Field: "is_consumed", Op: "==", Value: []byte("false")},
 	}
 
-	docs, err := s.db.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query invitations: %w", err)
 	}
@@ -619,7 +636,7 @@ func (s *UserService) ConsumeInvitation(id string) error {
 		return fmt.Errorf("failed to marshal invitation: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionInvitations), id, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionInvitations), id, data); err != nil {
 		return fmt.Errorf("failed to update invitation: %w", err)
 	}
 
@@ -629,7 +646,7 @@ func (s *UserService) ConsumeInvitation(id string) error {
 
 // GetInvitationByID retrieves an invitation by ID.
 func (s *UserService) GetInvitationByID(id string) (*models.Invitation, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionInvitations), id)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionInvitations), id)
 	if err != nil {
 		return nil, err
 	}
@@ -676,7 +693,7 @@ func (s *UserService) CreateInvitation(organizationID, sub, createdBy string, ro
 		return nil, fmt.Errorf("failed to marshal invitation: %w", err)
 	}
 
-	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
 		return nil, fmt.Errorf("failed to save invitation: %w", err)
 	}
 

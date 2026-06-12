@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestL1Doctrine_AnalyzeCommand_DestructiveCommands(t *testing.T) {
@@ -215,10 +216,10 @@ func TestL1Doctrine_AnalyzeMCPArguments(t *testing.T) {
 			signals, err := doctrine.AnalyzeMCPArguments(tt.arguments)
 
 			if tt.expectError {
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Nil(t, signals)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				if tt.expectBlock {
 					assert.NotEmpty(t, signals, "Expected threat signals for malicious arguments")
 					found := false
@@ -727,7 +728,7 @@ func TestL1Doctrine_AnalyzeCommand_MITREMapping(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			signals := doctrine.AnalyzeCommand(tt.command)
-			assert.Greater(t, len(signals), 0)
+			assert.NotEmpty(t, signals)
 
 			found := false
 			for _, sig := range signals {
@@ -1314,7 +1315,7 @@ func TestL1Doctrine_AnalyzeMCPArguments_RecursiveAnalysis(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			signals, err := doctrine.AnalyzeMCPArguments(tt.arguments)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			if tt.expectBlock {
 				assert.NotEmpty(t, signals, "Expected threat signals for: %s", tt.arguments)
@@ -1408,7 +1409,7 @@ func TestL1Doctrine_AnalyzeMCPArguments_AllThreatCategories(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			signals, err := doctrine.AnalyzeMCPArguments(tt.arguments)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.NotEmpty(t, signals, "Expected threat signals for: %s", tt.arguments)
 
 			found := false
@@ -1434,7 +1435,7 @@ func TestL1Doctrine_AnalyzeMCPArguments_DepthLimit(t *testing.T) {
 	signals, err := doctrine.AnalyzeMCPArguments(deepJSON)
 
 	// Should be blocked due to depth limit
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, signals)
 	assert.Contains(t, err.Error(), "depth exceeded")
 }
@@ -1449,7 +1450,7 @@ func TestL1Doctrine_AnalyzeMCPArguments_DepthLimitSafe(t *testing.T) {
 	signals, err := doctrine.AnalyzeMCPArguments(deepJSON)
 
 	// Should be safe (no threats in the benign data)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, signals)
 }
 

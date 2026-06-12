@@ -77,7 +77,7 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 	}
 	opBytes, err := json.Marshal(opDoc)
 	require.NoError(t, err)
-	require.NoError(t, db.DocSet("operators", "op-123", opBytes))
+	require.NoError(t, db.DocStore.DocSet("operators", "op-123", opBytes))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", strings.NewReader("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")

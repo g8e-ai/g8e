@@ -38,7 +38,6 @@ type AuditStoreConfig struct {
 	MaxDBSizeMB               int64
 	RetentionDays             int
 	PruneIntervalMinutes      int
-	Enabled                   bool
 	OutputTruncationThreshold int
 	HeadTailSize              int
 	// EncryptionVault is the required vault.Vault for encrypting sensitive content fields.
@@ -55,7 +54,6 @@ func DefaultAuditStoreConfig() *AuditStoreConfig {
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,
 		PruneIntervalMinutes:      60,
-		Enabled:                   true,
 		OutputTruncationThreshold: 102400,
 		HeadTailSize:              51200,
 	}
@@ -128,11 +126,6 @@ type SQLAuditStore struct {
 func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger) (*SQLAuditStore, error) {
 	if config == nil {
 		config = DefaultAuditStoreConfig()
-	}
-
-	if !config.Enabled {
-		logger.Info("Audit store is disabled")
-		return nil, nil
 	}
 
 	if config.EncryptionVault == nil {
@@ -379,8 +372,11 @@ func (ass *SQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *Event) err
 
 // RecordEvents records multiple events in a single database transaction.
 func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
-	if ass == nil || ass.db == nil || len(events) == 0 {
+	if ass == nil || len(events) == 0 {
 		return nil
+	}
+	if ass.db == nil {
+		return fmt.Errorf("audit store: database not initialized")
 	}
 
 	ass.muWrites.Add(1)
@@ -409,9 +405,8 @@ func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
 			stdout, stdoutTruncated := ass.truncateOutput(event.CommandStdout)
 			stderr, stderrTruncated := ass.truncateOutput(event.CommandStderr)
 
-			encrypted := ass.IsEncryptionEnabled()
 			encryptedFlag := 0
-			if encrypted {
+			if ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked() {
 				encryptedFlag = 1
 			}
 
@@ -458,8 +453,11 @@ func (ass *SQLAuditStore) RecordEvents(events []*Event) error {
 // RecordEvent records an event in the audit log
 // Content fields are encrypted if an encryption vault is configured and unlocked
 func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
-	if ass == nil || ass.db == nil {
+	if ass == nil {
 		return 0, nil
+	}
+	if ass.db == nil {
+		return 0, fmt.Errorf("audit store: database not initialized")
 	}
 
 	ass.muWrites.Add(1)
@@ -467,14 +465,21 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 
 	var eventID int64
 	err := ass.db.ExecInTxWithRetry(func(tx *sql.Tx) error {
+		// Auto-create session row for app sessions to avoid FK race conditions
+		// This mirrors the behavior in RecordActionReceipt
+		if event.OperatorSessionID != "" {
+			_, _ = tx.Exec(
+				`INSERT OR IGNORE INTO sessions (id, session_type, title, user_identity) VALUES (?, 'app', ?, ?)`,
+				event.OperatorSessionID, event.OperatorSessionID, event.OperatorSessionID,
+			)
+		}
+
 		if err := ass.requireExistingSessionTx(tx, event); err != nil {
 			return err
 		}
 
 		stdout, stdoutTruncated := ass.truncateOutput(event.CommandStdout)
 		stderr, stderrTruncated := ass.truncateOutput(event.CommandStderr)
-
-		encrypted := ass.IsEncryptionEnabled()
 
 		contentTextBytes, err := ass.encryptContent(event.ContentText)
 		if err != nil {
@@ -500,7 +505,7 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 		`
 
 		encryptedFlag := 0
-		if encrypted {
+		if ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked() {
 			encryptedFlag = 1
 		}
 
@@ -532,7 +537,7 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 			"operator_session_id", event.OperatorSessionID,
 			"stdout_truncated", stdoutTruncated,
 			"stderr_truncated", stderrTruncated,
-			"encrypted", encrypted)
+			"encrypted", encryptedFlag)
 
 		return nil
 	})
@@ -543,8 +548,11 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 // RecordActionReceipt records a signed ActionReceipt in the audit store.
 // This is the authoritative transaction-native audit record.
 func (ass *SQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRecord) error {
-	if ass == nil || ass.db == nil {
+	if ass == nil {
 		return nil
+	}
+	if ass.db == nil {
+		return fmt.Errorf("audit store: database not initialized")
 	}
 
 	ass.muWrites.Add(1)
@@ -831,7 +839,7 @@ func (ass *SQLAuditStore) GetEvents(operatorSessionID string, limit, offset int)
 	for _, row := range rows {
 		row.event.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
 
-		if row.encryptedFlag == 1 && ass.IsEncryptionEnabled() {
+		if row.encryptedFlag == 1 && ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked() {
 			if len(row.contentTextBytes) > 0 {
 				decrypted, err := ass.decryptContent(row.contentTextBytes)
 				if err != nil {
@@ -1064,11 +1072,6 @@ func (ass *SQLAuditStore) Close() error {
 	return closeErr
 }
 
-// IsEnabled returns whether the audit store is enabled
-func (ass *SQLAuditStore) IsEnabled() bool {
-	return ass != nil && ass.db != nil
-}
-
 // GetDataDir returns the audit store data directory
 func (ass *SQLAuditStore) GetDataDir() string {
 	if ass == nil {
@@ -1077,19 +1080,17 @@ func (ass *SQLAuditStore) GetDataDir() string {
 	return ass.config.DataDir
 }
 
-// IsEncryptionEnabled returns whether content encryption is enabled
-func (ass *SQLAuditStore) IsEncryptionEnabled() bool {
-	return ass != nil && ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked()
-}
-
-// encryptContent encrypts content using the encryption vault
+// encryptContent encrypts content using the encryption vault.
+// When the vault is locked, content is stored as plaintext so that audit records
+// are never blocked by vault state. The encrypted column will be 0 in that case.
 func (ass *SQLAuditStore) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
 	if !ass.encryptionVault.IsUnlocked() {
-		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
+		ass.logger.Warn("Vault is locked; storing audit content as plaintext")
+		return []byte(content), nil
 	}
 
 	encrypted, err := ass.encryptionVault.Encrypt([]byte(content))

@@ -212,10 +212,6 @@ func (hh *HistoryHandler) GetFileAtCommit(filePath, commitHash, operatorSessionI
 	return hh.ledger.GetFileAtCommit(filePath, commitHash, operatorSessionID)
 }
 
-func (hh *HistoryHandler) IsEnabled() bool {
-	return hh != nil && hh.auditStore != nil && hh.auditStore.IsEnabled()
-}
-
 func (hh *HistoryHandler) fetchHistoryError(message string) *operatorv1.FetchHistoryResult {
 	return &operatorv1.FetchHistoryResult{Success: false, Error: message}
 }

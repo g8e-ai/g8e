@@ -421,9 +421,11 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	jwtAudience := opts.JWTAudience
 
 	return &Config{
-		ComponentName: constants.ComponentNameG8EOGateway,
-		PKIDir:        pkiDir,
-		SecretsDir:    secretsDir,
+		ComponentName:      constants.ComponentNameG8EOGateway,
+		PKIDir:             pkiDir,
+		SecretsDir:         secretsDir,
+		MaxConcurrentTasks: 25,
+		MaxMemoryMB:        2048,
 		Gateway: GatewayConfig{
 			Enabled: true,
 			Posture: posture,
@@ -453,9 +455,9 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			IdleTimeout:       120 * time.Second,
 			MaxHeaderBytes:    1 << 20, // 1MB
 
-			// Rate limiting defaults
-			RateLimitRPS:   opts.RateLimitRPS,
-			RateLimitBurst: opts.RateLimitBurst,
+			// Rate limiting disabled for gateway mode (local-only, no external clients)
+			RateLimitRPS:   0,
+			RateLimitBurst: 0,
 
 			// Certificate mode
 			CertMode:            opts.CertMode,

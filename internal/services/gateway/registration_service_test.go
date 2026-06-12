@@ -173,7 +173,7 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		}
 
 		resp, err := regSvc.RegisterDeviceCSR("user-123", "org-123", req)
-		assert.NoError(t, err, "enrollment without CLI CSR should succeed for operator-only")
+		require.NoError(t, err, "enrollment without CLI CSR should succeed for operator-only")
 		assert.NotNil(t, resp)
 		assert.True(t, resp.Success)
 		assert.NotEmpty(t, resp.OperatorID)

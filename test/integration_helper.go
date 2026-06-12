@@ -178,10 +178,56 @@ func EnsureAuthLogin(t *testing.T, repoRoot string) {
 		}
 	}
 
-	// Run './g8e gw cli auth login' with explicit endpoint
-	loginCmd := exec.Command(g8ePath, "gw", "cli", "auth", "login")
+	// Run './g8e auth login' with explicit endpoint
+	loginCmd := exec.Command(g8ePath, "auth", "login")
 	loginCmd.Dir = repoRoot
 	if output, err := loginCmd.CombinedOutput(); err != nil {
-		require.NoError(t, err, "failed to run './g8e gw cli auth login': %s", string(output))
+		require.NoError(t, err, "failed to run './g8e auth login': %s", string(output))
 	}
+}
+
+// RunCLICommand executes ./g8e commands with proper error handling and output capture.
+// It ensures the g8e binary is built, sets the working directory to the repo root,
+// and returns the combined stdout/stderr output along with any error.
+//
+// Parameters:
+//   - t: testing.T for assertions
+//   - repoRoot: path to the repository root
+//   - args: command arguments (e.g., "gw", "status")
+//
+// Returns:
+//   - string: combined stdout/stderr output
+//   - error: nil if command succeeded, otherwise the execution error
+func RunCLICommand(t *testing.T, repoRoot string, args ...string) (string, error) {
+	t.Helper()
+
+	g8ePath := filepath.Join(repoRoot, "g8e")
+	if _, err := os.Stat(g8ePath); os.IsNotExist(err) {
+		// Build the binary if it doesn't exist
+		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
+		buildCmd.Dir = repoRoot
+		if output, err := buildCmd.CombinedOutput(); err != nil {
+			require.NoError(t, err, "failed to build g8e binary: %s", string(output))
+		}
+	}
+
+	cmd := exec.Command(g8ePath, args...)
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	return string(output), err
+}
+
+// RunCLICommandRequire executes a CLI command and requires it to succeed.
+// If the command fails, it calls t.Fatalf with the output.
+//
+// This is a convenience wrapper around RunCLICommand for cases where
+// the command must succeed for the test to continue.
+func RunCLICommandRequire(t *testing.T, repoRoot string, args ...string) string {
+	t.Helper()
+
+	output, err := RunCLICommand(t, repoRoot, args...)
+	if err != nil {
+		t.Fatalf("CLI command '%v' failed: %v\nOutput: %s", args, err, output)
+	}
+	return output
 }

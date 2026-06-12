@@ -43,7 +43,7 @@ import (
 
 func TestBuildOperatorArgs_Empty(t *testing.T) {
 	got := buildOperatorArgs("", false)
-	assert.Equal(t, "", got, "no endpoint should produce empty string")
+	assert.Empty(t, got, "no endpoint should produce empty string")
 }
 
 func TestBuildOperatorArgs_EndpointOnly(t *testing.T) {
@@ -242,7 +242,7 @@ Host equalhost
 
 func TestParseSSHConfig_MissingFile(t *testing.T) {
 	blocks, err := ssh.ParseConfig("/nonexistent/.ssh/config")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Empty(t, blocks)
 }
 
@@ -397,7 +397,7 @@ Host myhost
 
 func TestResolveHost_DefaultPort(t *testing.T) {
 	r, err := ssh.ResolveHost("somehost", "/nonexistent", "", "", "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "22", r.Port)
 }
 
@@ -512,7 +512,7 @@ Host myhost
 
 func TestResolveHost_NoSSHConfig_DefaultsApplied(t *testing.T) {
 	r, err := ssh.ResolveHost("bare-host", "/nonexistent/ssh/config", "fallback-user", "", "")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "fallback-user", r.User)
 }
 
@@ -565,8 +565,8 @@ func TestEmitJSON_PerHostEvent(t *testing.T) {
 
 	assert.Equal(t, "web-01", got["host"])
 	assert.Equal(t, marshaler.Status(constants.StreamStatusCompleted), got["status"])
-	assert.Equal(t, float64(1024), got["size_bytes"])
-	assert.Equal(t, float64(250), got["elapsed_ms"])
+	assert.InEpsilon(t, float64(1024), got["size_bytes"], 0.0)
+	assert.InEpsilon(t, float64(250), got["elapsed_ms"], 0.0)
 	assert.NotEmpty(t, got["ts"])
 	_, hasSummary := got["summary"]
 	assert.False(t, hasSummary, "summary field must be omitempty on non-summary events")
@@ -598,12 +598,12 @@ func TestEmitJSON_SummaryEvent(t *testing.T) {
 	var got map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(strings.TrimSpace(buf.String())), &got))
 
-	assert.Equal(t, true, got["summary"])
+	assert.True(t, got["summary"].(bool))
 	assert.Equal(t, marshaler.Status(constants.StreamStatusSummary), got["status"])
-	assert.Equal(t, float64(10), got["total"])
-	assert.Equal(t, float64(8), got["success"])
-	assert.Equal(t, float64(2), got["failed"])
-	assert.Equal(t, float64(5000), got["total_ms"])
+	assert.InEpsilon(t, float64(10), got["total"], 0.0)
+	assert.InEpsilon(t, float64(8), got["success"], 0.0)
+	assert.InEpsilon(t, float64(2), got["failed"], 0.0)
+	assert.InEpsilon(t, float64(5000), got["total_ms"], 0.0)
 }
 
 func TestEmitJSON_StatusConstants(t *testing.T) {
@@ -893,7 +893,7 @@ func TestRunStream_ArchValidation(t *testing.T) {
 		require.NoError(t, os.WriteFile(fakeBin, []byte("x"), 0755))
 
 		_, err := os.ReadFile(filepath.Join(binaryDir, "linux-"+arch, "g8e.operator"))
-		assert.NoError(t, err, "binary path for arch %s must be readable", arch)
+		require.NoError(t, err, "binary path for arch %s must be readable", arch)
 	}
 }
 
@@ -919,7 +919,7 @@ func TestBuildAuthMethods_NonExistentKeyFile_Skipped(t *testing.T) {
 		KeyFiles: []string{"/nonexistent/path/id_ed25519"},
 	}
 	_, err := ssh.BuildAuthMethods(r, "", "")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestBuildAuthMethods_InvalidKeyFile_Skipped(t *testing.T) {
@@ -931,7 +931,7 @@ func TestBuildAuthMethods_InvalidKeyFile_Skipped(t *testing.T) {
 		KeyFiles: []string{badKey},
 	}
 	_, err := ssh.BuildAuthMethods(r, "", "")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestBuildAuthMethods_ValidED25519Key_ReturnsMethod(t *testing.T) {
@@ -977,7 +977,7 @@ func TestBuildAuthMethods_MixedValidAndInvalid(t *testing.T) {
 		KeyFiles: []string{validKey, badKey, "/nonexistent"},
 	}
 	_, err := ssh.BuildAuthMethods(r, "", "")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestBuildAuthMethods_InvalidAgentSocket_StillLoadsKeys(t *testing.T) {
@@ -990,7 +990,7 @@ func TestBuildAuthMethods_InvalidAgentSocket_StillLoadsKeys(t *testing.T) {
 	}
 	// Non-existent agent socket - Dial fails silently; key-file method still loaded
 	_, err := ssh.BuildAuthMethods(r, "/tmp/nonexistent_agent_sock_xyz", "")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // generateTestSSHKey writes a PEM-encoded RSA private key to path.

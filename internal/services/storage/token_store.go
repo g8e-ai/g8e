@@ -32,7 +32,6 @@ type TokenStoreConfig struct {
 	MaxDBSizeMB          int64
 	RetentionDays        int
 	PruneIntervalMinutes int
-	Enabled              bool
 }
 
 // DefaultTokenStoreConfig returns the default configuration.
@@ -42,7 +41,6 @@ func DefaultTokenStoreConfig() *TokenStoreConfig {
 		MaxDBSizeMB:          512,
 		RetentionDays:        30,
 		PruneIntervalMinutes: 60,
-		Enabled:              true,
 	}
 }
 
@@ -65,11 +63,6 @@ var _ interfaces.TokenStore = (*TokenStoreService)(nil)
 func NewTokenStoreService(config *TokenStoreConfig, logger *slog.Logger, v *vault.Vault) (*TokenStoreService, error) {
 	if config == nil {
 		config = DefaultTokenStoreConfig()
-	}
-
-	if !config.Enabled {
-		logger.Info("Token store is disabled")
-		return nil, nil
 	}
 
 	if v == nil {
@@ -294,11 +287,6 @@ func (ts *TokenStoreService) Close() error {
 	}
 
 	return nil
-}
-
-// IsEnabled returns whether the token store is enabled.
-func (ts *TokenStoreService) IsEnabled() bool {
-	return ts != nil && ts.db != nil
 }
 
 // Wait blocks until all background workers and writes have finished.

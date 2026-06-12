@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.12] - 2026-06-11
+
+### Overview
+
+v1.0.12 is a foundational refactoring release focused on security fixes, architectural cleanup, and performance improvements. This release fixes a critical governance bypass in the `read_field` tool, completes the CanonicalDBService service extraction to eliminate delegation wrappers, consolidates duplicate interface definitions, adds auth caching for performance, and updates documentation to reflect the new architecture.
+
+### Security
+
+* **Fixed `read_field` Governance Bypass** — The `read_field` tool previously bypassed L4 Warden replay-protection and L5 Actuator signed receipt generation by handling execution before the full governance pipeline. Now routes through `processGatewayTransaction()` and `ProcessEnvelope()` like all other tools, ensuring replay protection applies and signed receipts are generated for all reads.
+* **Removed Double-Auditing for Native Tools** — Native tools were producing two audit records (a raw `auditStore.RecordEvent` plus the L5 signed receipt). Removed the raw event so native tools produce exactly one canonical audit record per call (the L5 receipt).
+
+### Architecture
+
+* **Completed CanonicalDBService Service Extraction** — Reduced `gateway_db.go` from 1759 lines to 478 lines (lifecycle-only code). All domain logic extracted to dedicated service files with no delegation wrappers:
+  - `DocumentStoreService` — Document CRUD operations (implements `TransactionAuditStore`)
+  - `AppPolicyStoreService` — App policy retrieval (implements `AppPolicyStore`)
+  - `SignerStoreService` — Trusted signer CRUD (implements `SignerStore`)
+  - `StateRootService` — State merkle root calculation with caching (implements `StateRootProvider`)
+  - `ReplayStoreService` — Nonce replay protection (implements `ReplayStore`)
+  - `KVStoreService` — TTL-aware ephemeral state with GLOB pattern scanning
+  - `SSEEventService` — Server-Sent Events fan-out
+  - `BlobStoreService` — Binary persistence for attachments and certificate material
+* **Consolidated SuspendedTransactionStore Interface** — Removed duplicate `SuspendedTransactionStore` interface definition from `mcp/gateway.go`. Both gateway and outbound modes now use the canonical `interfaces.SuspendedTransactionStore` from the `interfaces` package.
+* **Migrated Gateway Mode to `storage.SuspendedTransactionService`** — Gateway mode now uses `storage.SuspendedTransactionService` for L3 approval workflow, consistent with outbound mode. `auth_controller.go` holds the `SuspendedTransactionStore` interface reference instead of coupling to the concrete `CanonicalDBService` type.
+* **Delegated Maintenance Loop** — `CanonicalDBService.RunMaintenance` now delegates to extracted services (`KVStore.RunMaintenance()`, `BlobStore.RunMaintenance()`, `ReplayStore.CleanupExpiredNonces()`) instead of direct SQL operations.
+
+### Performance
+
+* **Auth Caching** — Added `sync.Map`-based cache to `AuthService` for user lookups with 5-minute TTL. Wrapped user lookups in `ValidateOperatorSession`, `handleCLIAuth`, `WebSessionAuth`, and `JWTAuthMiddleware`. Added cache invalidation hooks in `UserService.Disable` and `UserService.DeleteUser`. Benchmark results: ~40-116ns operations (far below 5ms target).
+
+### Code Quality
+
+* **Removed Unused Code** — Removed unused `sessionCache` field and related methods from `AuthService` (only user cache is used). Removed unused `cachedStateRoot` and `cachedStateVersion` fields from `CanonicalDBService` (state root caching moved to `StateRootService`).
+* **Fixed Lint Issues** — Fixed all `golangci-lint` issues including error return value checks for `json.NewEncoder.Encode` calls and formatting issues across modified files.
+
+### Testing
+
+* **Integration Test Updates** — Updated all integration tests to use extracted service fields directly instead of removed delegation wrapper methods. Fixed test infrastructure to use `storage.SuspendedTransactionService` instead of fake implementations.
+* **Governance Pipeline Verification** — Verified that all tools (native, `read_field`, and downstream) pass through the full L1-L5 governance pipeline with proper replay protection and signed receipt generation.
+
+### Documentation
+
+* **Updated `docs/architecture/gateway.md`** — Added entries for all 8 extracted services (DocumentStore, AppPolicyStore, SignerStore, StateRoot, ReplayStore, KVStore, SSEEvent, BlobStore) and SuspendedTransactionStore to the Implementation Reference table.
+* **Updated `docs/devs/codemap.md`** — Updated GatewayModeService dependency tree to reflect extracted service architecture with no delegation wrappers. Updated Data Handling Convergence section to document direct field access pattern. Updated Shared Interface Implementations to remove CanonicalDBService (no longer implements interfaces). Updated Critical Data Flows to reflect consistent use of `storage.SuspendedTransactionService` in both modes.
+
+---
+
 ## [1.0.11] - 2026-06-10
 
 ### Overview
@@ -131,7 +178,7 @@ v1.0.10 is a major release that hardens the platform's security posture, simplif
 
 * **Multi-Transport Configuration Command** — `./g8e mcp show` updated to output a matrix of different configurations side-by-side: `g8e.local` (mTLS), direct IP address (without DNS required), plain HTTP (for localhost access), and stdio transport.
 
-* **Simplified Stdio MCP Config** — Simplified stdio transport configuration format output via standard JSON structure (`command`, `args`, `disabled`) compatible with standard IDE-assisted clients (Cursor, Windsurf).
+* **Simplified Stdio MCP Config** — Simplified stdio transport configuration format output via standard JSON structure (`command`, `args`, `disabled`) compatible with standard IDE-assisted clients (Cursor, Devin).
 
 * **Cross-Platform Setup Scripts** — New cross-platform environment bootstrapper and dependency validation scripts added under `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, and `scripts/windows-setup.ps1` to easily verify Go, Buf, and Protoc compilers.
 

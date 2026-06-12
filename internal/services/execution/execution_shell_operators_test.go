@@ -15,7 +15,6 @@ package execution
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -247,7 +246,7 @@ func TestExecutionService_SystemMetrics(t *testing.T) {
 		}
 		if result.SystemInfo.Memory != nil {
 			t.Logf("Memory info: %+v", result.SystemInfo.Memory)
-			assert.Greater(t, result.SystemInfo.Memory.MemTotal, int64(0))
+			assert.Positive(t, result.SystemInfo.Memory.MemTotal)
 		}
 	})
 
@@ -329,7 +328,7 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 				}
 
 				result, err := svc.ExecuteCommand(context.Background(), req)
-				require.NoError(t, err)
+				assert.NoError(t, err)
 				results <- result
 			}(i)
 		}
@@ -387,10 +386,10 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 		}
 
 		result, err := svc.ExecuteCommand(ctx, req)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, result)
 		// Check for context cancellation error
-		assert.True(t, errors.Is(err, context.Canceled), "error should be context.Canceled, got: %v", err.Error())
+		require.ErrorIs(t, err, context.Canceled, "error should be context.Canceled, got: %v", err.Error())
 
 		wg.Wait()
 	})

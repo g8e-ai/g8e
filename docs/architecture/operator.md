@@ -4,7 +4,7 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-06-10
+Last Updated: 2026-06-11
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -77,11 +77,35 @@ The g8e Operator compiles native tool playbooks directly into the g8e Node to pr
 - **proc_metric_top**: Directly parses the Linux /proc filesystem in memory to extract process IDs, memory maps, and CPU tracking. It returns a tightly structured JSON array of the top resource-hogging processes.
 - **fs_disk_profile**: Recursively calculates directory sizes natively (equivalent to an optimized du --max-depth=2) starting from an approved path root. It instantly isolates unrotated log files or bloated tmp directories.
 - **proc_signal_safe**: Allows the AI to send explicit termination signals (SIGTERM, SIGKILL) to a process, but enforces a strict g8e Node-level denylist (e.g., rejecting attempts to kill PID 1, system init, or the g8e Node itself).
+- **proc_tree**: Inspects the process hierarchy to map parent-child relationships and identify process trees for targeted operations.
 
 #### Network & Connectivity Validation Playbook
 - **net_socket_audit**: Directly inspects active network sockets (/proc/net/tcp and /proc/net/udp) to map established connections and confirm if expected internal microservices are actually listening.
 - **net_endpoint_ping**: Initiates native TCP handshakes or ICMP requests to defined target host/port combinations to verify local network routing and DNS resolution performance.
 - **net_http_probe**: Performs a lightweight native HTTP request (similar to curl -I) to internal API endpoints, returning only the status codes, headers, and latency metrics while discarding heavy response payloads.
+- **net_dns_resolve**: Performs DNS lookups to verify domain resolution and identify DNS server issues.
+- **tls_cert_inspect**: Inspects TLS certificates from endpoints to validate expiration, chain of trust, and certificate metadata.
+- **net_ssh_known_hosts**: Manages SSH known_hosts entries for secure remote access validation.
+
+#### System Introspection Playbook
+- **sys_info**: Returns comprehensive system information including OS version, kernel, architecture, and hardware details.
+- **sys_env_vars**: Lists environment variables with optional filtering and masking of sensitive values.
+- **sys_service_status**: Checks the status of system services (systemd, init.d) to determine if services are running, stopped, or failed.
+- **sys_container_status**: Inspects container runtime status (Docker, containerd) to identify running containers and their health.
+- **sys_time_clock**: Reports system time, timezone, and clock synchronization status (NTP).
+
+#### File Operations Playbook
+- **fs_file_checksum**: Calculates cryptographic checksums (SHA256, MD5) of files to verify integrity and detect changes.
+- **fs_disk_usage**: Reports disk usage statistics for mounted filesystems to identify capacity issues.
+
+#### Cloud & Orchestration Playbook
+- **cloud_metadata**: Retrieves cloud provider metadata (AWS, GCP, Azure) to identify instance identity, region, and availability zone.
+- **k8s_inspect**: Queries Kubernetes API to inspect pod status, deployments, and cluster health.
+- **git_ops**: Performs Git operations (status, log, diff) to inspect repository state and changes.
+- **operator_deploy**: Deploys or updates g8e operators on remote hosts via secure channels.
+
+#### Shell Execution Playbook
+- **shell_execute**: Executes shell commands within the g8e execution boundary with strict argument validation and output capture.
 
 ### Identity, PKI, and mTLS
 The g8e Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
@@ -123,7 +147,7 @@ The reference implementation (`g8eo`) currently supports:
 - **Sovereign Execution Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
 - **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
 - **Zero-Dependency Node Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
-- **Expanded Native Tool Catalog**: 26 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, and cloud metadata operations.
+- **Expanded Native Tool Catalog**: 26 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata, and shell execution.
 
 ---
 
@@ -167,7 +191,7 @@ export G8E_CA_CERT_PATH=.g8e/pki/ca.crt
 
 **Protocol Integration:**
 - **All Clients**: Use the universal HTTP endpoint with mTLS authentication
-- **IDE Integration (Cursor, Windsurf, Claude Code)**: Configure MCP client with HTTP transport
+- **IDE Integration (Cursor, Devin, Claude Code, Codex)**: Configure MCP client with HTTP transport
 - **Custom BYO Clients**: Use HTTP MCP or A2A protocol endpoints
 
 ### 4. Test with a Simple Mutation
@@ -230,7 +254,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Notary (`L3Notary`) | `../../internal/services/governance/l3_notary.go` |
 | Local Audit Vault | `../../internal/services/storage/audit_store.go` |
 | Native Git Ledger | `../../internal/services/storage/ledger.go` |
-| Native Tools | `../../internal/services/mcp/native_tools.go` |
+| Native Tools | `../../internal/services/mcp/native_tool_registry.go` |
 | Native Tool Handlers | `../../internal/services/mcp/native_handlers.go` |
 | Operator Entrypoint | `../../cmd/operator/main.go` |
 | Protocol Definitions | `../../protocol/proto/g8e/common/v1/common.proto` |

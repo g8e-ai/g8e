@@ -21,14 +21,14 @@ import (
 	"sync"
 )
 
-// Broker is the interface for the PubSubBroker to avoid import cycles.
+// Broker is the interface for the GatewayWebSocketHandler to avoid import cycles.
 type Broker interface {
 	Publish(channel string, data []byte) int
 	RegisterHandler(channel string, handler func(string, []byte)) func()
 }
 
 // InProcessPubSubClient implements PubSubClient for in-process communication
-// between the GatewayService (broker) and PubSubCommandService (executor).
+// between the GatewayService (broker) and OperatorPubSubService (executor).
 type InProcessPubSubClient struct {
 	broker Broker
 	mu     sync.Mutex

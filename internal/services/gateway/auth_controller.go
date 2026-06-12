@@ -29,6 +29,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
@@ -50,11 +51,12 @@ type AuthController struct {
 	webSessionSvc      *WebSessionService
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
+	suspendedStore     interfaces.SuspendedTransactionStore
 	mcp                *mcp.GatewayService
 	responder          *response.Writer
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, suspendedStore interfaces.SuspendedTransactionStore, mcp *mcp.GatewayService, responder *response.Writer) *AuthController {
 	return &AuthController{
 		cfg:                cfg,
 		logger:             logger,
@@ -67,6 +69,7 @@ func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBS
 		webSessionSvc:      webSessionSvc,
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
+		suspendedStore:     suspendedStore,
 		mcp:                mcp,
 		responder:          responder,
 	}
@@ -102,7 +105,7 @@ func (c *AuthController) handleAuthPasskeysRegisterChallenge(w http.ResponseWrit
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
-	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
+	if ctxUserID, ok := r.Context().Value(constants.ContextKeyUserID).(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -169,7 +172,7 @@ func (c *AuthController) handleAuthPasskeysRegisterVerify(w http.ResponseWriter,
 	}
 
 	// [PIVOT] Enforce session-to-user binding for public browser registration
-	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
+	if ctxUserID, ok := r.Context().Value(constants.ContextKeyUserID).(string); ok {
 		if req.UserID != "" && req.UserID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -248,7 +251,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateChallenge(w http.Response
 	}
 
 	userID := req.UserID
-	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
+	if ctxUserID, ok := r.Context().Value(constants.ContextKeyUserID).(string); ok {
 		if userID != "" && userID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -300,7 +303,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWri
 	}
 
 	userID := req.UserID
-	if ctxUserID, ok := r.Context().Value(userIDKey).(string); ok {
+	if ctxUserID, ok := r.Context().Value(constants.ContextKeyUserID).(string); ok {
 		if userID != "" && userID != ctxUserID {
 			c.responder.Error(w, http.StatusForbidden, "user_id mismatch with session")
 			return
@@ -461,7 +464,7 @@ func (c *AuthController) handleApprovalAction(w http.ResponseWriter, r *http.Req
 		action = parts[1]
 	}
 
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -612,7 +615,7 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Persist the approval with signature before resuming
-	if err := c.db.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
+	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
 		c.logger.Error("Failed to approve transaction", "error", err, "txHash", txHash, "userID", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to approve transaction")
 		return
@@ -828,7 +831,7 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 		return
 	}
 
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -840,8 +843,8 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 		queryUserID = userID
 	}
 
-	// Get suspended transactions from the gateway DB service
-	transactions, err := c.db.ListSuspendedTransactions(r.Context(), queryUserID)
+	// Get suspended transactions from the suspended transaction store
+	transactions, err := c.suspendedStore.ListSuspendedTransactions(r.Context(), queryUserID)
 	if err != nil {
 		c.logger.Error("Failed to list suspended transactions", "error", err, "userID", queryUserID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to list suspended transactions")
@@ -932,7 +935,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	cookie, err := r.Cookie("g8e_session")
 	if err == nil {
 		// Best effort delete web session from DB
-		if _, err := c.db.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
+		if _, err := c.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
 			c.logger.Warn("Failed to delete web session during logout", "error", err, "sessionID", cookie.Value)
 		}
 	}
@@ -957,6 +960,14 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 // handleCLIPasskeyRegisterChallenge handles passkey registration challenges for CLI bootstrap.
 // This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
 // It enforces first-credential-only to prevent credential stuffing attacks.
+//
+//	@Summary		Passkey CLI register challenge
+//	@Description	Initiates passkey registration for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli-register/challenge [post]
 func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -995,7 +1006,7 @@ func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter
 	}
 
 	// Check if already authenticated via mTLS
-	authenticatedUserID, _ := r.Context().Value(userIDKey).(string)
+	authenticatedUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	isEnrolled := authenticatedUserID == req.UserID
 
 	if len(user.PasskeyCredentials) > 0 && !isEnrolled {
@@ -1019,6 +1030,14 @@ func (c *AuthController) handleCLIPasskeyRegisterChallenge(w http.ResponseWriter
 // handleCLIPasskeyRegisterVerify handles passkey registration verification for CLI bootstrap.
 // This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet.
 // It enforces first-credential-only to prevent credential stuffing attacks.
+//
+//	@Summary		Passkey CLI register verify
+//	@Description	Verifies passkey registration for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli-register/verify [post]
 func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1057,7 +1076,7 @@ func (c *AuthController) handleCLIPasskeyRegisterVerify(w http.ResponseWriter, r
 	}
 
 	// Check if already authenticated via mTLS
-	authenticatedUserID, _ := r.Context().Value(userIDKey).(string)
+	authenticatedUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	isEnrolled := authenticatedUserID == req.UserID
 
 	if len(user.PasskeyCredentials) > 0 && !isEnrolled {
@@ -1247,6 +1266,14 @@ func (c *AuthController) handleCLIBrowserPasskeyRegisterVerify(w http.ResponseWr
 
 // handleCLIPasskeyAuthenticateChallenge handles passkey authentication challenges for CLI.
 // This endpoint requires mTLS authentication via CLI certificate with X-G8E-CLI-Session-ID header.
+//
+//	@Summary		Passkey CLI authenticate challenge
+//	@Description	Initiates passkey authentication for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli/authenticate/challenge [post]
 func (c *AuthController) handleCLIPasskeyAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1291,6 +1318,14 @@ func (c *AuthController) handleCLIPasskeyAuthenticateChallenge(w http.ResponseWr
 
 // handleCLIPasskeyAuthenticateVerify handles passkey authentication verification for CLI.
 // This endpoint requires mTLS authentication via CLI certificate with X-G8E-CLI-Session-ID header.
+//
+//	@Summary		Passkey CLI authenticate verify
+//	@Description	Verifies passkey authentication for CLI bootstrap
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/passkeys/cli/authenticate/verify [post]
 func (c *AuthController) handleCLIPasskeyAuthenticateVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1345,6 +1380,13 @@ func (c *AuthController) handleCLIPasskeyAuthenticateVerify(w http.ResponseWrite
 	})
 }
 
+// @Summary		Bootstrap auth
+// @Description	Initiates local bootstrap authentication flow
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]string
+// @Router			/api/v1/auth/bootstrap [post]
 func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1486,7 +1528,7 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
 		}
-		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+		if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 			c.logger.Error("Failed to persist Operator document", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 			return
@@ -1575,6 +1617,14 @@ func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Req
 // handleCLIEnrollment issues a CLI certificate for an already-bootstrapped system.
 // This endpoint is strictly for CLI credential recovery when local credentials are
 // missing; it does NOT create or rotate operator state. Loopback-only for defense.
+//
+//	@Summary		CLI enrollment
+//	@Description	Enrolls a CLI client with the gateway
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	map[string]string
+//	@Router			/api/v1/auth/cli/enroll [post]
 func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1641,7 +1691,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
 		}
-		if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
+		if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), bootstrapUser.ID, userData); err != nil {
 			c.logger.Error("Failed to update bootstrap user with OS user info", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to update user")
 			return
@@ -1677,7 +1727,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator record")
 		return
 	}
-	if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+	if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 		c.logger.Error("Failed to persist operator document during CLI enrollment", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to persist operator record")
 		return
@@ -1745,6 +1795,13 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+// @Summary		Device enrollment
+// @Description	Enrolls a device with the gateway
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]string
+// @Router			/api/v1/auth/device/enroll [post]
 func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1880,7 +1937,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return
 	}
-	if err := c.db.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
+	if err := c.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionOperators), operatorID, opBytes); err != nil {
 		c.logger.Error("Failed to persist Operator document", "error", err)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to create operator")
 		return
@@ -1953,6 +2010,13 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	c.responder.JSON(w, http.StatusCreated, response)
 }
 
+// @Summary		Bootstrap status
+// @Description	Returns the current bootstrap status
+// @Tags			auth
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	map[string]string
+// @Router			/api/v1/auth/bootstrap/status [get]
 func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -1972,7 +2036,7 @@ func (c *AuthController) handleBootstrapStatus(w http.ResponseWriter, r *http.Re
 }
 
 func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -1995,7 +2059,7 @@ func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *AuthController) handleWebSession(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(userIDKey).(string)
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return

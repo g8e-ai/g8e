@@ -81,7 +81,7 @@ func main() {
 		Command:          "ls -la",
 		ExecutionId:      "exec-123",
 		Justification:    "List directory contents",
-		SentinelMode:     "scrub",
+		VaultMode:        "scrub",
 		TimeoutSeconds:   30,
 		Intent:           "Inspect filesystem",
 		Environment:      map[string]string{"PATH": "/usr/bin"},

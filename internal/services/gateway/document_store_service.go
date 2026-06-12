@@ -151,7 +151,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 		collection, id,
 	).Scan(&existingJSON, &createdAtStr, &updatedAtStr)
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("DocumentStoreService: document not found: %s/%s", collection, id)
+		return nil, constants.ErrNotFound
 	}
 	if err != nil {
 		return nil, err
@@ -226,39 +226,32 @@ func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, err
 
 // GetField extracts a single field value from a document using dot notation.
 // This is used for JIT field resolution with governed access controls.
-func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (json.RawMessage, error) {
-	var dataJSON string
-	err := s.db.QueryRowWithRetry(
-		"SELECT data FROM documents WHERE collection = ? AND id = ?",
-		collection, id,
-	).Scan(&dataJSON)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("DocumentStoreService: document not found: %s/%s", collection, id)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	// Use SQL json_extract for efficient field extraction
-	// This is safer than manual JSON parsing and leverages SQLite's JSON1 extension
-	var fieldValue string
-	query := "SELECT json_extract(data, ?) FROM documents WHERE collection = ? AND id = ?"
-
-	// Convert dot notation to JSON path (e.g., "metadata.tags" -> "$.metadata.tags")
+func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (interface{}, error) {
+	// Use json_quote(json_extract(...)) so SQLite re-encodes the extracted value as
+	// valid JSON regardless of its native type (TEXT, INTEGER, REAL, NULL).
+	// json_extract alone returns SQL TEXT without quotes for JSON strings, which is
+	// not valid JSON. json_quote wraps strings in quotes and leaves numbers/booleans as-is.
+	query := "SELECT json_quote(json_extract(data, ?)) FROM documents WHERE collection = ? AND id = ?"
 	jsonPath := "$." + fieldPath
 
-	err = s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&fieldValue)
+	var encoded *string
+	err := s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&encoded)
+	if err == sql.ErrNoRows {
+		return nil, constants.ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("DocumentStoreService: extract field %s: %w", fieldPath, err)
 	}
-
-	// Parse the extracted value back into a Go type
-	var result json.RawMessage
-	if err := json.Unmarshal([]byte(fieldValue), &result); err != nil {
-		return nil, fmt.Errorf("DocumentStoreService: unmarshal field value: %w", err)
+	if encoded == nil {
+		return nil, constants.ErrNotFound
 	}
 
-	return result, nil
+	var out interface{}
+	if err := json.Unmarshal([]byte(*encoded), &out); err != nil {
+		return nil, fmt.Errorf("DocumentStoreService: decode field %s: %w", fieldPath, err)
+	}
+
+	return out, nil
 }
 
 // DocQuery returns documents matching field conditions.
@@ -305,7 +298,11 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 		}
 		query.WriteString(" ?")
 
-		args = append(args, "$."+f.Field, string(f.Value))
+		var nativeVal interface{}
+		if err := json.Unmarshal(f.Value, &nativeVal); err != nil {
+			return nil, fmt.Errorf("DocumentStoreService: invalid filter value: %w", err)
+		}
+		args = append(args, "$."+f.Field, nativeVal)
 	}
 
 	if orderBy != "" {
@@ -363,4 +360,29 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 		results = append(results, doc)
 	}
 	return results, nil
+}
+
+// scanDocument converts raw database row data into a typed Document with native time.Time timestamps.
+func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
+	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+	updatedAt, err := sqliteutil.ParseTimestamp(updatedAtStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse updated_at: %w", err)
+	}
+
+	var data map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
+		return nil, fmt.Errorf("unmarshal document data: %w", err)
+	}
+
+	return &models.Document{
+		Collection: collection,
+		ID:         id,
+		Data:       data,
+		CreatedAt:  createdAt,
+		UpdatedAt:  updatedAt,
+	}, nil
 }

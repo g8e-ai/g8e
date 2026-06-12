@@ -166,6 +166,7 @@ const EventOperatorAuditAiRecorded EventType = "g8e.v1.operator.audit.ai.recorde
 const EventOperatorAuditCommandRecorded EventType = "g8e.v1.operator.audit.command.recorded"
 const EventOperatorAuditDirectCommandRecorded EventType = "g8e.v1.operator.audit.direct.command.recorded"
 const EventOperatorAuditDirectCommandResultRecorded EventType = "g8e.v1.operator.audit.direct.command.result.recorded"
+const EventOperatorAuditMcpCallRecorded EventType = "g8e.v1.operator.audit.mcp.call.recorded"
 const EventOperatorBootstrapRequested EventType = "g8e.v1.operator.bootstrap.requested"
 const EventOperatorBootstrapReceived EventType = "g8e.v1.operator.bootstrap.received"
 const EventOperatorBootstrapCompleted EventType = "g8e.v1.operator.bootstrap.completed"
@@ -268,7 +269,7 @@ const EventPlatformTerminalOpened EventType = "g8e.v1.platform.terminal.opened"
 const EventPlatformTerminalMinimized EventType = "g8e.v1.platform.terminal.minimized"
 const EventPlatformTerminalMaximized EventType = "g8e.v1.platform.terminal.maximized"
 const EventPlatformTerminalClosed EventType = "g8e.v1.platform.terminal.closed"
-const EventPlatformSentinelModeChanged EventType = "g8e.v1.platform.sentinel.mode.changed"
+const EventPlatformVaultModeChanged EventType = "g8e.v1.platform.sentinel.mode.changed"
 const EventPlatformExternalServiceConfigured EventType = "g8e.v1.platform.external.service.configured"
 const EventPlatformTelemetryHealthReported EventType = "g8e.v1.platform.telemetry.health.reported"
 const EventPlatformTelemetryPerformanceRecorded EventType = "g8e.v1.platform.telemetry.performance.recorded"
@@ -292,6 +293,7 @@ type _EventOperatorAudit struct {
 	Command         EventType
 	DirectCmd       EventType
 	DirectCmdResult EventType
+	McpCall         EventType
 	UserMsg         EventType
 }
 type _EventOperatorBootstrap struct {
@@ -486,6 +488,7 @@ var Event = struct {
 			Command:         EventOperatorAuditCommandRecorded,
 			DirectCmd:       EventOperatorAuditDirectCommandRecorded,
 			DirectCmdResult: EventOperatorAuditDirectCommandResultRecorded,
+			McpCall:         EventOperatorAuditMcpCallRecorded,
 			UserMsg:         EventOperatorAuditUserRecorded,
 		},
 		Bootstrap: _EventOperatorBootstrap{

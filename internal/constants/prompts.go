@@ -39,7 +39,7 @@ const (
 	PromptSectionTools                = "tools"
 	PromptSectionDocs                 = "docs"
 	PromptSectionSystemContext        = "system_context"
-	PromptSectionSentinelMode         = "sentinel_mode"
+	PromptSectionVaultMode            = "sentinel_mode"
 	PromptSectionTriageContext        = "triage_context"
 	PromptSectionInvestigationContext = "investigation_context"
 	PromptSectionResponseConstraints  = "response_constraints"

@@ -33,10 +33,10 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// TestPubSubCommandService_L3Rejection_FailClosed verifies that PubSubCommandService
+// TestOperatorPubSubService_L3Rejection_FailClosed verifies that OperatorPubSubService
 // rejects mutation envelopes when L3 verification fails, ensuring fail-closed behavior
 // through the full ProcessEnvelope → L4Warden → Actuator chain.
-func TestPubSubCommandService_L3Rejection_FailClosed(t *testing.T) {
+func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
@@ -63,7 +63,7 @@ func TestPubSubCommandService_L3Rejection_FailClosed(t *testing.T) {
 	fileSvc := execution.NewFileEditService(cfg, logger)
 
 	// Create command service with rejecting L3 notary
-	cmdSvc, err := NewPubSubCommandService(CommandServiceConfig{
+	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:              cfg,
 		Logger:              logger,
 		Execution:           execSvc,
@@ -157,10 +157,10 @@ func TestPubSubCommandService_L3Rejection_FailClosed(t *testing.T) {
 	}
 }
 
-// TestPubSubCommandService_L3Acceptance_Success verifies that PubSubCommandService
+// TestOperatorPubSubService_L3Acceptance_Success verifies that OperatorPubSubService
 // accepts mutation envelopes when L3 verification passes, ensuring the full
 // ProcessEnvelope → L4Warden → Actuator chain works correctly.
-func TestPubSubCommandService_L3Acceptance_Success(t *testing.T) {
+func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
@@ -187,7 +187,7 @@ func TestPubSubCommandService_L3Acceptance_Success(t *testing.T) {
 	fileSvc := execution.NewFileEditService(cfg, logger)
 
 	// Create command service with accepting L3 notary
-	cmdSvc, err := NewPubSubCommandService(CommandServiceConfig{
+	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:              cfg,
 		Logger:              logger,
 		Execution:           execSvc,
@@ -286,9 +286,9 @@ func TestPubSubCommandService_L3Acceptance_Success(t *testing.T) {
 	}
 }
 
-// TestPubSubCommandService_L3NilNotary_FailClosed verifies that PubSubCommandService
+// TestOperatorPubSubService_L3NilNotary_FailClosed verifies that OperatorPubSubService
 // rejects mutation envelopes when L3Notary is nil, ensuring fail-closed behavior.
-func TestPubSubCommandService_L3NilNotary_FailClosed(t *testing.T) {
+func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	t.Parallel()
 
 	cfg := testutil.NewTestConfig(t)
@@ -312,7 +312,7 @@ func TestPubSubCommandService_L3NilNotary_FailClosed(t *testing.T) {
 	fileSvc := execution.NewFileEditService(cfg, logger)
 
 	// Create command service with nil L3 notary (should fail-closed)
-	cmdSvc, err := NewPubSubCommandService(CommandServiceConfig{
+	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:              cfg,
 		Logger:              logger,
 		Execution:           execSvc,

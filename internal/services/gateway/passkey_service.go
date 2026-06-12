@@ -417,7 +417,7 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 }
 
 func (s *PasskeyService) getUser(userID string) (*models.User, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +471,7 @@ func (s *PasskeyService) updateUser(userID string, user *models.User) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal user: %w", err)
 	}
-	_, err = s.db.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
+	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
 	return err
 }
 
@@ -480,11 +480,11 @@ func (s *PasskeyService) storeWebAuthnSession(userID string, session *webauthn.S
 	if err != nil {
 		return err
 	}
-	return s.db.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
+	return s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
 }
 
 func (s *PasskeyService) getWebAuthnSession(userID string) (*webauthn.SessionData, error) {
-	doc, err := s.db.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
 	if err != nil {
 		return nil, err
 	}
