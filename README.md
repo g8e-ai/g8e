@@ -111,16 +111,15 @@ Download the binary for your platform from [g8e.ai](https://g8e.ai) (darwin/linu
 
 ```bash
 # Start the Gateway (choose your posture)
-./g8e gw start --posture notary
-
-# Bootstrap the first user and certificates (loopback-only, empty system only)
-./g8e auth bootstrap
+./g8e gw start
 
 # Enroll an Operator on any host that can dial out
-./g8e security pki enroll --endpoint <gateway-address>
+./g8e operator deploy --endpoint <gateway-external-address>
 
-# Verify
+# Run agentic tools
 ./g8e gw status
+
+# Query the audit vault
 ./g8e data query --collection audit_vault
 ```
 

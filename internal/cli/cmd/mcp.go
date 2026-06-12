@@ -110,9 +110,9 @@ type ToolsListResult struct {
 
 // Tool represents a single MCP tool descriptor.
 type Tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema interface{} `json:"inputSchema"`
 }
 
 // CallToolRequest is the params object for tools/call.
@@ -800,20 +800,20 @@ type agentInfo struct {
 
 func getSupportedAgents() []agentInfo {
 	return []agentInfo{
-		{"claude", "Anthropic Claude Desktop / Claude Code"},
-		{"codex", "OpenAI Codex AI coding assistant"},
-		{"cursor", "Cursor AI IDE"},
-		{"devin", "Devin AI IDE (formerly Windsurf)"},
-		{"vscode", "Visual Studio Code with MCP extension"},
-		{"continue", "Continue.dev AI coding assistant"},
-		{"cn", "Continue.dev AI coding assistant (alias)"},
-		{"aider", "Aider AI pair programmer"},
-		{"codeium", "Codeium AI assistant"},
-		{"tabby", "Tabby AI autocomplete"},
-		{"ollama", "Ollama local LLM runner"},
-		{"gemini", "Google Gemini CLI"},
-		{"goose", "Goose AI coding assistant"},
-		{"generic", "Generic MCP-compatible agent"},
+		{string(constants.AgentBinaryClaude), "Anthropic Claude Desktop / Claude Code"},
+		{string(constants.AgentBinaryCodex), "OpenAI Codex AI coding assistant"},
+		{string(constants.AgentBinaryCursor), "Cursor AI IDE"},
+		{string(constants.AgentBinaryDevin), "Devin AI IDE (formerly Windsurf)"},
+		{string(constants.AgentBinaryVSCode), "Visual Studio Code with MCP extension"},
+		{string(constants.AgentBinaryContinue), "Continue.dev AI coding assistant"},
+		{string(constants.AgentBinaryContinueAlias), "Continue.dev AI coding assistant (alias)"},
+		{string(constants.AgentBinaryAider), "Aider AI pair programmer"},
+		{string(constants.AgentBinaryCodeium), "Codeium AI assistant"},
+		{string(constants.AgentBinaryTabby), "Tabby AI autocomplete"},
+		{string(constants.AgentBinaryOllama), "Ollama local LLM runner"},
+		{string(constants.AgentBinaryGemini), "Google Gemini CLI"},
+		{string(constants.AgentBinaryGoose), "Goose AI coding assistant"},
+		{string(constants.AgentBinaryGeneric), "Generic MCP-compatible agent"},
 	}
 }
 
@@ -1030,17 +1030,42 @@ func ensureGatewayRunning() error {
 	return nil
 }
 
+// agentMCPConfig represents the MCP configuration structure for agents.
+type agentMCPConfig struct {
+	MCPServers    map[string]agentMCPServer `json:"mcpServers"`
+	ExcludeTools  []string                  `json:"excludeTools"`
+}
+
+// agentMCPServer represents a single MCP server configuration.
+type agentMCPServer struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+}
+
+// geminiSettings represents the Gemini settings.json structure.
+type geminiSettings struct {
+	MCPServers   map[string]agentMCPServer `json:"mcpServers,omitempty"`
+	ExcludeTools []string                 `json:"excludeTools,omitempty"`
+}
+
 // writeAgentConfig writes the appropriate MCP config file for the agent.
 // Returns the path to the config file and a cleanup function (if any).
 func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
-	configJSON, err := json.Marshal(map[string]interface{}{
-		"mcpServers": map[string]interface{}{
-			"g8e": map[string]interface{}{
-				"command": binaryPath,
-				"args":    []string{"mcp", "stdio"},
+	// Define native tools to exclude to force governance
+	nativeToolsToExclude := []string{
+		"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
+	}
+
+	config := agentMCPConfig{
+		MCPServers: map[string]agentMCPServer{
+			"g8e": {
+				Command: binaryPath,
+				Args:    []string{"mcp", "stdio"},
 			},
 		},
-	})
+		ExcludeTools: nativeToolsToExclude,
+	}
+	configJSON, err := json.Marshal(config)
 	if err != nil {
 		return "", nil, fmt.Errorf("build MCP config: %w", err)
 	}
@@ -1055,131 +1080,188 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 	}
 
-	switch strings.ToLower(agentID) {
-	case "cursor":
+	switch agentID {
+	case string(constants.AgentBinaryCursor):
+		// Cursor does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, ".cursor")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create cursor config dir: %w", err)
 		}
 		configPath := filepath.Join(configDir, "mcp.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write cursor mcp.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "devin":
+	case string(constants.AgentBinaryDevin):
+		// Devin does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, ".codeium", "windsurf")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create devin config dir: %w", err)
 		}
 		configPath := filepath.Join(configDir, "mcp_config.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write devin mcp_config.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "aider":
+	case string(constants.AgentBinaryAider):
+		// Aider does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configPath := ".aider.conf.yml"
 		// Check if config already exists to avoid silent overwrite
 		if _, err := os.Stat(configPath); err == nil {
 			return "", nil, fmt.Errorf(".aider.conf.yml already exists in current directory - please back it up before running g8e")
 		}
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		configYAML := fmt.Sprintf("mcp-server:\n  - name: g8e\n    command: %s\n    args:\n      - mcp\n      - stdio\n", binaryPath)
 		if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
 			return "", nil, fmt.Errorf("write aider .aider.conf.yml: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "gemini":
-		// Gemini uses `gemini mcp add` to register MCP servers
-		fmt.Fprintf(os.Stderr, "[g8e] Adding g8e MCP server to gemini configuration\n")
-		addCmd := exec.Command("gemini", "mcp", "add", "g8e", binaryPath, "mcp", "stdio")
-		addCmd.Stdout = os.Stderr
-		addCmd.Stderr = os.Stderr
-		if err := addCmd.Run(); err != nil {
-			return "", nil, fmt.Errorf("failed to add g8e MCP server to gemini: %w", err)
+	case string(constants.AgentBinaryGemini):
+		// Gemini uses settings.json for configuration
+		// We need to add g8e MCP server and exclude native tools to force governance
+		configDir := filepath.Join(homeDir, ".gemini")
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create gemini config dir: %w", err)
 		}
-		// Return empty path since gemini doesn't use a config file
-		return "", func() {
-			removeCmd := exec.Command("gemini", "mcp", "remove", "g8e")
-			removeCmd.Stdout = os.Stderr
-			removeCmd.Stderr = os.Stderr
-			if err := removeCmd.Run(); err != nil {
-				slog.Warn("Failed to remove g8e MCP server from gemini", "error", err)
-			}
-		}, nil
+		configPath := filepath.Join(configDir, "settings.json")
 
-	case "goose":
-		// Goose stores MCP config in ~/.goose/config.json or ~/.config/goose/config.json
+		// Read existing settings if present
+		var settings geminiSettings
+		if existingData, err := os.ReadFile(configPath); err == nil {
+			if err := json.Unmarshal(existingData, &settings); err != nil {
+				return "", nil, fmt.Errorf("parse existing gemini settings: %w", err)
+			}
+		}
+
+		// Add mcpServers configuration with g8e
+		if settings.MCPServers == nil {
+			settings.MCPServers = make(map[string]agentMCPServer)
+		}
+		settings.MCPServers["g8e"] = agentMCPServer{
+			Command: binaryPath,
+			Args:    []string{"mcp", "stdio"},
+		}
+
+		// Exclude native tools to force governance through g8e MCP
+		// This forces the agent to use only g8e's governed tools
+		settings.ExcludeTools = []string{
+			"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
+		}
+
+		configJSON, err := json.MarshalIndent(settings, "", "  ")
+		if err != nil {
+			return "", nil, fmt.Errorf("marshal gemini settings: %w", err)
+		}
+
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s with native tools disabled\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write gemini settings.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case string(constants.AgentBinaryGoose):
+		// Goose does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, ".goose")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create goose config dir: %w", err)
 		}
 		configPath := filepath.Join(configDir, "config.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write goose config.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "vscode":
-		// VS Code uses ~/.vscode/mcp.json or ~/.config/Code/User/mcp.json
+	case string(constants.AgentBinaryVSCode):
+		// VS Code does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, ".vscode")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create vscode config dir: %w", err)
 		}
 		configPath := filepath.Join(configDir, "mcp.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write vscode mcp.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "codeium":
-		// Codeium uses ~/.codeium/mcp.json
+	case string(constants.AgentBinaryCodeium):
+		// Codeium does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, ".codeium")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create codeium config dir: %w", err)
 		}
 		configPath := filepath.Join(configDir, "mcp.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write codeium mcp.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "tabby":
-		// Tabby uses ~/.tabby/mcp.json
+	case string(constants.AgentBinaryTabby):
+		// Tabby does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, ".tabby")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create tabby config dir: %w", err)
 		}
 		configPath := filepath.Join(configDir, "mcp.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write tabby mcp.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "continue", "cn":
-		// Continue uses ~/.continue/config.json
+	case string(constants.AgentBinaryContinue), string(constants.AgentBinaryContinueAlias):
+		// Continue does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, ".continue")
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create continue config dir: %w", err)
 		}
 		configPath := filepath.Join(configDir, "config.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write continue config.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "ollama":
+	case string(constants.AgentBinaryOllama):
 		// Ollama doesn't use a local config file - it's typically configured via CLI args
 		// or third-party MCP clients. Return a temp file for reference.
+		// Governance enforced by making g8e the only MCP server in the reference config
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-ollama-*.json")
 		if err != nil {
 			return "", nil, fmt.Errorf("create temp MCP config for ollama: %w", err)
@@ -1190,7 +1272,7 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 		tmpFile.Close()
 		tmpPath := tmpFile.Name()
-		fmt.Fprintf(os.Stderr, "[g8e] Ollama requires manual MCP configuration. Reference config at: %s\n", tmpPath)
+		fmt.Fprintf(os.Stderr, "[g8e] Ollama requires manual MCP configuration. Reference config at: %s (g8e as only MCP server for governance)\n", tmpPath)
 		return tmpPath, func() {
 			if err := os.Remove(tmpPath); err != nil {
 				slog.Warn("Failed to cleanup temp MCP config file", "path", tmpPath, "error", err)
