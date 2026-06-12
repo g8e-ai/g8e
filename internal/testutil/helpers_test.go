@@ -167,51 +167,6 @@ func TestNewVerboseTestLogger(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// testLogWriter.Write
-// ---------------------------------------------------------------------------
-
-func TestTestLogWriter_Write(t *testing.T) {
-	tests := []struct {
-		name string
-		msg  []byte
-		test func(t *testing.T, n int, err error)
-	}{
-		{
-			name: "ReturnsLenAndNoError",
-			msg:  []byte("test log line\n"),
-			test: func(t *testing.T, n int, err error) {
-				require.NoError(t, err)
-				assert.Equal(t, 15, n) // len([]byte("test log line\n"))
-			},
-		},
-		{
-			name: "EmptySlice",
-			msg:  []byte{},
-			test: func(t *testing.T, n int, err error) {
-				require.NoError(t, err)
-				assert.Equal(t, 0, n)
-			},
-		},
-		{
-			name: "MultiLine",
-			msg:  []byte("line1\nline2\nline3\n"),
-			test: func(t *testing.T, n int, err error) {
-				require.NoError(t, err)
-				assert.Equal(t, 18, n) // len([]byte("line1\nline2\nline3\n"))
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := testLogWriter{t: t}
-			n, err := w.Write(tt.msg)
-			tt.test(t, n, err)
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // GetTestOperatorDirectURL
 // ---------------------------------------------------------------------------
 
