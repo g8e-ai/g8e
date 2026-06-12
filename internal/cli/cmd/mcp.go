@@ -1002,22 +1002,22 @@ func ensureGatewayRunning() error {
 	} else {
 		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
 		if err := pm.StartOperator(platform.OperatorStartOptions{
-			Posture:             "doctrine",
-			HTTPPort:            0,
-			HTTPSPort:           0,
-			DataDir:             "",
-			PKIDir:              "",
-			SecretsDir:          "",
-			VaultDir:            "",
-			VaultKeyPath:        "",
-			VaultRequireUnlock:  false,
-			PasskeyRpID:         "",
-			PasskeyRpName:       "",
-			RateLimitRPS:        0,
-			RateLimitBurst:      0,
-			LogLevel:            "info",
+			Posture:            "doctrine",
+			HTTPPort:           0,
+			HTTPSPort:          0,
+			DataDir:            "",
+			PKIDir:             "",
+			SecretsDir:         "",
+			VaultDir:           "",
+			VaultKeyPath:       "",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "",
+			PasskeyRpName:      "",
+			RateLimitRPS:       0,
+			RateLimitBurst:     0,
+			LogLevel:           "info",
 			CertIdentityMode:   "localhost",
-			IdentityData:        nil,
+			IdentityData:       nil,
 		}); err != nil {
 			return fmt.Errorf("start gateway: %w", err)
 		}
@@ -1059,8 +1059,8 @@ func ensureGatewayRunning() error {
 
 // agentMCPConfig represents the MCP configuration structure for agents.
 type agentMCPConfig struct {
-	MCPServers    map[string]agentMCPServer `json:"mcpServers"`
-	ExcludeTools  []string                  `json:"excludeTools"`
+	MCPServers   map[string]agentMCPServer `json:"mcpServers"`
+	ExcludeTools []string                  `json:"excludeTools"`
 }
 
 // agentMCPServer represents a single MCP server configuration.
@@ -1072,7 +1072,7 @@ type agentMCPServer struct {
 // geminiSettings represents the Gemini settings.json structure.
 type geminiSettings struct {
 	MCPServers   map[string]agentMCPServer `json:"mcpServers,omitempty"`
-	ExcludeTools []string                 `json:"excludeTools,omitempty"`
+	ExcludeTools []string                  `json:"excludeTools,omitempty"`
 }
 
 // writeAgentConfig writes the appropriate MCP config file for the agent.

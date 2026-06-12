@@ -15,7 +15,7 @@ func backupConfigFile(configPath string) error {
 	// If a backup already exists, we could either overwrite it or fail.
 	// Overwriting it is generally safer to ensure we always have the most recent pre-governance state.
 	fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", backupPath)
-	
+
 	input, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("read config for backup: %w", err)
@@ -25,6 +25,6 @@ func backupConfigFile(configPath string) error {
 	if err != nil {
 		return fmt.Errorf("write backup config: %w", err)
 	}
-	
+
 	return nil
 }

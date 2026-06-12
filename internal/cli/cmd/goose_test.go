@@ -38,16 +38,16 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	// Verify Backup
 	backupPath := configPath + ".bak"
 	_, err = os.Stat(backupPath)
-	assert.NoError(t, err, "Backup file should exist")
-	
+	require.NoError(t, err, "Backup file should exist")
+
 	backupData, err := os.ReadFile(backupPath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, existingData, backupData)
 
 	// Verify Governance (excludeTools)
 	configData, err := os.ReadFile(configPath)
 	require.NoError(t, err)
-	
+
 	var config struct {
 		MCPServers   map[string]interface{} `json:"mcpServers"`
 		ExcludeTools []string               `json:"excludeTools"`

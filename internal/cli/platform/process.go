@@ -41,22 +41,22 @@ const (
 // OperatorStartOptions holds configuration for starting the operator process.
 // This replaces the 17 positional parameters previously used by StartOperator.
 type OperatorStartOptions struct {
-	Posture             string
-	HTTPPort            int
-	HTTPSPort           int
-	DataDir             string
-	PKIDir              string
-	SecretsDir          string
-	VaultDir            string
-	VaultKeyPath        string
-	VaultRequireUnlock  bool
-	PasskeyRpID         string
-	PasskeyRpName       string
-	RateLimitRPS        float64
-	RateLimitBurst      int
-	LogLevel            string
-	CertIdentityMode    string
-	IdentityData        []byte
+	Posture            string
+	HTTPPort           int
+	HTTPSPort          int
+	DataDir            string
+	PKIDir             string
+	SecretsDir         string
+	VaultDir           string
+	VaultKeyPath       string
+	VaultRequireUnlock bool
+	PasskeyRpID        string
+	PasskeyRpName      string
+	RateLimitRPS       float64
+	RateLimitBurst     int
+	LogLevel           string
+	CertIdentityMode   string
+	IdentityData       []byte
 }
 
 type ProcessManager struct {

@@ -655,6 +655,12 @@ func main() {
 
 	flag.Parse()
 
+	// Check for version flag before other processing
+	if showVersion {
+		printVersion()
+		os.Exit(constants.ExitSuccess)
+	}
+
 	// Check if this is a CLI command (known subcommands)
 	cliCommands := map[string]bool{
 		"gw":       true,
@@ -723,11 +729,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  --notary                Gateway mode: L1/L2/L3 strictly enforced\n\n")
 		fmt.Fprintf(os.Stderr, "Run './g8e --help' for more information\n")
 		os.Exit(constants.ExitConfigError)
-	}
-
-	if showVersion {
-		printVersion()
-		os.Exit(constants.ExitSuccess)
 	}
 
 	if rekeyVault || verifyVault || resetVault {

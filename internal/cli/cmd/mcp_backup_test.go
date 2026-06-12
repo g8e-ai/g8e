@@ -19,13 +19,13 @@ func TestBackupConfigFile(t *testing.T) {
 	require.NoError(t, err)
 
 	err = backupConfigFile(configPath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	backupPath := configPath + ".bak"
 	_, err = os.Stat(backupPath)
-	assert.NoError(t, err, "Backup file should exist")
+	require.NoError(t, err, "Backup file should exist")
 
 	content, err := os.ReadFile(backupPath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "{}", string(content))
 }

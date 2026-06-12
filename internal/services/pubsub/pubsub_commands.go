@@ -282,12 +282,12 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 		if c.AuditStore != nil {
 			rs.mcpGateway.SetAuditLogger(&pubsubAuditLogger{store: c.AuditStore, logger: c.Logger})
 		}
-		
+
 		// Set DB service for read_field operations
 		if c.FieldReader != nil {
 			rs.mcpGateway.SetDBService(c.FieldReader)
 		}
-		
+
 		// Set session validator for L3 authorization
 		rs.mcpGateway.SetSessionValidator(rs)
 	}
