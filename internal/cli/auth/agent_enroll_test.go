@@ -132,7 +132,7 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 			AppName string `json:"app_name"`
 			AppType string `json:"app_type"`
 		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.Equal(t, "test-agent", req.AppName)
 		assert.Equal(t, "mcp-client", req.AppType)
 
@@ -201,7 +201,7 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 			AppName string `json:"app_name"`
 			AppType string `json:"app_type"`
 		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
 		assert.Equal(t, "new-agent", req.AppName)
 		assert.Equal(t, "mcp-client", req.AppType)
 

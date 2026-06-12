@@ -22,7 +22,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -263,7 +262,7 @@ func TestNewClient_NoCredentials(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.True(t, errors.Is(err, clierrors.ErrNotAuthenticated))
+	assert.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
 }
 
 func TestNewClient_LoadCredentialsError(t *testing.T) {
@@ -278,7 +277,7 @@ func TestNewClient_LoadCredentialsError(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.True(t, errors.Is(err, clierrors.ErrFailedToLoadCredentials))
+	assert.ErrorIs(t, err, clierrors.ErrFailedToLoadCredentials)
 }
 
 func TestNewClient_MissingCertFile(t *testing.T) {
@@ -290,7 +289,7 @@ func TestNewClient_MissingCertFile(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.True(t, errors.Is(err, clierrors.ErrFailedToLoadClientCertificate))
+	assert.ErrorIs(t, err, clierrors.ErrFailedToLoadClientCertificate)
 }
 
 func TestNewClient_MissingKeyFile(t *testing.T) {
@@ -302,7 +301,7 @@ func TestNewClient_MissingKeyFile(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.True(t, errors.Is(err, clierrors.ErrFailedToLoadClientCertificate))
+	assert.ErrorIs(t, err, clierrors.ErrFailedToLoadClientCertificate)
 }
 
 func TestNewClient_MissingTrustBundle(t *testing.T) {
@@ -315,7 +314,7 @@ func TestNewClient_MissingTrustBundle(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.True(t, errors.Is(err, clierrors.ErrFailedToReadTrustBundle))
+	assert.ErrorIs(t, err, clierrors.ErrFailedToReadTrustBundle)
 }
 
 func TestNewClient_InvalidTrustBundle(t *testing.T) {
@@ -328,7 +327,7 @@ func TestNewClient_InvalidTrustBundle(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.True(t, errors.Is(err, clierrors.ErrFailedToParseTrustBundle))
+	assert.ErrorIs(t, err, clierrors.ErrFailedToParseTrustBundle)
 }
 
 func TestDoRequest_Success(t *testing.T) {
@@ -355,7 +354,7 @@ func TestDoRequest_Success(t *testing.T) {
 	body := map[string]string{"key": "value"}
 	resp, err := client.DoRequest("POST", "/api/test", body)
 	require.NoError(t, err)
-	assert.Equal(t, `{"result":"success"}`, string(resp))
+	assert.JSONEq(t, `{"result":"success"}`, string(resp))
 }
 
 func TestDoRequest_GetWithoutBody(t *testing.T) {
@@ -364,7 +363,7 @@ func TestDoRequest_GetWithoutBody(t *testing.T) {
 
 	server := newLocalhostTLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "GET", r.Method)
-		assert.Equal(t, "", r.Header.Get("Content-Type"))
+		assert.Empty(t, r.Header.Get("Content-Type"))
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -376,7 +375,7 @@ func TestDoRequest_GetWithoutBody(t *testing.T) {
 
 	resp, err := client.DoRequest("GET", "/api/test", nil)
 	require.NoError(t, err)
-	assert.Equal(t, `{"data":"test"}`, string(resp))
+	assert.JSONEq(t, `{"data":"test"}`, string(resp))
 }
 
 func TestDoRequest_MarshalError(t *testing.T) {
@@ -478,7 +477,7 @@ func TestGet_Success(t *testing.T) {
 
 	resp, err := client.Get("/api/test")
 	require.NoError(t, err)
-	assert.Equal(t, `{"get":"success"}`, string(resp))
+	assert.JSONEq(t, `{"get":"success"}`, string(resp))
 }
 
 func TestPost_Success(t *testing.T) {
@@ -499,7 +498,7 @@ func TestPost_Success(t *testing.T) {
 	body := map[string]string{"data": "test"}
 	resp, err := client.Post("/api/test", body)
 	require.NoError(t, err)
-	assert.Equal(t, `{"post":"success"}`, string(resp))
+	assert.JSONEq(t, `{"post":"success"}`, string(resp))
 }
 
 func TestPut_Success(t *testing.T) {
@@ -520,7 +519,7 @@ func TestPut_Success(t *testing.T) {
 	body := map[string]string{"data": "updated"}
 	resp, err := client.Put("/api/test", body)
 	require.NoError(t, err)
-	assert.Equal(t, `{"put":"success"}`, string(resp))
+	assert.JSONEq(t, `{"put":"success"}`, string(resp))
 }
 
 func TestDelete_Success(t *testing.T) {
@@ -539,7 +538,7 @@ func TestDelete_Success(t *testing.T) {
 
 	resp, err := client.Delete("/api/test")
 	require.NoError(t, err)
-	assert.Equal(t, `{"delete":"success"}`, string(resp))
+	assert.JSONEq(t, `{"delete":"success"}`, string(resp))
 }
 
 func TestDoRequest_HeadersSetCorrectly(t *testing.T) {

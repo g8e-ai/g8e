@@ -37,7 +37,7 @@ linters:
     - gosec
     
     # Test Helpers (relaxed for gradual compliance)
-    # - testifylint  # Disabled for gradual compliance (397 issues)
+    - testifylint
     # - thelper  # Disabled for gradual compliance (62 issues)
     # - paralleltest  # Disabled for gradual compliance (1490 issues)
     
@@ -93,15 +93,6 @@ linters:
     goconst:
       min-len: 5
       min-occurrences: 5
-    testifylint:
-      enable-all: false
-      enabled:
-        - error-is
-        - error-nil
-        - float-compare
-        - go-require
-        - require-error
-        - suite-extra-assert-call
   exclusions:
     generated: lax
     presets:

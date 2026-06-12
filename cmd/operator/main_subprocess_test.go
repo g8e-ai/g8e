@@ -474,9 +474,9 @@ func TestMain_PostureFlagsMutualExclusive_Subprocess(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestGatewayPostureConstants(t *testing.T) {
-	assert.Equal(t, config.GatewayPosture("doctrine"), config.PostureDoctrine)
-	assert.Equal(t, config.GatewayPosture("consensus"), config.PostureConsensus)
-	assert.Equal(t, config.GatewayPosture("notary"), config.PostureNotary)
+	assert.Equal(t, config.PostureDoctrine, config.GatewayPosture("doctrine"))
+	assert.Equal(t, config.PostureConsensus, config.GatewayPosture("consensus"))
+	assert.Equal(t, config.PostureNotary, config.GatewayPosture("notary"))
 }
 
 // ---------------------------------------------------------------------------

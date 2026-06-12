@@ -54,43 +54,43 @@ func mapMethodToPath(method string) (string, error) {
 func TestMapMethodToPath(t *testing.T) {
 	t.Run("tools/list maps correctly", func(t *testing.T) {
 		path, err := mapMethodToPath("tools/list")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "/tools/list", path)
 	})
 
 	t.Run("tools/call maps correctly", func(t *testing.T) {
 		path, err := mapMethodToPath("tools/call")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "/tools/call", path)
 	})
 
 	t.Run("resources/list maps correctly", func(t *testing.T) {
 		path, err := mapMethodToPath("resources/list")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "/resources/list", path)
 	})
 
 	t.Run("resources/read maps correctly", func(t *testing.T) {
 		path, err := mapMethodToPath("resources/read")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "/resources/read", path)
 	})
 
 	t.Run("prompts/list maps correctly", func(t *testing.T) {
 		path, err := mapMethodToPath("prompts/list")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "/prompts/list", path)
 	})
 
 	t.Run("prompts/get maps correctly", func(t *testing.T) {
 		path, err := mapMethodToPath("prompts/get")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "/prompts/get", path)
 	})
 
 	t.Run("unsupported method returns error", func(t *testing.T) {
 		path, err := mapMethodToPath("unknown/method")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Empty(t, path)
 		assert.Contains(t, err.Error(), "unsupported method")
 	})
@@ -113,7 +113,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetOut(&buf)
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "claude")
 		assert.Contains(t, output, "cursor")
@@ -139,7 +139,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"claude"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 		assert.Contains(t, output, "g8e.local")
@@ -154,7 +154,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"cursor"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -166,7 +166,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"devin"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -178,7 +178,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"vscode"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -190,7 +190,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"continue"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -202,7 +202,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"aider"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -214,7 +214,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"codeium"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -226,7 +226,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"tabby"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -238,7 +238,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"generic"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -250,7 +250,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"goose"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -262,7 +262,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"unknown-agent"})
 		err := cmd.Execute()
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown agent")
 	})
 
@@ -273,7 +273,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetErr(&buf)
 		cmd.SetArgs([]string{"CLAUDE"})
 		err := cmd.Execute()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e Gateway MCP Configurations")
 	})
@@ -306,9 +306,9 @@ func TestJSONRPCRequest(t *testing.T) {
 		jsonStr := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
 		var req JSONRPCRequest
 		err := json.Unmarshal([]byte(jsonStr), &req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "2.0", req.JSONRPC)
-		assert.Equal(t, float64(1), req.ID)
+		assert.InEpsilon(t, 1, req.ID, 0.0)
 		assert.Equal(t, "tools/list", req.Method)
 	})
 
@@ -316,7 +316,7 @@ func TestJSONRPCRequest(t *testing.T) {
 		jsonStr := `{"jsonrpc":"2.0","id":2,"method":"initialize"}`
 		var req JSONRPCRequest
 		err := json.Unmarshal([]byte(jsonStr), &req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "initialize", req.Method)
 		assert.Nil(t, req.Params)
 	})
@@ -411,7 +411,7 @@ func TestHandleInitialize(t *testing.T) {
 		err := json.Unmarshal(buf.Bytes(), &resp)
 		assert.NoError(t, err)
 		assert.Equal(t, "2.0", resp.JSONRPC)
-		assert.Equal(t, float64(1), resp.ID)
+		assert.InEpsilon(t, 1, resp.ID, 0.0)
 		assert.NotNil(t, resp.Result)
 
 		result := resp.Result.(map[string]interface{})
@@ -431,12 +431,12 @@ func TestHandleToolsList(t *testing.T) {
 
 		var resp JSONRPCResponse
 		err = json.Unmarshal(buf.Bytes(), &resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, resp.Result)
 
 		result := resp.Result.(map[string]interface{})
 		tools := result["tools"].([]interface{})
-		assert.Greater(t, len(tools), 0)
+		assert.NotEmpty(t, tools)
 	})
 }
 
@@ -448,9 +448,9 @@ func TestSendError(t *testing.T) {
 
 		var resp JSONRPCResponse
 		err := json.Unmarshal(buf.Bytes(), &resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "2.0", resp.JSONRPC)
-		assert.Equal(t, float64(1), resp.ID)
+		assert.InEpsilon(t, 1, resp.ID, 0.0)
 		assert.NotNil(t, resp.Error)
 		assert.Equal(t, -32601, resp.Error.Code)
 		assert.Equal(t, "method not found", resp.Error.Message)
@@ -467,7 +467,7 @@ func TestHandleToolsCall(t *testing.T) {
 
 		var resp JSONRPCResponse
 		err = json.Unmarshal(buf.Bytes(), &resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, resp.Result)
 	})
 }
@@ -612,7 +612,7 @@ func TestCreateMCPClient(t *testing.T) {
 
 		// Should fail without certificates
 		_, err := createMCPClient(cfg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load client certificate")
 	})
 }
@@ -626,7 +626,7 @@ func TestProxyToGateway(t *testing.T) {
 		}
 
 		reqBody, err := json.Marshal(req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, string(reqBody), "tools/list")
 		assert.Contains(t, string(reqBody), "2.0")
 	})
@@ -651,13 +651,13 @@ func TestProxyToGateway(t *testing.T) {
 
 			var req JSONRPCRequest
 			err := json.NewDecoder(r.Body).Decode(&req)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, "tools/list", req.Method)
 
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			err = json.NewEncoder(w).Encode(expectedResp)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		}))
 		defer server.Close()
 
@@ -669,7 +669,7 @@ func TestProxyToGateway(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := proxyToGateway(client, server.URL, req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "2.0", resp.JSONRPC)
 		assert.NotNil(t, resp.Result)
 	})
@@ -689,7 +689,7 @@ func TestProxyToGateway(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		_, err := proxyToGateway(client, server.URL, req)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("proxyToGateway returns error on invalid JSON response", func(t *testing.T) {
@@ -708,7 +708,7 @@ func TestProxyToGateway(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		_, err := proxyToGateway(client, server.URL, req)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 
 	t.Run("proxyToGateway forwards L3 approval response", func(t *testing.T) {
@@ -739,7 +739,7 @@ func TestProxyToGateway(t *testing.T) {
 
 		client := &http.Client{Timeout: 5 * time.Second}
 		resp, err := proxyToGateway(client, server.URL, req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, isL3ApprovalResponse(resp))
 	})
 }
@@ -801,7 +801,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		defer func() { l3ApprovalPollInterval = originalInterval }()
 
 		resp, err := proxySessionToGatewayWithRetry(session, req, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, 2, attempts)
 		assert.Equal(t, "success", resp.Result.(map[string]interface{})["status"])
 	})
@@ -856,7 +856,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		}()
 
 		resp, err := proxySessionToGatewayWithRetry(session, req, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.True(t, isL3ApprovalResponse(resp))
 		// 1 initial + 2 retries = 3
 		assert.Equal(t, 3, attempts)

@@ -28,7 +28,7 @@ func TestExpandPath(t *testing.T) {
 	t.Run("empty path returns empty", func(t *testing.T) {
 		result, err := expandPath("")
 		require.NoError(t, err)
-		assert.Equal(t, "", result)
+		assert.Empty(t, result)
 	})
 
 	t.Run("tilde alone expands to home directory", func(t *testing.T) {
@@ -228,7 +228,7 @@ func TestConfig_TrustBundlePath(t *testing.T) {
 		}
 
 		result := config.TrustBundlePath()
-		assert.Equal(t, "", result)
+		assert.Empty(t, result)
 	})
 }
 
@@ -413,6 +413,5 @@ func TestLoadIntegration(t *testing.T) {
 
 		// Verify port values from constants
 		assert.Equal(t, constants.Ports.OperatorHttps, config.OperatorHTTPSPort())
-		assert.Equal(t, constants.Ports.OperatorHttp, constants.Ports.OperatorHttp)
 	})
 }
