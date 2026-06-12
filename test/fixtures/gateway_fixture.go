@@ -227,8 +227,9 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
 
-	// Set MCP gateway dependencies for governance processing
-	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamURL)
+	// The MCP gateway's runtime governance dependencies are wired by
+	// NewOperatorPubSubService via initializeGovernance (mcpGateway was passed in
+	// through CommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
 	// Seed platform_settings required for health check
 	err = ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))

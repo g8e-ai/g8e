@@ -270,19 +270,14 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 		rs.consensus.Doctrine = rs.l4warden.Doctrine()
 	}
 
-	// Wire MCP gateway with dependencies if configured.
+	// Wire the MCP gateway's runtime governance dependencies. This is the single
+	// owner of runtime-phase wiring; config-phase fields (A2A downstream and the
+	// public base URL) are owned by the gateway's own construction in
+	// GatewayModeService.initHandlersAndServers and must not be re-set here.
 	// MCPGateway is used as the egress dispatcher for protocol translation.
 	if rs.mcpGateway != nil {
 		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Gateway.MCPDownstreamURL)
-		rs.mcpGateway.SetA2ADependencies(c.Config.Gateway.A2ADownstreamURL)
-		
-		// Set public base URL for L3 approval links
-		publicBaseURL := c.Config.Gateway.PublicBaseURL
-		if publicBaseURL == "" {
-			publicBaseURL = fmt.Sprintf("https://localhost:%d", c.Config.Gateway.HTTPSPort)
-		}
-		rs.mcpGateway.SetPublicBaseURL(publicBaseURL)
-		
+
 		// Set audit logger for field read operations
 		if c.AuditStore != nil {
 			rs.mcpGateway.SetAuditLogger(&pubsubAuditLogger{store: c.AuditStore, logger: c.Logger})
