@@ -64,12 +64,10 @@ PROTOC_GEN_GO_VERSION := v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION := v1.6.2
 PROTOC_GEN_DOC_VERSION := v1.5.1
 PROTOC_MIN_VERSION := 21
-UPX_VERSION := v4.2.4
 
 BUF := $(shell command -v buf 2>/dev/null || echo "./buf")
 PROTOC := $(shell command -v protoc 2>/dev/null || echo "/usr/local/bin/protoc")
 PROTOC_GEN_GO := $(shell go list -m -f '{{.Version}}' google.golang.org/protobuf 2>/dev/null || echo "$(PROTOC_GEN_GO_VERSION)")
-UPX := $(shell command -v upx 2>/dev/null || echo "/usr/local/bin/upx")
 
 # =============================================================================
 # HELP
@@ -89,7 +87,6 @@ help:
 	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
 	@echo "  protoc-install Install protoc compiler"
-	@echo "  upx-install   Install UPX compressor"
 	@echo ""
 	@echo "Build:"
 	@echo "  build			Build g8e for current OS and architecture"
@@ -102,10 +99,6 @@ help:
 	@echo "  build-windows-docker	Build g8e for Windows in Docker (amd64, arm64)"
 	@echo "  build-darwin-docker		Build g8e for Darwin in Docker (amd64, arm64)"
 	@echo "  build-all-docker		Build g8e for all platforms in Docker"
-	@echo "  build-compressed		Build g8e for all platforms with UPX compression"
-	@echo "  build-linux-compressed	Build g8e for Linux with UPX compression"
-	@echo "  build-windows-compressed	Build g8e for Windows with UPX compression"
-	@echo "  build-darwin-compressed	Build g8e for Darwin with UPX compression"
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests with race detection (unit + gateway)"
@@ -207,18 +200,6 @@ protoc-install:
 	fi
 	@echo "protoc version $$PROTOC_VERSION is compatible."
 
-.PHONY: upx-install
-upx-install:
-	@if ! command -v upx &> /dev/null; then \
-		echo "Installing UPX $(UPX_VERSION)..."; \
-		cd $(TMPDIR) && curl -fSL https://github.com/upx/upx/releases/download/$(UPX_VERSION)/upx-$(UPX_VERSION:v%=%)-linux_amd64.tar.xz -o upx.tar.xz && \
-		tar -xf upx.tar.xz && \
-		sudo cp upx-$(UPX_VERSION:v%=%)-linux_amd64/upx /usr/local/bin/upx && \
-		sudo chmod +x /usr/local/bin/upx && \
-		rm -rf $(TMPDIR)/upx-$(UPX_VERSION:v%=%)-linux_amd64 $(TMPDIR)/upx.tar.xz; \
-	fi
-	@echo "UPX installed."
-
 # =============================================================================
 # BUILD
 # =============================================================================
@@ -269,71 +250,6 @@ build-all:
 	done
 	@echo "Multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
 
-.PHONY: build-compressed
-build-compressed: upx-install
-	@echo "Building g8e Operator with compression for $(PLATFORMS)..."
-	@mkdir -p $(BIN_DIR)
-	@for platform in $(PLATFORMS); do \
-		GOOS=$${platform%/*}; \
-		GOARCH=$${platform#*/}; \
-		NODE_BINARY=$(BIN_DIR)/g8e-$$GOOS-$$GOARCH; \
-		if [ "$$GOOS" = "windows" ]; then \
-			NODE_BINARY=$$NODE_BINARY.exe; \
-		fi; \
-		echo "Building $$platform -> $$NODE_BINARY..."; \
-		if [ "$$GOOS" = "windows" ]; then \
-			CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) $(WINDOWS_EXTRA_FLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
-		else \
-			CGO_ENABLED=$(CGO_ENABLED) GOOS=$$GOOS GOARCH=$$GOARCH go build -ldflags "$(LDFLAGS) -X main.platform=$$platform" -o $$NODE_BINARY $(MAIN_PKG); \
-		fi; \
-		echo "Compressing $$NODE_BINARY with UPX..."; \
-		$(UPX) --best --lzma $$NODE_BINARY; \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	done
-	@echo "Compressed multi-platform build complete. Checksums: $(BIN_DIR)/g8e-*.sha256"
-
-.PHONY: build-linux-compressed
-build-linux-compressed: upx-install
-	@echo "Building g8e for Linux with UPX compression..."
-	@mkdir -p $(BIN_DIR)
-	@for arch in $(LINUX_ARCHS); do \
-		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
-		echo "Building linux/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=linux GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=linux_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
-		echo "Compressing $$NODE_BINARY with UPX..."; \
-		$(UPX) --best --lzma $$NODE_BINARY; \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	done
-	@echo "Linux compressed build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
-
-.PHONY: build-darwin-compressed
-build-darwin-compressed: upx-install
-	@echo "Building g8e for Darwin with UPX compression..."
-	@mkdir -p $(BIN_DIR)
-	@for arch in $(DARWIN_ARCHS); do \
-		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
-		echo "Building darwin/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=darwin GOARCH=$$arch go build -ldflags "$(LDFLAGS) -X main.platform=darwin_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
-		echo "Compressing $$NODE_BINARY with UPX..."; \
-		$(UPX) --best --lzma $$NODE_BINARY; \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	done
-	@echo "Darwin compressed build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
-
-.PHONY: build-windows-compressed
-build-windows-compressed: upx-install
-	@echo "Building g8e for Windows with UPX compression..."
-	@mkdir -p $(BIN_DIR)
-	@for arch in $(WINDOWS_ARCHS); do \
-		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
-		echo "Building windows/$$arch -> $$NODE_BINARY..."; \
-		CGO_ENABLED=$(CGO_ENABLED) GOOS=windows GOARCH=$$arch go build -ldflags "$(LDFLAGS) $(WINDOWS_EXTRA_FLAGS) -X main.platform=windows_$$arch" -o $$NODE_BINARY $(MAIN_PKG); \
-		echo "Compressing $$NODE_BINARY with UPX..."; \
-		$(UPX) --best --lzma $$NODE_BINARY; \
-		sha256sum $$NODE_BINARY > $$NODE_BINARY.sha256; \
-	done
-	@echo "Windows compressed build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
-
 .PHONY: build-darwin
 build-darwin:
 	@echo "Building g8e for Darwin..."
@@ -360,7 +276,7 @@ build-linux:
 
 .PHONY: build-windows
 build-windows:
-	@echo "Building g8e for Windows (no compression to avoid Defender false positives)..."
+	@echo "Building g8e for Windows..."
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
