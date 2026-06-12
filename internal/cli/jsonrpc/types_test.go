@@ -29,7 +29,7 @@ func TestRequest_Validate(t *testing.T) {
 			ID:      1,
 		}
 		err := req.Validate()
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("missing jsonrpc version", func(t *testing.T) {
@@ -118,7 +118,7 @@ func TestRequest_Unmarshal(t *testing.T) {
 		jsonStr := `invalid json`
 		var req Request
 		err := json.Unmarshal([]byte(jsonStr), &req)
-		assert.Error(t, err)
+		require.Error(t, err)
 	})
 }
 

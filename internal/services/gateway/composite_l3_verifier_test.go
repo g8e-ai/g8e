@@ -84,7 +84,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_MTLSProof_DelegatesToCLI(t *testing.T
 	// This will fail because we don't have a valid CLI session set up,
 	// but it should delegate to the CLI verifier
 	_, err := verifier.VerifyL3Proof(context.Background(), "user-123", "tx-hash-789", "cli-session-101", proof)
-	assert.Error(t, err)
+	require.Error(t, err)
 	// The error should come from the CLI verifier, not about missing verifier
 	assert.NotErrorIs(t, err, ErrCLIL3NotaryNotConfigured)
 }
@@ -106,7 +106,7 @@ func TestCompositeL3Verifier_VerifyL3Proof_WebAuthnProof_DelegatesToPasskey(t *t
 	// This will fail because we don't have a valid passkey set up,
 	// but it should delegate to the passkey verifier
 	_, err := verifier.VerifyL3Proof(context.Background(), "user-123", "tx-hash-101", "", proof)
-	assert.Error(t, err)
+	require.Error(t, err)
 	// The error should come from the passkey verifier, not about missing verifier
 	assert.NotErrorIs(t, err, ErrPasskeyL3NotaryNotConfigured)
 }

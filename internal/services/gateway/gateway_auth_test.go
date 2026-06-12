@@ -45,7 +45,7 @@ func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "missing operator_session_id")
 }
 
@@ -59,7 +59,7 @@ func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	_, err := auth.ValidateOperatorSession("nonexistent-session")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid or expired Operator session")
 }
 
@@ -87,7 +87,7 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 	require.NoError(t, db.DocStore.DocSet("operators", "op-123", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "operator identity disabled")
 }
 
@@ -126,7 +126,7 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 	require.NoError(t, db.DocStore.DocSetWithTimestamps("operators", "op-456", opBytes, oldTime, oldTime))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "operator session expired")
 }
 
@@ -164,7 +164,7 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 	require.NoError(t, db.DocStore.DocSet("operators", "op-789", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "identity disabled")
 }
 
@@ -584,7 +584,7 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 
 	// Test ValidateOperatorSession directly (the core validation logic)
 	op, err := auth.ValidateOperatorSession(operatorSessionID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, op)
 	assert.Equal(t, operatorSessionID, op.OperatorSessionID)
 	assert.Equal(t, userID, op.UserID)
@@ -601,7 +601,7 @@ func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
 
 	// Test with invalid session
 	_, err := auth.ValidateOperatorSession("invalid-session")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid or expired Operator session")
 }
 
@@ -629,7 +629,7 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 	require.NoError(t, db.DocStore.DocSet("operators", "op-terminated", opBytes))
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "operator identity disabled")
 }
 
@@ -662,13 +662,13 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 
 	// Test CLI session retrieval and validation
 	cliDocResult, err := db.DocStore.DocGet("cli_sessions", cliSessionID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
 	var cliSession models.CLISession
 	b, _ := json.Marshal(cliDocResult.Data)
 	err = json.Unmarshal(b, &cliSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, userID, cliSession.UserID)
 	assert.False(t, cliSession.ExpiresAt.IsZero())
 }
@@ -679,7 +679,7 @@ func TestAuthService_HandleCLIAuth_SessionNotFound(t *testing.T) {
 
 	// Test with non-existent CLI session
 	cliDoc, err := db.DocStore.DocGet("cli_sessions", "nonexistent-cli-session")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Nil(t, cliDoc)
 }
 
@@ -702,13 +702,13 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 
 	// Verify the session is stored with expired timestamp
 	cliDocResult, err := db.DocStore.DocGet("cli_sessions", cliSessionID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
 	var cliSession models.CLISession
 	b, _ := json.Marshal(cliDocResult.Data)
 	err = json.Unmarshal(b, &cliSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.True(t, cliSession.ExpiresAt.Before(time.Now()))
 }
 
@@ -730,7 +730,7 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 
 	// Verify user is inactive
 	user, err := userSvc.GetByID(userID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, user)
 	assert.False(t, user.IsActive())
 }
@@ -752,7 +752,7 @@ func TestAuthService_HandleAppAuth_NoAppPolicy(t *testing.T) {
 	// For now, test the enforceAppPolicy function directly which is the core logic
 	policy := &models.AppPolicy{}
 	err := auth.enforceAppPolicy(req, policy, "app-123")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
@@ -769,7 +769,7 @@ func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
 	// Test enforceAppPolicy with empty policy (no restrictions)
 	policy := &models.AppPolicy{}
 	err := auth.enforceAppPolicy(req, policy, "app-123")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
@@ -790,15 +790,15 @@ func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
 
 	// First request should pass
 	err := auth.enforceAppPolicy(req, policy, "app-123")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Second request should also pass (burst allows 2x)
 	err = auth.enforceAppPolicy(req, policy, "app-123")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Third request should hit rate limit
 	err = auth.enforceAppPolicy(req, policy, "app-123")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "rate limit exceeded")
 }
 
@@ -820,7 +820,7 @@ func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
 	req.ContentLength = 200
 
 	err := auth.enforceAppPolicy(req, policy, "app-123")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "payload exceeds maximum allowed size")
 }
 
@@ -847,13 +847,13 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 
 	// Test that CLI session can be retrieved and has correct operator_session_id
 	cliDocResult, err := db.DocStore.DocGet("cli_sessions", cliSessionID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NotNil(t, cliDocResult)
 
 	var cliSession models.CLISession
 	b, _ := json.Marshal(cliDocResult.Data)
 	err = json.Unmarshal(b, &cliSession)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, operatorSessionID, cliSession.OperatorSessionID)
 	assert.Equal(t, userID, cliSession.UserID)
 }

@@ -242,7 +242,7 @@ func TestExecutionService_Integration(t *testing.T) {
 
 		// Terminal output should be truncated to last 50 lines
 		if result.TerminalOutput != nil && result.TerminalOutput.TruncatedStdout {
-			assert.Equal(t, 50, len(result.TerminalOutput.LastLines))
+			assert.Len(t, result.TerminalOutput.LastLines, 50)
 			assert.Equal(t, 100, result.TerminalOutput.OriginalStdoutLines)
 		}
 
@@ -332,7 +332,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		assert.NotEmpty(t, result.SystemInfo.Hostname)
 		assert.NotEmpty(t, result.SystemInfo.OS)
 		assert.NotEmpty(t, result.SystemInfo.Architecture)
-		assert.Greater(t, result.SystemInfo.NumCPU, 0)
+		assert.Positive(t, result.SystemInfo.NumCPU)
 
 		// Verify environment info
 		assert.NotNil(t, result.EnvironmentInfo)

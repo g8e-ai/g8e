@@ -131,7 +131,7 @@ func TestDataCommandsRequireAuthentication(t *testing.T) {
 
 			err := cmd.RunE(cmd, []string{})
 			require.Error(t, err)
-			assert.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
+			require.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
 		})
 	}
 }

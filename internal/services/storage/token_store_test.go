@@ -105,7 +105,7 @@ func TestNewTokenStoreService_NilVault(t *testing.T) {
 	config := DefaultTokenStoreConfig()
 
 	ts, err := NewTokenStoreService(config, logger, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "encryption vault is required")
 	assert.Nil(t, ts)
 }
@@ -134,7 +134,7 @@ func TestNewTokenStoreService_DatabaseInitFailure(t *testing.T) {
 	}
 
 	ts, err := NewTokenStoreService(config, logger, testVault)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to initialize database")
 	assert.Nil(t, ts)
 }
@@ -181,7 +181,7 @@ func TestTokenStoreService_KVSetWithTTL(t *testing.T) {
 
 	// Should not be retrievable after TTL
 	_, err = ts.KVGet(context.Background(), key)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVSetUpdate verifies that setting an existing key
@@ -225,7 +225,7 @@ func TestTokenStoreService_KVSetLockedVault(t *testing.T) {
 	value := "test-value"
 
 	err := ts.KVSet(context.Background(), key, value, 0)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "vault is locked")
 }
 
@@ -248,7 +248,7 @@ func TestTokenStoreService_KVGetLockedVault(t *testing.T) {
 
 	// Get should fail when vault is locked
 	_, err = ts.KVGet(context.Background(), key)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVGetNonExistent verifies that KVGet returns
@@ -259,7 +259,7 @@ func TestTokenStoreService_KVGetNonExistent(t *testing.T) {
 	defer testVault.Close()
 
 	_, err := ts.KVGet(context.Background(), "non-existent-key")
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVDelete verifies that KVDelete removes
@@ -286,7 +286,7 @@ func TestTokenStoreService_KVDelete(t *testing.T) {
 
 	// Verify it's gone
 	_, err = ts.KVGet(context.Background(), key)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 // TestTokenStoreService_KVDeleteNonExistent verifies that KVDelete
@@ -297,7 +297,7 @@ func TestTokenStoreService_KVDeleteNonExistent(t *testing.T) {
 	defer testVault.Close()
 
 	err := ts.KVDelete("non-existent-key")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // TestTokenStoreService_KVScanPrefix verifies that KVScanPrefix
@@ -403,17 +403,17 @@ func TestTokenStoreService_NilService(t *testing.T) {
 
 	// All methods should handle nil gracefully
 	err := ts.KVSet(context.Background(), "key", "value", 0)
-	assert.Error(t, err, "KVSet should error on nil service")
+	require.Error(t, err, "KVSet should error on nil service")
 
 	_, err = ts.KVGet(context.Background(), "key")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	result, err := ts.KVScanPrefix(context.Background(), "prefix:")
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Nil(t, result)
 
 	err = ts.KVDelete("key")
-	assert.Error(t, err, "KVDelete should error on nil service")
+	require.Error(t, err, "KVDelete should error on nil service")
 }
 
 // TestTokenStoreService_Wait verifies that Wait blocks until
@@ -451,7 +451,7 @@ func TestTokenStoreService_CloseNil(t *testing.T) {
 	var ts *TokenStoreService
 
 	err := ts.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // TestTokenStoreService_ConcurrentOperations verifies that the service
@@ -565,7 +565,7 @@ func TestTokenStoreService_EmptyValue(t *testing.T) {
 
 	retrieved, err := ts.KVGet(context.Background(), key)
 	require.NoError(t, err)
-	assert.Equal(t, "", retrieved)
+	assert.Empty(t, retrieved)
 }
 
 // TestTokenStoreService_NegativeTTL verifies that negative TTL

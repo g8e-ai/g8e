@@ -123,7 +123,7 @@ func TestReplayStore_FinalizeNonce_NotReserved(t *testing.T) {
 
 	// Try to finalize a nonce that was never reserved
 	err := rs.FinalizeNonce(nonce)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found or not in reserved state")
 }
 
@@ -156,7 +156,7 @@ func TestReplayStore_ReleaseNonce_NotReserved(t *testing.T) {
 
 	// Try to release a nonce that was never reserved - should not error (no-op)
 	err := rs.ReleaseNonce(nonce)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestReplayStore_ReleaseNonce_AlreadyFinalized(t *testing.T) {
@@ -174,7 +174,7 @@ func TestReplayStore_ReleaseNonce_AlreadyFinalized(t *testing.T) {
 
 	// Try to release a finalized nonce - should not error (no-op)
 	err = rs.ReleaseNonce(nonce)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestReplayStore_Prune(t *testing.T) {
@@ -216,7 +216,7 @@ func TestReplayStore_Close_NilStore(t *testing.T) {
 
 	var rs *SQLReplayStore
 	err := rs.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestReplayStore_ReserveNonce_ExpiredNonce(t *testing.T) {
@@ -269,5 +269,5 @@ func TestReplayStore_FullWorkflow(t *testing.T) {
 
 	// Step 6: Attempt to finalize again (should fail)
 	err = rs.FinalizeNonce(nonce)
-	assert.Error(t, err)
+	require.Error(t, err)
 }

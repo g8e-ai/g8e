@@ -40,8 +40,8 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	assert.Equal(t, logger, service.logger)
 	assert.False(t, service.running)
 
-	assert.True(t, !service.startTime.Before(before), "startTime should be >= before")
-	assert.True(t, !service.startTime.After(after), "startTime should be <= after")
+	assert.False(t, service.startTime.Before(before), "startTime should be >= before")
+	assert.False(t, service.startTime.After(after), "startTime should be <= after")
 	assert.Equal(t, time.UTC, service.startTime.Location())
 
 	assert.NotNil(t, service.bootstrap)

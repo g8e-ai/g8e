@@ -101,7 +101,7 @@ func TestSQLAuditStore_EndToEnd_AuditTrail(t *testing.T) {
 	}
 	cmdEventID, err := avs.RecordEvent(cmdEvent)
 	require.NoError(t, err)
-	assert.Greater(t, cmdEventID, int64(0))
+	assert.Positive(t, cmdEventID)
 
 	// 4. Record file mutations
 	fileMutation := &storage.FileMutationLog{

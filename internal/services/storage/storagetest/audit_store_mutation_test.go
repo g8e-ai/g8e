@@ -198,7 +198,7 @@ func TestSQLAuditStore_GetFileMutationsNoMutations(t *testing.T) {
 	// Non-existent event ID
 	mutations, err := avs.GetFileMutations(99999)
 	require.NoError(t, err)
-	assert.Len(t, mutations, 0)
+	assert.Empty(t, mutations)
 }
 
 func TestSQLAuditStore_FileMutationOperationTypes(t *testing.T) {

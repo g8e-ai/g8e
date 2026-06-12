@@ -365,7 +365,7 @@ func TestExecutionService_CreateTerminalOutput(t *testing.T) {
 
 		assert.True(t, output.TruncatedStdout)
 		assert.Equal(t, 100, output.OriginalStdoutLines)
-		assert.Equal(t, 50, len(output.LastLines))
+		assert.Len(t, output.LastLines, 50)
 	})
 }
 
@@ -439,7 +439,7 @@ func TestExecutionService_CancelExecution(t *testing.T) {
 	t.Run("cancel non-existent execution", func(t *testing.T) {
 		t.Parallel()
 		err := svc.CancelExecution("non-existent-id")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "execution not found")
 	})
 
@@ -469,7 +469,7 @@ func TestExecutionService_CancelExecution(t *testing.T) {
 
 		// Cancel the execution
 		err := svc.CancelExecution("cancel-test-1")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		// Wait for execution to complete
 		select {
@@ -560,7 +560,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 				defer close(execDone)
 				svc.ExecuteCommand(context.Background(), req) //nolint:errcheck
 			}()
-			require.Eventually(t, func() bool {
+			assert.Eventually(t, func() bool {
 				active := svc.GetActiveExecutions()
 				_, exists := active[id]
 				return exists
@@ -595,7 +595,7 @@ func TestExecutionService_CollectSystemInfo(t *testing.T) {
 	assert.NotEmpty(t, info.Hostname)
 	assert.NotEmpty(t, info.OS)
 	assert.NotEmpty(t, info.Architecture)
-	assert.Greater(t, info.NumCPU, 0)
+	assert.Positive(t, info.NumCPU)
 }
 
 func TestExecutionService_CollectEnvironmentInfo(t *testing.T) {

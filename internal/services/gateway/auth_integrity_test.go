@@ -170,23 +170,23 @@ func TestAuthIntegrity_AppRateLimitEnforced(t *testing.T) {
 
 	// First request should pass
 	err := auth.enforceAppPolicy(req, policy, appID)
-	assert.NoError(t, err, "First request should pass rate limit")
+	require.NoError(t, err, "First request should pass rate limit")
 
 	// Second request should pass
 	err = auth.enforceAppPolicy(req, policy, appID)
-	assert.NoError(t, err, "Second request should pass rate limit")
+	require.NoError(t, err, "Second request should pass rate limit")
 
 	// Third request should pass (burst allows 2x RPS = 4)
 	err = auth.enforceAppPolicy(req, policy, appID)
-	assert.NoError(t, err, "Third request should pass rate limit (burst)")
+	require.NoError(t, err, "Third request should pass rate limit (burst)")
 
 	// Fourth request should pass (burst allows 2x RPS = 4)
 	err = auth.enforceAppPolicy(req, policy, appID)
-	assert.NoError(t, err, "Fourth request should pass rate limit (burst)")
+	require.NoError(t, err, "Fourth request should pass rate limit (burst)")
 
 	// Fifth request should fail (exceeds burst)
 	err = auth.enforceAppPolicy(req, policy, appID)
-	assert.Error(t, err, "Fifth request should exceed rate limit")
+	require.Error(t, err, "Fifth request should exceed rate limit")
 	assert.Contains(t, err.Error(), "rate limit exceeded")
 
 	t.Log("App rate limit enforcement test passed: rate limits are actually enforced")
@@ -215,7 +215,7 @@ func TestAuthIntegrity_AppRateLimitZeroConfigured(t *testing.T) {
 	// Many requests should all pass when rate limit is not configured
 	for i := 0; i < 100; i++ {
 		err := auth.enforceAppPolicy(req, policy, appID)
-		assert.NoError(t, err, "Request %d should pass when rate limit is not configured", i)
+		require.NoError(t, err, "Request %d should pass when rate limit is not configured", i)
 	}
 
 	t.Log("App rate limit zero test passed: no rate limiting when RPS = 0")

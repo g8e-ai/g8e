@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInvitation_IsValid(t *testing.T) {
@@ -72,12 +73,12 @@ func TestInvitation_IsValid(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.invitation.IsValid()
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 				if tt.errContains != "" {
 					assert.Contains(t, err.Error(), tt.errContains)
 				}
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}

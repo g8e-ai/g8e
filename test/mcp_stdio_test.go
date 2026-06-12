@@ -46,7 +46,7 @@ func TestMCPGateway_ConfigOutput(t *testing.T) {
 
 		var config mcp.Config
 		err = json.Unmarshal([]byte(output), &config)
-		assert.NoError(t, err, "output should be valid JSON")
+		require.NoError(t, err, "output should be valid JSON")
 
 		gatewayConfig, ok := config.MCPServers["g8e-gateway"]
 		assert.True(t, ok, "should have g8e-gateway config")
@@ -92,7 +92,7 @@ func TestMCPGateway_JSONRPCParsing(t *testing.T) {
 			Params  json.RawMessage `json:"params"`
 		}
 		err := json.Unmarshal([]byte(req), &parsed)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "tools/list", parsed.Method)
 	})
 
@@ -105,7 +105,7 @@ func TestMCPGateway_JSONRPCParsing(t *testing.T) {
 			Params  json.RawMessage `json:"params"`
 		}
 		err := json.Unmarshal([]byte(req), &parsed)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "tools/call", parsed.Method)
 	})
 
@@ -115,7 +115,7 @@ func TestMCPGateway_JSONRPCParsing(t *testing.T) {
 			JSONRPC string `json:"jsonrpc"`
 		}
 		err := json.Unmarshal([]byte(req), &parsed)
-		assert.Error(t, err, "invalid JSON should fail to parse")
+		require.Error(t, err, "invalid JSON should fail to parse")
 	})
 }
 
@@ -128,7 +128,7 @@ func TestMCPGateway_ConfigTemplate(t *testing.T) {
 		repoRoot := ResolveRepoRootFromTestDir(t)
 		fullPath := filepath.Join(repoRoot, "protocol/examples/mcp_server/g8e_gateway_mcp_config.json")
 		content, err := os.ReadFile(fullPath)
-		assert.NoError(t, err, "http template should exist at %s", fullPath)
+		require.NoError(t, err, "http template should exist at %s", fullPath)
 		assert.Contains(t, string(content), `"type": "http"`)
 		assert.Contains(t, string(content), `"url"`)
 		assert.Contains(t, string(content), `"tls"`)

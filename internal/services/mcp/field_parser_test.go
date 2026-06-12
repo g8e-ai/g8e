@@ -124,9 +124,9 @@ func TestValidateFieldPath_AllowedPaths(t *testing.T) {
 			t.Parallel()
 			err := registry.ValidateFieldPath(tt.collection, tt.fieldPath)
 			if tt.wantErr != nil {
-				assert.ErrorIs(t, err, tt.wantErr)
+				require.ErrorIs(t, err, tt.wantErr)
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -216,7 +216,7 @@ func TestParseFieldPath(t *testing.T) {
 			t.Parallel()
 			got, err := ParseFieldPath(tt.document, tt.fieldPath)
 			if tt.wantErr {
-				assert.Error(t, err)
+				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.want, got)

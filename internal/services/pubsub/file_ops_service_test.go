@@ -88,7 +88,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 		}
 
 		_, err := payloadToFileEditRequest(msg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to decode")
 	})
 
@@ -103,7 +103,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 		}
 
 		_, err := payloadToFileEditRequest(msg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "missing file_path")
 	})
 
@@ -119,7 +119,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 		}
 
 		_, err := payloadToFileEditRequest(msg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "missing operation")
 	})
 
@@ -196,7 +196,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 		}
 
 		_, err := payloadToFsListRequest(msg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to decode")
 	})
 
@@ -290,7 +290,7 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 		}
 
 		_, err := payloadToFsGrepRequest(msg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to decode")
 	})
 

@@ -16,7 +16,6 @@ package gateway
 import (
 	"bytes"
 	"log/slog"
-	"strings"
 	"sync"
 	"testing"
 
@@ -71,7 +70,7 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 	assert.Contains(t, logs, "back-pressure", "drop-oldest event must be logged")
 	assert.Contains(t, logs, "dropped_total=1", "log must include running drop counter")
 	assert.Contains(t, logs, "buffer_capacity=1", "log must include buffer capacity")
-	assert.True(t, strings.Contains(logs, "level=WARN"), "pubsub: trySend: drop-oldest must be logged at WARN level")
+	assert.Contains(t, logs, "level=WARN", "pubsub: trySend: drop-oldest must be logged at WARN level")
 }
 
 // TestPubSubBackPressureKeepsSubscriptions verifies that under sustained

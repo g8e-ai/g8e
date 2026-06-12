@@ -330,7 +330,7 @@ func TestJSONRPCResponse(t *testing.T) {
 			Result:  map[string]string{"status": "ok"},
 		}
 		data, err := json.Marshal(resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, string(data), "2.0")
 		assert.Contains(t, string(data), "result")
 	})
@@ -345,7 +345,7 @@ func TestJSONRPCResponse(t *testing.T) {
 			},
 		}
 		data, err := json.Marshal(resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Contains(t, string(data), "error")
 		assert.Contains(t, string(data), "-32601")
 	})
@@ -409,7 +409,7 @@ func TestHandleInitialize(t *testing.T) {
 
 		var resp JSONRPCResponse
 		err := json.Unmarshal(buf.Bytes(), &resp)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "2.0", resp.JSONRPC)
 		assert.InEpsilon(t, 1, resp.ID, 0.0)
 		assert.NotNil(t, resp.Result)
@@ -919,7 +919,7 @@ AwEHoUQDQgAEXCLo3IpodecGUMSUyH19L2M5oruEzWjknoh0lSpLWrab5d+d7J1g
 		// expecting the canonical "failed to load client certificate" when
 		// certificates are missing.
 		_, err := createMCPClient(cfg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to load client certificate")
 	})
 

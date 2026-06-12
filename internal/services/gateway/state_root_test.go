@@ -102,7 +102,7 @@ func TestStateRootSemantics(t *testing.T) {
 	require.NoError(t, err)
 	rootWithExp, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
-	assert.NotEqual(t, root7, rootWithExp)
+	assert.NotEqual(t, rootWithExp, root7)
 
 	// Manually delete the expired entry to simulate maintenance job
 	_, err = db.db.Exec("DELETE FROM kv_store WHERE key = 'exp1'")
@@ -110,7 +110,7 @@ func TestStateRootSemantics(t *testing.T) {
 
 	rootAfterExp, err := db.StateRootSvc.GetCurrentStateRoot()
 	require.NoError(t, err)
-	assert.Equal(t, root7, rootAfterExp, "Expired KV must be excluded from state root calculation")
+	assert.Equal(t, rootAfterExp, root7, "Expired KV must be excluded from state root calculation")
 }
 
 func TestStateRootDeterministicOrder(t *testing.T) {

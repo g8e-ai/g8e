@@ -76,7 +76,7 @@ func TestSQLAuditStore_Event(t *testing.T) {
 
 	eventID, err := avs.RecordEvent(event)
 	require.NoError(t, err)
-	assert.Greater(t, eventID, int64(0))
+	assert.Positive(t, eventID)
 
 	// Retrieve events for the session
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
@@ -225,7 +225,7 @@ func TestSQLAuditStore_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
-	assert.Len(t, events, 0)
+	assert.Empty(t, events)
 }
 
 func TestSQLAuditStore_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
@@ -331,7 +331,7 @@ func TestSQLAuditStore_OutputTruncation(t *testing.T) {
 
 	eventID, err := avs.RecordEvent(event)
 	require.NoError(t, err)
-	assert.Greater(t, eventID, int64(0))
+	assert.Positive(t, eventID)
 
 	// Retrieve and verify truncation
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
@@ -467,7 +467,7 @@ func TestSQLAuditStore_EventPagination(t *testing.T) {
 	// Test offset beyond total
 	events, err = avs.GetEvents(operatorSessionID, 10, 100)
 	require.NoError(t, err)
-	assert.Len(t, events, 0)
+	assert.Empty(t, events)
 
 	// Test default limit (0 should default to 50)
 	events, err = avs.GetEvents(operatorSessionID, 0, 0)
@@ -570,7 +570,7 @@ func TestSQLAuditStore_NullExitCode(t *testing.T) {
 	}
 	eventID, err := avs.RecordEvent(event)
 	require.NoError(t, err)
-	assert.Greater(t, eventID, int64(0))
+	assert.Positive(t, eventID)
 
 	// Retrieve and verify nil exit code
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
@@ -673,7 +673,7 @@ func TestSQLAuditStore_GetEventsEmptySession(t *testing.T) {
 
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
-	assert.Len(t, events, 0)
+	assert.Empty(t, events)
 }
 
 func TestSQLAuditStore_LongContentFields(t *testing.T) {
@@ -725,7 +725,7 @@ func TestSQLAuditStore_LongContentFields(t *testing.T) {
 
 	eventID, err := avs.RecordEvent(event)
 	require.NoError(t, err)
-	assert.Greater(t, eventID, int64(0))
+	assert.Positive(t, eventID)
 
 	// Retrieve and verify
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)

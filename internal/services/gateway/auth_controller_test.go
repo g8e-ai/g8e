@@ -254,7 +254,7 @@ func TestHandleBootstrapStatus(t *testing.T) {
 		var resp map[string]interface{}
 		err := json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.Equal(t, false, resp["bootstrapped"])
+		assert.False(t, resp["bootstrapped"].(bool))
 	})
 
 	t.Run("Bootstrapped after creating a user", func(t *testing.T) {
@@ -271,7 +271,7 @@ func TestHandleBootstrapStatus(t *testing.T) {
 		var resp map[string]interface{}
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		assert.Equal(t, true, resp["bootstrapped"])
+		assert.True(t, resp["bootstrapped"].(bool))
 	})
 }
 
@@ -1279,7 +1279,7 @@ func TestHandleListSuspendedTransactions(t *testing.T) {
 			// If null, that's acceptable for empty list
 			assert.Nil(t, resp["transactions"])
 		} else {
-			assert.Len(t, transactions, 0)
+			assert.Empty(t, transactions)
 		}
 	})
 
@@ -1305,7 +1305,7 @@ func TestHandleListSuspendedTransactions(t *testing.T) {
 			// If null, that's acceptable for empty list
 			assert.Nil(t, resp["transactions"])
 		} else {
-			assert.Len(t, transactions, 0)
+			assert.Empty(t, transactions)
 		}
 	})
 }
@@ -1410,7 +1410,7 @@ func TestHandleWebSession(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, resp["success"].(bool))
 		assert.Equal(t, user.ID, resp["user_id"])
-		assert.Equal(t, "", resp["web_session_id"])
+		assert.Empty(t, resp["web_session_id"])
 	})
 }
 

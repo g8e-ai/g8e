@@ -15,7 +15,6 @@ package pubsub
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -38,14 +37,14 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 
 	t.Run("rejects empty baseURL", func(t *testing.T) {
 		client, err := NewOperatorPubSubClient("", "", logger, nil)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Nil(t, client)
 		assert.Contains(t, err.Error(), "operator pub/sub URL is required")
 	})
 
 	t.Run("accepts ws:// URL", func(t *testing.T) {
 		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
 		assert.Nil(t, client.tlsConfig)
@@ -54,7 +53,7 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 
 	t.Run("accepts wss:// URL", func(t *testing.T) {
 		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
 		assert.NotNil(t, client.tlsConfig)
@@ -62,7 +61,7 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 
 	t.Run("sets serverName for TLS SNI override", func(t *testing.T) {
 		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://192.168.1.1:%d", constants.Ports.OperatorHttp), "gateway.local", logger, nil)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, "gateway.local", client.serverName)
 		assert.Equal(t, "gateway.local", client.tlsConfig.ServerName)
@@ -96,7 +95,7 @@ func TestConnectPubWs(t *testing.T) {
 		err = client.connectPubWs()
 		client.mu.Unlock()
 
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to connect publish WebSocket")
 	})
 
@@ -117,7 +116,7 @@ func TestConnectPubWs(t *testing.T) {
 		err = client.connectPubWs()
 		client.mu.Unlock()
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, client.pubWs)
 
 		client.Close()
@@ -133,7 +132,7 @@ func TestPublish(t *testing.T) {
 		client.Close()
 
 		err = client.Publish(context.Background(), "test-channel", []byte("test data"))
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "operator pub/sub client is closed")
 	})
 
@@ -142,7 +141,7 @@ func TestPublish(t *testing.T) {
 		require.NoError(t, err)
 
 		err = client.Publish(context.Background(), "test-channel", []byte("test data"))
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to connect publish WebSocket")
 	})
 
@@ -166,13 +165,13 @@ func TestPublish(t *testing.T) {
 
 		testData := []byte("test payload")
 		err = client.Publish(context.Background(), "test-channel", testData)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		select {
 		case data := <-receivedData:
 			var msg pubsubv1.PubSubMessage
 			err := proto.Unmarshal(data, &msg)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, testData, msg.Data)
 		case <-time.After(5 * time.Second):
 			t.Fatal("timeout waiting for published message")
@@ -225,7 +224,7 @@ func TestSubscribe(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = client.Subscribe(context.Background(), "test-channel")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to connect to Operator pub/sub")
 	})
 
@@ -271,7 +270,7 @@ func TestSubscribe(t *testing.T) {
 		require.NoError(t, err)
 
 		ch, err := client.Subscribe(context.Background(), "test-channel")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotNil(t, ch)
 
 		select {
@@ -326,7 +325,7 @@ func TestSubscribe(t *testing.T) {
 		require.NoError(t, err)
 
 		ch, err := client.Subscribe(context.Background(), "test-channel")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		select {
 		case data := <-ch:
@@ -374,7 +373,7 @@ func TestSubscribe(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		ch, err := client.Subscribe(ctx, "test-channel")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		cancel()
 
@@ -408,18 +407,18 @@ func TestWaitForSubscribedACK(t *testing.T) {
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
 		dialer := websocket.Dialer{}
 		ws, resp, err := dialer.Dial(wsURL, nil)
-		require.NoError(t, err)
+		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 		if resp != nil {
 			resp.Body.Close()
 		}
 
 		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
-		require.NoError(t, err)
+		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 
 		var pending [][]byte
 		err = client.waitForSubscribedACK(ctx, ws, "test-channel", &pending)
-		assert.Error(t, err)
-		assert.True(t, errors.Is(err, context.Canceled))
+		assert.Error(t, err)                     //nolint:testifylint,require-error // in http handler
+		assert.ErrorIs(t, err, context.Canceled) //nolint:testifylint,require-error // in http handler
 
 		ws.Close()
 	})
@@ -438,17 +437,17 @@ func TestWaitForSubscribedACK(t *testing.T) {
 		wsURL := strings.Replace(server.URL, "http", "ws", 1)
 		dialer := websocket.Dialer{}
 		ws, resp, err := dialer.Dial(wsURL, nil)
-		require.NoError(t, err)
+		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 		if resp != nil {
 			resp.Body.Close()
 		}
 
 		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
-		require.NoError(t, err)
+		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 
 		var pending [][]byte
 		err = client.waitForSubscribedACK(ctx, ws, "test-channel", &pending)
-		assert.Error(t, err)
+		assert.Error(t, err) //nolint:testifylint,require-error // in http handler
 		assert.Contains(t, err.Error(), "connection error")
 	})
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/response"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 
@@ -216,7 +217,7 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 	for k, tx := range store.txs {
 		txHash = k
 		require.Equal(t, "test-tool", tx.ToolName)
-		require.Equal(t, `{"foo":"bar"}`, string(tx.ToolArguments))
+		require.JSONEq(t, `{"foo":"bar"}`, string(tx.ToolArguments))
 	}
 	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:%d/approve/%s to authorize via WebAuthn, then retry."}]}}`, constants.Ports.OperatorHttps, txHash)
 	require.JSONEq(t, expectedJSON, w.Body.String())
@@ -663,7 +664,7 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		t.Parallel()
 		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
-			require.Contains(t, string(body), "tools/list")
+			assert.Contains(t, string(body), "tools/list")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
@@ -877,7 +878,7 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 		t.Parallel()
 		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			body, _ := io.ReadAll(r.Body)
-			require.Contains(t, string(body), "resources/list")
+			assert.Contains(t, string(body), "resources/list")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[]}}`))

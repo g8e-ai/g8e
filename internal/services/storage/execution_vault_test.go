@@ -548,7 +548,7 @@ func TestExecutionVault_GetFileDiffsBySession_EmptySession(t *testing.T) {
 
 	diffs, err := ev.GetFileDiffsBySession(context.Background(), "empty-session", 10)
 	require.NoError(t, err)
-	assert.Len(t, diffs, 0)
+	assert.Empty(t, diffs)
 }
 
 func TestExecutionVault_GetFileDiffsBySession_NilService(t *testing.T) {
@@ -631,7 +631,7 @@ func TestExecutionVault_ConcurrentStoreExecution(t *testing.T) {
 				StdoutSize:       10,
 			}
 			err := ev.StoreExecution(context.Background(), record)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			done <- true
 		}(i)
 	}
@@ -669,7 +669,7 @@ func TestExecutionVault_ConcurrentStoreFileDiff(t *testing.T) {
 				OperatorSessionID: sessionID,
 			}
 			err := ev.StoreFileDiff(context.Background(), record)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			done <- true
 		}(i)
 	}

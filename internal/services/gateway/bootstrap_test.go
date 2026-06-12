@@ -71,7 +71,7 @@ func TestBootstrapFlow(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code)
 	var statusResp models.BootstrapStatusResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.Equal(t, false, statusResp.Bootstrapped)
+	assert.False(t, statusResp.Bootstrapped)
 
 	// 2. Perform bootstrap
 	bootstrapBody := map[string]string{
@@ -89,7 +89,7 @@ func TestBootstrapFlow(t *testing.T) {
 
 	var resp models.BootstrapResponse
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	require.Equal(t, true, resp.Success, "Bootstrap response success: %v", resp)
+	require.True(t, resp.Success, "Bootstrap response success: %v", resp)
 	require.NotEmpty(t, resp.OperatorCert, "operator_cert is missing: %v", resp)
 	require.NotEmpty(t, resp.OperatorCertChain, "operator_cert_chain is missing: %v", resp)
 	require.NotEmpty(t, resp.HubTrustBundle, "hub_trust_bundle is missing: %v", resp)
@@ -110,7 +110,7 @@ func TestBootstrapFlow(t *testing.T) {
 	h.authController.handleBootstrapStatus(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &statusResp))
-	assert.Equal(t, true, statusResp.Bootstrapped)
+	assert.True(t, statusResp.Bootstrapped)
 
 	// 4. Verify bootstrap user is active
 	user, err := h.userSvc.GetByID(bootstrapUserID)
@@ -158,7 +158,7 @@ func TestBootstrapFlow(t *testing.T) {
 
 	// 8. Verify bootstrap user is REJECTED during authentication
 	op, err = h.auth.ValidateOperatorSession(bootstrapSessionID)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "identity disabled")
 	assert.Nil(t, op)
 }

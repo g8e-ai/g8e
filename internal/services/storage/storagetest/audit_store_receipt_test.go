@@ -451,7 +451,7 @@ func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
 	// No receipts
 	receipts, err := avs.ListActionReceiptsSince(time.Now().UTC(), 10)
 	require.NoError(t, err)
-	assert.Len(t, receipts, 0)
+	assert.Empty(t, receipts)
 }
 
 func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {

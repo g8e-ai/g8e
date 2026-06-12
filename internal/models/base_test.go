@@ -99,7 +99,7 @@ func TestExecutionResultsPayload(t *testing.T) {
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 0, *result.ReturnCode)
 		assert.Equal(t, "hello\n", result.Stdout)
-		assert.Equal(t, 2.0, result.DurationSeconds)
+		assert.InEpsilon(t, 2.0, result.DurationSeconds, 0.0)
 	})
 }
 
@@ -118,7 +118,7 @@ func TestTerminalOutput(t *testing.T) {
 		}
 
 		assert.Equal(t, "ls", output.Command)
-		assert.Equal(t, 2, len(output.LastLines))
+		assert.Len(t, output.LastLines, 2)
 		assert.False(t, output.TruncatedStdout)
 		assert.Equal(t, 2, output.TotalOriginalLines)
 	})

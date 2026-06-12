@@ -833,11 +833,11 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// App should be able to write to its own namespace
 		err := dbController.verifyBlobOwnership(req, "app/"+appID)
-		assert.NoError(t, err, "App should be able to write to its own namespace")
+		require.NoError(t, err, "App should be able to write to its own namespace")
 
 		// App should not be able to write to another app's namespace
 		err = dbController.verifyBlobOwnership(req, "app/other-app")
-		assert.Error(t, err, "App should not be able to write to another app's namespace")
+		require.Error(t, err, "App should not be able to write to another app's namespace")
 	})
 
 	t.Run("blob ownership verification - user identity", func(t *testing.T) {
@@ -850,11 +850,11 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// User should be able to write to their own namespace
 		err := dbController.verifyBlobOwnership(req, "user/"+userID)
-		assert.NoError(t, err, "User should be able to write to their own namespace")
+		require.NoError(t, err, "User should be able to write to their own namespace")
 
 		// User should not be able to write to another user's namespace
 		err = dbController.verifyBlobOwnership(req, "user/other-user")
-		assert.Error(t, err, "User should not be able to write to another user's namespace")
+		require.Error(t, err, "User should not be able to write to another user's namespace")
 	})
 
 	t.Run("blob ownership verification - allowlisted namespace", func(t *testing.T) {
@@ -867,10 +867,10 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// Any authenticated identity should be able to write to allowlisted namespaces
 		err := dbController.verifyBlobOwnership(req, "temp")
-		assert.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
+		require.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
 
 		err = dbController.verifyBlobOwnership(req, "uploads")
-		assert.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
+		require.NoError(t, err, "Authenticated identity should be able to write to allowlisted namespace")
 	})
 
 	t.Run("blob ownership verification - no identity rejected", func(t *testing.T) {
@@ -880,7 +880,7 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 
 		// Request without identity should be rejected
 		err := dbController.verifyBlobOwnership(req, "temp")
-		assert.Error(t, err, "Request without identity should be rejected")
+		require.Error(t, err, "Request without identity should be rejected")
 	})
 }
 

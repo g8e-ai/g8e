@@ -181,7 +181,7 @@ func TestTestLogWriter_Write(t *testing.T) {
 			msg:  []byte("test log line\n"),
 			test: func(t *testing.T, n int, err error) {
 				require.NoError(t, err)
-				assert.Equal(t, len([]byte("test log line\n")), n)
+				assert.Equal(t, 15, n) // len([]byte("test log line\n"))
 			},
 		},
 		{
@@ -197,7 +197,7 @@ func TestTestLogWriter_Write(t *testing.T) {
 			msg:  []byte("line1\nline2\nline3\n"),
 			test: func(t *testing.T, n int, err error) {
 				require.NoError(t, err)
-				assert.Equal(t, len([]byte("line1\nline2\nline3\n")), n)
+				assert.Equal(t, 18, n) // len([]byte("line1\nline2\nline3\n"))
 			},
 		},
 	}

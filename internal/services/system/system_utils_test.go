@@ -289,7 +289,7 @@ func TestGetMemoryDetails(t *testing.T) {
 	t.Parallel()
 	details := GetMemoryDetails()
 
-	assert.Greater(t, details.TotalMB, int64(0))
+	assert.Positive(t, details.TotalMB)
 	assert.GreaterOrEqual(t, details.AvailableMB, int64(0))
 	assert.GreaterOrEqual(t, details.UsedMB, int64(0))
 	assert.GreaterOrEqual(t, details.Percent, 0.0)
@@ -301,7 +301,7 @@ func TestGetMemoryMB(t *testing.T) {
 	t.Parallel()
 	totalMB := GetMemoryMB()
 
-	assert.Greater(t, totalMB, 0)
+	assert.Positive(t, totalMB)
 }
 
 func TestGetMemoryDetails_Consistency(t *testing.T) {
@@ -340,7 +340,7 @@ func TestGetNumCPU(t *testing.T) {
 	t.Parallel()
 	numCPU := GetNumCPU()
 
-	assert.Greater(t, numCPU, 0)
+	assert.Positive(t, numCPU)
 	assert.Equal(t, runtime.NumCPU(), numCPU)
 }
 
@@ -357,7 +357,7 @@ func TestGetNetworkInterfaces(t *testing.T) {
 	interfaces := GetNetworkInterfaces()
 
 	require.NotNil(t, interfaces)
-	assert.Greater(t, len(interfaces), 0)
+	assert.NotEmpty(t, interfaces)
 
 	for _, iface := range interfaces {
 		assert.NotEmpty(t, iface)

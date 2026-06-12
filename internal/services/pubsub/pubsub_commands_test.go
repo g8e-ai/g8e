@@ -18,7 +18,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -80,7 +79,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 
 	_, err = svc.l4warden.VerifyEnvelope(context.Background(), env)
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, governance.ErrL2KeyNotConfigured), "expected missing L2 key error, got %v", err)
+	assert.ErrorIs(t, err, governance.ErrL2KeyNotConfigured, "expected missing L2 key error, got %v", err)
 }
 
 func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg.GovernanceEnvelope {

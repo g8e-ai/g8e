@@ -357,7 +357,7 @@ func TestScrubbingService_ScrubCommandResult(t *testing.T) {
 		assert.Equal(t, constants.CommandExitStatusSuccess, scrubbed.Status)
 		assert.Equal(t, 0, scrubbed.ExitCode)
 		assert.Equal(t, int64(150), scrubbed.DurationMs)
-		assert.Greater(t, scrubbed.OutputLines, 0)
+		assert.Positive(t, scrubbed.OutputLines)
 		assert.NotNil(t, scrubbed.RowCount)
 		assert.Empty(t, scrubbed.ErrorType)
 		assert.NotContains(t, scrubbed.Summary, "john@example.com")
@@ -775,7 +775,7 @@ func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 
 	// Token should no longer be retrievable from storage
 	_, err = tokenStore.KVGet(context.Background(), key)
-	assert.Error(t, err, "Token should expire after TTL")
+	require.Error(t, err, "Token should expire after TTL")
 }
 
 func TestScrubbingService_ScrubText_ServiceTokens(t *testing.T) {
@@ -1006,7 +1006,7 @@ func TestScrubbingService_RehydrateText(t *testing.T) {
 	t.Run("empty input returns empty", func(t *testing.T) {
 		t.Parallel()
 		result := service.RehydrateText("")
-		assert.Equal(t, "", result)
+		assert.Empty(t, result)
 	})
 
 	t.Run("no tokens returns original", func(t *testing.T) {
@@ -1033,7 +1033,7 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 	t.Run("empty payload returns empty", func(t *testing.T) {
 		t.Parallel()
 		result, err := service.RehydratePayload([]byte{})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Empty(t, result)
 	})
 
@@ -1042,7 +1042,7 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 		token := service.GetTokenForValue("secret")
 		payload := []byte("Text with " + token)
 		result, err := service.RehydratePayload(payload)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "Text with secret", string(result))
 	})
 
@@ -1051,11 +1051,11 @@ func TestScrubbingService_RehydratePayload(t *testing.T) {
 		token := service.GetTokenForValue("secret")
 		payload := []byte(`{"key": "value ` + token + `", "nested": {"data": "` + token + `"}}`)
 		result, err := service.RehydratePayload(payload)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		// Parse the result to verify rehydration
 		var parsed map[string]interface{}
 		err = json.Unmarshal(result, &parsed)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "value secret", parsed["key"])
 		nested := parsed["nested"].(map[string]interface{})
 		assert.Equal(t, "secret", nested["data"])
@@ -1099,7 +1099,7 @@ func TestScrubbingService_ClearTokens(t *testing.T) {
 	// Add some tokens
 	service.GetTokenForValue("secret1")
 	service.GetTokenForValue("secret2")
-	assert.Greater(t, len(service.tokenMap), 0)
+	assert.NotEmpty(t, service.tokenMap)
 
 	// Clear tokens
 	service.ClearTokens()

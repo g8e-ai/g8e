@@ -82,7 +82,7 @@ func TestGetMachineID(t *testing.T) {
 			require.NoError(t, err)
 			assert.NotEmpty(t, machineID)
 		default:
-			assert.Error(t, err)
+			require.Error(t, err)
 			assert.Contains(t, err.Error(), "unsupported operating system")
 		}
 	})
@@ -141,7 +141,7 @@ func TestFingerprintComponents(t *testing.T) {
 
 		assert.NotEmpty(t, fp.OS)
 		assert.NotEmpty(t, fp.Architecture)
-		assert.Greater(t, fp.CPUCount, 0)
+		assert.Positive(t, fp.CPUCount)
 		assert.NotEmpty(t, fp.Fingerprint)
 	})
 }
@@ -231,7 +231,7 @@ func TestGetLinuxMachineIDFromCustomPath(t *testing.T) {
 
 		_, err = getLinuxMachineID(logger)
 		if err != nil {
-			assert.Error(t, err)
+			require.Error(t, err)
 		}
 	})
 }
@@ -289,7 +289,7 @@ func TestGetMachineID_UnsupportedOS(t *testing.T) {
 	// of the expected behavior
 	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" && runtime.GOOS != "windows" {
 		_, err := getMachineID(testutil.NewTestLogger())
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unsupported operating system")
 	}
 }

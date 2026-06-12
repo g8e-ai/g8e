@@ -825,7 +825,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, receipt)
 		require.True(t, processor.called, "Envelope processor should have been called")
-		require.Nil(t, processor.lastError, "L3 verification should have passed")
+		require.NoError(t, processor.lastError, "L3 verification should have passed")
 	})
 
 	t.Run("L3 verification fails with rejecting notary", func(t *testing.T) {

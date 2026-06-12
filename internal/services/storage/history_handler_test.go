@@ -107,7 +107,7 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 
 	assert.True(t, response.Success)
 	assert.Equal(t, operatorSessionID, response.OperatorSessionId)
-	assert.Equal(t, 5, len(response.Events))
+	assert.Len(t, response.Events, 5)
 	assert.NotNil(t, response.WebSession)
 	assert.Equal(t, "Test History OperatorSession", response.WebSession.Title)
 }

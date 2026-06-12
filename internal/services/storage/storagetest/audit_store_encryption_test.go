@@ -82,7 +82,7 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 
 	eventID, err := avs.RecordEvent(event)
 	require.NoError(t, err)
-	require.Greater(t, eventID, int64(0))
+	require.Positive(t, eventID)
 
 	// Retrieve and verify decryption works
 	events, err := avs.GetEvents("encrypted-session-1", 10, 0)

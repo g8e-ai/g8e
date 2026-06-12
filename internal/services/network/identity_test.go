@@ -446,7 +446,7 @@ func TestDetector_DetectAll_ConcurrentExecution(t *testing.T) {
 
 	// All should complete without error
 	for i := 0; i < 5; i++ {
-		assert.NoError(t, errors[i])
+		require.NoError(t, errors[i])
 		assert.NotNil(t, results[i])
 	}
 }

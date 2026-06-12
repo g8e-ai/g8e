@@ -159,7 +159,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 		t.Parallel()
 		ctx := setupTestPKI(t)
 		err := ctx.pki.VerifyCertificate(nil)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no certificate provided")
 	})
 
@@ -169,7 +169,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 
 		cert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
 		err := ctx.pki.VerifyCertificate(cert)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	})
 
 	t.Run("Revoked certificate is rejected", func(t *testing.T) {
@@ -181,7 +181,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 		require.NoError(t, err)
 
 		err = ctx.pki.VerifyCertificate(cert)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "certificate is revoked")
 	})
 }
@@ -347,7 +347,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 
 		assert.Equal(t, rootCert.Subject.CommonName, hubCert.Issuer.CommonName)
 		assert.True(t, hubCert.IsCA)
-		assert.Equal(t, int(1), hubCert.MaxPathLen)
+		assert.Equal(t, 1, hubCert.MaxPathLen)
 	})
 
 	t.Run("Service certificate chain validity", func(t *testing.T) {
@@ -537,7 +537,7 @@ func TestPKIAuthority_Phase0Regression_C1_ServiceCertRenewal(t *testing.T) {
 	expectedDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
 	assert.InDelta(t, expectedDuration.Hours(), duration.Hours(), 1.0, RegressionMarkerAfterFix+": service cert has 90-day TTL")
 
-	assert.Equal(t, int(servingCertValidityDays), 90, RegressionMarkerAfterFix+": servingCertValidityDays is 90 days")
+	assert.Equal(t, 90, int(servingCertValidityDays), RegressionMarkerAfterFix+": servingCertValidityDays is 90 days")
 }
 
 func TestPKIAuthority_Phase0Regression_C2_OperatorSerialBlank(t *testing.T) {
@@ -552,7 +552,8 @@ func TestPKIAuthority_Phase0Regression_C2_OperatorSerialBlank(t *testing.T) {
 	issuedSerial := cert.SerialNumber.String()
 	assert.NotEmpty(t, issuedSerial, "issued cert should have a serial")
 
-	assert.Equal(t, "", "", RegressionMarkerBeforeFix+": operator_cert_serial is blanked in completeRegistration")
+	// Regression marker: operator_cert_serial is blanked in completeRegistration
+	_ = RegressionMarkerBeforeFix
 }
 
 func TestPKIAuthority_Phase0Regression_H2_CurveInconsistency(t *testing.T) {
@@ -589,7 +590,7 @@ func TestPKIAuthority_Phase0Regression_C3_LeafCertTTL(t *testing.T) {
 	expectedDuration := time.Duration(leafCertValidityDays) * 24 * time.Hour
 	assert.InDelta(t, expectedDuration.Hours(), duration.Hours(), 1.0, RegressionMarkerAfterFix+": leaf cert has 7-day TTL")
 
-	assert.Equal(t, int(leafCertValidityDays), 7, RegressionMarkerAfterFix+": leaf cert TTL is 7 days")
+	assert.Equal(t, 7, int(leafCertValidityDays), RegressionMarkerAfterFix+": leaf cert TTL is 7 days")
 }
 
 func TestPKIAuthority_SignCSR(t *testing.T) {
@@ -697,7 +698,7 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 		assert.Equal(t, cert.SerialNumber, crl.RevokedCertificateEntries[0].SerialNumber)
 
 		err = crl.CheckSignatureFrom(ctx.pki.operatorCert)
-		assert.NoError(t, err, "CRL signature should verify with Operator CA")
+		require.NoError(t, err, "CRL signature should verify with Operator CA")
 	})
 
 	t.Run("GenerateCRL handles empty revocation list", func(t *testing.T) {
@@ -711,7 +712,7 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 		crl, err := x509.ParseRevocationList(crlDER)
 		require.NoError(t, err)
 
-		assert.Len(t, crl.RevokedCertificateEntries, 0)
+		assert.Empty(t, crl.RevokedCertificateEntries)
 	})
 }
 
@@ -744,7 +745,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		csrPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER}))
 
 		_, _, err = pki.SignCSR(csrPEM, "operator", "org-123", "op-456", "", "session-789", "")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "must use P-256 curve")
 	})
 
@@ -767,7 +768,7 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		// Generate a P-256 CSR (should be accepted)
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		certPEM, _, err := pki.SignCSR(csr, "operator", "org-123", "op-456", "", "session-789", "")
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.NotEmpty(t, certPEM)
 	})
 
@@ -1091,7 +1092,7 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 		}
 
 		chains, err := cert.Verify(opts)
-		assert.NoError(t, err, "serving certificate should verify against g8eg-ca-bundle.pem")
+		require.NoError(t, err, "serving certificate should verify against g8eg-ca-bundle.pem")
 		assert.NotEmpty(t, chains, "verification should return at least one valid chain")
 	})
 }

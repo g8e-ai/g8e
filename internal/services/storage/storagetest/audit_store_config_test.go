@@ -164,17 +164,17 @@ func TestSQLAuditStore_NilServiceMethods(t *testing.T) {
 
 	// These should not panic and return gracefully
 	err := avs.CreateSession("id", "operator", "title", "user")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	eventID, err := avs.RecordEvent(&storage.Event{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, int64(0), eventID)
 
 	err = avs.RecordFileMutation(&storage.FileMutationLog{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	err = avs.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestSQLAuditStore_DefaultConfig(t *testing.T) {
@@ -254,7 +254,7 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 
 	// Close multiple times should not panic
 	err = avs.Close()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Second close might error (db already closed) but shouldn't panic
 	_ = avs.Close()

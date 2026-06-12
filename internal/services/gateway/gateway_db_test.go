@@ -169,7 +169,7 @@ func TestDocUpdateNotFound(t *testing.T) {
 	db := newTestDB(t)
 
 	_, err := db.DocStore.DocUpdate("users", "nonexistent", mustDocJSON(t, map[string]string{"role": "admin"}))
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
 
@@ -299,7 +299,7 @@ func TestKVSetAndGet(t *testing.T) {
 
 	val, found := db.KVStore.KVGet("session:abc")
 	require.True(t, found)
-	assert.Equal(t, `{"user":"alice"}`, val)
+	assert.JSONEq(t, `{"user":"alice"}`, val)
 }
 
 func TestKVGetNotFound(t *testing.T) {
@@ -491,7 +491,7 @@ func TestCreateDataDir(t *testing.T) {
 	t.Cleanup(func() { db.Close() })
 
 	_, err = os.Stat(filepath.Join(dir, "g8e.db"))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // ---------------------------------------------------------------------------
@@ -889,7 +889,7 @@ func TestGetField(t *testing.T) {
 	field, err = db.DocStore.GetField("test_collection", "doc1", "value")
 	require.NoError(t, err)
 	require.NotNil(t, field)
-	assert.Equal(t, float64(42), field) // JSON numbers are unmarshaled as float64
+	assert.InEpsilon(t, float64(42), field, 0.0) // JSON numbers are unmarshaled as float64
 
 	// Get field from non-existent document
 	field, err = db.DocStore.GetField("test_collection", "nonexistent-doc", "name")
@@ -968,7 +968,7 @@ func TestDocCreate(t *testing.T) {
 
 	// Attempt to create duplicate - should fail
 	err = db.DocStore.DocCreate("test_collection", "doc1", docBytes)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already exists")
 }
 

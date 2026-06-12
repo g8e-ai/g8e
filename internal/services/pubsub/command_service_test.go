@@ -72,7 +72,7 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 		}
 
 		_, err := payloadToExecutionRequest(msg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "decode command payload")
 	})
 
@@ -87,7 +87,7 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 		}
 
 		_, err := payloadToExecutionRequest(msg)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "missing command")
 	})
 

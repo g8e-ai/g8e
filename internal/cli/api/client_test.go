@@ -262,7 +262,7 @@ func TestNewClient_NoCredentials(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
+	require.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
 }
 
 func TestNewClient_LoadCredentialsError(t *testing.T) {
@@ -277,7 +277,7 @@ func TestNewClient_LoadCredentialsError(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.ErrorIs(t, err, clierrors.ErrFailedToLoadCredentials)
+	require.ErrorIs(t, err, clierrors.ErrFailedToLoadCredentials)
 }
 
 func TestNewClient_MissingCertFile(t *testing.T) {
@@ -289,7 +289,7 @@ func TestNewClient_MissingCertFile(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.ErrorIs(t, err, clierrors.ErrFailedToLoadClientCertificate)
+	require.ErrorIs(t, err, clierrors.ErrFailedToLoadClientCertificate)
 }
 
 func TestNewClient_MissingKeyFile(t *testing.T) {
@@ -301,7 +301,7 @@ func TestNewClient_MissingKeyFile(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.ErrorIs(t, err, clierrors.ErrFailedToLoadClientCertificate)
+	require.ErrorIs(t, err, clierrors.ErrFailedToLoadClientCertificate)
 }
 
 func TestNewClient_MissingTrustBundle(t *testing.T) {
@@ -314,7 +314,7 @@ func TestNewClient_MissingTrustBundle(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.ErrorIs(t, err, clierrors.ErrFailedToReadTrustBundle)
+	require.ErrorIs(t, err, clierrors.ErrFailedToReadTrustBundle)
 }
 
 func TestNewClient_InvalidTrustBundle(t *testing.T) {
@@ -327,7 +327,7 @@ func TestNewClient_InvalidTrustBundle(t *testing.T) {
 	client, err := NewClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.ErrorIs(t, err, clierrors.ErrFailedToParseTrustBundle)
+	require.ErrorIs(t, err, clierrors.ErrFailedToParseTrustBundle)
 }
 
 func TestDoRequest_Success(t *testing.T) {

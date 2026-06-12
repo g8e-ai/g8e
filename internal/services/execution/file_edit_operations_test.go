@@ -124,9 +124,9 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.NotNil(t, result.FileStats)
-		assert.Greater(t, result.FileStats.Size, int64(0))
+		assert.Positive(t, result.FileStats.Size)
 		assert.NotEmpty(t, result.FileStats.Mode)
-		assert.Greater(t, result.FileStats.Lines, 0)
+		assert.Positive(t, result.FileStats.Lines)
 		assert.NotNil(t, result.FileStats.ModTime)
 	})
 

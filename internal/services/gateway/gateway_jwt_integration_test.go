@@ -677,7 +677,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "audience mismatch")
 	})
 
@@ -692,7 +692,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "issuer mismatch")
 	})
 
@@ -708,7 +708,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		_, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "not yet valid")
 	})
 
@@ -724,7 +724,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		jwt, err := ParseAndVerifyJWT(context.Background(), token, auth.jwks, auth.jwtRole, auth.jwtIssuer, auth.jwtAudience)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 		assert.Equal(t, "https://test-idp.example.com", jwt.Claims.Iss)
 		assert.Equal(t, "g8e-gateway", jwt.Claims.Aud)
@@ -741,7 +741,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 		token := generateSignedJWT(t, privKey, claims)
 
 		jwt, err := ParseAndVerifyJWT(context.Background(), token, authNoValidation.jwks, authNoValidation.jwtRole, authNoValidation.jwtIssuer, authNoValidation.jwtAudience)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, "user-123", jwt.Claims.Sub)
 	})
 }

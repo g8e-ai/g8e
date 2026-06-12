@@ -450,7 +450,7 @@ func TestPKIController_ReadBody(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/test", bytes.NewReader(largeBody))
 
 		_, err := c.readBody(req)
-		assert.Error(t, err, "should return error for oversized body")
+		require.Error(t, err, "should return error for oversized body")
 	})
 }
 

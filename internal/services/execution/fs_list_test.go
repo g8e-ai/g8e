@@ -52,7 +52,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.NotEmpty(t, result.Path)
 		assert.NotEmpty(t, result.Entries)
-		assert.Greater(t, result.TotalCount, 0)
+		assert.Positive(t, result.TotalCount)
 	})
 
 	t.Run("lists temp directory with file metadata", func(t *testing.T) {

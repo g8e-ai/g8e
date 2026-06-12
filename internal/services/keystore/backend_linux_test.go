@@ -61,14 +61,14 @@ func TestLibsecretBackend_StoreRetrieveDelete(t *testing.T) {
 			name: "store",
 			fn: func(t *testing.T) {
 				err := backend.StoreMasterKey(testKey)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			},
 		},
 		{
 			name: "retrieve",
 			fn: func(t *testing.T) {
 				retrievedKey, err := backend.RetrieveMasterKey()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, testKey, retrievedKey)
 			},
 		},
@@ -76,14 +76,14 @@ func TestLibsecretBackend_StoreRetrieveDelete(t *testing.T) {
 			name: "delete",
 			fn: func(t *testing.T) {
 				err := backend.DeleteMasterKey()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			},
 		},
 		{
 			name: "retrieve after delete",
 			fn: func(t *testing.T) {
 				_, err := backend.RetrieveMasterKey()
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Equal(t, ErrKeyNotFound, err)
 			},
 		},
@@ -109,7 +109,7 @@ func TestLibsecretBackend_RetrieveNotFound(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = backend.RetrieveMasterKey()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, ErrKeyNotFound, err)
 }
 
@@ -165,14 +165,14 @@ func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
 			name: "store",
 			fn: func(t *testing.T) {
 				err := backend.StoreMasterKey(testKey)
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			},
 		},
 		{
 			name: "retrieve",
 			fn: func(t *testing.T) {
 				retrievedKey, err := backend.RetrieveMasterKey()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, testKey, retrievedKey)
 			},
 		},
@@ -180,14 +180,14 @@ func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
 			name: "delete",
 			fn: func(t *testing.T) {
 				err := backend.DeleteMasterKey()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			},
 		},
 		{
 			name: "retrieve after delete",
 			fn: func(t *testing.T) {
 				_, err := backend.RetrieveMasterKey()
-				assert.Error(t, err)
+				require.Error(t, err)
 				assert.Equal(t, ErrKeyNotFound, err)
 			},
 		},
@@ -206,7 +206,7 @@ func TestFileBackend_RetrieveNotFound(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = backend.RetrieveMasterKey()
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Equal(t, ErrKeyNotFound, err)
 }
 
@@ -225,14 +225,14 @@ func TestFileBackend_DeleteIdempotent(t *testing.T) {
 			name: "first delete",
 			fn: func(t *testing.T) {
 				err := backend.DeleteMasterKey()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			},
 		},
 		{
 			name: "second delete",
 			fn: func(t *testing.T) {
 				err := backend.DeleteMasterKey()
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			},
 		},
 	}

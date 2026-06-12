@@ -220,7 +220,7 @@ func TestAuditDirectCmdResultPayload(t *testing.T) {
 
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.Equal(t, 0, *result.ExitCode)
-		assert.Equal(t, 0.5, result.ExecutionTimeSeconds)
+		assert.InEpsilon(t, 0.5, result.ExecutionTimeSeconds, 0.0)
 	})
 }
 
