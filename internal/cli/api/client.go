@@ -71,7 +71,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
-		Timeout: 30 * time.Second,
+		Timeout: 5 * time.Second,
 	}
 
 	return &Client{

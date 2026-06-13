@@ -39,7 +39,7 @@ import (
 const (
 	defaultHTTPRetryMaxAttempts = 60
 	defaultHTTPRetryInterval    = 1 * time.Second
-	defaultHTTPRetryTimeout     = 70 * time.Second
+	defaultHTTPRetryTimeout     = 5 * time.Second
 )
 
 // TestContext holds the test infrastructure for a single test run.
@@ -111,7 +111,7 @@ func setupTestContext(t *testing.T) *TestContext {
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
 	t.Logf("Waiting for gateway to be governance-ready at %s...", healthURL)
 
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(healthURL)
 		if err != nil {

@@ -16,11 +16,13 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
@@ -122,8 +124,42 @@ func testE2ECmd() *cobra.Command {
 		Long:  `Run live-platform E2E tests with the 'e2e' build tag. These tests require a running g8e gateway and authenticated CLI session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
-			fmt.Println("Note: This requires the gateway to be running and authenticated.")
-			fmt.Println("Run './g8e gw start' and './g8e auth login' first.")
+
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// Try HTTP check first (works for Docker/foreground/background modes)
+			// Use plain HTTP with short timeout to avoid hanging when gateway is not running
+			healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
+			httpClient := &http.Client{Timeout: 5 * time.Second}
+			isRunning := false
+			resp, err := httpClient.Get(healthURL)
+			if err == nil && resp.StatusCode == http.StatusOK {
+				isRunning = true
+				resp.Body.Close()
+			}
+
+			// Fallback to ProcessManager check (for background/host mode)
+			if !isRunning {
+				pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+				if err != nil {
+					return fmt.Errorf("failed to create process manager: %w", err)
+				}
+
+				running, _, err := pm.OperatorStatus()
+				if err != nil {
+					return fmt.Errorf("failed to check Operator status: %w", err)
+				}
+				isRunning = running
+			}
+
+			if !isRunning {
+				fmt.Println("Error: Gateway is not running.")
+				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
+				return fmt.Errorf("gateway not running")
+			}
 
 			testRace := ""
 			if runtime.GOOS != "windows" {
