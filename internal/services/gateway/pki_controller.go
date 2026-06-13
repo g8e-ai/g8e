@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
@@ -27,6 +28,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -342,6 +344,128 @@ func (c *PKIController) handlePKIAppsEnroll(w http.ResponseWriter, r *http.Reque
 	}
 
 	c.responder.JSON(w, http.StatusCreated, resp)
+}
+
+// @Summary		Mint delegated app credential
+// @Description	Mints a short-lived delegated credential for an app, binding both app and requestor identities (mTLS-authenticated)
+// @Tags			pki
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	AppEnrollResponse
+// @Router			/api/v1/pki/apps/delegated [post]
+func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	// Require mTLS authentication from a human CLI session
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		c.responder.Error(w, http.StatusUnauthorized, "pki: mTLS client certificate required")
+		return
+	}
+
+	// Extract user ID from the CLI certificate
+	userID, err := ExtractUserIDFromCert(r.TLS.PeerCertificates[0])
+	if err != nil {
+		c.responder.Error(w, http.StatusUnauthorized, fmt.Errorf("pki: extract user ID from certificate: %w", err).Error())
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
+		return
+	}
+
+	var req AppEnrollRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal delegated credential request: %w", err).Error())
+		return
+	}
+
+	// Validate request
+	if req.CSR == "" {
+		c.responder.Error(w, http.StatusBadRequest, "pki: csr_pem is required")
+		return
+	}
+	if req.AppName == "" {
+		c.responder.Error(w, http.StatusBadRequest, "pki: app_name is required")
+		return
+	}
+
+	// Sanitize app name
+	sanitizedName := req.AppName
+	if !isValidAppName(sanitizedName) {
+		c.responder.Error(w, http.StatusBadRequest, "pki: app_name must contain only alphanumeric characters, hyphens, and underscores")
+		return
+	}
+
+	// Validate CSR format
+	block, _ := pem.Decode([]byte(req.CSR))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		c.responder.Error(w, http.StatusBadRequest, "pki: invalid CSR PEM format")
+		return
+	}
+
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "pki: failed to parse CSR")
+		return
+	}
+
+	if err := csr.CheckSignature(); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "pki: CSR signature check failed")
+		return
+	}
+
+	// Sign the CSR with dual SANs (app + requestor)
+	// Use a short TTL (1 hour) for delegated credentials
+	certPEM, chainPEM, err := c.pki.SignDelegatedCSR(req.CSR, sanitizedName, userID)
+	if err != nil {
+		c.logger.Error("Failed to sign delegated CSR", "app_name", sanitizedName, "user_id", userID, "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "pki: failed to sign delegated certificate")
+		return
+	}
+
+	// Extract the appID from the signed certificate
+	certBlock, _ := pem.Decode([]byte(certPEM))
+	if certBlock == nil {
+		c.responder.Error(w, http.StatusInternalServerError, "pki: failed to parse issued certificate")
+		return
+	}
+	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("pki: failed to parse issued certificate: %v", err))
+		return
+	}
+	if len(parsedCert.URIs) == 0 {
+		c.responder.Error(w, http.StatusInternalServerError, "pki: issued certificate has no URI SAN")
+		return
+	}
+	appID := parsedCert.URIs[0].String()
+
+	// Fetch trust bundle
+	trustBundle, err := c.pki.GatewayTrustBundle()
+	if err != nil {
+		c.logger.Error("Failed to fetch trust bundle", "error", err)
+		trustBundle = []byte{}
+	}
+
+	c.logger.Info("[DELEGATED_CREDENTIAL] Minted delegated credential",
+		"app_id", appID,
+		"app_name", sanitizedName,
+		"user_id", userID,
+		"expires_at", parsedCert.NotAfter.UTC().Format(time.RFC3339))
+
+	c.responder.JSON(w, http.StatusCreated, AppEnrollResponse{
+		Success:     true,
+		AppCert:     certPEM,
+		CertChain:   chainPEM,
+		TrustBundle: string(trustBundle),
+		AppID:       appID,
+		ExpiresAt:   parsedCert.NotAfter.UTC().Format(time.RFC3339),
+	})
 }
 
 // @Summary		Bootstrap CA Linux script

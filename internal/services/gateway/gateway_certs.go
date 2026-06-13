@@ -693,6 +693,92 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	return certPEM, chainPEM, nil
 }
 
+// SignDelegatedCSR signs a CSR for a delegated credential with dual SANs (app + requestor).
+// The certificate is short-lived (1 hour) and binds both the app identity and the requesting user.
+func (pki *PKIAuthority) SignDelegatedCSR(csrPEM string, appName, userID string) (certPEM, chainPEM string, err error) {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	// Use Operator CA for delegated credentials
+	if pki.operatorCert == nil {
+		return "", "", fmt.Errorf("pki: operator CA not loaded - call InitializePKI first")
+	}
+
+	// Load CA private key on-demand for signing
+	var caKey *ecdsa.PrivateKey
+	if err := pki.loadCAPrivateKey(string(constants.UserRoleOperator), &caKey); err != nil {
+		return "", "", fmt.Errorf("pki: load operator CA private key for signing: %w", err)
+	}
+
+	block, _ := pem.Decode([]byte(csrPEM))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return "", "", fmt.Errorf("pki: invalid CSR PEM")
+	}
+
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: parse CSR: %w", err)
+	}
+
+	if err := csr.CheckSignature(); err != nil {
+		return "", "", fmt.Errorf("pki: CSR signature check failed: %w", err)
+	}
+
+	// Enforce P-256 curve policy
+	if !isCurveP256(csr.PublicKey) {
+		return "", "", fmt.Errorf("pki: CSR public key must use P-256 curve, got %T", csr.PublicKey)
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return "", "", fmt.Errorf("pki: generate serial: %w", err)
+	}
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      csr.Subject,
+		NotBefore:    now.Add(-1 * time.Minute),
+		NotAfter:     now.Add(1 * time.Hour), // Short-lived: 1 hour
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		DNSNames:     csr.DNSNames,
+		IPAddresses:  csr.IPAddresses,
+	}
+
+	// Set dual URI SANs: app identity + requestor user identity
+	wid := protocol.NewWorkloadIdentity()
+	appURI, err := wid.AppSPIFFEURL(appName)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: generate app SPIFFE URL: %w", err)
+	}
+	userURI, err := wid.UserSPIFFEURL(userID)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: generate user SPIFFE URL: %w", err)
+	}
+	template.URIs = []*url.URL{appURI, userURI}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.operatorCert, csr.PublicKey, caKey)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: sign delegated certificate: %w", err)
+	}
+
+	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
+
+	// Build chain: leaf + Operator intermediate + root
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root/root_ca.crt"))
+	if err != nil {
+		return "", "", fmt.Errorf("pki: read root CA for chain: %w", err)
+	}
+	caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/operator_ca.crt"))
+	if err != nil {
+		return "", "", fmt.Errorf("pki: read operator CA for chain: %w", err)
+	}
+	chainPEM = certPEM + string(caPEM) + string(rootPEM)
+
+	return certPEM, chainPEM, nil
+}
+
 // ─── private helpers ──────────────────────────────────────────────────────────
 
 func (pki *PKIAuthority) loadCACertificate(certPath string, cert **x509.Certificate) error {

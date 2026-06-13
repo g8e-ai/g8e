@@ -578,6 +578,19 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 				}
 
 				ctx := context.WithValue(r.Context(), constants.ContextKeyAppID, appID)
+				// Delegated certs carry a second URI SAN for the requestor user identity.
+				// Extract it so processGatewayTransaction can bind both identities to
+				// the signed governance envelope (RequestorUserId + ActingAppId).
+				wid2 := protocol.NewWorkloadIdentity()
+				for _, u2 := range cert.URIs {
+					u2Str := u2.String()
+					if strings.HasPrefix(u2Str, "spiffe://"+protocol.TrustDomain+"/user/") {
+						if userID, ok := wid2.ExtractUserIDFromUserSAN(u2Str); ok {
+							ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
+						}
+						break
+					}
+				}
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return true
 			}

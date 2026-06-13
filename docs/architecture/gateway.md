@@ -412,7 +412,6 @@ When the gateway returns an L3 approval response, the stdio proxy:
 The polling logic is implemented in `proxySessionToGatewayWithRetry` with constants:
 - `l3ApprovalMaxIterations`: 30
 - `l3ApprovalPollInterval`: 10 seconds
-- `l3ApprovalTotalTimeout`: 5 minutes
 
 ### Browser Utility
 

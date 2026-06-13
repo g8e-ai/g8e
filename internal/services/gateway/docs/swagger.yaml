@@ -304,6 +304,22 @@ paths:
       summary: Get blob
       tags:
       - data
+  /api/v1/pki/apps/delegated:
+    post:
+      consumes:
+      - application/json
+      description: Mints a short-lived delegated credential for an app, binding both
+        app and requestor identities (mTLS-authenticated)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/gateway.AppEnrollResponse'
+      summary: Mint delegated app credential
+      tags:
+      - pki
   /api/v1/pki/apps/enroll:
     post:
       consumes:

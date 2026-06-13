@@ -101,8 +101,11 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(clientRequest))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-G8E-User-ID", "user-byo-123")
-	req.Header.Set("X-G8E-Operator-ID", "op-byo-456")
+	// Identity is injected via context (as the auth middleware does from the mTLS cert),
+	// not via headers. The delegated cert carries both identities in URI SANs.
+	ctx := context.WithValue(req.Context(), constants.ContextKeyUserID, "user-byo-123")
+	ctx = context.WithValue(ctx, constants.ContextKeyAppID, "op-byo-456")
+	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
 	g.HandleToolsCall(w, req)

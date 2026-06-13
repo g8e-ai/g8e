@@ -88,6 +88,8 @@ message GovernanceEnvelope {
   string operator_session_id = 6;
   string web_session_id = 7;
   string cli_session_id = 22;
+  string requestor_user_id = 25;  // The human user who authorized the action (delegator)
+  string acting_app_id = 26;      // The app/tool acting on behalf of the user (delegate)
 
   // Intent & Payload
   string event_type = 8;

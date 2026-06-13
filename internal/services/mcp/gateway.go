@@ -669,8 +669,8 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) {
-			userID := r.Header.Get(constants.HeaderUserID)
-			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+			operatorID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 			certFingerprint := extractCertFingerprint(r)
 
 			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
@@ -1113,8 +1113,8 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 	receipt, err := g.envProc.ProcessEnvelope(r.Context(), envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) {
-			userID := r.Header.Get(constants.HeaderUserID)
-			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+			operatorID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 			certFingerprint := extractCertFingerprint(r)
 
 			g.StoreSuspendedTransaction(r.Context(), hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
@@ -1224,12 +1224,13 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	if persona, ok := ctx.Value(constants.ContextKeyBindingPersona).(string); ok {
 		env.BindingPersona = persona
 	}
-	// Inject identity as operator_id and operator_session_id for audit trail attribution.
-	// We prioritize app identity, then fallback to explicit operator/session IDs from context
-	// (e.g. from a proxied CLI session).
+	// Bind both the app identity and the human requestor to the envelope.
+	// For delegated credentials the auth middleware extracts both SANs from the cert
+	// and places them in context — no trusted headers.
 	if appID, ok := ctx.Value(constants.ContextKeyAppID).(string); ok && appID != "" {
 		env.OperatorId = appID
 		env.OperatorSessionId = appID
+		env.ActingAppId = appID
 	} else {
 		if opID, ok := ctx.Value(constants.ContextKeyOperatorID).(string); ok && opID != "" {
 			env.OperatorId = opID
@@ -1237,6 +1238,9 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		if opSessionID, ok := ctx.Value(constants.ContextKeyOperatorSessionID).(string); ok && opSessionID != "" {
 			env.OperatorSessionId = opSessionID
 		}
+	}
+	if userID, ok := ctx.Value(constants.ContextKeyUserID).(string); ok && userID != "" {
+		env.RequestorUserId = userID
 	}
 
 	hash, err = govpkg.GenerateMessageID(env)
@@ -1323,8 +1327,8 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
-			userID := r.Header.Get(constants.HeaderUserID)
-			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+			operatorID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 			certFingerprint := extractCertFingerprint(r)
 
 			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)

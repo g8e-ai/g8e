@@ -43,25 +43,20 @@ import (
 )
 
 // G8E environment variables injected by 'agent run' and consumed by 'mcp stdio'.
-// Using explicit strings rather than constants so the env-var contract is visible here.
+// Identity is carried in the delegated cert's URI SANs — no session header env vars.
 const (
-	envG8ECLISessionID      = "G8E_CLI_SESSION_ID"
-	envG8EUserID            = "G8E_USER_ID"
-	envG8EOperatorID        = "G8E_OPERATOR_ID"
-	envG8EOperatorSessionID = "G8E_OPERATOR_SESSION_ID"
-	envG8EClientCert        = "G8E_CLIENT_CERT"
-	envG8EClientKey         = "G8E_CLIENT_KEY"
-	envG8ECABundle          = "G8E_CA_BUNDLE"
-	envG8EGatewayURL        = "G8E_GATEWAY_URL"
-	envG8EAppID             = "G8E_APP_ID"
-	envG8EAppCert           = "G8E_APP_CERT"
-	envG8EAppKey            = "G8E_APP_KEY"
+	envG8EClientCert = "G8E_CLIENT_CERT"
+	envG8EClientKey  = "G8E_CLIENT_KEY"
+	envG8ECABundle   = "G8E_CA_BUNDLE"
+	envG8EGatewayURL = "G8E_GATEWAY_URL"
+	envG8EAppID      = "G8E_APP_ID"
+	envG8EAppCert    = "G8E_APP_CERT"
+	envG8EAppKey     = "G8E_APP_KEY"
 )
 
 var (
 	l3ApprovalMaxIterations = 30
 	l3ApprovalPollInterval  = 10 * time.Second
-	l3ApprovalTotalTimeout  = 5 * time.Minute
 )
 
 // nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
@@ -235,61 +230,27 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 
 // ─── stdio: governed proxy, full mTLS + CLI session to gateway ────────────────
 
-// cliProxySession holds the in-memory CLI session established at startup. All
-// gateway requests are driven through this single authenticated session for the
-// lifetime of the process.
-type cliProxySession struct {
-	client            *http.Client
-	gatewayURL        string
-	cliSessionID      string
-	userID            string
-	operatorID        string
-	operatorSessionID string
-	isAppMode         bool
+// gatewayConn is the mTLS connection to the gateway established at startup.
+// Identity is cryptographically bound in the delegated cert's URI SANs — the cert
+// IS the session. No server-side session object or identity headers are used.
+type gatewayConn struct {
+	client     *http.Client
+	gatewayURL string
 }
 
-// buildProxySession constructs a cliProxySession. It first reads session
-// identity from G8E_* environment variables injected by 'mcp agent run'.
-// When those are absent it loads credentials from disk, bootstrapping CLI
-// enrollment from the gateway if needed (idempotent).
-func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
-	certFile := envOr(envG8EClientCert, cfg.CLICertFile())
-	keyFile := envOr(envG8EClientKey, cfg.CLIKeyFile())
+// buildGatewayConn constructs a gatewayConn. It reads the delegated credential
+// from G8E_* environment variables injected by 'mcp agent run'. The delegated cert
+// carries both the app SPIFFE ID and the requestor's user identity in its URI SANs.
+func buildGatewayConn(cfg *config.Config) (*gatewayConn, error) {
+	// Use the delegated credential (app cert) for agent runs, or CLI cert for direct CLI usage
+	certFile := envOr(envG8EAppCert, envOr(envG8EClientCert, cfg.CLICertFile()))
+	keyFile := envOr(envG8EAppKey, envOr(envG8EClientKey, cfg.CLIKeyFile()))
 	caFile := envOr(envG8ECABundle, cfg.TrustBundlePath())
 
 	// Try g8e.local first, fall back to IP if not set in env
 	gatewayURL := os.Getenv(envG8EGatewayURL)
 	if gatewayURL == "" {
 		gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
-	}
-
-	// Prefer app identity when present (for agent runs)
-	appCert := os.Getenv(envG8EAppCert)
-	appKey := os.Getenv(envG8EAppKey)
-	isAppMode := appCert != "" && appKey != ""
-	if isAppMode {
-		certFile = appCert
-		keyFile = appKey
-	}
-
-	cliSessionID := os.Getenv(envG8ECLISessionID)
-	userID := os.Getenv(envG8EUserID)
-	operatorID := os.Getenv(envG8EOperatorID)
-	operatorSessionID := os.Getenv(envG8EOperatorSessionID)
-
-	// Fall back to stored credentials when env vars are not present and not in app mode.
-	if !isAppMode && (cliSessionID == "" || userID == "") {
-		if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
-			return nil, fmt.Errorf("CLI auth failed: %w", err)
-		}
-		creds, err := auth.LoadCredentials(cfg)
-		if err != nil || creds == nil {
-			return nil, fmt.Errorf("no CLI credentials available after bootstrap")
-		}
-		cliSessionID = creds.CLISessionID
-		userID = creds.UserID
-		operatorID = creds.OperatorID
-		operatorSessionID = creds.OperatorSessionID
 	}
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -311,17 +272,12 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 	}
 
 	// Try to connect with the current gatewayURL
-	session := &cliProxySession{
+	session := &gatewayConn{
 		client: &http.Client{
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
 			Timeout:   30 * time.Second,
 		},
-		gatewayURL:        gatewayURL,
-		cliSessionID:      cliSessionID,
-		userID:            userID,
-		operatorID:        operatorID,
-		operatorSessionID: operatorSessionID,
-		isAppMode:         isAppMode,
+		gatewayURL: gatewayURL,
 	}
 
 	// Test the connection - if it fails due to DNS, fall back to IP
@@ -361,17 +317,15 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	// Build the in-memory session once. All proxy calls for this process
-	// lifetime use this session — no disk reads per request.
-	session, err := buildProxySession(cfg)
+	// Build the mTLS gateway connection once. Identity is in the delegated cert's
+	// URI SANs — no session object or headers. All proxy calls reuse this connection.
+	conn, err := buildGatewayConn(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to establish CLI session: %w", err)
+		return fmt.Errorf("failed to establish gateway connection: %w", err)
 	}
 
 	logger.Info("g8e MCP governance proxy starting",
-		"cli_session_id", session.cliSessionID,
-		"user_id", session.userID,
-		"gateway_url", session.gatewayURL,
+		"gateway_url", conn.gatewayURL,
 	)
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -406,7 +360,7 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 		logger.Info("Proxying MCP request", "method", req.Method, "id", req.ID)
 
-		resp, err := proxySessionToGatewayWithRetry(session, req, logger)
+		resp, err := proxySessionToGatewayWithRetry(conn, req, logger)
 		if err != nil {
 			logger.Error("Failed to proxy to gateway", "error", err)
 			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
@@ -429,7 +383,7 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 // proxySessionToGateway posts a JSON-RPC request to the gateway over mTLS.
 // In CLI mode, it attaches CLI session headers. In app mode, it relies purely on mTLS cert.
-func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRPCResponse, error) {
+func proxySessionToGateway(session *gatewayConn, req JSONRPCRequest) (JSONRPCResponse, error) {
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return JSONRPCResponse{}, err
@@ -441,14 +395,7 @@ func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRP
 	}
 	httpReq.Header.Set(constants.HeaderContentType, "application/json")
 
-	// Only send CLI session headers in CLI mode. App mode uses pure mTLS cert auth.
-	if !session.isAppMode {
-		httpReq.Header.Set(constants.HeaderCLISessionID, session.cliSessionID)
-		httpReq.Header.Set(constants.HeaderUserID, session.userID)
-		httpReq.Header.Set(constants.HeaderOperatorID, session.operatorID)
-		httpReq.Header.Set(constants.HeaderOperatorSessionID, session.operatorSessionID)
-	}
-
+	// Identity is now carried in the delegated credential (mTLS cert), not in headers
 	httpResp, err := session.client.Do(httpReq)
 	if err != nil {
 		return JSONRPCResponse{}, err
@@ -467,12 +414,12 @@ func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRP
 	return resp, nil
 }
 
-func proxySessionToGatewayWithRetry(session *cliProxySession, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
+func proxySessionToGatewayWithRetry(session *gatewayConn, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
 	return proxySessionToGatewayWithRetryContext(context.Background(), session, req, logger)
 }
 
 // proxySessionToGatewayWithRetryContext performs L3 approval polling with context support.
-func proxySessionToGatewayWithRetryContext(ctx context.Context, session *cliProxySession, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
+func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gatewayConn, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
 	resp, err := proxySessionToGateway(session, req)
 	if err != nil {
 		return resp, err
@@ -527,8 +474,8 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *cliProx
 // ─── createMCPClient: kept for tests and external callers ───────────────────
 
 // createMCPClient builds a plain mTLS HTTP client from config paths.
-// Most callers should use buildProxySession instead, which also loads the
-// CLI session identity required for gateway authentication.
+// Most callers should use buildGatewayConn instead, which also loads the
+// delegated credential required for mTLS gateway authentication.
 func createMCPClient(cfg *config.Config) (*http.Client, error) {
 	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
@@ -587,13 +534,13 @@ func isL3ApprovalResponse(resp JSONRPCResponse) bool {
 	if resp.Result == nil {
 		return false
 	}
-	resultBytes, err := json.Marshal(resp.Result)
-	if err != nil {
+	resultMap, ok := resp.Result.(map[string]interface{})
+	if !ok {
 		return false
 	}
-	resultStr := string(resultBytes)
-	return strings.Contains(resultStr, "Execution paused") &&
-		strings.Contains(resultStr, "approve/")
+	// Check for structured approval_url field
+	_, exists := resultMap["approval_url"]
+	return exists
 }
 
 func extractApprovalURL(resp JSONRPCResponse) string {
@@ -1047,12 +994,6 @@ func ensureGatewayRunning() error {
 		}
 	}
 
-	// Ensure CLI mTLS credentials exist regardless of whether the gateway
-	// was just started or was already running (idempotent).
-	if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
-		return fmt.Errorf("bootstrap CLI auth: %w", err)
-	}
-
 	fmt.Fprintf(os.Stderr, "[g8e] Gateway ready (L1-L5 governance active)\n")
 	return nil
 }
@@ -1345,6 +1286,15 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("load CLI credentials: %w", err)
 	}
 
+	// Require an authenticated human with passkey registration
+	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID)
+	if err != nil {
+		return fmt.Errorf("verify passkey registration: %w", err)
+	}
+	if !hasPasskey {
+		return fmt.Errorf("agent run requires a passkey-enrolled user. Please register a passkey via 'g8e auth register-passkey'")
+	}
+
 	// Validate agent binary exists before writing any config files
 	agentBin, err := exec.LookPath(agentID)
 	if err != nil {
@@ -1377,16 +1327,12 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	agentCmd.Stderr = os.Stderr
 	// Don't set process group for interactive agents - it breaks terminal handling
 
-	// Propagate the authenticated CLI session to the 'g8e mcp stdio' subprocess
-	// that the agent will spawn. The subprocess reads these env vars at startup
-	// and stores the session in memory — no disk reads per request.
+	// Propagate the delegated credential to the 'g8e mcp stdio' subprocess that
+	// the agent will spawn. Identity (both app and human) is cryptographically bound
+	// in the delegated cert's URI SANs — no session headers needed.
 	// The stdio proxy will automatically fall back to IP if g8e.local DNS fails.
 	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
 	agentCmd.Env = append(os.Environ(),
-		envG8ECLISessionID+"="+creds.CLISessionID,
-		envG8EUserID+"="+creds.UserID,
-		envG8EOperatorID+"="+creds.OperatorID,
-		envG8EOperatorSessionID+"="+creds.OperatorSessionID,
 		envG8EClientCert+"="+cfg.CLICertFile(),
 		envG8EClientKey+"="+cfg.CLIKeyFile(),
 		envG8ECABundle+"="+cfg.TrustBundlePath(),

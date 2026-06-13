@@ -473,7 +473,16 @@ func TestHandleToolsCall(t *testing.T) {
 }
 
 func TestIsL3ApprovalResponse(t *testing.T) {
-	t.Run("detects L3 approval response", func(t *testing.T) {
+	t.Run("detects L3 approval response via structured approval_url field", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: map[string]interface{}{
+				"approval_url": "https://example.com/approve/123",
+			},
+		}
+		assert.True(t, isL3ApprovalResponse(resp))
+	})
+
+	t.Run("does not detect L3 approval via content text without approval_url field", func(t *testing.T) {
 		resp := JSONRPCResponse{
 			Result: map[string]interface{}{
 				"content": []interface{}{
@@ -484,7 +493,7 @@ func TestIsL3ApprovalResponse(t *testing.T) {
 				},
 			},
 		}
-		assert.True(t, isL3ApprovalResponse(resp))
+		assert.False(t, isL3ApprovalResponse(resp))
 	})
 
 	t.Run("does not detect non-approval response", func(t *testing.T) {
@@ -504,6 +513,13 @@ func TestIsL3ApprovalResponse(t *testing.T) {
 	t.Run("handles nil result", func(t *testing.T) {
 		resp := JSONRPCResponse{
 			Result: nil,
+		}
+		assert.False(t, isL3ApprovalResponse(resp))
+	})
+
+	t.Run("handles non-map result", func(t *testing.T) {
+		resp := JSONRPCResponse{
+			Result: "string result",
 		}
 		assert.False(t, isL3ApprovalResponse(resp))
 	})
@@ -717,6 +733,7 @@ func TestProxyToGateway(t *testing.T) {
 				JSONRPC: "2.0",
 				ID:      float64(1),
 				Result: map[string]interface{}{
+					"approval_url": "https://example.com/approve/abc123",
 					"content": []interface{}{
 						map[string]interface{}{
 							"type": "text",
@@ -780,13 +797,9 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		session := &cliProxySession{
-			client:            &http.Client{Timeout: 5 * time.Second},
-			gatewayURL:        server.URL,
-			cliSessionID:      "test-session",
-			userID:            "test-user",
-			operatorID:        "test-operator",
-			operatorSessionID: "test-op-session",
+		conn := &gatewayConn{
+			client:     &http.Client{Timeout: 5 * time.Second},
+			gatewayURL: server.URL,
 		}
 
 		req := JSONRPCRequest{
@@ -800,7 +813,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		l3ApprovalPollInterval = 1 * time.Millisecond
 		defer func() { l3ApprovalPollInterval = originalInterval }()
 
-		resp, err := proxySessionToGatewayWithRetry(session, req, nil)
+		resp, err := proxySessionToGatewayWithRetry(conn, req, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 2, attempts)
 		assert.Equal(t, "success", resp.Result.(map[string]interface{})["status"])
@@ -830,13 +843,9 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		}))
 		defer server.Close()
 
-		session := &cliProxySession{
-			client:            &http.Client{Timeout: 5 * time.Second},
-			gatewayURL:        server.URL,
-			cliSessionID:      "test-session",
-			userID:            "test-user",
-			operatorID:        "test-operator",
-			operatorSessionID: "test-op-session",
+		conn := &gatewayConn{
+			client:     &http.Client{Timeout: 5 * time.Second},
+			gatewayURL: server.URL,
 		}
 
 		req := JSONRPCRequest{
@@ -855,7 +864,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 			l3ApprovalMaxIterations = originalMaxIterations
 		}()
 
-		resp, err := proxySessionToGatewayWithRetry(session, req, nil)
+		resp, err := proxySessionToGatewayWithRetry(conn, req, nil)
 		require.NoError(t, err)
 		assert.True(t, isL3ApprovalResponse(resp))
 		// 1 initial + 2 retries = 3
@@ -867,7 +876,6 @@ func TestProxyToGatewayWithRetry(t *testing.T) {
 	t.Run("proxyToGatewayWithRetry constants are defined", func(t *testing.T) {
 		assert.Equal(t, 30, l3ApprovalMaxIterations)
 		assert.Equal(t, 10*time.Second, l3ApprovalPollInterval)
-		assert.Equal(t, 5*time.Minute, l3ApprovalTotalTimeout)
 	})
 }
 

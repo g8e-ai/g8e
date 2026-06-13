@@ -100,8 +100,11 @@ func setupTestContext(t *testing.T) *TestContext {
 		}
 	}
 
-	if err := auth.BootstrapCLIWithoutPasskey(cliCfg); err != nil {
-		t.Fatalf("failed to bootstrap CLI auth: %v", err)
+	// CLI authentication must be performed explicitly via 'g8e auth login'
+	// Tests should set up credentials via the proper auth flow
+	creds, err := auth.LoadCredentials(cliCfg)
+	if err != nil || creds == nil {
+		t.Fatalf("CLI credentials required for tests. Please authenticate via 'g8e auth login'")
 	}
 
 	// Ensure gateway is running and governance is ready before proceeding

@@ -31,6 +31,7 @@ import (
 
 const (
 	operatorPIDFile     = "operator.pid"
+	operatorPostureFile = "operator.posture"
 	operatorLogPath     = "operator.log"
 	shutdownTimeout     = 10 * time.Second
 	healthCheckInterval = 500 * time.Millisecond
@@ -197,6 +198,40 @@ func (pm *ProcessManager) deletePID(filename string) error {
 	return nil
 }
 
+func (pm *ProcessManager) writePosture(posture string) error {
+	postureFile := filepath.Join(pm.pidDir, operatorPostureFile)
+	return os.WriteFile(postureFile, []byte(posture), 0600)
+}
+
+func (pm *ProcessManager) readPosture() (string, error) {
+	postureFile := filepath.Join(pm.pidDir, operatorPostureFile)
+	postureData, err := os.ReadFile(postureFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to read posture file: %w", err)
+	}
+	posture := string(postureData)
+	// Validate posture is one of the allowed values
+	if posture != "" && posture != "doctrine" && posture != "consensus" && posture != "notary" {
+		return "", fmt.Errorf("invalid posture value '%s' in posture file: must be doctrine, consensus, or notary", posture)
+	}
+	return posture, nil
+}
+
+func (pm *ProcessManager) deletePosture() error {
+	postureFile := filepath.Join(pm.pidDir, operatorPostureFile)
+	if err := os.Remove(postureFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete posture file: %w", err)
+	}
+	return nil
+}
+
+func (pm *ProcessManager) ReadPosture() (string, error) {
+	return pm.readPosture()
+}
+
 func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	exePath, err := os.Executable()
 	if err == nil {
@@ -340,6 +375,15 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return fmt.Errorf("failed to write pid file: %w", err)
 	}
 
+	if err := pm.writePosture(opts.Posture); err != nil {
+		_ = cmd.Process.Kill()
+		_ = pm.deletePID(operatorPIDFile)
+		if closeErr := logHandle.Close(); closeErr != nil {
+			return fmt.Errorf("failed to write posture file: %w (additionally failed to close log file: %v)", err, closeErr)
+		}
+		return fmt.Errorf("failed to write posture file: %w", err)
+	}
+
 	if err := logHandle.Close(); err != nil {
 		return fmt.Errorf("failed to close log file: %w", err)
 	}
@@ -381,7 +425,11 @@ func (pm *ProcessManager) StopOperator() error {
 		return err
 	}
 
-	return pm.deletePID(operatorPIDFile)
+	if err := pm.deletePID(operatorPIDFile); err != nil {
+		return err
+	}
+
+	return pm.deletePosture()
 }
 
 func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
