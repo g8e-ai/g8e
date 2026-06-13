@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-06-11
+Last Updated: 2026-06-13
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -36,7 +36,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 The gateway handles certain tools locally without downstream proxy:
 
 - **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
-- **Native tools**: The Operator includes 29 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
+- **Native tools**: The Operator includes 30 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
   - `db_discover_topology`: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map
   - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
   - `db_isolated_read`: Executes SELECT statements in read-only mode against a SQLite database
@@ -66,6 +66,7 @@ The gateway handles certain tools locally without downstream proxy:
   - `shell_execute`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits. Supports multi-host execution via SSH with optional `hostnames` parameter (defaults to localhost)
   - `net_ssh_known_hosts`: Lists known hosts from SSH config and known_hosts files based on OS type
   - `operator_deploy`: Deploys the g8e operator to a list of remote hosts via SSH
+  - `file_read`: Reads file contents with path validation and size limits
 
 ---
 
@@ -168,10 +169,13 @@ Replace `<agent>` with one of the supported agents:
 - `devin` - Devin AI IDE (formerly Windsurf)
 - `vscode` - Visual Studio Code with MCP extension
 - `continue` - Continue.dev AI coding assistant
+- `cn` - Continue.dev AI coding assistant (alias)
 - `aider` - Aider AI pair programmer
 - `codeium` - Codeium AI assistant
 - `tabby` - Tabby AI autocomplete
 - `ollama` - Ollama local LLM runner
+- `gemini` - Google Gemini CLI
+- `goose` - Goose AI coding assistant
 - `generic` - Generic MCP-compatible agent
 
 To list all supported agents:
@@ -224,7 +228,7 @@ For local development without running the gateway, g8e can run as a stdio MCP se
 claude mcp add g8e-stdio g8e mcp stdio
 ```
 
-This runs g8e in stdio mode with no additional flags required. All 29 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
+This runs g8e in stdio mode with no additional flags required. All 30 native tools are available including system diagnostics, database operations, network tools, and shell execution with governance safety features.
 
 **Governance Proxy for Third-Party MCP Servers**
 
@@ -408,6 +412,7 @@ Default ports (configurable via flags or paths.json):
 |---|---|---|
 | `8080` | HTTP (bootstrap + MCP) | Plain HTTP (no TLS) |
 | `8443` | HTTPS (mTLS API + public) | mTLS (RequireAndVerifyClientCert) |
+| `18789` | Insecure MCP Gateway | Plain HTTP (no TLS) |
 
 ### Configuration
 

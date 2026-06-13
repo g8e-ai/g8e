@@ -49,14 +49,14 @@ See [Network Architecture](./network.md).
 
 ## 3. 5-Layer Verification Sequence (Interlock)
 
-The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:79-115`.
+The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:79-117`.
 
 ### Layer 1: Technical Bedrock (L1Doctrine)
 *Implementation: `internal/services/governance/l1_doctrine.go:50`*
 
 L1 is the foundational layer that executes deterministic security rules.
 - **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous regex patterns on typed payload fields.
-- **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns across 16 threat categories, including reverse shells, privilege escalation, credential access, data destruction, defense evasion, and cryptominer deployment. Analysis applies to `CommandRequested`, `McpCallRequested`, `A2ACallRequested`, and `FileEditRequested` payloads. MCP and A2A argument JSON is traversed recursively up to a depth of 50 levels.
+- **MITRE Threat Detection**: Analyzes payloads against MITRE ATT&CK patterns across 16 threat categories, including reverse shells, privilege escalation, credential access, data destruction, defense evasion, and cryptominer deployment. Analysis applies to `CommandRequested`, `McpCallRequested`, `A2ACallRequested`, and `FileEditRequested` payloads. MCP and A2A argument JSON is traversed recursively.
 - **Critical System File Protection**: Blocks modifications to critical system paths defined in `CriticalSystemPaths` and critical directories defined in `CriticalSystemDirs`.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
@@ -81,7 +81,7 @@ L3 ensures explicit human authorization for mutations.
 - **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:52-62`) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `internal/services/governance/l4_warden.go:372`*
+*Implementation: `internal/services/governance/l4_warden.go:393`*
 
 The Warden is the final fail-closed gate before execution. It verifies in the following order:
 1. **In-Flight Tracking**: Prevents concurrent processing of transactions with the same nonce via an in-memory `sync.Map` guard.
@@ -95,7 +95,7 @@ The Warden is the final fail-closed gate before execution. It verifies in the fo
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Fail-Closed Pre-Execution**: Receipt signing and initial audit logging must both succeed before the execution handler is invoked. If either fails, the transaction is aborted.
-- **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `RehydratePayload`.
+- **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `ScrubbingService.RehydratePayload`.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A) via `ExecutionHandler.ExecuteVerifiedTransaction`.
 - **Action Receipts**: Issues a signed `ActionReceipt` using the Actuator's own Ed25519 key over a canonical JSON serialization of the receipt fields, providing immutable proof of the execution outcome.
 - **Commitment**: Records the transaction in the `SQLAuditStore` and, where configured, in the console audit store.

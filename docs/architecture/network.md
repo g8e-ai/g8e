@@ -51,8 +51,9 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 | **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
 | **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:48-50` |
 | **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:59-61` |
-| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:68-72` |
-| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:139-141` |
+| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` | `protocol/workload_identity.go:70-72` |
+| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:81-83` |
+| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:165-167` |
 
 ---
 
@@ -101,7 +102,7 @@ Windows users can enroll via the Windows Certificate Store for managed browser a
 
 The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS execution boundary, surfaces with different TLS requirements must not share a port.
 
-Default ports are sourced from `internal/constants/ports.go:17`:
+Default ports are sourced from `protocol/constants/ports.json:2`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -229,8 +230,7 @@ The gateway provides a high-performance WebSocket fan-out via `/ws/v1/pubsub`. M
 ### Agent Integration
 
 The platform provides zero-config ingress for agentic CLI coding tools through:
-- **Agent Wrapper**: Detects tool binaries, verifies gateway status, and injects G8E_* environment variables with MCP configuration
-- **Stdio Proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval polling and browser opening
+- **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval polling and browser opening
 
 ---
 
@@ -251,7 +251,7 @@ The gateway detects the machine's network identity (IPs, hostnames, and aliases)
 | Network identity | `internal/services/network/identity.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
 | Peer connection manager | `internal/services/gateway/peer_connection.go` |
-| Port constants | `internal/constants/ports.go` |
+| Port constants | `protocol/constants/ports.json` |
 | Gateway pub/sub | `internal/services/gateway/gateway_pubsub.go` |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | Governance envelope verification | `internal/services/gateway/governance_envelope.go` |

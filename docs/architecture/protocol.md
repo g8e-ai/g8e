@@ -4,7 +4,7 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-11
+Last Updated: 2026-06-13
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -52,6 +52,8 @@ The `GovernanceEnvelope` is the single canonical container for all g8e mutations
 | `operator_session_id` | string | Host-side agent session identifier |
 | `web_session_id` | string | Browser frontend session identifier |
 | `cli_session_id` | string | CLI/BYO client session identifier |
+| `requestor_user_id` | string | The human user who authorized the action (delegator) |
+| `acting_app_id` | string | The app/tool acting on behalf of the user (delegate) |
 | `event_type` | string | Canonical event name from protocol/constants/events.json |
 | `payload` | bytes | Raw protobuf payload containing execution instruction |
 | `intent_data` | google.protobuf.Struct | Structured JSON-first view of intent |
@@ -241,10 +243,10 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `OperatorNetworkPortCheckRequested`, `OperatorNetworkPortCheckReceived`, `OperatorNetworkPortCheckStarted`, `OperatorNetworkPortCheckCompleted`, `OperatorNetworkPortCheckFailed`
 
 ### Operator Lifecycle Events
-- `OperatorBound`, `OperatorDeviceRegistered`
+- `OperatorBound`, `OperatorDeviceRegistered`, `OperatorUnbound`
 - `OperatorHeartbeatRequested`, `OperatorHeartbeatSent`, `OperatorHeartbeatReceived`, `OperatorHeartbeatMissed`
 - `OperatorShutdownRequested`, `OperatorShutdownAcknowledged`
-- `OperatorStatusUpdatedAvailable`, `OperatorStatusUpdatedActive`, `OperatorStatusUpdatedBound`
+- `OperatorStatusUpdatedAvailable`, `OperatorStatusUpdatedActive`, `OperatorStatusUpdatedBound`, `OperatorStatusUpdatedOffline`, `OperatorStatusUpdatedStale`, `OperatorStatusUpdatedStopped`, `OperatorStatusUpdatedTerminated`, `OperatorStatusUpdatedUnavailable`
 - `OperatorSlotInitializationFailed`
 - `OperatorContextChanged`
 
@@ -258,6 +260,34 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `OperatorLogsFetchRequested`, `OperatorLogsFetchReceived`, `OperatorLogsFetchCompleted`, `OperatorLogsFetchFailed`
 - `OperatorHistoryFetchRequested`, `OperatorHistoryFetchReceived`, `OperatorHistoryFetchCompleted`, `OperatorHistoryFetchFailed`
 - `OperatorPanelListUpdated`
+- `OperatorStreamApprovalRequested`, `OperatorStreamApprovalGranted`, `OperatorStreamApprovalRejected`
+- `OperatorTerminalApprovalDenied`, `OperatorTerminalAuthStateChanged`, `OperatorTerminalThinkingAppend`, `OperatorTerminalThinkingComplete`
+
+### Platform Events
+- `PlatformAuthComponentInitializedAuthstate`, `PlatformAuthComponentInitializedChat`, `PlatformAuthComponentInitializedOperator`
+- `PlatformAuthInfo`
+- `PlatformAuthLoginFailed`, `PlatformAuthLoginRequested`, `PlatformAuthLoginSucceeded`
+- `PlatformAuthLogoutFailed`, `PlatformAuthLogoutRequested`, `PlatformAuthLogoutSucceeded`
+- `PlatformAuthSessionExpired`, `PlatformAuthSessionValidationFailed`, `PlatformAuthSessionValidationRequested`, `PlatformAuthSessionValidationSucceeded`
+- `PlatformAuthUserAuthenticated`, `PlatformAuthUserUnauthenticated`
+- `PlatformConsoleLogConnectedConfirmed`, `PlatformConsoleLogEntryReceived`
+- `PlatformExternalServiceConfigured`
+- `PlatformNotification`
+- `PlatformSentinelModeChanged`
+- `PlatformSseConnectionClosed`, `PlatformSseConnectionError`, `PlatformSseConnectionEstablished`, `PlatformSseConnectionFailed`, `PlatformSseConnectionOpened`, `PlatformSseKeepaliveSent`
+- `PlatformTelemetryAuditLogged`, `PlatformTelemetryErrorLogged`, `PlatformTelemetryHealthReported`, `PlatformTelemetryPerformanceRecorded`
+- `PlatformTerminalClosed`, `PlatformTerminalMaximized`, `PlatformTerminalMinimized`, `PlatformTerminalOpened`
+- `PlatformUsageUpdated`
+
+### Reputation Events
+- `OperatorReputationCommitmentCreated`, `OperatorReputationCommitmentFailed`, `OperatorReputationCommitmentVerified`
+- `OperatorReputationSlashTier1`, `OperatorReputationSlashTier2`, `OperatorReputationSlashTier3`, `OperatorReputationStateUpdated`
+- `ReputationStateUpdated`
+
+### Source Events
+- `SourceAiAssistant`, `SourceAiPrimary`, `SourceAiTriage`
+- `SourceSystem`
+- `SourceUserChat`, `SourceUserTerminal`
 
 ---
 
@@ -360,7 +390,7 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | Pub/Sub command service | `../../internal/services/pubsub/pubsub_commands.go` |
 | Pub/Sub results service | `../../internal/services/pubsub/pubsub_results.go` |
 | MCP/A2A translation | `../../internal/services/mcp/gateway.go` |
-| Session management | `../../internal/services/gateway/session_service.go` |
+| Session management | `../../internal/services/gateway/cli_session_service.go`, `../../internal/services/gateway/operator_session_service.go`, `../../internal/services/gateway/web_session_service.go` |
 | CLI L3 verification | `../../internal/services/gateway/cli_l3_notary.go` |
 | Composite L3 verifier | `../../internal/services/gateway/composite_l3_verifier.go` |
 | Doctrine registry | `../../protocol/constants/doctrine/doctrine_registry.json` |
