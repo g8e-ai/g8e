@@ -194,11 +194,19 @@ See [docs/architecture/protocol.md](../architecture/protocol.md) for doctrine sc
 
 Constants are defined in Go source files in `internal/constants/` (SSOT). JSON files in `protocol/constants/` serve as reference documentation and external protocol definitions.
 
+**Path constants:**
+- ALL filepath strings in the codebase MUST be defined as constants in `internal/constants/paths.go`
+- No filepath strings may be constructed dynamically or hardcoded inline, including relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`, etc.
+- Dynamic path construction using `filepath.Join()` with string literals is prohibited
+- The only exception is when using `TestPaths` for isolated test environments - the base directory for TestPaths must come from a constant, and all path construction within TestPaths must use constants
+- This eliminates magic strings and improves maintainability and system robustness
+
 **Adding constants:**
 1. Add the constant to the appropriate Go file in `internal/constants/`
-2. Update the corresponding JSON file in `protocol/constants/` if the constant is part of the public protocol
-3. Run tests to verify the constant is properly integrated
-4. Commit both the Go source file and any updated JSON reference files
+2. For path constants, add them to `internal/constants/paths.go`
+3. Update the corresponding JSON file in `protocol/constants/` if the constant is part of the public protocol
+4. Run tests to verify the constant is properly integrated
+5. Commit both the Go source file and any updated JSON reference files
 
 **Commands:**
 - `make generate` - Generate protobuf code from `.proto` files

@@ -55,6 +55,7 @@ var Paths = struct {
 		PkiIssuedGatewayPeerDir string
 		PkiTrustDir             string
 		PkiRevocationDir        string
+		PkiBinariesDir          string
 	}
 }{
 	Infra: struct {
@@ -89,6 +90,7 @@ var Paths = struct {
 		PkiIssuedGatewayPeerDir string
 		PkiTrustDir             string
 		PkiRevocationDir        string
+		PkiBinariesDir          string
 	}{
 		DbPath:                  ".g8e/data/g8e.db",
 		PkiDir:                  ".g8e/pki",
@@ -267,21 +269,139 @@ const (
 
 	DbFilename             = "g8e.db"
 	VaultKeyFilename       = "key"
+	VaultNewKeyFilename    = "key.new"
 	SuspendedTxFilename    = "suspended_transactions.db"
 	ReceiptsFilename       = "receipts.json"
 	ReceiptsExportFilename = "receipts-export.json"
 
 	SecretsFileSessionEncryptionKey = "session_encryption_key"
 	SecretsFileBootstrapDigest      = "bootstrap_digest.json"
+	SecretsFileActuatorSigningKey   = "actuator_signing_key"
+	SecretsFileActuatorKeyID        = "actuator_key_id"
+	SecretsFileAuditorHMACKey       = "auditor_hmac_key"
+	SecretsFileConsensusSigningKey  = "consensus_signing_key"
+	SecretsFileNotarySigningKey     = "notary_signing_key"
+	SecretsFileOperatorPrivateKey   = "operator_private_key"
+	SecretsFileCLIPrivateKey        = "cli_private_key"
+	SecretsFileSessionToken         = "session_token"
 
 	DemosDirname     = "demos"
 	DemosComposeFile = "compose.yml"
+	DemosBinDirname  = "bin"
+	DemosBinaryName  = "g8e"
 
 	SwaggerFilename        = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"
 
-	// Gateway-specific PKI subdirectories
 	PkiSubdirHub         = "hub"
 	PkiSubdirGatewayPeer = "gateway-peer"
 	PkiSubdirApps        = "apps"
+	PkiSubdirTrustedSigners = "trusted_signers"
+
+	// Directory names
+	BinDirname = "bin"
+	LogDirname = "logs"
+
+	// CLI certificate and key filenames
+	CliCertFilename = "cli.crt"
+	CliKeyFilename = "cli.key"
+
+	// Gateway-specific filenames
+	GatewayIDFilename       = "gateway-id"
+	ActuatorPubJSONFilename = "Actuator_pub.json"
+	ActuatorPubPEMFilename  = "Actuator_pub.pem"
+	NetworkIdentityFilename = "network-identity.json"
+
+	// Operator-specific filenames
+	OperatorPIDFilename     = "operator.pid"
+	OperatorPostureFilename = "operator.posture"
+
+	// Peer certificate filenames
+	PeerCertFilename = "peer.crt"
+	PeerKeyFilename  = "peer.key"
+	PeerChainFilename = "peer.chain.pem"
+	PeerSubdir       = "peer"
+
+	// FULL path constants (relative from runtime directory)
+	GatewayIDPath       = ".g8e/data/gateway-id"
+	ActuatorPubJSONPath = ".g8e/pki/Actuator_pub.json"
+	ActuatorPubPEMPath  = ".g8e/pki/Actuator_pub.pem"
+	NetworkIdentityPath = ".g8e/pki/network-identity.json"
+	PeerCertPath        = ".g8e/pki/peer/peer.crt"
+	PeerKeyPath         = ".g8e/pki/peer/peer.key"
+	PeerChainPath       = ".g8e/pki/peer/peer.chain.pem"
+	PkiGatewayKeyPath   = ".g8e/pki/issued/hub/operator-gateway.key"
+	SwaggerFilePath     = "docs/swagger.json"
+	OperatorLogPath     = ".g8e/logs/operator.log"
+
+	// Project root discovery constants for test path initialization
+	ProjectRootFromTestDir    = "../../"
+	ProjectRootFromCurrentDir = "."
+
+	// Directory names (single path segment, no separators)
+	RuntimeDirname    = ".g8e"
+	DataDirname       = "data"
+	VaultDirname      = "vault"
+	SecretsDirname    = "secrets"
+	LedgerDirname     = "ledger"
+	SshConfigFilename = "ssh_config"
+	PidDirname        = "pids"
+
+	// Ledger-specific directory and file names
+	FilesDirname      = "files"
+	SessionsDirname   = "sessions"
+	GitDirname        = ".git"
+	GitignoreFilename = ".gitignore"
+
+	// Key filenames
+	MasterKeyFilename = ".master_key"
+	PublicKeySuffix   = ".pub"
+
+	// Storage DB filenames (used with filepath.Join)
+	TokenStoreDBFilename     = "token_store.db"
+	ReplayStoreDBFilename    = "replay_store.db"
+	ExecutionVaultDBFilename = "execution_vault.db"
+
+	// Full relative storage DB paths (relative to project root, used as config defaults)
+	TokenStoreDBPath           = RuntimeDirname + "/token_store.db"
+	ReplayStoreDBPath          = RuntimeDirname + "/replay_store.db"
+	ExecutionVaultDBPath       = RuntimeDirname + "/execution_vault.db"
+	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
+
+	// Agent config directory and file names (relative to home directory)
+	AgentConfigDirCursor     = ".cursor"
+	AgentConfigDirDevin      = ".codeium/windsurf"
+	AgentConfigDirGemini     = ".gemini"
+	AgentConfigDirGoose      = ".goose"
+	AgentConfigDirVSCode     = ".vscode"
+	AgentConfigDirCodeium    = ".codeium"
+	AgentConfigDirTabby      = ".tabby"
+	AgentConfigDirContinue   = ".continue"
+	AgentConfigFileMCP       = "mcp.json"
+	AgentConfigFileMCPDevin  = "mcp_config.json"
+	AgentConfigFileSettings  = "settings.json"
+	AgentConfigFileAider     = ".aider.conf.yml"
+
+	// File permission modes (octal)
+	PermDirPrivate  = 0700 // rwx------
+	PermFilePrivate = 0600 // rw-------
+	PermFilePublic  = 0644 // rw-r--r--
+
+	// API path constants
+	APIPathAuthDeviceEnroll    = "/api/v1/auth/device/enroll"
+	APIPathPKIDevicesEnroll    = "/api/v1/pki/devices/enroll"
+	WellKnownPKICABundle       = "/.well-known/g8e/pki/ca-bundle"
+
+	// Default path descriptions for CLI help text
+	DefaultVaultDirDesc        = ".g8e/vault"
+	DefaultVaultKeyDesc        = ".g8e/secrets/vault.key"
+	DefaultOperatorKeyDesc     = ".g8e/pki/operator.key"
+	DefaultClientKeyDesc       = ".g8e/pki/client.key"
+	DefaultOperatorCertDesc    = ".g8e/pki/operator.crt"
+	DefaultClientCertDesc      = ".g8e/pki/client.crt"
+
+	// Default path constants for CLI config (relative paths)
+	DefaultDataDir            = RuntimeDirname + "/" + DataDirname
+	DefaultPKIDir             = RuntimeDirname + "/" + PkiDirname
+	DefaultSecretsDir         = RuntimeDirname + "/" + SecretsDirname
 )

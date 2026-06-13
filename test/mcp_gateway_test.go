@@ -397,21 +397,16 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 }
 
 func TestMCPGateway_ErrorCases(t *testing.T) {
-	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase("../../"); err != nil {
-		t.Fatalf("failed to initialize paths: %v", err)
+	// Use TestPaths for isolated test environment
+	testPaths := testutil.NewTestPathsFromTemp(t)
+	if err := testPaths.EnsureDirs(); err != nil {
+		t.Fatalf("failed to create test directories: %v", err)
 	}
+	testPaths.RegisterCleanup(t)
 
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create test run directory: %v", err)
-	}
-	t.Logf("Test vault created at: %s", dataDir)
-
-	secretsDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
+	dataDir := testPaths.DataDir
+	secretsDir := testPaths.SecretsDir
+	pkiDir := testPaths.PKIDir
 
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,

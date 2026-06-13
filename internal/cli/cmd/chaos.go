@@ -14,6 +14,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -39,7 +41,7 @@ Distribution:
   70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
   20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
   10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)`,
-		Run: runChaos,
+		RunE: runChaos,
 	}
 
 	cmd.Flags().IntVar(&chaosCount, "count", 100, "number of payloads to fire")
@@ -49,11 +51,14 @@ Distribution:
 	return cmd
 }
 
-func runChaos(cmd *cobra.Command, args []string) {
+func runChaos(cmd *cobra.Command, args []string) error {
 	cfg := chaos.Config{
 		Count:   chaosCount,
 		DataDir: chaosDataDir,
 		PKIDir:  chaosPKIDir,
 	}
-	chaos.Run(cfg)
+	if err := chaos.Run(cfg); err != nil {
+		return fmt.Errorf("chaos: failed to run chaos test: %w", err)
+	}
+	return nil
 }

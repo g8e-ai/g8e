@@ -21,12 +21,17 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestDemosCmd(t *testing.T) {
+func getProjectRoot() string {
+	return "."
+}
+
+func TestDemos(t *testing.T) {
 	t.Run("demos command has correct use and description", func(t *testing.T) {
 		cmd := demosCmd()
 		assert.Equal(t, "demos", cmd.Use)
@@ -391,7 +396,7 @@ func TestRunDemosList(t *testing.T) {
 
 		// Create a temporary directory with demos structure
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -399,7 +404,7 @@ func TestRunDemosList(t *testing.T) {
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
 		require.NoError(t, err)
-		composePath := filepath.Join(healthcareDir, "compose.yml")
+		composePath := filepath.Join(healthcareDir, constants.DemosComposeFile)
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
@@ -432,15 +437,15 @@ func TestRunDemosList(t *testing.T) {
 
 		// Create a temporary directory with demos structure
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
 		// Create bin directory (should be excluded)
-		binDir := filepath.Join(demosDir, "bin")
+		binDir := filepath.Join(demosDir, constants.BinDirname)
 		err = os.Mkdir(binDir, 0755)
 		require.NoError(t, err)
-		binCompose := filepath.Join(binDir, "compose.yml")
+		binCompose := filepath.Join(binDir, constants.DemosComposeFile)
 		err = os.WriteFile(binCompose, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
@@ -448,7 +453,7 @@ func TestRunDemosList(t *testing.T) {
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
 		require.NoError(t, err)
-		composePath := filepath.Join(healthcareDir, "compose.yml")
+		composePath := filepath.Join(healthcareDir, constants.DemosComposeFile)
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
@@ -481,7 +486,7 @@ func TestRunDemosList(t *testing.T) {
 
 		// Create a temporary directory with demos structure
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -494,7 +499,7 @@ func TestRunDemosList(t *testing.T) {
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
 		require.NoError(t, err)
-		composePath := filepath.Join(healthcareDir, "compose.yml")
+		composePath := filepath.Join(healthcareDir, constants.DemosComposeFile)
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
@@ -528,7 +533,7 @@ func TestRunDemosStart(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -548,7 +553,7 @@ func TestRunDemosStart(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -574,7 +579,7 @@ func TestRunDemosStop(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -594,7 +599,7 @@ func TestRunDemosStop(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -620,7 +625,7 @@ func TestRunDemosStatus(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -640,7 +645,7 @@ func TestRunDemosStatus(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -666,7 +671,7 @@ func TestRunDemosClean(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -686,7 +691,7 @@ func TestRunDemosClean(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -712,7 +717,7 @@ func TestRunDemosRun(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -732,7 +737,7 @@ func TestRunDemosRun(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
@@ -756,14 +761,14 @@ func TestRunDemosRun(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
 		require.NoError(t, err)
-		composePath := filepath.Join(healthcareDir, "compose.yml")
+		composePath := filepath.Join(healthcareDir, constants.DemosComposeFile)
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
@@ -783,14 +788,14 @@ func TestRunDemosRun(t *testing.T) {
 		defer os.Chdir(originalWd)
 
 		tmpDir := t.TempDir()
-		demosDir := filepath.Join(tmpDir, "demos")
+		demosDir := filepath.Join(tmpDir, constants.DemosDirname)
 		err = os.Mkdir(demosDir, 0755)
 		require.NoError(t, err)
 
 		healthcareDir := filepath.Join(demosDir, "healthcare")
 		err = os.Mkdir(healthcareDir, 0755)
 		require.NoError(t, err)
-		composePath := filepath.Join(healthcareDir, "compose.yml")
+		composePath := filepath.Join(healthcareDir, constants.DemosComposeFile)
 		err = os.WriteFile(composePath, []byte("version: '3'"), 0644)
 		require.NoError(t, err)
 
@@ -807,17 +812,17 @@ func TestRunDemosRun(t *testing.T) {
 func TestBinaryPathConstruction(t *testing.T) {
 	t.Run("uses .exe extension on Windows", func(t *testing.T) {
 		if runtime.GOOS == "windows" {
-			binPath := filepath.Join("demos", "bin", "g8e.exe")
+			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e.exe")
 			assert.True(t, strings.HasSuffix(binPath, ".exe"))
 		} else {
-			binPath := filepath.Join("demos", "bin", "g8e")
+			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e")
 			assert.False(t, strings.HasSuffix(binPath, ".exe"))
 		}
 	})
 
 	t.Run("uses no extension on non-Windows", func(t *testing.T) {
 		if runtime.GOOS != "windows" {
-			binPath := filepath.Join("demos", "bin", "g8e")
+			binPath := filepath.Join(constants.DemosDirname, constants.BinDirname, "g8e")
 			assert.False(t, strings.HasSuffix(binPath, ".exe"))
 		}
 	})

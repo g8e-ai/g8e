@@ -333,7 +333,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		httpSwagger.DocExpansion("none"),
 	))
 	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "docs/swagger.json")
+		http.ServeFile(w, r, constants.SwaggerFilePath)
 	})
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS

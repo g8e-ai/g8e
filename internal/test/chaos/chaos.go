@@ -100,7 +100,7 @@ func pickCategory(r *rand.Rand) category {
 
 func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FsListRequested{
-		Path:        fmt.Sprintf("/tmp/chaos-%d", id),
+		Path:        fmt.Sprintf("%s/chaos-%d", constants.PathTmp, id),
 		ExecutionId: fmt.Sprintf("exec-good-%d", id),
 	})
 	if err != nil {
@@ -113,11 +113,11 @@ func buildGoodActorEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey
 
 func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	forbiddenCmds := []string{
-		"sudo rm -rf /var/log",
-		"su root -c 'cat /etc/shadow'",
-		"rm -rf /home/user",
+		"sudo rm -rf " + constants.PathVar + "/log",
+		"su root -c 'cat " + constants.PathEtcShadow + "'",
+		"rm -rf " + constants.PathHome + "/user",
 		"sudo useradd attacker",
-		"sudo chmod 777 /etc/passwd",
+		"sudo chmod 777 " + constants.PathEtcPasswd,
 	}
 	cmd := forbiddenCmds[id%len(forbiddenCmds)]
 	payload, err := proto.Marshal(&operatorv1.CommandRequested{
@@ -136,7 +136,7 @@ func buildPromptInjEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey
 
 func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FileEditRequested{
-		FilePath:    fmt.Sprintf("/tmp/chaos-edit-%d.txt", id),
+		FilePath:    fmt.Sprintf("%s/chaos-edit-%d.txt", constants.PathTmp, id),
 		Content:     fmt.Sprintf("chaos was here at %d", time.Now().UnixNano()),
 		ExecutionId: fmt.Sprintf("exec-edit-%d", id),
 	})
@@ -151,7 +151,7 @@ func buildFileMutationEnvelope(id int, stateRoot string, privKey ed25519.Private
 
 func buildMitMEnvelope(id int, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {
 	payload, err := proto.Marshal(&operatorv1.FsListRequested{
-		Path:        "/etc",
+		Path:        constants.PathEtc,
 		ExecutionId: fmt.Sprintf("exec-mitm-%d", id),
 	})
 	if err != nil {
@@ -350,13 +350,12 @@ type counters struct {
 // ── main ──────────────────────────────────────────────────────────────────────
 
 // Run executes the chaos test with the given configuration
-func Run(cfg Config) {
+func Run(cfg Config) error {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	// Initialize paths relative to current working directory
 	if err := constants.InitPaths(); err != nil {
-		logger.Error("failed to initialize paths", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to initialize paths: %w", err)
 	}
 
 	// Use shared test vault directory for persistent inspection
@@ -365,22 +364,19 @@ func Run(cfg Config) {
 	if dataDir == "" {
 		testVaultDir = constants.Paths.Infra.TestVaultDir
 		if err := os.MkdirAll(testVaultDir, 0755); err != nil {
-			logger.Error("failed to create test vault directory", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("chaos: failed to create test vault directory: %w", err)
 		}
 
 		// Create unique subdirectory for this test run
 		testRunID := fmt.Sprintf("%s-chaos-test", time.Now().Format("20060102-150405"))
 		dataDir = filepath.Join(testVaultDir, testRunID)
 		if err := os.MkdirAll(dataDir, 0755); err != nil {
-			logger.Error("failed to create test run directory", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("chaos: failed to create test run directory: %w", err)
 		}
 	} else {
 		// If user specified a directory, ensure it exists
 		if err := os.MkdirAll(dataDir, 0755); err != nil {
-			logger.Error("failed to create specified data directory", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("chaos: failed to create specified data directory: %w", err)
 		}
 	}
 
@@ -406,8 +402,7 @@ func Run(cfg Config) {
 	// trusted signers map, which is exactly what the test suite does.
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		logger.Error("failed to generate L2 signing key", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to generate L2 signing key: %w", err)
 	}
 	const keyID = "chaos-l2-key"
 	trustedSigners := map[string]ed25519.PublicKey{keyID: pubKey}
@@ -415,34 +410,28 @@ func Run(cfg Config) {
 	// ── vault ────────────────────────────────────────────────────────────────
 	vaultDir := filepath.Join(dataDir, "vault")
 	if err := os.MkdirAll(vaultDir, 0700); err != nil {
-		logger.Error("failed to create vault directory", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to create vault directory: %w", err)
 	}
 	_, vaultPrivKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		logger.Error("failed to generate vault key", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to generate vault key: %w", err)
 	}
 	vaultHeader, _, err := vault.NewVaultHeader(vaultPrivKey)
 	if err != nil {
-		logger.Error("failed to create vault header", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to create vault header: %w", err)
 	}
 	if err := vaultHeader.Save(vaultDir); err != nil {
-		logger.Error("failed to save vault header", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to save vault header: %w", err)
 	}
 	encryptionVault, err := vault.NewVault(&vault.VaultConfig{
 		DataDir: vaultDir,
 		Logger:  logger,
 	})
 	if err != nil {
-		logger.Error("failed to create vault", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to create vault: %w", err)
 	}
 	if err := encryptionVault.Unlock(vaultPrivKey); err != nil {
-		logger.Error("failed to unlock vault", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to unlock vault: %w", err)
 	}
 
 	// ── audit vault ───────────────────────────────────────────────────────────
@@ -461,8 +450,7 @@ func Run(cfg Config) {
 	}
 	av, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
 	if err != nil {
-		logger.Error("failed to initialise audit vault", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("chaos: failed to initialise audit vault: %w", err)
 	}
 	// ── generate session IDs for concurrency ──────────────────────────────────
 	workerCount := runtime.NumCPU() * 2
@@ -472,15 +460,13 @@ func Run(cfg Config) {
 		sessionIDs[i] = sessionID
 		operator_session, err := av.GetOperatorSession(sessionID)
 		if err != nil {
-			logger.Error("failed to inspect chaos audit session", "error", err)
 			av.Close()
-			os.Exit(1)
+			return fmt.Errorf("chaos: failed to inspect chaos audit session: %w", err)
 		}
 		if operator_session == nil {
 			if err := av.CreateSession(sessionID, "operator", fmt.Sprintf("Chaos Worker %d", i+1), "chaos@test.local"); err != nil {
-				logger.Error("failed to create chaos audit session", "error", err)
 				av.Close()
-				os.Exit(1)
+				return fmt.Errorf("chaos: failed to create chaos audit session: %w", err)
 			}
 		}
 	}
@@ -500,7 +486,8 @@ func Run(cfg Config) {
 	}
 
 	// Initialize Ledger (nil for chaos tester - no actual ledger needed)
-	ledger, _ := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ".g8e/data/ledger", EncryptionVault: nil}, logger)
+	ledgerBaseDir := filepath.Join(constants.Paths.Infra.RuntimeDir, constants.DataDirname, constants.LedgerDirname)
+	ledger, _ := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ledgerBaseDir, EncryptionVault: nil}, logger)
 
 	// Initialize L1 Doctrine for threat detection
 	doctrine := governance.NewL1Doctrine()
@@ -655,6 +642,7 @@ func Run(cfg Config) {
 	fmt.Printf("Ledger    : %s\n", filepath.Join(dataDir, "ledger"))
 	fmt.Printf("\n")
 	printDemoQueries(filepath.Join(dataDir, "g8e.db"))
+	return nil
 }
 
 func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.PrivateKey, keyID string, sessionID string) (*govpkg.GovernanceEnvelope, error) {

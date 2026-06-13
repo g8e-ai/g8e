@@ -76,7 +76,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err, "failed to create keystore")
 	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
-	require.NoError(t, ks.EnsurePermissions(), "failed to ensure keystore permissions")
+	require.NoError(t, ks.EnforcePermissions(), "failed to enforce keystore permissions")
 
 	sm := &SecretManager{
 		db:         db.db,

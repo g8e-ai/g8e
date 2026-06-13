@@ -57,7 +57,11 @@ func demosListCmd() *cobra.Command {
 }
 
 func runDemosList(cmd *cobra.Command, args []string) error {
-	demosDir := filepath.Join(getProjectRoot(), constants.DemosDirname)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demosDir := filepath.Join(cwd, constants.DemosDirname)
 	entries, err := os.ReadDir(demosDir)
 	if err != nil {
 		return fmt.Errorf("failed to read demos directory: %w", err)
@@ -65,7 +69,7 @@ func runDemosList(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Available demo environments:")
 	for _, entry := range entries {
-		if entry.IsDir() && entry.Name() != "bin" {
+		if entry.IsDir() && entry.Name() != constants.DemosBinDirname {
 			composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)
 			if _, err := os.Stat(composePath); err == nil {
 				fmt.Printf("  - %s\n", entry.Name())
@@ -89,7 +93,11 @@ func demosStartCmd() *cobra.Command {
 
 func runDemosStart(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -103,13 +111,13 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if g8e binary exists in demos/bin
-	binPath := filepath.Join(getProjectRoot(), constants.DemosDirname, "bin", "g8e")
+	binPath := filepath.Join(cwd, constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
 	if runtime.GOOS == "windows" {
 		binPath += ".exe"
 	}
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		fmt.Printf("Warning: g8e binary not found at %s\n", binPath)
-		fmt.Println("Run 'make build && cp g8e demos/bin/g8e' from the repository root to build it.")
+		fmt.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
 	}
 
 	// Start the demo environment
@@ -168,7 +176,11 @@ func demosStopCmd() *cobra.Command {
 
 func runDemosStop(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -210,7 +222,11 @@ func demosStatusCmd() *cobra.Command {
 
 func runDemosStatus(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -249,7 +265,11 @@ func demosCleanCmd() *cobra.Command {
 
 func runDemosClean(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -336,7 +356,11 @@ Available scenarios:
 
 func runDemosRun(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
 		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
@@ -689,37 +713,3 @@ func runFinanceScenario(demoDir, scenario string) error {
 	return nil
 }
 
-func getProjectRoot() string {
-	// Use current working directory as the project root
-	// This is the most reliable approach since demos are run from the repo root
-	if cwd, err := os.Getwd(); err == nil {
-		return cwd
-	}
-
-	// Fallback to directory containing the g8e binary
-	execPath, err := os.Executable()
-	if err != nil {
-		return "."
-	}
-
-	// Resolve symlinks
-	if resolvedPath, err := filepath.EvalSymlinks(execPath); err == nil {
-		execPath = resolvedPath
-	}
-
-	// Get the directory of the executable
-	execDir := filepath.Dir(execPath)
-
-	// If we're in a build directory (like cmd/g8e), go up to project root
-	if filepath.Base(execDir) == "g8e" {
-		return filepath.Dir(filepath.Dir(execDir))
-	}
-
-	// If we're in cmd directory, go up to project root
-	if filepath.Base(execDir) == "cmd" {
-		return filepath.Dir(execDir)
-	}
-
-	// Otherwise assume we're already at or near the project root
-	return execDir
-}

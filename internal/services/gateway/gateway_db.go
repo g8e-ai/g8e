@@ -230,7 +230,7 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string) error {
 	if err := ks.Initialize(); err != nil {
 		return err
 	}
-	if err := ks.EnsurePermissions(); err != nil {
+	if err := ks.EnforcePermissions(); err != nil {
 		return err
 	}
 	sm := &SecretManager{
@@ -365,7 +365,7 @@ func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *
 
 		// Determine service name from path
 		var serviceName string
-		if strings.Contains(keyPath, "operator-gateway.key") {
+		if strings.Contains(keyPath, constants.PkiGatewayKeyPath) {
 			serviceName = "operator-gateway"
 		} else {
 			s.logger.Warn("[Migration] Unknown service key file", "path", keyPath)
@@ -390,7 +390,9 @@ func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *
 
 	if migratedCount > 0 {
 		// Mark migration as complete
-		_ = sm.keystore.EncryptSecret("migration_plaintext_keys_migrated", "true")
+		if err := sm.keystore.EncryptSecret("migration_plaintext_keys_migrated", "true"); err != nil {
+			s.logger.Warn("[Migration] Failed to mark migration as complete", "error", err)
+		}
 		s.logger.Info("[Migration] Completed plaintext service key migration", "count", migratedCount)
 	}
 

@@ -297,7 +297,7 @@ func TestOperatorStatus(t *testing.T) {
 	// Test with PID file for non-existent process
 	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
 	// So the PID file will be deleted and 0 will be returned
-	if err := pm.writePID(operatorPIDFile, 999999); err != nil {
+	if err := pm.writePID(constants.OperatorPIDFilename, 999999); err != nil {
 		t.Fatalf("writePID failed: %v", err)
 	}
 
@@ -317,7 +317,7 @@ func TestOperatorStatus(t *testing.T) {
 	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
 	// So we skip this check on Windows
 	if runtime.GOOS != "windows" {
-		if err := pm.writePID(operatorPIDFile, os.Getpid()); err != nil {
+		if err := pm.writePID(constants.OperatorPIDFilename, os.Getpid()); err != nil {
 			t.Fatalf("writePID failed: %v", err)
 		}
 
@@ -361,7 +361,7 @@ func TestStopOperator(t *testing.T) {
 	pm.findOperatorProcessFn = func() int { return 0 }
 
 	// Test stopping non-existent process with PID file
-	if err := pm.writePID(operatorPIDFile, 999999); err != nil {
+	if err := pm.writePID(constants.OperatorPIDFilename, 999999); err != nil {
 		t.Fatalf("writePID failed: %v", err)
 	}
 
@@ -370,7 +370,7 @@ func TestStopOperator(t *testing.T) {
 	}
 
 	// Verify PID file was deleted
-	pidFile := filepath.Join(pm.pidDir, operatorPIDFile)
+	pidFile := filepath.Join(pm.pidDir, constants.OperatorPIDFilename)
 	if _, err := os.Stat(pidFile); !os.IsNotExist(err) {
 		t.Error("PID file should be deleted after stop")
 	}
@@ -383,7 +383,7 @@ func TestGetLogPath(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	expectedPath := filepath.Join(pm.logDir, operatorLogPath)
+	expectedPath := filepath.Join(pm.logDir, constants.OperatorLogPath)
 	actualPath := pm.GetLogPath()
 
 	if actualPath != expectedPath {
@@ -529,11 +529,11 @@ func TestTailLog(t *testing.T) {
 
 func TestConstants(t *testing.T) {
 	// Verify constants are set correctly
-	if operatorPIDFile == "" {
-		t.Error("operatorPIDFile should not be empty")
+	if constants.OperatorPIDFilename == "" {
+		t.Error("constants.OperatorPIDFilename should not be empty")
 	}
-	if operatorLogPath == "" {
-		t.Error("operatorLogPath should not be empty")
+	if constants.OperatorLogPath == "" {
+		t.Error("constants.OperatorLogPath should not be empty")
 	}
 	if shutdownTimeout == 0 {
 		t.Error("shutdownTimeout should not be zero")

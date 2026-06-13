@@ -22,8 +22,8 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -134,7 +134,7 @@ func TestDataCommandsRequireAuthentication(t *testing.T) {
 
 			err := cmd.RunE(cmd, []string{})
 			require.Error(t, err)
-			require.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
+			require.ErrorIs(t, err, constants.ErrNotAuthenticated)
 		})
 	}
 }
@@ -266,9 +266,6 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
-		// Initialize constants paths to point to tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
-
 		cmd := dataAuditSummaryCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -287,13 +284,11 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
-		// Initialize constants paths to point to tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
-
-		// Create data directory and empty database
-		dataDir := constants.Paths.Infra.DataDir
+		// Create data directory and empty database using test paths
+		testPaths := testutil.NewTestPaths(tmpDir)
+		dataDir := testPaths.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := constants.Paths.Infra.DbPath
+		dbPath := testPaths.DbPath
 
 		// Create database with events table but no data
 		db, err := sql.Open("sqlite", dbPath)

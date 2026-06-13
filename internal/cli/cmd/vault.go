@@ -246,7 +246,7 @@ func vaultRekeyCmd() *cobra.Command {
 				keyPath = filepath.Join(projectRoot, keyPath)
 			}
 			if newKeyPath == "" {
-				newKeyPath = keyPath + ".new"
+				newKeyPath = filepath.Join(vaultDir, constants.VaultNewKeyFilename)
 			}
 
 			if !vault.VaultHeaderExists(vaultDir) {

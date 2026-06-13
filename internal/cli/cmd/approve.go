@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -44,24 +45,27 @@ func approveCmd() *cobra.Command {
 			// Read CLI private key
 			keyData, err := os.ReadFile(cfg.CLIKeyFile())
 			if err != nil {
-				return fmt.Errorf("failed to read CLI private key: %w", err)
+				return fmt.Errorf("approve: read CLI private key: %w", err)
 			}
 
 			// Parse PEM-encoded private key
-			block, _ := pem.Decode(keyData)
+			block, rest := pem.Decode(keyData)
 			if block == nil {
-				return fmt.Errorf("failed to decode PEM private key")
+				return fmt.Errorf("approve: decode PEM private key: %w", constants.ErrPEMDecodeFailed)
+			}
+			if len(rest) > 0 {
+				return fmt.Errorf("approve: extra data after PEM block")
 			}
 
 			// Ed25519 keys are encoded in PKCS8 format
 			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 			if err != nil {
-				return fmt.Errorf("failed to parse private key: %w", err)
+				return fmt.Errorf("approve: parse private key: %w", err)
 			}
 
 			privKey, ok := key.(ed25519.PrivateKey)
 			if !ok {
-				return fmt.Errorf("private key is not Ed25519")
+				return fmt.Errorf("approve: invalid key type: %w", constants.ErrInvalidKeyType)
 			}
 
 			// Sign the transaction hash
@@ -71,55 +75,67 @@ func approveCmd() *cobra.Command {
 			// Calculate certificate fingerprint for verification
 			certData, err := os.ReadFile(cfg.CLICertFile())
 			if err != nil {
-				return fmt.Errorf("failed to read CLI certificate: %w", err)
+				return fmt.Errorf("approve: read CLI certificate: %w", err)
 			}
 
-			certBlock, _ := pem.Decode(certData)
+			certBlock, rest := pem.Decode(certData)
 			if certBlock == nil {
-				return fmt.Errorf("failed to decode PEM certificate")
+				return fmt.Errorf("approve: decode PEM certificate: %w", constants.ErrPEMDecodeFailed)
+			}
+			if len(rest) > 0 {
+				return fmt.Errorf("approve: extra data after PEM certificate block")
 			}
 
 			cert, err := x509.ParseCertificate(certBlock.Bytes)
 			if err != nil {
-				return fmt.Errorf("failed to parse certificate: %w", err)
+				return fmt.Errorf("approve: parse certificate: %w", err)
 			}
 
 			hash := sha256.Sum256(cert.Raw)
 			certFingerprint := hex.EncodeToString(hash[:])
 
 			// Create approval request
-			req := map[string]string{
-				"cli_signature":         signatureHex,
-				"mtls_cert_fingerprint": certFingerprint,
+			type approvalRequest struct {
+				CliSignature        string `json:"cli_signature"`
+				MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
+			}
+			req := approvalRequest{
+				CliSignature:        signatureHex,
+				MtlsCertFingerprint: certFingerprint,
 			}
 
 			reqBody, err := json.Marshal(req)
 			if err != nil {
-				return fmt.Errorf("failed to marshal request: %w", err)
+				return fmt.Errorf("approve: marshal request: %w", err)
 			}
 
 			// Call approval API
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("approve: create API client: %w", err)
 			}
 
-			resp, err := client.Post(fmt.Sprintf("/api/approve/%s", txHash), reqBody)
+			approvePath := constants.APIPaths.ApprovePagePrefix + txHash
+			resp, err := client.Post(approvePath, reqBody)
 			if err != nil {
-				return fmt.Errorf("failed to approve transaction: %w", err)
+				return fmt.Errorf("approve: approve transaction: %w", err)
 			}
 
-			var result map[string]interface{}
+			type approvalResponse struct {
+				Status         string `json:"status"`
+				ResultSummary  string `json:"result_summary"`
+			}
+			var result approvalResponse
 			if err := json.Unmarshal(resp, &result); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("approve: parse response: %w", err)
 			}
 
 			cmd.Printf("Transaction %s approved successfully\n", txHash)
-			if status, ok := result["status"].(string); ok {
-				cmd.Printf("Status: %s\n", status)
+			if result.Status != "" {
+				cmd.Printf("Status: %s\n", result.Status)
 			}
-			if summary, ok := result["result_summary"].(string); ok {
-				cmd.Printf("Result: %s\n", summary)
+			if result.ResultSummary != "" {
+				cmd.Printf("Result: %s\n", result.ResultSummary)
 			}
 
 			return nil

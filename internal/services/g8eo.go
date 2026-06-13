@@ -164,7 +164,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize ExecutionVaultService for execution log and file diff storage
 	executionVaultConfig := storage.DefaultExecutionVaultConfig()
-	executionVaultConfig.DBPath = filepath.Join(dataDir, "execution_vault.db")
+	executionVaultConfig.DBPath = filepath.Join(dataDir, constants.ExecutionVaultDBFilename)
 	executionVaultConfig.MaxDBSizeMB = vs.config.ExecutionVaultMaxSizeMB
 	executionVaultConfig.RetentionDays = vs.config.ExecutionVaultRetentionDays
 	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, encryptionVault)
@@ -175,7 +175,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize TokenStoreService for Sentinel token persistence
 	tokenStoreConfig := storage.DefaultTokenStoreConfig()
-	tokenStoreConfig.DBPath = filepath.Join(dataDir, "token_store.db")
+	tokenStoreConfig.DBPath = filepath.Join(dataDir, constants.TokenStoreDBFilename)
 	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, encryptionVault)
 	if err != nil {
 		return fmt.Errorf("failed to initialize token store: %w", err)
@@ -184,7 +184,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize SuspendedTransactionService for L3 approval workflow
 	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
-	suspendedTxConfig.DBPath = filepath.Join(dataDir, "suspended_transactions.db")
+	suspendedTxConfig.DBPath = filepath.Join(dataDir, constants.SuspendedTxFilename)
 	vs.suspendedTxStore, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize suspended transaction store: %w", err)
@@ -205,7 +205,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize SQLAuditStore for history handler
 	auditStoreConfig := storage.DefaultAuditStoreConfig()
-	auditStoreConfig.DataDir = filepath.Join(vs.config.WorkDir, ".g8e/data")
+	auditStoreConfig.DataDir = dataDir
 	auditStoreConfig.EncryptionVault = encryptionVault
 	vs.auditStore, err = storage.NewSQLAuditStore(auditStoreConfig, vs.logger)
 	if err != nil {
@@ -227,7 +227,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	if vs.auditStore != nil && gitPath != "" {
 		ledgerConfig := &storage.LedgerConfig{
-			BaseDir:         filepath.Join(vs.config.WorkDir, ".g8e/data/ledger"),
+			BaseDir:         filepath.Join(dataDir, constants.LedgerDirname),
 			GitPath:         gitPath,
 			EncryptionVault: encryptionVault,
 		}
@@ -248,7 +248,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Initialize P0 Transaction Gate infrastructure (replay protection and state root verification)
 	// ReplayStore is mandatory for fail-closed replay protection
 	replayStoreConfig := storage.DefaultReplayStoreConfig()
-	replayStoreConfig.DBPath = filepath.Join(dataDir, "replay_store.db")
+	replayStoreConfig.DBPath = filepath.Join(dataDir, constants.ReplayStoreDBFilename)
 	replayStore, err := storage.NewSQLReplayStore(replayStoreConfig, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to initialize replay store (required for transaction verification): %w", err)

@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -75,7 +76,7 @@ func tempDir(tb testing.TB) string {
 	count := tempDirCounters[safeName]
 	tempDirMu.Unlock()
 
-	dir := filepath.Join(".", "test-temp", fmt.Sprintf("%s_%d", safeName, count))
+	dir := filepath.Join(constants.ProjectRootFromCurrentDir, "test-temp", fmt.Sprintf("%s_%d", safeName, count))
 	err := os.MkdirAll(dir, 0755)
 	require.NoError(tb, err, "failed to create temp dir in cwd")
 	tb.Cleanup(func() { os.RemoveAll(dir) })
@@ -114,7 +115,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		ks, err := keystore.NewWithBackend(secretsDir, logger, backend)
 		require.NoError(t, err)
 		require.NoError(t, ks.Initialize())
-		require.NoError(t, ks.EnsurePermissions())
+		require.NoError(t, ks.EnforcePermissions())
 		sm = &SecretManager{
 			db:         db.db,
 			secretsDir: secretsDir,
@@ -130,7 +131,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		require.NoError(t, err)
 		// Initialize will retrieve the existing master key from shared test storage
 		require.NoError(t, ks.Initialize())
-		require.NoError(t, ks.EnsurePermissions())
+		require.NoError(t, ks.EnforcePermissions())
 		sm = &SecretManager{
 			db:         db.db,
 			secretsDir: secretsDir,

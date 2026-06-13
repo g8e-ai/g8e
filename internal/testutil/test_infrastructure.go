@@ -55,8 +55,8 @@ func NewTestConfig(t *testing.T) *config.Config {
 	operatorSessionID := fmt.Sprintf("test-sess-%s-%d", safeName, n)
 	workDir := t.TempDir()
 
-	pkiDir := filepath.Join(workDir, ".g8e/pki")
-	secretsDir := filepath.Join(workDir, ".g8e/secrets")
+	pkiDir := filepath.Join(workDir, constants.RuntimeDirname, constants.PkiDirname)
+	secretsDir := filepath.Join(workDir, constants.RuntimeDirname, constants.SecretsDirname)
 	trustedSignersDir := filepath.Join(pkiDir, "trusted_signers")
 	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
 		t.Fatalf("failed to create trusted signer directory: %v", err)
@@ -85,8 +85,8 @@ func NewTestConfig(t *testing.T) *config.Config {
 		WorkDir:                     workDir,
 		PKIDir:                      pkiDir,
 		SecretsDir:                  secretsDir,
-		VaultDir:                    filepath.Join(workDir, ".g8e/vault"),
-		VaultKeyPath:                filepath.Join(workDir, ".g8e/vault/key"),
+		VaultDir:                    filepath.Join(workDir, constants.RuntimeDirname, constants.VaultDirname),
+		VaultKeyPath:                filepath.Join(workDir, constants.RuntimeDirname, constants.VaultDirname, constants.VaultKeyFilename),
 		VaultRequireUnlock:          false,
 		ExecutionVaultEnabled:       true,
 		ExecutionVaultMaxSizeMB:     1024,

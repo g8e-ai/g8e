@@ -60,27 +60,13 @@ type TestContext struct {
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Initialize paths relative to project root
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	// If running from test/scenario, base is ../../. If from root, base is ./
-	base := "./"
-	if filepath.Base(cwd) == "scenario" {
-		base = "../../"
-	}
-	absBase, err := filepath.Abs(base)
-	if err != nil {
-		t.Fatalf("failed to get absolute path for base %s: %v", base, err)
-	}
-
-	if err := constants.InitPathsWithBase(absBase); err != nil {
+	// Initialize paths relative to project root using constant
+	if err := constants.InitPathsWithBase(constants.ProjectRootFromTestDir); err != nil {
 		t.Fatalf("failed to initialize paths: %v", err)
 	}
 	// The projectRoot should be the directory containing .g8e, not the .g8e directory itself,
 	// because cliconfig.Load and constants.InitPathsWithBase expect the base directory.
-	projectRoot := absBase
+	projectRoot := constants.Paths.Infra.RuntimeDir
 
 	cliCfg, err := cliconfig.Load(projectRoot)
 	if err != nil {

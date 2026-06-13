@@ -171,6 +171,30 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 - `NewLiveOperatorHTTPClient` - Creates mTLS HTTP client configured for live platform testing
 - `ResolveRepoRootFromTestDir` - Resolves repository root using go list
 
+#### Test Fixtures (`test/fixtures/`)
+
+Reusable test infrastructure for integration and E2E tests:
+
+**Gateway Fixture** (`test/fixtures/gateway_fixture.go`):
+- `GatewayFixture` - Reusable gateway setup for integration tests with full lifecycle management
+- `NewGatewayFixture` - Creates a fully configured gateway with downstream server, execution services, governance dependencies, and MCP gateway wiring
+- `EnrollClientIdentity` - Performs CSR enrollment for test clients with certificate generation and operator session creation
+- `CreateMTLSClient` - Creates HTTP client configured for mTLS using enrolled identity
+- `WaitForReady` - Polls HTTP health endpoint until server accepts connections
+- `SetPublicBaseURL` - Sets public base URL for MCP gateway (used for approval links)
+- Supports configurable posture (notary, consensus, doctrine), custom downstream URLs, and test port zero allowance
+- Handles path initialization, mock downstream MCP server, actuator key setup, and automatic cleanup
+
+**Docker Operator Fixture** (`test/fixtures/docker_operator_fixture.go`):
+- `DockerOperatorFixture` - Manages Docker-based operator containers for true multi-operator testing scenarios
+- `NewDockerOperatorFixture` - Creates and starts a Docker operator with configurable image, hostname, gateway URL, network, and environment variables
+- `Stop` - Stops the operator container
+- `GetLogs` - Retrieves container logs for debugging
+- `ExecCommand` - Executes commands inside the container
+- `WaitForReady` - Waits for operator to be ready by checking logs for a readiness marker
+- Supports auto-remove containers, custom Docker networks, and automatic image building from `Dockerfile.operator`
+- Includes cleanup function for graceful container shutdown and removal
+
 ### Unit Tests
 
 #### Models Tests (`internal/models/`)
@@ -512,7 +536,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **Coverage** - `--coverage` flag generates reports. CI enforces 52% coverage threshold.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Gateway gate infrastructure.
-- **Path constants** - Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). Hardcoded path strings like `.g8e/pki` are prohibited in test code.
+- **Path constants** - ALL filepath strings in test code MUST be defined as constants in `internal/constants/paths.go`. No filepath strings may be constructed dynamically or hardcoded inline, including relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`, etc. Dynamic path construction using `filepath.Join()` with string literals is prohibited. Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). The only exception is when using `TestPaths` for isolated test environments - the base directory for TestPaths must come from a constant, and all path construction within TestPaths must use constants. This eliminates magic strings and improves maintainability and system robustness.
 - **Typed error constants** - When testing error handling, check for any hand-trolled strings that should be properly typed errors (e.g., error reason strings, status codes, rejection reasons). Use typed constants from `internal/constants/` instead of hardcoded strings in assertions and error message checks.
 - **Regression test markers** - When documenting known issues in regression tests (e.g., Phase0Regression tests), use standardized marker constants instead of hardcoded strings. See `internal/services/gateway/pki_authority_test.go` for examples:
   - `RegressionMarkerAfterFix` - indicates expected behavior after a fix is implemented

@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
@@ -34,10 +33,10 @@ import (
 var defaultPathsJSON []byte
 
 const (
-	DefaultRuntimeDir     = ".g8e"
-	DefaultPKIDir         = ".g8e/pki"
-	DefaultSecretsDir     = ".g8e/secrets"
-	DefaultCredentialsDir = ".g8e"
+	DefaultRuntimeDir     = constants.RuntimeDirname
+	DefaultPKIDir         = constants.DefaultPKIDir
+	DefaultSecretsDir     = constants.DefaultSecretsDir
+	DefaultCredentialsDir = constants.RuntimeDirname
 )
 
 // expandPath expands tilde (~) to the user's home directory and expands environment variables
@@ -117,10 +116,24 @@ func Load(projectRoot string) (*Config, error) {
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
-		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToParsePaths, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToParsePaths, err)
 	}
 
 	// Resolve all relative paths in infra section relative to projectRoot
+	resolveInfraPaths(&paths, projectRoot)
+
+	return &Config{
+		ProjectRoot:    projectRoot,
+		RuntimeDir:     runtimeDir,
+		PKIDir:         pkiDir,
+		SecretsDir:     secretsDir,
+		CredentialsDir: credentialsDir,
+		Paths:          &paths,
+	}, nil
+}
+
+// resolveInfraPaths resolves all relative paths in the infra section relative to projectRoot
+func resolveInfraPaths(paths *PathsConfig, projectRoot string) {
 	if paths.Infra.AppCertDir != "" && !filepath.IsAbs(paths.Infra.AppCertDir) {
 		paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
 	}
@@ -151,15 +164,6 @@ func Load(projectRoot string) (*Config, error) {
 	if paths.Infra.SSHConfigPath != "" && !filepath.IsAbs(paths.Infra.SSHConfigPath) {
 		paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
 	}
-
-	return &Config{
-		ProjectRoot:    projectRoot,
-		RuntimeDir:     runtimeDir,
-		PKIDir:         pkiDir,
-		SecretsDir:     secretsDir,
-		CredentialsDir: credentialsDir,
-		Paths:          &paths,
-	}, nil
 }
 
 // LoadWithPaths loads config with custom paths configuration for testing.
@@ -181,40 +185,11 @@ func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
-		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToParsePaths, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToParsePaths, err)
 	}
 
 	// Resolve all relative paths in infra section relative to projectRoot
-	if paths.Infra.AppCertDir != "" && !filepath.IsAbs(paths.Infra.AppCertDir) {
-		paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
-	}
-	if paths.Infra.CACertPath != "" && !filepath.IsAbs(paths.Infra.CACertPath) {
-		paths.Infra.CACertPath = filepath.Join(projectRoot, paths.Infra.CACertPath)
-	}
-	if paths.Infra.DBPath != "" && !filepath.IsAbs(paths.Infra.DBPath) {
-		paths.Infra.DBPath = filepath.Join(projectRoot, paths.Infra.DBPath)
-	}
-	if paths.Infra.DocsDir != "" && !filepath.IsAbs(paths.Infra.DocsDir) {
-		paths.Infra.DocsDir = filepath.Join(projectRoot, paths.Infra.DocsDir)
-	}
-	if paths.Infra.PKIDir != "" && !filepath.IsAbs(paths.Infra.PKIDir) {
-		paths.Infra.PKIDir = filepath.Join(projectRoot, paths.Infra.PKIDir)
-	}
-	if paths.Infra.ProtocolConstantsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolConstantsDir) {
-		paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, paths.Infra.ProtocolConstantsDir)
-	}
-	if paths.Infra.ProtocolDir != "" && !filepath.IsAbs(paths.Infra.ProtocolDir) {
-		paths.Infra.ProtocolDir = filepath.Join(projectRoot, paths.Infra.ProtocolDir)
-	}
-	if paths.Infra.ProtocolModelsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolModelsDir) {
-		paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, paths.Infra.ProtocolModelsDir)
-	}
-	if paths.Infra.SecretsDir != "" && !filepath.IsAbs(paths.Infra.SecretsDir) {
-		paths.Infra.SecretsDir = filepath.Join(projectRoot, paths.Infra.SecretsDir)
-	}
-	if paths.Infra.SSHConfigPath != "" && !filepath.IsAbs(paths.Infra.SSHConfigPath) {
-		paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
-	}
+	resolveInfraPaths(&paths, projectRoot)
 
 	return &Config{
 		ProjectRoot:    projectRoot,
@@ -234,35 +209,35 @@ func (c *Config) TrustBundlePath() string {
 }
 
 func (c *Config) CredentialsFile() string {
-	return filepath.Join(c.CredentialsDir, "credentials")
+	return c.CredentialsDir
 }
 
 func (c *Config) CLICertFile() string {
-	return filepath.Join(c.CredentialsDir, "cli.crt")
+	return filepath.Join(c.CredentialsDir, constants.CliCertFilename)
 }
 
 func (c *Config) CLIKeyFile() string {
-	return filepath.Join(c.CredentialsDir, "cli.key")
+	return filepath.Join(c.CredentialsDir, constants.CliKeyFilename)
 }
 
 func (c *Config) AppCertFile(name string) string {
-	return filepath.Join(c.CredentialsDir, "apps", name+".crt")
+	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+".crt")
 }
 
 func (c *Config) AppKeyFile(name string) string {
-	return filepath.Join(c.CredentialsDir, "apps", name+".key")
+	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+".key")
 }
 
 func (c *Config) OperatorCertFile() string {
-	return filepath.Join(c.CredentialsDir, "operator.crt")
+	return filepath.Join(c.CredentialsDir, constants.PkiFileOperatorCert)
 }
 
 func (c *Config) OperatorKeyFile() string {
-	return filepath.Join(c.CredentialsDir, "operator.key")
+	return filepath.Join(c.CredentialsDir, constants.PkiFileOperatorKey)
 }
 
 func (c *Config) TrustBundleFile() string {
-	return filepath.Join(c.CredentialsDir, "g8eg-ca-bundle.pem")
+	return filepath.Join(c.CredentialsDir, constants.PkiFileGatewayBundle)
 }
 
 func (c *Config) OperatorHTTPSPort() int {

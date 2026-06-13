@@ -57,7 +57,7 @@ func newTestSecretManager(t *testing.T, db *sqliteutil.DB, secretsDir string) *S
 	ks, err := keystore.NewWithBackend(secretsDir, testutil.NewTestLogger(), backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, ks.EnforcePermissions())
 	return &SecretManager{
 		db:         db,
 		secretsDir: secretsDir,
@@ -229,7 +229,7 @@ func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
-	manifestPath := filepath.Join(secretsDir, BootstrapDigestManifestFile)
+	manifestPath := filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)
 	data, err := os.ReadFile(manifestPath)
 	require.NoError(t, err, "bootstrap digest manifest must be written")
 
@@ -253,7 +253,7 @@ func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
 
-	info, err := os.Stat(filepath.Join(secretsDir, BootstrapDigestManifestFile))
+	info, err := os.Stat(filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest))
 	require.NoError(t, err)
 	// Windows doesn't support Unix permissions exactly, so just check file is not world-writable
 	perm := info.Mode().Perm()
@@ -316,13 +316,13 @@ func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *tes
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
-	require.NoError(t, os.Remove(filepath.Join(secretsDir, BootstrapDigestManifestFile)))
+	require.NoError(t, os.Remove(filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	// Should recreate secrets instead of failing
 	require.NoError(t, sm2.InitAppSettings())
 	// Verify manifest was recreated
-	_, err := os.Stat(filepath.Join(secretsDir, BootstrapDigestManifestFile))
+	_, err := os.Stat(filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest))
 	require.NoError(t, err)
 }
 
@@ -333,7 +333,7 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
-	manifestPath := filepath.Join(secretsDir, BootstrapDigestManifestFile)
+	manifestPath := filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest)
 	data, err := os.ReadFile(manifestPath)
 	require.NoError(t, err)
 	var manifest bootstrapDigestManifest

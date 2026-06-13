@@ -56,7 +56,7 @@ func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
 		if errors.As(err, &exitErr) {
 			// macOS security command returns exit code 44 when item not found
 			if exitErr.ExitCode() == 44 {
-				return nil, ErrKeyNotFound
+				return nil, constants.ErrKeyNotFound
 			}
 		}
 		return nil, fmt.Errorf("keychain: retrieve master key: %w", err)
@@ -69,7 +69,7 @@ func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
 	}
 
 	if len(key) == 0 {
-		return nil, ErrKeyNotFound
+		return nil, constants.ErrKeyNotFound
 	}
 
 	return key, nil

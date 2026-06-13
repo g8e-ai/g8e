@@ -140,7 +140,7 @@ func securityValidateCmd() *cobra.Command {
 			cmd.Println("\n=== Summary ===")
 			if failed {
 				cmd.Println("[FAIL] Security validation failed")
-				return fmt.Errorf("security validation failed")
+				return fmt.Errorf("security: %w", constants.ErrValidationFailed)
 			}
 			cmd.Println("[OK]   Security validation passed")
 			return nil
@@ -177,12 +177,12 @@ func securityPKIEnrollCmd() *cobra.Command {
 		Long:  `Generate a CSR and enroll with the Gateway to obtain Operator mTLS certificates.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if endpoint == "" {
-				return fmt.Errorf("--endpoint is required")
+				return fmt.Errorf("security: %w", constants.ErrEndpointRequired)
 			}
 
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("security: %w", err)
 			}
 
 			// Use outputDir if specified, otherwise use project root
@@ -194,10 +194,13 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			cmd.Println("Generating CSR for enrollment...")
-			hostname, _ := os.Hostname()
+			hostname, err := os.Hostname()
+			if err != nil {
+				return fmt.Errorf("security: failed to get hostname: %w", err)
+			}
 			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 			if err != nil {
-				return fmt.Errorf("failed to generate Operator CSR: %w", err)
+				return fmt.Errorf("security: %w", err)
 			}
 
 			// Append default HTTP port
@@ -205,15 +208,15 @@ func securityPKIEnrollCmd() *cobra.Command {
 			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
 			regResp, err := auth.EnrollWithGateway(cfg, gatewayEndpoint, opCSR, "", "")
 			if err != nil {
-				return fmt.Errorf("failed to enroll: %w", err)
+				return fmt.Errorf("security: %w", err)
 			}
 
 			if regResp.OperatorCert == "" {
-				return fmt.Errorf("unexpected response: missing certificate")
+				return fmt.Errorf("security: %w", constants.ErrMissingCertificate)
 			}
 
-			if err := os.MkdirAll(pkiDir, 0700); err != nil {
-				return fmt.Errorf("failed to create PKI directory: %w", err)
+			if err := os.MkdirAll(pkiDir, constants.PermDirPrivate); err != nil {
+				return fmt.Errorf("security: failed to create PKI directory: %w", err)
 			}
 
 			certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
@@ -221,21 +224,21 @@ func securityPKIEnrollCmd() *cobra.Command {
 			chainPath := filepath.Join(pkiDir, constants.PkiFileOperatorChain)
 
 			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
-				return fmt.Errorf("failed to save Operator certificate: %w", err)
+				return fmt.Errorf("security: %w", err)
 			}
 
-			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), 0600); err != nil {
-				return fmt.Errorf("failed to save certificate chain: %w", err)
+			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
+				return fmt.Errorf("security: failed to save certificate chain: %w", err)
 			}
 
 			if regResp.HubTrustBundle != "" {
 				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
-				if err := os.MkdirAll(trustDir, 0700); err != nil {
-					return fmt.Errorf("failed to create trust directory: %w", err)
+				if err := os.MkdirAll(trustDir, constants.PermDirPrivate); err != nil {
+					return fmt.Errorf("security: failed to create trust directory: %w", err)
 				}
 				bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
-				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
-					return fmt.Errorf("failed to save trust bundle: %w", err)
+				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
+					return fmt.Errorf("security: failed to save trust bundle: %w", err)
 				}
 			}
 

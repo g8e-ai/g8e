@@ -637,7 +637,7 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 
 	// Check relative to executable
 	if execPath, err := os.Executable(); err == nil {
-		possiblePaths = append(possiblePaths, filepath.Join(filepath.Dir(execPath), "bin", filename))
+		possiblePaths = append(possiblePaths, filepath.Join(filepath.Dir(execPath), constants.BinDirname, filename))
 	}
 
 	// Check in PKI binaries directory

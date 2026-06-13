@@ -26,7 +26,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
@@ -39,26 +38,26 @@ type Client struct {
 func NewClient(cfg *config.Config) (*Client, error) {
 	creds, err := auth.LoadCredentials(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToLoadCredentials, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
 
 	if creds == nil {
-		return nil, clierrors.ErrNotAuthenticated
+		return nil, constants.ErrNotAuthenticated
 	}
 
 	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToLoadClientCertificate, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	trustBundle, err := os.ReadFile(cfg.TrustBundlePath())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", clierrors.ErrFailedToReadTrustBundle, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM(trustBundle) {
-		return nil, clierrors.ErrFailedToParseTrustBundle
+		return nil, constants.ErrFailedToParseTrustBundle
 	}
 
 	tlsConfig := &tls.Config{

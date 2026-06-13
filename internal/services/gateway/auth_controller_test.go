@@ -58,7 +58,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: tempDir(t),
