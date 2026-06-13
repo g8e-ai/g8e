@@ -143,7 +143,12 @@ func TestVaultInitCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTestPaths(t, tmpDir)
 
+		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
+		keyPath := filepath.Join(vaultDir, "key")
+
 		cmd := vaultInitCmd()
+		cmd.Flags().Set("vault-dir", vaultDir)
+		cmd.Flags().Set("key-path", keyPath)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -159,10 +164,8 @@ func TestVaultInitCmd(t *testing.T) {
 		assert.Contains(t, output, "Vault initialized")
 		assert.Contains(t, output, "WARNING: Back up this key")
 
-		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
 		assert.True(t, vault.VaultHeaderExists(vaultDir))
 
-		keyPath := filepath.Join(vaultDir, "key")
 		_, err = os.Stat(keyPath)
 		require.NoError(t, err)
 	})
@@ -422,6 +425,8 @@ func TestVaultRekeyCmd(t *testing.T) {
 		keyPath := filepath.Join(vaultDir, "key")
 
 		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", vaultDir)
+		initCmd.Flags().Set("key-path", keyPath)
 		var initBuf bytes.Buffer
 		initCmd.SetOut(&initBuf)
 		initCmd.SetErr(&initBuf)
@@ -434,6 +439,8 @@ func TestVaultRekeyCmd(t *testing.T) {
 		require.NoError(t, err)
 
 		rekeyCmd := vaultRekeyCmd()
+		rekeyCmd.Flags().Set("vault-dir", vaultDir)
+		rekeyCmd.Flags().Set("key-path", keyPath)
 		var rekeyBuf bytes.Buffer
 		rekeyCmd.SetOut(&rekeyBuf)
 		rekeyCmd.SetErr(&rekeyBuf)
@@ -587,7 +594,10 @@ func TestVaultResetCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTestPaths(t, tmpDir)
 
+		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
+
 		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", vaultDir)
 		var initBuf bytes.Buffer
 		initCmd.SetOut(&initBuf)
 		initCmd.SetErr(&initBuf)
@@ -600,6 +610,7 @@ func TestVaultResetCmd(t *testing.T) {
 		require.NoError(t, err)
 
 		resetCmd := vaultResetCmd()
+		resetCmd.Flags().Set("vault-dir", vaultDir)
 		var resetBuf bytes.Buffer
 		resetCmd.SetOut(&resetBuf)
 		resetCmd.SetErr(&resetBuf)
@@ -611,7 +622,6 @@ func TestVaultResetCmd(t *testing.T) {
 		output := resetBuf.String()
 		assert.Contains(t, output, "Reset cancelled")
 
-		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
 		assert.True(t, vault.VaultHeaderExists(vaultDir))
 	})
 
@@ -619,7 +629,10 @@ func TestVaultResetCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTestPaths(t, tmpDir)
 
+		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
+
 		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", vaultDir)
 		var initBuf bytes.Buffer
 		initCmd.SetOut(&initBuf)
 		initCmd.SetErr(&initBuf)
@@ -632,6 +645,7 @@ func TestVaultResetCmd(t *testing.T) {
 		require.NoError(t, err)
 
 		resetCmd := vaultResetCmd()
+		resetCmd.Flags().Set("vault-dir", vaultDir)
 		resetCmd.Flags().Set("confirm", "true")
 		var resetBuf bytes.Buffer
 		resetCmd.SetOut(&resetBuf)
@@ -643,7 +657,6 @@ func TestVaultResetCmd(t *testing.T) {
 		output := resetBuf.String()
 		assert.Contains(t, output, "Vault reset complete")
 
-		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
 		assert.False(t, vault.VaultHeaderExists(vaultDir))
 	})
 
@@ -752,12 +765,16 @@ func TestVaultImportCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupTestPaths(t, tmpDir)
 
+		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
+		keyPath := filepath.Join(vaultDir, "key")
+
 		testKey := make([]byte, vault.KeySize)
 		_, err := rand.Read(testKey)
 		require.NoError(t, err)
 
 		cmd := vaultImportCmd()
 		cmd.Flags().Set("key-hex", hex.EncodeToString(testKey))
+		cmd.Flags().Set("key-path", keyPath)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -772,8 +789,6 @@ func TestVaultImportCmd(t *testing.T) {
 		output := buf.String()
 		assert.Contains(t, output, "Key imported")
 
-		vaultDir := filepath.Join(tmpDir, constants.Paths.Infra.VaultDir)
-		keyPath := filepath.Join(vaultDir, "key")
 		_, err = os.Stat(keyPath)
 		require.NoError(t, err)
 	})
