@@ -298,7 +298,7 @@ func (m *SecretManager) validateAppSettings() error {
 
 // BootstrapDigestManifestFile is the filename of the tamper-evidence manifest
 // written alongside bootstrap secrets.
-const BootstrapDigestManifestFile = "bootstrap_digest.json"
+const BootstrapDigestManifestFile = constants.SecretsFileBootstrapDigest
 
 // bootstrapDigestManifest is the on-disk schema for bootstrap_digest.json.
 // Consumers on startup compute SHA-256 of each secret they load from the

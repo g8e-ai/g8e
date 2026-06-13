@@ -93,7 +93,7 @@ type CanonicalDBService struct {
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // vaultRequireUnlock requires the vault to be unlocked before starting.
 func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool) (*CanonicalDBService, error) {
-	dbPath := filepath.Join(dataDir, "g8e.db")
+	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
 	db, err := sqliteutil.OpenDB(cfg, logger)
@@ -114,7 +114,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	// Unlock vault before initializing storage services
 	// Encryption is required for secure data storage at rest
 	if vaultKeyPath == "" && vaultRequireUnlock {
-		vaultKeyPath = filepath.Join(vaultDir, "key")
+		vaultKeyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 	}
 
 	if vaultKeyPath != "" {
@@ -339,9 +339,9 @@ func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *
 		return nil
 	}
 
-	pkiDir := filepath.Join(filepath.Dir(secretsDir), "pki")
+	pkiDir := filepath.Join(filepath.Dir(secretsDir), constants.PkiDirname)
 	keyPaths := []string{
-		filepath.Join(pkiDir, "issued", "hub", "operator-gateway.key"),
+		filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayKey),
 	}
 
 	migratedCount := 0

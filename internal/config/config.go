@@ -382,7 +382,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	}
 
 	vaultDir := constants.Paths.Infra.VaultDir
-	vaultKeyPath := filepath.Join(vaultDir, "key")
+	vaultKeyPath := constants.Paths.Infra.VaultKeyPath
 
 	// Validate and resolve gateway ports
 	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
@@ -562,7 +562,7 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Default VaultKeyPath to .g8e/vault/key if not explicitly set
 	if cfg.VaultKeyPath == "" {
-		cfg.VaultKeyPath = filepath.Join(cfg.VaultDir, "key")
+		cfg.VaultKeyPath = constants.Paths.Infra.VaultKeyPath
 	}
 
 	// Default VaultRequireUnlock to false (matches CLI flag default)

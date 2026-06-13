@@ -29,7 +29,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -148,7 +147,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 
 	// Initialize suspended transaction service for gateway mode
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(cfg.Gateway.DataDir, "suspended_transactions.db"),
+		DBPath:               constants.Paths.Infra.SuspendedTransactionsDBPath,
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -314,7 +313,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 
 	// Initialize suspended transaction service for gateway mode (test configuration)
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(cfg.Gateway.DataDir, "suspended_transactions.db"),
+		DBPath:               constants.Paths.Infra.SuspendedTransactionsDBPath,
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,

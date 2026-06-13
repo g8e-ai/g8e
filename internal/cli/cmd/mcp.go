@@ -28,6 +28,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"syscall"
 	"regexp"
 	"strings"
 	"sync"
@@ -861,6 +863,14 @@ type subprocessMCPProxy struct {
 	stdin   io.WriteCloser
 	scanner *bufio.Scanner
 	mu      sync.Mutex
+}
+
+func setSysProcAttr(cmd *exec.Cmd) {
+	if runtime.GOOS != "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
+	}
 }
 
 func (d *subprocessMCPProxy) start() error {

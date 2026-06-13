@@ -309,7 +309,7 @@ func testSummaryCmd() *cobra.Command {
 			// Sort test runs by name (timestamp)
 			// For simplicity, we'll just use the most recent one
 			latestRun := testRuns[len(testRuns)-1]
-			dbPath := filepath.Join(latestRun, "g8e.db")
+			dbPath := filepath.Join(latestRun, constants.DbFilename)
 
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 				return fmt.Errorf("chaos test database not found at %s", dbPath)

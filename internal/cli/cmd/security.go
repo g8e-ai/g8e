@@ -62,10 +62,10 @@ func securityValidateCmd() *cobra.Command {
 			// Check PKI directory structure
 			cmd.Println("\n=== PKI Directory Structure ===")
 			pkiFiles := []string{
-				filepath.Join(pkiDir, "root", "root_ca.crt"),
-				filepath.Join(pkiDir, "root", "root_ca.key"),
-				filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
-				filepath.Join(pkiDir, "warden_pub.pem"),
+				filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
+				filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCAKey),
+				filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
+				filepath.Join(pkiDir, constants.PkiFileWardenPub),
 			}
 			for _, file := range pkiFiles {
 				if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -79,8 +79,8 @@ func securityValidateCmd() *cobra.Command {
 			// Check secrets directory
 			cmd.Println("\n=== Secrets Directory ===")
 			secretFiles := []string{
-				filepath.Join(secretsDir, "session_encryption_key"),
-				filepath.Join(secretsDir, "bootstrap_digest.json"),
+				filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey),
+				filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
 			}
 			for _, file := range secretFiles {
 				if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -93,7 +93,7 @@ func securityValidateCmd() *cobra.Command {
 
 			// Validate root CA certificate
 			cmd.Println("\n=== Certificate Validation ===")
-			rootCAPath := filepath.Join(pkiDir, "root", "root_ca.crt")
+			rootCAPath := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
 			if certData, err := os.ReadFile(rootCAPath); err == nil {
 				certPool := x509.NewCertPool()
 				if !certPool.AppendCertsFromPEM(certData) {
@@ -126,7 +126,7 @@ func securityValidateCmd() *cobra.Command {
 
 			// Check TLS configuration
 			cmd.Println("\n=== TLS Configuration ===")
-			trustBundlePath := filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem")
+			trustBundlePath := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 			if trustData, err := os.ReadFile(trustBundlePath); err == nil {
 				certPool := x509.NewCertPool()
 				if certPool.AppendCertsFromPEM(trustData) {
@@ -188,7 +188,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			// Use outputDir if specified, otherwise use project root
 			var pkiDir string
 			if outputDir != "" {
-				pkiDir = filepath.Join(outputDir, ".g8e/pki")
+				pkiDir = filepath.Join(outputDir, constants.Paths.Infra.PkiDir)
 			} else {
 				pkiDir = constants.Paths.Infra.PkiDir
 			}
@@ -216,9 +216,9 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("failed to create PKI directory: %w", err)
 			}
 
-			certPath := filepath.Join(pkiDir, "operator.crt")
-			keyPath := filepath.Join(pkiDir, "operator.key")
-			chainPath := filepath.Join(pkiDir, "operator.chain.pem")
+			certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
+			keyPath := filepath.Join(pkiDir, constants.PkiFileOperatorKey)
+			chainPath := filepath.Join(pkiDir, constants.PkiFileOperatorChain)
 
 			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
 				return fmt.Errorf("failed to save Operator certificate: %w", err)
@@ -229,11 +229,11 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			if regResp.HubTrustBundle != "" {
-				trustDir := filepath.Join(pkiDir, "trust")
+				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
 				if err := os.MkdirAll(trustDir, 0700); err != nil {
 					return fmt.Errorf("failed to create trust directory: %w", err)
 				}
-				bundlePath := filepath.Join(trustDir, "g8eg-ca-bundle.pem")
+				bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
 				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 					return fmt.Errorf("failed to save trust bundle: %w", err)
 				}
@@ -245,7 +245,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			cmd.Printf("Certificate saved to: %s\n", certPath)
 			cmd.Printf("Key saved to: %s\n", keyPath)
 			if regResp.HubTrustBundle != "" {
-				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"))
+				cmd.Printf("Trust bundle saved to: %s\n", filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle))
 			}
 
 			return nil

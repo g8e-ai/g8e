@@ -140,7 +140,7 @@ func swaggerServeCmd() *cobra.Command {
 			}
 
 			// Check if swagger.json exists
-			swaggerJSON := filepath.Join(absDocsPath, "swagger.json")
+			swaggerJSON := filepath.Join(absDocsPath, constants.SwaggerFilename)
 			if _, err := os.Stat(swaggerJSON); os.IsNotExist(err) {
 				cmd.Printf("Swagger documentation not found at %s\n", swaggerJSON)
 				cmd.Println("Run 'g8e swagger init' to generate documentation first.")

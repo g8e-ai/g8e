@@ -37,8 +37,10 @@ var Paths = struct {
 		RuntimeDir              string
 		DataDir                 string
 		VaultDir                string
+		VaultKeyPath            string
 		TestVaultDir            string
 		LocalStateDBPath        string
+		SuspendedTransactionsDBPath string
 		AuditVaultDBPath        string
 		RootCAPath              string
 		HubCAPath               string
@@ -69,8 +71,10 @@ var Paths = struct {
 		RuntimeDir              string
 		DataDir                 string
 		VaultDir                string
+		VaultKeyPath            string
 		TestVaultDir            string
 		LocalStateDBPath        string
+		SuspendedTransactionsDBPath string
 		AuditVaultDBPath        string
 		RootCAPath              string
 		HubCAPath               string
@@ -139,12 +143,14 @@ func InitPathsWithBase(baseDir string) error {
 	Paths.Infra.SecretsDir = filepath.Join(baseDir, ".g8e/secrets")
 	Paths.Infra.ProtocolDir = filepath.Join(baseDir, ".g8e/protocol")
 	Paths.Infra.VaultDir = filepath.Join(baseDir, ".g8e/vault")
+	Paths.Infra.VaultKeyPath = filepath.Join(Paths.Infra.VaultDir, "key")
 
 	// Update derived paths
 	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")
 	Paths.Infra.ProtocolModelsDir = filepath.Join(Paths.Infra.ProtocolDir, "models")
 	Paths.Infra.DbPath = filepath.Join(Paths.Infra.DataDir, "g8e.db")
 	Paths.Infra.LocalStateDBPath = filepath.Join(Paths.Infra.RuntimeDir, "local_state.db")
+	Paths.Infra.SuspendedTransactionsDBPath = filepath.Join(Paths.Infra.DataDir, "suspended_transactions.db")
 	Paths.Infra.AuditVaultDBPath = filepath.Join(Paths.Infra.DataDir, "audit_vault.db")
 	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
 	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
@@ -233,14 +239,17 @@ const (
 
 // PKI filesystem constants for subdirectories and filenames.
 const (
+	PkiDirname           = "pki"
 	PkiSubdirRoot        = "root"
 	PkiSubdirAuthorities = "authorities"
 	PkiSubdirIssued      = "issued"
 	PkiSubdirTrust       = "trust"
 	PkiSubdirRevocation  = "revocation"
 	PkiSubdirBinaries    = "binaries"
+	PkiSubdirClient      = "client"
 
 	PkiFileRootCA          = "root_ca.crt"
+	PkiFileRootCAKey       = "root_ca.key"
 	PkiFileHubCA           = "hub_ca.crt"
 	PkiFileOperatorCA      = "operator_ca.crt"
 	PkiFileGatewayPeerCA   = "gateway_peer_ca.crt"
@@ -248,4 +257,31 @@ const (
 	PkiFileRootBundle      = "root.pem"
 	PkiFileOperatorBundle  = "operator-bundle.pem"
 	PkiFileTrustDomainJSON = "trust-domain.json"
+	PkiFileWardenPub       = "warden_pub.pem"
+	PkiFileOperatorCert    = "operator.crt"
+	PkiFileOperatorKey     = "operator.key"
+	PkiFileOperatorChain   = "operator.chain.pem"
+	PkiFileGatewayCert     = "operator-gateway.crt"
+	PkiFileGatewayKey      = "operator-gateway.key"
+	PkiFileGatewayChain    = "operator-gateway.chain.pem"
+
+	DbFilename             = "g8e.db"
+	VaultKeyFilename       = "key"
+	SuspendedTxFilename    = "suspended_transactions.db"
+	ReceiptsFilename       = "receipts.json"
+	ReceiptsExportFilename = "receipts-export.json"
+
+	SecretsFileSessionEncryptionKey = "session_encryption_key"
+	SecretsFileBootstrapDigest      = "bootstrap_digest.json"
+
+	DemosDirname     = "demos"
+	DemosComposeFile = "compose.yml"
+
+	SwaggerFilename        = "swagger.json"
+	ComplianceReportFilename = "compliance-report.json"
+
+	// Gateway-specific PKI subdirectories
+	PkiSubdirHub         = "hub"
+	PkiSubdirGatewayPeer = "gateway-peer"
+	PkiSubdirApps        = "apps"
 )

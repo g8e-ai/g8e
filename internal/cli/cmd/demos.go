@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +57,7 @@ func demosListCmd() *cobra.Command {
 }
 
 func runDemosList(cmd *cobra.Command, args []string) error {
-	demosDir := filepath.Join(getProjectRoot(), "demos")
+	demosDir := filepath.Join(getProjectRoot(), constants.DemosDirname)
 	entries, err := os.ReadDir(demosDir)
 	if err != nil {
 		return fmt.Errorf("failed to read demos directory: %w", err)
@@ -65,7 +66,7 @@ func runDemosList(cmd *cobra.Command, args []string) error {
 	fmt.Println("Available demo environments:")
 	for _, entry := range entries {
 		if entry.IsDir() && entry.Name() != "bin" {
-			composePath := filepath.Join(demosDir, entry.Name(), "compose.yml")
+			composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)
 			if _, err := os.Stat(composePath); err == nil {
 				fmt.Printf("  - %s\n", entry.Name())
 			}
@@ -88,7 +89,7 @@ func demosStartCmd() *cobra.Command {
 
 func runDemosStart(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -96,13 +97,13 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
 
 	// Check if g8e binary exists in demos/bin
-	binPath := filepath.Join(getProjectRoot(), "demos", "bin", "g8e")
+	binPath := filepath.Join(getProjectRoot(), constants.DemosDirname, "bin", "g8e")
 	if runtime.GOOS == "windows" {
 		binPath += ".exe"
 	}
@@ -167,7 +168,7 @@ func demosStopCmd() *cobra.Command {
 
 func runDemosStop(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -175,7 +176,7 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
@@ -209,7 +210,7 @@ func demosStatusCmd() *cobra.Command {
 
 func runDemosStatus(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -217,7 +218,7 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
@@ -248,7 +249,7 @@ func demosCleanCmd() *cobra.Command {
 
 func runDemosClean(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -256,7 +257,7 @@ func runDemosClean(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
@@ -335,13 +336,13 @@ Available scenarios:
 
 func runDemosRun(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	demoDir := filepath.Join(getProjectRoot(), constants.DemosDirname, org)
 
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
 		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
 	}
 
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
@@ -449,7 +450,7 @@ func runHealthcareScenario(demoDir, scenario string) error {
 		fmt.Println("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		fmt.Println("  Copy-paste to inspect doctrine decisions for this request:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 		_ = demoStep(demoDir, "audit tail",
 			false,
@@ -491,7 +492,7 @@ func runHealthcareScenario(demoDir, scenario string) error {
 		fmt.Println("  ── Proof ─────────────────────────────────────────────────────")
 		fmt.Println("  Copy-paste to confirm AUTO_APPROVED in the audit log:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability | grep -i auto_approved")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability | grep -i auto_approved")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
@@ -595,7 +596,7 @@ func runHealthcareScenario(demoDir, scenario string) error {
 		fmt.Println()
 		fmt.Println("  Then inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")
@@ -636,7 +637,7 @@ func runGovScenario(demoDir, scenario string) error {
 
 		fmt.Println("  Copy-paste to inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 1 — CUI exfiltration blocked.")
@@ -676,7 +677,7 @@ func runFinanceScenario(demoDir, scenario string) error {
 
 		fmt.Println("  Copy-paste to inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 1 — Unauthorized trade blocked.")
