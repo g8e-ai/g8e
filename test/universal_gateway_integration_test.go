@@ -40,7 +40,6 @@ This test uses NO mocks - all components are real infrastructure.
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"

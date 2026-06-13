@@ -176,7 +176,7 @@ func setupTestContext(t *testing.T) *TestContext {
 	auditorCfg.Verbose = true       // Echo requests to stderr for debugging
 
 	// Load CLI credentials (bootstrapped by ./g8e gw start)
-	creds, err := auth.LoadCredentials(cliCfg)
+	creds, err = auth.LoadCredentials(cliCfg)
 	if err != nil {
 		t.Fatalf("failed to load CLI credentials: %v", err)
 	}
