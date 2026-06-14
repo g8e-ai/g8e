@@ -416,3 +416,75 @@ func TestResolveHost_ProxyCommand(t *testing.T) {
 	assert.Equal(t, "ssh -W %h:%p jump@bastion", r.ProxyCommand)
 	assert.Equal(t, "proxyuser", r.User)
 }
+
+// ---------------------------------------------------------------------------
+// preFlightCheck
+// ---------------------------------------------------------------------------
+
+func TestPreFlightCheck_ContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Need to provide a valid key to get past auth method check
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "id_rsa")
+	generateTestSSHKey(t, keyPath)
+
+	r := ssh.HostConfig{
+		Hostname: "127.0.0.1",
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{keyPath},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", 5*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
+}
+
+func TestPreFlightCheck_NoAuthMethods(t *testing.T) {
+	ctx := context.Background()
+	r := ssh.HostConfig{
+		Hostname: "127.0.0.1",
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", 5*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no SSH auth methods available")
+}
+
+func TestPreFlightCheck_InvalidKeyFile(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	badKey := filepath.Join(dir, "bad_key")
+	require.NoError(t, os.WriteFile(badKey, []byte("not a valid key"), 0600))
+
+	r := ssh.HostConfig{
+		Hostname: "127.0.0.1",
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{badKey},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", 5*time.Second)
+	assert.Error(t, err)
+}
+
+func TestPreFlightCheck_DialTimeout(t *testing.T) {
+	ctx := context.Background()
+	
+	// Use a non-routable IP to trigger timeout
+	r := ssh.HostConfig{
+		Hostname: "192.0.2.1", // TEST-NET-1, guaranteed non-routable
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", 100*time.Millisecond)
+	assert.Error(t, err)
+	// Should fail due to no auth methods or dial timeout
+}

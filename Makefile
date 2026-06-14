@@ -48,12 +48,38 @@ TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
 COVERAGE_THRESHOLD := 52
 
-# Package exclusion filter (reused across test targets)
-PKG_EXCLUDE := | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"
-TEST_PKGS := $$(go list ./... $(PKG_EXCLUDE))
+# =============================================================================
+# COVERAGE EXCLUSIONS — single source of truth
+# =============================================================================
+# Packages excluded from both test runs and coverage profile.
+# Each pattern is matched against Go import paths and coverage profile file paths.
+EXCLUDE_PKGS := \
+	mocks \
+	/cmd/ \
+	/internal/test \
+	/test/ \
+	/internal/protocol/proto \
+	/internal/contracts \
+	/internal/interfaces \
+	/internal/services/gateway/docs \
+	/internal/services/gateway/scripts \
+	/internal/services/storage/storagetest
 
-# Coverage exclusion filter (for coverage calculations)
-COVERAGE_EXCLUDE := | grep -v "internal/protocol/proto" | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "internal/cli/cmd/demos.go"
+# Files excluded from coverage only (belong to otherwise-tested packages).
+EXCLUDE_FILES := internal/cli/cmd/demos.go
+
+# Grep chains derived from the lists above — do not edit directly.
+_PKG_GREP  := $(foreach p,$(EXCLUDE_PKGS),| grep -v "$(p)")
+_FILE_GREP := $(foreach f,$(EXCLUDE_FILES),| grep -v "$(f)")
+_COV_GREP  := $(_PKG_GREP) $(_FILE_GREP)
+
+# Packages passed to go test.
+TEST_PKGS := $$(go list ./... $(_PKG_GREP))
+
+# Filter coverage.out (the raw profile) to remove excluded paths, then report %.
+# We operate on the profile data — not on the formatted output of go tool cover.
+FILTER_PROFILE = { head -1 coverage.out; tail -n +2 coverage.out $(_COV_GREP); } > coverage_filtered.out
+COVERAGE_PCT   = go tool cover -func=coverage_filtered.out | tail -1 | awk '{print $$3}' | sed 's/%//'
 
 # =============================================================================
 # TOOLS
@@ -423,14 +449,12 @@ test-native:
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage (threshold: $(COVERAGE_THRESHOLD)%)..."
-	@if [ -n "$(PKG)" ]; then \
-		echo "Running coverage for package: $(PKG)"; \
-		go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(if $(VERBOSE),-v,) $(PKG); \
-	else \
-		echo "Running coverage for all packages..."; \
-		go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(if $(VERBOSE),-v,) $(TEST_PKGS); \
-	fi
-	@COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+		-coverprofile=coverage.out -covermode=atomic \
+		$(if $(VERBOSE),-v,) \
+		$(if $(PKG),$(PKG),$(TEST_PKGS))
+	@$(FILTER_PROFILE)
+	@COVERAGE=$$($(COVERAGE_PCT)); \
 	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 		exit 1; \
@@ -507,7 +531,7 @@ clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
 	@rm -rf bin/
-	@rm -f *.sha256 *.test coverage.out buf
+	@rm -f *.sha256 *.test coverage.out coverage_filtered.out buf
 	@rm -rf .g8e-harness-*/
 	@echo "Clean complete."
 
@@ -574,8 +598,10 @@ _ci-vulncheck:
 _ci-test:
 	@echo "=== test ==="
 	@./g8e gw start --cert-mode localhost
-	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
-	@COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+		-coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
+	@$(FILTER_PROFILE)
+	@COVERAGE=$$($(COVERAGE_PCT)); \
 	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 		exit 1; \
