@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,13 +33,13 @@ import (
 
 // mockExecutionHandler is a test-only implementation of ExecutionHandler.
 type mockExecutionHandler struct {
-	executed                       bool
+	executed                       atomic.Bool
 	err                            error
 	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
 }
 
 func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
-	m.executed = true
+	m.executed.Store(true)
 	if m.ExecuteVerifiedTransactionFunc != nil {
 		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
 	}
