@@ -340,6 +340,52 @@ func TestNativeToolsIntegration_ProcessTools(t *testing.T) {
 	})
 }
 
+// TestNativeToolsIntegration_ProcTree tests process tree tool
+func TestNativeToolsIntegration_ProcTree(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	operatorURL := os.Getenv("OPERATOR_URL")
+	if operatorURL == "" {
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+	}
+
+	insecureClient := &http.Client{
+		Timeout: 5 * time.Second,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
+		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
+	} else {
+		resp.Body.Close()
+	}
+
+	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
+	require.NoError(t, err)
+
+	t.Run("proc_tree_from_init", func(t *testing.T) {
+		req := map[string]interface{}{
+			"pid":       1,
+			"max_depth": 2,
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		receipt := callNativeToolViaEnvelope(t, mtlsClient, operatorURL, sessionID, "proc_tree", reqJSON)
+		require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status)
+
+		var result processTreeResult
+		err = json.Unmarshal([]byte(receipt.ResultSummary), &result)
+		require.NoError(t, err)
+
+		require.Equal(t, 1, result.RootPID)
+		require.Equal(t, 1, result.Tree.PID)
+		require.NotEmpty(t, result.Tree.Name)
+	})
+}
+
 // TestNativeToolsIntegration_NetworkTools tests network auditing and probing
 func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 	if testing.Short() {
@@ -415,6 +461,26 @@ func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 
 		require.Equal(t, http.StatusOK, result.StatusCode)
 		require.Greater(t, result.LatencyMs, 0.0)
+	})
+
+	t.Run("net_dns_resolve_example_com", func(t *testing.T) {
+		req := NetDNSResolveRequest{
+			Hostname:   "example.com",
+			RecordType: "A",
+		}
+		reqJSON, _ := json.Marshal(req)
+
+		receipt := callNativeToolViaEnvelope(t, mtlsClient, operatorURL, sessionID, "net_dns_resolve", reqJSON)
+		require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status)
+
+		var result NetDNSResolveResult
+		err = json.Unmarshal([]byte(receipt.ResultSummary), &result)
+		require.NoError(t, err)
+
+		require.Equal(t, "example.com", result.Hostname)
+		require.Equal(t, "A", result.RecordType)
+		require.Empty(t, result.Error)
+		require.Positive(t, result.Count)
 	})
 }
 

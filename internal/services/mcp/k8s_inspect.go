@@ -22,8 +22,33 @@ import (
 	"strings"
 )
 
+// kubectlRunner is an interface for running kubectl commands, allowing dependency injection for testing.
+type kubectlRunner interface {
+	lookPath() bool
+	runCommand(ctx context.Context, args ...string) (string, error)
+}
+
+// realKubectlRunner is the production implementation that actually runs kubectl commands.
+type realKubectlRunner struct{}
+
+func (r *realKubectlRunner) lookPath() bool {
+	_, err := exec.LookPath("kubectl")
+	return err == nil
+}
+
+func (r *realKubectlRunner) runCommand(ctx context.Context, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "kubectl", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), fmt.Errorf("kubectl command failed: %w", err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
 // K8sInspectTool provides Kubernetes cluster inspection and pod management operations.
-type K8sInspectTool struct{}
+type K8sInspectTool struct {
+	runner kubectlRunner
+}
 
 // Name returns the tool identifier.
 func (t *K8sInspectTool) Name() string {
@@ -72,7 +97,12 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 		req.Operation = "pods"
 	}
 
-	if !kubectlAvailable() {
+	runner := t.runner
+	if runner == nil {
+		runner = &realKubectlRunner{}
+	}
+
+	if !runner.lookPath() {
 		return CallToolResult{}, fmt.Errorf("k8s_inspect: kubectl not found in PATH")
 	}
 
@@ -110,17 +140,17 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 
 	switch req.Operation {
 	case "pods":
-		result, err = k8sListPods(ctx, namespace, limit)
+		result, err = k8sListPods(ctx, namespace, limit, runner)
 	case "nodes":
-		result, err = k8sListNodes(ctx, limit)
+		result, err = k8sListNodes(ctx, limit, runner)
 	case "services":
-		result, err = k8sListServices(ctx, namespace, limit)
+		result, err = k8sListServices(ctx, namespace, limit, runner)
 	case "deployments":
-		result, err = k8sListDeployments(ctx, namespace, limit)
+		result, err = k8sListDeployments(ctx, namespace, limit, runner)
 	case "namespace":
-		result, err = k8sListNamespaces(ctx)
+		result, err = k8sListNamespaces(ctx, runner)
 	case "cluster_info":
-		result, err = k8sClusterInfo(ctx)
+		result, err = k8sClusterInfo(ctx, runner)
 	case "pod_logs":
 		if req.Name == "" {
 			return CallToolResult{}, fmt.Errorf("k8s_inspect: name required for pod_logs operation")
@@ -141,7 +171,7 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 				},
 			}, nil
 		}
-		result, err = k8sPodLogs(ctx, namespace, req.Name)
+		result, err = k8sPodLogs(ctx, namespace, req.Name, runner)
 	case "pod_describe":
 		if req.Name == "" {
 			return CallToolResult{}, fmt.Errorf("k8s_inspect: name required for pod_describe operation")
@@ -162,7 +192,7 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 				},
 			}, nil
 		}
-		result, err = k8sPodDescribe(ctx, namespace, req.Name)
+		result, err = k8sPodDescribe(ctx, namespace, req.Name, runner)
 	default:
 		return CallToolResult{}, fmt.Errorf("k8s_inspect: unsupported operation: %s", req.Operation)
 	}
@@ -218,9 +248,15 @@ func getCurrentNamespace(ctx context.Context) string {
 	return "default"
 }
 
-func k8sListPods(ctx context.Context, namespace string, limit int) (K8sInspectResult, error) {
+func k8sListPods(ctx context.Context, namespace string, limit int, runner kubectlRunner) (K8sInspectResult, error) {
 	args := []string{"get", "pods", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(ctx, args...)
+	var output string
+	var err error
+	if runner != nil {
+		output, err = runner.runCommand(ctx, args...)
+	} else {
+		output, err = runKubectlCommand(ctx, args...)
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get pods: %w", err)
 	}
@@ -257,9 +293,15 @@ func k8sListPods(ctx context.Context, namespace string, limit int) (K8sInspectRe
 	}, nil
 }
 
-func k8sListNodes(ctx context.Context, limit int) (K8sInspectResult, error) {
+func k8sListNodes(ctx context.Context, limit int, runner kubectlRunner) (K8sInspectResult, error) {
 	args := []string{"get", "nodes", "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(ctx, args...)
+	var output string
+	var err error
+	if runner != nil {
+		output, err = runner.runCommand(ctx, args...)
+	} else {
+		output, err = runKubectlCommand(ctx, args...)
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get nodes: %w", err)
 	}
@@ -303,9 +345,15 @@ func k8sListNodes(ctx context.Context, limit int) (K8sInspectResult, error) {
 	}, nil
 }
 
-func k8sListServices(ctx context.Context, namespace string, limit int) (K8sInspectResult, error) {
+func k8sListServices(ctx context.Context, namespace string, limit int, runner kubectlRunner) (K8sInspectResult, error) {
 	args := []string{"get", "services", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(ctx, args...)
+	var output string
+	var err error
+	if runner != nil {
+		output, err = runner.runCommand(ctx, args...)
+	} else {
+		output, err = runKubectlCommand(ctx, args...)
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get services: %w", err)
 	}
@@ -342,9 +390,15 @@ func k8sListServices(ctx context.Context, namespace string, limit int) (K8sInspe
 	}, nil
 }
 
-func k8sListDeployments(ctx context.Context, namespace string, limit int) (K8sInspectResult, error) {
+func k8sListDeployments(ctx context.Context, namespace string, limit int, runner kubectlRunner) (K8sInspectResult, error) {
 	args := []string{"get", "deployments", "-n", namespace, "-o", "json", "--limit", strconv.Itoa(limit)}
-	output, err := runKubectlCommand(ctx, args...)
+	var output string
+	var err error
+	if runner != nil {
+		output, err = runner.runCommand(ctx, args...)
+	} else {
+		output, err = runKubectlCommand(ctx, args...)
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get deployments: %w", err)
 	}
@@ -393,8 +447,14 @@ func k8sListDeployments(ctx context.Context, namespace string, limit int) (K8sIn
 	}, nil
 }
 
-func k8sListNamespaces(ctx context.Context) (K8sInspectResult, error) {
-	output, err := runKubectlCommand(ctx, "get", "namespaces", "-o", "json")
+func k8sListNamespaces(ctx context.Context, runner kubectlRunner) (K8sInspectResult, error) {
+	var output string
+	var err error
+	if runner != nil {
+		output, err = runner.runCommand(ctx, "get", "namespaces", "-o", "json")
+	} else {
+		output, err = runKubectlCommand(ctx, "get", "namespaces", "-o", "json")
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get namespaces: %w", err)
 	}
@@ -428,8 +488,14 @@ func k8sListNamespaces(ctx context.Context) (K8sInspectResult, error) {
 	}, nil
 }
 
-func k8sClusterInfo(ctx context.Context) (K8sInspectResult, error) {
-	version, err := runKubectlCommand(ctx, "version", "--short", "-o", "json")
+func k8sClusterInfo(ctx context.Context, runner kubectlRunner) (K8sInspectResult, error) {
+	var version string
+	var err error
+	if runner != nil {
+		version, err = runner.runCommand(ctx, "version", "--short", "-o", "json")
+	} else {
+		version, err = runKubectlCommand(ctx, "version", "--short", "-o", "json")
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get version: %w", err)
 	}
@@ -445,7 +511,11 @@ func k8sClusterInfo(ctx context.Context) (K8sInspectResult, error) {
 
 	contextName := "unknown"
 	if ctx.Err() == nil {
-		contextName, err = runKubectlCommand(ctx, "config", "current-context")
+		if runner != nil {
+			contextName, err = runner.runCommand(ctx, "config", "current-context")
+		} else {
+			contextName, err = runKubectlCommand(ctx, "config", "current-context")
+		}
 		if err != nil {
 			contextName = "unknown"
 		}
@@ -453,7 +523,11 @@ func k8sClusterInfo(ctx context.Context) (K8sInspectResult, error) {
 
 	clusterName := "unknown"
 	if ctx.Err() == nil {
-		clusterName, err = runKubectlCommand(ctx, "config", "view", "--minify", "-o", "jsonpath='{.cluster}'")
+		if runner != nil {
+			clusterName, err = runner.runCommand(ctx, "config", "view", "--minify", "-o", "jsonpath='{.cluster}'")
+		} else {
+			clusterName, err = runKubectlCommand(ctx, "config", "view", "--minify", "-o", "jsonpath='{.cluster}'")
+		}
 		if err != nil {
 			clusterName = "unknown"
 		}
@@ -470,9 +544,15 @@ func k8sClusterInfo(ctx context.Context) (K8sInspectResult, error) {
 	}, nil
 }
 
-func k8sPodLogs(ctx context.Context, namespace string, name string) (K8sInspectResult, error) {
+func k8sPodLogs(ctx context.Context, namespace string, name string, runner kubectlRunner) (K8sInspectResult, error) {
 	args := []string{"logs", "-n", namespace, name}
-	output, err := runKubectlCommand(ctx, args...)
+	var output string
+	var err error
+	if runner != nil {
+		output, err = runner.runCommand(ctx, args...)
+	} else {
+		output, err = runKubectlCommand(ctx, args...)
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: get pod logs: %w", err)
 	}
@@ -496,9 +576,15 @@ func k8sPodLogs(ctx context.Context, namespace string, name string) (K8sInspectR
 	}, nil
 }
 
-func k8sPodDescribe(ctx context.Context, namespace string, name string) (K8sInspectResult, error) {
+func k8sPodDescribe(ctx context.Context, namespace string, name string, runner kubectlRunner) (K8sInspectResult, error) {
 	args := []string{"describe", "pod", "-n", namespace, name}
-	output, err := runKubectlCommand(ctx, args...)
+	var output string
+	var err error
+	if runner != nil {
+		output, err = runner.runCommand(ctx, args...)
+	} else {
+		output, err = runKubectlCommand(ctx, args...)
+	}
 	if err != nil {
 		return K8sInspectResult{}, fmt.Errorf("k8s_inspect: describe pod: %w", err)
 	}

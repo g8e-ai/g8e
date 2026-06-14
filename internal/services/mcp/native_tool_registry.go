@@ -19,6 +19,9 @@ import "fmt"
 // registry. This function replaces the previous init()-based auto-registration
 // to comply with the prohibition on init() functions in service packages.
 func RegisterNativeTools(registry *ToolRegistry) error {
+	if registry == nil {
+		return fmt.Errorf("registry: cannot register to nil registry")
+	}
 	tools := []NativeTool{
 		&DBDiscoverTopologyTool{},
 		&DBQueryValidateTool{},
