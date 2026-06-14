@@ -30,6 +30,10 @@ import (
 )
 
 func approveCmd() *cobra.Command {
+	return approveCmdWithConfig(config.Load)
+}
+
+func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approve <transaction_hash>",
 		Short: "Approve a suspended L3 transaction with CLI signature",
@@ -37,7 +41,7 @@ func approveCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			txHash := args[0]
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("failed to load config: %w", err)
 			}

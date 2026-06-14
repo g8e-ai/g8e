@@ -126,11 +126,26 @@ func Suspended(resp *JSONRPCResponse) (txHash string, yes bool) {
 	if resp == nil {
 		return "", false
 	}
+
+	// First, try to parse structured error data for approval_url field
+	if resp.Error != nil && len(resp.Error.Data) > 0 {
+		var errData map[string]any
+		if json.Unmarshal(resp.Error.Data, &errData) == nil {
+			if approvalURL, ok := errData["approval_url"].(string); ok {
+				if hash := extractHashFromURL(approvalURL); hash != "" {
+					return hash, true
+				}
+			}
+		}
+	}
+
+	// Fall back to string search in error message and result
 	hay := ""
 	if resp.Error != nil {
 		hay = resp.Error.Message + string(resp.Error.Data)
 	}
 	hay += string(resp.Result)
+
 	// Pull the last path segment of an /approve/{hash} URL if present.
 	const marker = "/approve/"
 	if i := indexOf(hay, marker); i >= 0 {
@@ -144,6 +159,22 @@ func Suspended(resp *JSONRPCResponse) (txHash string, yes bool) {
 		}
 	}
 	return "", false
+}
+
+// extractHashFromURL extracts the transaction hash from an approval URL
+func extractHashFromURL(url string) string {
+	const marker = "/approve/"
+	if i := indexOf(url, marker); i >= 0 {
+		rest := url[i+len(marker):]
+		end := 0
+		for end < len(rest) && isHex(rest[end]) && rest[end] != '?' && rest[end] != '#' && rest[end] != '/' {
+			end++
+		}
+		if end > 0 {
+			return rest[:end]
+		}
+	}
+	return ""
 }
 
 func indexOf(s, sub string) int {

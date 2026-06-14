@@ -46,7 +46,7 @@ TEST_TIMEOUT := 180s
 TEST_SHORT_TIMEOUT := 60s
 TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
-COVERAGE_THRESHOLD := 52
+COVERAGE_THRESHOLD := 60
 
 # =============================================================================
 # COVERAGE EXCLUSIONS — single source of truth

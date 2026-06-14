@@ -20,10 +20,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Execute() {
+func NewRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "g8e",
-		Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
+		Use:     "g8e",
+		Version: "1.1.1",
+		Short:   "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
 		Long: `g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
 		CompletionOptions: cobra.CompletionOptions{
@@ -42,6 +43,12 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		auditCmd(),
 		swaggerCmd(),
 	)
+
+	return rootCmd
+}
+
+func Execute() {
+	rootCmd := NewRootCmd()
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
