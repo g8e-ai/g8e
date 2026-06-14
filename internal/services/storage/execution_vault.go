@@ -39,7 +39,7 @@ type ExecutionVaultConfig struct {
 // DefaultExecutionVaultConfig returns the default configuration.
 func DefaultExecutionVaultConfig() *ExecutionVaultConfig {
 	return &ExecutionVaultConfig{
-		DBPath:               ".g8e/execution_vault.db",
+		DBPath:               constants.ExecutionVaultDBPath,
 		MaxDBSizeMB:          1024,
 		RetentionDays:        30,
 		PruneIntervalMinutes: 60,

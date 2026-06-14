@@ -92,6 +92,18 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 		canonical.WriteByte('|')
 	}
 
+	// 8. requestor_user_id (string) - the human user who authorized the action
+	if env.RequestorUserId != "" {
+		canonical.WriteString(env.RequestorUserId)
+		canonical.WriteByte('|')
+	}
+
+	// 9. acting_app_id (string) - the app/tool acting on behalf of the user
+	if env.ActingAppId != "" {
+		canonical.WriteString(env.ActingAppId)
+		canonical.WriteByte('|')
+	}
+
 	canonicalStr := canonical.String()
 	hash := sha256.Sum256([]byte(canonicalStr))
 	return hex.EncodeToString(hash[:]), nil

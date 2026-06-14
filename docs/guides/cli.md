@@ -86,6 +86,8 @@ Flags:
 
 When `--cert-mode full` is selected, the CLI detects network identity once, writes it to a temporary JSON file in the runtime directory, and passes that file to the Gateway subprocess. `--cert-mode localhost` continues to use loopback-only identities, including IPv6 localhost when available.
 
+**Posture Persistence:** The gateway posture is persisted in `.g8e/pids/operator.posture` on startup. When using `gateway restart`, the current posture is read from this file and preserved. If the file is missing or corrupted, the gateway defaults to `doctrine` posture. Valid posture values are `doctrine`, `consensus`, and `notary`.
+
 ### gateway stop
 ```
 Stop the g8e Gateway
@@ -1023,6 +1025,17 @@ AUDIT TRAIL:
 
   View all audit events:
     g8e gateway data audit summary
+
+DELEGATED CREDENTIAL MODEL:
+  g8e uses a delegated credential model for agent identity. When an agent is launched,
+  it receives a short-lived mTLS certificate that carries both identities:
+  - App SPIFFE ID: spiffe://g8e.local/app/<agent-name> (the agent's policy identity)
+  - Requestor User ID: spiffe://g8e.local/user/<id> (the human who launched the agent)
+
+  Both identities are cryptographically bound in the certificate's URI SANs and presented
+  at the TLS handshake. No trusted identity headers are used — the certificate IS the
+  session. Every governed transaction includes both identities in the signed hash,
+  ensuring end-to-end identity correctness and auditability.
 
 Usage:
   g8e mcp agent run [<agent>] [--url <url>] [-- <command> [args...]] [flags]

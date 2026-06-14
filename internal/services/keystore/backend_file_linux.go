@@ -40,11 +40,11 @@ func (b *fileBackend) Name() string {
 }
 
 func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
-	path := filepath.Join(b.secretsDir, ".master_key")
+	path := filepath.Join(b.secretsDir, constants.MasterKeyFilename)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, ErrKeyNotFound
+			return nil, constants.ErrKeyStoreKeyNotFound
 		}
 		return nil, fmt.Errorf("read master key file: %w", err)
 	}
@@ -56,7 +56,7 @@ func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
 	}
 
 	if len(key) == 0 {
-		return nil, ErrKeyNotFound
+		return nil, constants.ErrKeyStoreKeyNotFound
 	}
 
 	return key, nil
@@ -70,7 +70,7 @@ func (b *fileBackend) StoreMasterKey(key []byte) error {
 
 	// Encode as base64 for safe storage
 	encoded := base64.StdEncoding.EncodeToString(key)
-	path := filepath.Join(b.secretsDir, ".master_key")
+	path := filepath.Join(b.secretsDir, constants.MasterKeyFilename)
 	tmpPath := path + ".tmp"
 
 	if err := os.WriteFile(tmpPath, []byte(encoded), 0600); err != nil {
@@ -86,7 +86,7 @@ func (b *fileBackend) StoreMasterKey(key []byte) error {
 }
 
 func (b *fileBackend) DeleteMasterKey() error {
-	path := filepath.Join(b.secretsDir, ".master_key")
+	path := filepath.Join(b.secretsDir, constants.MasterKeyFilename)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("delete master key file: %w", err)
 	}

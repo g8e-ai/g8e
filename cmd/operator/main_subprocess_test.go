@@ -560,8 +560,8 @@ func TestHandleRekeyVault_Success_VaultDataVerified(t *testing.T) {
 
 func TestHandleVaultCommand_DataDirResolution(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, constants.InitPathsWithBase(dir))
-	dataDir := constants.Paths.Infra.DataDir
+	testPaths := testutil.NewTestPaths(dir)
+	dataDir := testPaths.DataDir
 	require.NoError(t, os.MkdirAll(dataDir, 0700))
 
 	logger, err := configureLogger("info")

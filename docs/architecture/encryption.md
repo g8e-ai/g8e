@@ -11,6 +11,84 @@ g8e uses mandatory encryption for all sensitive data at rest. The encryption sys
 - **Key rotation**: Support for re-keying without data loss.
 - **Auditability**: All encryption operations are logged to the audit vault.
 
+## Code Quality Status
+
+### Test Coverage
+- **Vault service**: Comprehensive test coverage in `internal/services/vault/vault_test.go` (930 lines)
+  - Tests cover: KEK derivation, DEK generation, AES Key Wrap/Unwrap, AES-GCM encryption/decryption, vault lifecycle (init, unlock, rekey, lock, reset), concurrent access, integrity verification
+  - All cryptographic primitives have dedicated test cases
+  - Error paths are well-tested (invalid keys, tampered ciphertext, locked vault)
+- **Storage integration**: Vault requirement tests in `internal/services/storage/vault_requirement_test.go`
+  - Verifies that NewExecutionVaultService, NewTokenStoreService, and NewSQLAuditStore reject nil vault
+  - Tests that locked vault operations fail appropriately
+- **Integration tests**: Storage service tests use vault fixtures for end-to-end encryption validation
+
+### Documentation Status
+- ✅ Vault architecture documented
+- ✅ CLI commands documented
+- ✅ Configuration options documented
+- ✅ Security guarantees documented
+- ✅ Migration paths documented
+- ⚠️ Storage service integration needs update (AuditVaultService was split in v1.0.10)
+
+### Refactoring Opportunities
+
+#### 1. Inconsistent Vault Integration Patterns
+**Current State:**
+- `SQLAuditStore`: Vault passed via `AuditStoreConfig.EncryptionVault` (required field)
+- `ExecutionVaultService`: Vault passed as constructor parameter (required)
+- `TokenStoreService`: Vault passed as constructor parameter (required)
+- `GitLedgerService`: Vault passed via `LedgerConfig.EncryptionVault` (required)
+
+**Smell:** Inconsistent parameter passing patterns - some use config struct, some use direct parameters.
+
+**Refactoring Direction:**
+- Standardize on config struct pattern for all storage services
+- Create a common `VaultConfig` struct that can be embedded in service configs
+- This aligns with the pattern used by SQLAuditStore and GitLedgerService
+- Benefits: Consistency, easier configuration management, better testability
+
+#### 2. Vault Path Configuration
+**Current State:**
+- Vault header path: `.g8e/vault/vault.header` (stored in dataDir)
+- Vault key path: `.g8e/vault/key` (resolved relative to vault directory)
+- Paths are embedded in `internal/constants/paths.go`
+
+**Smell:** Documentation incorrectly states vault header is at `.g8e/data/vault.header`.
+
+**Refactoring Direction:**
+- Update documentation to reflect correct path (`.g8e/vault/vault.header`)
+- Consider centralizing path resolution in a single utility function
+- Add validation to ensure vault directory and key directory are properly secured (0700 permissions)
+
+#### 3. Error Handling Consistency
+**Current State:**
+- Vault errors defined in `internal/services/vault/vault.go`
+- Storage services have their own error handling for vault operations
+- Some services check `vault.IsUnlocked()` before operations, others check on-demand
+
+**Smell:** Inconsistent error handling patterns across services.
+
+**Refactoring Direction:**
+- Define common vault-related errors in `internal/constants/errors.go`
+- Standardize the pattern: check vault state at service initialization, fail-fast if locked
+- Add a `VaultWrapper` helper that provides consistent error wrapping for vault operations
+- This aligns with the v1.0.10 consolidation of CLI & Client errors
+
+#### 4. Thread Safety in Storage Services
+**Current State:**
+- Vault service uses `sync.RWMutex` for concurrent access
+- SQLAuditStore uses `sync.WaitGroup` for write operations
+- Other storage services have varying concurrency patterns
+
+**Smell:** Inconsistent concurrency control across storage services.
+
+**Refactoring Direction:**
+- Audit all storage services for thread safety
+- Standardize on mutex usage patterns
+- Add concurrent access tests for all storage services (similar to vault's TestVaultConcurrentAccess)
+- Ensure vault operations are properly synchronized in all services
+
 ## Vault Architecture
 
 ### Key Hierarchy
@@ -28,8 +106,8 @@ Master Key (32-byte hex-encoded, user-provided or generated)
 ### Vault Components
 
 - **Vault Header**: Metadata including key derivation parameters, wrapped DEK, and key fingerprint. Stored at `.g8e/vault/vault.header` as JSON.
-- **Vault Data**: Encrypted DEK and encrypted data records
-- **Vault Key**: Master key (32-byte hex-encoded) used to unlock the vault
+- **Vault Data**: Encrypted DEK and encrypted data records (stored in vault data directory)
+- **Vault Key**: Master key (32-byte hex-encoded) used to unlock the vault, stored at `.g8e/vault/key`
 
 ### Encryption Flow
 
@@ -57,12 +135,14 @@ Master Key (32-byte hex-encoded, user-provided or generated)
 
 All storage services require an unlocked vault at initialization:
 
-| Service | Vault Required | Encrypted Data |
-|---------|---------------|----------------|
-| SQLAuditStore | Yes | content_text, command_stdout, command_stderr fields in audit records |
-| ExecutionVaultService | Yes | Execution results, command outputs, file diffs |
-| TokenStoreService | Yes | Authentication tokens, session data |
-| GitLedgerService | Yes | File content in ledger |
+| Service | Vault Required | Encrypted Data | Vault Integration Pattern |
+|---------|---------------|----------------|-------------------------|
+| SQLAuditStore | Yes | content_text, command_stdout, command_stderr fields in audit records | Config struct (AuditStoreConfig.EncryptionVault) |
+| ExecutionVaultService | Yes | Execution results, command outputs, file diffs | Constructor parameter |
+| TokenStoreService | Yes | Authentication tokens, session data | Constructor parameter |
+| GitLedgerService | Yes | File content in ledger | Config struct (LedgerConfig.EncryptionVault) |
+
+**Note:** The AuditVaultService was split in v1.0.10. The audit vault functionality is now integrated into SQLAuditStore with the same encryption requirements.
 
 ## Vault Lifecycle
 
@@ -162,7 +242,8 @@ export G8E_VAULT_KEY=/path/to/vault/key
 Vault paths are configured in the embedded paths configuration in `internal/constants/paths.go`. The default paths are:
 
 - Vault directory: `.g8e/vault`
-- Vault key path: `.g8e/vault/key` (resolved as `.g8e/vault/key` relative to vault directory)
+- Vault header file: `.g8e/vault/vault.header`
+- Vault key path: `.g8e/vault/key` (resolved relative to vault directory)
 
 These paths are resolved relative to the current working directory.
 

@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // PeerConnectionManager manages outbound-only peer connections to a seed gateway.
@@ -135,7 +136,7 @@ func (pcm *PeerConnectionManager) IsConnected() bool {
 
 // loadGatewayID loads the gateway ID from disk.
 func (pcm *PeerConnectionManager) loadGatewayID() (string, error) {
-	gatewayIDPath := filepath.Join(pcm.cfg.Gateway.DataDir, "gateway-id")
+	gatewayIDPath := constants.GatewayIDPath
 
 	data, err := os.ReadFile(gatewayIDPath)
 	if err != nil {
@@ -153,7 +154,7 @@ func (pcm *PeerConnectionManager) loadGatewayID() (string, error) {
 
 // generateAndStoreGatewayID generates a new gateway ID and stores it to disk.
 func (pcm *PeerConnectionManager) generateAndStoreGatewayID() (string, error) {
-	gatewayIDPath := filepath.Join(pcm.cfg.Gateway.DataDir, "gateway-id")
+	gatewayIDPath := constants.GatewayIDPath
 
 	id, err := generateGatewayID()
 	if err != nil {
@@ -169,9 +170,9 @@ func (pcm *PeerConnectionManager) generateAndStoreGatewayID() (string, error) {
 
 // loadPeerCert loads the peer certificate from disk.
 func (pcm *PeerConnectionManager) loadPeerCert() error {
-	peerCertPath := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer", "peer.crt")
-	peerKeyPath := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer", "peer.key")
-	peerChainPath := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer", "peer.chain.pem")
+	peerCertPath := constants.PeerCertPath
+	peerKeyPath := constants.PeerKeyPath
+	peerChainPath := constants.PeerChainPath
 
 	certPEM, err := os.ReadFile(peerCertPath)
 	if err != nil {
@@ -232,14 +233,14 @@ func (pcm *PeerConnectionManager) enrollPeerCert() error {
 	}
 
 	// Store certificate and key
-	peerDir := filepath.Join(pcm.cfg.Gateway.PKIDir, "peer")
+	peerDir := filepath.Dir(constants.PeerCertPath)
 	if err := os.MkdirAll(peerDir, 0755); err != nil {
 		return fmt.Errorf("gateway: create peer directory: %w", err)
 	}
 
-	peerCertPath := filepath.Join(peerDir, "peer.crt")
-	peerKeyPath := filepath.Join(peerDir, "peer.key")
-	peerChainPath := filepath.Join(peerDir, "peer.chain.pem")
+	peerCertPath := constants.PeerCertPath
+	peerKeyPath := constants.PeerKeyPath
+	peerChainPath := constants.PeerChainPath
 
 	keyDER, err := x509.MarshalECPrivateKey(key)
 	if err != nil {

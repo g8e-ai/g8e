@@ -333,7 +333,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		httpSwagger.DocExpansion("none"),
 	))
 	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "docs/swagger.json")
+		http.ServeFile(w, r, constants.SwaggerFilePath)
 	})
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS
@@ -351,6 +351,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
 	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
+	mux.HandleFunc(constants.APIPaths.PKIAppsDelegated, h.pkiController.handlePKIAppsDelegated)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
 	// MCP/A2A Ingress routes with JWT authentication for remote clients

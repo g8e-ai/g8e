@@ -19,6 +19,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── pubsub.PortService
 │   ├── pubsub.AuditService
 │   ├── pubsub.HistoryService
+│   ├── governance.L1Doctrine
 │   ├── governance.L2Consensus
 │   │   └── governance.L1Doctrine
 │   ├── governance.L4Warden
@@ -37,7 +38,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   └── governance.SignerStore
 │   └── mcp.GatewayService [SHARED]
 │       ├── response.Writer
-│       └── gateway.CanonicalDBService (as SuspendedTransactionStore) [SHARED]
+│       └── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
 ├── pubsub.PubSubResultsService
 ├── storage.ExecutionVaultService
 │   ├── sqliteutil.DB
@@ -57,8 +58,20 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   └── storage.GitLedgerService
 ├── governance.ReplayStore (storage.SQLReplayStore)
 │   └── sqliteutil.DB
-└── scrubbing.ScrubbingService
-    └── storage.TokenStoreService
+├── scrubbing.ScrubbingService
+│   └── storage.TokenStoreService
+└── gateway.CanonicalDBService [SHARED]
+    ├── sqliteutil.DB
+    ├── storage.SQLAuditStore
+    ├── vault.Vault
+    ├── gateway.DocumentStoreService
+    ├── gateway.AppPolicyStoreService
+    ├── gateway.SignerStoreService
+    ├── gateway.StateRootService
+    ├── gateway.ReplayStoreService
+    ├── gateway.KVStoreService
+    ├── gateway.SSEEventService
+    └── gateway.BlobStoreService
 
 GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── gateway.CanonicalDBService [SHARED] (lifecycle only: Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop)
@@ -126,8 +139,6 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── sqliteutil.DB
 ├── gateway.BlobStoreService (Binary persistence)
 │   └── sqliteutil.DB
-├── gateway.InvitationService
-│   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.HTTPHandler
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.GatewayWebSocketHandler
@@ -144,7 +155,8 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── response.Writer
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
-│   └── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
+│   ├── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
+│   └── scrubbing.ScrubbingService
 └── response.Writer
 ```
 
@@ -177,11 +189,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - All outbound storage services (ExecutionVaultService, TokenStoreService, SQLAuditStore, GitLedgerService) share the same `vault.Vault` instance from CanonicalDBService.
 
 ### Governance Stack (L1-L5)
-- **L1**: `governance.L1Doctrine` (technical bedrock validation)
-- **L2**: `governance.L2Consensus` (signing + quorum)
-- **L3**: `governance.L3Notary` (gateway mode uses `gateway.CompositeL3Verifier` for WebAuthn + mTLS CLI; outbound mode uses `governance.outboundL3Notary` for CLI-based approval via suspended transactions)
-- **L4**: `governance.L4Warden` (transaction verifier / fail-closed gate)
-- **L5**: `governance.L5Actuator` (execution boundary, receipt signing)
+- **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
+- **L2**: `governance.L2Consensus` (multi-agent consensus signature verification using Ed25519 cryptography)
+- **L3**: `governance.L3Notary` (gateway mode uses `gateway.CompositeL3Verifier` combining WebAuthn passkey and mTLS CLI proofs; outbound mode uses `governance.outboundL3Notary` for CLI-based approval via suspended transactions)
+- **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
+- **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging)
 
 ### Shared Interface Implementations
 - `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).

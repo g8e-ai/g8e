@@ -15,6 +15,7 @@ package system
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,4 +49,20 @@ func TestIntPtrValue(t *testing.T) {
 	i := 7
 	assert.Equal(t, "7", IntPtrValue(&i))
 	assert.Equal(t, "<nil>", IntPtrValue(nil))
+}
+
+func TestRealClock_Now(t *testing.T) {
+	t.Parallel()
+	c := &RealClock{}
+	now := c.Now()
+	assert.False(t, now.IsZero())
+	assert.Equal(t, time.UTC, now.Location())
+}
+
+func TestFixedClock_Now(t *testing.T) {
+	t.Parallel()
+	fixedTime := time.Date(2026, 6, 13, 10, 0, 0, 0, time.UTC)
+	c := NewFixedClock(fixedTime)
+	now := c.Now()
+	assert.Equal(t, fixedTime, now)
 }

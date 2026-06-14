@@ -419,6 +419,23 @@ test-native:
 	@echo "Running native real Operator integration tests (requires platform running and auth login)..."
 	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/native_real_operator_test.go
 
+# Coverage tests
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running tests with coverage (threshold: $(COVERAGE_THRESHOLD)%)..."
+	@if [ -n "$(PKG)" ]; then \
+		echo "Running coverage for package: $(PKG)"; \
+		go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(if $(VERBOSE),-v,) $(PKG); \
+	else \
+		echo "Running coverage for all packages..."; \
+		go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(if $(VERBOSE),-v,) $(TEST_PKGS); \
+	fi
+	@COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
+		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
+		exit 1; \
+	fi; \
+	echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"
 
 # =============================================================================
 # LINT & QUALITY

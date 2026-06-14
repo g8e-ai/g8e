@@ -16,8 +16,6 @@
 package tests
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,14 +28,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// NewLiveOperatorHTTPClient creates an HTTP client configured for mTLS
-// against a running g8e platform. It loads the canonical trust bundle,
-// validates it parses correctly, loads the CLI client certificate, and
-// returns a client with proper TLS configuration.
+// NewLiveOperatorHTTPClient creates an API client configured for mTLS
+// against a running g8e platform using the platform's api.NewClient.
 //
 // This helper requires the platform to be running via `./g8e platform start`
 // and authenticated via `./g8e auth login`.
@@ -47,42 +44,16 @@ import (
 //   - repoRoot: path to the repository root (typically derived from test directory)
 //
 // Returns:
-//   - *http.Client: configured HTTP client with mTLS and CA verification
+//   - *api.Client: configured API client with mTLS and CA verification
 //   - *config.Config: loaded CLI configuration (for ports and paths)
-func NewLiveOperatorHTTPClient(t require.TestingT, repoRoot string) (*http.Client, *config.Config) {
+func NewLiveOperatorHTTPClient(t require.TestingT, repoRoot string) (*api.Client, *config.Config) {
 	// Load CLI config to get ports and paths
 	cliCfg, err := config.Load(repoRoot)
 	require.NoError(t, err, "failed to load CLI config")
 
-	// Verify client certificate exists (bootstrapped via ./g8e auth login)
-	clientCertPath := cliCfg.CLICertFile()
-	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
-		require.NoError(t, fmt.Errorf("client cert not found at %s - run './g8e auth login' first", clientCertPath))
-	}
-
-	// Load canonical trust bundle
-	caCertPath := cliCfg.TrustBundlePath()
-	caCert, err := os.ReadFile(caCertPath)
-	require.NoError(t, err, "failed to read CA bundle from %s - run './g8e platform start && ./g8e auth login' first", caCertPath)
-
-	// Validate trust bundle parses correctly
-	caCertPool := x509.NewCertPool()
-	ok := caCertPool.AppendCertsFromPEM(caCert)
-	require.True(t, ok, "invalid canonical trust bundle at %s - regenerate PKI by running './g8e platform start && ./g8e auth login'", caCertPath)
-
-	// Load client certificate for mTLS
-	cert, err := tls.LoadX509KeyPair(cliCfg.CLICertFile(), cliCfg.CLIKeyFile())
-	require.NoError(t, err, "failed to load client certificate")
-
-	// Build HTTP client with proper mTLS configuration
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			RootCAs:      caCertPool,
-			Certificates: []tls.Certificate{cert},
-			ServerName:   "localhost",
-		},
-	}
-	client := &http.Client{Transport: tr, Timeout: 5 * time.Second}
+	// Use platform's api.NewClient with 5-second timeout
+	client, err := api.NewClient(cliCfg)
+	require.NoError(t, err, "failed to create API client - run './g8e auth login' first")
 
 	return client, cliCfg
 }
@@ -109,9 +80,10 @@ func EnsureGatewayReady(t *testing.T, cliCfg *config.Config) {
 	t.Helper()
 
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d%s", constants.Ports.OperatorHttp, "/api/v1/health")
+	client := &http.Client{Timeout: 5 * time.Second}
 
 	require.Eventually(t, func() bool {
-		resp, err := http.Get(healthURL)
+		resp, err := client.Get(healthURL)
 		if err != nil {
 			return false
 		}
@@ -131,7 +103,7 @@ func EnsureGatewayReady(t *testing.T, cliCfg *config.Config) {
 		}
 
 		return health.GovernanceReady
-	}, 30*time.Second, 500*time.Millisecond, "gateway did not become governance-ready within timeout")
+	}, 5*time.Second, 500*time.Millisecond, "gateway did not become governance-ready within timeout")
 }
 
 // EnsureAuthLogin ensures the CLI has a fresh session by running './g8e auth login'.

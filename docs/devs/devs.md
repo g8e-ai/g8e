@@ -4,7 +4,7 @@ This document provides practical guidance for human developers contributing to t
 
 ## For AI Agents
 
-If you are an AI coding assistant, the authoritative contract is in **[AGENTS.md](AGENTS.md)**. That document contains the strict "Always" and "Never" directives you must follow. This document is for human developers.
+AI agents updating documentation must follow the guidelines in **[docs.md](docs.md)**. That document contains the strict stylistic rules, terminology conventions, and source-of-truth hierarchy. This document is for human developers.
 
 ## Platform Overview
 
@@ -17,21 +17,21 @@ g8e is a zero-trust execution platform for agentic infrastructure. The platform 
 - **BYO clients**: The platform is UI-less by design. The CLI (`./g8e`) is the default interface.
 
 For detailed architecture, see:
-- [docs/architecture/protocol.md](../architecture/protocol.md) - Platform architecture and governance model
-- [docs/architecture/protocol.md](../architecture/protocol.md) - Protocol and wire format
+- [docs/architecture/protocol.md](../architecture/protocol.md) - Platform architecture, governance model, and protocol wire format
+- [docs/architecture/gateway.md](../architecture/gateway.md) - Gateway service details
 - [docs/architecture/operator.md](../architecture/operator.md) - Operator service details
 
 ## Getting Started
 
-### Setup
+### Build
 
-Run the interactive setup wizard:
+Build the g8e binary:
 
 ```bash
-./g8e setup
+make build
 ```
 
-This checks for Go 1.26+ dependencies, generates protocol artifacts, and builds the `g8e` binary.
+This builds the g8e Operator binary for the current platform. Run `make help` for all available build targets.
 
 **Manual GOPATH configuration** (if needed):
 ```bash
@@ -49,7 +49,7 @@ export PATH=$GOPATH/bin:$PATH
 | `./g8e auth login` | Authenticate the local CLI |
 | `./g8e test` | Run Go host-native tests |
 
-The g8e Node is the single entry point for all platform operations. See [docs/g8e-help.md](../g8e-help.md) for complete command reference.
+The g8e Operator is the single entry point for all platform operations. Run `./g8e --help` for complete command reference.
 
 ## Architecture
 
@@ -101,7 +101,7 @@ The platform is built via the Makefile. Run `make help` for available targets.
 - Fix root causes; do not add defensive guards at call sites
 
 **Industry standards:**
-- Use latest stable versions (Go 1.26+, Python 3.14+)
+- Use latest stable versions (Go 1.26.4, Python 3.14+)
 - Fail-closed on security checks
 - Explicit over implicit; no magic or hidden side effects
 - Leave codebase cleaner than you found it
@@ -132,7 +132,7 @@ The platform is built via the Makefile. Run `make help` for available targets.
 
 **Wire format:** Canonical JSON (protojson) for all client-facing surfaces
 
-**Governance:** All mutations must pass through the `GovernanceEnvelope` and 5-layer verification gauntlet. See [AGENTS.md](AGENTS.md) for detailed layer responsibilities.
+**Governance:** All mutations must pass through the `GovernanceEnvelope` and 5-layer verification gauntlet. See [docs/architecture/protocol.md](../architecture/protocol.md) for detailed layer responsibilities.
 
 ## Testing
 
@@ -144,7 +144,11 @@ The platform is built via the Makefile. Run `make help` for available targets.
 - Test infrastructure separated from production code to avoid import cycles
 
 **Run tests via CLI:**
-- `./g8e test` - Full test suite (unit + integration)
+- `./g8e test unit` - Run Tier 1 (Unit) tests
+- `./g8e test integration` - Run Tier 2 (In-Memory Integration) tests
+- `./g8e test e2e` - Run Tier 3 (Live Platform E2E) tests
+- `./g8e test scenario` - Run scenario-specific E2E tests
+- `./g8e test lint` - Run linting and quality checks
 
 Never call `go test` directly for platform tests.
 
@@ -190,11 +194,19 @@ See [docs/architecture/protocol.md](../architecture/protocol.md) for doctrine sc
 
 Constants are defined in Go source files in `internal/constants/` (SSOT). JSON files in `protocol/constants/` serve as reference documentation and external protocol definitions.
 
+**Path constants:**
+- ALL filepath strings in the codebase MUST be defined as constants in `internal/constants/paths.go`
+- No filepath strings may be constructed dynamically or hardcoded inline, including relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`, etc.
+- Dynamic path construction using `filepath.Join()` with string literals is prohibited
+- The only exception is when using `TestPaths` for isolated test environments - the base directory for TestPaths must come from a constant, and all path construction within TestPaths must use constants
+- This eliminates magic strings and improves maintainability and system robustness
+
 **Adding constants:**
 1. Add the constant to the appropriate Go file in `internal/constants/`
-2. Update the corresponding JSON file in `protocol/constants/` if the constant is part of the public protocol
-3. Run tests to verify the constant is properly integrated
-4. Commit both the Go source file and any updated JSON reference files
+2. For path constants, add them to `internal/constants/paths.go`
+3. Update the corresponding JSON file in `protocol/constants/` if the constant is part of the public protocol
+4. Run tests to verify the constant is properly integrated
+5. Commit both the Go source file and any updated JSON reference files
 
 **Commands:**
 - `make generate` - Generate protobuf code from `.proto` files
@@ -215,7 +227,7 @@ Native tools are MCP tools compiled into the Node binary that execute within the
 
 **Template:** See `docs/protocols/mcp/tool_template.go` for a complete example.
 
-**Existing tools:** Database tools (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics, disk profiling, signal safety, network socket audit, endpoint ping, HTTP probe.
+**Existing tools:** Database tools (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics (top, tree), disk profiling (usage, profile, file checksum), signal safety, network socket audit, endpoint ping, HTTP probe, DNS resolution, TLS cert inspection, SSH known hosts, service status, container status, system info, environment variables, time clock, Git operations, cloud metadata, Kubernetes inspection, shell command execution, file read, operator deploy.
 
 ## Quick Reference
 

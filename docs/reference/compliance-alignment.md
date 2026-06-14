@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.0  
-**Last Updated:** 2026-06-02  
-**Platform:** g8e v1.0.8  
+**Document Version:** 1.1  
+**Last Updated:** 2026-06-12  
+**Platform:** g8e v1.1.0  
 **Maintained by:** Lateralus Labs
 
 ---
@@ -57,8 +57,8 @@ This document provides a comprehensive alignment of the g8e platform's security 
 |------------|---------------------|-------------------|-------------------|
 | **C1.1** | Confidentiality of information at rest | Mandatory encryption vault for audit content fields | `internal/services/storage/audit_store.go` |
 | **C1.2** | Confidentiality of information in transit | mTLS with TLS 1.3 for all platform communication | `docs/architecture/auth.md` |
-| **C1.3** | Confidentiality of information during processing | Sovereign Execution Boundary with PII/secret scrubbing before cloud transmission | `internal/services/sovereignty/boundary.go` |
-| **C1.4** | Avoidance of unauthorized disclosure | Deterministic rehydration only at execution boundary | `internal/services/sovereignty/boundary.go` |
+| **C1.3** | Confidentiality of information during processing | Sovereign Execution Boundary with PII/secret scrubbing before cloud transmission | `internal/services/scrubbing/boundary.go` |
+| **C1.4** | Avoidance of unauthorized disclosure | Deterministic rehydration only at execution boundary | `internal/services/scrubbing/boundary.go` |
 
 ---
 
@@ -155,9 +155,9 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 | Principle | g8e Implementation | Evidence |
 |-----------|-------------------|----------|
-| **Lawfulness, fairness, transparency** | Local-first processing, user-controlled data | `internal/services/sovereignty/boundary.go` |
-| **Purpose limitation** | Sensitive data scrubbing prevents data leakage to unintended systems | `internal/services/sovereignty/boundary.go` |
-| **Data minimization** | Scrubbing removes PII before cloud transmission | `internal/services/sovereignty/boundary.go` |
+| **Lawfulness, fairness, transparency** | Local-first processing, user-controlled data | `internal/services/scrubbing/boundary.go` |
+| **Purpose limitation** | Sensitive data scrubbing prevents data leakage to unintended systems | `internal/services/scrubbing/boundary.go` |
+| **Data minimization** | Scrubbing removes PII before cloud transmission | `internal/services/scrubbing/boundary.go` |
 | **Accuracy** | Immutable git-backed ledger with state roots | `internal/services/storage/ledger.go` |
 | **Storage limitation** | Configurable retention policies (default 90 days) | `internal/services/storage/audit_store.go` |
 | **Integrity and confidentiality** | Encryption at rest, mTLS in transit, access controls | `internal/services/storage/audit_store.go`, `docs/architecture/auth.md` |
@@ -375,11 +375,11 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 
 | ZIG Activity | Description | g8e Implementation | Evidence |
 |--------------|-------------|-------------------|----------|
-| **Identify Critical Data** | Catalog sensitive data and classification | Sovereign Execution Boundary with PII/secret detection | `internal/services/sovereignty/boundary.go` |
+| **Identify Critical Data** | Catalog sensitive data and classification | Sovereign Execution Boundary with PII/secret detection | `internal/services/scrubbing/boundary.go` |
 | **Identify Critical Applications** | Map application dependencies and data flows | GovernanceEnvelope protocol with transaction tracking | `docs/architecture/protocol.md` |
 | **Identify Critical Assets** | Inventory infrastructure components | Operator session tracking, ledger state | `internal/services/storage/ledger.go` |
 | **Identify Critical Services** | Catalog services and communication patterns | SPIFFE workload identity registry | `protocol/workload_identity.go` |
-| **Map Data Flows** | Document data movement across boundaries | Sensitive data scrubbing before external transmission | `internal/services/sovereignty/boundary.go` |
+| **Map Data Flows** | Document data movement across boundaries | Sensitive data scrubbing before external transmission | `internal/services/scrubbing/boundary.go` |
 | **Establish Trust Boundaries** | Define security perimeters | 5-layer verification pipeline (L1-L5) | `internal/services/governance/l4_warden.go` |
 
 ### Phase One Alignment: Secure Foundation
@@ -407,7 +407,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | **Risk-Based Authentication** | Adaptive authentication based on risk | L3 Notary with hardware-bound auth | `internal/services/governance/l3_notary.go` |
 | **Least Privilege Access** | Minimum necessary access | JIT provisioning, per-transaction authorization | `internal/services/gateway/pki_controller.go` |
 | **Micro-Segmentation** | Fine-grained network segmentation | mTLS with workload identity | `docs/architecture/auth.md` |
-| **Data Loss Prevention** | Prevent unauthorized data exfiltration | Sovereign Execution Boundary scrubbing | `internal/services/sovereignty/boundary.go` |
+| **Data Loss Prevention** | Prevent unauthorized data exfiltration | Sovereign Execution Boundary scrubbing | `internal/services/scrubbing/boundary.go` |
 | **Threat Detection** | Identify malicious activity | L1 Doctrine with MITRE ATT&CK patterns | `internal/services/governance/l1_doctrine.go` |
 | **Automated Response** | Automated containment of threats | Fail-closed verification pipeline | `internal/services/governance/l5_actuator.go` |
 | **Audit Logging** | Comprehensive audit trail | Git-backed ledger | `internal/services/storage/ledger.go` |
@@ -469,7 +469,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 |-----------|-------|----------------|
 | **Encryption at Rest** | Audit store content fields | `internal/services/storage/audit_store.go` |
 | **Encryption in Transit** | All platform communication | mTLS with TLS 1.3 |
-| **PII Scrubbing** | Outbound data | `internal/services/sovereignty/boundary.go` |
+| **PII Scrubbing** | Outbound data | `internal/services/scrubbing/boundary.go` |
 | **State Binding** | Transaction state | State Merkle roots |
 | **Replay Protection** | Transaction nonces | `internal/services/governance/l4_warden.go` |
 | **Audit Trail** | All mutations | `internal/services/storage/audit_store.go` |
@@ -528,7 +528,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 |-----------|----------|---------------------|
 | **PKI Controller** | `/internal/services/gateway/pki_controller.go` | Certificate issuance, revocation, CRL |
 | **Audit Store** | `/internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
-| **Sovereign Execution Boundary** | `/internal/services/sovereignty/boundary.go` | PII scrubbing, data sovereignty |
+| **Sovereign Execution Boundary** | `/internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `/internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
 | **L2 Consensus** | `/internal/services/governance/l2_consensus.go` | Cryptographic verification |
 | **L3 Notary** | `/internal/services/governance/l3_notary.go` | Human authorization |
@@ -542,7 +542,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 |------------|----------|----------|
 | **PKI Tests** | `/internal/services/gateway/pki_controller_test.go` | Certificate issuance, revocation |
 | **Audit Store Tests** | `/internal/services/storage/storagetest/audit_store_test.go` | Audit logging, encryption |
-| **Sovereignty Tests** | `/internal/services/sovereignty/boundary_test.go` | PII scrubbing, rehydration |
+| **Sovereignty Tests** | `/internal/services/scrubbing/boundary_test.go` | PII scrubbing, rehydration |
 | **Governance Tests** | `/internal/services/governance/*_test.go` | L1-L5 verification |
 | **Integration Tests** | `/test/*_test.go` | End-to-end security flows |
 
@@ -574,6 +574,7 @@ For specific compliance questions or audit support, contact:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-06-02 | Lateralus Labs | Initial compliance alignment report |
+| 1.1 | 2026-06-12 | Lateralus Labs | Corrected Sovereign Execution Boundary evidence path (`internal/services/scrubbing/boundary.go`); updated platform version to v1.1.0 |
 
 ---
 

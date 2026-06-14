@@ -63,7 +63,7 @@ func TestKeychainBackend_StoreRetrieveDelete(t *testing.T) {
 
 	_, err = backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyNotFound, err)
 }
 
 func TestKeychainBackend_RetrieveNotFound(t *testing.T) {
@@ -81,7 +81,7 @@ func TestKeychainBackend_RetrieveNotFound(t *testing.T) {
 
 	_, err = backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyNotFound, err)
 }
 
 func TestKeychainBackend_DeleteIdempotent(t *testing.T) {

@@ -21,7 +21,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
@@ -381,7 +380,7 @@ func logoutCmd() *cobra.Command {
 
 			creds, err := auth.LoadCredentials(cfg)
 			if err != nil {
-				return fmt.Errorf("%w: %w", clierrors.ErrFailedToLoadCredentials, err)
+				return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 			}
 
 			if creds == nil {

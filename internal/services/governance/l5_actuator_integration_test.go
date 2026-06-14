@@ -43,7 +43,7 @@ func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
+	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	vHeader, _, err := vault.NewVaultHeader(privKey)
 	require.NoError(t, err)

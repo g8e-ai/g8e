@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -38,7 +39,7 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 	// Default DataDir is now a relative path - caller must resolve based on workDir
 	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
-	assert.Equal(t, "ledger", config.LedgerDir)
+	assert.Equal(t, constants.TestLedgerDirname, config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)
 	assert.Equal(t, 90, config.RetentionDays)
 	assert.Equal(t, 102400, config.OutputTruncationThreshold)
@@ -61,7 +62,7 @@ func TestSQLAuditStore_Bootstrap(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
+		LedgerDir:                 constants.TestLedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -78,14 +79,14 @@ func TestSQLAuditStore_Bootstrap(t *testing.T) {
 
 	// Verify directory structure was created
 	assert.DirExists(t, tempDir)
-	assert.DirExists(t, filepath.Join(tempDir, "ledger"))
-	assert.DirExists(t, filepath.Join(tempDir, "ledger", "files"))
+	assert.DirExists(t, filepath.Join(tempDir, constants.TestLedgerDirname))
+	assert.DirExists(t, filepath.Join(tempDir, constants.TestLedgerDirname, "files"))
 
 	// Verify database was created
 	assert.FileExists(t, filepath.Join(tempDir, "test.db"))
 
 	// Verify git was initialized
-	assert.DirExists(t, filepath.Join(tempDir, "ledger", ".git"))
+	assert.DirExists(t, filepath.Join(tempDir, constants.TestLedgerDirname, constants.TestGitDirname))
 
 	assert.Equal(t, tempDir, avs.GetDataDir())
 }
@@ -103,7 +104,7 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
+		LedgerDir:                 constants.TestLedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -136,7 +137,7 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
+		LedgerDir:                 constants.TestLedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -150,7 +151,7 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 	defer avs.Close()
 
 	ledgerPath := avs.GetLedgerPath()
-	assert.Contains(t, ledgerPath, "ledger")
+	assert.Contains(t, ledgerPath, constants.TestLedgerDirname)
 	assert.DirExists(t, ledgerPath)
 
 	// Nil service
@@ -184,7 +185,7 @@ func TestSQLAuditStore_DefaultConfig(t *testing.T) {
 	config := DefaultTestSQLAuditStoreConfig()
 	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
-	assert.Equal(t, "ledger", config.LedgerDir)
+	assert.Equal(t, constants.TestLedgerDirname, config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)
 	assert.Equal(t, 90, config.RetentionDays)
 }
@@ -240,7 +241,7 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
+		LedgerDir:                 constants.TestLedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -273,7 +274,7 @@ func TestSQLAuditStore_WALMode(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 "ledger",
+		LedgerDir:                 constants.TestLedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,

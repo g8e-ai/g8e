@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
 
@@ -56,7 +57,11 @@ func demosListCmd() *cobra.Command {
 }
 
 func runDemosList(cmd *cobra.Command, args []string) error {
-	demosDir := filepath.Join(getProjectRoot(), "demos")
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demosDir := filepath.Join(cwd, constants.DemosDirname)
 	entries, err := os.ReadDir(demosDir)
 	if err != nil {
 		return fmt.Errorf("failed to read demos directory: %w", err)
@@ -64,8 +69,8 @@ func runDemosList(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("Available demo environments:")
 	for _, entry := range entries {
-		if entry.IsDir() && entry.Name() != "bin" {
-			composePath := filepath.Join(demosDir, entry.Name(), "compose.yml")
+		if entry.IsDir() && entry.Name() != constants.DemosBinDirname {
+			composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)
 			if _, err := os.Stat(composePath); err == nil {
 				fmt.Printf("  - %s\n", entry.Name())
 			}
@@ -88,7 +93,11 @@ func demosStartCmd() *cobra.Command {
 
 func runDemosStart(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -96,19 +105,19 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
 
 	// Check if g8e binary exists in demos/bin
-	binPath := filepath.Join(getProjectRoot(), "demos", "bin", "g8e")
+	binPath := filepath.Join(cwd, constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
 	if runtime.GOOS == "windows" {
 		binPath += ".exe"
 	}
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		fmt.Printf("Warning: g8e binary not found at %s\n", binPath)
-		fmt.Println("Run 'make build && cp g8e demos/bin/g8e' from the repository root to build it.")
+		fmt.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
 	}
 
 	// Start the demo environment
@@ -167,7 +176,11 @@ func demosStopCmd() *cobra.Command {
 
 func runDemosStop(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -175,7 +188,7 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
@@ -209,7 +222,11 @@ func demosStatusCmd() *cobra.Command {
 
 func runDemosStatus(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -217,7 +234,7 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
@@ -248,7 +265,11 @@ func demosCleanCmd() *cobra.Command {
 
 func runDemosClean(cmd *cobra.Command, args []string) error {
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
@@ -256,7 +277,7 @@ func runDemosClean(cmd *cobra.Command, args []string) error {
 	}
 
 	// Verify compose.yml exists
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
@@ -334,20 +355,31 @@ Available scenarios:
 }
 
 func runDemosRun(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("demos: requires demo environment name")
+	}
+	if len(args) > 2 {
+		return fmt.Errorf("demos: accepts at most 2 arguments (demo environment and optional scenario name)")
+	}
+
 	org := args[0]
-	demoDir := filepath.Join(getProjectRoot(), "demos", org)
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
 		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
 	}
 
-	composePath := filepath.Join(demoDir, "compose.yml")
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
 
-	if len(args) == 2 {
-		return runScenario(org, demoDir, args[1])
+	if len(args) >= 2 {
+		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
 	}
 
 	return runAllScenarios(org, demoDir)
@@ -449,7 +481,7 @@ func runHealthcareScenario(demoDir, scenario string) error {
 		fmt.Println("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		fmt.Println("  Copy-paste to inspect doctrine decisions for this request:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 		_ = demoStep(demoDir, "audit tail",
 			false,
@@ -491,7 +523,7 @@ func runHealthcareScenario(demoDir, scenario string) error {
 		fmt.Println("  ── Proof ─────────────────────────────────────────────────────")
 		fmt.Println("  Copy-paste to confirm AUTO_APPROVED in the audit log:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability | grep -i auto_approved")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability | grep -i auto_approved")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
@@ -595,7 +627,7 @@ func runHealthcareScenario(demoDir, scenario string) error {
 		fmt.Println()
 		fmt.Println("  Then inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")
@@ -636,7 +668,7 @@ func runGovScenario(demoDir, scenario string) error {
 
 		fmt.Println("  Copy-paste to inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 1 — CUI exfiltration blocked.")
@@ -676,7 +708,7 @@ func runFinanceScenario(demoDir, scenario string) error {
 
 		fmt.Println("  Copy-paste to inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, "compose.yml") + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 1 — Unauthorized trade blocked.")
@@ -686,39 +718,4 @@ func runFinanceScenario(demoDir, scenario string) error {
 		return fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
 	}
 	return nil
-}
-
-func getProjectRoot() string {
-	// Use current working directory as the project root
-	// This is the most reliable approach since demos are run from the repo root
-	if cwd, err := os.Getwd(); err == nil {
-		return cwd
-	}
-
-	// Fallback to directory containing the g8e binary
-	execPath, err := os.Executable()
-	if err != nil {
-		return "."
-	}
-
-	// Resolve symlinks
-	if resolvedPath, err := filepath.EvalSymlinks(execPath); err == nil {
-		execPath = resolvedPath
-	}
-
-	// Get the directory of the executable
-	execDir := filepath.Dir(execPath)
-
-	// If we're in a build directory (like cmd/g8e), go up to project root
-	if filepath.Base(execDir) == "g8e" {
-		return filepath.Dir(filepath.Dir(execDir))
-	}
-
-	// If we're in cmd directory, go up to project root
-	if filepath.Base(execDir) == "cmd" {
-		return filepath.Dir(execDir)
-	}
-
-	// Otherwise assume we're already at or near the project root
-	return execDir
 }

@@ -89,7 +89,12 @@ func (h *NativeToolHandler) HandleTool(ctx context.Context, toolName string, arg
 		if h.logger != nil {
 			h.logger.Error("Unknown native tool requested", "tool", toolName)
 		}
-		return CallToolResult{}, fmt.Errorf("unknown native tool: %s", toolName)
+		availableTools := h.registry.List()
+		toolNames := make([]string, 0, len(availableTools))
+		for _, t := range availableTools {
+			toolNames = append(toolNames, t.Name())
+		}
+		return CallToolResult{}, fmt.Errorf("unknown native tool: %s (available tools: %s)", toolName, strings.Join(toolNames, ", "))
 	}
 	result, err := tool.Execute(ctx, arguments)
 	if h.logger != nil {

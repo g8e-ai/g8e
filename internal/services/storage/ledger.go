@@ -75,11 +75,11 @@ type FileHistoryEntry struct {
 // EncryptionVault in config is required for encryption at rest.
 func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerService, error) {
 	if config == nil {
-		return nil, fmt.Errorf("ledger: config is required for git ledger service")
+		return nil, fmt.Errorf("ledger: %w", constants.ErrLedgerConfigRequired)
 	}
 
 	if config.EncryptionVault == nil {
-		return nil, fmt.Errorf("ledger: EncryptionVault is required for git ledger service")
+		return nil, fmt.Errorf("ledger: %w", constants.ErrLedgerVaultRequired)
 	}
 
 	return &GitLedgerService{
@@ -106,16 +106,16 @@ func (s *GitLedgerService) gitReady() bool {
 // GetSessionLedgerPath returns the ledger path for a specific session, initializing it if needed.
 func (s *GitLedgerService) GetSessionLedgerPath(operatorSessionID string) (string, error) {
 	if operatorSessionID == "" {
-		return filepath.Join(s.config.BaseDir, "files"), nil
+		return filepath.Join(s.config.BaseDir, constants.FilesDirname), nil
 	}
 
-	sessionsRoot := filepath.Join(s.config.BaseDir, "sessions")
+	sessionsRoot := filepath.Join(s.config.BaseDir, constants.SessionsDirname)
 	sessionPath := filepath.Join(sessionsRoot, operatorSessionID)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	_, err := os.Stat(filepath.Join(sessionPath, ".git"))
+	_, err := os.Stat(filepath.Join(sessionPath, constants.GitDirname))
 	if err == nil {
 		return sessionPath, nil
 	}
@@ -134,7 +134,7 @@ func (s *GitLedgerService) GetSessionLedgerPath(operatorSessionID string) (strin
 
 // initGitRepo initializes a git repository in the specified directory using native go-git.
 func (s *GitLedgerService) initGitRepo(path string) error {
-	gitDir := filepath.Join(path, ".git")
+	gitDir := filepath.Join(path, constants.GitDirname)
 
 	if _, err := os.Stat(gitDir); err == nil {
 		return nil
@@ -145,9 +145,9 @@ func (s *GitLedgerService) initGitRepo(path string) error {
 		return fmt.Errorf("ledger: git init failed: %w", err)
 	}
 
-	gitignore := filepath.Join(path, ".gitignore")
+	gitignore := filepath.Join(path, constants.GitignoreFilename)
 	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0600); err != nil {
-		return fmt.Errorf("ledger: failed to create .gitignore: %w", err)
+		return fmt.Errorf("ledger: failed to create %s: %w", constants.GitignoreFilename, err)
 	}
 
 	w, err := repo.Worktree()
@@ -155,8 +155,8 @@ func (s *GitLedgerService) initGitRepo(path string) error {
 		return fmt.Errorf("ledger: failed to get worktree: %w", err)
 	}
 
-	if _, err := w.Add(".gitignore"); err != nil {
-		return fmt.Errorf("ledger: failed to git add .gitignore: %w", err)
+	if _, err := w.Add(constants.GitignoreFilename); err != nil {
+		return fmt.Errorf("ledger: failed to git add %s: %w", constants.GitignoreFilename, err)
 	}
 
 	_, err = w.Commit("Initial ledger commit", &git.CommitOptions{
@@ -205,7 +205,7 @@ func (s *GitLedgerService) getLedgerPath(ledgerDir, filePath string) string {
 	// Files are stored in 'files/' subdirectory within the ledger repository
 	// Split the forward-slash path into components for proper filepath.Join behavior on Windows
 	components := strings.Split(cleanPath, "/")
-	pathParts := []string{ledgerDir, "files"}
+	pathParts := []string{ledgerDir, constants.FilesDirname}
 	for _, comp := range components {
 		if comp != "" {
 			pathParts = append(pathParts, comp)
@@ -218,7 +218,7 @@ func (s *GitLedgerService) getLedgerPath(ledgerDir, filePath string) string {
 func (s *GitLedgerService) getGitRelativePath(filePath string) string {
 	relPath := s.normalizeToGitPath(filePath)
 	// The file is stored under "files/" in the git repository
-	return "files/" + relPath
+	return constants.FilesDirname + "/" + relPath
 }
 
 // ── File copy ───────────────────────────────────────────────────────────
@@ -315,7 +315,7 @@ func (s *GitLedgerService) LedgerFileWrite(operatorSessionID, filePath string) (
 
 	if _, err := os.Stat(filePath); err == nil {
 		if err := s.copyToLedger(filePath, ledgerPath); err != nil {
-			result.Error = fmt.Sprintf("failed to copy file to ledger: %v", err)
+			result.Error = fmt.Errorf("ledger: failed to copy file to ledger: %w", err).Error()
 		}
 	}
 
@@ -344,7 +344,7 @@ func (s *GitLedgerService) CompleteMirrorWrite(result *LedgerResult, operatorSes
 	defer s.mu.Unlock()
 
 	if err := s.copyToLedger(result.FilePath, result.LedgerPath); err != nil {
-		result.Error = fmt.Sprintf("failed to copy post-mutation file to ledger: %v", err)
+		result.Error = fmt.Errorf("ledger: failed to copy post-mutation file to ledger: %w", err).Error()
 		return fmt.Errorf("ledger: failed to copy post-mutation file to ledger: %w", err)
 	}
 
@@ -431,7 +431,7 @@ func (s *GitLedgerService) CompleteMirrorDelete(result *LedgerResult, operatorSe
 	}
 	result.LedgerHashAfter = hashAfter
 
-	result.DiffStat = "file deleted"
+	result.DiffStat = constants.LedgerStatusFileDeleted
 	result.DiffContent = s.calculateDiffContent(ledgerDir, result.LedgerHashBefore, result.LedgerHashAfter)
 
 	s.logger.Info("File deletion mirrored",
@@ -492,7 +492,7 @@ func (s *GitLedgerService) CompleteMirrorCreate(result *LedgerResult, operatorSe
 	defer s.mu.Unlock()
 
 	if err := s.copyToLedger(result.FilePath, result.LedgerPath); err != nil {
-		result.Error = fmt.Sprintf("failed to copy created file to ledger: %v", err)
+		result.Error = fmt.Errorf("ledger: failed to copy created file to ledger: %w", err).Error()
 		return fmt.Errorf("ledger: failed to copy created file to ledger: %w", err)
 	}
 
@@ -530,7 +530,7 @@ func (s *GitLedgerService) GetStateMerkleRoot() (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	ledgerDir := filepath.Join(s.config.BaseDir, "files")
+	ledgerDir := filepath.Join(s.config.BaseDir, constants.FilesDirname)
 	repo, err := git.PlainOpen(ledgerDir)
 	if err != nil {
 		return "", fmt.Errorf("ledger: failed to open ledger git repo: %w", err)
@@ -545,7 +545,7 @@ func (s *GitLedgerService) GetStateMerkleRoot() (string, error) {
 // GetFileHistory retrieves the git history for a specific file.
 func (s *GitLedgerService) GetFileHistory(filePath string, limit int, operatorSessionID string) ([]FileHistoryEntry, error) {
 	if !s.gitReady() {
-		return nil, fmt.Errorf("ledger is disabled")
+		return nil, fmt.Errorf("ledger: %w", constants.ErrLedgerDisabled)
 	}
 
 	if limit <= 0 {
@@ -622,7 +622,7 @@ func (s *GitLedgerService) GetFileHistory(filePath string, limit int, operatorSe
 // GetFileAtCommit retrieves the content of a file at a specific commit, decrypting if the vault is unlocked.
 func (s *GitLedgerService) GetFileAtCommit(filePath, commitHash, operatorSessionID string) (string, error) {
 	if !s.gitReady() {
-		return "", fmt.Errorf("ledger is disabled")
+		return "", fmt.Errorf("ledger: %w", constants.ErrLedgerDisabled)
 	}
 
 	ledgerDir, err := s.GetSessionLedgerPath(operatorSessionID)
@@ -652,7 +652,7 @@ func (s *GitLedgerService) GetFileAtCommit(filePath, commitHash, operatorSession
 // RestoreFileFromCommit restores a file to its state at a specific commit.
 func (s *GitLedgerService) RestoreFileFromCommit(filePath, commitHash, operatorSessionID string) error {
 	if !s.gitReady() {
-		return fmt.Errorf("ledger is disabled")
+		return fmt.Errorf("ledger: %w", constants.ErrLedgerDisabled)
 	}
 
 	// Get session ledger path and file content before acquiring lock to avoid deadlock

@@ -280,7 +280,7 @@ func auditReportCmd() *cobra.Command {
 				return fmt.Errorf("failed to create output directory: %w", err)
 			}
 
-			jsonPath := filepath.Join(outDir, "compliance-report.json")
+			jsonPath := filepath.Join(outDir, constants.ComplianceReportFilename)
 			if err := os.WriteFile(jsonPath, resp, 0644); err != nil {
 				return fmt.Errorf("failed to write JSON report: %w", err)
 			}

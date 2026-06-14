@@ -1787,7 +1787,7 @@ func newTestGatewayService(t *testing.T, opts ...testGatewayOption) *GatewayServ
 		signingKey:        privKey,
 		keyID:             "test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
+		publicBaseURL:     constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   10 * 1024 * 1024,

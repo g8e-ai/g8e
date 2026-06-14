@@ -89,7 +89,7 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 2. Validates route (exactly one routing target set)
 3. Appends event to `sse_events` table with auto-increment ID and producer_id
 4. Publishes event to Pub/Sub channel for real-time fan-out (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`)
-5. Returns success confirmation
+5. Returns success confirmation with delivered count
 
 ---
 
@@ -155,7 +155,7 @@ data: {"type":"...","data":{...}}
 2. Subscribes to Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`)
 3. Flushes historical events since `since_id` in SSE format
 4. Streams new events as they arrive from Pub/Sub
-5. Sends keepalive comments every 30 seconds (SSE comment format `: heartbeat\n\n`)
+5. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`)
 
 ---
 
@@ -176,7 +176,7 @@ The SSE system is generic and supports any event type. Defined audit event types
 - `g8e.v1.platform.sse.connection.closed` - SSE connection closed
 - `g8e.v1.platform.sse.connection.failed` - SSE connection failed
 - `g8e.v1.platform.sse.connection.error` - SSE connection error
-- `g8e.v1.platform.sse.keepalive.sent` - SSE keepalive sent
+- `g8e.v1.platform.sse.keepalive.sent` - SSE heartbeat sent
 
 See `protocol/constants/events.json` for the complete event type catalog.
 
@@ -187,7 +187,7 @@ See `protocol/constants/events.json` for the complete event type catalog.
 The `sse_events` table stores all events:
 
 ```sql
-CREATE TABLE sse_events (
+CREATE TABLE IF NOT EXISTS sse_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     web_session_id TEXT,
     cli_session_id TEXT,
@@ -195,8 +195,18 @@ CREATE TABLE sse_events (
     event_type TEXT NOT NULL,
     payload TEXT NOT NULL,
     producer_id TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    CHECK (
+        (CASE WHEN web_session_id IS NULL THEN 0 ELSE 1 END)
+      + (CASE WHEN cli_session_id IS NULL THEN 0 ELSE 1 END)
+      + (CASE WHEN user_id        IS NULL THEN 0 ELSE 1 END)
+      = 1
+    )
 );
+CREATE INDEX IF NOT EXISTS idx_sse_web ON sse_events(web_session_id, id) WHERE web_session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sse_cli ON sse_events(cli_session_id, id) WHERE cli_session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sse_user ON sse_events(user_id, id) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 ```
 
 **Constraints**:
@@ -293,8 +303,10 @@ POST /api/v1/sse/push
 - `internal/services/gateway/sse_event_service.go` - SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsWipe`, `SSEEventsCount`)
 - `internal/services/gateway/gateway_pubsub.go` - Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`)
 - `internal/services/gateway/db_controller.go` - Admin endpoints for SSE event management (`handleSSEEvents`)
+- `internal/services/gateway/db/schema.sql` - Database schema for `sse_events` table
 - `internal/constants/api_paths.go` - API path constants
 - `protocol/constants/events.json` - Event type catalog
+- `internal/models/gateway.go` - SSE event row models (`SSEEventRow`)
 
 ### State Root Impact
 SSE event inserts are deliberately excluded from state root calculation. The `sse_events` table has no triggers to increment `state_version`, allowing high-frequency event streaming without triggering governance consensus rounds. Events are considered ephemeral telemetry, not governance state.

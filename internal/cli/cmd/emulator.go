@@ -166,7 +166,7 @@ func runEmulatorRun(cmd *cobra.Command, args []string) {
 	// receipts, _, _ := client.AuditReceipts(ctx, opSession)
 	if export, err := client.ExportReceipts(ctx, opSession); err == nil && len(export) > 0 {
 		_ = os.MkdirAll(cfg.OutDir, 0o755)
-		_ = os.WriteFile(filepath.Join(cfg.OutDir, "receipts-export.json"), export, 0o644)
+		_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsExportFilename), export, 0o644)
 	}
 
 	// report and summary printing would go here if we had internal/emulator/report
@@ -202,7 +202,7 @@ func runEmulatorAudit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 	_ = os.MkdirAll(cfg.OutDir, 0o755)
-	_ = os.WriteFile(filepath.Join(cfg.OutDir, "receipts.json"), raw, 0o644)
+	_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsFilename), raw, 0o644)
 	fmt.Printf("operator session: %s\n", opSession)
 	fmt.Printf("signed receipts: %d (raw written to %s/receipts.json)\n", len(receipts), cfg.OutDir)
 	for _, r := range receipts {

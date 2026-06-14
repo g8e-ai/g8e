@@ -38,7 +38,7 @@ type SuspendedTransactionConfig struct {
 // DefaultSuspendedTransactionConfig returns the default configuration.
 func DefaultSuspendedTransactionConfig() *SuspendedTransactionConfig {
 	return &SuspendedTransactionConfig{
-		DBPath:               ".g8e/suspended_transactions.db",
+		DBPath:               constants.SuspendedTransactionDBPath,
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,

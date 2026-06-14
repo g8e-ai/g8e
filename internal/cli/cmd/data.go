@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
@@ -311,7 +310,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 		Use:   string(constants.StreamStatusSummary),
 		Short: "Show audit event summary by type",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dbPath := filepath.Join(constants.Paths.Infra.DataDir, "g8e.db")
+			dbPath := constants.Paths.Infra.DbPath
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 				return fmt.Errorf("audit vault database not found at %s", dbPath)
 			}

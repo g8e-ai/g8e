@@ -97,22 +97,20 @@ type a2aTestContext struct {
 func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.HandlerFunc, dataDir string) *a2aTestContext {
 	t.Helper()
 
-	// Initialize paths relative to project root
-	if err := constants.InitPathsWithBase("."); err != nil {
-		t.Fatalf("failed to initialize paths: %v", err)
-	}
+	// Create test paths without mutating global constants.Paths
+	testPaths := testutil.NewTestPathsFromTemp(t)
 
 	// Create unique subdirectory for this test run if dataDir not provided
 	if dataDir == "" {
 		testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), testName)
-		dataDir = filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
+		dataDir = filepath.Join(testPaths.TestVaultDir, testRunID)
 		if err := os.MkdirAll(dataDir, 0755); err != nil {
 			t.Fatalf("failed to create test run directory: %v", err)
 		}
 	}
 	t.Logf("Test vault created at: %s", dataDir)
 
-	secretsDir := t.TempDir()
+	secretsDir := testPaths.SecretsDir
 	pkiDir := filepath.Join(dataDir, "pki")
 
 	// Setup Mock Downstream A2A Server
@@ -164,6 +162,7 @@ func setupA2AGatewayTest(t *testing.T, testName string, downstreamHandler http.H
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
 		L3Notary:           a2aGatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
@@ -317,7 +316,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -352,7 +351,7 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	}
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	// Test A2A Call (Suspends for L3, then Resume)
@@ -510,7 +509,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -539,7 +538,7 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	authHeader := func(req *http.Request) {
@@ -857,7 +856,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -886,7 +885,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		},
 	}
 
-	publicURL := fmt.Sprintf("https://localhost:%d", ctx.ls.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(ctx.ls.GetHTTPSPort())
 	ctx.mcpGateway.SetPublicBaseURL(publicURL)
 
 	authHeader := func(req *http.Request) {

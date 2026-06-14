@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
@@ -63,7 +64,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	pkiDir := tempDir(t)
 	secretsDir := tempDir(t)
 
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
@@ -76,7 +77,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err, "failed to create keystore")
 	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
-	require.NoError(t, ks.EnsurePermissions(), "failed to ensure keystore permissions")
+	require.NoError(t, ks.EnforcePermissions(), "failed to enforce keystore permissions")
 
 	sm := &SecretManager{
 		db:         db.db,
@@ -537,7 +538,7 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
-	binaryDir := filepath.Join(c.pki.PKIDir(), "binaries")
+	binaryDir := filepath.Join(c.pki.PKIDir(), constants.PkiSubdirBinaries)
 	require.NoError(t, os.MkdirAll(binaryDir, 0755))
 	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe")
 	testNodeBinaryContent := []byte("test binary content")

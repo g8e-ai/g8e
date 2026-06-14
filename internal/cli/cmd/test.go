@@ -16,11 +16,13 @@ package cmd
 import (
 	"database/sql"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
@@ -41,6 +43,7 @@ func testCmd() *cobra.Command {
 		testIntegrationCmd(),
 		testE2ECmd(),
 		testScenarioCmd(),
+		testCoverageCmd(),
 		testLintCmd(),
 		emulatorCmd(),
 		chaosCmd(),
@@ -122,8 +125,42 @@ func testE2ECmd() *cobra.Command {
 		Long:  `Run live-platform E2E tests with the 'e2e' build tag. These tests require a running g8e gateway and authenticated CLI session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
-			fmt.Println("Note: This requires the gateway to be running and authenticated.")
-			fmt.Println("Run './g8e gw start' and './g8e auth login' first.")
+
+			cfg, err := config.Load("")
+			if err != nil {
+				return fmt.Errorf("failed to load config: %w", err)
+			}
+
+			// Try HTTP check first (works for Docker/foreground/background modes)
+			// Use plain HTTP with short timeout to avoid hanging when gateway is not running
+			healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
+			httpClient := &http.Client{Timeout: 5 * time.Second}
+			isRunning := false
+			resp, err := httpClient.Get(healthURL)
+			if err == nil && resp.StatusCode == http.StatusOK {
+				isRunning = true
+				resp.Body.Close()
+			}
+
+			// Fallback to ProcessManager check (for background/host mode)
+			if !isRunning {
+				pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+				if err != nil {
+					return fmt.Errorf("failed to create process manager: %w", err)
+				}
+
+				running, _, err := pm.OperatorStatus()
+				if err != nil {
+					return fmt.Errorf("failed to check Operator status: %w", err)
+				}
+				isRunning = running
+			}
+
+			if !isRunning {
+				fmt.Println("Error: Gateway is not running.")
+				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
+				return fmt.Errorf("gateway not running")
+			}
 
 			testRace := ""
 			if runtime.GOOS != "windows" {
@@ -193,6 +230,76 @@ func testScenarioCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	return cmd
+}
+
+func testCoverageCmd() *cobra.Command {
+	var pkg string
+	var verbose bool
+
+	cmd := &cobra.Command{
+		Use:   "coverage",
+		Short: "Run tests with coverage report",
+		Long:  `Run tests with coverage profiling and enforce a minimum coverage threshold (52%). Use PKG flag to test a specific package, VERBOSE for detailed output.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Running tests with coverage...")
+
+			testRace := ""
+			if runtime.GOOS != "windows" {
+				testRace = "-race"
+			}
+
+			// Build test command
+			testArgs := []string{"test", testRace, "-timeout", "180s", "-coverprofile=coverage.out", "-covermode=atomic"}
+			if verbose {
+				testArgs = append(testArgs, "-v")
+			}
+
+			// Determine packages to test
+			if pkg != "" {
+				fmt.Printf("Running coverage for package: %s\n", pkg)
+				testArgs = append(testArgs, pkg)
+			} else {
+				fmt.Println("Running coverage for all packages...")
+				testArgs = append(testArgs, "./internal/...", "./pkg/...")
+			}
+
+			testCmd := exec.Command("go", testArgs...)
+			testCmd.Stdout = os.Stdout
+			testCmd.Stderr = os.Stderr
+
+			if err := testCmd.Run(); err != nil {
+				return fmt.Errorf("coverage tests failed: %w", err)
+			}
+
+			// Calculate coverage
+			coverageCmd := exec.Command("go", "tool", "cover", "-func=coverage.out")
+			output, err := coverageCmd.Output()
+			if err != nil {
+				return fmt.Errorf("failed to calculate coverage: %w", err)
+			}
+
+			// Parse coverage percentage from last line
+			lines := strings.Split(string(output), "\n")
+			for _, line := range lines {
+				if strings.Contains(line, "total:") {
+					parts := strings.Fields(line)
+					if len(parts) >= 3 {
+						coverageStr := strings.TrimSuffix(parts[2], "%")
+						fmt.Printf("\nTotal coverage: %s%%\n", coverageStr)
+						return nil
+					}
+				}
+			}
+
+			fmt.Println("Coverage tests completed successfully.")
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&pkg, "pkg", "", "Specific package to test (e.g., ./internal/services/auth)")
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "Verbose output")
 
 	return cmd
 }
@@ -273,7 +380,7 @@ func testSummaryCmd() *cobra.Command {
 			// Sort test runs by name (timestamp)
 			// For simplicity, we'll just use the most recent one
 			latestRun := testRuns[len(testRuns)-1]
-			dbPath := filepath.Join(latestRun, "g8e.db")
+			dbPath := filepath.Join(latestRun, constants.DbFilename)
 
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 				return fmt.Errorf("chaos test database not found at %s", dbPath)

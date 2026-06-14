@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -273,7 +274,7 @@ func TestKeystore_Purge(t *testing.T) {
 
 	_, err = backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 
 	entries, err := os.ReadDir(secretsDir)
 	require.NoError(t, err)
@@ -294,7 +295,7 @@ func TestKeystore_EnsurePermissions(t *testing.T) {
 	err = ks.EncryptSecret("test-secret", "value")
 	require.NoError(t, err)
 
-	err = ks.EnsurePermissions()
+	err = ks.EnforcePermissions()
 	require.NoError(t, err)
 
 	info, err := os.Stat(secretsDir)

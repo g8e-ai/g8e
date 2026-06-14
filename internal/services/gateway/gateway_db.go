@@ -92,8 +92,9 @@ type CanonicalDBService struct {
 // testMode enables the in-memory keystore backend for unit tests.
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // vaultRequireUnlock requires the vault to be unlocked before starting.
-func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool) (*CanonicalDBService, error) {
-	dbPath := filepath.Join(dataDir, "g8e.db")
+// testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
+func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore) (*CanonicalDBService, error) {
+	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
 	db, err := sqliteutil.OpenDB(cfg, logger)
@@ -114,7 +115,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	// Unlock vault before initializing storage services
 	// Encryption is required for secure data storage at rest
 	if vaultKeyPath == "" && vaultRequireUnlock {
-		vaultKeyPath = filepath.Join(vaultDir, "key")
+		vaultKeyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 	}
 
 	if vaultKeyPath != "" {
@@ -184,7 +185,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	svc.BlobStore = NewBlobStoreService(db, logger)
 
 	if testMode {
-		if err := svc.initTestSchema(secretsDir); err != nil {
+		if err := svc.initTestSchema(secretsDir, testKeystore); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("failed to initialize schema: %w", err)
 		}
@@ -209,7 +210,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	return svc, nil
 }
 
-func (s *CanonicalDBService) initTestSchema(secretsDir string) error {
+func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *keystore.Keystore) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return err
@@ -219,19 +220,24 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string) error {
 	if err != nil && !errors.Is(err, constants.ErrDuplicateColumn) && !sqliteutil.IsDuplicateColumnError(err) {
 		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
 	}
-	backend, err := keystore.NewTestBackend()
-	if err != nil {
-		return err
-	}
-	ks, err := keystore.NewWithBackend(secretsDir, s.logger, backend)
-	if err != nil {
-		return err
-	}
-	if err := ks.Initialize(); err != nil {
-		return err
-	}
-	if err := ks.EnsurePermissions(); err != nil {
-		return err
+	var ks *keystore.Keystore
+	if testKeystore != nil {
+		ks = testKeystore
+	} else {
+		backend, err := keystore.NewTestBackend()
+		if err != nil {
+			return err
+		}
+		ks, err = keystore.NewWithBackend(secretsDir, s.logger, backend)
+		if err != nil {
+			return err
+		}
+		if err := ks.Initialize(); err != nil {
+			return err
+		}
+		if err := ks.EnforcePermissions(); err != nil {
+			return err
+		}
 	}
 	sm := &SecretManager{
 		db:         s.db,
@@ -339,9 +345,9 @@ func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *
 		return nil
 	}
 
-	pkiDir := filepath.Join(filepath.Dir(secretsDir), "pki")
+	pkiDir := filepath.Join(filepath.Dir(secretsDir), constants.PkiDirname)
 	keyPaths := []string{
-		filepath.Join(pkiDir, "issued", "hub", "operator-gateway.key"),
+		filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayKey),
 	}
 
 	migratedCount := 0
@@ -365,7 +371,7 @@ func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *
 
 		// Determine service name from path
 		var serviceName string
-		if strings.Contains(keyPath, "operator-gateway.key") {
+		if strings.Contains(keyPath, constants.PkiGatewayKeyPath) {
 			serviceName = "operator-gateway"
 		} else {
 			s.logger.Warn("[Migration] Unknown service key file", "path", keyPath)
@@ -390,7 +396,9 @@ func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *
 
 	if migratedCount > 0 {
 		// Mark migration as complete
-		_ = sm.keystore.EncryptSecret("migration_plaintext_keys_migrated", "true")
+		if err := sm.keystore.EncryptSecret("migration_plaintext_keys_migrated", "true"); err != nil {
+			s.logger.Warn("[Migration] Failed to mark migration as complete", "error", err)
+		}
 		s.logger.Info("[Migration] Completed plaintext service key migration", "count", migratedCount)
 	}
 

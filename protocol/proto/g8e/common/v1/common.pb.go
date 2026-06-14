@@ -428,6 +428,8 @@ type GovernanceEnvelope struct {
 	OperatorSessionId string                 `protobuf:"bytes,6,opt,name=operator_session_id,json=operatorSessionId,proto3" json:"operator_session_id,omitempty"`
 	WebSessionId      string                 `protobuf:"bytes,7,opt,name=web_session_id,json=webSessionId,proto3" json:"web_session_id,omitempty"`
 	CliSessionId      string                 `protobuf:"bytes,22,opt,name=cli_session_id,json=cliSessionId,proto3" json:"cli_session_id,omitempty"`
+	RequestorUserId   string                 `protobuf:"bytes,25,opt,name=requestor_user_id,json=requestorUserId,proto3" json:"requestor_user_id,omitempty"` // The human user who authorized the action (delegator)
+	ActingAppId       string                 `protobuf:"bytes,26,opt,name=acting_app_id,json=actingAppId,proto3" json:"acting_app_id,omitempty"`             // The app/tool acting on behalf of the user (delegate)
 	// Intent & Payload
 	EventType      string           `protobuf:"bytes,8,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
 	Payload        []byte           `protobuf:"bytes,9,opt,name=payload,proto3" json:"payload,omitempty"`                                      // Raw protobuf payload
@@ -534,6 +536,20 @@ func (x *GovernanceEnvelope) GetWebSessionId() string {
 func (x *GovernanceEnvelope) GetCliSessionId() string {
 	if x != nil {
 		return x.CliSessionId
+	}
+	return ""
+}
+
+func (x *GovernanceEnvelope) GetRequestorUserId() string {
+	if x != nil {
+		return x.RequestorUserId
+	}
+	return ""
+}
+
+func (x *GovernanceEnvelope) GetActingAppId() string {
+	if x != nil {
+		return x.ActingAppId
 	}
 	return ""
 }
@@ -700,7 +716,7 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\x02l1\x18\x01 \x01(\v2\x19.g8e.common.v1.L1MetadataR\x02l1\x12)\n" +
 	"\x02l2\x18\x02 \x01(\v2\x19.g8e.common.v1.L2MetadataR\x02l2\x12)\n" +
 	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\x12%\n" +
-	"\x0egateway_signed\x18\x04 \x01(\bR\rgatewaySigned\"\xe5\a\n" +
+	"\x0egateway_signed\x18\x04 \x01(\bR\rgatewaySigned\"\xb5\b\n" +
 	"\x12GovernanceEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x129\n" +
@@ -711,7 +727,9 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"operatorId\x12.\n" +
 	"\x13operator_session_id\x18\x06 \x01(\tR\x11operatorSessionId\x12$\n" +
 	"\x0eweb_session_id\x18\a \x01(\tR\fwebSessionId\x12$\n" +
-	"\x0ecli_session_id\x18\x16 \x01(\tR\fcliSessionId\x12\x1d\n" +
+	"\x0ecli_session_id\x18\x16 \x01(\tR\fcliSessionId\x12*\n" +
+	"\x11requestor_user_id\x18\x19 \x01(\tR\x0frequestorUserId\x12\"\n" +
+	"\racting_app_id\x18\x1a \x01(\tR\vactingAppId\x12\x1d\n" +
 	"\n" +
 	"event_type\x18\b \x01(\tR\teventType\x12\x18\n" +
 	"\apayload\x18\t \x01(\fR\apayload\x128\n" +

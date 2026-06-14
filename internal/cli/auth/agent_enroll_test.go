@@ -17,11 +17,13 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -84,19 +86,127 @@ func generateTestCertificateWithSPIFFE(t *testing.T, agentName string, notAfter 
 	return certPEM, keyPEM
 }
 
+// writeTestCLICert generates a self-signed CLI cert and writes it to cfg.CLICertFile()/CLIKeyFile().
+func writeTestCLICert(t *testing.T, cfg *config.Config) {
+	t.Helper()
+
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: "test-cli"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)
+	require.NoError(t, err)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyDER, err := x509.MarshalECPrivateKey(privKey)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
+	require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), keyPEM, 0600))
+}
+
+// startTLSEnrollServer starts a TLS test server with a localhost-valid cert and configures
+// cfg to trust it via the CA bundle. Returns the server (cleanup registered via t.Cleanup).
+func startTLSEnrollServer(t *testing.T, cfg *config.Config, handler http.HandlerFunc) *httptest.Server {
+	t.Helper()
+
+	// Generate a test CA.
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	caSerial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	caTemplate := &x509.Certificate{
+		SerialNumber:          caSerial,
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign,
+	}
+	caDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+	caCert, err := x509.ParseCertificate(caDER)
+	require.NoError(t, err)
+
+	// Generate server cert signed by CA, valid for localhost / 127.0.0.1.
+	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serverSerial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	serverTemplate := &x509.Certificate{
+		SerialNumber: serverSerial,
+		Subject:      pkix.Name{CommonName: "localhost"},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(time.Hour),
+		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	serverDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)
+	require.NoError(t, err)
+
+	serverTLSCert := tls.Certificate{Certificate: [][]byte{serverDER}, PrivateKey: serverKey}
+
+	server := httptest.NewUnstartedServer(handler)
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{serverTLSCert}}
+	server.StartTLS()
+	t.Cleanup(server.Close)
+
+	// Write CA cert as trust bundle so EnrollAgentApp can verify the server.
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
+	caPath := filepath.Join(cfg.CredentialsDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, caPEM, 0600))
+	cfg.Paths.Infra.CACertPath = caPath // absolute — TrustBundlePath() returns it directly
+
+	cfg.TestPortOverride = extractPortFromURL(server.URL)
+	return server
+}
+
+// enrollResponse builds the standard enrollment success JSON with a fresh SPIFFE cert.
+func enrollResponse(t *testing.T, agentName string) []byte {
+	t.Helper()
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(365*24*time.Hour))
+	resp := struct {
+		Success bool   `json:"success"`
+		AppCert string `json:"app_cert"`
+		AppID   string `json:"app_id"`
+	}{
+		Success: true,
+		AppCert: certPEM,
+		AppID:   "spiffe://g8e.local/app/" + agentName,
+	}
+	b, err := json.Marshal(resp)
+	require.NoError(t, err)
+	return b
+}
+
 // TestEnrollAgentApp_Idempotency_ValidCert tests that a valid cert (>7 days from expiry) is reused
+// without contacting the gateway at all.
 func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -109,7 +219,7 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
 	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
 
-	// Call EnrollAgentApp - should reuse the existing cert without contacting gateway
+	// No CLI cert, no CA bundle, no gateway — idempotency must short-circuit before any of that.
 	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
 	require.NoError(t, err)
@@ -118,54 +228,18 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	assert.Equal(t, keyFile, returnedKeyFile)
 }
 
-// TestEnrollAgentApp_Idempotency_ExpiringCert tests that an expiring cert (<7 days) triggers re-enrollment
+// TestEnrollAgentApp_Idempotency_ExpiringCert tests that an expiring cert (<7 days) triggers re-enrollment.
 func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	t.Parallel()
 
-	// Mock server to handle enrollment request
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, constants.APIPaths.PKIAppsEnroll, r.URL.Path)
-		assert.Equal(t, "POST", r.Method)
-
-		var req struct {
-			CSR     string `json:"csr_pem"`
-			AppName string `json:"app_name"`
-			AppType string `json:"app_type"`
-		}
-		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-		assert.Equal(t, "test-agent", req.AppName)
-		assert.Equal(t, "mcp-client", req.AppType)
-
-		// Return successful enrollment response
-		certPEM, _ := generateTestCertificateWithSPIFFE(t, "test-agent", time.Now().Add(365*24*time.Hour))
-		resp := struct {
-			Success     bool   `json:"success"`
-			AppCert     string `json:"app_cert"`
-			CertChain   string `json:"cert_chain"`
-			TrustBundle string `json:"trust_bundle"`
-			AppID       string `json:"app_id"`
-		}{
-			Success:     true,
-			AppCert:     certPEM,
-			CertChain:   "",
-			TrustBundle: "",
-			AppID:       "spiffe://g8e.local/app/test-agent",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
@@ -178,22 +252,9 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
 	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
 
-	// Call EnrollAgentApp - should re-enroll due to expiring cert
-	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
-
-	require.NoError(t, err)
-	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
-	assert.Equal(t, certFile, returnedCertFile)
-	assert.Equal(t, keyFile, returnedKeyFile)
-}
-
-// TestEnrollAgentApp_NoCert tests enrollment when no cert exists
-func TestEnrollAgentApp_NoCert(t *testing.T) {
-	t.Parallel()
-
-	// Mock server to handle enrollment request
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, constants.APIPaths.PKIAppsEnroll, r.URL.Path)
+	// Expiring cert → must re-enroll → needs TLS server + CLI cert
+	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
 
 		var req struct {
@@ -202,143 +263,128 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 			AppType string `json:"app_type"`
 		}
 		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
-		assert.Equal(t, "new-agent", req.AppName)
+		assert.Equal(t, agentName, req.AppName)
 		assert.Equal(t, "mcp-client", req.AppType)
 
-		// Return successful enrollment response
-		certPEM, _ := generateTestCertificateWithSPIFFE(t, "new-agent", time.Now().Add(365*24*time.Hour))
-		resp := struct {
-			Success     bool   `json:"success"`
-			AppCert     string `json:"app_cert"`
-			CertChain   string `json:"cert_chain"`
-			TrustBundle string `json:"trust_bundle"`
-			AppID       string `json:"app_id"`
-		}{
-			Success:     true,
-			AppCert:     certPEM,
-			CertChain:   "",
-			TrustBundle: "",
-			AppID:       "spiffe://g8e.local/app/new-agent",
-		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
+		w.Write(enrollResponse(t, agentName))
+	})
+	writeTestCLICert(t, cfg)
 
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
-	}
-
-	agentName := "new-agent"
-
-	// Call EnrollAgentApp - should enroll since no cert exists
-	appID, certFile, keyFile, err := EnrollAgentApp(cfg, agentName)
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
 	require.NoError(t, err)
 	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
-	assert.FileExists(t, certFile)
-	assert.FileExists(t, keyFile)
+	assert.Equal(t, certFile, returnedCertFile)
+	assert.Equal(t, keyFile, returnedKeyFile)
 }
 
-// TestEnrollAgentApp_NoURISAN tests re-enrollment when cert has no URI SAN
-func TestEnrollAgentApp_NoURISAN(t *testing.T) {
+// TestEnrollAgentApp_NoCert tests enrollment when no cert exists.
+func TestEnrollAgentApp_NoCert(t *testing.T) {
 	t.Parallel()
-
-	// Mock server to handle enrollment request
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, constants.APIPaths.PKIAppsEnroll, r.URL.Path)
-
-		// Return successful enrollment response
-		certPEM, _ := generateTestCertificateWithSPIFFE(t, "test-agent", time.Now().Add(365*24*time.Hour))
-		resp := struct {
-			Success     bool   `json:"success"`
-			AppCert     string `json:"app_cert"`
-			CertChain   string `json:"cert_chain"`
-			TrustBundle string `json:"trust_bundle"`
-			AppID       string `json:"app_id"`
-		}{
-			Success:     true,
-			AppCert:     certPEM,
-			CertChain:   "",
-			TrustBundle: "",
-			AppID:       "spiffe://g8e.local/app/test-agent",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	agentName := "new-agent"
+	certFile := cfg.AppCertFile(agentName)
+	keyFile := cfg.AppKeyFile(agentName)
+
+	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
+		assert.Equal(t, "POST", r.Method)
+
+		var req struct {
+			CSR     string `json:"csr_pem"`
+			AppName string `json:"app_name"`
+			AppType string `json:"app_type"`
+		}
+		assert.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		assert.Equal(t, agentName, req.AppName)
+		assert.Equal(t, "mcp-client", req.AppType)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		w.Write(enrollResponse(t, agentName))
+	})
+	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
+	writeTestCLICert(t, cfg)
+
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+
+	require.NoError(t, err)
+	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
+	assert.Equal(t, certFile, returnedCertFile)
+	assert.Equal(t, keyFile, returnedKeyFile)
+	assert.FileExists(t, returnedCertFile)
+	assert.FileExists(t, returnedKeyFile)
+}
+
+// TestEnrollAgentApp_NoURISAN tests re-enrollment when cert has no URI SAN.
+func TestEnrollAgentApp_NoURISAN(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
 	certFile := cfg.AppCertFile(agentName)
 	keyFile := cfg.AppKeyFile(agentName)
 
-	// Create a cert without URI SAN (using a different generator)
+	// Create a cert without URI SAN
 	csr, privKey, err := GenerateCSR(agentName)
 	require.NoError(t, err)
-
-	// Parse the CSR to get the public key
 	block, _ := pem.Decode([]byte(csr))
 	require.NotNil(t, block)
 	csrObj, err := x509.ParseCertificateRequest(block.Bytes)
 	require.NoError(t, err)
 
-	// Create a cert without URI SAN
-	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	require.NoError(t, err)
-
-	template := x509.Certificate{
-		SerialNumber: serialNumber,
-		Subject: pkix.Name{
-			CommonName: agentName,
-		},
+	tmpl := x509.Certificate{
+		SerialNumber:          serial,
+		Subject:               pkix.Name{CommonName: agentName},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(30 * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 	}
-
-	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, csrObj.PublicKey, privKey)
+	certDER, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, csrObj.PublicKey, privKey)
 	require.NoError(t, err)
 
-	certPEM := string(pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE",
-		Bytes: certBytes,
-	}))
-
-	keyBytes, err := x509.MarshalECPrivateKey(privKey)
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyDER, err := x509.MarshalECPrivateKey(privKey)
 	require.NoError(t, err)
-
-	keyPEM := string(pem.EncodeToMemory(&pem.Block{
-		Type:  "EC PRIVATE KEY",
-		Bytes: keyBytes,
-	}))
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
 	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
-	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
-	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
+	require.NoError(t, os.WriteFile(certFile, certPEM, 0600))
+	require.NoError(t, os.WriteFile(keyFile, keyPEM, 0600))
 
-	// Call EnrollAgentApp - should re-enroll due to missing URI SAN
+	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		w.Write(enrollResponse(t, agentName))
+	})
+	writeTestCLICert(t, cfg)
+
 	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
 	require.NoError(t, err)
@@ -347,56 +393,37 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	assert.Equal(t, keyFile, returnedKeyFile)
 }
 
-// TestEnrollAgentApp_InvalidCert tests re-enrollment when cert is invalid
+// TestEnrollAgentApp_InvalidCert tests re-enrollment when cert is invalid (unparseable).
 func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	t.Parallel()
 
-	// Mock server to handle enrollment request
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, constants.APIPaths.PKIAppsEnroll, r.URL.Path)
-
-		// Return successful enrollment response
-		certPEM, _ := generateTestCertificateWithSPIFFE(t, "test-agent", time.Now().Add(365*24*time.Hour))
-		resp := struct {
-			Success     bool   `json:"success"`
-			AppCert     string `json:"app_cert"`
-			CertChain   string `json:"cert_chain"`
-			TrustBundle string `json:"trust_bundle"`
-			AppID       string `json:"app_id"`
-		}{
-			Success:     true,
-			AppCert:     certPEM,
-			CertChain:   "",
-			TrustBundle: "",
-			AppID:       "spiffe://g8e.local/app/test-agent",
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(resp)
-	}))
-	defer server.Close()
-
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
 	certFile := cfg.AppCertFile(agentName)
 	keyFile := cfg.AppKeyFile(agentName)
 
-	// Create invalid cert data
+	// Write invalid cert data
 	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
 	require.NoError(t, os.WriteFile(certFile, []byte("invalid-cert-data"), 0600))
 	require.NoError(t, os.WriteFile(keyFile, []byte("invalid-key-data"), 0600))
 
-	// Call EnrollAgentApp - should re-enroll due to invalid cert
+	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		w.Write(enrollResponse(t, agentName))
+	})
+	writeTestCLICert(t, cfg)
+
 	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
 	require.NoError(t, err)
@@ -405,38 +432,35 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	assert.Equal(t, keyFile, returnedKeyFile)
 }
 
-// TestEnrollAgentApp_EnrollmentError tests error handling when enrollment fails
+// TestEnrollAgentApp_EnrollmentError tests error handling when enrollment fails.
 func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 	t.Parallel()
 
-	// Mock server that returns an error
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
-	}))
-	defer server.Close()
-
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"
 
-	// Call EnrollAgentApp - should fail
+	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
+	})
+	writeTestCLICert(t, cfg)
+
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "enrollment failed")
 }
 
-// TestEnrollAgentApp_GatewayUnreachable tests error handling when gateway is unreachable
+// TestEnrollAgentApp_GatewayUnreachable tests error handling when the gateway is unreachable.
 func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	t.Parallel()
 
@@ -448,14 +472,20 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
 		CredentialsDir:   tmpDir,
 		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		TestPortOverride: 59999, // non-existent port
 	}
 
 	agentName := "test-agent"
 
-	// Call EnrollAgentApp - should fail due to unreachable gateway
+	// CLI cert and CA bundle must exist so we reach the POST before failing.
+	writeTestCLICert(t, cfg)
+	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	cfg.Paths.Infra.CACertPath = caPath
+
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to POST enrollment request")
+	assert.Contains(t, err.Error(), "failed to POST delegated credential request")
 }

@@ -46,7 +46,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	dbDir := tempDir(t)
 	pkiDir := tempDir(t)
 	secretsDir := tempDir(t)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -58,7 +58,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: tempDir(t),
@@ -94,11 +94,12 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	t.Cleanup(func() { suspendedTxService.Close() })
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)

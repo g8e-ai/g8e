@@ -96,6 +96,7 @@ type GatewayConfig struct {
 	PasskeyRpName      string         // RP Name for passkey operations (default: g8e)
 	MCPDownstreamURL   string         // URL of the downstream MCP server to proxy discovery and execution to
 	A2ADownstreamURL   string         // URL of the downstream A2A server to proxy execution to
+	PublicBaseURL      string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
 	JWKSURL            string         // URL to fetch JWKS for JWT validation
 	JWTRoleClaim       string         // The claim in JWT that contains roles (default: "roles")
 	JWTIssuer          string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
@@ -381,7 +382,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	}
 
 	vaultDir := constants.Paths.Infra.VaultDir
-	vaultKeyPath := filepath.Join(vaultDir, "key")
+	vaultKeyPath := constants.Paths.Infra.VaultKeyPath
 
 	// Validate and resolve gateway ports
 	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
@@ -561,7 +562,7 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Default VaultKeyPath to .g8e/vault/key if not explicitly set
 	if cfg.VaultKeyPath == "" {
-		cfg.VaultKeyPath = filepath.Join(cfg.VaultDir, "key")
+		cfg.VaultKeyPath = constants.Paths.Infra.VaultKeyPath
 	}
 
 	// Default VaultRequireUnlock to false (matches CLI flag default)

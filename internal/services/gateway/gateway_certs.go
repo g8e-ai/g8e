@@ -90,7 +90,7 @@ type PKIAuthority struct {
 
 func newPKIAuthority(dataDir, pkiDir string, db *CanonicalDBService, secretManager *SecretManager, logger *slog.Logger) *PKIAuthority {
 	if pkiDir == "" {
-		pkiDir = filepath.Join(dataDir, "pki")
+		pkiDir = filepath.Join(dataDir, constants.PkiDirname)
 	}
 	return &PKIAuthority{
 		pkiDir:        pkiDir,
@@ -113,13 +113,13 @@ func (pki *PKIAuthority) InitializePKIWithNames(extraIPs []net.IP, extraDNSNames
 
 	// Create directory structure
 	dirs := []string{
-		filepath.Join(pki.pkiDir, "root"),
-		filepath.Join(pki.pkiDir, "authorities"),
-		filepath.Join(pki.pkiDir, "issued"),
-		filepath.Join(pki.pkiDir, "issued", "hub"),
-		filepath.Join(pki.pkiDir, "issued", "gateway-peer"),
-		filepath.Join(pki.pkiDir, "trust"),
-		filepath.Join(pki.pkiDir, "revocation"),
+		filepath.Join(pki.pkiDir, constants.PkiSubdirRoot),
+		filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities),
+		filepath.Join(pki.pkiDir, constants.PkiSubdirIssued),
+		filepath.Join(pki.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub),
+		filepath.Join(pki.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirGatewayPeer),
+		filepath.Join(pki.pkiDir, constants.PkiSubdirTrust),
+		filepath.Join(pki.pkiDir, constants.PkiSubdirRevocation),
 	}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -128,18 +128,18 @@ func (pki *PKIAuthority) InitializePKIWithNames(extraIPs []net.IP, extraDNSNames
 	}
 
 	// Generate or load Root CA
-	if err := pki.ensureRootCA(); err != nil {
-		return fmt.Errorf("pki: ensure root CA: %w", err)
+	if err := pki.loadOrGenerateRootCA(); err != nil {
+		return fmt.Errorf("pki: load or generate root CA: %w", err)
 	}
 
 	// Generate or load Intermediate CAs
-	if err := pki.ensureIntermediateCAs(); err != nil {
-		return fmt.Errorf("pki: ensure intermediate CAs: %w", err)
+	if err := pki.loadOrGenerateIntermediateCAs(); err != nil {
+		return fmt.Errorf("pki: load or generate intermediate CAs: %w", err)
 	}
 
 	// Generate or load operator-gateway service certificate
-	if err := pki.ensureServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
-		return fmt.Errorf("pki: ensure service certificate: %w", err)
+	if err := pki.loadOrGenerateServiceCertWithNames(extraIPs, extraDNSNames); err != nil {
+		return fmt.Errorf("pki: load or generate service certificate: %w", err)
 	}
 
 	// Generate trust bundles
@@ -182,7 +182,7 @@ func (pki *PKIAuthority) TLSConfig() *tls.Config {
 
 // TrustBundlePath returns the path to the gateway trust bundle.
 func (pki *PKIAuthority) TrustBundlePath() string {
-	return filepath.Join(pki.pkiDir, "trust/g8eg-ca-bundle.pem")
+	return filepath.Join(pki.pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 }
 
 // PKIDir returns the path to the pki directory.
@@ -192,15 +192,15 @@ func (pki *PKIAuthority) PKIDir() string {
 
 // ─── PKI hierarchy management ─────────────────────────────────────────────
 
-func (pki *PKIAuthority) ensureRootCA() error {
-	rootCertPath := filepath.Join(pki.pkiDir, "root/root_ca.crt")
+func (pki *PKIAuthority) loadOrGenerateRootCA() error {
+	rootCertPath := filepath.Join(pki.pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
 
 	if fileExists(rootCertPath) {
 		if err := pki.loadCACertificate(rootCertPath, &pki.rootCert); err != nil {
 			return fmt.Errorf("pki: load existing root CA: %w", err)
 		}
 		// Verify private key exists in keystore; regenerate if missing
-		if _, err := pki.secretManager.GetCAPrivateKey("root"); err != nil {
+		if _, err := pki.secretManager.GetCAPrivateKey(string(constants.CATypeRoot)); err != nil {
 			pki.logger.Info("[PKI] Root CA private key missing from keystore, regenerating")
 			return pki.generateRootCA(rootCertPath)
 		}
@@ -211,17 +211,17 @@ func (pki *PKIAuthority) ensureRootCA() error {
 	return pki.generateRootCA(rootCertPath)
 }
 
-func (pki *PKIAuthority) ensureIntermediateCAs() error {
+func (pki *PKIAuthority) loadOrGenerateIntermediateCAs() error {
 	// Hub Intermediate CA
-	hubCertPath := filepath.Join(pki.pkiDir, "authorities/hub_ca.crt")
+	hubCertPath := filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileHubCA)
 	if fileExists(hubCertPath) {
 		if err := pki.loadCACertificate(hubCertPath, &pki.hubCert); err != nil {
 			return fmt.Errorf("pki: load existing hub CA: %w", err)
 		}
 		// Verify private key exists in keystore; regenerate if missing
-		if _, err := pki.secretManager.GetCAPrivateKey("hub"); err != nil {
+		if _, err := pki.secretManager.GetCAPrivateKey(string(constants.CATypeHub)); err != nil {
 			pki.logger.Info("[PKI] Hub CA private key missing from keystore, regenerating")
-			if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+			if err := pki.loadCAPrivateKey(string(constants.CATypeRoot), &pki.rootKey); err != nil {
 				return fmt.Errorf("pki: load root CA private key for hub intermediate: %w", err)
 			}
 			if err := pki.generateIntermediateCA(hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
@@ -230,7 +230,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 		}
 	} else {
 		pki.logger.Info("[PKI] Generating hub intermediate CA")
-		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+		if err := pki.loadCAPrivateKey(string(constants.CATypeRoot), &pki.rootKey); err != nil {
 			return fmt.Errorf("pki: load root CA private key for hub intermediate: %w", err)
 		}
 		if err := pki.generateIntermediateCA(hubCertPath, pki.rootCert, pki.rootKey, hubCommonName); err != nil {
@@ -239,15 +239,15 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	}
 
 	// Operator Intermediate CA
-	operatorCertPath := filepath.Join(pki.pkiDir, "authorities/operator_ca.crt")
+	operatorCertPath := filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA)
 	if fileExists(operatorCertPath) {
 		if err := pki.loadCACertificate(operatorCertPath, &pki.operatorCert); err != nil {
 			return fmt.Errorf("pki: load existing operator CA: %w", err)
 		}
 		// Verify private key exists in keystore; regenerate if missing
-		if _, err := pki.secretManager.GetCAPrivateKey("operator"); err != nil {
+		if _, err := pki.secretManager.GetCAPrivateKey(string(constants.CATypeOperator)); err != nil {
 			pki.logger.Info("[PKI] Operator CA private key missing from keystore, regenerating")
-			if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+			if err := pki.loadCAPrivateKey(string(constants.CATypeRoot), &pki.rootKey); err != nil {
 				return fmt.Errorf("pki: load root CA private key for operator intermediate: %w", err)
 			}
 			if err := pki.generateIntermediateCA(operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
@@ -256,7 +256,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 		}
 	} else {
 		pki.logger.Info("[PKI] Generating Operator intermediate CA")
-		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+		if err := pki.loadCAPrivateKey(string(constants.CATypeRoot), &pki.rootKey); err != nil {
 			return fmt.Errorf("pki: load root CA private key for operator intermediate: %w", err)
 		}
 		if err := pki.generateIntermediateCA(operatorCertPath, pki.rootCert, pki.rootKey, operatorCommonName); err != nil {
@@ -265,15 +265,15 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 	}
 
 	// Gateway Peer Intermediate CA
-	gatewayPeerCertPath := filepath.Join(pki.pkiDir, "authorities/gateway_peer_ca.crt")
+	gatewayPeerCertPath := filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileGatewayPeerCA)
 	if fileExists(gatewayPeerCertPath) {
 		if err := pki.loadCACertificate(gatewayPeerCertPath, &pki.gatewayPeerCert); err != nil {
 			return fmt.Errorf("pki: load existing gateway peer CA: %w", err)
 		}
 		// Verify private key exists in keystore; regenerate if missing
-		if _, err := pki.secretManager.GetCAPrivateKey("gateway-peer"); err != nil {
+		if _, err := pki.secretManager.GetCAPrivateKey(string(constants.CATypeGatewayPeer)); err != nil {
 			pki.logger.Info("[PKI] Gateway peer CA private key missing from keystore, regenerating")
-			if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+			if err := pki.loadCAPrivateKey(string(constants.CATypeRoot), &pki.rootKey); err != nil {
 				return fmt.Errorf("pki: load root CA private key for gateway peer intermediate: %w", err)
 			}
 			if err := pki.generateIntermediateCA(gatewayPeerCertPath, pki.rootCert, pki.rootKey, gatewayPeerCommonName); err != nil {
@@ -282,7 +282,7 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 		}
 	} else {
 		pki.logger.Info("[PKI] Generating gateway peer intermediate CA")
-		if err := pki.loadCAPrivateKey("root", &pki.rootKey); err != nil {
+		if err := pki.loadCAPrivateKey(string(constants.CATypeRoot), &pki.rootKey); err != nil {
 			return fmt.Errorf("pki: load root CA private key for gateway peer intermediate: %w", err)
 		}
 		if err := pki.generateIntermediateCA(gatewayPeerCertPath, pki.rootCert, pki.rootKey, gatewayPeerCommonName); err != nil {
@@ -292,9 +292,9 @@ func (pki *PKIAuthority) ensureIntermediateCAs() error {
 
 	return nil
 }
-func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
-	serviceCertPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.crt")
-	chainPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.chain.pem")
+func (pki *PKIAuthority) loadOrGenerateServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
+	serviceCertPath := filepath.Join(pki.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
+	chainPath := filepath.Join(pki.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
 
 	needService := !fileExists(serviceCertPath) || !fileExists(chainPath)
 	if !needService {
@@ -308,7 +308,7 @@ func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSN
 			if pki.secretManager == nil {
 				return fmt.Errorf("SecretManager is required for service private key loading")
 			}
-			keyDER, err := pki.secretManager.GetServicePrivateKey("operator-gateway")
+			keyDER, err := pki.secretManager.GetServicePrivateKey(string(constants.ServiceNameOperatorGateway))
 			if err != nil {
 				pki.logger.Warn("[PKI] Failed to load service private key from keystore, regenerating", string(constants.ConnectionStateError), err)
 				needService = true
@@ -339,7 +339,7 @@ func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSN
 		pki.logger.Info("[PKI] Generating operator-gateway service certificate")
 		// Load hub CA private key on-demand for service cert generation
 		if pki.hubKey == nil {
-			if err := pki.loadCAPrivateKey("hub", &pki.hubKey); err != nil {
+			if err := pki.loadCAPrivateKey(string(constants.CATypeHub), &pki.hubKey); err != nil {
 				return fmt.Errorf("pki: load hub CA private key for service cert generation: %w", err)
 			}
 		}
@@ -351,7 +351,7 @@ func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSN
 		if err != nil {
 			return fmt.Errorf("pki: load generated service cert chain: %w", err)
 		}
-		keyDER, err := pki.secretManager.GetServicePrivateKey("operator-gateway")
+		keyDER, err := pki.secretManager.GetServicePrivateKey(string(constants.ServiceNameOperatorGateway))
 		if err != nil {
 			return fmt.Errorf("pki: load generated service private key from keystore: %w", err)
 		}
@@ -367,20 +367,20 @@ func (pki *PKIAuthority) ensureServiceCertWithNames(extraIPs []net.IP, extraDNSN
 
 func (pki *PKIAuthority) generateTrustBundles() error {
 	// Gateway bundle (root + hub intermediate + Operator intermediate + gateway peer intermediate)
-	gatewayBundlePath := filepath.Join(pki.pkiDir, "trust/g8eg-ca-bundle.pem")
-	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root/root_ca.crt"))
+	gatewayBundlePath := filepath.Join(pki.pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA))
 	if err != nil {
 		return fmt.Errorf("pki: read root CA: %w", err)
 	}
-	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/hub_ca.crt"))
+	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileHubCA))
 	if err != nil {
 		return fmt.Errorf("pki: read hub CA: %w", err)
 	}
-	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/operator_ca.crt"))
+	operatorPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA))
 	if err != nil {
 		return fmt.Errorf("pki: read operator CA: %w", err)
 	}
-	gatewayPeerPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/gateway_peer_ca.crt"))
+	gatewayPeerPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileGatewayPeerCA))
 	if err != nil {
 		return fmt.Errorf("pki: read gateway peer CA: %w", err)
 	}
@@ -394,7 +394,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	}
 
 	// Operator bundle (root + Operator intermediate)
-	operatorBundlePath := filepath.Join(pki.pkiDir, "trust/operator-bundle.pem")
+	operatorBundlePath := filepath.Join(pki.pkiDir, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle)
 	operatorBundle := make([]byte, 0, len(rootPEM)+len(operatorPEM))
 	operatorBundle = append(operatorBundle, rootPEM...)
 	operatorBundle = append(operatorBundle, operatorPEM...)
@@ -403,7 +403,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	}
 
 	// Root CA mirror (for operator clients)
-	rootBundlePath := filepath.Join(pki.pkiDir, "trust/root.pem")
+	rootBundlePath := filepath.Join(pki.pkiDir, constants.PkiSubdirTrust, constants.PkiFileRootBundle)
 	if err := writePEMFile(rootBundlePath, "", rootPEM, 0644); err != nil {
 		return fmt.Errorf("pki: write root bundle: %w", err)
 	}
@@ -416,7 +416,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 	if err != nil {
 		return fmt.Errorf("pki: marshal trust domain data: %w", err)
 	}
-	if err := writePEMFile(filepath.Join(pki.pkiDir, "trust/trust-domain.json"), "TRUST DOMAIN", trustDomainJSON, 0600); err != nil {
+	if err := writePEMFile(filepath.Join(pki.pkiDir, constants.PkiSubdirTrust, constants.PkiFileTrustDomainJSON), "TRUST DOMAIN", trustDomainJSON, 0600); err != nil {
 		return fmt.Errorf("pki: write trust-domain.json: %w", err)
 	}
 
@@ -427,7 +427,7 @@ func (pki *PKIAuthority) generateTrustBundles() error {
 func (pki *PKIAuthority) GatewayTrustBundle() ([]byte, error) {
 	pki.mu.RLock()
 	defer pki.mu.RUnlock()
-	bundlePath := filepath.Join(pki.pkiDir, "trust/g8eg-ca-bundle.pem")
+	bundlePath := filepath.Join(pki.pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 	if pki.logger != nil {
 		pki.logger.Debug("GatewayTrustBundle reading", "path", bundlePath, "pki_dir", pki.pkiDir)
 	}
@@ -577,7 +577,7 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	// Determine which CA to use based on leaf type
 	var caCert *x509.Certificate
 	var caKey *ecdsa.PrivateKey
-	var caType string
+	var caType constants.CAType
 	var certValidityDays int
 
 	switch leafType {
@@ -586,7 +586,7 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 			return "", "", fmt.Errorf("pki: gateway peer CA not loaded - call InitializePKI first")
 		}
 		caCert = pki.gatewayPeerCert
-		caType = "gateway-peer"
+		caType = constants.CATypeGatewayPeer
 		certValidityDays = peerCertValidityDays
 	default:
 		// operator, cli, app use Operator CA
@@ -594,13 +594,13 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 			return "", "", fmt.Errorf("pki: operator CA not loaded - call InitializePKI first")
 		}
 		caCert = pki.operatorCert
-		caType = string(constants.UserRoleOperator)
+		caType = constants.CATypeOperator
 		certValidityDays = leafCertValidityDays
 	}
 
 	// Load CA private key on-demand for signing
 	if caKey == nil {
-		if err := pki.loadCAPrivateKey(caType, &caKey); err != nil {
+		if err := pki.loadCAPrivateKey(string(caType), &caKey); err != nil {
 			return "", "", fmt.Errorf("pki: load %s CA private key for signing: %w", caType, err)
 		}
 	}
@@ -670,25 +670,111 @@ func (pki *PKIAuthority) SignCSR(csrPEM string, leafType string, organizationID,
 	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
 
 	// Build chain based on CA type
-	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root/root_ca.crt"))
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA))
 	if err != nil {
 		return "", "", fmt.Errorf("pki: read root CA for chain: %w", err)
 	}
 	if leafType == "gateway-peer" {
 		// Gateway peer chain: leaf + gateway peer intermediate + root
-		caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/gateway_peer_ca.crt"))
+		caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileGatewayPeerCA))
 		if err != nil {
 			return "", "", fmt.Errorf("pki: read gateway peer CA for chain: %w", err)
 		}
 		chainPEM = certPEM + string(caPEM) + string(rootPEM)
 	} else {
 		// Operator/cli/app chain: leaf + Operator intermediate + root
-		caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/operator_ca.crt"))
+		caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA))
 		if err != nil {
 			return "", "", fmt.Errorf("pki: read operator CA for chain: %w", err)
 		}
 		chainPEM = certPEM + string(caPEM) + string(rootPEM)
 	}
+
+	return certPEM, chainPEM, nil
+}
+
+// SignDelegatedCSR signs a CSR for a delegated credential with dual SANs (app + requestor).
+// The certificate is short-lived (1 hour) and binds both the app identity and the requesting user.
+func (pki *PKIAuthority) SignDelegatedCSR(csrPEM string, appName, userID string) (certPEM, chainPEM string, err error) {
+	pki.mu.Lock()
+	defer pki.mu.Unlock()
+
+	// Use Operator CA for delegated credentials
+	if pki.operatorCert == nil {
+		return "", "", fmt.Errorf("pki: operator CA not loaded - call InitializePKI first")
+	}
+
+	// Load CA private key on-demand for signing
+	var caKey *ecdsa.PrivateKey
+	if err := pki.loadCAPrivateKey(string(constants.CATypeOperator), &caKey); err != nil {
+		return "", "", fmt.Errorf("pki: load operator CA private key for signing: %w", err)
+	}
+
+	block, _ := pem.Decode([]byte(csrPEM))
+	if block == nil || block.Type != "CERTIFICATE REQUEST" {
+		return "", "", fmt.Errorf("pki: invalid CSR PEM")
+	}
+
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: parse CSR: %w", err)
+	}
+
+	if err := csr.CheckSignature(); err != nil {
+		return "", "", fmt.Errorf("pki: CSR signature check failed: %w", err)
+	}
+
+	// Enforce P-256 curve policy
+	if !isCurveP256(csr.PublicKey) {
+		return "", "", fmt.Errorf("pki: CSR public key must use P-256 curve, got %T", csr.PublicKey)
+	}
+
+	serial, err := randomSerial()
+	if err != nil {
+		return "", "", fmt.Errorf("pki: generate serial: %w", err)
+	}
+
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: serial,
+		Subject:      csr.Subject,
+		NotBefore:    now.Add(-1 * time.Minute),
+		NotAfter:     now.Add(1 * time.Hour), // Short-lived: 1 hour
+		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		DNSNames:     csr.DNSNames,
+		IPAddresses:  csr.IPAddresses,
+	}
+
+	// Set dual URI SANs: app identity + requestor user identity
+	wid := protocol.NewWorkloadIdentity()
+	appURI, err := wid.AppSPIFFEURL(appName)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: generate app SPIFFE URL: %w", err)
+	}
+	userURI, err := wid.UserSPIFFEURL(userID)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: generate user SPIFFE URL: %w", err)
+	}
+	template.URIs = []*url.URL{appURI, userURI}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, template, pki.operatorCert, csr.PublicKey, caKey)
+	if err != nil {
+		return "", "", fmt.Errorf("pki: sign delegated certificate: %w", err)
+	}
+
+	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
+
+	// Build chain: leaf + Operator intermediate + root
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA))
+	if err != nil {
+		return "", "", fmt.Errorf("pki: read root CA for chain: %w", err)
+	}
+	caPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA))
+	if err != nil {
+		return "", "", fmt.Errorf("pki: read operator CA for chain: %w", err)
+	}
+	chainPEM = certPEM + string(caPEM) + string(rootPEM)
 
 	return certPEM, chainPEM, nil
 }
@@ -781,7 +867,7 @@ func (pki *PKIAuthority) generateRootCA(certPath string) error {
 	if pki.secretManager == nil {
 		return fmt.Errorf("pki: secret manager required for PKI private key storage")
 	}
-	if err := pki.secretManager.StoreCAPrivateKey("root", keyDER); err != nil {
+	if err := pki.secretManager.StoreCAPrivateKey(string(constants.CATypeRoot), keyDER); err != nil {
 		return fmt.Errorf("pki: store root CA private key in keystore: %w", err)
 	}
 
@@ -837,14 +923,14 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 	}
 
 	// Determine CA type for keystore storage
-	var caType string
+	var caType constants.CAType
 	switch commonName {
 	case hubCommonName:
-		caType = "hub"
+		caType = constants.CATypeHub
 	case operatorCommonName:
-		caType = string(constants.UserRoleOperator)
+		caType = constants.CATypeOperator
 	case gatewayPeerCommonName:
-		caType = "gateway-peer"
+		caType = constants.CATypeGatewayPeer
 	}
 
 	if pki.secretManager == nil {
@@ -853,7 +939,7 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 	if caType == "" {
 		return fmt.Errorf("pki: unknown CA common name: %s", commonName)
 	}
-	if err := pki.secretManager.StoreCAPrivateKey(caType, keyDER); err != nil {
+	if err := pki.secretManager.StoreCAPrivateKey(string(caType), keyDER); err != nil {
 		return fmt.Errorf("pki: store %s CA private key in keystore: %w", caType, err)
 	}
 
@@ -873,7 +959,7 @@ func (pki *PKIAuthority) generateIntermediateCA(certPath string, parentCert *x50
 	return nil
 }
 func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDNSNames []string) error {
-	serviceCertPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.crt")
+	serviceCertPath := filepath.Join(pki.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
 
 	if pki.hubCert == nil || pki.hubKey == nil {
 		return fmt.Errorf("pki: hub CA not loaded - call InitializePKI first")
@@ -907,7 +993,7 @@ func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDN
 	template := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			CommonName:   "operator-gateway",
+			CommonName:   string(constants.ServiceNameOperatorGateway),
 			Organization: []string{"g8e"},
 			Country:      []string{"US"},
 		},
@@ -928,17 +1014,17 @@ func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDN
 
 	// Write chain PEM (leaf + hub intermediate + root)
 	chainPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "authorities/hub_ca.crt"))
+	hubPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileHubCA))
 	if err != nil {
 		return fmt.Errorf("pki: read hub CA for chain: %w", err)
 	}
-	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, "root/root_ca.crt"))
+	rootPEM, err := os.ReadFile(filepath.Join(pki.pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA))
 	if err != nil {
 		return fmt.Errorf("pki: read root CA for chain: %w", err)
 	}
 	chainPEM = append(chainPEM, hubPEM...)
 	chainPEM = append(chainPEM, rootPEM...)
-	chainPath := filepath.Join(pki.pkiDir, "issued/hub/operator-gateway.chain.pem")
+	chainPath := filepath.Join(pki.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
 	// Write chain PEM directly without re-encoding (chainPEM is already concatenated PEM blocks)
 	if err := writePEMFile(chainPath, "", chainPEM, 0600); err != nil {
 		return fmt.Errorf("pki: write chain: %w", err)
@@ -955,7 +1041,7 @@ func (pki *PKIAuthority) generateServiceCertWithNames(extraIPs []net.IP, extraDN
 	if pki.secretManager == nil {
 		return fmt.Errorf("pki: secret manager required for service private key storage")
 	}
-	if err := pki.secretManager.StoreServicePrivateKey("operator-gateway", keyDER); err != nil {
+	if err := pki.secretManager.StoreServicePrivateKey(string(constants.ServiceNameOperatorGateway), keyDER); err != nil {
 		return fmt.Errorf("pki: store operator-gateway private key in keystore: %w", err)
 	}
 
@@ -1038,7 +1124,7 @@ func (pki *PKIAuthority) RenewServiceCertWithNames(extraIPs []net.IP, extraDNSNa
 
 	// Load hub CA private key on-demand for service cert generation
 	if pki.hubKey == nil {
-		if err := pki.loadCAPrivateKey("hub", &pki.hubKey); err != nil {
+		if err := pki.loadCAPrivateKey(string(constants.CATypeHub), &pki.hubKey); err != nil {
 			return fmt.Errorf("pki: load hub CA private key for service cert renewal: %w", err)
 		}
 	}
@@ -1054,7 +1140,7 @@ func (pki *PKIAuthority) RenewServiceCertWithNames(extraIPs []net.IP, extraDNSNa
 	if err != nil {
 		return fmt.Errorf("pki: load renewed service cert chain: %w", err)
 	}
-	keyDER, err := pki.secretManager.GetServicePrivateKey("operator-gateway")
+	keyDER, err := pki.secretManager.GetServicePrivateKey(string(constants.ServiceNameOperatorGateway))
 	if err != nil {
 		return fmt.Errorf("pki: load renewed service private key from keystore: %w", err)
 	}

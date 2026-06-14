@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-11
+Last Updated: 2026-06-13
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -171,6 +171,30 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 - `NewLiveOperatorHTTPClient` - Creates mTLS HTTP client configured for live platform testing
 - `ResolveRepoRootFromTestDir` - Resolves repository root using go list
 
+#### Test Fixtures (`test/fixtures/`)
+
+Reusable test infrastructure for integration and E2E tests:
+
+**Gateway Fixture** (`test/fixtures/gateway_fixture.go`):
+- `GatewayFixture` - Reusable gateway setup for integration tests with full lifecycle management
+- `NewGatewayFixture` - Creates a fully configured gateway with downstream server, execution services, governance dependencies, and MCP gateway wiring
+- `EnrollClientIdentity` - Performs CSR enrollment for test clients with certificate generation and operator session creation
+- `CreateMTLSClient` - Creates HTTP client configured for mTLS using enrolled identity
+- `WaitForReady` - Polls HTTP health endpoint until server accepts connections
+- `SetPublicBaseURL` - Sets public base URL for MCP gateway (used for approval links)
+- Supports configurable posture (notary, consensus, doctrine), custom downstream URLs, and test port zero allowance
+- Handles path initialization, mock downstream MCP server, actuator key setup, and automatic cleanup
+
+**Docker Operator Fixture** (`test/fixtures/docker_operator_fixture.go`):
+- `DockerOperatorFixture` - Manages Docker-based operator containers for true multi-operator testing scenarios
+- `NewDockerOperatorFixture` - Creates and starts a Docker operator with configurable image, hostname, gateway URL, network, and environment variables
+- `Stop` - Stops the operator container
+- `GetLogs` - Retrieves container logs for debugging
+- `ExecCommand` - Executes commands inside the container
+- `WaitForReady` - Waits for operator to be ready by checking logs for a readiness marker
+- Supports auto-remove containers, custom Docker networks, and automatic image building from `Dockerfile.operator`
+- Includes cleanup function for graceful container shutdown and removal
+
 ### Unit Tests
 
 #### Models Tests (`internal/models/`)
@@ -184,6 +208,7 @@ Tests for data model serialization and validation:
 - `fs_list_test.go` - File system list model tests
 - `gateway_test.go` - Gateway model tests
 - `heartbeat_test.go` - Heartbeat model tests
+- `invitation_test.go` - Invitation model tests
 - `suspended_test.go` - Suspended state model tests
 - `timestamp_test.go` - Timestamp model tests
 - `wire_test.go` - Wire format model tests
@@ -199,41 +224,45 @@ Comprehensive gateway service testing:
 - `cli_l3_notary_test.go` - CLI-based L3 notary tests
 - `composite_l3_verifier_test.go` - Composite L3 verification tests
 - `db_controller_test.go` - Database controller tests
+- `gateway_auth_bench_test.go` - Gateway authentication benchmark tests
 - `gateway_auth_test.go` - Gateway authentication tests
 - `gateway_db_test.go` - Gateway database tests
 - `gateway_http_test.go` - Gateway HTTP handler tests
 - `gateway_jwt_integration_test.go` - JWT integration tests
 - `gateway_pubsub_test.go` - Gateway pub/sub tests
+- `gateway_service_test.go` - Gateway service tests
 - `governance_envelope_fuzz_test.go` - Fuzz testing for governance envelopes
 - `governance_envelope_test.go` - Governance envelope validation tests
 - `jwks_test.go` - JWKS endpoint tests
-- `listen_service_test.go` - Listen service tests
 - `network_identity_test.go` - Network identity tests
 - `operator_controller_test.go` - Operator controller tests
 - `passkey_service_test.go` - WebAuthn passkey tests
 - `pki_authority_test.go` - PKI authority tests
 - `pki_controller_test.go` - PKI controller tests
 - `registration_service_test.go` - Registration service tests
+- `replay_store_service_test.go` - Replay store service tests
 - `secret_manager_test.go` - Secret manager tests
-- `session_service_test.go` - Session service tests
+- `state_root_service_test.go` - State root service tests
 - `state_root_test.go` - State root management tests
 - `user_service_test.go` - User service tests
-- `test_setup.go` - Shared test infrastructure setup
 
 #### Governance Service Tests (`internal/services/governance/`)
 
 Five-layer governance pipeline tests:
 - `actuator_pub_export_test.go` - L5 Actuator public export tests
 - `eval_answer_test.go` - L1 Doctrine evaluation answer tests
+- `eval_answer_integration_test.go` - L1 Doctrine evaluation answer integration tests
 - `governance_test.go` - General governance tests
 - `governance_integration_test.go` - Governance integration tests with `//go:build integration` tag
 - `l1_doctrine_payload_test.go` - L1 Doctrine payload validation tests
 - `l1_doctrine_test.go` - L1 Doctrine pattern matching tests
+- `l2_consensus_test.go` - L2 Consensus signature verification tests
 - `l3_notary_test.go` - L3 Notary human presence proof tests
 - `l3_notary_integration_test.go` - L3 Notary integration tests with `//go:build integration` tag
 - `l4_warden_test.go` - L4 Warden integrity tests
 - `l5_actuator_test.go` - L5 Actuator execution tests
 - `l5_actuator_integration_test.go` - L5 Actuator integration tests with `//go:build integration` tag
+- `processor_test.go` - Governance processor tests
 - `transaction_verifier_test.go` - Transaction verifier integration tests
 
 #### Execution Service Tests (`internal/services/execution/`)
@@ -262,7 +291,25 @@ Authentication and PKI tests:
 - `internal/services/g8eo_test.go` - g8e Operator lifecycle tests
 - `internal/services/g8eo_integration_test.go` - g8e Operator integration tests with `//go:build integration` tag
 - `internal/services/g8eo_lifecycle_test.go` - g8e Operator lifecycle management tests
+- `internal/services/pubsub/audit_service_test.go` - Pub/sub audit service tests
+- `internal/services/pubsub/command_service_test.go` - Pub/sub command service tests
+- `internal/services/pubsub/file_ops_service_test.go` - Pub/sub file operations service tests
+- `internal/services/pubsub/g8eg_pubsub_client_test.go` - g8e Gateway pub/sub client tests
+- `internal/services/pubsub/g8eg_pubsub_mock_test.go` - g8e Gateway pub/sub mock tests
 - `internal/services/pubsub/heartbeat_service_test.go` - Pub/sub heartbeat tests
+- `internal/services/pubsub/history_service_test.go` - Pub/sub history service tests
+- `internal/services/pubsub/inprocess_client_test.go` - In-process pub/sub client tests
+- `internal/services/pubsub/port_service_test.go` - Pub/sub port service tests
+- `internal/services/pubsub/protocol_helpers_test.go` - Pub/sub protocol helper tests
+- `internal/services/pubsub/publish_helpers_test.go` - Pub/sub publish helper tests
+- `internal/services/pubsub/pubsub_commands_test.go` - Pub/sub command tests
+- `internal/services/pubsub/pubsub_fixtures_test.go` - Pub/sub fixture tests
+- `internal/services/pubsub/pubsub_integration_helpers_test.go` - Pub/sub integration helper tests
+- `internal/services/pubsub/pubsub_l3_integration_test.go` - Pub/sub L3 integration tests
+- `internal/services/pubsub/pubsub_results_test.go` - Pub/sub results tests
+- `internal/services/pubsub/pubsub_test_helpers_test.go` - Pub/sub test helper tests
+- `internal/services/pubsub/tls_errors_test.go` - Pub/sub TLS error tests
+- `internal/services/pubsub/vault_writer_test.go` - Pub/sub vault writer tests
 - `internal/services/system/system_utils_test.go` - System utility tests with `//go:build !windows` tag
 
 #### CLI Tests (`internal/cli/`)
@@ -272,15 +319,15 @@ CLI command and configuration tests:
 - `auth/agent_enroll_test.go` - Agent enrollment tests with SPIFFE URI SAN generation
 - `auth/client_test.go` - Auth client tests
 - `auth/windows_crypto_test.go` - Windows crypto tests
-- `cmd/agent_test.go` - Agent command tests
 - `cmd/approve_test.go` - Approve command tests
-- `cmd/auditor_test.go` - Emulator command tests
 - `cmd/auth_test.go` - Auth command tests
 - `cmd/chaos_test.go` - Chaos command tests
 - `cmd/cmd_test.go` - General command tests
 - `cmd/data_test.go` - Data command tests
 - `cmd/emulator_test.go` - Emulator command tests
+- `cmd/goose_test.go` - Goose command tests
 - `cmd/main_test.go` - Main command tests
+- `cmd/mcp_backup_test.go` - MCP backup command tests
 - `cmd/mcp_test.go` - MCP command tests
 - `cmd/platform_test.go` - Platform command tests
 - `cmd/security_test.go` - Security command tests
@@ -315,15 +362,30 @@ CLI command and configuration tests:
 - `internal/httpclient/errors_test.go` - HTTP client error tests
 - `internal/httpclient/httpclient_test.go` - HTTP client tests
 - `internal/marshaler/marshaler_test.go` - Marshaler tests
-- `internal/emulator/client/mtls_test.go` - Emulator mTLS client tests
+- `internal/response/writer_test.go` - Response writer tests
+- `internal/response/writer_fuzz_test.go` - Response writer fuzz tests
+- `internal/security/path_test.go` - Security path validation tests
 - `internal/certs/embed_test.go` - Embedded certificates tests
 - `internal/certs/fetch_test.go` - Certificate fetch tests
 - `internal/testutil/pubsub_integration_test.go` - Pub/sub integration tests with `//go:build integration` tag
 - `internal/testutil/pubsub_unit_test.go` - Pub/sub unit tests
 
-#### Storage Test Infrastructure (`internal/services/storage/storagetest/`)
+#### Storage Test Infrastructure (`internal/services/storage/` and `internal/services/storage/storagetest/`)
 
-Test-only audit storage implementations separated from production code to avoid import cycles:
+Storage service tests and test-only audit storage implementations separated from production code to avoid import cycles:
+
+- `execution_vault_test.go` - Execution vault tests
+- `history_handler_test.go` - History handler tests
+- `ledger_diffcontent_test.go` - Ledger diff content tests
+- `ledger_diffstat_test.go` - Ledger diff stat tests
+- `ledger_git_test.go` - Ledger Git integration tests
+- `ledger_test.go` - Ledger tests
+- `replay_store_test.go` - Replay store tests
+- `storage_test_helpers_test.go` - Storage test helper tests
+- `token_store_test.go` - Token store tests
+- `vault_requirement_test.go` - Vault requirement tests
+
+**Test-only audit storage infrastructure** (`internal/services/storage/storagetest/`):
 
 - `audit_vault.go` - `TestSQLAuditStore` (test-only monolithic audit service with Git ledger integration)
 - `audit_store_config_test.go` - Configuration tests for the test audit store
@@ -352,8 +414,20 @@ Test-only audit storage implementations separated from production code to avoid 
 #### MCP Service Tests (`internal/services/mcp/`)
 
 MCP gateway and native tool integration tests:
+- `audit_attribution_test.go` - Audit attribution tests
+- `byo_client_e2e_test.go` - BYO client E2E tests
+- `config_test.go` - MCP configuration tests
+- `field_parser_test.go` - Field parser tests
 - `gateway_integration_test.go` - Gateway integration tests with real envelope processing, GatewaySigned propagation, SSE streaming, circuit breaker, error code mapping, native tool execution, read_field tool with L3 validation, and real L3 verification
+- `gateway_test.go` - Gateway service tests
+- `mcp_endpoint_test.go` - MCP endpoint tests
+- `native_handlers_test.go` - Native handler tests
 - `native_tools_integration_test.go` - Native tools integration tests with real SQLite databases, audit vault persistence, log filtering with scrubbing, process metrics and signal safety, network auditing and probing, concurrency tests for TOCTOU resistance, property-based tests for safety invariants, and negative controls for intentional failures
+- `registry_test.go` - Tool registry tests
+- `run_shell_command_test.go` - Shell command execution tests
+- `suspended_transaction_test.go` - Suspended transaction tests
+- `sys_tools_test.go` - System tools tests
+- `validation_test.go` - Validation tests
 
 #### Package Tests
 
@@ -459,10 +533,10 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **Tooling** - Standard `go test` with optional `gotestsum` for dots-style output.
 - **Race detection** - Enabled via `-race` in CI and by default in `./g8e test unit` and `./g8e test ci`.
 - **Parallelism** - `-parallel 4` with `180s` timeout.
-- **Coverage** - `--coverage` flag generates reports. CI enforces 52% coverage threshold. Note: The Makefile help text incorrectly states 60% threshold, but the actual `COVERAGE_THRESHOLD` variable is set to 52%.
+- **Coverage** - `--coverage` flag generates reports. CI enforces 52% coverage threshold.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Gateway gate infrastructure.
-- **Path constants** - Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). Hardcoded path strings like `.g8e/pki` are prohibited in test code.
+- **Path constants** - ALL filepath strings in test code MUST be defined as constants in `internal/constants/paths.go`. No filepath strings may be constructed dynamically or hardcoded inline, including relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`, etc. Dynamic path construction using `filepath.Join()` with string literals is prohibited. Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). The only exception is when using `TestPaths` for isolated test environments - the base directory for TestPaths must come from a constant, and all path construction within TestPaths must use constants. This eliminates magic strings and improves maintainability and system robustness.
 - **Typed error constants** - When testing error handling, check for any hand-trolled strings that should be properly typed errors (e.g., error reason strings, status codes, rejection reasons). Use typed constants from `internal/constants/` instead of hardcoded strings in assertions and error message checks.
 - **Regression test markers** - When documenting known issues in regression tests (e.g., Phase0Regression tests), use standardized marker constants instead of hardcoded strings. See `internal/services/gateway/pki_authority_test.go` for examples:
   - `RegressionMarkerAfterFix` - indicates expected behavior after a fix is implemented
@@ -477,7 +551,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-e2e`** - Runs Tier 3 (Live Platform E2E) tests with `e2e` build tag. Requires running gateway and auth login.
 - **`make test-scenario`** - Runs Tier 3 (Scenario) tests with `e2e` build tag. Requires running gateway and auth login.
 - **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
-- **`make test-coverage`** - Runs tests with coverage and enforces 52% threshold. Use `PKG=./path/to/pkg` for specific packages, `VERBOSE=true` for verbose output. Note: The Makefile help text incorrectly states 60% threshold, but the actual `COVERAGE_THRESHOLD` variable is set to 52%.
+- **`make test-coverage`** - Note: This target is documented in the Makefile help text but is not implemented as a .PHONY target. Use `go test -coverprofile=coverage.out ./...` directly instead.
 - **`make test-pkg-<path>`** - Note: This target is documented in the Makefile help text but is not implemented as a .PHONY target. Use `go test ./path/to/pkg` directly instead.
 - **`make test-shuffle`** - Runs all tests with randomized order.
 - **`make test-gateway`** - Runs gateway-specific tests (A2A gateway, MCP gateway, MCP stdio).

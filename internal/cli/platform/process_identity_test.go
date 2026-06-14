@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,9 +30,9 @@ func TestNetworkIdentityArgs_WritesFileWith0600Permissions(t *testing.T) {
 	pm := &ProcessManager{runtimeDir: t.TempDir()}
 	args, err := pm.networkIdentityArgs([]byte(`{"IPs":["192.0.2.10"]}`))
 	require.NoError(t, err)
-	require.Equal(t, []string{"--network-identity-file", filepath.Join(pm.runtimeDir, "network-identity.json")}, args)
+	require.Equal(t, []string{"--network-identity-file", filepath.Join(pm.runtimeDir, constants.NetworkIdentityFilename)}, args)
 
-	identityFile := filepath.Join(pm.runtimeDir, "network-identity.json")
+	identityFile := filepath.Join(pm.runtimeDir, constants.NetworkIdentityFilename)
 	info, err := os.Stat(identityFile)
 	require.NoError(t, err)
 	// Verify file permissions on Unix systems

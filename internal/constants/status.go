@@ -241,6 +241,23 @@ const (
 	UserRoleUser     UserRole = "user"
 )
 
+// CAType is a typed string for certificate authority type.
+type CAType string
+
+const (
+	CATypeRoot        CAType = "root"
+	CATypeHub         CAType = "hub"
+	CATypeOperator    CAType = "operator"
+	CATypeGatewayPeer CAType = "gateway-peer"
+)
+
+// ServiceName is a typed string for service names.
+type ServiceName string
+
+const (
+	ServiceNameOperatorGateway ServiceName = "operator-gateway"
+)
+
 // GatewayMode is a typed string for gateway mode.
 type GatewayMode string
 

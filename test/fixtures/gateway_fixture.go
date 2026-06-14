@@ -90,21 +90,19 @@ type GatewayFixtureOptions struct {
 func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture {
 	t.Helper()
 
-	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase("../../"); err != nil {
-		t.Fatalf("failed to initialize paths: %v", err)
-	}
+	// Create test paths without mutating global constants.Paths
+	testPaths := testutil.NewTestPathsFromTemp(t)
 
 	// Create unique subdirectory for this test run
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), opts.TestName)
-	dataDir := filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
+	dataDir := filepath.Join(testPaths.TestVaultDir, testRunID)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create test run directory: %v", err)
+		t.Fatalf("gateway_fixture: create test run directory: %v", err)
 	}
 	t.Logf("Test vault created at: %s", dataDir)
 
-	secretsDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
+	secretsDir := testPaths.SecretsDir
+	pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 
 	var downstreamServer *httptest.Server
 	var downstreamURL string
@@ -217,6 +215,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
 		L3Notary:           gatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
@@ -226,8 +225,9 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
 
-	// Set MCP gateway dependencies for governance processing
-	mcpGateway.SetDependencies(cmdSvc, govDeps.StateRootProvider, ActuatorPriv, ActuatorKeyID, downstreamURL)
+	// The MCP gateway's runtime governance dependencies are wired by
+	// NewOperatorPubSubService via initializeGovernance (mcpGateway was passed in
+	// through CommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
 	// Seed platform_settings required for health check
 	err = ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
@@ -274,7 +274,7 @@ func (f *GatewayFixture) WaitForReady(t *testing.T) {
 	t.Helper()
 	client := &http.Client{Timeout: 2 * time.Second}
 	require.Eventually(t, func() bool {
-		httpURL := fmt.Sprintf("http://localhost:%d", f.Service.GetHTTPPort())
+		httpURL := constants.LocalhostHTTPURL(f.Service.GetHTTPPort())
 		resp, err := client.Get(httpURL + constants.APIPaths.Health)
 		if err != nil {
 			return false
@@ -420,7 +420,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", f.Service.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -434,7 +434,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
 	if err := json.NewDecoder(hResp.Body).Decode(&regResp); err != nil {
-		t.Fatalf("failed to decode registration response: %v", err)
+		t.Fatalf("gateway_fixture: decode registration response: %v", err)
 	}
 	hResp.Body.Close()
 

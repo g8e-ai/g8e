@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // libsecretBackend uses the libsecret/GNOME Keyring for key storage on Linux.
@@ -50,7 +52,7 @@ func (b *libsecretBackend) RetrieveMasterKey() ([]byte, error) {
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			// secret-tool returns exit code 1 when item not found
-			return nil, ErrKeyNotFound
+			return nil, constants.ErrKeyStoreKeyNotFound
 		}
 		return nil, fmt.Errorf("libsecret: lookup master key: %w", err)
 	}
@@ -62,7 +64,7 @@ func (b *libsecretBackend) RetrieveMasterKey() ([]byte, error) {
 	}
 
 	if len(key) == 0 {
-		return nil, ErrKeyNotFound
+		return nil, constants.ErrKeyStoreKeyNotFound
 	}
 
 	return key, nil

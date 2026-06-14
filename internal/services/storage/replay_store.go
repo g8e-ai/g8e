@@ -36,7 +36,7 @@ type ReplayStoreConfig struct {
 // DefaultReplayStoreConfig returns the default configuration.
 func DefaultReplayStoreConfig() *ReplayStoreConfig {
 	return &ReplayStoreConfig{
-		DBPath: ".g8e/replay_store.db",
+		DBPath: constants.ReplayStoreDBPath,
 	}
 }
 

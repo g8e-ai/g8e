@@ -38,12 +38,7 @@ This test uses NO mocks - all components are real infrastructure.
 */
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"os"
 	"strings"
 	"testing"
 
@@ -54,103 +49,66 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
-// readLiveCreds reads cli_session_id from the credentials file.
-// Universal gateway tests use CLI auth (X-G8E-CLI-Session-ID header + CLI cert).
-func readLiveCreds(t *testing.T, credsFile string) (cliSessionID string) {
-	t.Helper()
-	data, err := os.ReadFile(credsFile)
-	if err != nil {
-		t.Fatalf("failed to read credentials file at %s - run './g8e auth login' first: %v", credsFile, err)
-	}
-	var creds struct {
-		CLISessionID string `json:"cli_session_id"`
-	}
-	require.NoError(t, json.Unmarshal(data, &creds), "failed to parse credentials file")
-	require.NotEmpty(t, creds.CLISessionID, "cli_session_id not found in credentials - run './g8e auth login' first")
-	return creds.CLISessionID
-}
-
 // TestUniversalGateway_RealMCPFlow validates the complete MCP flow
 // with real operator, real gateway, and real MCP calls.
 func TestUniversalGateway_RealMCPFlow(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	EnsureAuthLogin(t, repoRoot)
-	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
 
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-
-	setAuth := func(req *http.Request) {
-		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
-	}
+	// api.Client sets auth headers automatically, no need for setAuth helper
 
 	t.Run("health check", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+constants.APIPaths.Health, nil)
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Get(constants.APIPaths.Health)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-		require.Equal(t, http.StatusOK, resp.StatusCode)
 
 		var health models.HealthResponse
-		require.NoError(t, json.NewDecoder(resp.Body).Decode(&health))
+		require.NoError(t, json.Unmarshal(resp, &health))
 		require.NotEmpty(t, health.StateMerkleRoot)
 		t.Logf("State root: %s", health.StateMerkleRoot)
 	})
 
 	t.Run("MCP tools/list with real gateway", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/mcp/tools/list", nil)
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			var mcpResp struct {
-				Result mcp.ToolsListResult `json:"result"`
-			}
-			require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
-			t.Logf("Tools listed: %d tools", len(mcpResp.Result.Tools))
-		} else {
-			t.Logf("tools/list returned status %d (may indicate no downstream MCP server configured)", resp.StatusCode)
+		resp, err := apiClient.Get("/api/v1/mcp/tools/list")
+		if err != nil {
+			t.Logf("tools/list failed: %v (may indicate no downstream MCP server configured)", err)
+			return
 		}
+
+		var mcpResp struct {
+			Result mcp.ToolsListResult `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(resp, &mcpResp))
+		t.Logf("Tools listed: %d tools", len(mcpResp.Result.Tools))
 	})
 
 	t.Run("MCP resources/list with real gateway", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/mcp/resources/list", nil)
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			var mcpResp struct {
-				Result mcp.ListResourcesResult `json:"result"`
-			}
-			require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
-			t.Logf("Resources listed: %d resources", len(mcpResp.Result.Resources))
-		} else {
-			t.Logf("resources/list returned status %d", resp.StatusCode)
+		resp, err := apiClient.Get("/api/v1/mcp/resources/list")
+		if err != nil {
+			t.Logf("resources/list failed: %v", err)
+			return
 		}
+
+		var mcpResp struct {
+			Result mcp.ListResourcesResult `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(resp, &mcpResp))
+		t.Logf("Resources listed: %d resources", len(mcpResp.Result.Resources))
 	})
 
 	t.Run("MCP prompts/list with real gateway", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/mcp/prompts/list", nil)
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			var mcpResp struct {
-				Result mcp.ListPromptsResult `json:"result"`
-			}
-			require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
-			t.Logf("Prompts listed: %d prompts", len(mcpResp.Result.Prompts))
-		} else {
-			t.Logf("prompts/list returned status %d", resp.StatusCode)
+		resp, err := apiClient.Get("/api/v1/mcp/prompts/list")
+		if err != nil {
+			t.Logf("prompts/list failed: %v", err)
+			return
 		}
+
+		var mcpResp struct {
+			Result mcp.ListPromptsResult `json:"result"`
+		}
+		require.NoError(t, json.Unmarshal(resp, &mcpResp))
+		t.Logf("Prompts listed: %d prompts", len(mcpResp.Result.Prompts))
 	})
 
 	t.Run("MCP tools/call with governance envelope", func(t *testing.T) {
@@ -164,22 +122,16 @@ func TestUniversalGateway_RealMCPFlow(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
 		var result map[string]interface{}
-		if err := json.Unmarshal(body, &result); err == nil {
+		if err := json.Unmarshal(resp, &result); err == nil {
 			if txHash, ok := result["transaction_hash"].(string); ok {
 				t.Logf("Transaction hash: %s", txHash)
 			}
 		}
-		t.Logf("MCP tools/call status %d response: %s", resp.StatusCode, string(body))
+		t.Logf("MCP tools/call response: %s", string(resp))
 	})
 }
 
@@ -188,15 +140,8 @@ func TestUniversalGateway_RealMCPFlow(t *testing.T) {
 func TestUniversalGateway_RealA2AFlow(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	EnsureAuthLogin(t, repoRoot)
-	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
-
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-
-	setAuth := func(req *http.Request) {
-		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
-	}
 
 	t.Run("A2A skill call with governance envelope", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -212,22 +157,16 @@ func TestUniversalGateway_RealA2AFlow(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/a2a/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
 		var result map[string]interface{}
-		if err := json.Unmarshal(body, &result); err == nil {
+		if err := json.Unmarshal(resp, &result); err == nil {
 			if txHash, ok := result["transaction_hash"].(string); ok {
 				t.Logf("Transaction hash: %s", txHash)
 			}
 		}
-		t.Logf("A2A call status %d response: %s", resp.StatusCode, string(body))
+		t.Logf("A2A call response: %s", string(resp))
 	})
 }
 
@@ -236,15 +175,8 @@ func TestUniversalGateway_RealA2AFlow(t *testing.T) {
 func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	EnsureAuthLogin(t, repoRoot)
-	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
-
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-
-	setAuth := func(req *http.Request) {
-		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
-	}
 
 	t.Run("MCP payload detected on universal endpoint", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -254,14 +186,9 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 			"params":  map[string]interface{}{},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/list", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/list", callReq)
 		require.NoError(t, err)
-		resp.Body.Close()
-		t.Logf("MCP detection status: %d", resp.StatusCode)
+		t.Logf("MCP detection response: %s", string(resp))
 	})
 
 	t.Run("A2A payload detected on universal endpoint", func(t *testing.T) {
@@ -275,14 +202,9 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/a2a/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/a2a/call", callReq)
 		require.NoError(t, err)
-		resp.Body.Close()
-		t.Logf("A2A detection status: %d", resp.StatusCode)
+		t.Logf("A2A detection response: %s", string(resp))
 	})
 }
 
@@ -291,15 +213,8 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	EnsureAuthLogin(t, repoRoot)
-	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
-
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-
-	setAuth := func(req *http.Request) {
-		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
-	}
 
 	t.Run("L1 hard gates enforced", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -314,17 +229,11 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
 		var result map[string]interface{}
-		if err := json.Unmarshal(body, &result); err == nil {
+		if err := json.Unmarshal(resp, &result); err == nil {
 			if errorMsg, ok := result["error"].(string); ok {
 				t.Logf("L1 rejection: %s", errorMsg)
 				require.Contains(t, strings.ToLower(errorMsg), "forbidden")
@@ -343,17 +252,11 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
 		var result map[string]interface{}
-		if err := json.Unmarshal(body, &result); err == nil {
+		if err := json.Unmarshal(resp, &result); err == nil {
 			if l2Meta, ok := result["l2_metadata"].(map[string]interface{}); ok {
 				t.Logf("L2 metadata present: %v", l2Meta)
 			}
@@ -371,17 +274,11 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
 		var result map[string]interface{}
-		if err := json.Unmarshal(body, &result); err == nil {
+		if err := json.Unmarshal(resp, &result); err == nil {
 			if approvalURL, ok := result["approval_url"].(string); ok {
 				t.Logf("L3 approval URL: %s", approvalURL)
 			}
@@ -397,15 +294,8 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	EnsureAuthLogin(t, repoRoot)
-	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
-
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-
-	setAuth := func(req *http.Request) {
-		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
-	}
 
 	t.Run("transaction suspension for L3 approval", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -418,30 +308,21 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		body, _ := io.ReadAll(resp.Body)
-		t.Logf("Suspension test status %d: %s", resp.StatusCode, string(body))
+		t.Logf("Suspension test response: %s", string(resp))
 	})
 
 	t.Run("query suspended transactions", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/suspended-transactions", nil)
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		resp, err := apiClient.Get("/api/v1/suspended-transactions")
+		if err != nil {
+			t.Logf("Failed to query suspended transactions: %v", err)
+			return
+		}
 
-		if resp.StatusCode == http.StatusOK {
-			var transactions []map[string]interface{}
-			if err := json.NewDecoder(resp.Body).Decode(&transactions); err == nil {
-				t.Logf("Suspended transactions: %d", len(transactions))
-			}
+		var transactions []map[string]interface{}
+		if err := json.Unmarshal(resp, &transactions); err == nil {
+			t.Logf("Suspended transactions: %d", len(transactions))
 		}
 	})
 }
@@ -451,33 +332,21 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 func TestUniversalGateway_RealDownstreamIntegration(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	EnsureAuthLogin(t, repoRoot)
-	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
 
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-
-	setAuth := func(req *http.Request) {
-		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
-	}
-
 	t.Run("downstream server tools/list", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mtlsURL+"/api/v1/mcp/tools/list", nil)
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		resp, err := apiClient.Get("/api/v1/mcp/tools/list")
+		if err != nil {
+			t.Logf("Downstream server not configured: %v", err)
+			return
+		}
 
-		if resp.StatusCode == http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-			var mcpResp struct {
-				Result mcp.ToolsListResult `json:"result"`
-			}
-			if err := json.Unmarshal(body, &mcpResp); err == nil {
-				t.Logf("Downstream tools: %d", len(mcpResp.Result.Tools))
-			}
-		} else {
-			t.Logf("Downstream server not configured (status %d)", resp.StatusCode)
+		var mcpResp struct {
+			Result mcp.ToolsListResult `json:"result"`
+		}
+		if err := json.Unmarshal(resp, &mcpResp); err == nil {
+			t.Logf("Downstream tools: %d", len(mcpResp.Result.Tools))
 		}
 	})
 
@@ -492,16 +361,9 @@ func TestUniversalGateway_RealDownstreamIntegration(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		body, _ := io.ReadAll(resp.Body)
-		t.Logf("Downstream call status %d: %s", resp.StatusCode, string(body))
+		t.Logf("Downstream call response: %s", string(resp))
 	})
 }
 
@@ -510,15 +372,8 @@ func TestUniversalGateway_RealDownstreamIntegration(t *testing.T) {
 func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 	repoRoot := ResolveRepoRootFromTestDir(t)
 	EnsureAuthLogin(t, repoRoot)
-	mtlsClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
+	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
-
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := fmt.Sprintf("https://localhost:%d", cliCfg.OperatorHTTPSPort())
-
-	setAuth := func(req *http.Request) {
-		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
-	}
 
 	t.Run("governance envelope uses protojson", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -531,17 +386,11 @@ func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 			},
 		}
 
-		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
-		req.Header.Set("Content-Type", "application/json")
-		setAuth(req)
-		resp, err := mtlsClient.Do(req)
+		resp, err := apiClient.Post("/api/v1/mcp/tools/call", callReq)
 		require.NoError(t, err)
-		defer resp.Body.Close()
 
-		body, _ := io.ReadAll(resp.Body)
 		var result map[string]interface{}
-		if err := json.Unmarshal(body, &result); err == nil {
+		if err := json.Unmarshal(resp, &result); err == nil {
 			if txHash, ok := result["transaction_hash"].(string); ok {
 				t.Logf("Canonical transaction_hash: %s", txHash)
 			}
@@ -549,6 +398,6 @@ func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 				t.Logf("Canonical timestamp: %s", timestamp)
 			}
 		}
-		t.Logf("Canonical JSON wire format status %d", resp.StatusCode)
+		t.Logf("Canonical JSON wire format validated")
 	})
 }

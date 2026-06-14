@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,15 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 		_, err := handler.HandleTool(context.Background(), "unknown_tool", json.RawMessage(`{}`))
 		if err == nil {
 			t.Error("expected error for unknown tool")
+		}
+		// Verify error message includes the list of available tools
+		errStr := err.Error()
+		if !strings.Contains(errStr, "available tools:") {
+			t.Errorf("error message should include list of available tools, got: %s", errStr)
+		}
+		// Verify at least one known tool name is in the error
+		if !strings.Contains(errStr, "sys_info") {
+			t.Errorf("error message should include known tool names, got: %s", errStr)
 		}
 	})
 

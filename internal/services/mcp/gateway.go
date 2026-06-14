@@ -40,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -73,13 +74,12 @@ type GatewayService struct {
 	publicBaseURL     string
 	suspendedStore    interfaces.SuspendedTransactionStore
 	fieldPathRegistry *FieldPathRegistry
-	dbService         interface {
-		GetField(collection, id, fieldPath string) (interface{}, error)
-	}
+	dbService         FieldReader
 	sessionValidator  SessionValidator
 	auditLogger       AuditLogger
 	auditStore        *storage.SQLAuditStore
 	nativeToolHandler *NativeToolHandler
+	scrubbingService  *scrubbing.ScrubbingService
 	posture           string // Gateway posture: doctrine, consensus, or notary
 
 	// Circuit breaker state
@@ -91,6 +91,13 @@ type GatewayService struct {
 	maxFailures      int
 
 	maxPayloadBytes int64
+}
+
+// FieldReader provides read access to individual document fields, backing the
+// MCP gateway's read_field operation. It is implemented by the gateway's
+// document store (DocumentStoreService).
+type FieldReader interface {
+	GetField(collection, id, fieldPath string) (interface{}, error)
 }
 
 // SessionValidator validates Operator sessions for L3 authorization
@@ -105,11 +112,12 @@ type AuditLogger interface {
 
 // Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
 type Dependencies struct {
-	Logger          *slog.Logger
-	Responder       *response.Writer
-	SuspendedStore  interfaces.SuspendedTransactionStore
-	MaxPayloadBytes int64
-	Posture         string // Gateway posture: doctrine, consensus, or notary
+	Logger           *slog.Logger
+	Responder        *response.Writer
+	SuspendedStore   interfaces.SuspendedTransactionStore
+	ScrubbingService *scrubbing.ScrubbingService
+	MaxPayloadBytes  int64
+	Posture          string // Gateway posture: doctrine, consensus, or notary
 }
 
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
@@ -140,6 +148,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		suspendedStore:    deps.SuspendedStore,
 		fieldPathRegistry: fieldPathRegistry,
 		nativeToolHandler: nativeToolHandler,
+		scrubbingService:  deps.ScrubbingService,
 		posture:           deps.Posture,
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
@@ -186,9 +195,7 @@ func (g *GatewayService) SetPublicBaseURL(baseURL string) {
 	g.publicBaseURL = baseURL
 }
 
-func (g *GatewayService) SetDBService(dbService interface {
-	GetField(collection, id, fieldPath string) (interface{}, error)
-}) {
+func (g *GatewayService) SetDBService(dbService FieldReader) {
 	g.dbService = dbService
 }
 
@@ -662,8 +669,8 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) {
-			userID := r.Header.Get(constants.HeaderUserID)
-			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+			operatorID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 			certFingerprint := extractCertFingerprint(r)
 
 			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
@@ -1106,8 +1113,8 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 	receipt, err := g.envProc.ProcessEnvelope(r.Context(), envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) {
-			userID := r.Header.Get(constants.HeaderUserID)
-			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+			operatorID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 			certFingerprint := extractCertFingerprint(r)
 
 			g.StoreSuspendedTransaction(r.Context(), hash, envelopeBytes, callParams.Name, callParams.Arguments, userID, operatorID, certFingerprint)
@@ -1217,12 +1224,13 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	if persona, ok := ctx.Value(constants.ContextKeyBindingPersona).(string); ok {
 		env.BindingPersona = persona
 	}
-	// Inject identity as operator_id and operator_session_id for audit trail attribution.
-	// We prioritize app identity, then fallback to explicit operator/session IDs from context
-	// (e.g. from a proxied CLI session).
+	// Bind both the app identity and the human requestor to the envelope.
+	// For delegated credentials the auth middleware extracts both SANs from the cert
+	// and places them in context — no trusted headers.
 	if appID, ok := ctx.Value(constants.ContextKeyAppID).(string); ok && appID != "" {
 		env.OperatorId = appID
 		env.OperatorSessionId = appID
+		env.ActingAppId = appID
 	} else {
 		if opID, ok := ctx.Value(constants.ContextKeyOperatorID).(string); ok && opID != "" {
 			env.OperatorId = opID
@@ -1230,6 +1238,9 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		if opSessionID, ok := ctx.Value(constants.ContextKeyOperatorSessionID).(string); ok && opSessionID != "" {
 			env.OperatorSessionId = opSessionID
 		}
+	}
+	if userID, ok := ctx.Value(constants.ContextKeyUserID).(string); ok && userID != "" {
+		env.RequestorUserId = userID
 	}
 
 	hash, err = govpkg.GenerateMessageID(env)
@@ -1316,8 +1327,8 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
-			userID := r.Header.Get(constants.HeaderUserID)
-			operatorID := r.Header.Get(constants.HeaderOperatorID)
+			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+			operatorID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 			certFingerprint := extractCertFingerprint(r)
 
 			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
@@ -1542,6 +1553,11 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		summary := strings.TrimRight(sb.String(), "\n")
 		if summary == "" {
 			summary = "completed"
+		}
+
+		// Scrub native tool output to prevent sensitive data leakage
+		if g.scrubbingService != nil {
+			summary = g.scrubbingService.ScrubText(summary)
 		}
 
 		return summary, nil

@@ -58,7 +58,7 @@ func TestExportActuatorPublicKey(t *testing.T) {
 	}
 
 	// Verify JSON file exists and contains the correct data
-	jsonPath := filepath.Join(tmpDir, "Actuator_pub.json")
+	jsonPath := filepath.Join(tmpDir, ".g8e", "pki", "Actuator_pub.json")
 	jsonData, err := os.ReadFile(jsonPath)
 	if err != nil {
 		t.Fatalf("Failed to read JSON file: %v", err)
@@ -122,6 +122,11 @@ func TestExportActuatorPublicKeyCreatesDirectory(t *testing.T) {
 	pemPath := filepath.Join(subDir, "Actuator_pub.pem")
 	if _, err := os.Stat(pemPath); err != nil {
 		t.Errorf("PEM file not created in new directory: %v", err)
+	}
+	// Also verify the JSON file was created at the nested path
+	jsonPath := filepath.Join(subDir, ".g8e", "pki", "Actuator_pub.json")
+	if _, err := os.Stat(jsonPath); err != nil {
+		t.Errorf("JSON file not created in nested directory: %v", err)
 	}
 }
 

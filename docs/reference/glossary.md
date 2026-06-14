@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-06-01
-Version: v1.0.5
+Last Updated: 2026-06-13
+Version: v1.1.0
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -23,9 +23,9 @@ The **L5Actuator** is the execution boundary in the g8e Operator that performs a
 
 ---
 
-## Audit Vault
+## Execution Vault
 
-An embedded SQLite database on the g8e Operator that stores all Operator session history, command executions, and file mutations locally. Part of the Local-First Audit Architecture. Contains tables for `sessions`, `events`, and `file_mutation_log`. The Audit Vault is fail-closed: it rejects events with missing or malformed `operator_session_id` and unknown sessions.
+An embedded SQLite database on the g8e Operator that stores command execution results and file diffs locally. Part of the Local-First Audit Architecture. The Execution VaultService provides encrypted storage for execution logs and file mutation tracking. Data is encrypted at rest when configured with the encryption vault. The vault supports retention-based pruning and size limits.
 
 ---
 
@@ -168,7 +168,7 @@ The pre-compiled g8e Node that can be launched as a g8e Gateway or g8e Operator.
 
 ## Operator Session
 
-A unique execution context for a running g8e Operator instance. Identified by `operator_session_id`. Each session has its own isolated git-backed ledger for file mutation tracking. The Audit Vault is keyed by Operator session ID and enforces session validation before recording events.
+A unique execution context for a running g8e Operator instance. Identified by `operator_session_id`. Each session has its own isolated git-backed ledger for file mutation tracking. The Execution Vault is keyed by Operator session ID and enforces session validation before recording events.
 
 ---
 
@@ -192,16 +192,16 @@ The mechanism by which L2 Consensus agents earn or lose standing based on the qu
 
 ## Scrubbed Vault
 
-The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host.
+The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host. The vault mode is controlled by `VaultModeScrubbed` and `VaultModeRaw` constants.
 
 ---
 
 ## Sovereign Execution Boundary
 
-The data sovereignty and scrubbing system running within the g8e Operator (PEP), implemented as the `SovereigntyService`. It provides:
+The data sovereignty and scrubbing system running within the g8e Operator (PEP), implemented as the `ScrubbingService`. It provides:
 - **Egress Scrubbing**: Removes sensitive data (PII, credentials) from command output before transmission to the cloud.
 - **Local Rehydration**: Restores original tokens just before execution at the L5 Actuator, ensuring the host shell receives the actual required values while the cloud only see placeholders.
-- **Token Persistence**: Maintains consistent mapping of placeholders across sessions.
+- **Token Persistence**: Maintains consistent mapping of placeholders across sessions via the TokenStoreService.
 
 ---
 
@@ -213,7 +213,7 @@ The streaming protocol used to push real-time events from the g8e Gateway to cli
 
 ## State Root
 
-A Merkle root representing the current state of the g8e Operator's data stores (Audit Vault, Ledger, etc.). The GovernanceEnvelope includes `state_merkle_root` for state binding. The L4 Warden verifies that the transaction's state root matches the current state root before accepting the transaction, ensuring the transaction is based on the correct state.
+A Merkle root representing the current state of the g8e Operator's data stores (Execution Vault, Ledger, etc.). The GovernanceEnvelope includes `state_merkle_root` for state binding. The L4 Warden verifies that the transaction's state root matches the current state root before accepting the transaction, ensuring the transaction is based on the correct state.
 
 ---
 
