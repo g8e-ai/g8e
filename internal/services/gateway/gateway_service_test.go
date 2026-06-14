@@ -31,9 +31,9 @@ func TestNewGatewayModeService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	// Ensure directories are set for tests to avoid SQLITE_CANTOPEN
-	cfg.Gateway.DataDir = tempDir(t)
-	cfg.Gateway.PKIDir = tempDir(t)
-	cfg.Gateway.SecretsDir = tempDir(t)
+	cfg.Gateway.DataDir = t.TempDir()
+	cfg.Gateway.PKIDir = t.TempDir()
+	cfg.Gateway.SecretsDir = t.TempDir()
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
 		t.Parallel()
@@ -44,8 +44,8 @@ func TestNewGatewayModeService(t *testing.T) {
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 
-		cfg.Gateway.PKIDir = tempDir(t)
-		cfg.Gateway.SecretsDir = tempDir(t)
+		cfg.Gateway.PKIDir = t.TempDir()
+		cfg.Gateway.SecretsDir = t.TempDir()
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
@@ -62,9 +62,9 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	cfg.Gateway.DataDir = tempDir(t)
-	cfg.Gateway.PKIDir = tempDir(t)
-	cfg.Gateway.SecretsDir = tempDir(t)
+	cfg.Gateway.DataDir = t.TempDir()
+	cfg.Gateway.PKIDir = t.TempDir()
+	cfg.Gateway.SecretsDir = t.TempDir()
 
 	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err)
@@ -122,9 +122,9 @@ func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	pkiDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })

@@ -43,9 +43,9 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	pkiDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -55,13 +55,13 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
+	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
-		secretsDir: tempDir(t),
+		secretsDir: t.TempDir(),
 		logger:     logger,
 		keystore:   ks,
 	}

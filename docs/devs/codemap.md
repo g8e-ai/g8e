@@ -177,7 +177,6 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on CanonicalDBService - no delegation wrappers.
 - **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on CanonicalDBService - no delegation wrappers.
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements interfaces.SuspendedTransactionStore).
-- **`gateway.InvitationService`** handles user invitations for gateway mode.
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
 - **`storage.TokenStoreService`** is the Sentinel token persistence store for outbound mode.
 - **`storage.SQLAuditStore`** is shared by both modes and provides the SQL-based audit storage foundation.

@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package gateway
 
 import (
@@ -163,4 +165,66 @@ func TestReplayStoreService_CleanupExpiredNonces(t *testing.T) {
 	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", "valid-nonce").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
+}
+
+func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
+	t.Parallel()
+	svc := newTestReplayStoreService(t)
+
+	nonce := "used-nonce"
+	expiresAt := time.Now().Add(1 * time.Hour)
+	replayed, err := svc.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+	require.False(t, replayed)
+
+	// First finalization
+	err = svc.FinalizeNonce(nonce)
+	require.NoError(t, err)
+
+	// Verify status is 'used'
+	var status string
+	err = svc.db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
+	require.NoError(t, err)
+	assert.Equal(t, "used", status)
+
+	// Second finalization should not change anything or error
+	err = svc.FinalizeNonce(nonce)
+	require.NoError(t, err)
+
+	err = svc.db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
+	require.NoError(t, err)
+	assert.Equal(t, "used", status)
+}
+
+func TestReplayStoreService_ReleaseNonce_Used(t *testing.T) {
+	t.Parallel()
+	svc := newTestReplayStoreService(t)
+
+	nonce := "release-used-nonce"
+	expiresAt := time.Now().Add(1 * time.Hour)
+	replayed, err := svc.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+	require.False(t, replayed)
+
+	// Finalize it
+	err = svc.FinalizeNonce(nonce)
+	require.NoError(t, err)
+
+	// Attempt to release it - should not delete because it's 'used'
+	err = svc.ReleaseNonce(nonce)
+	require.NoError(t, err)
+
+	var count int
+	err = svc.db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", nonce).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "nonce should still exist if it was already used")
+}
+
+func TestReplayStoreService_Close(t *testing.T) {
+	t.Parallel()
+	svc := newTestReplayStoreService(t)
+
+	// Close is a no-op, but should not panic
+	err := svc.Close()
+	require.NoError(t, err)
 }

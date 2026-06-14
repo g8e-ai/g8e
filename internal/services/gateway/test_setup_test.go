@@ -14,12 +14,8 @@
 package gateway
 
 import (
-	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
@@ -29,11 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
-)
-
-var (
-	tempDirCounters = make(map[string]int)
-	tempDirMu       sync.Mutex
 )
 
 // TestInfrastructure holds common test setup components shared across gateway tests.
@@ -59,30 +50,6 @@ type TestInfrastructure struct {
 	SecretsDir         string
 }
 
-// tempDir creates a temporary directory in the current working directory.
-// This avoids Windows %TEMP% permission issues and temp dir cleanup problems.
-func tempDir(tb testing.TB) string {
-	tb.Helper()
-	// Sanitize test name for use as directory name
-	safeName := strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
-			return r
-		}
-		return '_'
-	}, tb.Name())
-
-	tempDirMu.Lock()
-	tempDirCounters[safeName]++
-	count := tempDirCounters[safeName]
-	tempDirMu.Unlock()
-
-	dir := filepath.Join(constants.ProjectRootFromCurrentDir, "test-temp", fmt.Sprintf("%s_%d", safeName, count))
-	err := os.MkdirAll(dir, 0755)
-	require.NoError(tb, err, "failed to create temp dir in cwd")
-	tb.Cleanup(func() { os.RemoveAll(dir) })
-	return dir
-}
-
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
 // It initializes DB, PKI, auth services, and other shared components.
 func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfrastructure {
@@ -90,16 +57,10 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	pkiDir := tempDir(t)
-	secretsDir := tempDir(t)
-	// Ensure directories are clean to avoid stale state from previous test runs
-	os.RemoveAll(dbDir)
-	require.NoError(t, os.MkdirAll(dbDir, 0755))
-	os.RemoveAll(pkiDir)
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
-	os.RemoveAll(secretsDir)
-	require.NoError(t, os.MkdirAll(secretsDir, 0755))
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+
 	var ks *keystore.Keystore
 	if resetKeystoreStorage {
 		keystore.ResetTestStorage()

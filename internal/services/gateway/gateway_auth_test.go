@@ -329,8 +329,8 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })

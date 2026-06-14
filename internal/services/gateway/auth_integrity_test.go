@@ -37,8 +37,8 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -103,8 +103,8 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -136,8 +136,8 @@ func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
 func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 	t.Helper()
 	logger := testutil.NewTestLogger()
-	dbDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	secretsDir := t.TempDir()
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })

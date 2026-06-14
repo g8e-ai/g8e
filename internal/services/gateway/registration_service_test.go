@@ -55,15 +55,15 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 	t.Parallel()
 
 	// Test that calculateSerialFromPEM correctly extracts serial from a certificate
-	dataDir := tempDir(t)
+	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 	logger := testutil.NewTestLogger()
-	dbDir := tempDir(t)
+	dbDir := t.TempDir()
 	vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 	db, err := OpenCanonicalDBService(dataDir, dbDir, vaultDir, logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-	smDir := tempDir(t)
+	smDir := t.TempDir()
 	sm, err := NewSecretManager(db.db, smDir, logger)
 	require.NoError(t, err)
 
@@ -141,15 +141,15 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 	t.Run("RegisterDeviceCSR accepts enrollment without CLI CSR (operator-only)", func(t *testing.T) {
 		t.Parallel()
 
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		dbDir := tempDir(t)
+		dbDir := t.TempDir()
 		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := OpenCanonicalDBService(dataDir, dbDir, vaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		smDir := tempDir(t)
+		smDir := t.TempDir()
 		sm, err := NewSecretManager(db.db, smDir, logger)
 		require.NoError(t, err)
 

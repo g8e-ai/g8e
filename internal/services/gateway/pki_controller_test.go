@@ -60,9 +60,9 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	pkiDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
 
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err, "failed to open gateway DB service")
@@ -74,14 +74,14 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err, "failed to create test keystore backend")
 
-	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
+	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
 	require.NoError(t, err, "failed to create keystore")
 	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
 	require.NoError(t, ks.EnforcePermissions(), "failed to enforce keystore permissions")
 
 	sm := &SecretManager{
 		db:         db.db,
-		secretsDir: tempDir(t),
+		secretsDir: t.TempDir(),
 		logger:     logger,
 		keystore:   ks,
 	}
