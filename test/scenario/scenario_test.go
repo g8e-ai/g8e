@@ -39,7 +39,7 @@ import (
 const (
 	defaultHTTPRetryMaxAttempts = 60
 	defaultHTTPRetryInterval    = 1 * time.Second
-	defaultHTTPRetryTimeout     = 70 * time.Second
+	defaultHTTPRetryTimeout     = 5 * time.Second
 )
 
 // TestContext holds the test infrastructure for a single test run.
@@ -60,27 +60,13 @@ type TestContext struct {
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Initialize paths relative to project root
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	// If running from test/scenario, base is ../../. If from root, base is ./
-	base := "./"
-	if filepath.Base(cwd) == "scenario" {
-		base = "../../"
-	}
-	absBase, err := filepath.Abs(base)
-	if err != nil {
-		t.Fatalf("failed to get absolute path for base %s: %v", base, err)
-	}
-
-	if err := constants.InitPathsWithBase(absBase); err != nil {
+	// Initialize paths relative to project root using constant
+	if err := constants.InitPathsWithBase(constants.ProjectRootFromTestDir); err != nil {
 		t.Fatalf("failed to initialize paths: %v", err)
 	}
 	// The projectRoot should be the directory containing .g8e, not the .g8e directory itself,
 	// because cliconfig.Load and constants.InitPathsWithBase expect the base directory.
-	projectRoot := absBase
+	projectRoot := constants.Paths.Infra.RuntimeDir
 
 	cliCfg, err := cliconfig.Load(projectRoot)
 	if err != nil {
@@ -100,15 +86,18 @@ func setupTestContext(t *testing.T) *TestContext {
 		}
 	}
 
-	if err := auth.BootstrapCLIWithoutPasskey(cliCfg); err != nil {
-		t.Fatalf("failed to bootstrap CLI auth: %v", err)
+	// CLI authentication must be performed explicitly via 'g8e auth login'
+	// Tests should set up credentials via the proper auth flow
+	creds, err := auth.LoadCredentials(cliCfg)
+	if err != nil || creds == nil {
+		t.Fatalf("CLI credentials required for tests. Please authenticate via 'g8e auth login'")
 	}
 
 	// Ensure gateway is running and governance is ready before proceeding
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
 	t.Logf("Waiting for gateway to be governance-ready at %s...", healthURL)
 
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(healthURL)
 		if err != nil {
@@ -164,8 +153,8 @@ func setupTestContext(t *testing.T) *TestContext {
 	// Create auditor client for HTTP submission
 	auditorCfg := config.Default()
 	auditorCfg.UseCLIConfig = false // Don't auto-load from CLI config, we set paths explicitly
-	auditorCfg.MTLSBaseURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
-	auditorCfg.PublicBaseURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+	auditorCfg.MTLSBaseURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+	auditorCfg.PublicBaseURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	auditorCfg.Auth.ClientCert = clientCertPath
 	auditorCfg.Auth.ClientKey = clientKeyPath
 	auditorCfg.Auth.CABundle = caBundlePath
@@ -173,7 +162,7 @@ func setupTestContext(t *testing.T) *TestContext {
 	auditorCfg.Verbose = true       // Echo requests to stderr for debugging
 
 	// Load CLI credentials (bootstrapped by ./g8e gw start)
-	creds, err := auth.LoadCredentials(cliCfg)
+	creds, err = auth.LoadCredentials(cliCfg)
 	if err != nil {
 		t.Fatalf("failed to load CLI credentials: %v", err)
 	}

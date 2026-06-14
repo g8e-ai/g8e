@@ -16,11 +16,11 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers sequentially:
     - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `internal/services/governance/l1_doctrine.go`.
     - **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography defined in `internal/services/governance/l2_consensus.go`.
-    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go`.
+    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`.
     - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
     - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
 - **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities. See [Network Architecture](./network.md) for detailed mTLS enforcement, PKI hierarchy, and identity management.
-- **Local-First Audit (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger.
+- **Local-First Audit Architecture (LFAA)**: The target host remains the source of truth for command history and file mutations, stored in a tamper-evident local ledger and SQL audit store.
 - **Canonical JSON (GovernanceEnvelope)**: Every mutation action is governed by a canonical JSON `GovernanceEnvelope` (protojson). This is the single canonical container for all g8e mutations, binding identity, intent, state, and governance proofs into one transaction.
 - **Transaction Invariants**: Every transaction is identified by a deterministic `transaction_hash` computed from its content. The envelope `id` must match this hash for the transaction to be valid.
 - **Protocol vs Implementation**: The protocol is the Gateway. Conforming implementations of the g8e Gateway and g8e Operator enforce these invariants.
@@ -242,11 +242,13 @@ Defined in `internal/services/governance/l1_doctrine.go`. Enforces forbidden pat
 Defined in `internal/services/governance/l2_consensus.go`. Verifies multi-agent consensus signature using Ed25519 cryptography. In Gateway mode, this requires Ed25519 signatures from trusted consensus agents.
 
 ### L3 Notary (Human Authorization)
-Defined in `internal/services/governance/l3_notary.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
-- **Web Sessions**: Use WebAuthn or Passkey proofs (FIDO2).
-- **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session.
+Defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
+- **Web Sessions**: Use WebAuthn or Passkey proofs (FIDO2) via `internal/services/gateway/passkey_service.go`.
+- **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session via `internal/services/gateway/cli_l3_notary.go`.
 - **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
 - **JWT Sessions**: Use JWT tokens validated at the gateway with JIT user provisioning.
+
+The `CompositeL3Verifier` handles delegation between WebAuthn and mTLS proofs based on the session type.
 
 ### L4 Warden (Pre-Dispatch Gating)
 Defined in `internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
@@ -325,7 +327,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Concern | File |
 |---|---|
 | Gateway service | `internal/services/gateway/gateway_service.go` |
-| Gateway mode entry | `internal/services/gateway/gateway_service.go:543` (`GatewayModeService.Start`) |
+| Gateway mode entry | `internal/services/gateway/gateway_service.go` (see `Start` method) |
 | Coordination Store (lifecycle) | `internal/services/gateway/gateway_db.go` |
 | Document Store | `internal/services/gateway/document_store_service.go` |
 | App Policy Store | `internal/services/gateway/app_policy_store_service.go` |
@@ -335,11 +337,12 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | KV Store | `internal/services/gateway/kv_store_service.go` |
 | SSE Event Store | `internal/services/gateway/sse_event_service.go` |
 | Blob Store | `internal/services/gateway/blob_store_service.go` |
-| Suspended Transaction Store | `internal/services/storage/suspended_transaction_service.go` |
+| Suspended Transaction Store | `internal/services/storage/suspended_transaction_store.go` |
 | Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
 | L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
 | L2 Consensus | `internal/services/governance/l2_consensus.go` |
 | L3 Notary | `internal/services/governance/l3_notary.go` |
+| L3 Notary (Composite) | `internal/services/gateway/composite_l3_verifier.go` |
 | L4 Warden | `internal/services/governance/l4_warden.go` |
 | L5 Actuator | `internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
@@ -412,7 +415,6 @@ When the gateway returns an L3 approval response, the stdio proxy:
 The polling logic is implemented in `proxySessionToGatewayWithRetry` with constants:
 - `l3ApprovalMaxIterations`: 30
 - `l3ApprovalPollInterval`: 10 seconds
-- `l3ApprovalTotalTimeout`: 5 minutes
 
 ### Browser Utility
 

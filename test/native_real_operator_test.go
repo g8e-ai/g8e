@@ -16,8 +16,7 @@
 package tests
 
 import (
-	"fmt"
-	"net/http"
+	"encoding/json"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -40,11 +39,14 @@ func TestNativeRealOperator_Smoke(t *testing.T) {
 	EnsureGatewayReady(t, cliCfg)
 
 	// Test basic connectivity to Operator via HTTPS
-	healthURL := fmt.Sprintf("https://localhost:%d/api/v1/health", constants.Ports.OperatorHttps)
+	healthURL := constants.APIPaths.Health
 
 	resp, err := client.Get(healthURL)
 	require.NoError(t, err)
-	defer resp.Body.Close()
 
-	require.Equal(t, http.StatusOK, resp.StatusCode, "health check failed")
+	var health struct {
+		Status string `json:"status"`
+	}
+	require.NoError(t, json.Unmarshal(resp, &health))
+	require.Equal(t, "running", health.Status, "health check failed")
 }

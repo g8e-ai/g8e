@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,7 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -73,7 +74,7 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 
 	// Close the database to stop background workers
@@ -89,7 +90,7 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	secretsDir := tempDir(t)
 	logger := testutil.NewTestLogger()
 
-	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -115,7 +116,7 @@ func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
 	dir := tempDir(t)
 	secretsDir := tempDir(t)
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 	return db
@@ -460,13 +461,13 @@ func TestSchemaIdempotent(t *testing.T) {
 	dir := tempDir(t)
 	secretsDir := tempDir(t)
 
-	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
+	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(t, err)
 	require.NoError(t, db1.DocStore.DocSet("test", "1", mustDocJSON(t, map[string]string{"val": "first"})))
 	db1.Close()
 
 	// Re-open same database - schema init should not fail or lose data
-	db2, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
+	db2, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db2.Close() })
 
@@ -486,11 +487,11 @@ func TestCreateDataDir(t *testing.T) {
 	dir := filepath.Join(tmpDir, "nested", "deep", "data")
 	secretsDir := tempDir(t)
 
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	_, err = os.Stat(filepath.Join(dir, "g8e.db"))
+	_, err = os.Stat(filepath.Join(dir, constants.DbFilename))
 	require.NoError(t, err)
 }
 

@@ -32,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
@@ -109,7 +110,7 @@ func generateSignedJWT(t *testing.T, privKey *rsa.PrivateKey, claims map[string]
 func setupSuspendedTxService(t *testing.T, dbDir string) *storage.SuspendedTransactionService {
 	t.Helper()
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -132,7 +133,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	dbDir := tempDir(t)
 	pkiDir := tempDir(t)
 	secretsDir := tempDir(t)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -147,7 +148,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: secretsDir,
@@ -186,11 +187,12 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -291,7 +293,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	dbDir := tempDir(t)
 	pkiDir := tempDir(t)
 	secretsDir := tempDir(t)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -306,7 +308,7 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: secretsDir,
@@ -344,11 +346,12 @@ func TestGateway_JITPasskeyBootstrap(t *testing.T) {
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -464,7 +467,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	dbDir := tempDir(t)
 	pkiDir := tempDir(t)
 	secretsDir := tempDir(t)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -479,7 +482,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: secretsDir,
@@ -517,11 +520,12 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:          logger,
-		Responder:       resp,
-		SuspendedStore:  suspendedTxService,
-		MaxPayloadBytes: cfg.Gateway.MaxPayloadBytes,
-		Posture:         string(cfg.Gateway.Posture),
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
 		t.Fatalf("failed to create MCP gateway: %v", err)
@@ -631,7 +635,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	dbDir := tempDir(t)
 	pkiDir := tempDir(t)
 	secretsDir := tempDir(t)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -643,7 +647,7 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnsurePermissions())
+	require.NoError(t, ks.EnforcePermissions())
 
 	sm, err := NewSecretManager(db.db, secretsDir, logger)
 	require.NoError(t, err)

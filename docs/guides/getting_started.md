@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-11
-Version: v1.0.11
+Last Updated: 2026-06-13
+Version: v1.1.0
 
 ---
 
@@ -38,7 +38,7 @@ Everything else — Go compiler, OpenSSL, Git — runs inside the container. No 
 
 | Requirement | Notes |
 |---|---|
-| Go | 1.26+ — required to build from source |
+| Go | 1.26.4 — required to build from source |
 | Git | Any recent version — required for the audit vault's Git-backed ledger |
 | OpenSSL | Any recent version — required for PKI operations at runtime |
 | Python | 3.11+ — optional, required only for demo environments and protocol library development |
@@ -229,14 +229,7 @@ See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enr
 
 The root `docker-compose.yml` configures a Dockerized g8e Operator that dials out to a gateway running on the host machine (or a remote IP). This is useful for testing the operator in an isolated container while the gateway runs locally.
 
-Note: The root `docker-compose.yml` references `Dockerfile.operator` which is not included in the repository. For working Gateway and Operator deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, or `demos/finance`.
-
-To use the demo configurations as reference:
-
-```bash
-cd demos/healthcare
-docker compose up -d
-```
+Note: The root `docker-compose.yml` references `Dockerfile.operator` which is not included in the repository. This file must be created separately or use the demo configurations in `demos/healthcare`, `demos/gov`, or `demos/finance` as reference implementations.
 
 The operator connects to the gateway over `host` networking. The gateway must be running and reachable at the specified IP before the operator starts. The `restart: "no"` policy prevents enrollment loops if the gateway is not yet available.
 
@@ -245,6 +238,8 @@ The operator connects to the gateway over `host` networking. The gateway must be
 ## Industry Demos
 
 The `demos/` directory contains Docker Compose environments for three industry scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), and **Government** (CUI/CMMC). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+
+Note: The gov and finance demo configurations reference `Dockerfile.operator` which is not included in the repository. These demos require the operator Dockerfile to be created separately. The healthcare demo uses a different approach with binary bind-mounts and does not require Dockerfile.operator.
 
 ### What the demos use Docker for
 
@@ -256,9 +251,14 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system** — mock EHR/trading/classified-doc API on `net_secure`
 - **Observability** — log aggregator and audit viewer on `net_mgmt`
 
-The `g8e` binary should be copied to `demos/bin/g8e` before running demos. Build the binary first with `make build`, then copy it to the demos directory:
+The healthcare demo uses Alpine images with binary bind-mounts. The gov and finance demos build dedicated gateway and operator images using Dockerfile and Dockerfile.operator respectively.
+
+Note: The healthcare demo uses the `/api/v1/health` endpoint for health checks, while the gov and finance demos use `/healthz`. Both endpoints are valid for gateway health verification.
+
+The `g8e` binary must be built before running demos. The demos CLI checks for the binary at `demos/bin/g8e` and provides a warning if it is not found. Build the binary and copy it to the demos directory:
 
 ```bash
+make build
 cp g8e demos/bin/g8e
 ```
 

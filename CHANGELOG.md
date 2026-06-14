@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-06-13
+
+### Overview
+
+v1.1.0 is a major agentic tool expansion release that dramatically broadens g8e's compatibility with the AI agent ecosystem. This release adds support for 13 additional AI agent binaries beyond Claude Code, including Cursor, Devin, VSCode, Continue, Aider, Codeium, Tabby, Ollama, Gemini, and Goose. The MCP CLI has been significantly refactored to provide a unified `agent` command for seamless integration across all supported environments. Additionally, this release includes gateway service cleanup, URL constant standardization, comprehensive documentation updates including a new position paper, and simplified build processes.
+
+### Added
+
+* **Universal Agent Support** — Expanded agent binary support from 2 to 15 agents with new constants in `internal/constants/agents.go` and `protocol/constants/agents.json`:
+  - **IDE Agents**: Cursor, Devin, VSCode, Continue (with `cn` alias), Aider, Codeium, Tabby
+  - **Model Servers**: Ollama, Gemini
+  - **Specialized Tools**: Goose, Generic
+  - **Existing**: Claude, Codex
+* **Agent Persona System** — Added typed constants for agent personas (`AgentNameSage`, `AgentNameDash`) to support different agent behavioral profiles.
+* **Triage Classification System** — Added comprehensive triage classification constants for agent behavior analysis:
+  - `TriageComplexity` (simple, complex)
+  - `TriageConfidence` (high, low)
+  - `TriageIntent` (information, action, unknown)
+  - `TriagePosture` (normal, escalated, adversarial, confused)
+* **Unified MCP Agent Command** — New `./g8e mcp agent` command provides a single entry point for running g8e as an MCP server across all supported agent environments with automatic environment variable injection and configuration.
+* **Network Constants** — Added `internal/constants/network.go` with standardized network-related constants for improved consistency across the codebase.
+* **PubSub Commands** — Added `internal/services/pubsub/pubsub_commands.go` with comprehensive pubsub command handling for improved service orchestration.
+* **MCP Backup Commands** — Added `internal/cli/cmd/mcp_backup.go` with backup and restore functionality for MCP configurations.
+* **Updated Position Paper** — Updated `docs/core/position_paper.md` (156 insertions, 73 deletions) with refined architectural philosophy and governance documentation.
+
+### Changed
+
+* **MCP CLI Refactoring** — Major refactoring of `internal/cli/cmd/mcp.go` (367 lines changed) to:
+  - Consolidate agent-specific logic into a unified `agentCmd()`
+  - Add `getSupportedAgents()` helper function to reduce code duplication
+  - Improve binary path validation with `os.Stat()` checks
+  - Standardize configuration output across all agent types
+* **Gateway Service Cleanup** — Fixed interface mismatches and removed divergence in gateway service implementation (`internal/services/gateway/gateway_service.go`) for consistency and maintainability.
+* **URL Constant Standardization** — Cleaned up and standardized URL constants across the codebase to eliminate duplication and improve maintainability.
+* **Build Process Simplification** — Removed UPX compression from Makefile (86 lines removed) to simplify the build process and improve compatibility.
+* **Documentation Reorganization** — Removed redundant build guides (`docs/guides/build_gateway.md`, `docs/guides/build_operator.md`) and simplified `docs/guides/getting_started.md` to reduce documentation surface area.
+* **Compliance Documentation Update** — Updated `docs/reference/compliance-alignment.md` to reflect the expanded agent support and updated security posture.
+* **Gateway CLI Improvements** — Enhanced `internal/cli/cmd/gateway.go` (250 lines added) with improved command structure and error handling.
+* **Platform Process Handling** — Improved `internal/cli/platform/process.go` with better cross-platform process lifecycle management.
+
+### Fixed
+
+* **Interface Mismatches** — Fixed interface mismatches between gateway service implementations and their contracts to ensure consistent behavior across modes.
+* **Gateway Service Divergence** — Resolved divergence in gateway service code that had accumulated across different operational modes.
+* **Test Reliability** — Fixed various test failures across integration and unit test suites to improve CI/CD reliability.
+* **CLI Bug Fixes** — Addressed multiple CLI bugs including configuration validation, path resolution, and error messaging issues.
+
+### Security
+
+* **Agent Binary Validation** — Added binary path validation using `os.Stat()` in agent configuration to prevent execution of non-existent or unauthorized binaries.
+* **Environment Variable Injection** — Standardized and secured environment variable injection for agent sessions with explicit contracts documented in `mcp.go`.
+
+### Testing
+
+* **MCP Backup Tests** — Added comprehensive test coverage for MCP backup and restore functionality (`internal/cli/cmd/mcp_backup_test.go`).
+* **Gateway Test Updates** — Updated gateway integration tests to reflect the refactored service architecture and fixed test fixture issues.
+* **Agent Integration Tests** — Improved agent integration test coverage across the expanded set of supported agents.
+
+### Documentation
+
+* **Updated README** — Significantly expanded `README.md` (256 lines added) with improved getting started guidance, agent support matrix, and architectural overview.
+* **CLI Documentation** — Updated CLI documentation to reflect the new `agent` command structure and expanded agent support.
+* **Simplified Guides** — Removed redundant build guides and consolidated getting started information for a cleaner documentation hierarchy.
+
+---
+
 ## [1.0.12] - 2026-06-11
 
 ### Overview

@@ -4,7 +4,7 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-06-11
+Last Updated: 2026-06-13
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -97,6 +97,7 @@ The g8e Operator compiles native tool playbooks directly into the g8e Node to pr
 #### File Operations Playbook
 - **fs_file_checksum**: Calculates cryptographic checksums (SHA256, MD5) of files to verify integrity and detect changes.
 - **fs_disk_usage**: Reports disk usage statistics for mounted filesystems to identify capacity issues.
+- **file_read**: Reads file contents with optional line range limits and encoding detection for safe file inspection.
 
 #### Cloud & Orchestration Playbook
 - **cloud_metadata**: Retrieves cloud provider metadata (AWS, GCP, Azure) to identify instance identity, region, and availability zone.
@@ -147,7 +148,7 @@ The reference implementation (`g8eo`) currently supports:
 - **Sovereign Execution Boundary**: Automated scrubbing and rehydration of sensitive data during the execution lifecycle.
 - **Host-Unique Signing**: Cryptographic Action Receipts signed by host-specific keys.
 - **Zero-Dependency Node Binary**: Statically compiled Go binary for air-gapped and high-security deployments.
-- **Expanded Native Tool Catalog**: 26 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata, and shell execution.
+- **Expanded Native Tool Catalog**: 30 native tools compiled into the binary for memory-safe, boundary-enforced execution across database triage, log digestion, process governance, network validation, system introspection, file operations, cloud metadata, and shell execution.
 
 ---
 

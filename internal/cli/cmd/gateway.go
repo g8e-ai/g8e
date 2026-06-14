@@ -21,13 +21,14 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/spf13/cobra"
+
 	"github.com/g8e-ai/g8e/internal/cli/api"
-	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
-	"github.com/spf13/cobra"
 )
 
 func getBinaryName() string {
@@ -35,6 +36,110 @@ func getBinaryName() string {
 		return "./g8e.exe"
 	}
 	return "./g8e"
+}
+
+// startConfig holds resolved configuration for starting the gateway.
+type startConfig struct {
+	VaultDir           string
+	VaultKeyPath       string
+	VaultRequireUnlock bool
+	Posture            string
+	HTTPPort           int
+	HTTPSPort          int
+	DataDir            string
+	PKIDir             string
+	SecretsDir         string
+	PasskeyRpID        string
+	PasskeyRpName      string
+	RateLimitRPS       float64
+	RateLimitBurst     int
+	LogLevel           string
+	CertIdentityMode   string
+	IdentityData       []byte
+}
+
+// resolveStartConfig resolves environment variable overrides and defaults for gateway start.
+func resolveStartConfig(
+	posture string,
+	httpPort, httpsPort int,
+	dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string,
+	vaultRequireUnlock bool,
+	passkeyRpID, passkeyRpName string,
+	rateLimitRPS float64,
+	rateLimitBurst int,
+	logLevel, certIdentityMode string,
+) startConfig {
+	// Environment variables override CLI flags
+	if vaultDir == "" {
+		vaultDir = os.Getenv("G8E_VAULT_DIR")
+	}
+	if vaultKeyPath == "" {
+		vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+	}
+	if !vaultRequireUnlock {
+		vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
+	}
+
+	return startConfig{
+		VaultDir:           vaultDir,
+		VaultKeyPath:       vaultKeyPath,
+		VaultRequireUnlock: vaultRequireUnlock,
+		Posture:            posture,
+		HTTPPort:           httpPort,
+		HTTPSPort:          httpsPort,
+		DataDir:            dataDir,
+		PKIDir:             pkiDir,
+		SecretsDir:         secretsDir,
+		PasskeyRpID:        passkeyRpID,
+		PasskeyRpName:      passkeyRpName,
+		RateLimitRPS:       rateLimitRPS,
+		RateLimitBurst:     rateLimitBurst,
+		LogLevel:           logLevel,
+		CertIdentityMode:   certIdentityMode,
+	}
+}
+
+// detectIdentityResult holds the result of network identity detection.
+type detectIdentityResult struct {
+	Identity       *network.NetworkIdentity
+	CertMode       string
+	IdentityData   []byte
+	ShouldFallback bool
+}
+
+// detectIdentity performs network identity detection and returns the result.
+func detectIdentity(ctx context.Context, logger *slog.Logger, certIdentityMode string) detectIdentityResult {
+	netDetector := network.NewDetector(logger)
+	netIdentity, err := netDetector.DetectAll(ctx)
+	if err != nil {
+		return detectIdentityResult{
+			CertMode:       "localhost",
+			ShouldFallback: true,
+		}
+	}
+
+	// Default to full identity mode if not specified via flag
+	if certIdentityMode == "" {
+		certIdentityMode = "full"
+	}
+
+	// Serialize network identity to pass to subprocess
+	var identityData []byte
+	if certIdentityMode == "full" && netIdentity != nil {
+		identityData, err = json.Marshal(netIdentity)
+		if err != nil {
+			return detectIdentityResult{
+				CertMode:       "localhost",
+				ShouldFallback: true,
+			}
+		}
+	}
+
+	return detectIdentityResult{
+		Identity:     netIdentity,
+		CertMode:     certIdentityMode,
+		IdentityData: identityData,
+	}
 }
 
 func gatewayCmd() *cobra.Command {
@@ -83,77 +188,27 @@ func gatewayStartCmd() *cobra.Command {
 		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Environment variables override CLI flags
-			if vaultDir == "" {
-				vaultDir = os.Getenv("G8E_VAULT_DIR")
-			}
-			if vaultKeyPath == "" {
-				vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
-			}
-			if !vaultRequireUnlock {
-				vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
-			}
-
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("config: failed to load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
+				return fmt.Errorf("platform: failed to create process manager: %w", err)
 			}
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check Operator status: %w", err)
+				return fmt.Errorf("platform: failed to check Operator status: %w", err)
 			}
 			if running {
 				cmd.Printf("g8e Gateway is already running (PID: %d)\n", pid)
 				return nil
 			}
 
-			// Detect and display network identity before prompting
-			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			netDetector := network.NewDetector(logger)
-			netIdentity, err := netDetector.DetectAll(context.Background())
-			if err != nil {
-				cmd.Printf("Warning: Failed to detect network identity: %v\n", err)
-				cmd.Println("Falling back to localhost-only mode")
-				certIdentityMode = "localhost"
-			} else {
-				cmd.Println(netIdentity.FormatForDisplay())
-				cmd.Println()
-			}
-
-			// Default to full identity mode if not specified via flag
-			if certIdentityMode == "" {
-				certIdentityMode = "full"
-			}
-
-			// Serialize network identity to pass to subprocess
-			var identityData []byte
-			if certIdentityMode == "full" && netIdentity != nil {
-				identityData, err = json.Marshal(netIdentity)
-				if err != nil {
-					return fmt.Errorf("failed to marshal network identity: %w", err)
-				}
-			}
-
-			cmd.Println("[g8e] Starting g8e Gateway service...")
-			var postureDesc string
-			switch posture {
-			case "doctrine":
-				postureDesc = "doctrine (L1 enforced, L2/L3 audited)"
-			case "consensus":
-				postureDesc = "consensus (L1/L2 enforced, L3 audited)"
-			case "notary":
-				postureDesc = "notary (L1/L2/L3 strictly enforced)"
-			default:
-				postureDesc = posture
-			}
-			cmd.Printf("[g8e] Gateway posture: %s\n", postureDesc)
-			if err := pm.StartOperator(
+			// Resolve configuration from flags and environment variables
+			startCfg := resolveStartConfig(
 				posture,
 				httpPort,
 				httpsPort,
@@ -169,37 +224,66 @@ func gatewayStartCmd() *cobra.Command {
 				rateLimitBurst,
 				logLevel,
 				certIdentityMode,
-				identityData,
-			); err != nil {
-				return err
+			)
+
+			// Detect and display network identity before prompting
+			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
+			identityResult := detectIdentity(context.Background(), logger, startCfg.CertIdentityMode)
+
+			if identityResult.ShouldFallback {
+				cmd.Printf("Warning: Failed to detect network identity\n")
+				cmd.Println("Falling back to localhost-only mode")
+			} else {
+				cmd.Println(identityResult.Identity.FormatForDisplay())
+				cmd.Println()
+			}
+
+			cmd.Println("[g8e] Starting g8e Gateway service...")
+			// Validate posture at CLI edge for clean error messages
+			postureObj, err := governance.ParseGovernancePosture(startCfg.Posture)
+			if err != nil {
+				return fmt.Errorf("governance: invalid posture: %w", err)
+			}
+			cmd.Printf("[g8e] Gateway posture: %s\n", postureObj.Description())
+			if err := pm.StartOperator(platform.OperatorStartOptions{
+				Posture:            startCfg.Posture,
+				HTTPPort:           startCfg.HTTPPort,
+				HTTPSPort:          startCfg.HTTPSPort,
+				DataDir:            startCfg.DataDir,
+				PKIDir:             startCfg.PKIDir,
+				SecretsDir:         startCfg.SecretsDir,
+				VaultDir:           startCfg.VaultDir,
+				VaultKeyPath:       startCfg.VaultKeyPath,
+				VaultRequireUnlock: startCfg.VaultRequireUnlock,
+				PasskeyRpID:        startCfg.PasskeyRpID,
+				PasskeyRpName:      startCfg.PasskeyRpName,
+				RateLimitRPS:       startCfg.RateLimitRPS,
+				RateLimitBurst:     startCfg.RateLimitBurst,
+				LogLevel:           startCfg.LogLevel,
+				CertIdentityMode:   identityResult.CertMode,
+				IdentityData:       identityResult.IdentityData,
+			}); err != nil {
+				return fmt.Errorf("platform: failed to start operator: %w", err)
 			}
 
 			_, pid, err = pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check Operator status after start: %w", err)
+				return fmt.Errorf("platform: failed to check Operator status after start: %w", err)
 			}
 
 			externalIP := config.GetExternalInterfaceIP()
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n\n", pid)
 
-			// Automatically bootstrap CLI auth on first start
-			cmd.Println("[g8e] Bootstrapping CLI authentication...")
-			if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
-				cmd.Printf("[g8e] Warning: Failed to bootstrap CLI auth automatically: %v\n", err)
-				cmd.Println()
-				cmd.Println("╔════════════════════════════════════════════════════════════════════════════╗")
-				cmd.Println("║  IMPORTANT: The gateway is now running. Before it can be used, you must    ║")
-				cmd.Println("║  authenticate to bootstrap your credentials and allow remote operators to  ║")
-				cmd.Println("║  connect.                                                                  ║")
-				cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
-				cmd.Println()
-				cmd.Println("Bootstrap Authentication:")
-				cmd.Printf("  %s auth login\n\n", getBinaryName())
-			} else {
-				cmd.Println("[g8e] CLI authentication bootstrapped successfully!")
-				cmd.Println()
-			}
+			// CLI authentication must be performed explicitly via 'g8e auth login'
+			cmd.Println("╔════════════════════════════════════════════════════════════════════════════╗")
+			cmd.Println("║  IMPORTANT: The gateway is now running. Before it can be used, you must    ║")
+			cmd.Println("║  authenticate to bootstrap your credentials and allow remote operators to  ║")
+			cmd.Println("║  connect.                                                                  ║")
+			cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
+			cmd.Println()
+			cmd.Println("Bootstrap Authentication:")
+			cmd.Printf("  %s auth login\n\n", getBinaryName())
 			cmd.Println("Deploy/Stream Operators from this machine to Remote Hosts:")
 			cmd.Printf("  %s operator deploy --hosts <host1,host2>\n", getBinaryName())
 			cmd.Printf("  %s operator stream --hosts <host1,host2>\n", getBinaryName())
@@ -234,7 +318,7 @@ func gatewayStartCmd() *cobra.Command {
 				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it
 				logPath := pm.GetLogPath()
 				if err := platform.TailLog(logPath, true); err != nil {
-					return fmt.Errorf("failed to follow logs: %w", err)
+					return fmt.Errorf("platform: failed to follow logs: %w", err)
 				}
 			}
 
@@ -245,11 +329,11 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
 	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
 	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
-	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory for SQLite database (default: .g8e/data in working directory)")
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "Directory for TLS certificates (default: .g8e/pki)")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Directory for platform secrets (default: .g8e/secrets)")
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", "Directory for vault data (default: .g8e/vault)")
-	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", "Path to vault private key (default: .g8e/secrets/vault.key)")
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", fmt.Sprintf("Data directory for SQLite database (default: %s in working directory)", constants.DefaultDataDir))
+	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", fmt.Sprintf("Directory for TLS certificates (default: %s)", constants.DefaultPKIDir))
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
+	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", fmt.Sprintf("Directory for vault data (default: %s)", constants.DefaultVaultDirDesc))
+	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", fmt.Sprintf("Path to vault private key (default: %s)", constants.DefaultVaultKeyDesc))
 	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
@@ -269,17 +353,17 @@ func gatewayStopCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("config: failed to load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
+				return fmt.Errorf("platform: failed to create process manager: %w", err)
 			}
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check Operator status: %w", err)
+				return fmt.Errorf("platform: failed to check Operator status: %w", err)
 			}
 			if !running {
 				cmd.Println("g8e Gateway is not running")
@@ -288,7 +372,7 @@ func gatewayStopCmd() *cobra.Command {
 
 			cmd.Printf("Stopping g8e Gateway (PID: %d)...\n", pid)
 			if err := pm.StopOperator(); err != nil {
-				return err
+				return fmt.Errorf("platform: failed to stop operator: %w", err)
 			}
 
 			cmd.Println("g8e Gateway stopped successfully")
@@ -305,7 +389,7 @@ func gatewayStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("config: failed to load config: %w", err)
 			}
 
 			cmd.Println("g8e Gateway Status")
@@ -319,8 +403,8 @@ func gatewayStatusCmd() *cobra.Command {
 					cmd.Println("State: RUNNING (HTTP check)")
 					cmd.Printf("\nEndpoints:\n")
 					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-					cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
-					cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
+					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 					return nil
 				}
 			}
@@ -328,20 +412,20 @@ func gatewayStatusCmd() *cobra.Command {
 			// Fallback to ProcessManager check (for background/host mode)
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
+				return fmt.Errorf("platform: failed to create process manager: %w", err)
 			}
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check Operator status: %w", err)
+				return fmt.Errorf("platform: failed to check Operator status: %w", err)
 			}
 
 			if running {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
 				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-				cmd.Printf("  Public API:         https://localhost:%d (Public browser/BYO bootstrap)\n", constants.Ports.OperatorHttps)
-				cmd.Printf("  MCP HTTP:           http://localhost:%d (Plain HTTP for MCP calls)\n", constants.Ports.OperatorHttp)
+				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 			} else {
 				cmd.Println("State: STOPPED")
 			}
@@ -360,50 +444,61 @@ func gatewayRestartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("config: failed to load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
+				return fmt.Errorf("platform: failed to create process manager: %w", err)
 			}
 
 			running, _, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("failed to check Operator status: %w", err)
+				return fmt.Errorf("platform: failed to check Operator status: %w", err)
 			}
 
 			if running {
 				cmd.Println("Stopping g8e Gateway...")
 				if err := pm.StopOperator(); err != nil {
-					return err
+					return fmt.Errorf("platform: failed to stop operator: %w", err)
 				}
 			}
 
 			cmd.Println("Starting g8e Gateway...")
-			if err := pm.StartOperator(
-				"doctrine",
-				cfg.OperatorHTTPSPort(),
-				constants.Ports.OperatorHttps,
-				"",
-				"",
-				"",
-				"",
-				"",
-				false,
-				"",
-				"",
-				0,
-				0,
-				"info",
-				"",
-				nil,
-			); err != nil {
-				return err
+			currentPosture, err := pm.ReadPosture()
+			if err != nil {
+				return fmt.Errorf("platform: failed to read current posture: %w", err)
+			}
+			if currentPosture == "" {
+				currentPosture = "doctrine"
+				cmd.Println("[g8e] Warning: No posture file found, restarting with default 'doctrine' posture.")
+			} else {
+				cmd.Printf("[g8e] Restarting with current posture: %s\n", currentPosture)
+			}
+			if err := pm.StartOperator(platform.OperatorStartOptions{
+				Posture:            currentPosture,
+				HTTPPort:           cfg.OperatorHTTPSPort(),
+				HTTPSPort:          constants.Ports.OperatorHttps,
+				DataDir:            "",
+				PKIDir:             "",
+				SecretsDir:         "",
+				VaultDir:           "",
+				VaultKeyPath:       "",
+				VaultRequireUnlock: false,
+				PasskeyRpID:        "",
+				PasskeyRpName:      "",
+				RateLimitRPS:       0,
+				RateLimitBurst:     0,
+				LogLevel:           "info",
+				CertIdentityMode:   "",
+				IdentityData:       nil,
+			}); err != nil {
+				return fmt.Errorf("platform: failed to start operator: %w", err)
 			}
 
 			cmd.Println("g8e Gateway restarted successfully")
-			cmd.Printf("Governance mode: doctrine (L1 enforced, L2/L3 audited)\n")
+			postureObj, _ := governance.ParseGovernancePosture(currentPosture)
+			cmd.Printf("Governance mode: %s\n", postureObj.Description())
 			cmd.Printf("\nNext step: Run '%s auth login' to authenticate\n", getBinaryName())
 			return nil
 		},
@@ -421,12 +516,12 @@ func gatewayLogsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("config: failed to load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
+				return fmt.Errorf("platform: failed to create process manager: %w", err)
 			}
 
 			logPath := pm.GetLogPath()
@@ -451,17 +546,17 @@ func gatewaySettingsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("config: failed to load config: %w", err)
 			}
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("api: failed to create client: %w", err)
 			}
 
 			resp, err := client.Get("/api/settings")
 			if err != nil {
-				return err
+				return fmt.Errorf("api: failed to get settings: %w", err)
 			}
 
 			cmd.Println(string(resp))
@@ -499,7 +594,7 @@ func gatewayResetCmd() *cobra.Command {
 			stopCmd.SetErr(cmd.ErrOrStderr())
 			stopCmd.SetIn(cmd.InOrStdin())
 			if err := stopCmd.Execute(); err != nil {
-				return fmt.Errorf("failed to stop gateway: %w", err)
+				return fmt.Errorf("gateway: failed to stop gateway: %w", err)
 			}
 
 			cleanCmd := gatewayCleanCmd()
@@ -508,7 +603,7 @@ func gatewayResetCmd() *cobra.Command {
 			cleanCmd.SetErr(cmd.ErrOrStderr())
 			cleanCmd.SetIn(cmd.InOrStdin())
 			if err := cleanCmd.Execute(); err != nil {
-				return fmt.Errorf("failed to clean gateway: %w", err)
+				return fmt.Errorf("gateway: failed to clean gateway: %w", err)
 			}
 
 			startCmd := gatewayStartCmd()
@@ -517,7 +612,7 @@ func gatewayResetCmd() *cobra.Command {
 			startCmd.SetErr(cmd.ErrOrStderr())
 			startCmd.SetIn(cmd.InOrStdin())
 			if err := startCmd.Execute(); err != nil {
-				return fmt.Errorf("failed to start gateway: %w", err)
+				return fmt.Errorf("gateway: failed to start gateway: %w", err)
 			}
 
 			return nil
@@ -540,7 +635,7 @@ func gatewayCleanCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("config: failed to load config: %w", err)
 			}
 
 			if !force {
@@ -563,11 +658,11 @@ func gatewayCleanCmd() *cobra.Command {
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
+				return fmt.Errorf("platform: failed to create process manager: %w", err)
 			}
 
 			if err := pm.Clean(); err != nil {
-				return err
+				return fmt.Errorf("platform: failed to clean: %w", err)
 			}
 
 			cmd.Println("Clean complete. All runtime state and credentials destroyed.")

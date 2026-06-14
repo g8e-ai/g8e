@@ -14,7 +14,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -310,7 +309,7 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
+		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 
 	t.Run("returns Operator HTTPS URL with test port override", func(t *testing.T) {
@@ -331,7 +330,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 		}
 
 		result := config.OperatorBootstrapURL()
-		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
+		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 }
 
@@ -342,7 +341,7 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 		}
 
 		result := config.OperatorPublicURL()
-		assert.Equal(t, fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps), result)
+		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 }
 
@@ -353,7 +352,7 @@ func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 		}
 
 		result := config.OperatorDiscoveryURL()
-		assert.Equal(t, fmt.Sprintf("http://localhost:%d", constants.Ports.OperatorHttp), result)
+		assert.Equal(t, constants.LocalhostHTTPURL(constants.Ports.OperatorHttp), result)
 	})
 }
 

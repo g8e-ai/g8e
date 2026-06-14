@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-06-11
-Version: v1.0.12
+Last Updated: 2026-06-13
+Version: v1.1.0
 
 ---
 

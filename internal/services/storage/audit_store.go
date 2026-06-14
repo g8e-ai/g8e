@@ -49,8 +49,8 @@ type AuditStoreConfig struct {
 // Note: DataDir should be set by the caller based on the actual work directory.
 func DefaultAuditStoreConfig() *AuditStoreConfig {
 	return &AuditStoreConfig{
-		DataDir:                   ".g8e/data",
-		DBPath:                    "g8e.db",
+		DataDir:                   constants.Paths.Infra.DataDir,
+		DBPath:                    constants.DbFilename,
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,
 		PruneIntervalMinutes:      60,

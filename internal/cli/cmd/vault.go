@@ -89,7 +89,7 @@ func vaultInitCmd() *cobra.Command {
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, "key")
+				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
 				keyPath = filepath.Join(projectRoot, keyPath)
@@ -174,7 +174,7 @@ func vaultUnlockCmd() *cobra.Command {
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, "key")
+				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
 				keyPath = filepath.Join(projectRoot, keyPath)
@@ -240,13 +240,13 @@ func vaultRekeyCmd() *cobra.Command {
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, "key")
+				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
 				keyPath = filepath.Join(projectRoot, keyPath)
 			}
 			if newKeyPath == "" {
-				newKeyPath = keyPath + ".new"
+				newKeyPath = filepath.Join(vaultDir, constants.VaultNewKeyFilename)
 			}
 
 			if !vault.VaultHeaderExists(vaultDir) {
@@ -444,7 +444,7 @@ func vaultExportCmd() *cobra.Command {
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, "key")
+				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
 				keyPath = filepath.Join(projectRoot, keyPath)
@@ -490,7 +490,7 @@ func vaultImportCmd() *cobra.Command {
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, "key")
+				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
 				keyPath = filepath.Join(projectRoot, keyPath)

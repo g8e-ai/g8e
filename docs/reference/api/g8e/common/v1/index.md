@@ -43,6 +43,8 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | operator_session_id | [string](#string) |  |  |
 | web_session_id | [string](#string) |  |  |
 | cli_session_id | [string](#string) |  |  |
+| requestor_user_id | [string](#string) |  | The human user who authorized the action (delegator) |
+| acting_app_id | [string](#string) |  | The app/tool acting on behalf of the user (delegate) |
 | event_type | [string](#string) |  | Intent &amp; Payload |
 | payload | [bytes](#bytes) |  | Raw protobuf payload |
 | intent_data | [google.protobuf.Struct](#google-protobuf-Struct) |  | Structured JSON-first view |

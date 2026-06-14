@@ -29,8 +29,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
@@ -43,26 +45,27 @@ import (
 )
 
 // G8E environment variables injected by 'agent run' and consumed by 'mcp stdio'.
-// Using explicit strings rather than constants so the env-var contract is visible here.
+// Identity is carried in the delegated cert's URI SANs — no session header env vars.
 const (
-	envG8ECLISessionID      = "G8E_CLI_SESSION_ID"
-	envG8EUserID            = "G8E_USER_ID"
-	envG8EOperatorID        = "G8E_OPERATOR_ID"
-	envG8EOperatorSessionID = "G8E_OPERATOR_SESSION_ID"
-	envG8EClientCert        = "G8E_CLIENT_CERT"
-	envG8EClientKey         = "G8E_CLIENT_KEY"
-	envG8ECABundle          = "G8E_CA_BUNDLE"
-	envG8EGatewayURL        = "G8E_GATEWAY_URL"
-	envG8EAppID             = "G8E_APP_ID"
-	envG8EAppCert           = "G8E_APP_CERT"
-	envG8EAppKey            = "G8E_APP_KEY"
+	envG8EClientCert = "G8E_CLIENT_CERT"
+	envG8EClientKey  = "G8E_CLIENT_KEY"
+	envG8ECABundle   = "G8E_CA_BUNDLE"
+	envG8EGatewayURL = "G8E_GATEWAY_URL"
+	envG8EAppID      = "G8E_APP_ID"
+	envG8EAppCert    = "G8E_APP_CERT"
+	envG8EAppKey     = "G8E_APP_KEY"
 )
 
 var (
 	l3ApprovalMaxIterations = 30
 	l3ApprovalPollInterval  = 10 * time.Second
-	l3ApprovalTotalTimeout  = 5 * time.Minute
 )
+
+// nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
+// Disabling them forces all I/O through g8e's MCP tools so every action is audited.
+var nativeToolsToDisable = []string{
+	"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
+}
 
 // mcpCmd is the parent command for MCP stdio operations.
 func mcpCmd() *cobra.Command {
@@ -110,15 +113,41 @@ type ToolsListResult struct {
 
 // Tool represents a single MCP tool descriptor.
 type Tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	InputSchema map[string]interface{} `json:"inputSchema"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	InputSchema interface{} `json:"inputSchema"`
 }
 
 // CallToolRequest is the params object for tools/call.
 type CallToolRequest struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments,omitempty"`
+}
+
+// InitializeResult is the result payload for initialize.
+type InitializeResult struct {
+	ProtocolVersion string                 `json:"protocolVersion"`
+	Capabilities    map[string]interface{} `json:"capabilities"`
+	ServerInfo      ServerInfo             `json:"serverInfo"`
+}
+
+// ServerInfo contains server information for initialize.
+type ServerInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+// ApprovalResult represents a tool call result requiring L3 approval.
+type ApprovalResult struct {
+	ApprovalURL string    `json:"approval_url,omitempty"`
+	Content     []Content `json:"content,omitempty"`
+}
+
+// Content represents a content item in an MCP response.
+type Content struct {
+	Type string      `json:"type"`
+	Text string      `json:"text,omitempty"`
+	Data interface{} `json:"data,omitempty"`
 }
 
 // ─── stdio: governed proxy (the only supported mode) ────────────────────────
@@ -144,14 +173,14 @@ func handleInitialize(encoder *json.Encoder, id interface{}) {
 	response := JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
-		Result: map[string]interface{}{
-			"protocolVersion": "2024-11-05",
-			"capabilities": map[string]interface{}{
+		Result: InitializeResult{
+			ProtocolVersion: "2024-11-05",
+			Capabilities: map[string]interface{}{
 				"tools": map[string]interface{}{},
 			},
-			"serverInfo": map[string]interface{}{
-				"name":    "g8e",
-				"version": "1.0.0",
+			ServerInfo: ServerInfo{
+				Name:    "g8e",
+				Version: "1.0.0",
 			},
 		},
 	}
@@ -229,61 +258,27 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 
 // ─── stdio: governed proxy, full mTLS + CLI session to gateway ────────────────
 
-// cliProxySession holds the in-memory CLI session established at startup. All
-// gateway requests are driven through this single authenticated session for the
-// lifetime of the process.
-type cliProxySession struct {
-	client            *http.Client
-	gatewayURL        string
-	cliSessionID      string
-	userID            string
-	operatorID        string
-	operatorSessionID string
-	isAppMode         bool
+// gatewayConn is the mTLS connection to the gateway established at startup.
+// Identity is cryptographically bound in the delegated cert's URI SANs — the cert
+// IS the session. No server-side session object or identity headers are used.
+type gatewayConn struct {
+	client     *http.Client
+	gatewayURL string
 }
 
-// buildProxySession constructs a cliProxySession. It first reads session
-// identity from G8E_* environment variables injected by 'mcp agent run'.
-// When those are absent it loads credentials from disk, bootstrapping CLI
-// enrollment from the gateway if needed (idempotent).
-func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
-	certFile := envOr(envG8EClientCert, cfg.CLICertFile())
-	keyFile := envOr(envG8EClientKey, cfg.CLIKeyFile())
+// buildGatewayConn constructs a gatewayConn. It reads the delegated credential
+// from G8E_* environment variables injected by 'mcp agent run'. The delegated cert
+// carries both the app SPIFFE ID and the requestor's user identity in its URI SANs.
+func buildGatewayConn(cfg *config.Config) (*gatewayConn, error) {
+	// Use the delegated credential (app cert) for agent runs, or CLI cert for direct CLI usage
+	certFile := envOr(envG8EAppCert, envOr(envG8EClientCert, cfg.CLICertFile()))
+	keyFile := envOr(envG8EAppKey, envOr(envG8EClientKey, cfg.CLIKeyFile()))
 	caFile := envOr(envG8ECABundle, cfg.TrustBundlePath())
 
 	// Try g8e.local first, fall back to IP if not set in env
 	gatewayURL := os.Getenv(envG8EGatewayURL)
 	if gatewayURL == "" {
 		gatewayURL = fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
-	}
-
-	// Prefer app identity when present (for agent runs)
-	appCert := os.Getenv(envG8EAppCert)
-	appKey := os.Getenv(envG8EAppKey)
-	isAppMode := appCert != "" && appKey != ""
-	if isAppMode {
-		certFile = appCert
-		keyFile = appKey
-	}
-
-	cliSessionID := os.Getenv(envG8ECLISessionID)
-	userID := os.Getenv(envG8EUserID)
-	operatorID := os.Getenv(envG8EOperatorID)
-	operatorSessionID := os.Getenv(envG8EOperatorSessionID)
-
-	// Fall back to stored credentials when env vars are not present and not in app mode.
-	if !isAppMode && (cliSessionID == "" || userID == "") {
-		if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
-			return nil, fmt.Errorf("CLI auth failed: %w", err)
-		}
-		creds, err := auth.LoadCredentials(cfg)
-		if err != nil || creds == nil {
-			return nil, fmt.Errorf("no CLI credentials available after bootstrap")
-		}
-		cliSessionID = creds.CLISessionID
-		userID = creds.UserID
-		operatorID = creds.OperatorID
-		operatorSessionID = creds.OperatorSessionID
 	}
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
@@ -305,17 +300,12 @@ func buildProxySession(cfg *config.Config) (*cliProxySession, error) {
 	}
 
 	// Try to connect with the current gatewayURL
-	session := &cliProxySession{
+	session := &gatewayConn{
 		client: &http.Client{
 			Transport: &http.Transport{TLSClientConfig: tlsCfg},
 			Timeout:   30 * time.Second,
 		},
-		gatewayURL:        gatewayURL,
-		cliSessionID:      cliSessionID,
-		userID:            userID,
-		operatorID:        operatorID,
-		operatorSessionID: operatorSessionID,
-		isAppMode:         isAppMode,
+		gatewayURL: gatewayURL,
 	}
 
 	// Test the connection - if it fails due to DNS, fall back to IP
@@ -355,17 +345,15 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	// Build the in-memory session once. All proxy calls for this process
-	// lifetime use this session — no disk reads per request.
-	session, err := buildProxySession(cfg)
+	// Build the mTLS gateway connection once. Identity is in the delegated cert's
+	// URI SANs — no session object or headers. All proxy calls reuse this connection.
+	conn, err := buildGatewayConn(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to establish CLI session: %w", err)
+		return fmt.Errorf("failed to establish gateway connection: %w", err)
 	}
 
 	logger.Info("g8e MCP governance proxy starting",
-		"cli_session_id", session.cliSessionID,
-		"user_id", session.userID,
-		"gateway_url", session.gatewayURL,
+		"gateway_url", conn.gatewayURL,
 	)
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -400,7 +388,7 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 		logger.Info("Proxying MCP request", "method", req.Method, "id", req.ID)
 
-		resp, err := proxySessionToGatewayWithRetry(session, req, logger)
+		resp, err := proxySessionToGatewayWithRetry(conn, req, logger)
 		if err != nil {
 			logger.Error("Failed to proxy to gateway", "error", err)
 			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
@@ -423,7 +411,7 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 // proxySessionToGateway posts a JSON-RPC request to the gateway over mTLS.
 // In CLI mode, it attaches CLI session headers. In app mode, it relies purely on mTLS cert.
-func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRPCResponse, error) {
+func proxySessionToGateway(session *gatewayConn, req JSONRPCRequest) (JSONRPCResponse, error) {
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return JSONRPCResponse{}, err
@@ -435,14 +423,7 @@ func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRP
 	}
 	httpReq.Header.Set(constants.HeaderContentType, "application/json")
 
-	// Only send CLI session headers in CLI mode. App mode uses pure mTLS cert auth.
-	if !session.isAppMode {
-		httpReq.Header.Set(constants.HeaderCLISessionID, session.cliSessionID)
-		httpReq.Header.Set(constants.HeaderUserID, session.userID)
-		httpReq.Header.Set(constants.HeaderOperatorID, session.operatorID)
-		httpReq.Header.Set(constants.HeaderOperatorSessionID, session.operatorSessionID)
-	}
-
+	// Identity is now carried in the delegated credential (mTLS cert), not in headers
 	httpResp, err := session.client.Do(httpReq)
 	if err != nil {
 		return JSONRPCResponse{}, err
@@ -461,7 +442,12 @@ func proxySessionToGateway(session *cliProxySession, req JSONRPCRequest) (JSONRP
 	return resp, nil
 }
 
-func proxySessionToGatewayWithRetry(session *cliProxySession, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
+func proxySessionToGatewayWithRetry(session *gatewayConn, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
+	return proxySessionToGatewayWithRetryContext(context.Background(), session, req, logger)
+}
+
+// proxySessionToGatewayWithRetryContext performs L3 approval polling with context support.
+func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gatewayConn, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
 	resp, err := proxySessionToGateway(session, req)
 	if err != nil {
 		return resp, err
@@ -483,18 +469,27 @@ func proxySessionToGatewayWithRetry(session *cliProxySession, req JSONRPCRequest
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 	}
 
-	for i := 0; i < l3ApprovalMaxIterations; i++ {
-		time.Sleep(l3ApprovalPollInterval)
+	ticker := time.NewTicker(l3ApprovalPollInterval)
+	defer ticker.Stop()
 
-		retryResp, err := proxySessionToGateway(session, req)
-		if err != nil {
-			continue
-		}
-		if !isL3ApprovalResponse(retryResp) {
+	for i := 0; i < l3ApprovalMaxIterations; i++ {
+		select {
+		case <-ctx.Done():
 			if logger != nil {
-				logger.Info("L3 approval completed, proceeding with execution")
+				logger.Warn("L3 approval polling cancelled by context")
 			}
-			return retryResp, nil
+			return resp, ctx.Err()
+		case <-ticker.C:
+			retryResp, err := proxySessionToGateway(session, req)
+			if err != nil {
+				continue
+			}
+			if !isL3ApprovalResponse(retryResp) {
+				if logger != nil {
+					logger.Info("L3 approval completed, proceeding with execution")
+				}
+				return retryResp, nil
+			}
 		}
 	}
 
@@ -507,8 +502,8 @@ func proxySessionToGatewayWithRetry(session *cliProxySession, req JSONRPCRequest
 // ─── createMCPClient: kept for tests and external callers ───────────────────
 
 // createMCPClient builds a plain mTLS HTTP client from config paths.
-// Most callers should use buildProxySession instead, which also loads the
-// CLI session identity required for gateway authentication.
+// Most callers should use buildGatewayConn instead, which also loads the
+// delegated credential required for mTLS gateway authentication.
 func createMCPClient(cfg *config.Config) (*http.Client, error) {
 	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
@@ -567,13 +562,16 @@ func isL3ApprovalResponse(resp JSONRPCResponse) bool {
 	if resp.Result == nil {
 		return false
 	}
+	// Try to unmarshal as ApprovalResult
 	resultBytes, err := json.Marshal(resp.Result)
 	if err != nil {
 		return false
 	}
-	resultStr := string(resultBytes)
-	return strings.Contains(resultStr, "Execution paused") &&
-		strings.Contains(resultStr, "approve/")
+	var approvalResult ApprovalResult
+	if err := json.Unmarshal(resultBytes, &approvalResult); err != nil {
+		return false
+	}
+	return approvalResult.ApprovalURL != ""
 }
 
 func extractApprovalURL(resp JSONRPCResponse) string {
@@ -581,34 +579,27 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 		return ""
 	}
 
-	resultMap, ok := resp.Result.(map[string]interface{})
-	if ok {
-		if approvalURL, exists := resultMap["approval_url"]; exists {
-			if urlStr, ok := approvalURL.(string); ok && urlStr != "" {
-				return urlStr
-			}
+	// Try to unmarshal as ApprovalResult
+	resultBytes, err := json.Marshal(resp.Result)
+	if err != nil {
+		return ""
+	}
+	var approvalResult ApprovalResult
+	if err := json.Unmarshal(resultBytes, &approvalResult); err == nil {
+		if approvalResult.ApprovalURL != "" {
+			return approvalResult.ApprovalURL
 		}
-		if content, exists := resultMap["content"]; exists {
-			if contentArray, ok := content.([]interface{}); ok {
-				for _, item := range contentArray {
-					if itemMap, ok := item.(map[string]interface{}); ok {
-						if text, exists := itemMap["text"]; exists {
-							if textStr, ok := text.(string); ok {
-								if url := extractURLFromText(textStr); url != "" {
-									return url
-								}
-							}
-						}
-					}
+		// Check content array for approval URL
+		for _, item := range approvalResult.Content {
+			if item.Text != "" {
+				if url := extractURLFromText(item.Text); url != "" {
+					return url
 				}
 			}
 		}
 	}
 
-	resultBytes, err := json.Marshal(resp.Result)
-	if err != nil {
-		return ""
-	}
+	// Fallback to text extraction from entire result
 	return extractURLFromText(string(resultBytes))
 }
 
@@ -751,7 +742,7 @@ func printAgentShow(cmd *cobra.Command, agentID string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("unknown agent: %s. Use 'g8e mcp agent list' to see supported agents", agentID)
+		return fmt.Errorf("%w: %s. Use 'g8e mcp agent list' to see supported agents", constants.ErrAgentNotFound, agentID)
 	}
 
 	cmd.Println("╔═════════════════════════════════════════════════════════════════════════")
@@ -800,20 +791,20 @@ type agentInfo struct {
 
 func getSupportedAgents() []agentInfo {
 	return []agentInfo{
-		{"claude", "Anthropic Claude Desktop / Claude Code"},
-		{"codex", "OpenAI Codex AI coding assistant"},
-		{"cursor", "Cursor AI IDE"},
-		{"devin", "Devin AI IDE (formerly Windsurf)"},
-		{"vscode", "Visual Studio Code with MCP extension"},
-		{"continue", "Continue.dev AI coding assistant"},
-		{"cn", "Continue.dev AI coding assistant (alias)"},
-		{"aider", "Aider AI pair programmer"},
-		{"codeium", "Codeium AI assistant"},
-		{"tabby", "Tabby AI autocomplete"},
-		{"ollama", "Ollama local LLM runner"},
-		{"gemini", "Google Gemini CLI"},
-		{"goose", "Goose AI coding assistant"},
-		{"generic", "Generic MCP-compatible agent"},
+		{string(constants.AgentBinaryClaude), "Anthropic Claude Desktop / Claude Code"},
+		{string(constants.AgentBinaryCodex), "OpenAI Codex AI coding assistant"},
+		{string(constants.AgentBinaryCursor), "Cursor AI IDE"},
+		{string(constants.AgentBinaryDevin), "Devin AI IDE (formerly Windsurf)"},
+		{string(constants.AgentBinaryVSCode), "Visual Studio Code with MCP extension"},
+		{string(constants.AgentBinaryContinue), "Continue.dev AI coding assistant"},
+		{string(constants.AgentBinaryContinueAlias), "Continue.dev AI coding assistant (alias)"},
+		{string(constants.AgentBinaryAider), "Aider AI pair programmer"},
+		{string(constants.AgentBinaryCodeium), "Codeium AI assistant"},
+		{string(constants.AgentBinaryTabby), "Tabby AI autocomplete"},
+		{string(constants.AgentBinaryOllama), "Ollama local LLM runner"},
+		{string(constants.AgentBinaryGemini), "Google Gemini CLI"},
+		{string(constants.AgentBinaryGoose), "Goose AI coding assistant"},
+		{string(constants.AgentBinaryGeneric), "Generic MCP-compatible agent"},
 	}
 }
 
@@ -894,6 +885,14 @@ type subprocessMCPProxy struct {
 	stdin   io.WriteCloser
 	scanner *bufio.Scanner
 	mu      sync.Mutex
+}
+
+func setSysProcAttr(cmd *exec.Cmd) {
+	if runtime.GOOS != "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			Setpgid: true,
+		}
+	}
 }
 
 func (d *subprocessMCPProxy) start() error {
@@ -981,17 +980,24 @@ func ensureGatewayRunning() error {
 		fmt.Fprintf(os.Stderr, "[g8e] Gateway already running (PID %d)\n", pid)
 	} else {
 		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
-		if err := pm.StartOperator(
-			"doctrine",
-			0, 0,
-			"", "", "", "", "",
-			false,
-			"", "",
-			0, 0,
-			"info",
-			"localhost",
-			nil,
-		); err != nil {
+		if err := pm.StartOperator(platform.OperatorStartOptions{
+			Posture:            "doctrine",
+			HTTPPort:           0,
+			HTTPSPort:          0,
+			DataDir:            "",
+			PKIDir:             "",
+			SecretsDir:         "",
+			VaultDir:           "",
+			VaultKeyPath:       "",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "",
+			PasskeyRpName:      "",
+			RateLimitRPS:       0,
+			RateLimitBurst:     0,
+			LogLevel:           "info",
+			CertIdentityMode:   "localhost",
+			IdentityData:       nil,
+		}); err != nil {
 			return fmt.Errorf("start gateway: %w", err)
 		}
 
@@ -1020,27 +1026,41 @@ func ensureGatewayRunning() error {
 		}
 	}
 
-	// Ensure CLI mTLS credentials exist regardless of whether the gateway
-	// was just started or was already running (idempotent).
-	if err := auth.BootstrapCLIWithoutPasskey(cfg); err != nil {
-		return fmt.Errorf("bootstrap CLI auth: %w", err)
-	}
-
 	fmt.Fprintf(os.Stderr, "[g8e] Gateway ready (L1-L5 governance active)\n")
 	return nil
+}
+
+// agentMCPConfig represents the MCP configuration structure for agents.
+type agentMCPConfig struct {
+	MCPServers   map[string]agentMCPServer `json:"mcpServers"`
+	ExcludeTools []string                  `json:"excludeTools"`
+}
+
+// agentMCPServer represents a single MCP server configuration.
+type agentMCPServer struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args"`
+}
+
+// geminiSettings represents the Gemini settings.json structure.
+type geminiSettings struct {
+	MCPServers   map[string]agentMCPServer `json:"mcpServers,omitempty"`
+	ExcludeTools []string                  `json:"excludeTools,omitempty"`
 }
 
 // writeAgentConfig writes the appropriate MCP config file for the agent.
 // Returns the path to the config file and a cleanup function (if any).
 func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
-	configJSON, err := json.Marshal(map[string]interface{}{
-		"mcpServers": map[string]interface{}{
-			"g8e": map[string]interface{}{
-				"command": binaryPath,
-				"args":    []string{"mcp", "stdio"},
+	config := agentMCPConfig{
+		MCPServers: map[string]agentMCPServer{
+			"g8e": {
+				Command: binaryPath,
+				Args:    []string{"mcp", "stdio"},
 			},
 		},
-	})
+		ExcludeTools: nativeToolsToDisable,
+	}
+	configJSON, err := json.Marshal(config)
 	if err != nil {
 		return "", nil, fmt.Errorf("build MCP config: %w", err)
 	}
@@ -1055,75 +1075,202 @@ func writeAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		}
 	}
 
-	switch strings.ToLower(agentID) {
-	case "cursor":
-		configDir := filepath.Join(homeDir, ".cursor")
+	switch agentID {
+	case string(constants.AgentBinaryCursor):
+		// Cursor does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirCursor)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create cursor config dir: %w", err)
 		}
-		configPath := filepath.Join(configDir, "mcp.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write cursor mcp.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "devin":
-		configDir := filepath.Join(homeDir, ".codeium", "windsurf")
+	case string(constants.AgentBinaryDevin):
+		// Devin does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirDevin)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create devin config dir: %w", err)
 		}
-		configPath := filepath.Join(configDir, "mcp_config.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		configPath := filepath.Join(configDir, constants.AgentConfigFileMCPDevin)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write devin mcp_config.json: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "aider":
-		configPath := ".aider.conf.yml"
+	case string(constants.AgentBinaryAider):
+		// Aider does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configPath := constants.AgentConfigFileAider
 		// Check if config already exists to avoid silent overwrite
 		if _, err := os.Stat(configPath); err == nil {
-			return "", nil, fmt.Errorf(".aider.conf.yml already exists in current directory - please back it up before running g8e")
+			return "", nil, fmt.Errorf("%w: %s in current directory - please back it up before running g8e", constants.ErrConfigFileExists, constants.AgentConfigFileAider)
 		}
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		configYAML := fmt.Sprintf("mcp-server:\n  - name: g8e\n    command: %s\n    args:\n      - mcp\n      - stdio\n", binaryPath)
 		if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
 			return "", nil, fmt.Errorf("write aider .aider.conf.yml: %w", err)
 		}
 		return configPath, nil, nil
 
-	case "gemini":
-		// Gemini uses `gemini mcp add` to register MCP servers
-		fmt.Fprintf(os.Stderr, "[g8e] Adding g8e MCP server to gemini configuration\n")
-		addCmd := exec.Command("gemini", "mcp", "add", "g8e", binaryPath, "mcp", "stdio")
-		addCmd.Stdout = os.Stderr
-		addCmd.Stderr = os.Stderr
-		if err := addCmd.Run(); err != nil {
-			return "", nil, fmt.Errorf("failed to add g8e MCP server to gemini: %w", err)
+	case string(constants.AgentBinaryGemini):
+		// Gemini uses settings.json for configuration
+		// We need to add g8e MCP server and exclude native tools to force governance
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirGemini)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create gemini config dir: %w", err)
 		}
-		// Return empty path since gemini doesn't use a config file
-		return "", func() {
-			removeCmd := exec.Command("gemini", "mcp", "remove", "g8e")
-			removeCmd.Stdout = os.Stderr
-			removeCmd.Stderr = os.Stderr
-			if err := removeCmd.Run(); err != nil {
-				slog.Warn("Failed to remove g8e MCP server from gemini", "error", err)
-			}
-		}, nil
+		configPath := filepath.Join(configDir, constants.AgentConfigFileSettings)
 
-	case "goose":
-		// Goose stores MCP config in ~/.goose/config.json or ~/.config/goose/config.json
-		configDir := filepath.Join(homeDir, ".goose")
+		// Read existing settings if present
+		var settings geminiSettings
+		if existingData, err := os.ReadFile(configPath); err == nil {
+			if err := json.Unmarshal(existingData, &settings); err != nil {
+				return "", nil, fmt.Errorf("parse existing gemini settings: %w", err)
+			}
+		}
+
+		// Add mcpServers configuration with g8e
+		if settings.MCPServers == nil {
+			settings.MCPServers = make(map[string]agentMCPServer)
+		}
+		settings.MCPServers["g8e"] = agentMCPServer{
+			Command: binaryPath,
+			Args:    []string{"mcp", "stdio"},
+		}
+
+		// Exclude native tools to force governance through g8e MCP
+		// This forces the agent to use only g8e's governed tools
+		settings.ExcludeTools = nativeToolsToDisable
+
+		configJSON, err := json.MarshalIndent(settings, "", "  ")
+		if err != nil {
+			return "", nil, fmt.Errorf("marshal gemini settings: %w", err)
+		}
+
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s with native tools disabled\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write gemini settings.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case string(constants.AgentBinaryGoose):
+		// Goose does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirGoose)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			return "", nil, fmt.Errorf("create goose config dir: %w", err)
 		}
-		configPath := filepath.Join(configDir, "config.json")
-		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s\n", configPath)
+		configPath := filepath.Join(configDir, constants.AgentConfigFileSettings)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
 			return "", nil, fmt.Errorf("write goose config.json: %w", err)
 		}
 		return configPath, nil, nil
+
+	case string(constants.AgentBinaryVSCode):
+		// VS Code does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirVSCode)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create vscode config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write vscode mcp.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case string(constants.AgentBinaryCodeium):
+		// Codeium does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirCodeium)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create codeium config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write codeium mcp.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case string(constants.AgentBinaryTabby):
+		// Tabby does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirTabby)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create tabby config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write tabby mcp.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case string(constants.AgentBinaryContinue), string(constants.AgentBinaryContinueAlias):
+		// Continue does not support native tool disabling via config
+		// Governance enforced by making g8e the only MCP server
+		configDir := filepath.Join(homeDir, constants.AgentConfigDirContinue)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return "", nil, fmt.Errorf("create continue config dir: %w", err)
+		}
+		configPath := filepath.Join(configDir, constants.AgentConfigFileSettings)
+		if err := backupConfigFile(configPath); err != nil {
+			return "", nil, err
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", configPath)
+		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
+			return "", nil, fmt.Errorf("write continue config.json: %w", err)
+		}
+		return configPath, nil, nil
+
+	case string(constants.AgentBinaryOllama):
+		// Ollama doesn't use a local config file - it's typically configured via CLI args
+		// or third-party MCP clients. Return a temp file for reference.
+		// Governance enforced by making g8e the only MCP server in the reference config
+		tmpFile, err := os.CreateTemp("", "g8e-mcp-ollama-*.json")
+		if err != nil {
+			return "", nil, fmt.Errorf("create temp MCP config for ollama: %w", err)
+		}
+		if _, err := tmpFile.Write(configJSON); err != nil {
+			tmpFile.Close()
+			return "", nil, fmt.Errorf("write MCP config for ollama: %w", err)
+		}
+		tmpFile.Close()
+		tmpPath := tmpFile.Name()
+		fmt.Fprintf(os.Stderr, "[g8e] Ollama requires manual MCP configuration. Reference config at: %s (g8e as only MCP server for governance)\n", tmpPath)
+		return tmpPath, func() {
+			if err := os.Remove(tmpPath); err != nil {
+				slog.Warn("Failed to cleanup temp MCP config file", "path", tmpPath, "error", err)
+			}
+		}, nil
 
 	default:
 		// For agents that use CLI flags or temp files
@@ -1171,10 +1318,19 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("load CLI credentials: %w", err)
 	}
 
+	// Require an authenticated human with passkey registration
+	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID)
+	if err != nil {
+		return fmt.Errorf("verify passkey registration: %w", err)
+	}
+	if !hasPasskey {
+		return fmt.Errorf("agent run requires a passkey-enrolled user. Please register a passkey via 'g8e auth register-passkey'")
+	}
+
 	// Validate agent binary exists before writing any config files
 	agentBin, err := exec.LookPath(agentID)
 	if err != nil {
-		return fmt.Errorf("%q not found in PATH — is it installed?", agentID)
+		return fmt.Errorf("%w: %q not found in PATH — is it installed?", constants.ErrAgentNotInPath, agentID)
 	}
 
 	binaryPath, err := os.Executable()
@@ -1203,16 +1359,12 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	agentCmd.Stderr = os.Stderr
 	// Don't set process group for interactive agents - it breaks terminal handling
 
-	// Propagate the authenticated CLI session to the 'g8e mcp stdio' subprocess
-	// that the agent will spawn. The subprocess reads these env vars at startup
-	// and stores the session in memory — no disk reads per request.
+	// Propagate the delegated credential to the 'g8e mcp stdio' subprocess that
+	// the agent will spawn. Identity (both app and human) is cryptographically bound
+	// in the delegated cert's URI SANs — no session headers needed.
 	// The stdio proxy will automatically fall back to IP if g8e.local DNS fails.
 	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", constants.GatewayInternalHostname, constants.Ports.OperatorHttps)
 	agentCmd.Env = append(os.Environ(),
-		envG8ECLISessionID+"="+creds.CLISessionID,
-		envG8EUserID+"="+creds.UserID,
-		envG8EOperatorID+"="+creds.OperatorID,
-		envG8EOperatorSessionID+"="+creds.OperatorSessionID,
 		envG8EClientCert+"="+cfg.CLICertFile(),
 		envG8EClientKey+"="+cfg.CLIKeyFile(),
 		envG8ECABundle+"="+cfg.TrustBundlePath(),
@@ -1225,13 +1377,9 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	return agentCmd.Run()
 }
 
-// nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
-// Disabling them forces all I/O through g8e's MCP tools so every action is audited.
-var nativeToolsToDisable = []string{
-	"Bash", "Read", "Write", "Edit", "Glob", "Grep", "WebSearch", "WebFetch",
-}
-
 // agentLaunchArgs returns the argv to pass to the agent binary for a governed session.
+// Governance is enforced by making g8e the only MCP server in the agent's config.
+// For agents that support native tool disabling via CLI flags, those are added here.
 func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 	switch strings.ToLower(agentID) {
 	case "claude", "codex":
@@ -1244,29 +1392,54 @@ func agentLaunchArgs(agentID, mcpConfigPath string) ([]string, error) {
 			"--strict-mcp-config",
 			"--disallowed-tools", strings.Join(nativeToolsToDisable, ","),
 		}, nil
+	case "cursor":
+		// Cursor reads from ~/.cursor/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Cursor does not support CLI flags to disable native tools
+		return []string{}, nil
+	case "devin":
+		// Devin reads from ~/.codeium/windsurf/mcp_config.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Devin does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "continue", "cn":
-		// Continue CLI uses --config to specify a config file
-		// We'll create a temporary config with MCP server configuration
-		return []string{
-			"--config", mcpConfigPath,
-		}, nil
-	case "cursor", "devin", "aider", "goose":
-		// These agents read from their standard config file locations
-		// No CLI args needed - config is written by writeAgentConfig
+		// Continue reads from ~/.continue/config.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Continue does not support CLI flags to disable native tools
+		return []string{}, nil
+	case "aider":
+		// Aider reads from .aider.conf.yml in current directory written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		return []string{}, nil
+	case "goose":
+		// Goose reads from ~/.goose/config.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
 		return []string{}, nil
 	case "vscode":
-		return nil, fmt.Errorf("VS Code requires manual MCP configuration via the MCP extension settings. Run 'g8e mcp agent show vscode' to see the required configuration JSON, then add it to your VS Code MCP settings")
+		// VS Code reads from ~/.vscode/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// VS Code does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "codeium":
-		return nil, fmt.Errorf("codeium requires manual MCP configuration via its settings. Run 'g8e mcp agent show codeium' to see the required configuration, then add it to your codeium MCP settings")
+		// Codeium reads from ~/.codeium/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Codeium does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "tabby":
-		return nil, fmt.Errorf("tabby requires manual MCP configuration via its settings. Run 'g8e mcp agent show tabby' to see the required configuration, then add it to your tabby MCP settings")
+		// Tabby reads from ~/.tabby/mcp.json written by writeAgentConfig
+		// Governance enforced by g8e being the only MCP server
+		// Tabby does not support CLI flags to disable native tools
+		return []string{}, nil
 	case "ollama":
-		return nil, fmt.Errorf("ollama requires manual MCP configuration via third-party clients. Run 'g8e mcp agent show ollama' to see the required configuration, then use it with an MCP-compatible ollama client")
+		// Ollama requires manual MCP configuration via third-party clients
+		// Return error to guide user to manual setup
+		return nil, fmt.Errorf("%w: ollama requires manual MCP configuration via third-party clients. Run 'g8e mcp agent show ollama' to see the required configuration, then use it with an MCP-compatible ollama client", constants.ErrAgentNotSupported)
 	case "gemini":
 		// Gemini uses `gemini mcp add` to register servers, no config file needed
+		// Governance enforced by g8e being the only MCP server
 		return []string{}, nil
 	default:
-		return nil, fmt.Errorf("auto-launch not yet supported for %q. To configure manually: g8e mcp agent show %s", agentID, agentID)
+		return nil, fmt.Errorf("%w: auto-launch not yet supported for %q. To configure manually: g8e mcp agent show %s", constants.ErrAgentNotSupported, agentID, agentID)
 	}
 }
 

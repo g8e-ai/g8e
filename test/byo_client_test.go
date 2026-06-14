@@ -104,6 +104,7 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
 		L3Notary:           nil, // L3 verified via mTLS certificate fingerprint in CLIL3Notary
 		ActuatorSigningKey: ActuatorPriv,
@@ -133,8 +134,8 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	httpsPort := ls.GetHTTPSPort()
 	require.NotZero(t, httpPort, "gateway HTTP port not bound")
 	require.NotZero(t, httpsPort, "gateway HTTPS port not bound")
-	discoveryURL := fmt.Sprintf("http://localhost:%d", httpPort)
-	mtlsURL := fmt.Sprintf("https://localhost:%d", httpsPort)
+	discoveryURL := constants.LocalhostHTTPURL(httpPort)
+	mtlsURL := constants.LocalhostHTTPSURL(httpsPort)
 	wssURL := fmt.Sprintf("wss://localhost:%d%s", httpsPort, constants.APIPaths.PubSubStream)
 
 	// 1. Discover Operator trust metadata

@@ -28,22 +28,25 @@ Typed event identifiers for the pub/sub system:
 
 ### API Paths (`api_paths.go`)
 HTTP route paths for the Gateway REST API:
-- MCP routes: `/api/v1/mcp/tools/list`, `/api/v1/mcp/tools/call`, `/api/v1/mcp/resources/list`, `/api/v1/mcp/prompts/list`
+- MCP routes: `/api/v1/mcp/tools/list`, `/api/v1/mcp/tools/call`, `/api/v1/mcp/tools/call/sse`, `/api/v1/mcp/resources/list`, `/api/v1/mcp/resources/read`, `/api/v1/mcp/prompts/list`, `/api/v1/mcp/prompts/get`
 - A2A routes: `/api/v1/a2a/call`
-- Governance routes: `/api/v1/governance/envelopes`, `/api/v1/governance/signers`
-- Operator management: `/api/v1/operators`, `/api/v1/operators/bind`, `/api/v1/operators/reauth`
-- Data routes: `/api/v1/data/settings`, `/api/v1/data/items`, `/api/v1/blobs/`
+- Governance routes: `/api/v1/governance/envelopes`, `/api/v1/governance/signers`, `/api/v1/governance/signers/`
+- Operator management: `/api/v1/operators`, `/api/v1/operators/`, `/api/v1/operators/bind`, `/api/v1/operators/unbind`, `/api/v1/operators/target`, `/api/v1/operators/reauth`
+- Data routes: `/api/v1/data/settings`, `/api/v1/data/`, `/api/v1/data/items`, `/api/v1/blobs/`
 - KV routes: `/api/v1/kv/`
 - PubSub routes: `/api/v1/pubsub/publish`, `/api/v1/pubsub/stream`
 - SSE routes: `/api/v1/sse/push`, `/api/v1/sse/events`, `/api/v1/sse/stream`
-- PKI routes: `/api/v1/pki/csr/sign`, `/api/v1/pki/devices/enroll`, `/api/v1/pki/certificates/revoke`
-- Audit routes: `/api/v1/audit/receipts`, `/api/v1/audit/receipts/export`
+- PKI routes: `/api/v1/pki/csr/sign`, `/api/v1/pki/devices/enroll`, `/api/v1/pki/apps/enroll`, `/api/v1/pki/apps/delegated`, `/api/v1/pki/certificates/revoke`, `/api/v1/pki/revocation-bundle`, `/.well-known/g8e/pki/crl`, `/.well-known/g8e/pki/ca-bundle`, `/.well-known/g8e/pki/fingerprint`
+- Audit routes: `/api/v1/audit/receipts`, `/api/v1/audit/receipts/export`, `/api/v1/audit/events`, `/api/v1/audit/summary`, `/api/v1/audit/report`
 - User routes: `/api/v1/users`, `/api/v1/users/me`
-- Auth routes: `/api/v1/auth/login/verify`, `/api/v1/auth/logout`, `/api/v1/auth/bootstrap`, `/api/v1/auth/passkeys/register/challenge`, `/api/v1/auth/passkeys/authenticate/challenge`
-- Approval routes: `/api/v1/approvals`, `/api/v1/approve/`
+- Auth routes: `/api/v1/auth/login/verify`, `/api/v1/auth/logout`, `/api/v1/auth/bootstrap`, `/api/v1/auth/bootstrap/status`, `/api/v1/auth/cli/enroll`, `/api/v1/auth/device/enroll`, `/api/v1/auth/passkeys/register/challenge`, `/api/v1/auth/passkeys/register/verify`, `/api/v1/auth/passkeys/authenticate/challenge`, `/api/v1/auth/passkeys/authenticate/verify`, `/api/v1/auth/passkeys/`, `/api/v1/auth/passkeys/jit-register/challenge`, `/api/v1/auth/passkeys/jit-register/verify`, `/api/v1/auth/passkeys/cli-register/challenge`, `/api/v1/auth/passkeys/cli-register/verify`, `/api/v1/auth/passkeys/cli/authenticate/challenge`, `/api/v1/auth/passkeys/cli/authenticate/verify`, `/api/v1/auth/sessions/me`
+- Approval routes: `/api/v1/approvals`, `/api/v1/approvals/`, `/api/v1/approve/`
 - Admin routes: `/api/v1/admin/app-policies/`, `/api/v1/admin/apps/revoke`
-- Well-known routes: `/.well-known/g8e/pki/ca-bundle`, `/.well-known/g8e/pki/fingerprint`
+- Well-known routes: `/.well-known/g8e/pki/ca-bundle`, `/.well-known/g8e/pki/fingerprint`, `/.well-known/g8e/bin/`
+- Bootstrap scripts: `/bootstrap-ca`, `/bootstrap-ca.ps1`
+- Deploy scripts: `/g8e-operator.sh`, `/g8e-operator.ps1`
 - Health: `/api/v1/health`
+- Landing: `/`
 
 ### Channels (`channels.go`)
 Pub/sub channel names for inter-component communication:
@@ -60,6 +63,9 @@ Pub/sub channel names for inter-component communication:
 Cloud provider intent classification values for governance posture:
 - EC2 intents: `IntentEc2Discovery`, `IntentEc2Management`, `IntentEc2SnapshotManagement`
 - S3 intents: `IntentS3Read`, `IntentS3Write`, `IntentS3BucketDiscovery`, `IntentS3Delete`
+- Infrastructure as Code: `IntentTerraformState`, `IntentCloudformationDeployment`
+- Secrets: `IntentSecretsRead`
+- CloudWatch intents: `IntentCloudwatchLogs`, `IntentCloudwatchMetrics`
 - RDS intents: `IntentRdsDiscovery`, `IntentRdsManagement`, `IntentRdsSnapshotManagement`
 - Aurora intents: `IntentAuroraClusterManagement`, `IntentAuroraScaling`, `IntentAuroraCloning`, `IntentAuroraGlobalDatabase`
 - Lambda intents: `IntentLambdaDiscovery`, `IntentLambdaInvoke`
@@ -67,12 +73,13 @@ Cloud provider intent classification values for governance posture:
 - VPC/ELB intents: `IntentVpcDiscovery`, `IntentElbDiscovery`
 - Route53 intents: `IntentRoute53Discovery`, `IntentRoute53Management`
 - Autoscaling intents: `IntentAutoscalingDiscovery`, `IntentAutoscalingManagement`
-- CloudWatch intents: `IntentCloudwatchLogs`, `IntentCloudwatchMetrics`
 - SNS/SQS intents: `IntentSnsDiscovery`, `IntentSnsPublish`, `IntentSqsDiscovery`, `IntentSqsManagement`
+- EventBridge: `IntentEventbridgeDiscovery`
 - DynamoDB intents: `IntentDynamodbDiscovery`, `IntentDynamodbRead`, `IntentDynamodbWrite`
+- ElastiCache: `IntentElasticacheDiscovery`
 - KMS intents: `IntentKmsDiscovery`, `IntentKmsCrypto`
 - IAM intents: `IntentIamDiscovery`
-- Additional intents for ACM, API Gateway, Step Functions, Athena, Glue, CloudFront, CodeDeploy, Cost Explorer
+- Additional intents for ACM, API Gateway, Step Functions (discovery and execution), Athena (discovery and query execution), Glue, CloudFront, CodeDeploy, Cost Explorer
 
 ### Status Enums (`status.go`)
 Internal enumeration constants:
@@ -105,9 +112,10 @@ Internal enumeration constants:
 HTTP header names used across the platform:
 - Standard headers: `HeaderAccept`, `HeaderAcceptLanguage`, `HeaderAuthorization`, `HeaderCacheControl`, `HeaderContentType`, `HeaderCookie`, `HeaderUserAgent`
 - CORS headers: `HeaderAccessControlAllowCredentials`, `HeaderAccessControlAllowOrigin`, `HeaderAccessControlRequestHeaders`, `HeaderAccessControlRequestMethod`
-- G8E identity headers: `HeaderOperatorID`, `HeaderOperatorSessionID`, `HeaderWebSessionID`, `HeaderCLISessionID`, `HeaderUserID`, `HeaderOrganizationID`
-- G8E context headers: `HeaderCaseID`, `HeaderExecutionID`, `HeaderInvestigationID`, `HeaderTaskID`, `HeaderBoundOperators`
+- G8E identity headers: `HeaderOperatorID`, `HeaderOperatorSessionID`, `HeaderWebSessionID`, `HeaderCLISessionID`, `HeaderUserID`, `HeaderOrganizationID`, `HeaderBoundOperators`
+- G8E context headers: `HeaderCaseID`, `HeaderExecutionID`, `HeaderInvestigationID`, `HeaderTaskID`
 - G8E system headers: `HeaderRequestID`, `HeaderSourceComponent`, `HeaderSystemFingerprint`, `HeaderXAccelBuffering`
+- Security headers: `HeaderXContentTypeOptions`, `HeaderXFrameOptions`
 - Proxy headers: `HeaderXForwardedFor`, `HeaderXForwardedHost`, `HeaderXForwardedProto`, `HeaderXProxyOrganizationID`, `HeaderXProxyUserID`, `HeaderXRequestTimestamp`
 - Additional headers for content disposition, language, length, last event ID, pragma, requested with, and set cookie
 
@@ -120,9 +128,10 @@ GovernanceEnvelope action type constants:
 - `ActionTypePortCheck`, `ActionTypeRestoreFile`, `ActionTypeRevokeIntent`, `ActionTypeShutdown`
 
 ### Additional Constant Files
-- `paths.go` - Filesystem paths for Operator data, certificates, ledger, runtime directories
+- `paths.go` - Filesystem paths for Operator data, certificates, ledger, runtime directories, and critical system paths
 - `ports.go` - Network port numbers: `Ports.OperatorHttp` (8080), `Ports.OperatorHttps` (8443), `Ports.InsecureMcpGateway` (18789)
 - `exit_codes.go` - Process exit code constants: `ExitSuccess` (0), `ExitGeneralError` (1), `ExitAuthFailure` (2), `ExitPermissionDenied` (3), `ExitNetworkError` (4), `ExitConfigError` (5), `ExitStorageError` (6), `ExitCertTrustFailure` (7)
+- `errors.go` - Standard platform errors: `ErrUserNotFound`, `ErrNoPasskeysRegistered`, `ErrInvalidJSONBody`, `ErrUserIDRequired`, `ErrMethodNotAllowed`, `ErrForbidden`, `ErrInternal`, `ErrNotFound`, `ErrAlreadyExists`, `ErrConstraintViolation`, `ErrDatabaseLocked`, `ErrServiceUnavailable`, `ErrDatabaseReplay`, `ErrDuplicateColumn`, `ErrProcessKilled`, `ErrTrustBundleStale`, `ErrKeyNotFound`, `ErrExpired`
 - `network.go` - Network-related constants: `DefaultEndpoint` (localhost)
 - `output.go` - Output format constants: `TruncatedOutputFormat`
 - `mappings.go` - Mapping helpers for protocol translation between event types and action types
@@ -137,6 +146,7 @@ GovernanceEnvelope action type constants:
 - `timestamp.go` - Go-specific format strings: `FormatRFC3339`
 - `field_paths.go` - Field path access control configurations for investigations, memories, and cases collections
 - `agents.go` - Agent persona details
+- `rpc_errors.go` - RPC error constants
 
 ## JSON Reference Files
 

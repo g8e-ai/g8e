@@ -89,6 +89,22 @@ func TestGovernanceEnvelope_GenerateMessageID(t *testing.T) {
 	if id1 == id7 {
 		t.Error("MessageID should change when ExpiresAt changes")
 	}
+
+	// Verify sensitivity to RequestorUserId
+	env.ExpiresAt = expiresAt
+	env.RequestorUserId = "user-123"
+	id8, _ := GenerateMessageID(env)
+	if id1 == id8 {
+		t.Error("MessageID should change when RequestorUserId changes")
+	}
+
+	// Verify sensitivity to ActingAppId
+	env.RequestorUserId = ""
+	env.ActingAppId = "app-456"
+	id9, _ := GenerateMessageID(env)
+	if id1 == id9 {
+		t.Error("MessageID should change when ActingAppId changes")
+	}
 }
 
 func TestGovernanceEnvelope_GenerateMessageID_WithIntentData(t *testing.T) {

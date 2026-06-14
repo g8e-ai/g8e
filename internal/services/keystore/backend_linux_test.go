@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,7 +85,7 @@ func TestLibsecretBackend_StoreRetrieveDelete(t *testing.T) {
 			fn: func(t *testing.T) {
 				_, err := backend.RetrieveMasterKey()
 				require.Error(t, err)
-				assert.Equal(t, ErrKeyNotFound, err)
+				assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 			},
 		},
 	}
@@ -110,7 +111,7 @@ func TestLibsecretBackend_RetrieveNotFound(t *testing.T) {
 
 	_, err = backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyNotFound, err)
 }
 
 func TestNewLinux_FallbackToFileBackend(t *testing.T) {
@@ -188,7 +189,7 @@ func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
 			fn: func(t *testing.T) {
 				_, err := backend.RetrieveMasterKey()
 				require.Error(t, err)
-				assert.Equal(t, ErrKeyNotFound, err)
+				assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 			},
 		},
 	}
@@ -207,7 +208,7 @@ func TestFileBackend_RetrieveNotFound(t *testing.T) {
 
 	_, err = backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 }
 
 func TestFileBackend_DeleteIdempotent(t *testing.T) {

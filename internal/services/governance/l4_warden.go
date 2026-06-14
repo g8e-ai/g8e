@@ -101,6 +101,9 @@ type GovernancePosture interface {
 	// Name returns the posture name (e.g., "doctrine", "consensus", "notary").
 	Name() string
 
+	// Description returns a human-readable description of the posture.
+	Description() string
+
 	// RequiresL2Signature returns true if this posture requires L2 signatures.
 	RequiresL2Signature() bool
 
@@ -113,6 +116,7 @@ type GovernancePosture interface {
 type DoctrinePosture struct{}
 
 func (p *DoctrinePosture) Name() string              { return "doctrine" }
+func (p *DoctrinePosture) Description() string       { return "doctrine (L1 enforced, L2/L3 audited)" }
 func (p *DoctrinePosture) RequiresL2Signature() bool { return false }
 func (p *DoctrinePosture) RequiresL3Proof() bool     { return false }
 
@@ -121,6 +125,7 @@ func (p *DoctrinePosture) RequiresL3Proof() bool     { return false }
 type ConsensusPosture struct{}
 
 func (p *ConsensusPosture) Name() string              { return "consensus" }
+func (p *ConsensusPosture) Description() string       { return "consensus (L1/L2 enforced, L3 audited)" }
 func (p *ConsensusPosture) RequiresL2Signature() bool { return true }
 func (p *ConsensusPosture) RequiresL3Proof() bool     { return false }
 
@@ -129,6 +134,7 @@ func (p *ConsensusPosture) RequiresL3Proof() bool     { return false }
 type NotaryPosture struct{}
 
 func (p *NotaryPosture) Name() string              { return "notary" }
+func (p *NotaryPosture) Description() string       { return "notary (L1/L2/L3 strictly enforced)" }
 func (p *NotaryPosture) RequiresL2Signature() bool { return true }
 func (p *NotaryPosture) RequiresL3Proof() bool     { return true }
 
@@ -144,6 +150,21 @@ func NewGovernancePosture(posture string) GovernancePosture {
 		return &NotaryPosture{}
 	default:
 		panic(fmt.Sprintf("invalid governance posture: %s (must be one of: doctrine, consensus, notary)", posture))
+	}
+}
+
+// ParseGovernancePosture creates a GovernancePosture from a string name.
+// Returns an error on invalid posture instead of panicking, for CLI edge validation.
+func ParseGovernancePosture(posture string) (GovernancePosture, error) {
+	switch posture {
+	case "doctrine":
+		return &DoctrinePosture{}, nil
+	case "consensus":
+		return &ConsensusPosture{}, nil
+	case "notary":
+		return &NotaryPosture{}, nil
+	default:
+		return nil, fmt.Errorf("invalid governance posture: %s (must be one of: doctrine, consensus, notary)", posture)
 	}
 }
 

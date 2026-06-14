@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
@@ -37,7 +38,7 @@ type TokenStoreConfig struct {
 // DefaultTokenStoreConfig returns the default configuration.
 func DefaultTokenStoreConfig() *TokenStoreConfig {
 	return &TokenStoreConfig{
-		DBPath:               ".g8e/token_store.db",
+		DBPath:               constants.TokenStoreDBPath,
 		MaxDBSizeMB:          512,
 		RetentionDays:        30,
 		PruneIntervalMinutes: 60,

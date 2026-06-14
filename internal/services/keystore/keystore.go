@@ -25,13 +25,8 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-)
 
-var (
-	ErrKeyNotFound       = errors.New("master key not found in OS key store")
-	ErrKeyStoreLocked    = errors.New("OS key store is locked/unavailable")
-	ErrInvalidCiphertext = errors.New("invalid ciphertext or authentication failed")
-	ErrOSNotSupported    = errors.New("OS not supported for OS-native key store")
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 const (
@@ -86,7 +81,7 @@ type Backend interface {
 func (k *Keystore) Initialize() error {
 	key, err := k.backend.RetrieveMasterKey()
 	if err != nil {
-		if errors.Is(err, ErrKeyNotFound) {
+		if errors.Is(err, constants.ErrKeyStoreKeyNotFound) {
 			k.logger.Info("[Keystore] Master key not found, generating new key", "backend", k.backend.Name())
 			return k.generateAndStoreMasterKey()
 		}
@@ -200,7 +195,7 @@ func (k *Keystore) DecryptSecret(name string) (string, error) {
 
 	plaintext, err := gcm.Open(nil, enc.Nonce, enc.Ciphertext, nil)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrInvalidCiphertext, err)
+		return "", fmt.Errorf("%w: %v", constants.ErrInvalidCiphertext, err)
 	}
 
 	k.logger.Debug("[Keystore] Secret decrypted", "name", name)
@@ -280,7 +275,7 @@ func (k *Keystore) Decrypt(encodedCiphertext string) (string, error) {
 
 	plaintext, err := gcm.Open(nil, enc.Nonce, enc.Ciphertext, nil)
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", ErrInvalidCiphertext, err)
+		return "", fmt.Errorf("%w: %v", constants.ErrInvalidCiphertext, err)
 	}
 
 	return string(plaintext), nil
@@ -321,8 +316,8 @@ func (k *Keystore) Purge() error {
 	return nil
 }
 
-// EnsurePermissions enforces strict filesystem permissions on the secrets directory.
-func (k *Keystore) EnsurePermissions() error {
+// EnforcePermissions enforces strict filesystem permissions on the secrets directory.
+func (k *Keystore) EnforcePermissions() error {
 	// Enforce 0700 on directory
 	if err := os.Chmod(k.secretsDir, 0700); err != nil {
 		return fmt.Errorf("chmod secrets directory: %w", err)

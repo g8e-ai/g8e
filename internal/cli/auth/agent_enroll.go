@@ -14,6 +14,7 @@
 package auth
 
 import (
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -27,32 +28,17 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// EnrollAgentApp enrolls an agent as an external app with the gateway.
+// EnrollAgentApp enrolls an agent as an external app with the gateway using the delegated credential model.
+// It requires an authenticated human CLI session (mTLS) and issues a short-lived cert (1 hour) that carries
+// both the app SPIFFE ID and the requestor's user identity.
 // It returns the app SPIFFE ID, cert file path, key file path, and an error if any.
-// The function is idempotent: if a valid cert exists and is not near expiry, it reuses it.
 func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyFile string, err error) {
 	certFile = cfg.AppCertFile(agentName)
 	keyFile = cfg.AppKeyFile(agentName)
 
-	// Idempotency check: if cert exists and is valid (more than 7 days from expiry), reuse it
-	if certData, err := os.ReadFile(certFile); err == nil {
-		block, _ := pem.Decode(certData)
-		if block != nil && block.Type == "CERTIFICATE" {
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err == nil {
-				// Check if cert is valid for more than 7 days
-				if time.Until(cert.NotAfter) > 7*24*time.Hour {
-					// Extract app SPIFFE ID from cert's URI SAN
-					for _, uri := range cert.URIs {
-						if uri.Scheme == "spiffe" && uri.Host == "g8e.local" {
-							appID = uri.String()
-							return appID, certFile, keyFile, nil
-						}
-					}
-					// If no URI SAN found, fall through to re-enroll
-				}
-			}
-		}
+	// Idempotency: reuse existing cert if still valid (>7 days) with correct SPIFFE URI SAN
+	if existingAppID, ok := checkExistingAppCert(certFile, agentName); ok {
+		return existingAppID, certFile, keyFile, nil
 	}
 
 	// Generate CSR for the agent app
@@ -61,7 +47,7 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("failed to generate CSR: %w", err)
 	}
 
-	// Build enrollment request
+	// Build delegated credential request
 	req := struct {
 		CSR     string `json:"csr_pem"`
 		AppName string `json:"app_name"`
@@ -76,17 +62,42 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("failed to marshal enrollment request: %w", err)
 	}
 
-	// POST to the enrollment endpoint (plain HTTP, no mTLS yet)
-	enrollURL := cfg.OperatorDiscoveryURL() + constants.APIPaths.PKIAppsEnroll
-	httpClient := &http.Client{}
+	// Load CLI mTLS certificate for authentication
+	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to load CLI certificate: %w", err)
+	}
+
+	// Load CA bundle for server verification
+	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to read CA bundle: %w", err)
+	}
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caBundleBytes)
+
+	// Create mTLS HTTP client
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cliCert},
+		RootCAs:      caPool,
+		MinVersion:   tls.VersionTLS13,
+	}
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+	}
+
+	// POST to the delegated credential endpoint (requires mTLS)
+	enrollURL := cfg.OperatorHTTPURL() + constants.APIPaths.PKIAppsDelegated
 	resp, err := httpClient.Post(enrollURL, "application/json", strings.NewReader(string(reqBody)))
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to POST enrollment request: %w", err)
+		return "", "", "", fmt.Errorf("failed to POST delegated credential request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		return "", "", "", fmt.Errorf("enrollment failed with status %d", resp.StatusCode)
+		return "", "", "", fmt.Errorf("delegated credential enrollment failed with status %d", resp.StatusCode)
 	}
 
 	var enrollResp struct {
@@ -102,7 +113,7 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 	}
 
 	if !enrollResp.Success {
-		return "", "", "", fmt.Errorf("enrollment failed: %s", enrollResp.Error)
+		return "", "", "", fmt.Errorf("delegated credential enrollment failed: %s", enrollResp.Error)
 	}
 
 	// Save cert and key to disk
@@ -111,4 +122,31 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 	}
 
 	return enrollResp.AppID, certFile, keyFile, nil
+}
+
+// checkExistingAppCert checks if an existing app cert is still valid (>7 days remaining)
+// and carries the expected SPIFFE URI SAN for the given agent name.
+func checkExistingAppCert(certFile, agentName string) (string, bool) {
+	certBytes, err := os.ReadFile(certFile)
+	if err != nil {
+		return "", false
+	}
+	block, _ := pem.Decode(certBytes)
+	if block == nil {
+		return "", false
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", false
+	}
+	if time.Until(cert.NotAfter) < 7*24*time.Hour {
+		return "", false
+	}
+	expectedSPIFFE := fmt.Sprintf("spiffe://g8e.local/app/%s", agentName)
+	for _, uri := range cert.URIs {
+		if uri.String() == expectedSPIFFE {
+			return expectedSPIFFE, true
+		}
+	}
+	return "", false
 }

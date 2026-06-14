@@ -55,3 +55,23 @@ const (
 	AgentNameSage AgentName = "sage"
 	AgentNameDash AgentName = "dash"
 )
+
+// AgentBinary is a typed string for external AI agent binary identifiers.
+type AgentBinary string
+
+const (
+	AgentBinaryClaude        AgentBinary = "claude"
+	AgentBinaryCodex         AgentBinary = "codex"
+	AgentBinaryCursor        AgentBinary = "cursor"
+	AgentBinaryDevin         AgentBinary = "devin"
+	AgentBinaryVSCode        AgentBinary = "vscode"
+	AgentBinaryContinue      AgentBinary = "continue"
+	AgentBinaryContinueAlias AgentBinary = "cn"
+	AgentBinaryAider         AgentBinary = "aider"
+	AgentBinaryCodeium       AgentBinary = "codeium"
+	AgentBinaryTabby         AgentBinary = "tabby"
+	AgentBinaryOllama        AgentBinary = "ollama"
+	AgentBinaryGemini        AgentBinary = "gemini"
+	AgentBinaryGoose         AgentBinary = "goose"
+	AgentBinaryGeneric       AgentBinary = "generic"
+)

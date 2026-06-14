@@ -34,11 +34,11 @@ import (
 )
 
 var requiredBootstrapSecrets = []string{
-	"session_encryption_key",
-	"actuator_signing_key",
-	"actuator_key_id",
-	"auditor_hmac_key",
-	"consensus_signing_key",
+	constants.SecretsFileSessionEncryptionKey,
+	constants.SecretsFileActuatorSigningKey,
+	constants.SecretsFileActuatorKeyID,
+	constants.SecretsFileAuditorHMACKey,
+	constants.SecretsFileConsensusSigningKey,
 }
 
 // SecretManager handles generation and validation of platform security secrets.
@@ -57,7 +57,7 @@ func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger)
 	if err := ks.Initialize(); err != nil {
 		return nil, fmt.Errorf("initialize master key: %w", err)
 	}
-	if err := ks.EnsurePermissions(); err != nil {
+	if err := ks.EnforcePermissions(); err != nil {
 		return nil, fmt.Errorf("enforce keystore permissions: %w", err)
 	}
 	return &SecretManager{
@@ -166,7 +166,7 @@ func (m *SecretManager) recreateAppSettings() error {
 	}
 
 	// Delete bootstrap digest manifest if it exists
-	manifestPath := filepath.Join(m.secretsDir, BootstrapDigestManifestFile)
+	manifestPath := filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)
 	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
 		m.logger.Warn("[SecretManager] Failed to delete digest manifest during recreation",
 			"path", manifestPath, string(constants.ConnectionStateError), err)
@@ -211,16 +211,16 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	}
 
 	secrets := map[string]string{
-		"session_encryption_key": sessionEncryptionKey,
-		"actuator_signing_key":   ActuatorSeed, // Seed for ED25519
-		"actuator_key_id":        ActuatorKeyID,
-		"auditor_hmac_key":       auditorHMACKey,
-		"consensus_signing_key":  ConsensusSeed, // Seed for ED25519
+		constants.SecretsFileSessionEncryptionKey: sessionEncryptionKey,
+		constants.SecretsFileActuatorSigningKey:   ActuatorSeed, // Seed for ED25519
+		constants.SecretsFileActuatorKeyID:        ActuatorKeyID,
+		constants.SecretsFileAuditorHMACKey:       auditorHMACKey,
+		constants.SecretsFileConsensusSigningKey:  ConsensusSeed, // Seed for ED25519
 	}
 
 	platformSettings := models.SettingsDocument{
 		Settings: &models.PlatformSettings{
-			ActuatorKeyID: secrets["actuator_key_id"],
+			ActuatorKeyID: secrets[constants.SecretsFileActuatorKeyID],
 		},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -270,7 +270,7 @@ func (m *SecretManager) validateAppSettings() error {
 		// and recreate secrets (e.g., when .g8e directory was wiped but DB persists)
 		if errors.Is(err, os.ErrNotExist) {
 			m.logger.Warn("[SecretManager] Bootstrap digest manifest missing, recreating secrets",
-				"path", filepath.Join(m.secretsDir, BootstrapDigestManifestFile))
+				"path", filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest))
 			return m.recreateAppSettings()
 		}
 		return fmt.Errorf("secret_manager: validate app settings: read digest manifest: %w", err)
@@ -295,10 +295,6 @@ func (m *SecretManager) validateAppSettings() error {
 
 	return nil
 }
-
-// BootstrapDigestManifestFile is the filename of the tamper-evidence manifest
-// written alongside bootstrap secrets.
-const BootstrapDigestManifestFile = "bootstrap_digest.json"
 
 // bootstrapDigestManifest is the on-disk schema for bootstrap_digest.json.
 // Consumers on startup compute SHA-256 of each secret they load from the
@@ -343,7 +339,7 @@ func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) err
 		return fmt.Errorf("secret_manager: write digest manifest: marshal manifest: %w", err)
 	}
 
-	finalPath := filepath.Join(m.secretsDir, BootstrapDigestManifestFile)
+	finalPath := filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)
 	tmpPath := finalPath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		m.logger.Error("[SecretManager] Failed to write bootstrap digest manifest",
@@ -362,7 +358,7 @@ func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) err
 }
 
 func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
-	manifestPath := filepath.Join(m.secretsDir, BootstrapDigestManifestFile)
+	manifestPath := filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -392,7 +388,7 @@ func (m *SecretManager) rejectPreexistingBootstrapState() error {
 			return fmt.Errorf("secret_manager: reject preexisting bootstrap state: inspect secret %s: %w", name, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(m.secretsDir, BootstrapDigestManifestFile)); err == nil {
+	if _, err := os.Stat(filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)); err == nil {
 		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: found preexisting digest manifest")
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: inspect digest manifest: %w", err)
@@ -438,7 +434,7 @@ func (m *SecretManager) generateSecureTokenBytes(bytes int) ([]byte, error) {
 // GetActuatorKey retrieves the Actuator's ED25519 signing key and its KeyID.
 // The signing key is decrypted from the keystore; the KeyID is read from platform_settings.
 func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
-	seedHex, err := m.keystore.DecryptSecret("actuator_signing_key")
+	seedHex, err := m.keystore.DecryptSecret(constants.SecretsFileActuatorSigningKey)
 	if err != nil {
 		return nil, "", fmt.Errorf("secret_manager: get actuator key: decrypt secret: %w", err)
 	}
@@ -483,12 +479,12 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 
 // GetSessionEncryptionKey retrieves the session encryption key from the keystore.
 func (m *SecretManager) GetSessionEncryptionKey() (string, error) {
-	return m.keystore.DecryptSecret("session_encryption_key")
+	return m.keystore.DecryptSecret(constants.SecretsFileSessionEncryptionKey)
 }
 
 // GetAuditorHMACKey retrieves the auditor HMAC key from the keystore.
 func (m *SecretManager) GetAuditorHMACKey() (string, error) {
-	return m.keystore.DecryptSecret("auditor_hmac_key")
+	return m.keystore.DecryptSecret(constants.SecretsFileAuditorHMACKey)
 }
 
 // StoreCAPrivateKey stores a CA private key in the keystore.
@@ -512,12 +508,12 @@ func (m *SecretManager) GetCAPrivateKey(caType string) ([]byte, error) {
 
 // StoreConsensusKey stores a consensus signing key in the keystore.
 func (m *SecretManager) StoreConsensusKey(seedHex string) error {
-	return m.keystore.EncryptSecret("consensus_signing_key", seedHex)
+	return m.keystore.EncryptSecret(constants.SecretsFileConsensusSigningKey, seedHex)
 }
 
 // GetConsensusKey retrieves the consensus ED25519 signing key from the keystore.
 func (m *SecretManager) GetConsensusKey() (ed25519.PrivateKey, error) {
-	seedHex, err := m.keystore.DecryptSecret("consensus_signing_key")
+	seedHex, err := m.keystore.DecryptSecret(constants.SecretsFileConsensusSigningKey)
 	if err != nil {
 		return nil, fmt.Errorf("secret_manager: get consensus key: decrypt secret: %w", err)
 	}
@@ -535,12 +531,12 @@ func (m *SecretManager) GetConsensusKey() (ed25519.PrivateKey, error) {
 
 // StoreNotaryKey stores an L3 Notary signing key in the keystore.
 func (m *SecretManager) StoreNotaryKey(seedHex string) error {
-	return m.keystore.EncryptSecret("notary_signing_key", seedHex)
+	return m.keystore.EncryptSecret(constants.SecretsFileNotarySigningKey, seedHex)
 }
 
 // GetNotaryKey retrieves an L3 Notary signing key from the keystore.
 func (m *SecretManager) GetNotaryKey() (string, error) {
-	return m.keystore.DecryptSecret("notary_signing_key")
+	return m.keystore.DecryptSecret(constants.SecretsFileNotarySigningKey)
 }
 
 // StoreServicePrivateKey stores a service or app certificate private key in the keystore.
@@ -592,12 +588,12 @@ func (m *SecretManager) GetAPIKey(service string) (string, error) {
 // This is used for BYO-client enrollment where the Operator has its own identity.
 func (m *SecretManager) StoreOperatorPrivateKey(key ed25519.PrivateKey) error {
 	seedHex := hex.EncodeToString(key.Seed())
-	return m.keystore.EncryptSecret("operator_private_key", seedHex)
+	return m.keystore.EncryptSecret(constants.SecretsFileOperatorPrivateKey, seedHex)
 }
 
 // GetOperatorPrivateKey retrieves an Operator ed25519 private key from the keystore.
 func (m *SecretManager) GetOperatorPrivateKey() (ed25519.PrivateKey, error) {
-	seedHex, err := m.keystore.DecryptSecret("operator_private_key")
+	seedHex, err := m.keystore.DecryptSecret(constants.SecretsFileOperatorPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("secret_manager: get operator private key: decrypt secret: %w", err)
 	}
@@ -615,12 +611,12 @@ func (m *SecretManager) GetOperatorPrivateKey() (ed25519.PrivateKey, error) {
 // This is used for BYO-client enrollment where the CLI has its own identity.
 func (m *SecretManager) StoreCLIPrivateKey(key ed25519.PrivateKey) error {
 	seedHex := hex.EncodeToString(key.Seed())
-	return m.keystore.EncryptSecret("cli_private_key", seedHex)
+	return m.keystore.EncryptSecret(constants.SecretsFileCLIPrivateKey, seedHex)
 }
 
 // GetCLIPrivateKey retrieves a CLI ed25519 private key from the keystore.
 func (m *SecretManager) GetCLIPrivateKey() (ed25519.PrivateKey, error) {
-	seedHex, err := m.keystore.DecryptSecret("cli_private_key")
+	seedHex, err := m.keystore.DecryptSecret(constants.SecretsFileCLIPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("secret_manager: get CLI private key: decrypt secret: %w", err)
 	}
@@ -639,13 +635,13 @@ func (m *SecretManager) GetCLIPrivateKey() (ed25519.PrivateKey, error) {
 func (m *SecretManager) StoreSessionToken(token string, ttl time.Duration) error {
 	expiresAt := time.Now().UTC().Add(ttl).Format(time.RFC3339Nano)
 	tokenData := fmt.Sprintf("%s|%s", token, expiresAt)
-	return m.keystore.EncryptSecret("session_token", tokenData)
+	return m.keystore.EncryptSecret(constants.SecretsFileSessionToken, tokenData)
 }
 
 // GetSessionToken retrieves a session token from the keystore.
 // Returns error if the token has expired.
 func (m *SecretManager) GetSessionToken() (string, error) {
-	tokenData, err := m.keystore.DecryptSecret("session_token")
+	tokenData, err := m.keystore.DecryptSecret(constants.SecretsFileSessionToken)
 	if err != nil {
 		return "", fmt.Errorf("secret_manager: get session token: decrypt secret: %w", err)
 	}

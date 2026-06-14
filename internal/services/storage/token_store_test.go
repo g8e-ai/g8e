@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -36,13 +37,13 @@ func setupTestTokenStore(t *testing.T) (*TokenStoreService, *vault.Vault, string
 	// Create vault for encryption
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
+	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
 	testVault := createTestVault(t, vaultDir, privKey)
 
 	logger := testutil.NewTestLogger()
 
 	config := &TokenStoreConfig{
-		DBPath:               filepath.Join(tempDir, "token_store.db"),
+		DBPath:               filepath.Join(tempDir, constants.TokenStoreDBFilename),
 		MaxDBSizeMB:          100,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 60,
@@ -82,13 +83,13 @@ func TestNewTokenStoreService_NilConfig(t *testing.T) {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
+	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
 	testVault := createTestVault(t, vaultDir, privKey)
 	defer testVault.Close()
 
 	// Override DB path to temp dir
 	defaultConfig := DefaultTokenStoreConfig()
-	defaultConfig.DBPath = filepath.Join(tempDir, "token_store.db")
+	defaultConfig.DBPath = filepath.Join(tempDir, constants.TokenStoreDBFilename)
 
 	ts, err := NewTokenStoreService(nil, logger, testVault)
 	require.NoError(t, err)
@@ -130,7 +131,7 @@ func TestNewTokenStoreService_DatabaseInitFailure(t *testing.T) {
 	defer os.Remove(tempFile.Name())
 
 	config := &TokenStoreConfig{
-		DBPath: filepath.Join(tempFile.Name(), "db", "token_store.db"),
+		DBPath: filepath.Join(tempFile.Name(), constants.TestDBSubdirName, constants.TokenStoreDBFilename),
 	}
 
 	ts, err := NewTokenStoreService(config, logger, testVault)

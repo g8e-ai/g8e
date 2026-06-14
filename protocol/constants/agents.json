@@ -11,6 +11,78 @@
       "value": "sage"
     }
   },
+  "agent_binaries": {
+    "claude": {
+      "_go_const": "AgentBinaryClaude",
+      "_python_const": "CLAUDE",
+      "value": "claude"
+    },
+    "codex": {
+      "_go_const": "AgentBinaryCodex",
+      "_python_const": "CODEX",
+      "value": "codex"
+    },
+    "cursor": {
+      "_go_const": "AgentBinaryCursor",
+      "_python_const": "CURSOR",
+      "value": "cursor"
+    },
+    "devin": {
+      "_go_const": "AgentBinaryDevin",
+      "_python_const": "DEVIN",
+      "value": "devin"
+    },
+    "vscode": {
+      "_go_const": "AgentBinaryVSCode",
+      "_python_const": "VSCODE",
+      "value": "vscode"
+    },
+    "continue": {
+      "_go_const": "AgentBinaryContinue",
+      "_python_const": "CONTINUE",
+      "value": "continue"
+    },
+    "cn": {
+      "_go_const": "AgentBinaryContinueAlias",
+      "_python_const": "CONTINUE_ALIAS",
+      "value": "cn"
+    },
+    "aider": {
+      "_go_const": "AgentBinaryAider",
+      "_python_const": "AIDER",
+      "value": "aider"
+    },
+    "codeium": {
+      "_go_const": "AgentBinaryCodeium",
+      "_python_const": "CODEIUM",
+      "value": "codeium"
+    },
+    "tabby": {
+      "_go_const": "AgentBinaryTabby",
+      "_python_const": "TABBY",
+      "value": "tabby"
+    },
+    "ollama": {
+      "_go_const": "AgentBinaryOllama",
+      "_python_const": "OLLAMA",
+      "value": "ollama"
+    },
+    "gemini": {
+      "_go_const": "AgentBinaryGemini",
+      "_python_const": "GEMINI",
+      "value": "gemini"
+    },
+    "goose": {
+      "_go_const": "AgentBinaryGoose",
+      "_python_const": "GOOSE",
+      "value": "goose"
+    },
+    "generic": {
+      "_go_const": "AgentBinaryGeneric",
+      "_python_const": "GENERIC",
+      "value": "generic"
+    }
+  },
   "triage_complexity": {
     "simple": {
       "_go_const": "TriageComplexitySimple",

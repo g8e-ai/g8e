@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -75,7 +76,7 @@ func tempDir(tb testing.TB) string {
 	count := tempDirCounters[safeName]
 	tempDirMu.Unlock()
 
-	dir := filepath.Join(".", "test-temp", fmt.Sprintf("%s_%d", safeName, count))
+	dir := filepath.Join(constants.ProjectRootFromCurrentDir, "test-temp", fmt.Sprintf("%s_%d", safeName, count))
 	err := os.MkdirAll(dir, 0755)
 	require.NoError(tb, err, "failed to create temp dir in cwd")
 	tb.Cleanup(func() { os.RemoveAll(dir) })
@@ -99,44 +100,38 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 	os.RemoveAll(secretsDir)
 	require.NoError(t, os.MkdirAll(secretsDir, 0755))
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false)
+	var ks *keystore.Keystore
+	if resetKeystoreStorage {
+		keystore.ResetTestStorage()
+		backend, err := keystore.NewTestBackend()
+		require.NoError(t, err)
+		ks, err = keystore.NewWithBackend(secretsDir, logger, backend)
+		require.NoError(t, err)
+		require.NoError(t, ks.Initialize())
+		require.NoError(t, ks.EnforcePermissions())
+	} else {
+		// Reuse the keystore from shared test storage
+		backend, err := keystore.NewTestBackend()
+		require.NoError(t, err)
+		ks, err = keystore.NewWithBackend(secretsDir, logger, backend)
+		require.NoError(t, err)
+		// Initialize will retrieve the existing master key from shared test storage
+		require.NoError(t, ks.Initialize())
+		require.NoError(t, ks.EnforcePermissions())
+	}
+
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	var sm *SecretManager
-	if resetKeystoreStorage {
-		keystore.ResetTestStorage()
-		backend, err := keystore.NewTestBackend()
-		require.NoError(t, err)
-		ks, err := keystore.NewWithBackend(secretsDir, logger, backend)
-		require.NoError(t, err)
-		require.NoError(t, ks.Initialize())
-		require.NoError(t, ks.EnsurePermissions())
-		sm = &SecretManager{
-			db:         db.db,
-			secretsDir: secretsDir,
-			logger:     logger,
-			keystore:   ks,
-		}
-	} else {
-		// Reuse the keystore from DB initialization - create a new SecretManager instance
-		// that points to the same secretsDir and uses the shared test backend
-		backend, err := keystore.NewTestBackend()
-		require.NoError(t, err)
-		ks, err := keystore.NewWithBackend(secretsDir, logger, backend)
-		require.NoError(t, err)
-		// Initialize will retrieve the existing master key from shared test storage
-		require.NoError(t, ks.Initialize())
-		require.NoError(t, ks.EnsurePermissions())
-		sm = &SecretManager{
-			db:         db.db,
-			secretsDir: secretsDir,
-			logger:     logger,
-			keystore:   ks,
-		}
+	sm := &SecretManager{
+		db:         db.db,
+		secretsDir: secretsDir,
+		logger:     logger,
+		keystore:   ks,
 	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
@@ -157,7 +152,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,

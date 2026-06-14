@@ -8,7 +8,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -78,8 +77,8 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	cfg := Config{
-		MTLSBaseURL:    fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
-		PublicBaseURL:  fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps),
+		MTLSBaseURL:    constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		PublicBaseURL:  constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		EnsembleSize:   3,
 		ConsensusKeyID: "auditor-ensemble",
 		PrincipalKeyID: "auditor-principal",

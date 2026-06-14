@@ -55,7 +55,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	// Check if Operator is reachable
@@ -200,7 +200,7 @@ func TestNativeToolsIntegration_LogTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -264,7 +264,7 @@ func TestNativeToolsIntegration_ProcessTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -348,7 +348,7 @@ func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -426,7 +426,7 @@ func TestNativeToolsIntegration_Concurrency(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -510,7 +510,7 @@ func TestNativeToolsIntegration_PropertyBasedTests(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -646,7 +646,7 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = fmt.Sprintf("https://localhost:%d", constants.Ports.OperatorHttps)
+		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{

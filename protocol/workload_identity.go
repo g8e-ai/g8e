@@ -65,6 +65,17 @@ func (w *WorkloadIdentity) AppSPIFFEURL(operatorID string) (*url.URL, error) {
 	return url.Parse(w.AppSPIFFEID(operatorID))
 }
 
+// UserSPIFFEID generates the SPIFFE ID for a user (human delegator).
+// Format: spiffe://g8e.local/user/<user_id>
+func (w *WorkloadIdentity) UserSPIFFEID(userID string) string {
+	return fmt.Sprintf("spiffe://%s/user/%s", TrustDomain, userID)
+}
+
+// UserSPIFFEURL generates the SPIFFE URL for a user identity.
+func (w *WorkloadIdentity) UserSPIFFEURL(userID string) (*url.URL, error) {
+	return url.Parse(w.UserSPIFFEID(userID))
+}
+
 // HubSPIFFEID generates the SPIFFE ID for the hub (operator-listen) workload.
 // Format: spiffe://g8e.local/hub/operator-listen
 func (w *WorkloadIdentity) HubSPIFFEID() string {
@@ -119,19 +130,34 @@ func (w *WorkloadIdentity) ExtractCLISessionID(spiffeID string) (string, bool) {
 	return parts[5], true
 }
 
-// ExtractUserID extracts the user ID from a SPIFFE ID.
-// Returns the user ID and true if the SPIFFE ID contains a user ID.
+// ExtractUserID extracts the user ID from a CLI SPIFFE ID.
+// Returns the user ID and true if the SPIFFE ID is a valid CLI identity.
+// Format: spiffe://g8e.local/cli/<user_id>/<cli_session_id>
 func (w *WorkloadIdentity) ExtractUserID(spiffeID string) (string, bool) {
 	prefix := fmt.Sprintf("spiffe://%s/cli/", TrustDomain)
 	if !strings.HasPrefix(spiffeID, prefix) {
 		return "", false
 	}
-	// Format: spiffe://g8e.local/cli/<user_id>/<cli_session_id>
 	parts := strings.Split(spiffeID, "/")
 	if len(parts) < 5 {
 		return "", false
 	}
 	return parts[4], true
+}
+
+// ExtractUserIDFromUserSAN extracts the user ID from a user SPIFFE ID.
+// This is used for delegated credentials where the user identity is in a
+// dedicated URI SAN of the form spiffe://g8e.local/user/<user_id>.
+func (w *WorkloadIdentity) ExtractUserIDFromUserSAN(spiffeID string) (string, bool) {
+	prefix := fmt.Sprintf("spiffe://%s/user/", TrustDomain)
+	if !strings.HasPrefix(spiffeID, prefix) {
+		return "", false
+	}
+	userID := strings.TrimPrefix(spiffeID, prefix)
+	if userID == "" {
+		return "", false
+	}
+	return userID, true
 }
 
 // GatewayPeerSPIFFEID generates the SPIFFE ID for a gateway peer workload.

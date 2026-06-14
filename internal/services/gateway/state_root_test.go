@@ -192,7 +192,7 @@ func TestStateRootCaching(t *testing.T) {
 func BenchmarkStateRootCalculation(b *testing.B) {
 	dir := tempDir(b)
 	secretsDir := tempDir(b)
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(b, err)
 	defer db.Close()
 
@@ -216,7 +216,7 @@ func BenchmarkStateRootCalculation(b *testing.B) {
 func BenchmarkStateRootLargeDataset(b *testing.B) {
 	dir := tempDir(b)
 	secretsDir := tempDir(b)
-	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false)
+	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(b, err)
 	defer db.Close()
 

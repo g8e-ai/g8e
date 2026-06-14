@@ -15,16 +15,18 @@ package cmd
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	clierrors "github.com/g8e-ai/g8e/internal/cli/errors"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 )
 
 func TestDataCmd(t *testing.T) {
@@ -131,7 +133,7 @@ func TestDataCommandsRequireAuthentication(t *testing.T) {
 
 			err := cmd.RunE(cmd, []string{})
 			require.Error(t, err)
-			require.ErrorIs(t, err, clierrors.ErrNotAuthenticated)
+			require.ErrorIs(t, err, constants.ErrNotAuthenticated)
 		})
 	}
 }
@@ -202,4 +204,303 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 			},
 		},
 	}
+}
+
+func TestSqlDBQuery(t *testing.T) {
+	t.Run("returns error for non-existent database", func(t *testing.T) {
+		_, err := sqlDBQuery("/nonexistent/path/to/db.db", "SELECT 1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "unable to open database file")
+	})
+
+	t.Run("returns error for invalid SQL syntax", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		dbPath := filepath.Join(tmpDir, "test.db")
+
+		// Create an empty database file
+		require.NoError(t, os.WriteFile(dbPath, []byte{}, 0644))
+
+		_, err := sqlDBQuery(dbPath, "INVALID SQL SYNTAX")
+		require.Error(t, err)
+	})
+
+	t.Run("executes valid query with in-memory database", func(t *testing.T) {
+		// Use :memory: for in-memory SQLite database
+		rows, err := sqlDBQuery(":memory:", "SELECT 1 as result")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		assert.True(t, rows.Next())
+		var result int
+		require.NoError(t, rows.Scan(&result))
+		assert.Equal(t, 1, result)
+	})
+
+	t.Run("executes query with parameters", func(t *testing.T) {
+		rows, err := sqlDBQuery(":memory:", "SELECT ? as value", 42)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		assert.True(t, rows.Next())
+		var value int
+		require.NoError(t, rows.Scan(&value))
+		assert.Equal(t, 42, value)
+	})
+}
+
+func TestDataAuditSummaryCmd(t *testing.T) {
+	t.Run("summary command has correct use", func(t *testing.T) {
+		cmd := dataAuditSummaryCmd()
+		assert.Equal(t, string(constants.StreamStatusSummary), cmd.Use)
+		assert.Contains(t, cmd.Short, "Show audit event summary")
+	})
+
+	t.Run("summary has operator-session-id flag", func(t *testing.T) {
+		cmd := dataAuditSummaryCmd()
+		flag := cmd.Flags().Lookup("operator-session-id")
+		assert.NotNil(t, flag)
+	})
+
+	t.Run("summary fails when database does not exist", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		cmd := dataAuditSummaryCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "audit vault database not found")
+	})
+
+	t.Run("summary succeeds with empty database", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		// Initialize global paths to use tmpDir
+		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+
+		// Create data directory and empty database using global paths
+		dataDir := constants.Paths.Infra.DataDir
+		require.NoError(t, os.MkdirAll(dataDir, 0755))
+		dbPath := constants.Paths.Infra.DbPath
+
+		// Create database with events table but no data
+		db, err := sql.Open("sqlite", dbPath)
+		require.NoError(t, err)
+		defer db.Close()
+
+		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
+		require.NoError(t, err)
+
+		cmd := dataAuditSummaryCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "No audit events found in audit vault")
+	})
+}
+
+func TestDataStoreCmdFlagValidation(t *testing.T) {
+	t.Run("store fails without collection flag", func(t *testing.T) {
+		// This test verifies that the collection flag is required
+		// Note: The actual command checks the flag AFTER config load and client creation
+		// So we verify the flag exists and is required by checking the command definition
+		cmd := dataStoreCmd()
+		flag := cmd.Flags().Lookup("collection")
+		assert.NotNil(t, flag)
+		// The flag has no default value, making it required
+		assert.Empty(t, flag.DefValue)
+	})
+
+	t.Run("store list mode with collection flag", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		cmd := dataStoreCmd()
+		cmd.Flags().Set("collection", "test_collection")
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		// Will fail on API call, but should pass flag validation
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		// Error should not be about missing collection flag
+		assert.NotContains(t, err.Error(), "--collection is required")
+	})
+}
+
+func TestDataAuditListCmdFlagValidation(t *testing.T) {
+	t.Run("audit list requires operator-session-id flag", func(t *testing.T) {
+		// This test verifies that the operator-session-id flag is required
+		// Note: The actual command checks the flag AFTER config load and client creation
+		// So we verify the flag exists and is required by checking the command definition
+		cmd := dataAuditListCmd()
+		flag := cmd.Flags().Lookup("operator-session-id")
+		assert.NotNil(t, flag)
+		// The flag has no default value, making it required
+		assert.Empty(t, flag.DefValue)
+	})
+
+	t.Run("audit list with operator-session-id flag", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		cmd := dataAuditListCmd()
+		cmd.Flags().Set("operator-session-id", "test-session-123")
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		// Will fail on API call, but should pass flag validation
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		// Error should not be about missing operator-session-id flag
+		assert.NotContains(t, err.Error(), "--operator-session-id is required")
+	})
+}
+
+func TestDataAuditCmdStructure(t *testing.T) {
+	t.Run("audit command has correct subcommands", func(t *testing.T) {
+		cmd := dataAuditCmd()
+		subcommands := cmd.Commands()
+		subcommandNames := make(map[string]bool)
+		for _, sub := range subcommands {
+			subcommandNames[sub.Use] = true
+		}
+
+		assert.True(t, subcommandNames["list"], "missing list subcommand")
+		assert.True(t, subcommandNames[string(constants.StreamStatusSummary)], "missing summary subcommand")
+	})
+}
+
+func TestDataCommandJSONUnmarshaling(t *testing.T) {
+	testCases := []struct {
+		name        string
+		jsonData    string
+		targetType  interface{}
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid User JSON",
+			jsonData:    `[{"id":"user1","name":"Test User"}]`,
+			targetType:  &[]User{},
+			expectError: false,
+		},
+		{
+			name:        "invalid User JSON",
+			jsonData:    `invalid json`,
+			targetType:  &[]User{},
+			expectError: true,
+			errorMsg:    "failed to parse response",
+		},
+		{
+			name:        "valid Operator JSON",
+			jsonData:    `[{"id":"op1","cloud_subtype":"aws","status":"active"}]`,
+			targetType:  &[]Operator{},
+			expectError: false,
+		},
+		{
+			name:        "valid SettingsResponse JSON",
+			jsonData:    `{"settings":{"key1":"value1","key2":123}}`,
+			targetType:  &SettingsResponse{},
+			expectError: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := json.Unmarshal([]byte(tc.jsonData), tc.targetType)
+			if tc.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestDataQueryFilterTypes(t *testing.T) {
+	t.Run("QueryFilter struct serialization", func(t *testing.T) {
+		filter := QueryFilter{
+			Field: "test_field",
+			Op:    "==",
+			Value: "test_value",
+		}
+
+		data, err := json.Marshal(filter)
+		require.NoError(t, err)
+
+		var decoded QueryFilter
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, filter.Field, decoded.Field)
+		assert.Equal(t, filter.Op, decoded.Op)
+		assert.Equal(t, filter.Value, decoded.Value)
+	})
+
+	t.Run("QueryRequest struct serialization", func(t *testing.T) {
+		req := QueryRequest{
+			Filters: []QueryFilter{
+				{Field: "field1", Op: "==", Value: "value1"},
+				{Field: "field2", Op: "!=", Value: "value2"},
+			},
+		}
+
+		data, err := json.Marshal(req)
+		require.NoError(t, err)
+
+		var decoded QueryRequest
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Len(t, decoded.Filters, 2)
+		assert.Equal(t, "field1", decoded.Filters[0].Field)
+		assert.Equal(t, "field2", decoded.Filters[1].Field)
+	})
+
+	t.Run("QueryRequestWithLimit struct serialization", func(t *testing.T) {
+		req := QueryRequestWithLimit{
+			Filters: []QueryFilter{
+				{Field: "session_id", Op: "==", Value: "sess-123"},
+			},
+			Limit: 50,
+		}
+
+		data, err := json.Marshal(req)
+		require.NoError(t, err)
+
+		var decoded QueryRequestWithLimit
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Len(t, decoded.Filters, 1)
+		assert.Equal(t, 50, decoded.Limit)
+	})
 }

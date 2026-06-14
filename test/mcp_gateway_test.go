@@ -48,8 +48,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -95,11 +93,11 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	mcpURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
@@ -216,11 +214,11 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	publicURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", fixture.Service.GetHTTPSPort())
+	mcpURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
 	t.Run("nested object arguments", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
@@ -397,21 +395,16 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 }
 
 func TestMCPGateway_ErrorCases(t *testing.T) {
-	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase("../../"); err != nil {
-		t.Fatalf("failed to initialize paths: %v", err)
+	// Use TestPaths for isolated test environment
+	testPaths := testutil.NewTestPathsFromTemp(t)
+	if err := testPaths.EnsureDirs(); err != nil {
+		t.Fatalf("failed to create test directories: %v", err)
 	}
+	testPaths.RegisterCleanup(t)
 
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), t.Name())
-	dataDir := filepath.Join(constants.Paths.Infra.TestVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("failed to create test run directory: %v", err)
-	}
-	t.Logf("Test vault created at: %s", dataDir)
-
-	secretsDir := t.TempDir()
-	pkiDir := filepath.Join(dataDir, "pki")
+	dataDir := testPaths.DataDir
+	secretsDir := testPaths.SecretsDir
+	pkiDir := testPaths.PKIDir
 
 	cfg, err := config.LoadGateway(config.GatewayOptions{
 		DataDir:           dataDir,
@@ -456,6 +449,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,
 		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
 		L3Notary:           gatewayRejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
@@ -578,7 +572,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
+	mtlsURL := constants.LocalhostHTTPSURL(ls.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),
@@ -631,7 +625,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 	t.Logf("Enrolled certificate URIs: %v", parsedCert.URIs)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := fmt.Sprintf("https://localhost:%d", ls.GetHTTPSPort())
+	mcpURL := constants.LocalhostHTTPSURL(ls.GetHTTPSPort())
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
