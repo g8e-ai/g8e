@@ -14,6 +14,7 @@
 package pubsub
 
 import (
+	"context"
 	"log/slog"
 	"testing"
 
@@ -21,6 +22,7 @@ import (
 	"crypto/rand"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -61,6 +63,20 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 	if err != nil {
 		t.Fatalf("failed to create OperatorPubSubService: %v", err)
 	}
+
+	// Set up a mock actuator for tests that require execution
+	mockHandler := &mockExecutionHandler{
+		ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+			return "test-receipt-id", nil
+		},
+	}
+	mockActuator := &governance.L5Actuator{
+		Logger:            logger,
+		ExecutionHandler: mockHandler,
+		SigningKey:       priv,
+		KeyID:            "Actuator-key",
+	}
+	svc.SetActuator(mockActuator)
 
 	return &pubsubFixture{
 		Cfg:        cfg,

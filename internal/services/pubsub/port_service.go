@@ -22,15 +22,18 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
 
 // PortService owns port connectivity check handling.
 type PortService struct {
-	config *config.Config
-	logger *slog.Logger
-	client PubSubClient
+	config          *config.Config
+	logger          *slog.Logger
+	client          PubSubClient
+	auditStore      AuditEventRecorder // *storage.SQLAuditStore - optional for observed-state content evidence
+	scrubbing       *scrubbing.ScrubbingService
 }
 
 // NewPortService creates a new PortService.
@@ -42,18 +45,28 @@ func NewPortService(cfg *config.Config, logger *slog.Logger, client PubSubClient
 	}
 }
 
+// SetAuditStore sets the audit store for observed-state content evidence.
+func (ps *PortService) SetAuditStore(auditStore AuditEventRecorder) {
+	ps.auditStore = auditStore
+}
+
+// SetScrubbingService sets the scrubbing service for observed-state content evidence.
+func (ps *PortService) SetScrubbingService(scrubbingSvc *scrubbing.ScrubbingService) {
+	ps.scrubbing = scrubbingSvc
+}
+
 // HandlePortCheckRequest processes an inbound port check request.
 func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoPort operatorv1.CheckPortRequested
 	if err := proto.Unmarshal(msg.Payload, &protoPort); err != nil {
 		ps.logger.Error("Failed to decode port check payload as protobuf CheckPortRequested", string(constants.ConnectionStateError), err)
-		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "invalid request payload")
+		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "invalid request payload", ps.auditStore, ps.scrubbing)
 		return
 	}
 
 	if protoPort.Port <= 0 || protoPort.Port > 65535 {
 		ps.logger.Warn("Port check request with invalid port", "port", protoPort.Port)
-		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "port must be between 1 and 65535")
+		publishLFAAErrorTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Failed, "port must be between 1 and 65535", ps.auditStore, ps.scrubbing)
 		return
 	}
 
@@ -92,5 +105,5 @@ func (ps *PortService) HandlePortCheckRequest(ctx context.Context, msg *PubSubCo
 		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		Results:     []*operatorv1.PortCheckEntry{entry},
 	}
-	publishLFAATypedResponseTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Completed, payload)
+	publishLFAATypedResponseTo(ctx, ps.client, ps.config, ps.logger, msg, constants.Event.Operator.PortCheck.Completed, payload, ps.auditStore, ps.scrubbing)
 }

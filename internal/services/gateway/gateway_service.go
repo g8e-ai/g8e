@@ -499,7 +499,7 @@ func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 func (ls *GatewayModeService) GetHTTPSPort() int {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
-	if ls.publicServer == nil {
+	if !ls.running || ls.publicServer == nil {
 		return 0
 	}
 	_, port, err := net.SplitHostPort(ls.publicServer.Addr)
@@ -517,7 +517,7 @@ func (ls *GatewayModeService) GetHTTPSPort() int {
 func (ls *GatewayModeService) GetHTTPPort() int {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
-	if ls.server == nil {
+	if !ls.running || ls.server == nil {
 		return 0
 	}
 	_, port, err := net.SplitHostPort(ls.server.Addr)
@@ -685,6 +685,20 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		ls.mu.Unlock()
 		ls.logger.Info("operator Gateway Mode fully operational",
 			"posture", ls.cfg.Gateway.Posture)
+	}()
+
+	// Listen for context cancellation and trigger shutdown
+	go func() {
+		<-ctx.Done()
+		ls.logger.Info("Context cancelled, initiating server shutdown")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if ls.server != nil {
+			ls.server.Shutdown(shutdownCtx)
+		}
+		if ls.publicServer != nil {
+			ls.publicServer.Shutdown(shutdownCtx)
+		}
 	}()
 
 	return <-errChan

@@ -16,13 +16,17 @@ package pubsub
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -62,6 +66,11 @@ func setExecutionIDOnPayload(payload proto.Message, executionID string) {
 	}
 }
 
+// AuditEventRecorder defines the interface for recording audit events.
+type AuditEventRecorder interface {
+	RecordEvent(event *storage.Event) (int64, error)
+}
+
 // publishLFAATypedResponseTo builds a GovernanceEnvelope from a typed payload and publishes it to the
 // results channel. Used by services that hold a PubSubClient directly.
 func publishLFAATypedResponseTo(
@@ -72,6 +81,8 @@ func publishLFAATypedResponseTo(
 	msg *PubSubCommandMessage,
 	eventType constants.EventType,
 	payload proto.Message,
+	auditStore AuditEventRecorder, // *storage.SQLAuditStore - optional for observed-state content evidence
+	scrubbingService *scrubbing.ScrubbingService, // optional for scrubbing observed-state content
 ) {
 	executionID := executionIDFromMessage(msg)
 	setExecutionIDOnPayload(payload, executionID)
@@ -95,6 +106,9 @@ func publishLFAATypedResponseTo(
 	}
 
 	logger.Info("LFAA typed response published (Universal)", "event_type", eventType)
+
+	// §3: observed-state content evidence (best-effort, non-fatal)
+	publishObservedStateEvidence(ctx, logger, msg, eventType, payload, auditStore, scrubbingService)
 }
 
 // publishLFAAErrorTo builds an error GovernanceEnvelope and publishes it to the results channel.
@@ -106,6 +120,8 @@ func publishLFAAErrorTo(
 	msg *PubSubCommandMessage,
 	eventType constants.EventType,
 	errorMsg string,
+	auditStore AuditEventRecorder, // *storage.SQLAuditStore - optional for observed-state content evidence
+	scrubbingService *scrubbing.ScrubbingService, // optional for scrubbing observed-state content
 ) {
 	executionID := executionIDFromMessage(msg)
 
@@ -131,5 +147,123 @@ func publishLFAAErrorTo(
 	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
 		logger.Error("Failed to publish LFAA error Universal", string(constants.ConnectionStateError), err)
+	}
+
+	// §3: observed-state content evidence (best-effort, non-fatal)
+	publishObservedStateEvidence(ctx, logger, msg, eventType, payload, auditStore, scrubbingService)
+}
+
+// publishObservedStateEvidence persists observed-state content evidence to the audit store.
+// This is best-effort (non-fatal) and only applies to observe handlers (not commands).
+// Commands already capture stdout/stderr via their own RecordEvent calls.
+func publishObservedStateEvidence(
+	ctx context.Context,
+	logger *slog.Logger,
+	msg *PubSubCommandMessage,
+	eventType constants.EventType,
+	payload proto.Message,
+	auditStore AuditEventRecorder,
+	scrubbingService *scrubbing.ScrubbingService,
+) {
+	if auditStore == nil {
+		return
+	}
+
+	// Guard: only capture evidence for observe handlers, not commands
+	// Commands already capture their own content via RecordEvent
+	if isCommandEvent(eventType) {
+		return
+	}
+
+	// Extract content text from the payload
+	contentText := extractContentText(payload)
+	if contentText == "" {
+		return
+	}
+
+	// Scrub content before persisting (per position paper §10: raw data belongs only in raw vault)
+	if scrubbingService != nil && scrubbingService.IsEnabled() {
+		contentText = scrubbingService.ScrubText(contentText)
+	}
+
+	// Create event record
+	event := &storage.Event{
+		OperatorSessionID: msg.OperatorSessionID,
+		Timestamp:         time.Now().UTC(),
+		Type:              eventType,
+		ContentText:       contentText,
+		StoredLocally:     true,
+	}
+
+	// Best-effort: log warning but don't fail the publish
+	if _, err := auditStore.RecordEvent(event); err != nil {
+		logger.Warn("Failed to record observed-state content evidence (non-fatal)",
+			"event_type", eventType,
+			"error", err)
+	}
+}
+
+// isCommandEvent checks if the event type is a command event (which already captures its own content)
+func isCommandEvent(eventType constants.EventType) bool {
+	// Command events already capture stdout/stderr via their own RecordEvent calls
+	// We should not double-record them here
+	return eventType == constants.Event.Operator.Command.Completed ||
+		eventType == constants.Event.Operator.Command.Failed ||
+		eventType == constants.Event.Operator.FileEdit.Completed ||
+		eventType == constants.Event.Operator.FileEdit.Failed
+}
+
+// extractContentText extracts human-readable content from observe handler payloads
+func extractContentText(payload proto.Message) string {
+	if payload == nil {
+		return ""
+	}
+
+	// Handle different payload types
+	switch p := payload.(type) {
+	case *operatorv1.FsListResult:
+		if len(p.Entries) > 0 {
+			entriesJSON, _ := json.Marshal(p.Entries)
+			return string(entriesJSON)
+		}
+		return ""
+	case *operatorv1.FsReadResult:
+		return p.Content
+	case *operatorv1.FsGrepResult:
+		if len(p.Matches) > 0 {
+			matchesJSON, _ := json.Marshal(p.Matches)
+			return string(matchesJSON)
+		}
+		return ""
+	case *operatorv1.PortCheckResult:
+		if len(p.Results) > 0 {
+			resultsJSON, _ := json.Marshal(p.Results)
+			return string(resultsJSON)
+		}
+		return ""
+	case *operatorv1.FetchLogsResult:
+		return fmt.Sprintf("command: %s, exit_code: %d, stdout_size: %d, stderr_size: %d",
+			p.Command, p.ReturnCode, p.StdoutSize, p.StderrSize)
+	case *operatorv1.FetchHistoryResult:
+		return fmt.Sprintf("fetch_history: %d events", p.Total)
+	case *operatorv1.FetchFileHistoryResult:
+		return fmt.Sprintf("fetch_file_history: %s, %d entries", p.FilePath, len(p.History))
+	case *operatorv1.FetchFileDiffResult:
+		if p.Diff != nil {
+			return fmt.Sprintf("fetch_file_diff: %s, operation: %s", p.Diff.FilePath, p.Diff.Operation)
+		}
+		return fmt.Sprintf("fetch_file_diff: %d diffs", p.Total)
+	case *operatorv1.RestoreFileResult:
+		return fmt.Sprintf("restore_file: %s, commit: %s", p.FilePath, p.CommitHash)
+	case *operatorv1.HeartbeatResult:
+		return fmt.Sprintf("heartbeat: %s, status: %s", p.OperatorId, p.Status)
+	case *operatorv1.EvalAnswerRequested:
+		return fmt.Sprintf("eval_answer: benchmark=%s, prompt_id=%s", p.Benchmark, p.PromptId)
+	default:
+		// Generic fallback: marshal to JSON
+		if jsonBytes, err := json.Marshal(payload); err == nil {
+			return string(jsonBytes)
+		}
+		return ""
 	}
 }

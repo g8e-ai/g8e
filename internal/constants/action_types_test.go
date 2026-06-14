@@ -30,6 +30,7 @@ func TestAllActionTypes(t *testing.T) {
 		
 		expectedTypes := []ActionType{
 			ActionTypeA2aCall,
+			ActionTypeCancel,
 			ActionTypeEvalAnswer,
 			ActionTypeExecuteBash,
 			ActionTypeFetchFileDiff,
@@ -61,7 +62,7 @@ func TestAllActionTypes(t *testing.T) {
 
 	t.Run("has correct length", func(t *testing.T) {
 		result := AllActionTypes()
-		assert.Len(t, result, 23, "AllActionTypes should return 23 action types")
+		assert.Len(t, result, 24, "AllActionTypes should return 24 action types")
 	})
 
 	t.Run("all values are unique", func(t *testing.T) {
@@ -78,6 +79,7 @@ func TestIsMutation(t *testing.T) {
 	t.Run("returns true for mutation action types", func(t *testing.T) {
 		mutationTypes := []ActionType{
 			ActionTypeA2aCall,
+			ActionTypeCancel,
 			ActionTypeExecuteBash,
 			ActionTypeFileEdit,
 			ActionTypeMcpCall,
@@ -134,6 +136,7 @@ func TestActionTypeConstants(t *testing.T) {
 	t.Run("all action type constants are distinct", func(t *testing.T) {
 		types := []ActionType{
 			ActionTypeA2aCall,
+			ActionTypeCancel,
 			ActionTypeEvalAnswer,
 			ActionTypeExecuteBash,
 			ActionTypeFetchFileDiff,

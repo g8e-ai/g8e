@@ -15,18 +15,35 @@ package pubsub
 
 import (
 	"context"
+	"crypto/ed25519"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
+
+// mockExecutionHandler is a test-only implementation of ExecutionHandler.
+type mockExecutionHandler struct {
+	executed                       bool
+	err                            error
+	ExecuteVerifiedTransactionFunc func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error)
+}
+
+func (m *mockExecutionHandler) ExecuteVerifiedTransaction(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+	m.executed = true
+	if m.ExecuteVerifiedTransactionFunc != nil {
+		return m.ExecuteVerifiedTransactionFunc(ctx, eventType, cmdMsg)
+	}
+	return "", m.err
+}
 
 // mockResultsPublisher is a simple manual mock for testing
 type mockResultsPublisher struct {
@@ -453,51 +470,61 @@ func TestHeartbeatService_HandleRequest(t *testing.T) {
 }
 
 func TestHeartbeatService_SendAutomatic(t *testing.T) {
-	t.Run("sends automatic heartbeat and publishes", func(t *testing.T) {
+	t.Run("sends automatic heartbeat via actuator", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewHeartbeatService(cfg, logger, nil)
 		svc.SetContext(context.Background())
 
-		mockPublisher := &mockResultsPublisher{}
-		svc.SetResultsPublisher(mockPublisher)
+		// Create a mock execution handler that tracks execution
+		actuatorCalled := false
+		mockHandler := &mockExecutionHandler{
+			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {
+				actuatorCalled = true
+				return "test-receipt-id", nil
+			},
+		}
+		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+		mockActuator := &governance.L5Actuator{
+			Logger:            logger,
+			ExecutionHandler: mockHandler,
+			SigningKey:       privKey,
+			KeyID:            "test-key",
+		}
+		svc.SetActuator(mockActuator)
 
 		svc.SendAutomatic()
-		assert.True(t, mockPublisher.publishHeartbeatCalled)
+		assert.True(t, actuatorCalled)
 	})
 
-	t.Run("logs error when publish fails", func(t *testing.T) {
+	t.Run("logs error when actuator execution fails", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc := NewHeartbeatService(cfg, logger, nil)
 		svc.SetContext(context.Background())
 
-		mockPublisher := &mockResultsPublisher{publishHeartbeatError: assert.AnError}
-		svc.SetResultsPublisher(mockPublisher)
+		// Create a mock execution handler that returns an error
+		mockHandler := &mockExecutionHandler{
+			err: assert.AnError,
+		}
+		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
+		mockActuator := &governance.L5Actuator{
+			Logger:            logger,
+			ExecutionHandler: mockHandler,
+			SigningKey:       privKey,
+			KeyID:            "test-key",
+		}
+		svc.SetActuator(mockActuator)
 
 		svc.SendAutomatic()
 		// Should not panic, should log error
-		assert.True(t, mockPublisher.publishHeartbeatCalled)
 	})
 
-	t.Run("skips publish when results publisher is nil in gateway mode", func(t *testing.T) {
+	t.Run("skips execution when actuator is nil", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
-		cfg.Gateway.Enabled = true
-		logger := testutil.NewTestLogger()
-		svc := NewHeartbeatService(cfg, logger, nil)
-		svc.SetContext(context.Background())
-
-		svc.SendAutomatic()
-		// Should not panic
-	})
-
-	t.Run("warns when results publisher is nil in non-gateway mode", func(t *testing.T) {
-		t.Parallel()
-		cfg := testutil.NewTestConfig(t)
-		cfg.Gateway.Enabled = false
 		logger := testutil.NewTestLogger()
 		svc := NewHeartbeatService(cfg, logger, nil)
 		svc.SetContext(context.Background())
