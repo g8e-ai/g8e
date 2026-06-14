@@ -504,3 +504,210 @@ func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid format")
 }
+
+func TestSecretManager_GetKeystore(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	ks := sm.GetKeystore()
+	assert.NotNil(t, ks)
+	assert.Same(t, sm.keystore, ks)
+}
+
+func TestSecretManager_GetSessionEncryptionKey(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Initialize to create the key
+	require.NoError(t, sm.InitAppSettings())
+
+	// Retrieve the key
+	key, err := sm.GetSessionEncryptionKey()
+	require.NoError(t, err)
+	assert.NotEmpty(t, key)
+	assert.Len(t, key, 64) // 32 bytes hex encoded
+}
+
+func TestSecretManager_GetSessionEncryptionKey_NotInitialized(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Try to retrieve without initialization
+	_, err := sm.GetSessionEncryptionKey()
+	require.Error(t, err)
+}
+
+func TestSecretManager_GetAuditorHMACKey(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Initialize to create the key
+	require.NoError(t, sm.InitAppSettings())
+
+	// Retrieve the key
+	key, err := sm.GetAuditorHMACKey()
+	require.NoError(t, err)
+	assert.NotEmpty(t, key)
+	assert.Len(t, key, 64) // 32 bytes hex encoded
+}
+
+func TestSecretManager_GetAuditorHMACKey_NotInitialized(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Try to retrieve without initialization
+	_, err := sm.GetAuditorHMACKey()
+	require.Error(t, err)
+}
+
+func TestSecretManager_ConsensusKey(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Generate and store consensus key
+	seed := make([]byte, ed25519.SeedSize)
+	for i := range seed {
+		seed[i] = byte(i + 2)
+	}
+	seedHex := hex.EncodeToString(seed)
+
+	err := sm.StoreConsensusKey(seedHex)
+	require.NoError(t, err)
+
+	// Retrieve and validate
+	retrieved, err := sm.GetConsensusKey()
+	require.NoError(t, err)
+	assert.NotNil(t, retrieved)
+	assert.Len(t, retrieved, ed25519.PrivateKeySize)
+
+	// Verify it matches the original seed
+	retrievedSeed := retrieved.Seed()
+	assert.Equal(t, seed, retrievedSeed)
+}
+
+func TestSecretManager_GetConsensusKey_RejectsInvalidSeed(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Store invalid seed length
+	err := sm.keystore.EncryptSecret("consensus_signing_key", "deadbeef")
+	require.NoError(t, err)
+
+	_, err = sm.GetConsensusKey()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid seed length")
+}
+
+func TestSecretManager_NotaryKey(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Store notary key
+	seedHex := hex.EncodeToString([]byte("notary-seed-32-bytes-long-1234567890"))
+
+	err := sm.StoreNotaryKey(seedHex)
+	require.NoError(t, err)
+
+	// Retrieve and validate
+	retrieved, err := sm.GetNotaryKey()
+	require.NoError(t, err)
+	assert.Equal(t, seedHex, retrieved)
+}
+
+func TestSecretManager_GetNotaryKey_NotInitialized(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Try to retrieve without initialization
+	_, err := sm.GetNotaryKey()
+	require.Error(t, err)
+}
+
+func TestSecretManager_CleanupStaleAppSettings(t *testing.T) {
+	t.Parallel()
+	db := newSecretManagerTestDB(t)
+	secretsDir := t.TempDir()
+	sm := newTestSecretManager(t, db, secretsDir)
+
+	// Test with no platform_settings document (query error)
+	err := sm.cleanupStaleAppSettings()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "query document")
+
+	// Create a platform_settings document with stale fields
+	settingsDoc := models.SettingsDocument{
+		Settings: &models.PlatformSettings{
+			PasskeyRPID:   "localhost",
+			PasskeyOrigin: "https://localhost",
+		},
+	}
+	settingsJSON, err := json.Marshal(settingsDoc)
+	require.NoError(t, err)
+	_, err = db.Exec(
+		"INSERT INTO documents (collection, id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		"settings", "platform_settings", string(settingsJSON), sqliteutil.NowTimestamp(), sqliteutil.NowTimestamp(),
+	)
+	require.NoError(t, err)
+
+	// Cleanup should remove stale fields
+	err = sm.cleanupStaleAppSettings()
+	assert.NoError(t, err)
+
+	// Verify fields were cleared
+	var dataJSON string
+	err = db.QueryRow(
+		"SELECT data FROM documents WHERE collection = 'settings' AND id = 'platform_settings'",
+	).Scan(&dataJSON)
+	require.NoError(t, err)
+	var doc models.SettingsDocument
+	require.NoError(t, json.Unmarshal([]byte(dataJSON), &doc))
+	assert.NotNil(t, doc.Settings)
+	assert.Empty(t, doc.Settings.PasskeyRPID)
+	assert.Empty(t, doc.Settings.PasskeyOrigin)
+
+	// Test with no stale fields (no-op)
+	err = sm.cleanupStaleAppSettings()
+	assert.NoError(t, err)
+
+	// Test with nil settings (no-op)
+	settingsDoc.Settings = nil
+	settingsJSON, err = json.Marshal(settingsDoc)
+	require.NoError(t, err)
+	_, err = db.Exec(
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		string(settingsJSON),
+	)
+	require.NoError(t, err)
+
+	err = sm.cleanupStaleAppSettings()
+	assert.NoError(t, err)
+
+	// Test with malformed JSON
+	_, err = db.Exec(
+		"UPDATE documents SET data = ? WHERE collection = 'settings' AND id = 'platform_settings'",
+		"{invalid json",
+	)
+	require.NoError(t, err)
+
+	err = sm.cleanupStaleAppSettings()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal document")
+}

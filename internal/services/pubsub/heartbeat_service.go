@@ -39,9 +39,9 @@ import (
 // building heartbeat payloads, handling inbound heartbeat requests,
 // sending automatic heartbeats, and managing the periodic scheduler.
 type HeartbeatService struct {
-	config  *config.Config
-	logger  *slog.Logger
-	results ResultsPublisher
+	config   *config.Config
+	logger   *slog.Logger
+	results  ResultsPublisher
 	actuator *governance.L5Actuator
 
 	ctx    context.Context

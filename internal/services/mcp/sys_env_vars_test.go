@@ -53,11 +53,11 @@ func TestSysEnvVarsTool_Execute_WithPattern(t *testing.T) {
 
 	// Set up test environment variables
 	testVars := map[string]string{
-		"G8E_TEST_VAR":  "value1",
+		"G8E_TEST_VAR": "value1",
 		"G8E_API_KEY":  "secret123",
-		"PATH":          "/usr/bin",
-		"HOME":          "/home/user",
-		"DATABASE_URL":  "postgres://localhost",
+		"PATH":         "/usr/bin",
+		"HOME":         "/home/user",
+		"DATABASE_URL": "postgres://localhost",
 	}
 
 	// Save original values and restore after test
@@ -97,10 +97,10 @@ func TestSysEnvVarsTool_Execute_RedactSecretsDefault(t *testing.T) {
 
 	// Set up test environment variables with sensitive data
 	testVars := map[string]string{
-		"API_KEY":       "secret123",
+		"API_KEY":           "secret123",
 		"DATABASE_PASSWORD": "mypassword",
-		"SECRET_TOKEN":  "token456",
-		"SAFE_VAR":      "public_value",
+		"SECRET_TOKEN":      "token456",
+		"SAFE_VAR":          "public_value",
 	}
 
 	originalVars := make(map[string]string)
@@ -139,7 +139,7 @@ func TestSysEnvVarsTool_Execute_RedactSecretsFalse(t *testing.T) {
 
 	// Set up test environment variables
 	testVars := map[string]string{
-		"API_KEY": "secret123",
+		"API_KEY":  "secret123",
 		"SAFE_VAR": "public_value",
 	}
 
@@ -180,7 +180,7 @@ func TestSysEnvVarsTool_Execute_RedactSecretsTrue(t *testing.T) {
 
 	// Set up test environment variables
 	testVars := map[string]string{
-		"API_KEY": "secret123",
+		"API_KEY":  "secret123",
 		"SAFE_VAR": "public_value",
 	}
 
@@ -218,9 +218,9 @@ func TestSysEnvVarsTool_Execute_PatternAndRedact(t *testing.T) {
 
 	// Set up test environment variables
 	testVars := map[string]string{
-		"G8E_API_KEY":     "secret123",
-		"G8E_SAFE_VAR":   "public_value",
-		"OTHER_API_KEY":  "other_secret",
+		"G8E_API_KEY":   "secret123",
+		"G8E_SAFE_VAR":  "public_value",
+		"OTHER_API_KEY": "other_secret",
 	}
 
 	originalVars := make(map[string]string)

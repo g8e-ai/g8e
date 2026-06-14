@@ -176,9 +176,9 @@ func TestBlobStoreService_BlobGet(t *testing.T) {
 
 	t.Run("BlobGet with different content types", func(t *testing.T) {
 		testCases := []struct {
-			name         string
-			data         []byte
-			contentType  string
+			name        string
+			data        []byte
+			contentType string
 		}{
 			{"text/plain", []byte("plain text"), "text/plain"},
 			{"application/json", []byte(`{"key":"value"}`), "application/json"},

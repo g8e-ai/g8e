@@ -809,7 +809,7 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 
 	// Create valid matching CLI cert/key files
 	certPEM, keyPEM := testutil.GenerateTestCertificate(t, "test-cli")
-	
+
 	// Re-parse the keyPEM to *ecdsa.PrivateKey as required by SaveCertAndKey
 	block, _ := pem.Decode([]byte(keyPEM))
 	require.NotNil(t, block)

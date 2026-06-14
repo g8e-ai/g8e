@@ -1529,3 +1529,660 @@ func TestHandlePublicAuthLogout(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 }
+
+func TestHandleCLIPasskeyRegisterChallenge(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cli-register/challenge", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/challenge", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"user_name": "test-user",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - user not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"user_id":   "nonexistent-user",
+			"user_name": "test-user",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user not found")
+	})
+
+	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Add a fake credential to simulate existing credentials
+		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
+		updatedUser, err := json.Marshal(user)
+		require.NoError(t, err)
+		c.db.DocStore.DocSet("users", user.ID, updatedUser)
+
+		body := map[string]string{
+			"user_id":   user.ID,
+			"user_name": "test-user",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+	})
+
+	t.Run("Success - valid request with mTLS enrollment", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id":   user.ID,
+			"user_name": "test-user",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/challenge", bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotEmpty(t, resp["options"])
+	})
+}
+
+func TestHandleCLIPasskeyRegisterVerify(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cli-register/verify", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/verify", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - user not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"user_id": "nonexistent-user",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user not found")
+	})
+
+	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Add a fake credential to simulate existing credentials
+		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
+		updatedUser, err := json.Marshal(user)
+		require.NoError(t, err)
+		c.db.DocStore.DocSet("users", user.ID, updatedUser)
+
+		body := map[string]string{
+			"user_id": user.ID,
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+	})
+}
+
+func TestHandleCLIBrowserPasskeyRegisterChallenge(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cli-browser-register/challenge", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/challenge", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"user_name":     "test-user",
+			"cli_session_id": "session-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - user not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"user_id":        "nonexistent-user",
+			"user_name":      "test-user",
+			"cli_session_id": "session-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user not found")
+	})
+
+	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Add a fake credential to simulate existing credentials
+		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
+		updatedUser, err := json.Marshal(user)
+		require.NoError(t, err)
+		c.db.DocStore.DocSet("users", user.ID, updatedUser)
+
+		body := map[string]string{
+			"user_id":        user.ID,
+			"user_name":      "test-user",
+			"cli_session_id": "session-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+	})
+
+	t.Run("Success - valid request", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id":        user.ID,
+			"user_name":      "test-user",
+			"cli_session_id": "session-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotEmpty(t, resp["options"])
+	})
+}
+
+func TestHandleCLIBrowserPasskeyRegisterVerify(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cli-browser-register/verify", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/verify", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"cli_session_id": "session-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - user not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"user_id":        "nonexistent-user",
+			"cli_session_id": "session-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user not found")
+	})
+
+	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Add a fake credential to simulate existing credentials
+		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
+		updatedUser, err := json.Marshal(user)
+		require.NoError(t, err)
+		c.db.DocStore.DocSet("users", user.ID, updatedUser)
+
+		body := map[string]string{
+			"user_id":        user.ID,
+			"cli_session_id": "session-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli-browser-register/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIBrowserPasskeyRegisterVerify(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+	})
+}
+
+func TestHandleCLIPasskeyAuthenticateChallenge(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cli/authenticate/challenge", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/authenticate/challenge", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/authenticate/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+
+	t.Run("Failure - no passkeys registered", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		body := map[string]string{
+			"user_id": user.ID,
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/authenticate/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.False(t, resp["success"].(bool))
+		assert.Contains(t, resp["error"].(string), "no passkeys registered")
+	})
+
+	t.Run("Success - valid request", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		// Add a fake credential to simulate existing credentials
+		user.PasskeyCredentials = []models.PasskeyCredential{{ID: []byte("existing-cred")}}
+		updatedUser, err := json.Marshal(user)
+		require.NoError(t, err)
+		c.db.DocStore.DocSet("users", user.ID, updatedUser)
+
+		body := map[string]string{
+			"user_id": user.ID,
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/authenticate/challenge", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateChallenge(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err = json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.NotEmpty(t, resp["options"])
+	})
+}
+
+func TestHandleCLIPasskeyAuthenticateVerify(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cli/authenticate/verify", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateVerify(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/authenticate/verify", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+	})
+
+	t.Run("Failure - missing user_id", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/authenticate/verify", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIPasskeyAuthenticateVerify(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "user_id required")
+	})
+}
+
+func TestHandleDeviceEnrollment(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/device/enroll", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleDeviceEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - invalid JSON", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", strings.NewReader("{invalid}"))
+		rr := httptest.NewRecorder()
+
+		c.handleDeviceEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "invalid JSON")
+	})
+
+	t.Run("Failure - missing csr_pem", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"system_fingerprint": "fp-123",
+			"hostname":          "test-host",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleDeviceEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "csr_pem is required")
+	})
+
+	t.Run("Failure - missing system_fingerprint", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"csr_pem":   testutil.GenerateTestCSRP256(t, "test-device"),
+			"hostname": "test-host",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleDeviceEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "system_fingerprint is required")
+	})
+
+	t.Run("Failure - missing hostname", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		body := map[string]string{
+			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
+			"system_fingerprint": "fp-123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleDeviceEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "hostname is required")
+	})
+
+	t.Run("Failure - bootstrap user disabled", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		require.NoError(t, err)
+		c.userSvc.Disable(bootstrapUser.ID, "test", "actor", "op")
+
+		body := map[string]string{
+			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
+			"system_fingerprint": "fp-123",
+			"hostname":          "test-host",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleDeviceEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusConflict, rr.Code)
+		assert.Contains(t, rr.Body.String(), "bootstrap user is disabled")
+	})
+
+	t.Run("Failure - device enrollment on non-empty system", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		// Create a regular user to make system non-empty
+		c.userSvc.CreateUser()
+
+		body := map[string]string{
+			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
+			"system_fingerprint": "fp-123",
+			"hostname":          "test-host",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", bytes.NewReader(b))
+		rr := httptest.NewRecorder()
+
+		c.handleDeviceEnrollment(rr, req)
+
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "device enrollment only available for initial setup")
+	})
+}

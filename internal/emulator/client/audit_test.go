@@ -346,69 +346,69 @@ func TestExportReceipts(t *testing.T) {
 
 func TestDiscoverOperatorSession(t *testing.T) {
 	tests := []struct {
-		name             string
-		cfgSessionID     string
-		useCLIConfig     bool
-		responseBody     string
-		expectedSession  string
-		setupHandler     func(*http.Request)
+		name            string
+		cfgSessionID    string
+		useCLIConfig    bool
+		responseBody    string
+		expectedSession string
+		setupHandler    func(*http.Request)
 	}{
 		{
-			name:             "session ID pinned in config",
-			cfgSessionID:     "pinned-session-123",
-			useCLIConfig:     false,
-			responseBody:     `{"operators":[]}`,
-			expectedSession:  "pinned-session-123",
-			setupHandler:     nil, // should not make HTTP call
+			name:            "session ID pinned in config",
+			cfgSessionID:    "pinned-session-123",
+			useCLIConfig:    false,
+			responseBody:    `{"operators":[]}`,
+			expectedSession: "pinned-session-123",
+			setupHandler:    nil, // should not make HTTP call
 		},
 		{
-			name:             "no session ID, no CLI config, empty response",
-			cfgSessionID:     "",
-			useCLIConfig:     false,
-			responseBody:     `{"operators":[]}`,
-			expectedSession:  "",
+			name:            "no session ID, no CLI config, empty response",
+			cfgSessionID:    "",
+			useCLIConfig:    false,
+			responseBody:    `{"operators":[]}`,
+			expectedSession: "",
 		},
 		{
-			name:             "wrapped operators array",
-			cfgSessionID:     "",
-			useCLIConfig:     false,
-			responseBody:     `{"operators":[{"operator_session_id":"session-456"}]}`,
-			expectedSession:  "session-456",
+			name:            "wrapped operators array",
+			cfgSessionID:    "",
+			useCLIConfig:    false,
+			responseBody:    `{"operators":[{"operator_session_id":"session-456"}]}`,
+			expectedSession: "session-456",
 		},
 		{
-			name:             "bare operators array",
-			cfgSessionID:     "",
-			useCLIConfig:     false,
-			responseBody:     `[{"operator_session_id":"session-789"}]`,
-			expectedSession:  "session-789",
+			name:            "bare operators array",
+			cfgSessionID:    "",
+			useCLIConfig:    false,
+			responseBody:    `[{"operator_session_id":"session-789"}]`,
+			expectedSession: "session-789",
 		},
 		{
-			name:             "multiple operators, returns first",
-			cfgSessionID:     "",
-			useCLIConfig:     false,
-			responseBody:     `[{"operator_session_id":"session-1"},{"operator_session_id":"session-2"}]`,
-			expectedSession:  "session-1",
+			name:            "multiple operators, returns first",
+			cfgSessionID:    "",
+			useCLIConfig:    false,
+			responseBody:    `[{"operator_session_id":"session-1"},{"operator_session_id":"session-2"}]`,
+			expectedSession: "session-1",
 		},
 		{
-			name:             "operator without session ID",
-			cfgSessionID:     "",
-			useCLIConfig:     false,
-			responseBody:     `[{"operator_id":"op-1"}]`,
-			expectedSession:  "",
+			name:            "operator without session ID",
+			cfgSessionID:    "",
+			useCLIConfig:    false,
+			responseBody:    `[{"operator_id":"op-1"}]`,
+			expectedSession: "",
 		},
 		{
-			name:             "invalid JSON response",
-			cfgSessionID:     "",
-			useCLIConfig:     false,
-			responseBody:     `invalid json`,
-			expectedSession:  "",
+			name:            "invalid JSON response",
+			cfgSessionID:    "",
+			useCLIConfig:    false,
+			responseBody:    `invalid json`,
+			expectedSession: "",
 		},
 		{
-			name:             "network error",
-			cfgSessionID:     "",
-			useCLIConfig:     false,
-			responseBody:     ``,
-			expectedSession:  "",
+			name:            "network error",
+			cfgSessionID:    "",
+			useCLIConfig:    false,
+			responseBody:    ``,
+			expectedSession: "",
 			setupHandler: func(r *http.Request) {
 				// Simulate network error by closing connection
 			},
@@ -446,10 +446,10 @@ func TestDiscoverOperatorSession(t *testing.T) {
 			defer server.Close()
 
 			cfg := config.Config{
-				MTLSBaseURL:      server.URL,
+				MTLSBaseURL:       server.URL,
 				OperatorSessionID: tt.cfgSessionID,
-				UseCLIConfig:     tt.useCLIConfig,
-				Auth:             config.Auth{Insecure: true},
+				UseCLIConfig:      tt.useCLIConfig,
+				Auth:              config.Auth{Insecure: true},
 			}
 
 			client, err := New(cfg)
@@ -606,14 +606,14 @@ func TestReceipt_RawField(t *testing.T) {
 
 func TestReceipt_MarshalJSON(t *testing.T) {
 	rec := Receipt{
-		TransactionID:    "tx-123",
-		TransactionHash:  "hash-abc",
-		ActionType:       "EXECUTE_BASH",
-		TargetResource:   "localhost",
-		Status:           "completed",
-		StateRootBefore:  "root-before",
-		StateRootAfter:   "root-after",
-		Signature:        "sig-def",
+		TransactionID:   "tx-123",
+		TransactionHash: "hash-abc",
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Status:          "completed",
+		StateRootBefore: "root-before",
+		StateRootAfter:  "root-after",
+		Signature:       "sig-def",
 	}
 
 	data, err := json.Marshal(rec)

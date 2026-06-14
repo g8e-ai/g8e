@@ -39,7 +39,7 @@ func TestSysOOMDetectTool_Metadata(t *testing.T) {
 
 func TestSysOOMDetectTool_Execute(t *testing.T) {
 	tempDir := t.TempDir()
-	
+
 	// Create a mock log file with OOM events that match the improved regexes
 	logContent := `
 [ 1235.123456] oom-killer: killed process 5678 (worker) pid=5678 process worker 512 MB
@@ -114,7 +114,7 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 				assert.Equal(t, 5678, oomResult.Events[0].PID)
 				assert.Equal(t, "worker", oomResult.Events[0].Process)
 				assert.Equal(t, 512, oomResult.Events[0].MemoryMB)
-				
+
 				// Verify second event (pid=9012 process db 1024 MB)
 				assert.Equal(t, 9012, oomResult.Events[1].PID)
 				assert.Equal(t, "db", oomResult.Events[1].Process)

@@ -267,7 +267,7 @@ func TestParseAndVerifyJWT(t *testing.T) {
 		// Tamper with signature
 		tamperedSig := base64.RawURLEncoding.EncodeToString([]byte("invalid signature"))
 		tamperedToken := parts[0] + "." + parts[1] + "." + tamperedSig
-		
+
 		_, err := ParseAndVerifyJWT(context.Background(), tamperedToken, jwks, "roles", "", "")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "verify signature")
@@ -277,7 +277,7 @@ func TestParseAndVerifyJWT(t *testing.T) {
 func TestParseAndVerifyJWT_KeyNotFound(t *testing.T) {
 	// Using httptest for the "Key not found" scenario which triggers a fetch
 	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-	
+
 	// Server that returns empty JWKS
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"keys": []}`)
@@ -286,7 +286,7 @@ func TestParseAndVerifyJWT_KeyNotFound(t *testing.T) {
 
 	jwks := NewJWKSProvider(ts.URL)
 	token := generateTestJWT(t, privKey, "unknown-kid", nil, map[string]interface{}{"sub": "test"})
-	
+
 	_, err := ParseAndVerifyJWT(context.Background(), token, jwks, "roles", "", "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "key not found")

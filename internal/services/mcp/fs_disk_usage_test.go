@@ -465,11 +465,11 @@ func TestFSDiskUsageTool_NilDependencies(t *testing.T) {
 
 func TestFSDiskUsageTool_UsedPercentCalculation(t *testing.T) {
 	tests := []struct {
-		name         string
-		blocks       uint64
-		bsize        int64
-		bfree        uint64
-		expectedPct  float64
+		name        string
+		blocks      uint64
+		bsize       int64
+		bfree       uint64
+		expectedPct float64
 	}{
 		{
 			name:        "50% used",

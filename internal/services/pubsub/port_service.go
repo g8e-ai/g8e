@@ -29,11 +29,11 @@ import (
 
 // PortService owns port connectivity check handling.
 type PortService struct {
-	config          *config.Config
-	logger          *slog.Logger
-	client          PubSubClient
-	auditStore      AuditEventRecorder // *storage.SQLAuditStore - optional for observed-state content evidence
-	scrubbing       *scrubbing.ScrubbingService
+	config     *config.Config
+	logger     *slog.Logger
+	client     PubSubClient
+	auditStore AuditEventRecorder // *storage.SQLAuditStore - optional for observed-state content evidence
+	scrubbing  *scrubbing.ScrubbingService
 }
 
 // NewPortService creates a new PortService.

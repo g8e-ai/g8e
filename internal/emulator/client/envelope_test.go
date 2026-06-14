@@ -463,12 +463,12 @@ func TestSubmitEnvelope_MarshalError(t *testing.T) {
 
 func TestSubmitMaximal(t *testing.T) {
 	tests := []struct {
-		name          string
-		maximal       MaximalEnvelope
-		responseCode  int
-		responseBody  string
-		wantErr       bool
-		verifyFields  bool
+		name         string
+		maximal      MaximalEnvelope
+		responseCode int
+		responseBody string
+		wantErr      bool
+		verifyFields bool
 	}{
 		{
 			name: "minimal maximal envelope",

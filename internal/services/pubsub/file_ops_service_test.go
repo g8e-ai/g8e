@@ -470,9 +470,9 @@ func TestFileOpsService_HandleFsReadRequest(t *testing.T) {
 func TestFileOpsService_LedgerIntegration(t *testing.T) {
 	t.Run("documents ledger integration gap for file write", func(t *testing.T) {
 		t.Parallel()
-		
+
 		// This test documents a CRITICAL GAP identified during the ledger path audit:
-		// 
+		//
 		// The GitLedgerService has comprehensive two-phase commit methods:
 		// - LedgerFileWrite / CompleteMirrorWrite (for file writes)
 		// - MirrorFileCreate / CompleteMirrorCreate (for file creation)
@@ -496,7 +496,7 @@ func TestFileOpsService_LedgerIntegration(t *testing.T) {
 		// REQUIRED FIX:
 		// The FileEditService or FileOpsService must call the ledger two-phase commit
 		// methods before and after file mutations to ensure proper recording.
-		
+
 		t.Log("CRITICAL GAP IDENTIFIED:")
 		t.Log("1. Ledger two-phase commit methods exist and are tested (ledger_test.go)")
 		t.Log("2. These methods are NOT called in FileEditService.ExecuteFileEdit")
@@ -518,7 +518,7 @@ func TestFileOpsService_LedgerIntegration(t *testing.T) {
 
 	t.Run("documents ledger integration gap for file delete", func(t *testing.T) {
 		t.Parallel()
-		
+
 		t.Log("DELETE OPERATION GAP:")
 		t.Log("- MirrorFileDelete should be called before file deletion")
 		t.Log("- CompleteMirrorDelete should be called after file deletion")

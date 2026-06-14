@@ -529,10 +529,7 @@ func TestScenarioFieldValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hasErr := false
-			if tt.sc.Name == "" || tt.sc.Title == "" || tt.sc.Persona.ID == "" || tt.sc.RequiresPosture == "" || tt.sc.Run == nil {
-				hasErr = true
-			}
+			hasErr := tt.sc.Name == "" || tt.sc.Title == "" || tt.sc.Persona.ID == "" || tt.sc.RequiresPosture == "" || tt.sc.Run == nil
 			if hasErr != tt.wantErr {
 				t.Errorf("validation error mismatch, got %v, want %v", hasErr, tt.wantErr)
 			}

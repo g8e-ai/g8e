@@ -16,8 +16,8 @@ package auth
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/pem"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"

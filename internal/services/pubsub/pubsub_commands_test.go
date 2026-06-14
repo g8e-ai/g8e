@@ -240,16 +240,16 @@ func TestOperatorPubSubService_ReceiptCoverage(t *testing.T) {
 			{
 				name:       "HEARTBEAT",
 				actionType: constants.ActionTypeHeartbeat,
-				payload: mustMarshalProto(t, &operatorv1.HeartbeatRequested{}),
+				payload:    mustMarshalProto(t, &operatorv1.HeartbeatRequested{}),
 			},
 			{
 				name:       "EVAL_ANSWER",
 				actionType: constants.ActionTypeEvalAnswer,
 				payload: mustMarshalProto(t, &operatorv1.EvalAnswerRequested{
-					PromptId: "test-prompt",
+					PromptId:  "test-prompt",
 					Benchmark: "test",
-					Answer:   "test answer",
-					Model:    "test-model",
+					Answer:    "test answer",
+					Model:     "test-model",
 				}),
 			},
 		}
@@ -716,7 +716,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
-			
+
 			require.NoError(t, os.MkdirAll(vaultDir, 0700))
 			logger := testutil.NewTestLogger()
 			header, _, err := vault.NewVaultHeader(vaultPrivKey)
@@ -786,7 +786,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
-			
+
 			require.NoError(t, os.MkdirAll(vaultDir, 0700))
 			logger := testutil.NewTestLogger()
 			header, _, err := vault.NewVaultHeader(vaultPrivKey)
@@ -855,7 +855,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 			vaultDir := filepath.Join(tmpDir, "vault")
 			vaultPrivKey := make([]byte, 32)
 			_, _ = rand.Read(vaultPrivKey)
-			
+
 			require.NoError(t, os.MkdirAll(vaultDir, 0700))
 			logger := testutil.NewTestLogger()
 			header, _, err := vault.NewVaultHeader(vaultPrivKey)

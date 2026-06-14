@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-06-14
+
+### Overview
+
+v1.1.1 is a maintenance and stability release focused on improving test coverage, fixing deployment issues, and refining core services. Significant work was done to increase gateway test coverage to over 65%, alongside critical bug fixes in docker deployments, ledger wiring, and heartbeat mechanisms.
+
+### Changed
+
+* **Test Coverage Improvement** — Significantly increased gateway test coverage to over 65%, improving reliability and future maintainability.
+* **Test Infrastructure Refactoring** — Refactored `testbackend` and improved unit tests for various scenarios to provide more robust testing foundations.
+* **Scrubbing Logic Enhancement** — Improved scrubbing logic for better data sanitization and security.
+* **Emulator Documentation** — Updated emulator documentation to provide clearer guidance for developers.
+
+### Fixed
+
+* **Docker Deployment Fixes** — Resolved issues in docker deployments to ensure smoother orchestration and setup.
+* **Ledger Wiring** — Fixed wiring issues in the ledger service for improved data consistency.
+* **Heartbeat Test Stability** — Fixed flaky heartbeat tests to ensure reliable CI/CD pipelines.
+
 ---
 
 ## [1.1.0] - 2026-06-13

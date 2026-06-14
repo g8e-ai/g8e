@@ -103,7 +103,10 @@ func TestPasskeyBootstrapServer_Stop(t *testing.T) {
 
 	// Verify server is stopped by trying to make a request
 	resp, err := http.Get(url)
-	assert.Error(t, err)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	require.Error(t, err)
 	assert.Nil(t, resp)
 }
 

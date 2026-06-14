@@ -111,4 +111,3 @@ func TestTestBackend_OverwriteMasterKey(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, key2, retrievedKey, "second key should overwrite first")
 }
-

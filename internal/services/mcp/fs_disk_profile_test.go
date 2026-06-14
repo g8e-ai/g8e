@@ -122,7 +122,7 @@ func TestFSDiskProfileTool_Execute_SingleFile(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Greater(t, len(profileResult.Entries), 0)
-	
+
 	// Find the root entry (should be ".")
 	var rootEntry *DirEntry
 	for i := range profileResult.Entries {
@@ -140,7 +140,7 @@ func TestFSDiskProfileTool_Execute_DirectoryStructure(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create directory structure
 	subDir1 := filepath.Join(tmpDir, "subdir1")
 	subDir2 := filepath.Join(tmpDir, "subdir2")
@@ -193,7 +193,7 @@ func TestFSDiskProfileTool_Execute_MaxDepth(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create nested structure: tmpDir/subdir1/subdir2/subdir3/file.txt
 	subDir1 := filepath.Join(tmpDir, "subdir1")
 	subDir2 := filepath.Join(subDir1, "subdir2")
@@ -242,7 +242,7 @@ func TestFSDiskProfileTool_Execute_DefaultMaxDepth(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create nested structure
 	subDir1 := filepath.Join(tmpDir, "subdir1")
 	subDir2 := filepath.Join(subDir1, "subdir2")
@@ -281,7 +281,7 @@ func TestFSDiskProfileTool_Execute_ZeroMaxDepth(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create simple structure
 	subDir := filepath.Join(tmpDir, "subdir")
 	err := os.Mkdir(subDir, 0755)
@@ -312,7 +312,7 @@ func TestFSDiskProfileTool_Execute_NegativeMaxDepth(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	file := filepath.Join(tmpDir, "file.txt")
 	err := os.WriteFile(file, []byte("content"), 0644)
 	require.NoError(t, err)
@@ -334,13 +334,13 @@ func TestFSDiskProfileTool_Execute_NegativeMaxDepth(t *testing.T) {
 
 func TestFSDiskProfileTool_Execute_ContextCancellation(t *testing.T) {
 	tool := &FSDiskProfileTool{}
-	
+
 	// Create a context that's already cancelled
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create some structure
 	subDir := filepath.Join(tmpDir, "subdir")
 	err := os.Mkdir(subDir, 0755)
@@ -360,13 +360,13 @@ func TestFSDiskProfileTool_Execute_SizeCalculation(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create files with known sizes
 	file1 := filepath.Join(tmpDir, "file1.txt")
 	file2 := filepath.Join(tmpDir, "file2.txt")
 	content1 := make([]byte, 1024*1024) // 1 MB
 	content2 := make([]byte, 512*1024)  // 0.5 MB
-	
+
 	err := os.WriteFile(file1, content1, 0644)
 	require.NoError(t, err)
 	err = os.WriteFile(file2, content2, 0644)
@@ -392,7 +392,7 @@ func TestFSDiskProfileTool_Execute_ModificationTime(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	file := filepath.Join(tmpDir, "file.txt")
 	err := os.WriteFile(file, []byte("content"), 0644)
 	require.NoError(t, err)
@@ -422,7 +422,7 @@ func TestFSDiskProfileTool_Execute_ModificationTime(t *testing.T) {
 		}
 	}
 	require.NotNil(t, fileEntry)
-	
+
 	// Modification time should be close (within 1 second tolerance)
 	require.InDelta(t, expectedModTime, fileEntry.Modified, 1)
 }
@@ -447,7 +447,7 @@ func TestFSDiskProfileTool_Execute_EmptyDirectory(t *testing.T) {
 
 	// Should have at least the root entry
 	require.GreaterOrEqual(t, len(profileResult.Entries), 1)
-	
+
 	// Total size should be 0 for empty directory
 	require.Equal(t, int64(0), profileResult.TotalMB)
 }
@@ -457,7 +457,7 @@ func TestFSDiskProfileTool_Execute_SymlinkSkip(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create a file and a symlink to it
 	file := filepath.Join(tmpDir, "file.txt")
 	err := os.WriteFile(file, []byte("content"), 0644)
@@ -488,7 +488,7 @@ func TestFSDiskProfileTool_Execute_LargeMaxDepth(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	// Create a moderately deep structure
 	current := tmpDir
 	for i := 0; i < 5; i++ {

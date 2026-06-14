@@ -55,7 +55,7 @@ func TestProcSignalSafeTool_Execute_Integration(t *testing.T) {
 		})))
 		result, err := tool.Execute(ctx, args)
 		require.NoError(t, err)
-		
+
 		var res ProcSignalSafeResult
 		err = json.Unmarshal([]byte(result.Content[0].Text), &res)
 		require.NoError(t, err)
@@ -86,7 +86,7 @@ func TestProcSignalSafeTool_Execute_Integration(t *testing.T) {
 		})))
 		result, err := tool.Execute(ctx, args)
 		require.NoError(t, err)
-		
+
 		var res ProcSignalSafeResult
 		err = json.Unmarshal([]byte(result.Content[0].Text), &res)
 		require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestProcSignalSafeTool_Execute_Integration(t *testing.T) {
 		})))
 		result, err := tool.Execute(ctx, args)
 		require.NoError(t, err)
-		
+
 		var res ProcSignalSafeResult
 		err = json.Unmarshal([]byte(result.Content[0].Text), &res)
 		require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestProcSignalSafeTool_Execute_Integration(t *testing.T) {
 		})))
 		result, err := tool.Execute(ctx, args)
 		require.NoError(t, err)
-		
+
 		var res ProcSignalSafeResult
 		err = json.Unmarshal([]byte(result.Content[0].Text), &res)
 		require.NoError(t, err)

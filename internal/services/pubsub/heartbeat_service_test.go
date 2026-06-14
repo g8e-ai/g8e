@@ -488,7 +488,7 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		}
 		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
 		mockActuator := &governance.L5Actuator{
-			Logger:            logger,
+			Logger:           logger,
 			ExecutionHandler: mockHandler,
 			SigningKey:       privKey,
 			KeyID:            "test-key",
@@ -512,7 +512,7 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		}
 		privKey := ed25519.NewKeyFromSeed(make([]byte, 32))
 		mockActuator := &governance.L5Actuator{
-			Logger:            logger,
+			Logger:           logger,
 			ExecutionHandler: mockHandler,
 			SigningKey:       privKey,
 			KeyID:            "test-key",

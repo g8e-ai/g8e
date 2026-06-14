@@ -47,7 +47,7 @@ func TestNew(t *testing.T) {
 			cfg: config.Config{
 				Auth: config.Auth{
 					Insecure: false,
-					CABundle:  "nonexistent.pem",
+					CABundle: "nonexistent.pem",
 				},
 			},
 			wantErr: false, // missing CA bundle is tolerated
@@ -182,46 +182,46 @@ func TestClient_Record(t *testing.T) {
 
 func TestClient_StateRoot(t *testing.T) {
 	tests := []struct {
-		name           string
-		responseBody   string
-		expectedRoot   string
-		wantErr        bool
-		setupServer    func(*httptest.Server)
-		usePublicBase  bool
+		name          string
+		responseBody  string
+		expectedRoot  string
+		wantErr       bool
+		setupServer   func(*httptest.Server)
+		usePublicBase bool
 	}{
 		{
-			name:         "state_merkle_root field",
-			responseBody: `{"state_merkle_root": "abc123"}`,
-			expectedRoot: "abc123",
-			wantErr:      false,
+			name:          "state_merkle_root field",
+			responseBody:  `{"state_merkle_root": "abc123"}`,
+			expectedRoot:  "abc123",
+			wantErr:       false,
 			usePublicBase: true,
 		},
 		{
-			name:         "state_root field (legacy)",
-			responseBody: `{"state_root": "def456"}`,
-			expectedRoot: "def456",
-			wantErr:      false,
+			name:          "state_root field (legacy)",
+			responseBody:  `{"state_root": "def456"}`,
+			expectedRoot:  "def456",
+			wantErr:       false,
 			usePublicBase: true,
 		},
 		{
-			name:         "both fields (state_merkle_root takes precedence)",
-			responseBody: `{"state_merkle_root": "abc123", "state_root": "def456"}`,
-			expectedRoot: "abc123",
-			wantErr:      false,
+			name:          "both fields (state_merkle_root takes precedence)",
+			responseBody:  `{"state_merkle_root": "abc123", "state_root": "def456"}`,
+			expectedRoot:  "abc123",
+			wantErr:       false,
 			usePublicBase: true,
 		},
 		{
-			name:         "empty response",
-			responseBody: `{}`,
-			expectedRoot: "",
-			wantErr:      false,
+			name:          "empty response",
+			responseBody:  `{}`,
+			expectedRoot:  "",
+			wantErr:       false,
 			usePublicBase: true,
 		},
 		{
-			name:         "invalid JSON",
-			responseBody: `invalid`,
-			wantErr:      false, // stateRoot is lenient - returns empty string on invalid JSON
-			expectedRoot: "",
+			name:          "invalid JSON",
+			responseBody:  `invalid`,
+			wantErr:       false, // stateRoot is lenient - returns empty string on invalid JSON
+			expectedRoot:  "",
 			usePublicBase: true,
 		},
 		{
@@ -238,10 +238,10 @@ func TestClient_StateRoot(t *testing.T) {
 			usePublicBase: true,
 		},
 		{
-			name:         "mTLS surface",
-			responseBody: `{"state_merkle_root": "mTLS-root"}`,
-			expectedRoot: "mTLS-root",
-			wantErr:      false,
+			name:          "mTLS surface",
+			responseBody:  `{"state_merkle_root": "mTLS-root"}`,
+			expectedRoot:  "mTLS-root",
+			wantErr:       false,
 			usePublicBase: false,
 		},
 	}
@@ -474,120 +474,120 @@ func TestClient_Approve(t *testing.T) {
 
 func TestClient_do(t *testing.T) {
 	tests := []struct {
-		name         string
-		persona      Persona
-		method       string
-		body         []byte
-		responseCode int
-		responseBody string
-		wantErr      bool
+		name          string
+		persona       Persona
+		method        string
+		body          []byte
+		responseCode  int
+		responseBody  string
+		wantErr       bool
 		verifyHeaders map[string]string
 	}{
 		{
-			name:    "GET request",
-			persona: Persona{ID: "test-client"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "GET request",
+			persona:      Persona{ID: "test-client"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: false,
+			wantErr:      false,
 		},
 		{
-			name:    "POST request with body",
-			persona: Persona{ID: "test-client"},
-			method:  http.MethodPost,
-			body:    []byte(`{"test": "data"}`),
+			name:         "POST request with body",
+			persona:      Persona{ID: "test-client"},
+			method:       http.MethodPost,
+			body:         []byte(`{"test": "data"}`),
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "created"}`,
-			wantErr: false,
+			wantErr:      false,
 		},
 		{
-			name:    "request with User-Agent",
-			persona: Persona{ID: "test-client", UserAgent: "TestAgent/1.0"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "request with User-Agent",
+			persona:      Persona{ID: "test-client", UserAgent: "TestAgent/1.0"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: false,
+			wantErr:      false,
 			verifyHeaders: map[string]string{
-				"User-Agent": "TestAgent/1.0",
+				"User-Agent":           "TestAgent/1.0",
 				"X-G8E-Client-Persona": "test-client",
 			},
 		},
 		{
-			name:    "request with API key",
-			persona: Persona{ID: "test-client"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "request with API key",
+			persona:      Persona{ID: "test-client"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: false,
+			wantErr:      false,
 		},
 		{
-			name:    "request with Operator session ID",
-			persona: Persona{ID: "test-client", OperatorSessionID: "session-123"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "request with Operator session ID",
+			persona:      Persona{ID: "test-client", OperatorSessionID: "session-123"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: false,
+			wantErr:      false,
 			verifyHeaders: map[string]string{
 				"Authorization": "Bearer session-123",
 			},
 		},
 		{
-			name:    "request with CLI session ID",
-			persona: Persona{ID: "test-client", CLISessionID: "cli-session-123"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "request with CLI session ID",
+			persona:      Persona{ID: "test-client", CLISessionID: "cli-session-123"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: false,
+			wantErr:      false,
 			verifyHeaders: map[string]string{
 				constants.HeaderCLISessionID: "cli-session-123",
 			},
 		},
 		{
-			name:    "request with User ID",
-			persona: Persona{ID: "test-client", UserID: "user-123"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "request with User ID",
+			persona:      Persona{ID: "test-client", UserID: "user-123"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: false,
+			wantErr:      false,
 			verifyHeaders: map[string]string{
 				constants.HeaderUserID: "user-123",
 			},
 		},
 		{
-			name:    "request with Operator ID",
-			persona: Persona{ID: "test-client", OperatorID: "operator-123"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "request with Operator ID",
+			persona:      Persona{ID: "test-client", OperatorID: "operator-123"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: false,
+			wantErr:      false,
 			verifyHeaders: map[string]string{
 				constants.HeaderOperatorID: "operator-123",
 			},
 		},
 		{
-			name:    "server error",
-			persona: Persona{ID: "test-client"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "server error",
+			persona:      Persona{ID: "test-client"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusInternalServerError,
 			responseBody: `{"error": "internal error"}`,
-			wantErr: false, // do() doesn't error on status codes
+			wantErr:      false, // do() doesn't error on status codes
 		},
 		{
-			name:    "network error (context canceled)",
-			persona: Persona{ID: "test-client"},
-			method:  http.MethodGet,
-			body:    nil,
+			name:         "network error (context canceled)",
+			persona:      Persona{ID: "test-client"},
+			method:       http.MethodGet,
+			body:         nil,
 			responseCode: http.StatusOK,
 			responseBody: `{"result": "ok"}`,
-			wantErr: true,
+			wantErr:      true,
 		},
 	}
 
@@ -843,12 +843,12 @@ func TestExchange_Marshal(t *testing.T) {
 
 func TestPersona(t *testing.T) {
 	p := Persona{
-		ID:               "test-id",
-		UserAgent:        "TestAgent/1.0",
+		ID:                "test-id",
+		UserAgent:         "TestAgent/1.0",
 		OperatorSessionID: "session-123",
-		CLISessionID:     "cli-session-123",
-		UserID:           "user-123",
-		OperatorID:       "operator-123",
+		CLISessionID:      "cli-session-123",
+		UserID:            "user-123",
+		OperatorID:        "operator-123",
 	}
 
 	if p.ID != "test-id" {

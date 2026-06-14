@@ -145,7 +145,7 @@ func TestNetDNSResolveTool_Execute_MX(t *testing.T) {
 
 	require.Equal(t, "MX", res.RecordType)
 	require.Equal(t, 1, res.Count)
-	
+
 	records := res.Records.([]interface{})
 	require.Len(t, records, 1)
 	mx := records[0].(map[string]interface{})

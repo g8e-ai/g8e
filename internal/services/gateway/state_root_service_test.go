@@ -113,3 +113,24 @@ func TestStateRootService_CachingBehavior(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, root1, root3, "state root should be same after recalculation without state changes")
 }
+
+func TestStateRootService_CalculateStateRootUncached(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
+
+	// Delete the state_version table to force uncached path
+	_, err := db.GetDB().Exec("DROP TABLE IF EXISTS state_version")
+	require.NoError(t, err)
+
+	// This should fall back to calculateStateRootUncached
+	root, err := svc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	assert.NotEmpty(t, root)
+
+	// Verify the root was persisted to state_root table
+	var persistedRoot string
+	err = db.GetDB().QueryRow("SELECT root FROM state_root WHERE id = 1").Scan(&persistedRoot)
+	require.NoError(t, err)
+	assert.Equal(t, root, persistedRoot)
+}

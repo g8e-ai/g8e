@@ -17,6 +17,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -62,6 +63,108 @@ func TestIsLoopbackOrigin(t *testing.T) {
 			t.Parallel()
 			result := isLoopbackOrigin(tc.origin)
 			assert.Equal(t, tc.expected, result, "Origin %s should return %v", tc.origin, tc.expected)
+		})
+	}
+}
+
+func TestIsLocalNetworkOrigin(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		origin   string
+		expected bool
+	}{
+		// Loopback addresses
+		{"http://localhost:8080", true},
+		{"http://localhost", true},
+		{"https://localhost:443", true},
+		{"http://127.0.0.1:8080", true},
+		{"http://127.0.0.1", true},
+		{"http://127.0.0.2:8080", true},
+		{"http://[::1]:8080", true},
+		{"http://[::1]", true},
+		// Private network IPs (RFC 1918)
+		{"http://192.168.1.1:8080", true},
+		{"http://192.168.0.1:8080", true},
+		{"http://192.168.255.255:8080", true},
+		{"http://10.0.0.1:8080", true},
+		{"http://10.255.255.255:8080", true},
+		{"http://172.16.0.1:8080", true},
+		{"http://172.31.255.255:8080", true},
+		{"http://172.20.0.1:8080", true},
+		// Public IPs should be rejected
+		{"http://8.8.8.8:8080", false},
+		{"http://1.1.1.1:8080", false},
+		{"http://172.32.0.1:8080", false}, // Outside 172.16.0.0/12
+		{"http://172.15.255.255:8080", false}, // Outside 172.16.0.0/12
+		{"http://192.169.0.1:8080", false}, // Outside 192.168.0.0/16
+		{"http://11.0.0.1:8080", false}, // Outside 10.0.0.0/8
+		// Domain names should be rejected
+		{"http://example.com:8080", false},
+		{"http://google.com:8080", false},
+		// Invalid URLs
+		{"invalid-url", false},
+		{"", false},
+		{"not-a-url", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.origin, func(t *testing.T) {
+			t.Parallel()
+			result := isLocalNetworkOrigin(tc.origin)
+			assert.Equal(t, tc.expected, result, "Origin %s should return %v", tc.origin, tc.expected)
+		})
+	}
+}
+
+func TestIsPrivateIP(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		ip       string
+		expected bool
+	}{
+		// 10.0.0.0/8
+		{"10.0.0.1", true},
+		{"10.255.255.255", true},
+		{"10.128.0.1", true},
+		// 172.16.0.0/12
+		{"172.16.0.1", true},
+		{"172.31.255.255", true},
+		{"172.20.0.1", true},
+		{"172.17.0.1", true},
+		{"172.30.255.255", true},
+		// 192.168.0.0/16
+		{"192.168.0.1", true},
+		{"192.168.255.255", true},
+		{"192.168.1.1", true},
+		{"192.168.100.50", true},
+		// Public IPs should be false
+		{"8.8.8.8", false},
+		{"1.1.1.1", false},
+		{"172.32.0.1", false}, // Outside 172.16.0.0/12
+		{"172.15.255.255", false}, // Outside 172.16.0.0/12
+		{"192.169.0.1", false}, // Outside 192.168.0.0/16
+		{"11.0.0.1", false}, // Outside 10.0.0.0/8
+		{"172.15.0.1", false}, // Just outside 172.16.0.0/12
+		{"172.32.0.1", false}, // Just outside 172.16.0.0/12
+		{"192.167.255.255", false}, // Just outside 192.168.0.0/16
+		{"192.169.0.0", false}, // Just outside 192.168.0.0/16
+		{"9.255.255.255", false}, // Just outside 10.0.0.0/8
+		{"11.0.0.0", false}, // Just outside 10.0.0.0/8
+		// IPv6 addresses (not handled by this function, should return false)
+		{"::1", false},
+		{"2001:db8::1", false},
+		{"fe80::1", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.ip, func(t *testing.T) {
+			t.Parallel()
+			ip := net.ParseIP(tc.ip)
+			require.NotNil(t, ip, "Failed to parse IP: %s", tc.ip)
+			result := isPrivateIP(ip)
+			assert.Equal(t, tc.expected, result, "IP %s should return %v", tc.ip, tc.expected)
 		})
 	}
 }

@@ -114,11 +114,11 @@ func TestNetHTTPProbeTool_Execute_NetworkError(t *testing.T) {
 
 func TestNetHTTPProbeTool_Execute_Timeout(t *testing.T) {
 	tool := &NetHTTPProbeTool{}
-	
+
 	// Create a context that is already canceled or has a very short timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Microsecond)
 	defer cancel()
-	
+
 	// Sleep a bit to ensure timeout
 	time.Sleep(10 * time.Millisecond)
 
@@ -136,7 +136,7 @@ func TestNetHTTPProbeTool_Execute_Timeout(t *testing.T) {
 }
 
 func TestNetHTTPProbeTool_Execute_MethodHandling(t *testing.T) {
-	// Since we can't easily hit a real server, we'll just test that different methods 
+	// Since we can't easily hit a real server, we'll just test that different methods
 	// don't crash and pass through the validation.
 	tool := &NetHTTPProbeTool{}
 	ctx := context.Background()
@@ -145,7 +145,7 @@ func TestNetHTTPProbeTool_Execute_MethodHandling(t *testing.T) {
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.Len(t, result.Content, 1)
-	
+
 	var probeResult NetHTTPProbeResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &probeResult)
 	require.NoError(t, err)

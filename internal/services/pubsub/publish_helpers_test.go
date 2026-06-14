@@ -30,8 +30,8 @@ import (
 
 // mockAuditStore is a simple in-memory mock for testing
 type mockAuditStore struct {
-	mu     sync.Mutex
-	events []*storage.Event
+	mu               sync.Mutex
+	events           []*storage.Event
 	recordEventError bool
 }
 

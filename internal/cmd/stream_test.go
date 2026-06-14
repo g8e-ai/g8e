@@ -1049,16 +1049,16 @@ func TestBoundedBuffer_WriteExceedsLimit(t *testing.T) {
 
 func TestBoundedBuffer_WriteMultipleChunks(t *testing.T) {
 	buf := &boundedBuffer{limit: 10}
-	
+
 	_, err := buf.Write([]byte("hello"))
 	require.NoError(t, err)
-	
+
 	_, err = buf.Write([]byte(" "))
 	require.NoError(t, err)
-	
+
 	_, err = buf.Write([]byte("world"))
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "hello worl", buf.String(), "should truncate at limit")
 }
 

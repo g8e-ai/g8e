@@ -199,7 +199,7 @@ func parseNtpqOutput(output string) NTPStatus {
 				if strings.HasPrefix(fields[0], "*") {
 					result.Synced = true
 					result.Status = "synchronized"
-					
+
 					// Handle both 9-column and 10-column (with 't' type) output
 					offset := 0
 					if len(fields) >= 10 {

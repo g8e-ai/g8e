@@ -71,7 +71,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		},
 	}
 	mockActuator := &governance.L5Actuator{
-		Logger:            logger,
+		Logger:           logger,
 		ExecutionHandler: mockHandler,
 		SigningKey:       priv,
 		KeyID:            "Actuator-key",

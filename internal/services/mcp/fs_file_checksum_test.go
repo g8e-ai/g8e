@@ -199,7 +199,7 @@ func TestFSFileChecksumTool_Execute_LargeFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "large.bin")
-	
+
 	// Create a 1MB file
 	largeContent := make([]byte, 1024*1024)
 	for i := range largeContent {
@@ -233,7 +233,7 @@ func TestFSFileChecksumTool_Execute_BinaryFile(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "binary.bin")
-	
+
 	// Create binary content with null bytes and other special characters
 	binaryContent := []byte{0x00, 0x01, 0x02, 0xFF, 0xFE, 0x80, 0x81}
 	err := os.WriteFile(testFile, binaryContent, 0644)
@@ -264,7 +264,7 @@ func TestFSFileChecksumTool_Execute_UnicodeContent(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "unicode.txt")
-	
+
 	// Create content with various Unicode characters
 	unicodeContent := []byte("Hello 世界 🌍 Ñoño café")
 	err := os.WriteFile(testFile, unicodeContent, 0644)
@@ -292,7 +292,7 @@ func TestFSFileChecksumTool_Execute_DirectoryInsteadOfFile(t *testing.T) {
 	ctx := context.Background()
 
 	tmpDir := t.TempDir()
-	
+
 	req := FSFileChecksumRequest{FilePath: tmpDir}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestFSFileChecksumTool_Execute_RelativePath(t *testing.T) {
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer os.Chdir(originalDir)
-	
+
 	err = os.Chdir(tmpDir)
 	require.NoError(t, err)
 

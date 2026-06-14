@@ -39,9 +39,9 @@ func (m *mockDBOpener) Open(driverName, dataSourceName string) (*sql.DB, error) 
 
 // mockRows is a mock implementation of sql.Rows for testing.
 type mockRows struct {
-	columns []string
-	data    [][]interface{}
-	pos     int
+	columns  []string
+	data     [][]interface{}
+	pos      int
 	closeErr error
 	scanErr  error
 }

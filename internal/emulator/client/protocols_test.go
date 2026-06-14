@@ -584,21 +584,21 @@ func TestA2ACallProto(t *testing.T) {
 
 func TestSuspended(t *testing.T) {
 	tests := []struct {
-		name      string
-		resp      *JSONRPCResponse
-		wantHash  string
+		name          string
+		resp          *JSONRPCResponse
+		wantHash      string
 		wantSuspended bool
 	}{
 		{
-			name:      "nil response",
-			resp:      nil,
-			wantHash:  "",
+			name:          "nil response",
+			resp:          nil,
+			wantHash:      "",
 			wantSuspended: false,
 		},
 		{
-			name:      "no error, no result",
-			resp:      &JSONRPCResponse{},
-			wantHash:  "",
+			name:          "no error, no result",
+			resp:          &JSONRPCResponse{},
+			wantHash:      "",
 			wantSuspended: false,
 		},
 		{
@@ -608,7 +608,7 @@ func TestSuspended(t *testing.T) {
 					Message: "Transaction suspended. Approve at https://example.com/approve/abc123",
 				},
 			},
-			wantHash:  "abc123",
+			wantHash:      "abc123",
 			wantSuspended: true,
 		},
 		{
@@ -619,7 +619,7 @@ func TestSuspended(t *testing.T) {
 					Data:    json.RawMessage(`{"approval_url":"https://example.com/approve/def456"}`),
 				},
 			},
-			wantHash:  "def456",
+			wantHash:      "def456",
 			wantSuspended: true,
 		},
 		{
@@ -629,7 +629,7 @@ func TestSuspended(t *testing.T) {
 					Message: "Some other error",
 				},
 			},
-			wantHash:  "",
+			wantHash:      "",
 			wantSuspended: false,
 		},
 		{
@@ -639,7 +639,7 @@ func TestSuspended(t *testing.T) {
 					Message: "Approve at https://example.com/approve/AbC123F",
 				},
 			},
-			wantHash:  "AbC123F",
+			wantHash:      "AbC123F",
 			wantSuspended: true,
 		},
 		{
@@ -649,7 +649,7 @@ func TestSuspended(t *testing.T) {
 					Message: "Approve at https://example.com/approve/1234567890",
 				},
 			},
-			wantHash:  "1234567890",
+			wantHash:      "1234567890",
 			wantSuspended: true,
 		},
 		{
@@ -659,7 +659,7 @@ func TestSuspended(t *testing.T) {
 					Message: "Approve at https://example.com/approve/abc123xyz",
 				},
 			},
-			wantHash:  "abc123",
+			wantHash:      "abc123",
 			wantSuspended: true,
 		},
 		{
@@ -669,7 +669,7 @@ func TestSuspended(t *testing.T) {
 					Message: "Approve at https://example.com/approve/",
 				},
 			},
-			wantHash:  "",
+			wantHash:      "",
 			wantSuspended: false,
 		},
 	}

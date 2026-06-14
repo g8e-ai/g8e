@@ -124,7 +124,7 @@ github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...
 	// 2. github.com ssh-ed25519
 	// 3. old-host.com ssh-rsa (marker @revoked is skipped)
 	assert.Len(t, hostsResult.KnownHosts, 3)
-	
+
 	foundGithub := false
 	foundRevoked := false
 	for _, kh := range hostsResult.KnownHosts {
@@ -181,7 +181,7 @@ func TestNetSSHKnownHostsTool_Execute_MissingFiles(t *testing.T) {
 
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
-	
+
 	var hostsResult NetSSHKnownHostsResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &hostsResult)
 	require.NoError(t, err)

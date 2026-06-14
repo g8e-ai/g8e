@@ -103,10 +103,7 @@ func TestGovKitValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hasErr := false
-			if tt.kit == nil || tt.kit.Ensemble == nil || tt.kit.Principal == nil || tt.kit.OperatorID == "" {
-				hasErr = true
-			}
+			hasErr := tt.kit == nil || tt.kit.Ensemble == nil || tt.kit.Principal == nil || tt.kit.OperatorID == ""
 			if hasErr != tt.wantErr {
 				t.Errorf("GovKit validation error mismatch, got %v, want %v", hasErr, tt.wantErr)
 			}
@@ -140,11 +137,11 @@ func TestShortEdgeCases(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"012345678901", "012345678901"},     // exactly 12 chars
-		{"0123456789012", "012345678901…"},   // 13 chars
-		{"0123456789", "0123456789"},         // 10 chars
-		{"a\nb", "a\nb"},                     // contains newline
-		{"日本語", "日本語"},                   // unicode
+		{"012345678901", "012345678901"},   // exactly 12 chars
+		{"0123456789012", "012345678901…"}, // 13 chars
+		{"0123456789", "0123456789"},       // 10 chars
+		{"a\nb", "a\nb"},                   // contains newline
+		{"日本語", "日本語"},                     // unicode
 		// Note: short() counts bytes, not runes. Each emoji is 4 bytes.
 		// 3 emojis = 12 bytes, so they won't be truncated
 		{"🎉🎉🎉", "🎉🎉🎉"},
@@ -372,9 +369,9 @@ func TestGovernanceScenarioRunNotNil(t *testing.T) {
 
 func TestGovKitL3Modes(t *testing.T) {
 	tests := []struct {
-		name    string
-		l3Mode  string
-		valid   bool
+		name   string
+		l3Mode string
+		valid  bool
 	}{
 		{
 			name:   "mock mode",

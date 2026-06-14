@@ -688,16 +688,21 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 	}()
 
 	// Listen for context cancellation and trigger shutdown
+	// nolint:gosec // G118: ctx is already cancelled, need fresh context for shutdown timeout
 	go func() {
 		<-ctx.Done()
 		ls.logger.Info("Context cancelled, initiating server shutdown")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if ls.server != nil {
-			ls.server.Shutdown(shutdownCtx)
+			if err := ls.server.Shutdown(shutdownCtx); err != nil {
+				ls.logger.Error("Failed to shutdown server", "error", err)
+			}
 		}
 		if ls.publicServer != nil {
-			ls.publicServer.Shutdown(shutdownCtx)
+			if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
+				ls.logger.Error("Failed to shutdown public server", "error", err)
+			}
 		}
 	}()
 

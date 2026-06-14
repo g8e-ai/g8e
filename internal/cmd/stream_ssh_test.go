@@ -475,7 +475,7 @@ func TestPreFlightCheck_InvalidKeyFile(t *testing.T) {
 
 func TestPreFlightCheck_DialTimeout(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Use a non-routable IP to trigger timeout
 	r := ssh.HostConfig{
 		Hostname: "192.0.2.1", // TEST-NET-1, guaranteed non-routable

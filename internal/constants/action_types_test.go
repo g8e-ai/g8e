@@ -27,7 +27,7 @@ func TestAllActionTypes(t *testing.T) {
 
 	t.Run("contains all expected action types", func(t *testing.T) {
 		result := AllActionTypes()
-		
+
 		expectedTypes := []ActionType{
 			ActionTypeA2aCall,
 			ActionTypeCancel,

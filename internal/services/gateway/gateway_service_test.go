@@ -315,10 +315,10 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 
 		// Add a trusted signer
 		signer := map[string]interface{}{
-			"id":        "test-signer-1",
+			"id":         "test-signer-1",
 			"public_key": "abc123",
-			"added_at":  time.Now().UTC().Format(time.RFC3339),
-			"enabled":   true,
+			"added_at":   time.Now().UTC().Format(time.RFC3339),
+			"enabled":    true,
 		}
 		signerBytes, err := json.Marshal(signer)
 		require.NoError(t, err)
@@ -567,7 +567,7 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 	// Test the renewal function - it may fail if PKI is not fully initialized,
 	// but we're testing that it doesn't panic and handles errors gracefully
 	ctx := context.Background()
-	err = ls.renewServiceCertWithIdentity(ctx)
+	_ = ls.renewServiceCertWithIdentity(ctx)
 	// We don't assert on error since it depends on PKI state
 	// The important thing is it doesn't panic
 }

@@ -73,18 +73,18 @@ func TestRegisterNativeTools_Success(t *testing.T) {
 
 func TestRegisterNativeTools_DuplicateError(t *testing.T) {
 	registry := NewToolRegistry()
-	
+
 	// Register once
 	if err := RegisterNativeTools(registry); err != nil {
 		t.Fatalf("First registration failed: %v", err)
 	}
-	
+
 	// Register again - should fail
 	err := RegisterNativeTools(registry)
 	if err == nil {
 		t.Fatal("Expected error on duplicate registration, got nil")
 	}
-	
+
 	if !strings.Contains(err.Error(), "already registered") {
 		t.Errorf("Expected duplicate registration error, got: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestRegisterNativeTools_NilRegistry(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error when registry is nil, got nil")
 	}
-	
+
 	expectedErr := "registry: cannot register to nil registry"
 	if err.Error() != expectedErr {
 		t.Errorf("Expected error %q, got %q", expectedErr, err.Error())
@@ -105,7 +105,7 @@ func TestRegisterNativeTools_NilRegistry(t *testing.T) {
 func TestNativeTools_InterfaceCompliance(t *testing.T) {
 	registry := NewToolRegistry()
 	_ = RegisterNativeTools(registry)
-	
+
 	tools := registry.List()
 	for _, tool := range tools {
 		if tool.Name() == "" {

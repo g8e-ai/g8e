@@ -53,18 +53,18 @@ func TestProcTreeTool_Execute_Errors(t *testing.T) {
 
 func TestBuildProcessTree(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Setup mock /proc
 	// PID 1: init
 	// PID 10: parent (child of 1)
 	// PID 20: child1 (child of 10)
 	// PID 30: child2 (child of 10)
 	// PID 40: grandchild (child of 20)
-	
+
 	setupProc := func(pid int, name string, ppid int) {
 		pidDir := filepath.Join(tmpDir, fmt.Sprintf("%d", pid))
 		require.NoError(t, os.MkdirAll(pidDir, 0755))
-		
+
 		// stat format: pid (name) state ppid ...
 		statContent := fmt.Sprintf("%d (%s) S %d 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0", pid, name, ppid)
 		require.NoError(t, os.WriteFile(filepath.Join(pidDir, "stat"), []byte(statContent), 0644))
@@ -86,21 +86,22 @@ func TestBuildProcessTree(t *testing.T) {
 		require.Equal(t, 1, result.RootPID)
 		require.Equal(t, "systemd", result.Tree.Name)
 		require.Equal(t, 1, result.Tree.PID)
-		
+
 		// systemd -> parent
 		require.Len(t, result.Tree.Children, 1)
 		parent := result.Tree.Children[0]
 		require.Equal(t, "parent", parent.Name)
 		require.Equal(t, 10, parent.PID)
-		
+
 		// parent -> child1, child2
 		require.Len(t, parent.Children, 2)
-		
+
 		var c1, c2 *processNode
 		for i := range parent.Children {
-			if parent.Children[i].PID == 20 {
+			switch parent.Children[i].PID {
+			case 20:
 				c1 = &parent.Children[i]
-			} else if parent.Children[i].PID == 30 {
+			case 30:
 				c2 = &parent.Children[i]
 			}
 		}
@@ -108,12 +109,12 @@ func TestBuildProcessTree(t *testing.T) {
 		require.NotNil(t, c2)
 		require.Equal(t, "child1", c1.Name)
 		require.Equal(t, "child2", c2.Name)
-		
+
 		// child1 -> grandchild
 		require.Len(t, c1.Children, 1)
 		require.Equal(t, "grandchild", c1.Children[0].Name)
 		require.Equal(t, 40, c1.Children[0].PID)
-		
+
 		// child2 has no children
 		require.Empty(t, c2.Children)
 	})
@@ -131,7 +132,7 @@ func TestBuildProcessTree(t *testing.T) {
 		result, err := buildProcessTree(context.Background(), 1, 1)
 		require.NoError(t, err)
 		require.Equal(t, 1, result.RootPID)
-		require.Len(t, result.Tree.Children, 1) // parent
+		require.Len(t, result.Tree.Children, 1)            // parent
 		require.Empty(t, result.Tree.Children[0].Children) // child1 excluded
 	})
 
@@ -145,7 +146,7 @@ func TestBuildProcessTree(t *testing.T) {
 	t.Run("context cancellation", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		
+
 		_, err := buildProcessTree(ctx, 1, 10)
 		require.Error(t, err)
 		require.Equal(t, context.Canceled, err)
@@ -176,7 +177,7 @@ func TestBuildProcessTree_EdgeCases(t *testing.T) {
 		pidDir := filepath.Join(tmpDir, "100")
 		require.NoError(t, os.MkdirAll(pidDir, 0755))
 		require.NoError(t, os.WriteFile(filepath.Join(pidDir, "stat"), []byte("100"), 0644)) // too few fields
-		
+
 		result, err := buildProcessTree(context.Background(), 1, 10)
 		require.NoError(t, err)
 		require.Contains(t, result.Error, "not found")

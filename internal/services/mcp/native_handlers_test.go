@@ -38,8 +38,8 @@ type mockNativeTool struct {
 	executeFn   func(ctx context.Context, args json.RawMessage) (CallToolResult, error)
 }
 
-func (m *mockNativeTool) Name() string           { return m.name }
-func (m *mockNativeTool) Description() string    { return m.description }
+func (m *mockNativeTool) Name() string              { return m.name }
+func (m *mockNativeTool) Description() string       { return m.description }
 func (m *mockNativeTool) InputSchema() *InputSchema { return m.schema }
 func (m *mockNativeTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	if m.executeFn != nil {
@@ -86,7 +86,7 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 		t.Parallel()
 		registry := NewToolRegistry()
 		handler := NewNativeToolHandlerWithRegistry(registry)
-		
+
 		_, err := handler.HandleTool(context.Background(), "unknown_tool", nil)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "unknown native tool: unknown_tool")
@@ -96,7 +96,7 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 		t.Parallel()
 		registry := NewToolRegistry()
 		mockTool := &mockNativeTool{
-			name: "test_tool",
+			name:   "test_tool",
 			schema: &InputSchema{Type: "object"},
 			executeFn: func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 				return CallToolResult{
@@ -105,7 +105,7 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 			},
 		}
 		require.NoError(t, registry.Register(mockTool))
-		
+
 		handler := NewNativeToolHandlerWithRegistry(registry)
 		result, err := handler.HandleTool(context.Background(), "test_tool", nil)
 		require.NoError(t, err)
@@ -118,14 +118,14 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 		t.Parallel()
 		registry := NewToolRegistry()
 		mockTool := &mockNativeTool{
-			name: "fail_tool",
+			name:   "fail_tool",
 			schema: &InputSchema{Type: "object"},
 			executeFn: func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 				return CallToolResult{}, errors.New("execution failed")
 			},
 		}
 		require.NoError(t, registry.Register(mockTool))
-		
+
 		handler := NewNativeToolHandlerWithRegistry(registry)
 		_, err := handler.HandleTool(context.Background(), "fail_tool", nil)
 		require.Error(t, err)
@@ -138,19 +138,19 @@ func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
 		logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 		registry := NewToolRegistry()
 		mockTool := &mockNativeTool{
-			name: "log_tool",
+			name:   "log_tool",
 			schema: &InputSchema{Type: "object"},
 		}
 		require.NoError(t, registry.Register(mockTool))
-		
+
 		handler := &NativeToolHandler{
 			registry: registry,
 			logger:   logger,
 		}
-		
+
 		_, err := handler.HandleTool(context.Background(), "log_tool", nil)
 		require.NoError(t, err)
-		
+
 		_, err = handler.HandleTool(context.Background(), "unknown", nil)
 		require.Error(t, err)
 	})
@@ -161,11 +161,11 @@ func TestNativeToolHandler_ListTools_Unit(t *testing.T) {
 
 	registry := NewToolRegistry()
 	mockTool := &mockNativeTool{
-		name: "tool1",
+		name:   "tool1",
 		schema: &InputSchema{Type: "object"},
 	}
 	require.NoError(t, registry.Register(mockTool))
-	
+
 	handler := NewNativeToolHandlerWithRegistry(registry)
 	tools := handler.ListTools()
 	require.Len(t, tools, 1)

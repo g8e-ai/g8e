@@ -220,11 +220,6 @@ func (t *K8sInspectTool) Execute(ctx context.Context, args json.RawMessage) (Cal
 	}, nil
 }
 
-func kubectlAvailable() bool {
-	_, err := exec.LookPath("kubectl")
-	return err == nil
-}
-
 func runKubectlCommand(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "kubectl", args...)
 	output, err := cmd.CombinedOutput()
