@@ -1993,7 +1993,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 	}
 
 	// Include Actuator public key so the operator can populate its trusted_signers directory.
-	actuatorJSONPath := constants.ActuatorPubJSONPath
+	actuatorJSONPath := constants.Paths.Infra.ActuatorPubJSONPath
 	if data, err := os.ReadFile(actuatorJSONPath); err == nil {
 		var ap struct {
 			KeyID     string `json:"key_id"`

@@ -82,6 +82,12 @@ func EnsureGatewayReady(t *testing.T, cliCfg *config.Config) {
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d%s", constants.Ports.OperatorHttp, "/api/v1/health")
 	client := &http.Client{Timeout: 5 * time.Second}
 
+	// Increase timeout for Docker environments which might take longer to bootstrap
+	timeout := 10 * time.Second
+	if os.Getenv("G8E_TEST_ENV") != "" {
+		timeout = 60 * time.Second
+	}
+
 	require.Eventually(t, func() bool {
 		resp, err := client.Get(healthURL)
 		if err != nil {
@@ -103,7 +109,7 @@ func EnsureGatewayReady(t *testing.T, cliCfg *config.Config) {
 		}
 
 		return health.GovernanceReady
-	}, 5*time.Second, 500*time.Millisecond, "gateway did not become governance-ready within timeout")
+	}, timeout, 500*time.Millisecond, "gateway did not become governance-ready within timeout")
 }
 
 // EnsureAuthLogin ensures the CLI has a fresh session by running './g8e auth login'.
@@ -122,21 +128,46 @@ func EnsureAuthLogin(t *testing.T, repoRoot string) {
 		}
 	}
 
-	// Check if gateway is already running by examining status output
-	// (gw status always exits 0, so we must parse output rather than checking err)
-	checkCmd := exec.Command(g8ePath, "gw", "status")
-	checkCmd.Dir = repoRoot
-	checkOutput, _ := checkCmd.CombinedOutput()
-	if strings.Contains(string(checkOutput), "STOPPED") {
-		// Gateway not running, start it
-		t.Logf("Gateway not running, starting it...")
-		startCmd := exec.Command(g8ePath, "gw", "start")
-		startCmd.Dir = repoRoot
-		if output, err := startCmd.CombinedOutput(); err != nil {
-			require.NoError(t, err, "failed to start gateway: %s", string(output))
+	testEnv := os.Getenv("G8E_TEST_ENV")
+	useDocker := testEnv == "docker" || strings.HasPrefix(testEnv, "demos/")
+
+	if useDocker {
+		composeFile := "docker-compose.yml"
+		if strings.HasPrefix(testEnv, "demos/") {
+			composeFile = filepath.Join(testEnv, "compose.yml")
 		}
-		// Wait for gateway to be ready
-		time.Sleep(3 * time.Second)
+		composePath := filepath.Join(repoRoot, composeFile)
+
+		t.Logf("Ensuring Docker environment is up (using %s)...", composeFile)
+		upCmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d")
+		upCmd.Dir = repoRoot
+		if output, err := upCmd.CombinedOutput(); err != nil {
+			require.NoError(t, err, "failed to start docker-compose: %s", string(output))
+		}
+
+		// Load config to check health
+		cliCfg, err := config.Load(repoRoot)
+		require.NoError(t, err)
+		EnsureGatewayReady(t, cliCfg)
+	} else {
+		// Check if gateway is already running by examining status output
+		// (gw status always exits 0, so we must parse output rather than checking err)
+		checkCmd := exec.Command(g8ePath, "gw", "status")
+		checkCmd.Dir = repoRoot
+		checkOutput, _ := checkCmd.CombinedOutput()
+		if strings.Contains(string(checkOutput), "STOPPED") {
+			// Gateway not running, start it
+			t.Logf("Gateway not running, starting it...")
+			startCmd := exec.Command(g8ePath, "gw", "start")
+			startCmd.Dir = repoRoot
+			if output, err := startCmd.CombinedOutput(); err != nil {
+				require.NoError(t, err, "failed to start gateway: %s", string(output))
+			}
+			// Wait for gateway to be ready
+			cliCfg, err := config.Load(repoRoot)
+			require.NoError(t, err)
+			EnsureGatewayReady(t, cliCfg)
+		}
 	}
 
 	// Skip re-enrollment if credentials are fresh (< 45 min old).
@@ -151,8 +182,10 @@ func EnsureAuthLogin(t *testing.T, repoRoot string) {
 	}
 
 	// Run './g8e auth login' with explicit endpoint
+	t.Logf("Performing non-interactive auth login...")
 	loginCmd := exec.Command(g8ePath, "auth", "login")
 	loginCmd.Dir = repoRoot
+	loginCmd.Env = append(os.Environ(), "G8E_SKIP_PASSKEY=true")
 	if output, err := loginCmd.CombinedOutput(); err != nil {
 		require.NoError(t, err, "failed to run './g8e auth login': %s", string(output))
 	}

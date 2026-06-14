@@ -1682,7 +1682,7 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 	}
 
 	// Write JSON format
-	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONPath)
+	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
 	jsonData := map[string]string{
 		"key_id":     keyID,
 		"public_key": hex.EncodeToString(pubKey),

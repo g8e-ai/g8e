@@ -56,6 +56,8 @@ var Paths = struct {
 		PkiTrustDir                 string
 		PkiRevocationDir            string
 		PkiBinariesDir              string
+		ActuatorPubJSONPath         string
+		ActuatorPubPEMPath          string
 	}
 }{
 	Infra: struct {
@@ -91,6 +93,8 @@ var Paths = struct {
 		PkiTrustDir                 string
 		PkiRevocationDir            string
 		PkiBinariesDir              string
+		ActuatorPubJSONPath         string
+		ActuatorPubPEMPath          string
 	}{
 		DbPath:                  ".g8e/data/g8e.db",
 		PkiDir:                  ".g8e/pki",
@@ -121,6 +125,8 @@ var Paths = struct {
 		PkiIssuedGatewayPeerDir: ".g8e/pki/issued/gateway-peer",
 		PkiTrustDir:             ".g8e/pki/trust",
 		PkiRevocationDir:        ".g8e/pki/revocation",
+		ActuatorPubJSONPath:     ".g8e/pki/Actuator_pub.json",
+		ActuatorPubPEMPath:      ".g8e/pki/Actuator_pub.pem",
 	},
 }
 
@@ -172,6 +178,8 @@ func InitPathsWithBase(baseDir string) error {
 	Paths.Infra.PkiIssuedGatewayPeerDir = filepath.Join(Paths.Infra.PkiDir, "issued/gateway-peer")
 	Paths.Infra.PkiTrustDir = filepath.Join(Paths.Infra.PkiDir, "trust")
 	Paths.Infra.PkiRevocationDir = filepath.Join(Paths.Infra.PkiDir, "revocation")
+	Paths.Infra.ActuatorPubJSONPath = filepath.Join(Paths.Infra.PkiDir, ActuatorPubJSONFilename)
+	Paths.Infra.ActuatorPubPEMPath = filepath.Join(Paths.Infra.PkiDir, ActuatorPubPEMFilename)
 	return nil
 }
 
@@ -332,8 +340,8 @@ const (
 
 	// FULL path constants (relative from runtime directory)
 	GatewayIDPath       = ".g8e/data/gateway-id"
-	ActuatorPubJSONPath = "Actuator_pub.json"
-	ActuatorPubPEMPath  = "Actuator_pub.pem"
+	ActuatorPubJSONPath = ".g8e/pki/Actuator_pub.json"
+	ActuatorPubPEMPath  = ".g8e/pki/Actuator_pub.pem"
 	NetworkIdentityPath = ".g8e/pki/network-identity.json"
 	PeerCertPath        = ".g8e/pki/peer/peer.crt"
 	PeerKeyPath         = ".g8e/pki/peer/peer.key"

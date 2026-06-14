@@ -22,7 +22,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,40 +66,85 @@ func setupTestContext(t *testing.T) *TestContext {
 	if err := constants.InitPathsWithBase(constants.ProjectRootFromTestDir); err != nil {
 		t.Fatalf("failed to initialize paths: %v", err)
 	}
-	// The projectRoot should be the directory containing .g8e, not the .g8e directory itself,
-	// because cliconfig.Load and constants.InitPathsWithBase expect the base directory.
+
+	repoRoot := constants.ProjectRootFromTestDir
 	projectRoot := constants.Paths.Infra.RuntimeDir
+
+	// Ensure platform is running and authenticated
+	// We build the g8e binary if needed
+	g8ePath := filepath.Join(repoRoot, "g8e")
+	if _, err := os.Stat(g8ePath); os.IsNotExist(err) {
+		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
+		buildCmd.Dir = repoRoot
+		if output, err := buildCmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to build g8e binary: %s", string(output))
+		}
+	}
+
+	testEnv := os.Getenv("G8E_TEST_ENV")
+	useDocker := testEnv == "docker" || strings.HasPrefix(testEnv, "demos/")
+
+	if useDocker {
+		composeFile := "docker-compose.yml"
+		if strings.HasPrefix(testEnv, "demos/") {
+			composeFile = filepath.Join(testEnv, "compose.yml")
+		}
+		composePath := filepath.Join(repoRoot, composeFile)
+
+		t.Logf("Ensuring Docker environment is up (using %s)...", composeFile)
+		upCmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d")
+		upCmd.Dir = repoRoot
+		if output, err := upCmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to start docker-compose: %s", string(output))
+		}
+	} else {
+		// Local start if not already running
+		checkCmd := exec.Command(g8ePath, "gw", "status")
+		checkCmd.Dir = repoRoot
+		checkOutput, _ := checkCmd.CombinedOutput()
+		if strings.Contains(string(checkOutput), "STOPPED") {
+			t.Logf("Gateway not running, starting it...")
+			startCmd := exec.Command(g8ePath, "gw", "start")
+			startCmd.Dir = repoRoot
+			if output, err := startCmd.CombinedOutput(); err != nil {
+				t.Fatalf("failed to start gateway: %s", string(output))
+			}
+		}
+	}
 
 	cliCfg, err := cliconfig.Load(projectRoot)
 	if err != nil {
 		t.Fatalf("failed to load CLI config: %v", err)
 	}
 
-	// Bootstrap CLI authentication if not already done (matches ./g8e gw start behavior)
-	// Check if credentials are stale (> 45 min old) and re-enroll if needed
+	// Bootstrap CLI authentication if not already done
 	credsPath := filepath.Join(projectRoot, ".g8e", "credentials")
+	needsLogin := true
 	if info, statErr := os.Stat(credsPath); statErr == nil {
-		if time.Since(info.ModTime()) >= 45*time.Minute {
-			t.Logf("Credentials are stale (%v old), re-enrolling...", time.Since(info.ModTime()).Round(time.Second))
-			// Delete stale credentials to force re-enrollment
-			os.Remove(credsPath)
-			os.Remove(cliCfg.CLICertFile())
-			os.Remove(cliCfg.CLIKeyFile())
+		if time.Since(info.ModTime()) < 45*time.Minute {
+			needsLogin = false
 		}
 	}
 
-	// CLI authentication must be performed explicitly via 'g8e auth login'
-	// Tests should set up credentials via the proper auth flow
-	creds, err := auth.LoadCredentials(cliCfg)
-	if err != nil || creds == nil {
-		t.Fatalf("CLI credentials required for tests. Please authenticate via 'g8e auth login'")
+	if needsLogin {
+		t.Logf("Performing non-interactive auth login...")
+		loginCmd := exec.Command(g8ePath, "auth", "login")
+		loginCmd.Dir = repoRoot
+		loginCmd.Env = append(os.Environ(), "G8E_SKIP_PASSKEY=true")
+		if output, err := loginCmd.CombinedOutput(); err != nil {
+			t.Fatalf("failed to run './g8e auth login': %s", string(output))
+		}
 	}
 
 	// Ensure gateway is running and governance is ready before proceeding
 	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
 	t.Logf("Waiting for gateway to be governance-ready at %s...", healthURL)
 
-	deadline := time.Now().Add(5 * time.Second)
+	timeout := 5 * time.Second
+	if useDocker {
+		timeout = 60 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		resp, err := http.Get(healthURL)
 		if err != nil {
@@ -133,41 +180,37 @@ func setupTestContext(t *testing.T) *TestContext {
 	}
 
 	if time.Now().After(deadline) {
-		t.Fatal("gateway did not become governance-ready within timeout - run './g8e gw start' first")
+		t.Fatal("gateway did not become governance-ready within timeout")
 	}
 
-	// Paths to local PKI material (bootstrapped via ./g8e gw start)
+	// Paths to local PKI material (bootstrapped via ./g8e auth login)
 	clientCertPath := cliCfg.CLICertFile()
 	clientKeyPath := cliCfg.CLIKeyFile()
-	// Use the CA bundle from centralized constants as per docs/devs/tests.md
 	caBundlePath := constants.Paths.Infra.CaCertPath
 
 	// Verify certificates exist
 	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
-		t.Fatalf("client cert not found at %s - run './g8e gw start' first", clientCertPath)
+		t.Fatalf("client cert not found at %s", clientCertPath)
 	}
 	if _, err := os.Stat(caBundlePath); os.IsNotExist(err) {
-		t.Fatalf("CA bundle not found at %s - run './g8e gw start' first", caBundlePath)
+		t.Fatalf("CA bundle not found at %s", caBundlePath)
 	}
 
 	// Create auditor client for HTTP submission
 	auditorCfg := config.Default()
-	auditorCfg.UseCLIConfig = false // Don't auto-load from CLI config, we set paths explicitly
+	auditorCfg.UseCLIConfig = false
 	auditorCfg.MTLSBaseURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	auditorCfg.PublicBaseURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	auditorCfg.Auth.ClientCert = clientCertPath
 	auditorCfg.Auth.ClientKey = clientKeyPath
 	auditorCfg.Auth.CABundle = caBundlePath
-	auditorCfg.Auth.Insecure = true // Skip verify for local dev with self-signed certs
-	auditorCfg.Verbose = true       // Echo requests to stderr for debugging
+	auditorCfg.Auth.Insecure = true
+	auditorCfg.Verbose = true
 
-	// Load CLI credentials (bootstrapped by ./g8e gw start)
-	creds, err = auth.LoadCredentials(cliCfg)
-	if err != nil {
-		t.Fatalf("failed to load CLI credentials: %v", err)
-	}
-	if creds == nil {
-		t.Fatalf("no CLI credentials found - run './g8e gw start' first")
+	// Load CLI credentials
+	creds, err := auth.LoadCredentials(cliCfg)
+	if err != nil || creds == nil {
+		t.Fatalf("failed to load CLI credentials")
 	}
 
 	t.Logf("Creating auditor client with Cert: %s, Key: %s, CA: %s", clientCertPath, clientKeyPath, caBundlePath)
@@ -176,14 +219,11 @@ func setupTestContext(t *testing.T) *TestContext {
 		t.Fatalf("failed to create auditor client: %v", err)
 	}
 
-	// For gateway-only testing, use CLI session ID as operator session ID
-	// The gateway validates envelopes using the session ID in the envelope body
 	operatorSessionID := creds.CLISessionID
 	if operatorSessionID == "" {
-		t.Fatal("CLI session ID is empty - run './g8e gw start' first")
+		t.Fatal("CLI session ID is empty")
 	}
 
-	// Generate test client keys for signing (these are for L2 consensus simulation in tests)
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("failed to generate test client keys: %v", err)
