@@ -63,7 +63,6 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	var ks *keystore.Keystore
 	if resetKeystoreStorage {
-		keystore.ResetTestStorage()
 		backend, err := keystore.NewTestBackend()
 		require.NoError(t, err)
 		ks, err = keystore.NewWithBackend(secretsDir, logger, backend)

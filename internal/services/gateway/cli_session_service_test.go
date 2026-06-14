@@ -91,7 +91,8 @@ func TestCLISessionService_PersistCLISession(t *testing.T) {
 		assert.Equal(t, loginMethod, stored.LoginMethod)
 
 		// Verify timestamp fields are set
-		assert.False(t, stored.CreatedAt.IsZero())
+		// Note: CreatedAt is stored in the Document metadata, not in the data map
+		assert.False(t, doc.CreatedAt.IsZero())
 		assert.False(t, stored.ExpiresAt.IsZero())
 		assert.False(t, stored.AbsoluteExpiresAt.IsZero())
 		assert.False(t, stored.IdleExpiresAt.IsZero())

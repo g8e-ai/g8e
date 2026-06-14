@@ -29,7 +29,6 @@ func TestNewTestBackend(t *testing.T) {
 }
 
 func TestTestBackend_RetrieveMasterKey_NotFound(t *testing.T) {
-	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 
@@ -40,7 +39,6 @@ func TestTestBackend_RetrieveMasterKey_NotFound(t *testing.T) {
 }
 
 func TestTestBackend_StoreAndRetrieveMasterKey(t *testing.T) {
-	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 
@@ -54,7 +52,6 @@ func TestTestBackend_StoreAndRetrieveMasterKey(t *testing.T) {
 }
 
 func TestTestBackend_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
-	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 
@@ -74,7 +71,6 @@ func TestTestBackend_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
 }
 
 func TestTestBackend_DeleteMasterKey(t *testing.T) {
-	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 
@@ -92,7 +88,6 @@ func TestTestBackend_DeleteMasterKey(t *testing.T) {
 }
 
 func TestTestBackend_DeleteMasterKey_NotFound(t *testing.T) {
-	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 
@@ -101,7 +96,6 @@ func TestTestBackend_DeleteMasterKey_NotFound(t *testing.T) {
 }
 
 func TestTestBackend_OverwriteMasterKey(t *testing.T) {
-	ResetTestStorage()
 	backend, err := NewTestBackend()
 	require.NoError(t, err)
 
@@ -118,18 +112,3 @@ func TestTestBackend_OverwriteMasterKey(t *testing.T) {
 	assert.Equal(t, key2, retrievedKey, "second key should overwrite first")
 }
 
-func TestResetTestStorage(t *testing.T) {
-	backend, err := NewTestBackend()
-	require.NoError(t, err)
-
-	testKey := []byte("test-master-key-32-bytes-long-12345")
-	err = backend.StoreMasterKey(testKey)
-	require.NoError(t, err)
-
-	ResetTestStorage()
-
-	key, err := backend.RetrieveMasterKey()
-	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
-	assert.Nil(t, key)
-}

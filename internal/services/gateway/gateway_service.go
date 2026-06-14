@@ -147,7 +147,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 
 	// Initialize suspended transaction service for gateway mode
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               constants.Paths.Infra.SuspendedTransactionsDBPath,
+		DBPath:               constants.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -313,7 +313,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 
 	// Initialize suspended transaction service for gateway mode (test configuration)
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               constants.Paths.Infra.SuspendedTransactionsDBPath,
+		DBPath:               constants.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,

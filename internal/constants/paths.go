@@ -175,6 +175,12 @@ func InitPathsWithBase(baseDir string) error {
 	return nil
 }
 
+// GetSuspendedTransactionsDBPath constructs the suspended transaction database path
+// relative to the provided data directory.
+func GetSuspendedTransactionsDBPath(dataDir string) string {
+	return filepath.Join(dataDir, SuspendedTxFilename)
+}
+
 // System path constants for critical system directories and files
 const (
 	PathEtc                                                   = "/etc"

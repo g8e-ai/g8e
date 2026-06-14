@@ -134,6 +134,7 @@ func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 
 	cfg.Gateway.PKIDir = pkiDir
 	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
 	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
