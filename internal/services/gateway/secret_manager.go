@@ -296,7 +296,6 @@ func (m *SecretManager) validateAppSettings() error {
 	return nil
 }
 
-
 // bootstrapDigestManifest is the on-disk schema for bootstrap_digest.json.
 // Consumers on startup compute SHA-256 of each secret they load from the
 // volume and compare to the digest recorded here. Divergence means the

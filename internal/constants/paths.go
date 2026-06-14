@@ -24,73 +24,73 @@ import (
 // The binary is fully self-contained and can run from any directory.
 var Paths = struct {
 	Infra struct {
-		DbPath                  string
-		PkiDir                  string
-		SecretsDir              string
-		CaCertPath              string
-		AppCertDir              string
-		DocsDir                 string
-		ProtocolDir             string
-		ProtocolConstantsDir    string
-		ProtocolModelsDir       string
-		SshConfigPath           string
-		RuntimeDir              string
-		DataDir                 string
-		VaultDir                string
-		VaultKeyPath            string
-		TestVaultDir            string
-		LocalStateDBPath        string
+		DbPath                      string
+		PkiDir                      string
+		SecretsDir                  string
+		CaCertPath                  string
+		AppCertDir                  string
+		DocsDir                     string
+		ProtocolDir                 string
+		ProtocolConstantsDir        string
+		ProtocolModelsDir           string
+		SshConfigPath               string
+		RuntimeDir                  string
+		DataDir                     string
+		VaultDir                    string
+		VaultKeyPath                string
+		TestVaultDir                string
+		LocalStateDBPath            string
 		SuspendedTransactionsDBPath string
-		AuditVaultDBPath        string
-		RootCAPath              string
-		HubCAPath               string
-		OperatorCAPath          string
-		GatewayPeerCAPath       string
-		GatewayChainPath        string
-		TrustDomainJSONPath     string
-		ServiceCertPath         string
-		PkiRootDir              string
-		PkiAuthoritiesDir       string
-		PkiIssuedHubDir         string
-		PkiIssuedGatewayPeerDir string
-		PkiTrustDir             string
-		PkiRevocationDir        string
-		PkiBinariesDir          string
+		AuditVaultDBPath            string
+		RootCAPath                  string
+		HubCAPath                   string
+		OperatorCAPath              string
+		GatewayPeerCAPath           string
+		GatewayChainPath            string
+		TrustDomainJSONPath         string
+		ServiceCertPath             string
+		PkiRootDir                  string
+		PkiAuthoritiesDir           string
+		PkiIssuedHubDir             string
+		PkiIssuedGatewayPeerDir     string
+		PkiTrustDir                 string
+		PkiRevocationDir            string
+		PkiBinariesDir              string
 	}
 }{
 	Infra: struct {
-		DbPath                  string
-		PkiDir                  string
-		SecretsDir              string
-		CaCertPath              string
-		AppCertDir              string
-		DocsDir                 string
-		ProtocolDir             string
-		ProtocolConstantsDir    string
-		ProtocolModelsDir       string
-		SshConfigPath           string
-		RuntimeDir              string
-		DataDir                 string
-		VaultDir                string
-		VaultKeyPath            string
-		TestVaultDir            string
-		LocalStateDBPath        string
+		DbPath                      string
+		PkiDir                      string
+		SecretsDir                  string
+		CaCertPath                  string
+		AppCertDir                  string
+		DocsDir                     string
+		ProtocolDir                 string
+		ProtocolConstantsDir        string
+		ProtocolModelsDir           string
+		SshConfigPath               string
+		RuntimeDir                  string
+		DataDir                     string
+		VaultDir                    string
+		VaultKeyPath                string
+		TestVaultDir                string
+		LocalStateDBPath            string
 		SuspendedTransactionsDBPath string
-		AuditVaultDBPath        string
-		RootCAPath              string
-		HubCAPath               string
-		OperatorCAPath          string
-		GatewayPeerCAPath       string
-		GatewayChainPath        string
-		TrustDomainJSONPath     string
-		ServiceCertPath         string
-		PkiRootDir              string
-		PkiAuthoritiesDir       string
-		PkiIssuedHubDir         string
-		PkiIssuedGatewayPeerDir string
-		PkiTrustDir             string
-		PkiRevocationDir        string
-		PkiBinariesDir          string
+		AuditVaultDBPath            string
+		RootCAPath                  string
+		HubCAPath                   string
+		OperatorCAPath              string
+		GatewayPeerCAPath           string
+		GatewayChainPath            string
+		TrustDomainJSONPath         string
+		ServiceCertPath             string
+		PkiRootDir                  string
+		PkiAuthoritiesDir           string
+		PkiIssuedHubDir             string
+		PkiIssuedGatewayPeerDir     string
+		PkiTrustDir                 string
+		PkiRevocationDir            string
+		PkiBinariesDir              string
 	}{
 		DbPath:                  ".g8e/data/g8e.db",
 		PkiDir:                  ".g8e/pki",
@@ -292,12 +292,12 @@ const (
 	DemosBinDirname  = "bin"
 	DemosBinaryName  = "g8e"
 
-	SwaggerFilename        = "swagger.json"
+	SwaggerFilename          = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"
 
-	PkiSubdirHub         = "hub"
-	PkiSubdirGatewayPeer = "gateway-peer"
-	PkiSubdirApps        = "apps"
+	PkiSubdirHub            = "hub"
+	PkiSubdirGatewayPeer    = "gateway-peer"
+	PkiSubdirApps           = "apps"
 	PkiSubdirTrustedSigners = "trusted_signers"
 
 	// Directory names
@@ -306,7 +306,7 @@ const (
 
 	// CLI certificate and key filenames
 	CliCertFilename = "cli.crt"
-	CliKeyFilename = "cli.key"
+	CliKeyFilename  = "cli.key"
 
 	// Gateway-specific filenames
 	GatewayIDFilename       = "gateway-id"
@@ -319,10 +319,10 @@ const (
 	OperatorPostureFilename = "operator.posture"
 
 	// Peer certificate filenames
-	PeerCertFilename = "peer.crt"
-	PeerKeyFilename  = "peer.key"
+	PeerCertFilename  = "peer.crt"
+	PeerKeyFilename   = "peer.key"
 	PeerChainFilename = "peer.chain.pem"
-	PeerSubdir       = "peer"
+	PeerSubdir        = "peer"
 
 	// FULL path constants (relative from runtime directory)
 	GatewayIDPath       = ".g8e/data/gateway-id"
@@ -371,18 +371,18 @@ const (
 	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
 
 	// Agent config directory and file names (relative to home directory)
-	AgentConfigDirCursor     = ".cursor"
-	AgentConfigDirDevin      = ".codeium/windsurf"
-	AgentConfigDirGemini     = ".gemini"
-	AgentConfigDirGoose      = ".goose"
-	AgentConfigDirVSCode     = ".vscode"
-	AgentConfigDirCodeium    = ".codeium"
-	AgentConfigDirTabby      = ".tabby"
-	AgentConfigDirContinue   = ".continue"
-	AgentConfigFileMCP       = "mcp.json"
-	AgentConfigFileMCPDevin  = "mcp_config.json"
-	AgentConfigFileSettings  = "settings.json"
-	AgentConfigFileAider     = ".aider.conf.yml"
+	AgentConfigDirCursor    = ".cursor"
+	AgentConfigDirDevin     = ".codeium/windsurf"
+	AgentConfigDirGemini    = ".gemini"
+	AgentConfigDirGoose     = ".goose"
+	AgentConfigDirVSCode    = ".vscode"
+	AgentConfigDirCodeium   = ".codeium"
+	AgentConfigDirTabby     = ".tabby"
+	AgentConfigDirContinue  = ".continue"
+	AgentConfigFileMCP      = "mcp.json"
+	AgentConfigFileMCPDevin = "mcp_config.json"
+	AgentConfigFileSettings = "settings.json"
+	AgentConfigFileAider    = ".aider.conf.yml"
 
 	// File permission modes (octal)
 	PermDirPrivate  = 0700 // rwx------
@@ -390,26 +390,26 @@ const (
 	PermFilePublic  = 0644 // rw-r--r--
 
 	// API path constants
-	APIPathAuthDeviceEnroll    = "/api/v1/auth/device/enroll"
-	APIPathPKIDevicesEnroll    = "/api/v1/pki/devices/enroll"
-	WellKnownPKICABundle       = "/.well-known/g8e/pki/ca-bundle"
+	APIPathAuthDeviceEnroll = "/api/v1/auth/device/enroll"
+	APIPathPKIDevicesEnroll = "/api/v1/pki/devices/enroll"
+	WellKnownPKICABundle    = "/.well-known/g8e/pki/ca-bundle"
 
 	// Default path descriptions for CLI help text
-	DefaultVaultDirDesc        = ".g8e/vault"
-	DefaultVaultKeyDesc        = ".g8e/secrets/vault.key"
-	DefaultOperatorKeyDesc     = ".g8e/pki/operator.key"
-	DefaultClientKeyDesc       = ".g8e/pki/client.key"
-	DefaultOperatorCertDesc    = ".g8e/pki/operator.crt"
-	DefaultClientCertDesc      = ".g8e/pki/client.crt"
+	DefaultVaultDirDesc     = ".g8e/vault"
+	DefaultVaultKeyDesc     = ".g8e/secrets/vault.key"
+	DefaultOperatorKeyDesc  = ".g8e/pki/operator.key"
+	DefaultClientKeyDesc    = ".g8e/pki/client.key"
+	DefaultOperatorCertDesc = ".g8e/pki/operator.crt"
+	DefaultClientCertDesc   = ".g8e/pki/client.crt"
 
 	// Default path constants for CLI config (relative paths)
-	DefaultDataDir            = RuntimeDirname + "/" + DataDirname
-	DefaultPKIDir             = RuntimeDirname + "/" + PkiDirname
-	DefaultSecretsDir         = RuntimeDirname + "/" + SecretsDirname
+	DefaultDataDir    = RuntimeDirname + "/" + DataDirname
+	DefaultPKIDir     = RuntimeDirname + "/" + PkiDirname
+	DefaultSecretsDir = RuntimeDirname + "/" + SecretsDirname
 
 	// Test-specific filename constants (for isolated test environments)
 	TestEmptyMachineIDFilename = "empty-machine-id"
-	TestDBSubdirName          = "db"
-	TestLedgerDirname         = "ledger"
-	TestGitDirname            = ".git"
+	TestDBSubdirName           = "db"
+	TestLedgerDirname          = "ledger"
+	TestGitDirname             = ".git"
 )

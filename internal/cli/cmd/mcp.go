@@ -28,11 +28,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"syscall"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
@@ -128,7 +128,7 @@ type CallToolRequest struct {
 type InitializeResult struct {
 	ProtocolVersion string                 `json:"protocolVersion"`
 	Capabilities    map[string]interface{} `json:"capabilities"`
-	ServerInfo      ServerInfo              `json:"serverInfo"`
+	ServerInfo      ServerInfo             `json:"serverInfo"`
 }
 
 // ServerInfo contains server information for initialize.

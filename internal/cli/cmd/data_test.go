@@ -325,7 +325,7 @@ func TestDataStoreCmdFlagValidation(t *testing.T) {
 		flag := cmd.Flags().Lookup("collection")
 		assert.NotNil(t, flag)
 		// The flag has no default value, making it required
-		assert.Equal(t, "", flag.DefValue)
+		assert.Empty(t, flag.DefValue)
 	})
 
 	t.Run("store list mode with collection flag", func(t *testing.T) {
@@ -359,7 +359,7 @@ func TestDataAuditListCmdFlagValidation(t *testing.T) {
 		flag := cmd.Flags().Lookup("operator-session-id")
 		assert.NotNil(t, flag)
 		// The flag has no default value, making it required
-		assert.Equal(t, "", flag.DefValue)
+		assert.Empty(t, flag.DefValue)
 	})
 
 	t.Run("audit list with operator-session-id flag", func(t *testing.T) {

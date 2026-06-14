@@ -17,10 +17,8 @@ package tests
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )

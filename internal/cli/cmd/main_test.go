@@ -294,7 +294,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		err := rootCmd.Execute()
 
 		// Cobra shows help and returns nil error when no args provided
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e")
 	})
@@ -371,7 +371,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		rootCmd.SetArgs([]string{"invalid-command"})
 		err := rootCmd.Execute()
 
-		assert.Error(t, err)
+		require.Error(t, err)
 
 		w.Close()
 		var buf bytes.Buffer
@@ -470,7 +470,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		rootCmd.SetArgs([]string{"--help"})
 		err := rootCmd.Execute()
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 
 		assert.Contains(t, output, "g8e")
@@ -507,7 +507,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		rootCmd.SetArgs([]string{"help"})
 		err := rootCmd.Execute()
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 
 		assert.Contains(t, output, "g8e")
@@ -584,7 +584,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		rootCmd.SetArgs([]string{})
 		err := rootCmd.Execute()
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 
 		assert.Contains(t, output, "g8e")

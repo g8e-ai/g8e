@@ -606,4 +606,3 @@ func TestPromptForScpOptions(t *testing.T) {
 		assert.Equal(t, 0, port)
 	})
 }
-

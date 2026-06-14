@@ -27,20 +27,20 @@ import (
 // the global constants.Paths package-level state, which causes race
 // conditions in parallel test execution.
 type TestPaths struct {
-	BaseDir          string
-	RuntimeDir       string
-	DataDir          string
-	PKIDir           string
-	SecretsDir       string
-	VaultDir         string
-	VaultKeyPath     string
-	TestVaultDir     string
-	ProtocolDir      string
-	DocsDir          string
-	SshConfigPath    string
-	DbPath           string
-	LocalStateDBPath string
-	AuditVaultDBPath string
+	BaseDir           string
+	RuntimeDir        string
+	DataDir           string
+	PKIDir            string
+	SecretsDir        string
+	VaultDir          string
+	VaultKeyPath      string
+	TestVaultDir      string
+	ProtocolDir       string
+	DocsDir           string
+	SshConfigPath     string
+	DbPath            string
+	LocalStateDBPath  string
+	AuditVaultDBPath  string
 	SuspendedTxDBPath string
 }
 
@@ -57,20 +57,20 @@ func NewTestPaths(baseDir string) *TestPaths {
 	docsDir := filepath.Join(runtimeDir, "docs")
 
 	return &TestPaths{
-		BaseDir:          baseDir,
-		RuntimeDir:       runtimeDir,
-		DataDir:          dataDir,
-		PKIDir:           pkiDir,
-		SecretsDir:       secretsDir,
-		VaultDir:         vaultDir,
-		VaultKeyPath:     filepath.Join(vaultDir, "key"),
-		TestVaultDir:     testVaultDir,
-		ProtocolDir:      protocolDir,
-		DocsDir:          docsDir,
-		SshConfigPath:    filepath.Join(runtimeDir, constants.SshConfigFilename),
-		DbPath:           filepath.Join(dataDir, "g8e.db"),
-		LocalStateDBPath: filepath.Join(runtimeDir, "local_state.db"),
-		AuditVaultDBPath: filepath.Join(dataDir, "audit_vault.db"),
+		BaseDir:           baseDir,
+		RuntimeDir:        runtimeDir,
+		DataDir:           dataDir,
+		PKIDir:            pkiDir,
+		SecretsDir:        secretsDir,
+		VaultDir:          vaultDir,
+		VaultKeyPath:      filepath.Join(vaultDir, "key"),
+		TestVaultDir:      testVaultDir,
+		ProtocolDir:       protocolDir,
+		DocsDir:           docsDir,
+		SshConfigPath:     filepath.Join(runtimeDir, constants.SshConfigFilename),
+		DbPath:            filepath.Join(dataDir, "g8e.db"),
+		LocalStateDBPath:  filepath.Join(runtimeDir, "local_state.db"),
+		AuditVaultDBPath:  filepath.Join(dataDir, "audit_vault.db"),
 		SuspendedTxDBPath: filepath.Join(dataDir, "suspended_transactions.db"),
 	}
 }

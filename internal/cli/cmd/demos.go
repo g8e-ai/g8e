@@ -355,6 +355,13 @@ Available scenarios:
 }
 
 func runDemosRun(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("demos: requires demo environment name")
+	}
+	if len(args) > 2 {
+		return fmt.Errorf("demos: accepts at most 2 arguments (demo environment and optional scenario name)")
+	}
+
 	org := args[0]
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -371,8 +378,8 @@ func runDemosRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
 	}
 
-	if len(args) == 2 {
-		return runScenario(org, demoDir, args[1])
+	if len(args) >= 2 {
+		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
 	}
 
 	return runAllScenarios(org, demoDir)
@@ -712,4 +719,3 @@ func runFinanceScenario(demoDir, scenario string) error {
 	}
 	return nil
 }
-

@@ -277,27 +277,27 @@ func TestPrintDemoEndpoints(t *testing.T) {
 func TestRunScenario(t *testing.T) {
 	t.Run("returns error for unknown org", func(t *testing.T) {
 		err := runScenario("unknown-org", "/tmp", "1")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
 	})
 
 	t.Run("returns error for invalid healthcare scenario", func(t *testing.T) {
 		err := runHealthcareScenario("/tmp", "99")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for healthcare")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
 	t.Run("returns error for invalid gov scenario", func(t *testing.T) {
 		err := runGovScenario("/tmp", "99")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for gov")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
 	t.Run("returns error for invalid finance scenario", func(t *testing.T) {
 		err := runFinanceScenario("/tmp", "99")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for finance")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
@@ -320,7 +320,7 @@ func TestRunScenario(t *testing.T) {
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns error for org without scenarios", func(t *testing.T) {
 		err := runAllScenarios("unknown-org", "/tmp")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
 	})
 
@@ -388,7 +388,7 @@ func TestRunDemosList(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosList(cmd, []string{})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to read demos directory")
 	})
 
@@ -427,7 +427,7 @@ func TestRunDemosList(t *testing.T) {
 		os.Stdout = originalStdout
 		buf.ReadFrom(r)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "Available demo environments:")
 		assert.Contains(t, output, "healthcare")
@@ -476,7 +476,7 @@ func TestRunDemosList(t *testing.T) {
 		os.Stdout = originalStdout
 		buf.ReadFrom(r)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "healthcare")
 		assert.NotContains(t, output, "bin")
@@ -522,7 +522,7 @@ func TestRunDemosList(t *testing.T) {
 		os.Stdout = originalStdout
 		buf.ReadFrom(r)
 
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "healthcare")
 		assert.NotContains(t, output, "no-compose")
@@ -546,7 +546,7 @@ func TestRunDemosStart(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosStart(cmd, []string{"nonexistent"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
 	})
 
@@ -570,7 +570,7 @@ func TestRunDemosStart(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosStart(cmd, []string{"healthcare"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
 	})
 }
@@ -592,7 +592,7 @@ func TestRunDemosStop(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosStop(cmd, []string{"nonexistent"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
 	})
 
@@ -616,7 +616,7 @@ func TestRunDemosStop(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosStop(cmd, []string{"healthcare"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
 	})
 }
@@ -638,7 +638,7 @@ func TestRunDemosStatus(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosStatus(cmd, []string{"nonexistent"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
 	})
 
@@ -662,7 +662,7 @@ func TestRunDemosStatus(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosStatus(cmd, []string{"healthcare"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
 	})
 }
@@ -684,7 +684,7 @@ func TestRunDemosClean(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosClean(cmd, []string{"nonexistent"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
 	})
 
@@ -708,7 +708,7 @@ func TestRunDemosClean(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosClean(cmd, []string{"healthcare"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
 	})
 }
@@ -730,7 +730,7 @@ func TestRunDemosRun(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosRun(cmd, []string{"nonexistent"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
 	})
 
@@ -754,7 +754,7 @@ func TestRunDemosRun(t *testing.T) {
 
 		cmd := &cobra.Command{}
 		err = runDemosRun(cmd, []string{"healthcare"})
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
 	})
 

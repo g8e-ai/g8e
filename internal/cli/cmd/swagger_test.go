@@ -641,7 +641,7 @@ func TestSwaggerCommandDefaultValues(t *testing.T) {
 		dirFlag := cmd.Flags().Lookup("dir")
 		assert.NotNil(t, dirFlag)
 		// Default value is empty string, which triggers the default in RunE
-		assert.Equal(t, "", dirFlag.DefValue)
+		assert.Empty(t, dirFlag.DefValue)
 	})
 
 	t.Run("init default output directory is correct", func(t *testing.T) {
@@ -649,7 +649,7 @@ func TestSwaggerCommandDefaultValues(t *testing.T) {
 		outputFlag := cmd.Flags().Lookup("output")
 		assert.NotNil(t, outputFlag)
 		// Default value is empty string, which triggers the default in RunE
-		assert.Equal(t, "", outputFlag.DefValue)
+		assert.Empty(t, outputFlag.DefValue)
 	})
 
 	t.Run("serve default port is correct", func(t *testing.T) {
@@ -665,7 +665,7 @@ func TestSwaggerCommandDefaultValues(t *testing.T) {
 		hostFlag := cmd.Flags().Lookup("host")
 		assert.NotNil(t, hostFlag)
 		// Default value is empty string, which triggers the default localhost in RunE
-		assert.Equal(t, "", hostFlag.DefValue)
+		assert.Empty(t, hostFlag.DefValue)
 	})
 
 	t.Run("validate default file is correct", func(t *testing.T) {
@@ -673,7 +673,7 @@ func TestSwaggerCommandDefaultValues(t *testing.T) {
 		fileFlag := cmd.Flags().Lookup("file")
 		assert.NotNil(t, fileFlag)
 		// Default value is empty string, which triggers the default in RunE
-		assert.Equal(t, "", fileFlag.DefValue)
+		assert.Empty(t, fileFlag.DefValue)
 	})
 }
 
@@ -683,7 +683,7 @@ func TestSwaggerCommandIntegration(t *testing.T) {
 		swaggerCmd := swaggerCmd()
 		parentCmd.AddCommand(swaggerCmd)
 
-		assert.Equal(t, 1, len(parentCmd.Commands()))
+		assert.Len(t, parentCmd.Commands(), 1)
 		assert.Equal(t, "swagger", parentCmd.Commands()[0].Name())
 	})
 

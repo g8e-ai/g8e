@@ -125,9 +125,6 @@ func TestSetGovKit(t *testing.T) {
 
 	// We can't directly access kit since it's package-private,
 	// but we can at least verify the function doesn't panic
-	if testKit == nil {
-		t.Error("SetGovKit should not nil the input")
-	}
 }
 
 func TestShort(t *testing.T) {

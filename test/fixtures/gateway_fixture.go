@@ -92,7 +92,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 
 	// Create test paths without mutating global constants.Paths
 	testPaths := testutil.NewTestPathsFromTemp(t)
-	
+
 	// Create unique subdirectory for this test run
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), opts.TestName)
 	dataDir := filepath.Join(testPaths.TestVaultDir, testRunID)

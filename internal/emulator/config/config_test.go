@@ -49,15 +49,15 @@ func TestLoadFile(t *testing.T) {
 
 	// Create a test config file
 	testConfig := map[string]any{
-		"mtls_base_url": "https://example.com:8443",
-		"public_base_url": "https://example.com:8080",
-		"ensemble_size": 5,
+		"mtls_base_url":    "https://example.com:8443",
+		"public_base_url":  "https://example.com:8080",
+		"ensemble_size":    5,
 		"consensus_key_id": "test-key",
 		"principal_key_id": "test-principal",
-		"l3_mode": "mock",
-		"envelope_ttl": 600000000000, // 10 minutes in nanoseconds
-		"out_dir": "/tmp/test-out",
-		"use_cli_config": false,
+		"l3_mode":          "mock",
+		"envelope_ttl":     600000000000, // 10 minutes in nanoseconds
+		"out_dir":          "/tmp/test-out",
+		"use_cli_config":   false,
 		"auth": map[string]any{
 			"client_cert": "/path/to/cert.pem",
 			"client_key":  "/path/to/key.pem",
@@ -145,7 +145,7 @@ func TestLoadFile_PartialOverlay(t *testing.T) {
 	// Create a partial config with only some fields
 	partialConfig := map[string]any{
 		"ensemble_size": 7,
-		"l3_mode": "mock",
+		"l3_mode":       "mock",
 	}
 
 	data, err := json.Marshal(partialConfig)

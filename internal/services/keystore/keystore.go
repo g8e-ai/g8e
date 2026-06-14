@@ -29,7 +29,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-
 const (
 	keyStoreName  = "g8e-platform"
 	masterKeyName = "master-encryption-key"

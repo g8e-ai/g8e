@@ -38,37 +38,16 @@ This test uses NO mocks - all components are real infrastructure.
 */
 
 import (
-	"bytes"
 	"encoding/json"
-	"io"
-	"net/http"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
-
-// readLiveCreds reads cli_session_id from the credentials file.
-// Universal gateway tests use CLI auth (X-G8E-CLI-Session-ID header + CLI cert).
-func readLiveCreds(t *testing.T, credsFile string) (cliSessionID string) {
-	t.Helper()
-	data, err := os.ReadFile(credsFile)
-	if err != nil {
-		t.Fatalf("failed to read credentials file at %s - run './g8e auth login' first: %v", credsFile, err)
-	}
-	var creds struct {
-		CLISessionID string `json:"cli_session_id"`
-	}
-	require.NoError(t, json.Unmarshal(data, &creds), "failed to parse credentials file")
-	require.NotEmpty(t, creds.CLISessionID, "cli_session_id not found in credentials - run './g8e auth login' first")
-	return creds.CLISessionID
-}
 
 // TestUniversalGateway_RealMCPFlow validates the complete MCP flow
 // with real operator, real gateway, and real MCP calls.
@@ -77,9 +56,6 @@ func TestUniversalGateway_RealMCPFlow(t *testing.T) {
 	EnsureAuthLogin(t, repoRoot)
 	apiClient, cliCfg := NewLiveOperatorHTTPClient(t, repoRoot)
 	EnsureGatewayReady(t, cliCfg)
-
-	cliSessionID := readLiveCreds(t, cliCfg.CredentialsFile())
-	mtlsURL := constants.LocalhostHTTPSURL(cliCfg.OperatorHTTPSPort())
 
 	// api.Client sets auth headers automatically, no need for setAuth helper
 

@@ -279,7 +279,7 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 		ctx := setupTestPKI(t)
 
 		bundles := map[string]int{
-			constants.PkiFileRootBundle:      1,
+			constants.PkiFileRootBundle:     1,
 			constants.PkiFileGatewayBundle:  4,
 			constants.PkiFileOperatorBundle: 2,
 		}

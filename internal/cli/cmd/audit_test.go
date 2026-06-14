@@ -219,7 +219,7 @@ func TestAuditReceiptsResponseParsing(t *testing.T) {
 		err := json.Unmarshal([]byte(jsonResp), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
-		assert.Len(t, resp.Receipts, 0)
+		assert.Empty(t, resp.Receipts)
 	})
 }
 

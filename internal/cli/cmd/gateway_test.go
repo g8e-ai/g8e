@@ -80,7 +80,7 @@ func TestResolveStartConfig(t *testing.T) {
 		assert.False(t, cfg.VaultRequireUnlock)
 		assert.Equal(t, "rp-id", cfg.PasskeyRpID)
 		assert.Equal(t, "rp-name", cfg.PasskeyRpName)
-		assert.Equal(t, 100.0, cfg.RateLimitRPS)
+		assert.InEpsilon(t, 100.0, cfg.RateLimitRPS, 0.01)
 		assert.Equal(t, 50, cfg.RateLimitBurst)
 		assert.Equal(t, "info", cfg.LogLevel)
 		assert.Equal(t, "full", cfg.CertIdentityMode)

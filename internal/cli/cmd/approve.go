@@ -122,8 +122,8 @@ func approveCmd() *cobra.Command {
 			}
 
 			type approvalResponse struct {
-				Status         string `json:"status"`
-				ResultSummary  string `json:"result_summary"`
+				Status        string `json:"status"`
+				ResultSummary string `json:"result_summary"`
 			}
 			var result approvalResponse
 			if err := json.Unmarshal(resp, &result); err != nil {
