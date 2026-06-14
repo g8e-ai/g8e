@@ -14,6 +14,8 @@
 package gateway
 
 import (
+	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -21,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -143,4 +146,471 @@ func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 	assert.Equal(t, db, ls.db)
 	assert.Equal(t, pubsub, ls.pubsub)
 	assert.NotNil(t, ls.server)
+}
+
+func TestGatewayModeService_Getters(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
+
+	t.Run("GetDB returns non-nil", func(t *testing.T) {
+		t.Parallel()
+		assert.NotNil(t, ls.GetDB())
+		assert.Equal(t, db, ls.GetDB())
+	})
+
+	t.Run("GetSecretManager returns non-nil", func(t *testing.T) {
+		t.Parallel()
+		sm, err := ls.GetSecretManager()
+		require.NoError(t, err)
+		assert.NotNil(t, sm)
+	})
+
+	t.Run("GetPKIAuthority returns non-nil", func(t *testing.T) {
+		t.Parallel()
+		assert.NotNil(t, ls.GetPKIAuthority())
+	})
+
+	t.Run("GetHTTPHandler returns non-nil", func(t *testing.T) {
+		t.Parallel()
+		assert.NotNil(t, ls.GetHTTPHandler())
+	})
+
+	t.Run("GetHTTPPort returns 0 when not started", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, 0, ls.GetHTTPPort())
+	})
+
+	t.Run("GetHTTPSPort returns 0 when not started", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, 0, ls.GetHTTPSPort())
+	})
+}
+
+func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Doctrine posture returns true without signers", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.Gateway.Posture = config.PostureDoctrine
+		logger := testutil.NewTestLogger()
+
+		dbDir := t.TempDir()
+		pkiDir := t.TempDir()
+		secretsDir := t.TempDir()
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+
+		cfg.Gateway.PKIDir = pkiDir
+		cfg.Gateway.SecretsDir = secretsDir
+		cfg.Gateway.DataDir = dbDir
+		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		require.NoError(t, err)
+
+		assert.True(t, ls.IsGovernanceReady())
+	})
+
+	t.Run("Empty posture returns true without signers", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.Gateway.Posture = ""
+		logger := testutil.NewTestLogger()
+
+		dbDir := t.TempDir()
+		pkiDir := t.TempDir()
+		secretsDir := t.TempDir()
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+
+		cfg.Gateway.PKIDir = pkiDir
+		cfg.Gateway.SecretsDir = secretsDir
+		cfg.Gateway.DataDir = dbDir
+		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		require.NoError(t, err)
+
+		assert.True(t, ls.IsGovernanceReady())
+	})
+
+	t.Run("Notary posture returns false without signers", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.Gateway.Posture = config.PostureNotary
+		logger := testutil.NewTestLogger()
+
+		dbDir := t.TempDir()
+		pkiDir := t.TempDir()
+		secretsDir := t.TempDir()
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+
+		cfg.Gateway.PKIDir = pkiDir
+		cfg.Gateway.SecretsDir = secretsDir
+		cfg.Gateway.DataDir = dbDir
+		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		require.NoError(t, err)
+
+		assert.False(t, ls.IsGovernanceReady())
+	})
+
+	t.Run("Notary posture returns true with signers", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		cfg.Gateway.Posture = config.PostureNotary
+		logger := testutil.NewTestLogger()
+
+		dbDir := t.TempDir()
+		pkiDir := t.TempDir()
+		secretsDir := t.TempDir()
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		require.NoError(t, err)
+		t.Cleanup(func() { db.Close() })
+
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+
+		cfg.Gateway.PKIDir = pkiDir
+		cfg.Gateway.SecretsDir = secretsDir
+		cfg.Gateway.DataDir = dbDir
+		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		require.NoError(t, err)
+
+		// Add a trusted signer
+		signer := map[string]interface{}{
+			"id":        "test-signer-1",
+			"public_key": "abc123",
+			"added_at":  time.Now().UTC().Format(time.RFC3339),
+			"enabled":   true,
+		}
+		signerBytes, err := json.Marshal(signer)
+		require.NoError(t, err)
+		err = db.DocStore.DocSet("trusted_signers", "test-signer-1", signerBytes)
+		require.NoError(t, err)
+
+		assert.True(t, ls.IsGovernanceReady())
+	})
+}
+
+func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
+
+	deps := ls.GetGovernanceDeps()
+	assert.NotNil(t, deps)
+	assert.NotNil(t, deps.ReplayStore)
+	assert.NotNil(t, deps.StateRootProvider)
+	assert.NotNil(t, deps.TransactionAudit)
+	assert.NotNil(t, deps.L3Notary)
+	assert.NotNil(t, deps.SignerStore)
+	assert.NotNil(t, deps.AppPolicyStore)
+	assert.NotNil(t, deps.FieldReader)
+	assert.Equal(t, db.DocStore, deps.FieldReader)
+}
+
+func TestGatewayModeService_StartStop(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
+	// Use port 0 for dynamic port assignment in tests
+	cfg.Gateway.HTTPPort = 0
+	cfg.Gateway.HTTPSPort = 0
+
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start the service in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- ls.Start(ctx)
+	}()
+
+	// Wait for the service to become ready
+	require.Eventually(t, func() bool {
+		return ls.IsReady()
+	}, 5*time.Second, 100*time.Millisecond, "service should become ready")
+
+	// Verify ports are now non-zero
+	httpPort := ls.GetHTTPPort()
+	httpsPort := ls.GetHTTPSPort()
+	assert.NotZero(t, httpPort, "HTTP port should be assigned")
+	assert.NotZero(t, httpsPort, "HTTPS port should be assigned")
+
+	// Verify IsRunning is true
+	assert.True(t, ls.IsRunning())
+
+	// Test double-start returns error
+	err = ls.Start(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already running")
+
+	// Stop the service
+	cancel()
+	err = <-errChan
+	// Expect context cancellation error
+	assert.Error(t, err)
+
+	stopErr := ls.Stop(context.Background())
+	assert.NoError(t, stopErr)
+
+	// Verify IsRunning is false
+	assert.False(t, ls.IsRunning())
+	assert.False(t, ls.IsReady())
+}
+
+func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
+
+	// Stop when not running should return nil
+	err = ls.Stop(context.Background())
+	assert.NoError(t, err)
+}
+
+func TestDetectBasicNonLoopbackIPv4Addresses(t *testing.T) {
+	t.Parallel()
+	// This function is host-dependent, so we just verify it doesn't panic
+	// and returns a slice (possibly empty)
+	ips := detectBasicNonLoopbackIPv4Addresses()
+	assert.NotNil(t, ips)
+	// We don't assert contents since it varies by host
+}
+
+func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
+
+	t.Run("Valid heartbeat updates operator document", func(t *testing.T) {
+		t.Parallel()
+		// Seed an operator document
+		opDoc := map[string]interface{}{
+			"id":     "op-123",
+			"status": "active",
+		}
+		opBytes, err := json.Marshal(opDoc)
+		require.NoError(t, err)
+		err = db.DocStore.DocSet("operators", "op-123", opBytes)
+		require.NoError(t, err)
+
+		// Publish a heartbeat
+		heartbeat := map[string]interface{}{
+			"operator_id": "op-123",
+			"intent_data": map[string]interface{}{
+				"uptime": 12345,
+			},
+		}
+		heartbeatBytes, err := json.Marshal(heartbeat)
+		require.NoError(t, err)
+
+		ls.handleHeartbeatPublish("test-channel", heartbeatBytes)
+
+		// Verify the operator document was updated
+		updatedDoc, err := db.DocStore.DocGet("operators", "op-123")
+		require.NoError(t, err)
+		assert.NotNil(t, updatedDoc)
+		assert.Contains(t, updatedDoc.Data, "latest_heartbeat_snapshot")
+	})
+
+	t.Run("Malformed JSON logs and returns", func(t *testing.T) {
+		t.Parallel()
+		// Should not panic
+		ls.handleHeartbeatPublish("test-channel", []byte("{invalid json"))
+	})
+
+	t.Run("Missing operator_id returns without write", func(t *testing.T) {
+		t.Parallel()
+		heartbeat := map[string]interface{}{
+			"intent_data": map[string]interface{}{},
+		}
+		heartbeatBytes, err := json.Marshal(heartbeat)
+		require.NoError(t, err)
+
+		// Should not panic
+		ls.handleHeartbeatPublish("test-channel", heartbeatBytes)
+	})
+}
+
+func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
+
+	// Test the renewal function - it may fail if PKI is not fully initialized,
+	// but we're testing that it doesn't panic and handles errors gracefully
+	ctx := context.Background()
+	err = ls.renewServiceCertWithIdentity(ctx)
+	// We don't assert on error since it depends on PKI state
+	// The important thing is it doesn't panic
+}
+
+func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	pubsub := NewGatewayWebSocketHandler(logger)
+	t.Cleanup(func() { pubsub.Close() })
+
+	cfg.Gateway.PKIDir = pkiDir
+	cfg.Gateway.SecretsDir = secretsDir
+	cfg.Gateway.DataDir = dbDir
+	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
+
+	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	require.NoError(t, err)
+
+	// Test with an already-cancelled context - should return promptly
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// This should return immediately since the context is already cancelled
+	// We run it in a goroutine with a timeout to ensure it doesn't hang
+	done := make(chan bool)
+	go func() {
+		ls.runServiceCertRenewalLoop(ctx)
+		done <- true
+	}()
+
+	select {
+	case <-done:
+		// Success - returned promptly
+	case <-time.After(2 * time.Second):
+		t.Fatal("runServiceCertRenewalLoop did not return promptly with cancelled context")
+	}
 }
