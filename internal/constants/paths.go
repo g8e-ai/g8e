@@ -332,15 +332,15 @@ const (
 
 	// FULL path constants (relative from runtime directory)
 	GatewayIDPath       = ".g8e/data/gateway-id"
-	ActuatorPubJSONPath = ".g8e/pki/Actuator_pub.json"
-	ActuatorPubPEMPath  = ".g8e/pki/Actuator_pub.pem"
+	ActuatorPubJSONPath = "Actuator_pub.json"
+	ActuatorPubPEMPath  = "Actuator_pub.pem"
 	NetworkIdentityPath = ".g8e/pki/network-identity.json"
 	PeerCertPath        = ".g8e/pki/peer/peer.crt"
 	PeerKeyPath         = ".g8e/pki/peer/peer.key"
 	PeerChainPath       = ".g8e/pki/peer/peer.chain.pem"
 	PkiGatewayKeyPath   = ".g8e/pki/issued/hub/operator-gateway.key"
 	SwaggerFilePath     = "docs/swagger.json"
-	OperatorLogPath     = ".g8e/logs/operator.log"
+	OperatorLogPath     = "operator.log"
 
 	// Project root discovery constants for test path initialization
 	ProjectRootFromTestDir    = "../../"
