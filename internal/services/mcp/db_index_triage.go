@@ -23,8 +23,22 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// dbOpener defines the interface for opening database connections.
+type dbOpener interface {
+	Open(driverName, dataSourceName string) (*sql.DB, error)
+}
+
+// realDBOpener is the default implementation using sql.Open.
+type realDBOpener struct{}
+
+func (r *realDBOpener) Open(driverName, dataSourceName string) (*sql.DB, error) {
+	return sql.Open(driverName, dataSourceName)
+}
+
 // DBIndexTriageTool queries fragmentation statistics and indexes.
-type DBIndexTriageTool struct{}
+type DBIndexTriageTool struct {
+	dbOpener dbOpener
+}
 
 // Name returns the tool identifier.
 func (t *DBIndexTriageTool) Name() string {
@@ -61,8 +75,13 @@ func (t *DBIndexTriageTool) Execute(ctx context.Context, args json.RawMessage) (
 		return CallToolResult{}, fmt.Errorf("database_path required")
 	}
 
+	opener := t.dbOpener
+	if opener == nil {
+		opener = &realDBOpener{}
+	}
+
 	dsn := fmt.Sprintf("file:%s?mode=ro", req.DatabasePath)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := opener.Open("sqlite", dsn)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to open database: %w", err)
 	}

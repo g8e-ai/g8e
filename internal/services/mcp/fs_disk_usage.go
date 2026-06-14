@@ -25,7 +25,34 @@ import (
 )
 
 // FSDiskUsageTool provides df-style free space reporting.
-type FSDiskUsageTool struct{}
+type FSDiskUsageTool struct {
+	// statFS is used for filesystem stat calls. If nil, syscall.Statfs is used.
+	// This is primarily for testing.
+	statFS statFSInterface
+	// readFile is used for reading /proc/mounts. If nil, os.ReadFile is used.
+	// This is primarily for testing.
+	readFile readFileInterface
+}
+
+type statFSInterface interface {
+	StatFS(path string, stat *syscall.Statfs_t) error
+}
+
+type readFileInterface interface {
+	ReadFile(path string) ([]byte, error)
+}
+
+type realStatFS struct{}
+
+func (r realStatFS) StatFS(path string, stat *syscall.Statfs_t) error {
+	return syscall.Statfs(path, stat)
+}
+
+type realReadFile struct{}
+
+func (r realReadFile) ReadFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}
 
 // Name returns the tool identifier.
 func (t *FSDiskUsageTool) Name() string {
@@ -60,10 +87,20 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 	var result FSDiskUsageResult
 	var err error
 
+	statFS := t.statFS
+	if statFS == nil {
+		statFS = realStatFS{}
+	}
+
+	readFile := t.readFile
+	if readFile == nil {
+		readFile = realReadFile{}
+	}
+
 	if req.Path != "" {
-		result, err = getDiskUsageForPath(req.Path)
+		result, err = getDiskUsageForPath(req.Path, statFS)
 	} else {
-		result, err = getAllDiskUsage()
+		result, err = getAllDiskUsage(statFS, readFile)
 	}
 
 	if err != nil {
@@ -85,9 +122,9 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 	}, nil
 }
 
-func getDiskUsageForPath(path string) (FSDiskUsageResult, error) {
+func getDiskUsageForPath(path string, statFS statFSInterface) (FSDiskUsageResult, error) {
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs(path, &stat); err != nil {
+	if err := statFS.StatFS(path, &stat); err != nil {
 		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: statfs: %w", err)
 	}
 
@@ -110,15 +147,15 @@ func getDiskUsageForPath(path string) (FSDiskUsageResult, error) {
 	}, nil
 }
 
-func getAllDiskUsage() (FSDiskUsageResult, error) {
-	mounts, err := parseMounts()
+func getAllDiskUsage(statFS statFSInterface, readFile readFileInterface) (FSDiskUsageResult, error) {
+	mounts, err := parseMounts(readFile)
 	if err != nil {
 		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: parse mounts: %w", err)
 	}
 
 	var filesystems []FilesystemInfo
 	for _, mount := range mounts {
-		result, err := getDiskUsageForPath(mount)
+		result, err := getDiskUsageForPath(mount, statFS)
 		if err != nil {
 			continue
 		}
@@ -133,8 +170,8 @@ func getAllDiskUsage() (FSDiskUsageResult, error) {
 	}, nil
 }
 
-func parseMounts() ([]string, error) {
-	data, err := os.ReadFile("/proc/mounts")
+func parseMounts(readFile readFileInterface) ([]string, error) {
+	data, err := readFile.ReadFile("/proc/mounts")
 	if err != nil {
 		return nil, fmt.Errorf("fs_disk_usage: read /proc/mounts: %w", err)
 	}
