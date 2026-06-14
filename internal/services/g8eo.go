@@ -134,7 +134,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vaultKeyPath != "" && !filepath.IsAbs(vaultKeyPath) {
 		vaultKeyPath = filepath.Join(vs.config.WorkDir, vaultKeyPath)
 	}
-	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.config.VaultDir, vs.logger, false, vaultKeyPath, vs.config.VaultRequireUnlock)
+	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.config.VaultDir, vs.logger, false, vaultKeyPath, vs.config.VaultRequireUnlock, nil)
 	if err != nil {
 		return fmt.Errorf("failed to initialize gateway database (required for state root calculation): %w", err)
 	}

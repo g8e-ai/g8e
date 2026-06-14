@@ -33,7 +33,7 @@ func TestNewUserService(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	dbDir := tempDir(t)
 	secretsDir := tempDir(t)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -50,7 +50,7 @@ func TestUserService_CreateUser(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := tempDir(t)
 		secretsDir := tempDir(t)
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -77,7 +77,7 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := tempDir(t)
 		secretsDir := tempDir(t)
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -94,7 +94,7 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := tempDir(t)
 		secretsDir := tempDir(t)
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -116,7 +116,7 @@ func TestUserService_Disable(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := tempDir(t)
 		secretsDir := tempDir(t)
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -159,7 +159,7 @@ func TestUserService_Disable(t *testing.T) {
 		dataDir := tempDir(t)
 		secretsDir := tempDir(t)
 		vaultDir := tempDir(t)
-		db, err := OpenCanonicalDBService(dataDir, secretsDir, vaultDir, logger, true, "", false)
+		db, err := OpenCanonicalDBService(dataDir, secretsDir, vaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -181,7 +181,7 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - finds bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(tempDir(t), tempDir(t), tempDir(t), logger, true, "", false)
+		db, err := OpenCanonicalDBService(tempDir(t), tempDir(t), tempDir(t), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -201,7 +201,7 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(tempDir(t), tempDir(t), tempDir(t), logger, true, "", false)
+		db, err := OpenCanonicalDBService(tempDir(t), tempDir(t), tempDir(t), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -258,7 +258,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := tempDir(t)
 		secretsDir := tempDir(t)
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -273,7 +273,7 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 		logger := testutil.NewTestLogger()
 		dbDir := tempDir(t)
 		secretsDir := tempDir(t)
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false)
+		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 

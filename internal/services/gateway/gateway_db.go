@@ -92,7 +92,8 @@ type CanonicalDBService struct {
 // testMode enables the in-memory keystore backend for unit tests.
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // vaultRequireUnlock requires the vault to be unlocked before starting.
-func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool) (*CanonicalDBService, error) {
+// testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
+func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, logger *slog.Logger, testMode bool, vaultKeyPath string, vaultRequireUnlock bool, testKeystore *keystore.Keystore) (*CanonicalDBService, error) {
 	dbPath := filepath.Join(dataDir, constants.DbFilename)
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 
@@ -184,7 +185,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	svc.BlobStore = NewBlobStoreService(db, logger)
 
 	if testMode {
-		if err := svc.initTestSchema(secretsDir); err != nil {
+		if err := svc.initTestSchema(secretsDir, testKeystore); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("failed to initialize schema: %w", err)
 		}
@@ -209,7 +210,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	return svc, nil
 }
 
-func (s *CanonicalDBService) initTestSchema(secretsDir string) error {
+func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *keystore.Keystore) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
 		return err
@@ -219,19 +220,24 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string) error {
 	if err != nil && !errors.Is(err, constants.ErrDuplicateColumn) && !sqliteutil.IsDuplicateColumnError(err) {
 		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
 	}
-	backend, err := keystore.NewTestBackend()
-	if err != nil {
-		return err
-	}
-	ks, err := keystore.NewWithBackend(secretsDir, s.logger, backend)
-	if err != nil {
-		return err
-	}
-	if err := ks.Initialize(); err != nil {
-		return err
-	}
-	if err := ks.EnforcePermissions(); err != nil {
-		return err
+	var ks *keystore.Keystore
+	if testKeystore != nil {
+		ks = testKeystore
+	} else {
+		backend, err := keystore.NewTestBackend()
+		if err != nil {
+			return err
+		}
+		ks, err = keystore.NewWithBackend(secretsDir, s.logger, backend)
+		if err != nil {
+			return err
+		}
+		if err := ks.Initialize(); err != nil {
+			return err
+		}
+		if err := ks.EnforcePermissions(); err != nil {
+			return err
+		}
 	}
 	sm := &SecretManager{
 		db:         s.db,
