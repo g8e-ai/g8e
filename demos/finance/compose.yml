@@ -3,14 +3,29 @@ name: finance-demo
 networks:
   net_untrusted:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.0.0/24
   net_perimeter:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.21.0.0/24
   net_internal:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.22.0.0/24
   net_secure:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.23.0.0/24
   net_mgmt:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.24.0.0/24
 
 volumes:
   gateway_state:
@@ -19,59 +34,60 @@ volumes:
 
 services:
   gateway:
-    image: g8e-gateway:latest
-    build:
-      context: ../..
-      dockerfile: Dockerfile
+    image: alpine:latest
     container_name: finance-gateway
     networks:
       net_perimeter:
+        ipv4_address: 10.21.0.10
       net_internal:
+        ipv4_address: 10.22.0.10
     volumes:
       - gateway_state:/root/.g8e
       - ../../g8e:/usr/local/bin/g8e:ro
-      - ./config/gateway.yml:/etc/g8e/gateway.yml:ro
       - ./doctrine:/etc/g8e/doctrine:ro
     ports:
       - "8082:8080"
       - "8445:8443"
+    working_dir: /root
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["/usr/local/bin/g8e", "gw", "start", "--config", "/etc/g8e/gateway.yml"]
+    command: ["/usr/local/bin/g8e", "--consensus", "--http-port", "8080", "--https-port", "8443", "--data-dir", "/root/.g8e/data", "--pki-dir", "/root/.g8e/pki", "--secrets-dir", "/root/.g8e/secrets", "--vault-dir", "/root/.g8e/vault", "--log", "debug", "--passkey-rp-id", "localhost", "--passkey-rp-name", "g8e-finance", "--cert-mode", "localhost"]
 
   operator:
-    image: g8e-operator:latest
-    build:
-      context: ../..
-      dockerfile: Dockerfile.operator
+    image: alpine:latest
     container_name: finance-operator
     networks:
       net_internal:
+        ipv4_address: 10.22.0.20
       net_secure:
+        ipv4_address: 10.23.0.20
+    extra_hosts:
+      - "g8e.local:10.22.0.10"
     volumes:
       - operator_state:/root/.g8e
       - ../../g8e:/usr/local/bin/g8e:ro
-      - ./config/operator.yml:/etc/g8e/operator.yml:ro
     depends_on:
       gateway:
         condition: service_healthy
+    working_dir: /root
     healthcheck:
-      test: ["CMD", "/usr/local/bin/g8e", "status"]
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["/usr/local/bin/g8e", "operator", "start", "--config", "/etc/g8e/operator.yml"]
+    command: ["/usr/local/bin/g8e", "-e", "10.22.0.10", "--log", "debug"]
 
   target-system:
     image: alpine:latest
     container_name: finance-target
     networks:
       net_secure:
+        ipv4_address: 10.23.0.30
     volumes:
       - target_state:/var/target
       - ./target-data:/var/g8e/target:ro
@@ -105,6 +121,7 @@ services:
     container_name: finance-demo-ui
     networks:
       net_perimeter:
+        ipv4_address: 10.21.0.20
     depends_on:
       gateway:
         condition: service_healthy
@@ -127,4 +144,4 @@ services:
     volumes:
       - gateway_state:/data/gateway:ro
       - operator_state:/data/operator:ro
-    command: ["sh", "-c", "tail -f /data/gateway/logs/*.log /data/operator/logs/*.log"]
+    command: ["sh", "-c", "until [ -f /data/gateway/logs/operator.log ]; do sleep 2; done; tail -f /data/gateway/logs/operator.log"]
