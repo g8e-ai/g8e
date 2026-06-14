@@ -91,7 +91,39 @@ Integration tests exercising end-to-end governance workflows across doctrine, co
 ./g8e emulator audit
 ```
 
-The emulator is a universal agent emulator that runs scenarios against a real g8e Gateway and Operator. It impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+The emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
+
+**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The emulator merely wears different "personas" to test how the system behaves when various AI tools interact with it.
+
+**Architecture**:
+- **client/** - Thin, faithful HTTP client with mTLS support and exchange recording
+- **config/** - Runtime configuration (auth, URLs, ensemble size, L3 mode)
+- **scenarios/** - Ordered registry of impersonation scripts (MCP, A2A, governance)
+- **report/** - Generates machine-readable JSON and human-readable Markdown reports
+
+**Protocol Coverage**:
+- **MCP (Model Context Protocol)** - Tools, resources, and prompts
+- **A2A (Agent-to-Agent)** - Skill invocations with JSON and protobuf payloads
+- **Governance envelopes** - L2 consensus and L3 notary flows
+
+**Testing Postures**:
+Scenarios run under different enforcement modes:
+- **Doctrine** - L1 enforced, L2/L3 audited
+- **Consensus** - L1/L2 enforced, L3 audited
+- **Notary** - L1/L2/L3 strictly enforced
+
+**Personas Impersonated**:
+- Claude Desktop, Cursor, enterprise agents (MCP clients)
+- A2A peers with JSON and protobuf transports
+- Mock consensus ensemble (L2 co-signers)
+- Mock principal (L3 human notary)
+
+**Governance Testing**:
+For consensus/notary scenarios, the emulator uses mock cryptographic actors:
+- **Ensemble**: Mock consensus agents that co-sign L2 envelopes
+- **Principal**: Mock human notary for L3 signing (or drives real OOB approve flow)
+
+This allows testing maximal governance envelopes without requiring actual distributed consensus infrastructure.
 
 **Emulator Commands**:
 - **`./g8e emulator list`** - Lists available scenarios with their posture requirements and personas
