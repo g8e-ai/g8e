@@ -44,7 +44,7 @@ func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, constants.ErrKeyNotFound
+			return nil, constants.ErrKeyStoreKeyNotFound
 		}
 		return nil, fmt.Errorf("read master key file: %w", err)
 	}
@@ -56,7 +56,7 @@ func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
 	}
 
 	if len(key) == 0 {
-		return nil, constants.ErrKeyNotFound
+		return nil, constants.ErrKeyStoreKeyNotFound
 	}
 
 	return key, nil

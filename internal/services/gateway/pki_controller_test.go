@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
@@ -537,7 +538,7 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	c, _, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
-	binaryDir := filepath.Join(c.pki.PKIDir(), "binaries")
+	binaryDir := filepath.Join(c.pki.PKIDir(), constants.PkiSubdirBinaries)
 	require.NoError(t, os.MkdirAll(binaryDir, 0755))
 	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe")
 	testNodeBinaryContent := []byte("test binary content")

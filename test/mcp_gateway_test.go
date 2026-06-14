@@ -48,8 +48,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"

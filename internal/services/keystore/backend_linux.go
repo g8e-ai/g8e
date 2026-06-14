@@ -52,7 +52,7 @@ func (b *libsecretBackend) RetrieveMasterKey() ([]byte, error) {
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			// secret-tool returns exit code 1 when item not found
-			return nil, constants.ErrKeyNotFound
+			return nil, constants.ErrKeyStoreKeyNotFound
 		}
 		return nil, fmt.Errorf("libsecret: lookup master key: %w", err)
 	}
@@ -64,7 +64,7 @@ func (b *libsecretBackend) RetrieveMasterKey() ([]byte, error) {
 	}
 
 	if len(key) == 0 {
-		return nil, constants.ErrKeyNotFound
+		return nil, constants.ErrKeyStoreKeyNotFound
 	}
 
 	return key, nil

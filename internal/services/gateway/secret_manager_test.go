@@ -213,7 +213,7 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
-	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), corruptedData, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), corruptedData, 0600))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	err := sm2.InitAppSettings()
@@ -270,7 +270,7 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 
 	// Write corrupted encrypted data (simulating manual file tampering)
 	corruptedData := []byte(`{"version":1,"nonce":"AAAA","ciphertext":"corrupted"}`)
-	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), corruptedData, 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), corruptedData, 0600))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	err := sm2.InitAppSettings()
@@ -285,7 +285,7 @@ func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSetting
 	secretsDir := tempDir(t)
 
 	preSeeded := strings.Repeat("c", 64)
-	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, "session_encryption_key"), []byte(preSeeded), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey), []byte(preSeeded), 0600))
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	err := sm.InitAppSettings()
@@ -300,7 +300,7 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 
 	sm := newTestSecretManager(t, db, secretsDir)
 	require.NoError(t, sm.InitAppSettings())
-	require.NoError(t, os.Remove(filepath.Join(secretsDir, "session_encryption_key")))
+	require.NoError(t, os.Remove(filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey)))
 
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	err := sm2.InitAppSettings()

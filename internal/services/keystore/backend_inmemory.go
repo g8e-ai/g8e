@@ -42,7 +42,7 @@ func (b *testBackend) RetrieveMasterKey() ([]byte, error) {
 	sharedTestKeyStorage.mu.RLock()
 	defer sharedTestKeyStorage.mu.RUnlock()
 	if sharedTestKeyStorage.key == nil {
-		return nil, constants.ErrKeyNotFound
+		return nil, constants.ErrKeyStoreKeyNotFound
 	}
 	keyCopy := make([]byte, len(sharedTestKeyStorage.key))
 	copy(keyCopy, sharedTestKeyStorage.key)

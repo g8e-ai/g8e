@@ -30,10 +30,10 @@ import (
 )
 
 const (
-	shutdownTimeout     = 10 * time.Second
-	healthCheckInterval = 500 * time.Millisecond
-	maxHealthChecks     = 20
-	maxPortAttempts     = 100
+	ShutdownTimeout     = 10 * time.Second
+	HealthCheckInterval = 500 * time.Millisecond
+	MaxHealthChecks     = 20
+	MaxPortAttempts     = 100
 )
 
 // OperatorStartOptions holds configuration for starting the operator process.
@@ -146,7 +146,7 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 		}
 	}
 
-	for attempt := 0; attempt < maxPortAttempts; attempt++ {
+	for attempt := 0; attempt < MaxPortAttempts; attempt++ {
 		port := startPort + attempt
 		addr := fmt.Sprintf("127.0.0.1:%d", port)
 		listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
@@ -161,7 +161,7 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 		}
 	}
 
-	return 0, fmt.Errorf("process manager: failed to find available port starting from %d after %d attempts", startPort, maxPortAttempts)
+	return 0, fmt.Errorf("process manager: failed to find available port starting from %d after %d attempts", startPort, MaxPortAttempts)
 }
 
 func (pm *ProcessManager) readPID(filename string) (int, error) {

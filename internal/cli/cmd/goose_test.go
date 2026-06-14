@@ -21,8 +21,8 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	err = os.MkdirAll(configDir, 0755)
 	require.NoError(t, err)
 
-	// Create an existing config to test the backup mechanism
-	existingConfigPath := filepath.Join(configDir, "config.json")
+	// Create an existing settings.json to test the backup mechanism
+	existingConfigPath := filepath.Join(configDir, "settings.json")
 	existingData := []byte(`{"mcpServers": {"existing": {}}}`)
 	err = os.WriteFile(existingConfigPath, existingData, 0644)
 	require.NoError(t, err)

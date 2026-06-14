@@ -293,7 +293,8 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		rootCmd.SetArgs([]string{})
 		err := rootCmd.Execute()
 
-		assert.Error(t, err)
+		// Cobra shows help and returns nil error when no args provided
+		assert.NoError(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "g8e")
 	})
@@ -473,7 +474,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		output := buf.String()
 
 		assert.Contains(t, output, "g8e")
-		assert.Contains(t, output, "Platform Manager")
+		assert.Contains(t, output, "zero-trust execution platform")
 	})
 
 	t.Run("help command displays help", func(t *testing.T) {

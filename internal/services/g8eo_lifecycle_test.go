@@ -27,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/auth"
+	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -75,6 +76,16 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NoError(t, err)
 	vault.SecureZero(dek)
 	require.NoError(t, header.Save(vaultDir))
+
+	// Initialize keystore with test backend for master key (required for gateway database)
+	secretsDir := filepath.Join(cfg.WorkDir, constants.Paths.Infra.SecretsDir)
+	require.NoError(t, os.MkdirAll(secretsDir, 0700))
+	testBackend, err := keystore.NewTestBackend()
+	require.NoError(t, err)
+	ks, err := keystore.NewWithBackend(secretsDir, testutil.NewVerboseTestLogger(t), testBackend)
+	require.NoError(t, err)
+	require.NoError(t, ks.Initialize())
+	require.NoError(t, ks.EnforcePermissions())
 
 	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), nil)
 	require.NoError(t, err)

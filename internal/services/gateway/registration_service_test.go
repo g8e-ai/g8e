@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -55,10 +56,10 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 
 	// Test that calculateSerialFromPEM correctly extracts serial from a certificate
 	dataDir := tempDir(t)
-	pkiDir := filepath.Join(dataDir, "pki")
+	pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 	logger := testutil.NewTestLogger()
 	dbDir := tempDir(t)
-	vaultDir := filepath.Join(dataDir, "vault")
+	vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 	db, err := OpenCanonicalDBService(dataDir, dbDir, vaultDir, logger, true, "", false)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -141,10 +142,10 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 		t.Parallel()
 
 		dataDir := tempDir(t)
-		pkiDir := filepath.Join(dataDir, "pki")
+		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
 		dbDir := tempDir(t)
-		vaultDir := filepath.Join(dataDir, "vault")
+		vaultDir := filepath.Join(dataDir, constants.VaultDirname)
 		db, err := OpenCanonicalDBService(dataDir, dbDir, vaultDir, logger, true, "", false)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })

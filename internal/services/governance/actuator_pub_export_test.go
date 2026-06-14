@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,7 +67,7 @@ func TestActuatorPublicKeyExport(t *testing.T) {
 			require.NoError(t, err)
 
 			// 1. Verify PEM file
-			pemPath := filepath.Join(tmpDir, "Actuator_pub.pem")
+			pemPath := filepath.Join(tmpDir, constants.ActuatorPubPEMFilename)
 			pemData, err := os.ReadFile(pemPath)
 			require.NoError(t, err)
 
@@ -77,7 +78,7 @@ func TestActuatorPublicKeyExport(t *testing.T) {
 			require.Equal(t, []byte(pubKey), block.Bytes)
 
 			// 2. Verify JSON file
-			jsonPath := filepath.Join(tmpDir, "Actuator_pub.json")
+			jsonPath := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 			jsonData, err := os.ReadFile(jsonPath)
 			require.NoError(t, err)
 
@@ -100,7 +101,7 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 	}
 
 	// Write PEM format
-	pemPath := filepath.Join(pkiDir, "Actuator_pub.pem")
+	pemPath := filepath.Join(pkiDir, constants.ActuatorPubPEMFilename)
 	pemData := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubKey,
@@ -110,7 +111,7 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 	}
 
 	// Write JSON format
-	jsonPath := filepath.Join(pkiDir, "Actuator_pub.json")
+	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
 	jsonData := actuatorPublicKeyExportData{
 		KeyID:     keyID,
 		PublicKey: hex.EncodeToString(pubKey),

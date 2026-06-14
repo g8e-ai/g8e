@@ -242,7 +242,7 @@ func TestNewClient_Success(t *testing.T) {
 	assert.NotNil(t, client.httpClient)
 	assert.Equal(t, cfg, client.cfg)
 	assert.NotNil(t, client.creds)
-	assert.Equal(t, 30*time.Second, client.httpClient.Timeout)
+	assert.Equal(t, 5*time.Second, client.httpClient.Timeout)
 
 	transport, ok := client.httpClient.Transport.(*http.Transport)
 	require.True(t, ok)

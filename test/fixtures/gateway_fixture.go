@@ -97,7 +97,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), opts.TestName)
 	dataDir := filepath.Join(testPaths.TestVaultDir, testRunID)
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		t.Fatalf("gateway_fixture: create test run directory: %w", err)
+		t.Fatalf("gateway_fixture: create test run directory: %v", err)
 	}
 	t.Logf("Test vault created at: %s", dataDir)
 
@@ -434,7 +434,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	require.Equal(t, http.StatusCreated, hResp.StatusCode)
 	var regResp models.OperatorRegistrationResponse
 	if err := json.NewDecoder(hResp.Body).Decode(&regResp); err != nil {
-		t.Fatalf("gateway_fixture: decode registration response: %w", err)
+		t.Fatalf("gateway_fixture: decode registration response: %v", err)
 	}
 	hResp.Body.Close()
 

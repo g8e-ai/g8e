@@ -209,7 +209,7 @@ func (c *Config) TrustBundlePath() string {
 }
 
 func (c *Config) CredentialsFile() string {
-	return c.CredentialsDir
+	return filepath.Join(c.CredentialsDir, "credentials")
 }
 
 func (c *Config) CLICertFile() string {

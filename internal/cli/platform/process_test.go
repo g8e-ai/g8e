@@ -21,6 +21,8 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestNewProcessManager(t *testing.T) {
@@ -535,14 +537,14 @@ func TestConstants(t *testing.T) {
 	if constants.OperatorLogPath == "" {
 		t.Error("constants.OperatorLogPath should not be empty")
 	}
-	if shutdownTimeout == 0 {
-		t.Error("shutdownTimeout should not be zero")
+	if ShutdownTimeout == 0 {
+		t.Error("ShutdownTimeout should not be zero")
 	}
-	if healthCheckInterval == 0 {
-		t.Error("healthCheckInterval should not be zero")
+	if HealthCheckInterval == 0 {
+		t.Error("HealthCheckInterval should not be zero")
 	}
-	if maxHealthChecks == 0 {
-		t.Error("maxHealthChecks should not be zero")
+	if MaxHealthChecks == 0 {
+		t.Error("MaxHealthChecks should not be zero")
 	}
 }
 

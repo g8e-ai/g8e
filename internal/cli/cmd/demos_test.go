@@ -28,7 +28,11 @@ import (
 )
 
 func getProjectRoot() string {
-	return "."
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return cwd
 }
 
 func TestDemos(t *testing.T) {

@@ -614,7 +614,7 @@ func TestLedgerService_RestoreFileFromCommit_DisabledVault(t *testing.T) {
 	}
 	_, err := NewGitLedgerService(config, testutil.NewTestLogger())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "EncryptionVault is required")
+	assert.Contains(t, err.Error(), "ledger encryption vault is required")
 }
 
 func TestLedgerService_RestoreFileFromCommit_InvalidCommit(t *testing.T) {

@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )
 
@@ -191,14 +192,14 @@ type PKICertPaths struct {
 // This centralizes path construction and eliminates hardcoded paths in tests.
 func GetPKICertPaths(pkiDir string) PKICertPaths {
 	return PKICertPaths{
-		RootCA:          filepath.Join(pkiDir, "root", "root_ca.crt"),
-		HubCA:           filepath.Join(pkiDir, "authorities", "hub_ca.crt"),
-		OperatorCA:      filepath.Join(pkiDir, "authorities", "operator_ca.crt"),
-		BootstrapCA:     filepath.Join(pkiDir, "authorities", "bootstrap_ca.crt"),
-		TrustBundle:     filepath.Join(pkiDir, "trust", "root.pem"),
-		HubBundle:       filepath.Join(pkiDir, "trust", "g8eg-ca-bundle.pem"),
-		OperatorBundle:  filepath.Join(pkiDir, "trust", "operator-bundle.pem"),
-		BootstrapBundle: filepath.Join(pkiDir, "trust", "bootstrap-bundle.pem"),
+		RootCA:          filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
+		HubCA:           filepath.Join(pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileHubCA),
+		OperatorCA:      filepath.Join(pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA),
+		BootstrapCA:     filepath.Join(pkiDir, constants.PkiSubdirAuthorities, constants.PkiFileBootstrapCA),
+		TrustBundle:     filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileRootBundle),
+		HubBundle:       filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
+		OperatorBundle:  filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileOperatorBundle),
+		BootstrapBundle: filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileBootstrapBundle),
 	}
 }
 

@@ -23,7 +23,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -211,7 +210,7 @@ func TestSqlDBQuery(t *testing.T) {
 	t.Run("returns error for non-existent database", func(t *testing.T) {
 		_, err := sqlDBQuery("/nonexistent/path/to/db.db", "SELECT 1")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "no such file")
+		assert.Contains(t, err.Error(), "unable to open database file")
 	})
 
 	t.Run("returns error for invalid SQL syntax", func(t *testing.T) {
@@ -284,11 +283,13 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 		tmpDir := t.TempDir()
 		setupDataTestConfig(t, tmpDir)
 
-		// Create data directory and empty database using test paths
-		testPaths := testutil.NewTestPaths(tmpDir)
-		dataDir := testPaths.DataDir
+		// Initialize global paths to use tmpDir
+		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+
+		// Create data directory and empty database using global paths
+		dataDir := constants.Paths.Infra.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := testPaths.DbPath
+		dbPath := constants.Paths.Infra.DbPath
 
 		// Create database with events table but no data
 		db, err := sql.Open("sqlite", dbPath)

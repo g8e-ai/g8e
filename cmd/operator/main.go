@@ -1692,6 +1692,10 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 	if err != nil {
 		return fmt.Errorf("marshal Actuator_pub.json: %w", err)
 	}
+	// Ensure the directory for the JSON file exists
+	if err := os.MkdirAll(filepath.Dir(jsonPath), 0700); err != nil {
+		return fmt.Errorf("create JSON directory: %w", err)
+	}
 	if err := os.WriteFile(jsonPath, jsonBytes, 0600); err != nil {
 		return fmt.Errorf("write Actuator_pub.json: %w", err)
 	}

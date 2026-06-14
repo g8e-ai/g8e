@@ -266,6 +266,8 @@ const (
 	PkiFileGatewayCert     = "operator-gateway.crt"
 	PkiFileGatewayKey      = "operator-gateway.key"
 	PkiFileGatewayChain    = "operator-gateway.chain.pem"
+	PkiFileBootstrapCA     = "bootstrap_ca.crt"
+	PkiFileBootstrapBundle = "bootstrap-bundle.pem"
 
 	DbFilename             = "g8e.db"
 	VaultKeyFilename       = "key"
@@ -404,4 +406,10 @@ const (
 	DefaultDataDir            = RuntimeDirname + "/" + DataDirname
 	DefaultPKIDir             = RuntimeDirname + "/" + PkiDirname
 	DefaultSecretsDir         = RuntimeDirname + "/" + SecretsDirname
+
+	// Test-specific filename constants (for isolated test environments)
+	TestEmptyMachineIDFilename = "empty-machine-id"
+	TestDBSubdirName          = "db"
+	TestLedgerDirname         = "ledger"
+	TestGitDirname            = ".git"
 )

@@ -35,7 +35,7 @@ func TestTestBackend_RetrieveMasterKey_NotFound(t *testing.T) {
 
 	key, err := backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 	assert.Nil(t, key)
 }
 
@@ -87,7 +87,7 @@ func TestTestBackend_DeleteMasterKey(t *testing.T) {
 
 	key, err := backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 	assert.Nil(t, key)
 }
 
@@ -130,6 +130,6 @@ func TestResetTestStorage(t *testing.T) {
 
 	key, err := backend.RetrieveMasterKey()
 	require.Error(t, err)
-	assert.Equal(t, constants.ErrKeyNotFound, err)
+	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 	assert.Nil(t, key)
 }

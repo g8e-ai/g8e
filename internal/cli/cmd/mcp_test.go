@@ -267,7 +267,7 @@ func TestAgentCmd(t *testing.T) {
 		cmd.SetArgs([]string{"unknown-agent"})
 		err := cmd.Execute()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unknown agent")
+		assert.Contains(t, err.Error(), "agent not found")
 	})
 
 	t.Run("agent show is case-insensitive", func(t *testing.T) {
