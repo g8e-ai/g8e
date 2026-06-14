@@ -460,38 +460,16 @@ func printResultsTable(org string, results []scenarioResult) {
 		strings.Repeat("═", 60), strings.Title(org), strings.Repeat("═", 60))
 	fmt.Println()
 
-	// Calculate column widths
-	numWidth := 8
-	nameWidth := 50
-	statusWidth := 12
-	metricsWidth := 60
-
 	// Print header
-	fmt.Printf("┌─%s─┬─%s─┬─%s─┬─%s─┐\n",
-		strings.Repeat("─", numWidth),
-		strings.Repeat("─", nameWidth),
-		strings.Repeat("─", statusWidth),
-		strings.Repeat("─", metricsWidth))
-	fmt.Printf("│ %-7s │ %-48s │ %-10s │ %-58s │\n",
+	fmt.Printf("%-10s\t%-50s\t%-12s\t%s\n",
 		"Scenario", "Name", "Status", "Key Metrics")
-	fmt.Printf("├─%s─┼─%s─┼─%s─┼─%s─┤\n",
-		strings.Repeat("─", numWidth),
-		strings.Repeat("─", nameWidth),
-		strings.Repeat("─", statusWidth),
-		strings.Repeat("─", metricsWidth))
+	fmt.Println(strings.Repeat("─", 120))
 
 	// Print rows
 	for _, r := range results {
-		fmt.Printf("│ %-7s │ %-48s │ %-10s │ %-58s │\n",
+		fmt.Printf("%-10s\t%-50s\t%-12s\t%s\n",
 			r.number, r.name, r.status, r.metrics)
 	}
-
-	// Print footer
-	fmt.Printf("└─%s─┴─%s─┴─%s─┴─%s─┘\n",
-		strings.Repeat("─", numWidth),
-		strings.Repeat("─", nameWidth),
-		strings.Repeat("─", statusWidth),
-		strings.Repeat("─", metricsWidth))
 	fmt.Println()
 }
 
