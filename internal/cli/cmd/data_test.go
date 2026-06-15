@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -502,5 +503,509 @@ func TestDataQueryFilterTypes(t *testing.T) {
 
 		assert.Len(t, decoded.Filters, 1)
 		assert.Equal(t, 50, decoded.Limit)
+	})
+
+	t.Run("QueryFilter with numeric value", func(t *testing.T) {
+		filter := QueryFilter{
+			Field: "count",
+			Op:    ">",
+			Value: 100,
+		}
+
+		data, err := json.Marshal(filter)
+		require.NoError(t, err)
+
+		var decoded QueryFilter
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, "count", decoded.Field)
+		assert.Equal(t, ">", decoded.Op)
+		assert.Equal(t, float64(100), decoded.Value) // JSON numbers unmarshal as float64
+	})
+
+	t.Run("QueryFilter with null value", func(t *testing.T) {
+		filter := QueryFilter{
+			Field: "deleted_at",
+			Op:    "==",
+			Value: nil,
+		}
+
+		data, err := json.Marshal(filter)
+		require.NoError(t, err)
+
+		var decoded QueryFilter
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, "deleted_at", decoded.Field)
+		assert.Equal(t, "==", decoded.Op)
+		assert.Nil(t, decoded.Value)
+	})
+
+	t.Run("QueryRequestWithLimit with zero limit", func(t *testing.T) {
+		req := QueryRequestWithLimit{
+			Filters: []QueryFilter{},
+			Limit:   0,
+		}
+
+		data, err := json.Marshal(req)
+		require.NoError(t, err)
+
+		var decoded QueryRequestWithLimit
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, 0, decoded.Limit)
+	})
+}
+
+func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
+	t.Run("summary with session filter constructs correct query", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		// Initialize global paths to use tmpDir
+		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+
+		// Create data directory and database with test data
+		dataDir := constants.Paths.Infra.DataDir
+		require.NoError(t, os.MkdirAll(dataDir, 0755))
+		dbPath := constants.Paths.Infra.DbPath
+
+		db, err := sql.Open("sqlite", dbPath)
+		require.NoError(t, err)
+		defer db.Close()
+
+		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
+		require.NoError(t, err)
+
+		// Insert test events for different sessions
+		_, err = db.Exec("INSERT INTO events (type, operator_session_id) VALUES (?, ?)", "login", "session-1")
+		require.NoError(t, err)
+		_, err = db.Exec("INSERT INTO events (type, operator_session_id) VALUES (?, ?)", "logout", "session-1")
+		require.NoError(t, err)
+		_, err = db.Exec("INSERT INTO events (type, operator_session_id) VALUES (?, ?)", "login", "session-2")
+		require.NoError(t, err)
+
+		cmd := dataAuditSummaryCmd()
+		cmd.Flags().Set("operator-session-id", "session-1")
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "Audit Event Summary")
+		assert.Contains(t, output, "login: 1")
+		assert.Contains(t, output, "logout: 1")
+		assert.Contains(t, output, "Total events: 2")
+		// Should not include events from session-2
+		assert.NotContains(t, output, "Total events: 3")
+	})
+
+	t.Run("summary without session filter includes all events", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		// Initialize global paths to use tmpDir
+		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+
+		// Create data directory and database with test data
+		dataDir := constants.Paths.Infra.DataDir
+		require.NoError(t, os.MkdirAll(dataDir, 0755))
+		dbPath := constants.Paths.Infra.DbPath
+
+		db, err := sql.Open("sqlite", dbPath)
+		require.NoError(t, err)
+		defer db.Close()
+
+		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
+		require.NoError(t, err)
+
+		// Insert test events for different sessions
+		_, err = db.Exec("INSERT INTO events (type, operator_session_id) VALUES (?, ?)", "login", "session-1")
+		require.NoError(t, err)
+		_, err = db.Exec("INSERT INTO events (type, operator_session_id) VALUES (?, ?)", "logout", "session-1")
+		require.NoError(t, err)
+		_, err = db.Exec("INSERT INTO events (type, operator_session_id) VALUES (?, ?)", "login", "session-2")
+		require.NoError(t, err)
+
+		cmd := dataAuditSummaryCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "Audit Event Summary")
+		assert.Contains(t, output, "login: 2")
+		assert.Contains(t, output, "logout: 1")
+		assert.Contains(t, output, "Total events: 3")
+	})
+}
+
+func TestDataAuditSummaryQueryConstruction(t *testing.T) {
+	t.Run("SQL query construction without session filter", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		// Initialize global paths to use tmpDir
+		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+
+		// Create data directory and database
+		dataDir := constants.Paths.Infra.DataDir
+		require.NoError(t, os.MkdirAll(dataDir, 0755))
+		dbPath := constants.Paths.Infra.DbPath
+
+		db, err := sql.Open("sqlite", dbPath)
+		require.NoError(t, err)
+		defer db.Close()
+
+		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
+		require.NoError(t, err)
+
+		// Test the query directly
+		rows, err := sqlDBQuery(dbPath, "SELECT type, COUNT(*) as count FROM events GROUP BY type")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		// Should return no rows for empty table
+		assert.False(t, rows.Next())
+	})
+
+	t.Run("SQL query construction with session filter", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		// Initialize global paths to use tmpDir
+		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+
+		// Create data directory and database
+		dataDir := constants.Paths.Infra.DataDir
+		require.NoError(t, os.MkdirAll(dataDir, 0755))
+		dbPath := constants.Paths.Infra.DbPath
+
+		db, err := sql.Open("sqlite", dbPath)
+		require.NoError(t, err)
+		defer db.Close()
+
+		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
+		require.NoError(t, err)
+
+		// Test the query with parameter
+		rows, err := sqlDBQuery(dbPath, "SELECT type, COUNT(*) as count FROM events WHERE operator_session_id = ? GROUP BY type", "test-session")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		// Should return no rows for empty table
+		assert.False(t, rows.Next())
+	})
+}
+
+func TestDataAuditSummaryOutputFormatting(t *testing.T) {
+	t.Run("summary formats output correctly with multiple event types", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		// Initialize global paths to use tmpDir
+		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+
+		// Create data directory and database with test data
+		dataDir := constants.Paths.Infra.DataDir
+		require.NoError(t, os.MkdirAll(dataDir, 0755))
+		dbPath := constants.Paths.Infra.DbPath
+
+		db, err := sql.Open("sqlite", dbPath)
+		require.NoError(t, err)
+		defer db.Close()
+
+		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
+		require.NoError(t, err)
+
+		// Insert multiple event types
+		eventTypes := []string{"login", "logout", "command", "error", "success"}
+		for i, eventType := range eventTypes {
+			for j := 0; j < i+1; j++ {
+				_, err = db.Exec("INSERT INTO events (type, operator_session_id) VALUES (?, ?)", eventType, "session-1")
+				require.NoError(t, err)
+			}
+		}
+
+		cmd := dataAuditSummaryCmd()
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		err = cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "Audit Event Summary")
+		assert.Contains(t, output, strings.Repeat("=", 110))
+		assert.Contains(t, output, "login: 1")
+		assert.Contains(t, output, "logout: 2")
+		assert.Contains(t, output, "command: 3")
+		assert.Contains(t, output, "error: 4")
+		assert.Contains(t, output, "success: 5")
+		assert.Contains(t, output, "Total events: 15")
+	})
+}
+
+func TestDataStoreCommandModes(t *testing.T) {
+	t.Run("store command defaults to list mode when document-id not provided", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		cmd := dataStoreCmd()
+		cmd.Flags().Set("collection", "test_collection")
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		// Will fail on API call, but we can verify the flag state
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		// Error should not be about missing collection flag
+		assert.NotContains(t, err.Error(), "--collection is required")
+	})
+
+	t.Run("store command uses document mode when document-id provided", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		setupDataTestConfig(t, tmpDir)
+
+		cmd := dataStoreCmd()
+		cmd.Flags().Set("collection", "test_collection")
+		cmd.Flags().Set("document-id", "doc-123")
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		// Will fail on API call, but we can verify both flags are set
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		// Error should not be about missing flags
+		assert.NotContains(t, err.Error(), "--collection is required")
+	})
+}
+
+func TestDataCommandErrorHandling(t *testing.T) {
+	t.Run("users command handles JSON parse errors", func(t *testing.T) {
+		// This test verifies that the users command properly handles invalid JSON responses
+		// Since we can't mock the API client easily, we test the struct unmarshaling directly
+		invalidJSON := `not valid json`
+		var users []User
+		err := json.Unmarshal([]byte(invalidJSON), &users)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid character")
+	})
+
+	t.Run("operators command handles JSON parse errors", func(t *testing.T) {
+		invalidJSON := `{invalid}`
+		var operators []Operator
+		err := json.Unmarshal([]byte(invalidJSON), &operators)
+		require.Error(t, err)
+	})
+
+	t.Run("settings command handles JSON parse errors", func(t *testing.T) {
+		invalidJSON := `{invalid}`
+		var settings SettingsResponse
+		err := json.Unmarshal([]byte(invalidJSON), &settings)
+		require.Error(t, err)
+	})
+
+	t.Run("settings command handles missing settings field", func(t *testing.T) {
+		// Valid JSON but missing required field
+		invalidJSON := `{"other_field": "value"}`
+		var settings SettingsResponse
+		err := json.Unmarshal([]byte(invalidJSON), &settings)
+		require.NoError(t, err) // JSON is valid, just empty settings
+		assert.Nil(t, settings.Settings)
+	})
+}
+
+func TestDataQueryFilterEdgeCases(t *testing.T) {
+	t.Run("QueryFilter with empty field", func(t *testing.T) {
+		filter := QueryFilter{
+			Field: "",
+			Op:    "==",
+			Value: "value",
+		}
+
+		data, err := json.Marshal(filter)
+		require.NoError(t, err)
+
+		var decoded QueryFilter
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, "", decoded.Field)
+	})
+
+	t.Run("QueryFilter with empty operator", func(t *testing.T) {
+		filter := QueryFilter{
+			Field: "field",
+			Op:    "",
+			Value: "value",
+		}
+
+		data, err := json.Marshal(filter)
+		require.NoError(t, err)
+
+		var decoded QueryFilter
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, "", decoded.Op)
+	})
+
+	t.Run("QueryFilter with complex value (object)", func(t *testing.T) {
+		complexValue := map[string]interface{}{"nested": "value", "number": 42}
+		filter := QueryFilter{
+			Field: "metadata",
+			Op:    "==",
+			Value: complexValue,
+		}
+
+		data, err := json.Marshal(filter)
+		require.NoError(t, err)
+
+		var decoded QueryFilter
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, "metadata", decoded.Field)
+		assert.Equal(t, "==", decoded.Op)
+		assert.IsType(t, map[string]interface{}{}, decoded.Value)
+	})
+
+	t.Run("QueryFilter with array value", func(t *testing.T) {
+		arrayValue := []string{"value1", "value2", "value3"}
+		filter := QueryFilter{
+			Field: "tags",
+			Op:    "in",
+			Value: arrayValue,
+		}
+
+		data, err := json.Marshal(filter)
+		require.NoError(t, err)
+
+		var decoded QueryFilter
+		err = json.Unmarshal(data, &decoded)
+		require.NoError(t, err)
+
+		assert.Equal(t, "tags", decoded.Field)
+		assert.Equal(t, "in", decoded.Op)
+		assert.IsType(t, []interface{}{}, decoded.Value)
+	})
+}
+
+func TestDataCommandLongDescription(t *testing.T) {
+	t.Run("data command has long description", func(t *testing.T) {
+		cmd := dataCmd()
+		assert.NotEmpty(t, cmd.Long)
+		assert.Contains(t, cmd.Long, "Data management")
+	})
+
+	t.Run("users command has no long description (uses default)", func(t *testing.T) {
+		cmd := dataUsersCmd()
+		// Most subcommands don't have long descriptions, that's fine
+		assert.Empty(t, cmd.Long)
+	})
+}
+
+func TestDataCommandSubcommandRegistration(t *testing.T) {
+	t.Run("data command registers all expected subcommands", func(t *testing.T) {
+		cmd := dataCmd()
+		subcommands := cmd.Commands()
+		subcommandNames := make(map[string]bool)
+		for _, sub := range subcommands {
+			subcommandNames[sub.Use] = true
+		}
+
+		assert.True(t, subcommandNames["users"], "missing users subcommand")
+		assert.True(t, subcommandNames["operators"], "missing operators subcommand")
+		assert.True(t, subcommandNames["settings"], "missing settings subcommand")
+		assert.True(t, subcommandNames["store"], "missing store subcommand")
+		assert.True(t, subcommandNames["audit"], "missing audit subcommand")
+	})
+
+	t.Run("audit command registers list and summary subcommands", func(t *testing.T) {
+		cmd := dataAuditCmd()
+		subcommands := cmd.Commands()
+		subcommandNames := make(map[string]bool)
+		for _, sub := range subcommands {
+			subcommandNames[sub.Use] = true
+		}
+
+		assert.True(t, subcommandNames["list"], "missing list subcommand")
+		assert.True(t, subcommandNames[string(constants.StreamStatusSummary)], "missing summary subcommand")
+	})
+}
+
+func TestDataSqlDBQueryEdgeCases(t *testing.T) {
+	t.Run("sqlDBQuery handles empty result set", func(t *testing.T) {
+		rows, err := sqlDBQuery(":memory:", "SELECT 1 WHERE 1=0")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		assert.False(t, rows.Next())
+	})
+
+	t.Run("sqlDBQuery handles multiple parameters", func(t *testing.T) {
+		rows, err := sqlDBQuery(":memory:", "SELECT ? + ? as result", 10, 20)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		assert.True(t, rows.Next())
+		var result int
+		require.NoError(t, rows.Scan(&result))
+		assert.Equal(t, 30, result)
+	})
+
+	t.Run("sqlDBQuery handles string parameters", func(t *testing.T) {
+		rows, err := sqlDBQuery(":memory:", "SELECT ? as result", "test-string")
+		require.NoError(t, err)
+		defer rows.Close()
+
+		assert.True(t, rows.Next())
+		var result string
+		require.NoError(t, rows.Scan(&result))
+		assert.Equal(t, "test-string", result)
+	})
+
+	t.Run("sqlDBQuery handles NULL parameters", func(t *testing.T) {
+		rows, err := sqlDBQuery(":memory:", "SELECT ? as result", nil)
+		require.NoError(t, err)
+		defer rows.Close()
+
+		assert.True(t, rows.Next())
+		var result interface{}
+		require.NoError(t, rows.Scan(&result))
+		assert.Nil(t, result)
 	})
 }

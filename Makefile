@@ -46,14 +46,40 @@ TEST_TIMEOUT := 180s
 TEST_SHORT_TIMEOUT := 60s
 TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
-COVERAGE_THRESHOLD := 52
+COVERAGE_THRESHOLD := 65
 
-# Package exclusion filter (reused across test targets)
-PKG_EXCLUDE := | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "^github.com/g8e-ai/g8e/internal/protocol/proto/"
-TEST_PKGS := $$(go list ./... $(PKG_EXCLUDE))
+# =============================================================================
+# COVERAGE EXCLUSIONS — single source of truth
+# =============================================================================
+# Packages excluded from both test runs and coverage profile.
+# Each pattern is matched against Go import paths and coverage profile file paths.
+EXCLUDE_PKGS := \
+	mocks \
+	/cmd/ \
+	/internal/test \
+	/test/ \
+	/internal/protocol/proto \
+	/internal/contracts \
+	/internal/interfaces \
+	/internal/services/gateway/docs \
+	/internal/services/gateway/scripts \
+	/internal/services/storage/storagetest
 
-# Coverage exclusion filter (for coverage calculations)
-COVERAGE_EXCLUDE := | grep -v "internal/protocol/proto" | grep -v mocks | grep -v "^github.com/g8e-ai/g8e/cmd/" | grep -v "^github.com/g8e-ai/g8e/internal/testutil/" | grep -v "^github.com/g8e-ai/g8e/test/" | grep -v "internal/cli/cmd/demos.go"
+# Files excluded from coverage only (belong to otherwise-tested packages).
+EXCLUDE_FILES := internal/cli/cmd/demos.go
+
+# Grep chains derived from the lists above — do not edit directly.
+_PKG_GREP  := $(foreach p,$(EXCLUDE_PKGS),| grep -v "$(p)")
+_FILE_GREP := $(foreach f,$(EXCLUDE_FILES),| grep -v "$(f)")
+_COV_GREP  := $(_PKG_GREP) $(_FILE_GREP)
+
+# Packages passed to go test.
+TEST_PKGS := $$(go list ./... $(_PKG_GREP))
+
+# Filter coverage.out (the raw profile) to remove excluded paths, then report %.
+# We operate on the profile data — not on the formatted output of go tool cover.
+FILTER_PROFILE = { head -1 coverage.out; tail -n +2 coverage.out $(_COV_GREP); } > coverage_filtered.out
+COVERAGE_PCT   = go tool cover -func=coverage_filtered.out | tail -1 | awk '{print $$3}' | sed 's/%//'
 
 # =============================================================================
 # TOOLS
@@ -86,7 +112,7 @@ help:
 	@echo "  generate      Generate all protocol artifacts (proto)"
 	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
-	@echo "  protoc-install Install protoc compiler"
+	@echo "  protoc-install Install protoc compiler (optional; buf does not require it)"
 	@echo ""
 	@echo "Build:"
 	@echo "  build			Build g8e for current OS and architecture"
@@ -101,19 +127,21 @@ help:
 	@echo "  build-all-docker		Build g8e for all platforms in Docker"
 	@echo ""
 	@echo "Test:"
-	@echo "  test                  Run all tests with race detection (unit + gateway)"
+	@echo "  test                  Run all tests (unit + integration)"
 	@echo "  test-short            Run short tests with race detection"
 	@echo "  test-pkg-<path>       Run tests for a specific package (e.g., make test-pkg-internal/services/auth)"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
-	@echo "  test-integration      Run integration tests (requires platform running and auth login)"
-	@echo "  test-scenario         Run scenario integration tests (requires platform running)"
-	@echo "  test-gateway          Run gateway tests"
-	@echo "  test-mcp              Run MCP tests (requires platform running and auth login)"
-	@echo "  test-a2a              Run A2A tests (requires platform running and auth login)"
-	@echo "  test-universal-gateway Run universal gateway integration tests (requires platform running and auth login)"
-	@echo "  test-byo              Run BYO client tests (requires platform running and auth login)"
-	@echo "  test-native           Run native real Operator tests (requires platform running and auth login)"
+	@echo "  test-integration      Run Tier 2 (In-Memory Integration) tests - no external dependencies"
+	@echo "  test-docker           Run Tier 3 (Docker E2E) tests - requires Docker"
+	@echo "  test-gov              Run Tier 3 (Gov Demo E2E) tests - requires Docker"
+	@echo "  test-gateway          Run gateway-specific integration tests"
+	@echo "  test-mcp              Run MCP integration tests (legacy - redirects to test-integration)"
+	@echo "  test-a2a              Run A2A integration tests (legacy - redirects to test-integration)"
+	@echo "  test-universal-gateway Run universal gateway integration tests (legacy - redirects to test-integration)"
+	@echo "  test-byo              Run BYO client integration tests (legacy - redirects to test-integration)"
+	@echo "  test-native           Run native tool integration tests (legacy - redirects to test-integration)"
+	@echo "  test-scenario         Run scenario integration tests (legacy - redirects to test-integration)"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -131,8 +159,10 @@ help:
 generate: proto
 
 
+# Note: buf has its own built-in compiler (protocompile) and invokes the
+# protoc-gen-* plugins directly, so the standalone protoc binary is NOT required.
 .PHONY: proto
-proto: buf-install protoc-install
+proto: buf-install
 	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
 		echo "Generating Go Protobuf code with Buf..."; \
 		$(BUF) generate protocol/proto; \
@@ -166,6 +196,10 @@ proto-force: buf-install
 
 # =============================================================================
 # TOOL INSTALLATION
+#
+# NOTE: protoc-install is OPTIONAL. `make proto` uses buf, which ships its own
+# compiler and does not require the standalone protoc binary. This target exists
+# only for manual use (e.g. invoking protoc directly for debugging).
 # =============================================================================
 .PHONY: buf-install
 buf-install:
@@ -184,7 +218,21 @@ buf-install:
 protoc-install:
 	@if ! command -v protoc &> /dev/null; then \
 		echo "Installing protoc $(PROTOC_VERSION)..."; \
-		cd $(TMPDIR) && curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/protoc-35.0-linux-x86_64.zip -o protoc.zip && \
+		PROTOC_VER=$$(echo "$(PROTOC_VERSION)" | sed 's/^v//'); \
+		case "$(HOST_OS)" in \
+			linux)   PROTOC_OS=linux ;; \
+			darwin)  PROTOC_OS=osx ;; \
+			windows) PROTOC_OS=win64 ;; \
+			*) echo "Error: unsupported OS $(HOST_OS) for protoc install" >&2; exit 1 ;; \
+		esac; \
+		case "$(HOST_ARCH)" in \
+			amd64) PROTOC_ARCH=x86_64 ;; \
+			arm64) PROTOC_ARCH=aarch_64 ;; \
+			*) echo "Error: unsupported arch $(HOST_ARCH) for protoc install" >&2; exit 1 ;; \
+		esac; \
+		if [ "$(HOST_OS)" = "windows" ]; then PROTOC_ASSET="protoc-$$PROTOC_VER-win64.zip"; \
+		else PROTOC_ASSET="protoc-$$PROTOC_VER-$$PROTOC_OS-$$PROTOC_ARCH.zip"; fi; \
+		cd $(TMPDIR) && curl -fSL "https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/$$PROTOC_ASSET" -o protoc.zip && \
 		unzip -o protoc.zip -d protoc && \
 		sudo cp protoc/bin/protoc /usr/local/bin/protoc && \
 		sudo chmod +x /usr/local/bin/protoc && \
@@ -354,7 +402,7 @@ build-all-docker:
 # =============================================================================
 # Core test targets
 .PHONY: test
-test: test-unit test-integration test-e2e
+test: test-unit test-integration
 	@echo "All tests completed successfully."
 
 # Unit Tests: Run immediately without any build tags (excludes integration and e2e)
@@ -368,23 +416,29 @@ test-short:
 	@echo "Running short unit tests (skips long-running tests)..."
 	@go test $(TEST_RACE) -short $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
-# In-Memory Integration Tests: Requires the integration tag
+# Tier 2: In-Memory Integration Tests - no external dependencies
 .PHONY: test-integration
 test-integration:
 	@echo "Running Tier 2 (In-Memory Integration) tests..."
 	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
-# Live-Platform E2E Tests: Requires the e2e tag, running platform, and auth login
-.PHONY: test-e2e
-test-e2e:
-	@echo "Running Tier 3 (Live Platform E2E) tests..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/...
+# Tier 3a: Docker E2E Tests - requires Docker
+.PHONY: test-docker
+test-docker:
+	@echo "Running Tier 3 (Docker E2E) tests..."
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
-# Scenario-specific Live Tests
-.PHONY: test-scenario
-test-scenario:
-	@echo "Running Tier 3 (Scenario) tests..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/scenario/...
+# Tier 3b: Gov Demo E2E Tests - requires Docker
+.PHONY: test-gov
+test-gov:
+	@echo "Running Tier 3 (Gov Demo E2E) tests..."
+	@go test -tags=e2e -run TestDockerGateway_GovDemo $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
+
+# Legacy targets - redirect to honest names
+.PHONY: test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway
+test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway:
+	@echo "Running integration tests (legacy target)..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
 # Gateway tests (subset of integration tests)
 .PHONY: test-gateway
@@ -392,45 +446,16 @@ test-gateway:
 	@echo "Running gateway-specific tests (no platform required)..."
 	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
 
-# Protocol-specific integration tests (requires platform running and auth login)
-.PHONY: test-mcp
-test-mcp:
-	@echo "Running MCP (Model Context Protocol) integration tests (requires platform running and auth login)..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
-
-.PHONY: test-a2a
-test-a2a:
-	@echo "Running A2A (Agent-to-Agent) integration tests (requires platform running and auth login)..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
-
-.PHONY: test-universal-gateway
-test-universal-gateway:
-	@echo "Running universal gateway integration tests (requires platform running and auth login)..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/universal_gateway_integration_test.go
-
-# Client integration tests (requires platform running and auth login)
-.PHONY: test-byo
-test-byo:
-	@echo "Running BYO (Bring Your Own) client integration tests (requires platform running and auth login)..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/byo_client_test.go
-
-.PHONY: test-native
-test-native:
-	@echo "Running native real Operator integration tests (requires platform running and auth login)..."
-	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/native_real_operator_test.go
-
 # Coverage tests
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage (threshold: $(COVERAGE_THRESHOLD)%)..."
-	@if [ -n "$(PKG)" ]; then \
-		echo "Running coverage for package: $(PKG)"; \
-		go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(if $(VERBOSE),-v,) $(PKG); \
-	else \
-		echo "Running coverage for all packages..."; \
-		go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(if $(VERBOSE),-v,) $(TEST_PKGS); \
-	fi
-	@COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+		-coverprofile=coverage.out -covermode=atomic \
+		$(if $(VERBOSE),-v,) \
+		$(if $(PKG),$(PKG),$(TEST_PKGS))
+	@$(FILTER_PROFILE)
+	@COVERAGE=$$($(COVERAGE_PCT)); \
 	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 		exit 1; \
@@ -507,7 +532,7 @@ clean:
 	@echo "Cleaning up build artifacts and runtime state..."
 	@rm -rf .g8e/
 	@rm -rf bin/
-	@rm -f *.sha256 *.test coverage.out buf
+	@rm -f *.sha256 *.test coverage.out coverage_filtered.out buf
 	@rm -rf .g8e-harness-*/
 	@echo "Clean complete."
 
@@ -537,7 +562,6 @@ ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test
 .PHONY: _ci-verify-proto
 _ci-verify-proto:
 	@echo "=== verify-proto ==="
-	@$(MAKE) protoc-install
 	@$(MAKE) proto
 	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*\.proto$$" || true); \
 	if [ -n "$$CHANGES" ]; then \
@@ -573,12 +597,12 @@ _ci-vulncheck:
 .PHONY: _ci-test
 _ci-test:
 	@echo "=== test ==="
-	@./g8e gw start --cert-mode localhost
-	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) -coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
-	@COVERAGE=$$(go tool cover -func=coverage.out $(COVERAGE_EXCLUDE) | tail -1 | awk '{print $$3}' | sed 's/%//'); \
+	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+		-coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
+	@$(FILTER_PROFILE)
+	@COVERAGE=$$($(COVERAGE_PCT)); \
 	if [ $$(echo "$$COVERAGE < $(COVERAGE_THRESHOLD)" | bc -l) -eq 1 ]; then \
 		echo "Coverage $$COVERAGE% is below $(COVERAGE_THRESHOLD)% threshold"; \
 		exit 1; \
 	fi; \
 	echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"
-	@./g8e gw stop

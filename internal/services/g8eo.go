@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -290,8 +291,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 	vs.logger.Info("Consensus signing key loaded successfully")
 
-	// Load trusted L2 signers from filesystem (fail-closed if directory doesn't exist)
+	// Load trusted L2 signers from filesystem (create directory if it doesn't exist)
 	trustedSignersDir := filepath.Join(vs.config.PKIDir, "trusted_signers")
+	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
+		return fmt.Errorf("failed to create trusted signers directory %s: %w", trustedSignersDir, err)
+	}
 	signerStore, err := governance.NewFilesystemSignerStore(trustedSignersDir, vs.logger)
 	if err != nil {
 		return fmt.Errorf("failed to load trusted signers from %s: %w", trustedSignersDir, err)

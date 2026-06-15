@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build e2e
+//go:build integration
 
 package scenario
 
@@ -19,20 +19,21 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
-	cliconfig "github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/emulator/client"
-	"github.com/g8e-ai/g8e/internal/emulator/config"
+	emulatorconfig "github.com/g8e-ai/g8e/internal/emulator/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/test/fixtures"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -53,137 +54,68 @@ type TestContext struct {
 	PubKey            ed25519.PublicKey
 	OperatorSessionID string
 	CLISessionID      string
+	Fixture           *fixtures.GatewayFixture
+	Identity          *fixtures.ClientIdentity
 }
 
-// setupTestContext connects to a real running operator/gateway.
+// setupTestContext spins up an in-process gateway via GatewayFixture
+// and enrolls a client identity for mTLS authentication.
 // Returns a TestContext with mTLS client ready for use.
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Initialize paths relative to project root using constant
-	if err := constants.InitPathsWithBase(constants.ProjectRootFromTestDir); err != nil {
-		t.Fatalf("failed to initialize paths: %v", err)
-	}
-	// The projectRoot should be the directory containing .g8e, not the .g8e directory itself,
-	// because cliconfig.Load and constants.InitPathsWithBase expect the base directory.
-	projectRoot := constants.Paths.Infra.RuntimeDir
+	// Create in-process gateway
+	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
+		TestName: "scenario-test",
+		Posture:  config.PostureDoctrine,
+	})
 
-	cliCfg, err := cliconfig.Load(projectRoot)
+	// Enroll a client identity for mTLS authentication
+	identity := fixtures.EnrollClientIdentity(t, f, "scenario-user", "scenario-org", "scenario-fingerprint", "scenario-host")
+
+	// Write certificates to temp files for emulator client
+	certFile, err := os.CreateTemp("", "scenario-cert-*.pem")
 	if err != nil {
-		t.Fatalf("failed to load CLI config: %v", err)
+		t.Fatalf("failed to create temp cert file: %v", err)
 	}
-
-	// Bootstrap CLI authentication if not already done (matches ./g8e gw start behavior)
-	// Check if credentials are stale (> 45 min old) and re-enroll if needed
-	credsPath := filepath.Join(projectRoot, ".g8e", "credentials")
-	if info, statErr := os.Stat(credsPath); statErr == nil {
-		if time.Since(info.ModTime()) >= 45*time.Minute {
-			t.Logf("Credentials are stale (%v old), re-enrolling...", time.Since(info.ModTime()).Round(time.Second))
-			// Delete stale credentials to force re-enrollment
-			os.Remove(credsPath)
-			os.Remove(cliCfg.CLICertFile())
-			os.Remove(cliCfg.CLIKeyFile())
-		}
+	defer os.Remove(certFile.Name())
+	if _, err := certFile.Write(identity.Certificate); err != nil {
+		t.Fatalf("failed to write cert file: %v", err)
 	}
+	certFile.Close()
 
-	// CLI authentication must be performed explicitly via 'g8e auth login'
-	// Tests should set up credentials via the proper auth flow
-	creds, err := auth.LoadCredentials(cliCfg)
-	if err != nil || creds == nil {
-		t.Fatalf("CLI credentials required for tests. Please authenticate via 'g8e auth login'")
+	keyFile, err := os.CreateTemp("", "scenario-key-*.pem")
+	if err != nil {
+		t.Fatalf("failed to create temp key file: %v", err)
 	}
-
-	// Ensure gateway is running and governance is ready before proceeding
-	healthURL := fmt.Sprintf("http://127.0.0.1:%d/api/v1/health", constants.Ports.OperatorHttp)
-	t.Logf("Waiting for gateway to be governance-ready at %s...", healthURL)
-
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		resp, err := http.Get(healthURL)
-		if err != nil {
-			t.Logf("Gateway not ready yet, retrying... (%v)", err)
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			t.Logf("Gateway returned status %d, retrying...", resp.StatusCode)
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		var health struct {
-			Status          string `json:"status"`
-			GovernanceReady bool   `json:"governance_ready"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-			t.Logf("Failed to decode health response, retrying... (%v)", err)
-			time.Sleep(500 * time.Millisecond)
-			continue
-		}
-
-		if health.GovernanceReady {
-			t.Logf("Gateway is governance-ready")
-			break
-		}
-
-		t.Logf("Gateway not governance-ready yet, retrying...")
-		time.Sleep(500 * time.Millisecond)
+	defer os.Remove(keyFile.Name())
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: identity.PrivateKey})
+	if _, err := keyFile.Write(keyPEM); err != nil {
+		t.Fatalf("failed to write key file: %v", err)
 	}
+	keyFile.Close()
 
-	if time.Now().After(deadline) {
-		t.Fatal("gateway did not become governance-ready within timeout - run './g8e gw start' first")
-	}
+	// Read CA bundle from PKI dir
+	caBundlePath := f.PKIDir + "/trust/g8eg-ca-bundle.pem"
 
-	// Paths to local PKI material (bootstrapped via ./g8e gw start)
-	clientCertPath := cliCfg.CLICertFile()
-	clientKeyPath := cliCfg.CLIKeyFile()
-	// Use the CA bundle from centralized constants as per docs/devs/tests.md
-	caBundlePath := constants.Paths.Infra.CaCertPath
-
-	// Verify certificates exist
-	if _, err := os.Stat(clientCertPath); os.IsNotExist(err) {
-		t.Fatalf("client cert not found at %s - run './g8e gw start' first", clientCertPath)
-	}
-	if _, err := os.Stat(caBundlePath); os.IsNotExist(err) {
-		t.Fatalf("CA bundle not found at %s - run './g8e gw start' first", caBundlePath)
-	}
-
-	// Create auditor client for HTTP submission
-	auditorCfg := config.Default()
-	auditorCfg.UseCLIConfig = false // Don't auto-load from CLI config, we set paths explicitly
-	auditorCfg.MTLSBaseURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
-	auditorCfg.PublicBaseURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
-	auditorCfg.Auth.ClientCert = clientCertPath
-	auditorCfg.Auth.ClientKey = clientKeyPath
+	// Create emulator client for HTTP submission
+	mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+	auditorCfg := emulatorconfig.Default()
+	auditorCfg.UseCLIConfig = false
+	auditorCfg.MTLSBaseURL = mtlsURL
+	auditorCfg.PublicBaseURL = mtlsURL
+	auditorCfg.Auth.ClientCert = certFile.Name()
+	auditorCfg.Auth.ClientKey = keyFile.Name()
 	auditorCfg.Auth.CABundle = caBundlePath
-	auditorCfg.Auth.Insecure = true // Skip verify for local dev with self-signed certs
-	auditorCfg.Verbose = true       // Echo requests to stderr for debugging
+	auditorCfg.Auth.Insecure = true
+	auditorCfg.Verbose = true
 
-	// Load CLI credentials (bootstrapped by ./g8e gw start)
-	creds, err = auth.LoadCredentials(cliCfg)
-	if err != nil {
-		t.Fatalf("failed to load CLI credentials: %v", err)
-	}
-	if creds == nil {
-		t.Fatalf("no CLI credentials found - run './g8e gw start' first")
-	}
-
-	t.Logf("Creating auditor client with Cert: %s, Key: %s, CA: %s", clientCertPath, clientKeyPath, caBundlePath)
+	t.Logf("Creating auditor client with Cert: %s, Key: %s, CA: %s", certFile.Name(), keyFile.Name(), caBundlePath)
 	testClient, err := client.New(auditorCfg)
 	if err != nil {
 		t.Fatalf("failed to create auditor client: %v", err)
 	}
 
-	// For gateway-only testing, use CLI session ID as operator session ID
-	// The gateway validates envelopes using the session ID in the envelope body
-	operatorSessionID := creds.CLISessionID
-	if operatorSessionID == "" {
-		t.Fatal("CLI session ID is empty - run './g8e gw start' first")
-	}
-
-	// Generate test client keys for signing (these are for L2 consensus simulation in tests)
 	pub, priv, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatalf("failed to generate test client keys: %v", err)
@@ -191,37 +123,40 @@ func setupTestContext(t *testing.T) *TestContext {
 
 	return &TestContext{
 		Client:            testClient,
-		BaseURL:           auditorCfg.MTLSBaseURL,
-		CertPath:          clientCertPath,
-		KeyPath:           clientKeyPath,
+		BaseURL:           mtlsURL,
+		CertPath:          certFile.Name(),
+		KeyPath:           keyFile.Name(),
 		CAPath:            caBundlePath,
 		PrivKey:           priv,
 		PubKey:            pub,
-		OperatorSessionID: operatorSessionID,
-		CLISessionID:      creds.CLISessionID,
+		OperatorSessionID: identity.OperatorSessionID,
+		CLISessionID:      identity.OperatorSessionID,
+		Fixture:           f,
+		Identity:          identity,
 	}
 }
 
 func TestScenarios(t *testing.T) {
 	// Setup test infrastructure
 	ctx := setupTestContext(t)
+	defer ctx.Fixture.Cleanup()
 
-	// Fetch actual state root from gateway via mTLS port
-	// Note: StateRoot uses PublicBaseURL by default, but in full cert mode
-	// all ports require mTLS, so we need to use the mTLS endpoint directly
-	stateRoot, err := ctx.Client.StateRootFromMTLS(context.Background())
+	// Fetch the current state root via the public health API so the envelope
+	// binds to the same state the gateway will verify against.
+	stateRoot, err := ctx.Client.StateRoot(context.Background())
 	if err != nil {
 		t.Fatalf("failed to fetch state root: %v", err)
 	}
-	t.Logf("State root from gateway: %q", stateRoot)
+	if stateRoot == "" {
+		t.Fatal("gateway returned empty state root")
+	}
 
 	// Build a valid envelope using the builder
 	intentBytes, err := New().
 		WithCommand("echo hello").
-		WithOperatorID("").
+		WithOperatorID(ctx.Identity.OperatorID).
 		WithOperatorSessionID(ctx.OperatorSessionID).
 		WithStateRoot(stateRoot).
-		WithL2(ctx.PrivKey, true).
 		Build()
 	if err != nil {
 		t.Fatalf("failed to build test envelope: %v", err)
@@ -265,6 +200,7 @@ func TestScenarios(t *testing.T) {
 // malformed envelopes are correctly rejected.
 func TestNegativeControls(t *testing.T) {
 	ctx := setupTestContext(t)
+	defer ctx.Fixture.Cleanup()
 
 	t.Run("bad_id_rejection", func(t *testing.T) {
 		intentBytes, err := New().

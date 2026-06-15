@@ -81,10 +81,10 @@ type testPKIContext struct {
 func setupTestPKI(t *testing.T) *testPKIContext {
 	t.Helper()
 
-	dataDir := tempDir(t)
+	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 	logger := testutil.NewTestLogger()
-	secretsDir := tempDir(t)
+	secretsDir := t.TempDir()
 
 	// Clean pkiDir to avoid stale certificates from previous test runs
 	os.RemoveAll(pkiDir)
@@ -720,10 +720,10 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 	t.Run("Phase5: SignCSR rejects P-384 CSR", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -752,10 +752,10 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 
 	t.Run("Phase5: SignCSR accepts P-256 CSR", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -775,10 +775,10 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 
 	t.Run("Phase5: All CA and service certs use P-256", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -809,10 +809,10 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -846,10 +846,10 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -869,10 +869,10 @@ func TestPKIAuthority_Phase5_CurveEnforcement(t *testing.T) {
 
 	t.Run("Phase5: issued/apps directory is not created", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -896,10 +896,10 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -933,10 +933,10 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Unix file permissions not supported on Windows")
 		}
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -958,10 +958,10 @@ func TestPKIAuthority_Phase5_Permissions(t *testing.T) {
 func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 	t.Run("Phase8_1: root.pem parses with 1 certificate", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -989,10 +989,10 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 
 	t.Run("Phase8_1: operator-bundle.pem parses with 2 certificates", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		secretsDir := tempDir(t)
+		secretsDir := t.TempDir()
 		db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -1020,13 +1020,13 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 
 	t.Run("Phase8_1: g8eg-ca-bundle.pem parses with 3 certificates", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(dataDir, tempDir(t), filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
+		db, err := OpenCanonicalDBService(dataDir, t.TempDir(), filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, tempDir(t), logger)
+		sm, err := NewSecretManager(db.db, t.TempDir(), logger)
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)
@@ -1050,13 +1050,13 @@ func TestPKIAuthority_Phase8_1_TrustBundles(t *testing.T) {
 
 	t.Run("Phase8_1: serving certificate verifies against g8eg-ca-bundle.pem", func(t *testing.T) {
 		t.Parallel()
-		dataDir := tempDir(t)
+		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(dataDir, tempDir(t), filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
+		db, err := OpenCanonicalDBService(dataDir, t.TempDir(), filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
-		sm, err := NewSecretManager(db.db, tempDir(t), logger)
+		sm, err := NewSecretManager(db.db, t.TempDir(), logger)
 		require.NoError(t, err)
 
 		pki := newPKIAuthority(dataDir, pkiDir, db, sm, logger)

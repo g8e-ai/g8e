@@ -196,19 +196,26 @@ func parseNtpqOutput(output string) NTPStatus {
 		for _, line := range lines[2:] {
 			fields := strings.Fields(line)
 			if len(fields) >= 9 {
-				if fields[0] == "*" {
+				if strings.HasPrefix(fields[0], "*") {
 					result.Synced = true
 					result.Status = "synchronized"
+
+					// Handle both 9-column and 10-column (with 't' type) output
+					offset := 0
+					if len(fields) >= 10 {
+						offset = 1
+					}
+
 					result.SelectedPeer = &NTPSelectedPeer{
 						Remote:  fields[0],
 						RefID:   fields[1],
 						Stratum: fields[2],
-						When:    fields[3],
-						Poll:    fields[4],
-						Reach:   fields[5],
-						Delay:   fields[6],
-						Offset:  fields[7],
-						Jitter:  fields[8],
+						When:    fields[3+offset],
+						Poll:    fields[4+offset],
+						Reach:   fields[5+offset],
+						Delay:   fields[6+offset],
+						Offset:  fields[7+offset],
+						Jitter:  fields[8+offset],
 					}
 				}
 			}

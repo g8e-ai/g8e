@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build e2e
+//go:build integration
 
 package tests
 
@@ -94,12 +94,19 @@ func TestBYOClientParity_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
 	require.NoError(t, err)
+	broker := ls.GetHTTPHandler().GetGatewayWebSocketHandler()
+	inProcessClient := pubsub.NewInProcessPubSubClient(broker)
+	resultsClient := pubsub.NewInProcessPubSubClient(broker)
+	resultsService, err := pubsub.NewPubSubResultsService(cfg, testutil.NewTestLogger(), resultsClient)
+	require.NoError(t, err)
+
 	cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
 		Config:             cfg,
 		Logger:             testutil.NewTestLogger(),
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
+		PubSubClient:       inProcessClient,
+		ResultsService:     resultsService,
 		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
 		ReplayStore:        govDeps.ReplayStore,
 		StateRootProvider:  govDeps.StateRootProvider,

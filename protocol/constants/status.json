@@ -34,6 +34,12 @@
         "_python_const": "A2A_CALL",
         "value": "A2A_CALL"
       },
+      "CANCEL": {
+        "_go_const": "ActionTypeCancel",
+        "_mutation": true,
+        "_python_const": "CANCEL",
+        "value": "CANCEL"
+      },
       "EVAL_ANSWER": {
         "_go_const": "ActionTypeEvalAnswer",
         "_python_const": "EVAL_ANSWER",

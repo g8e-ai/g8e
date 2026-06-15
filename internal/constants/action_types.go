@@ -29,6 +29,7 @@ type ActionType string
 
 const (
 	ActionTypeA2aCall             ActionType = "A2A_CALL"
+	ActionTypeCancel              ActionType = "CANCEL"
 	ActionTypeEvalAnswer          ActionType = "EVAL_ANSWER"
 	ActionTypeExecuteBash         ActionType = "EXECUTE_BASH"
 	ActionTypeFetchFileDiff       ActionType = "FETCH_FILE_DIFF"
@@ -57,6 +58,7 @@ const (
 func AllActionTypes() []ActionType {
 	return []ActionType{
 		ActionTypeA2aCall,
+		ActionTypeCancel,
 		ActionTypeEvalAnswer,
 		ActionTypeExecuteBash,
 		ActionTypeFetchFileDiff,
@@ -87,6 +89,7 @@ func AllActionTypes() []ActionType {
 func IsMutation(actionType ActionType) bool {
 	switch actionType {
 	case ActionTypeA2aCall,
+		ActionTypeCancel,
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
 		ActionTypeMcpCall,

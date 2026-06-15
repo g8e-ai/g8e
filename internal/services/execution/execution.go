@@ -52,6 +52,7 @@ type ExecutionService struct {
 	// Active executions tracking
 	activeExecutions map[string]*ExecutionContext
 	executionsMutex  sync.RWMutex
+	isStopping       bool          // Service shutdown flag
 	semaphore        chan struct{} // Concurrency control
 	wg               sync.WaitGroup
 }
@@ -285,10 +286,16 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		return nil, fmt.Errorf("execution: wait for semaphore: %w", ctx.Err())
 	}
 
+	// Create timeout context - use exactly what was requested
+	timeoutDuration := time.Duration(request.TimeoutSeconds) * time.Second
+	cmdCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
+	defer cancel()
+
 	// Create execution context
 	execCtx := &ExecutionContext{
 		Request:   request,
 		StartTime: time.Now().UTC(),
+		Cancel:    cancel, // Set early to prevent Stop() race
 	}
 
 	// Initialize result
@@ -305,13 +312,17 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 
 	execCtx.Result = result
 
-	// Track active execution
+	// Track active execution and handle shutdown coordination
 	es.executionsMutex.Lock()
+	if es.isStopping {
+		es.executionsMutex.Unlock()
+		<-es.semaphore
+		cancel()
+		return nil, fmt.Errorf("execution: service is stopping")
+	}
 	es.activeExecutions[request.ExecutionID] = execCtx
+	es.wg.Add(1) // Add inside lock to prevent Stop() race
 	es.executionsMutex.Unlock()
-
-	// Add to wait group after tracking is established
-	es.wg.Add(1)
 
 	// Unified cleanup function: ensures map cleanup, semaphore release, and wg.Done happen atomically
 	// This prevents race conditions where the map might not be cleared even after wg.Wait() completes
@@ -322,14 +333,6 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		<-es.semaphore
 		es.wg.Done()
 	}()
-
-	// Create timeout context - use exactly what was requested
-	timeoutDuration := time.Duration(request.TimeoutSeconds) * time.Second
-	cmdCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
-	defer cancel()
-	execCtx.mu.Lock()
-	execCtx.Cancel = cancel
-	execCtx.mu.Unlock()
 
 	// Execute the command
 	err := es.executeCommandInternal(cmdCtx, execCtx)
@@ -344,7 +347,8 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		execCtx.mu.Unlock()
 	}
 
-	// Finalize result
+	// Finalize result and log completion
+	execCtx.mu.Lock()
 	es.finalizeResult(result)
 
 	// Create output preview for logging
@@ -366,6 +370,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		"return_code", system.IntPtrValue(result.ReturnCode),
 		"stdout_preview", stdoutPreview,
 		"stderr_preview", stderrPreview)
+	execCtx.mu.Unlock()
 
 	return result, nil
 }
@@ -820,6 +825,12 @@ func (es *ExecutionService) finalizeResult(result *models.ExecutionResultsPayloa
 // It blocks until all active executions have completed their cleanup.
 func (es *ExecutionService) Stop() {
 	es.executionsMutex.Lock()
+	if es.isStopping {
+		es.executionsMutex.Unlock()
+		return
+	}
+	es.isStopping = true
+
 	if len(es.activeExecutions) == 0 {
 		es.executionsMutex.Unlock()
 		return

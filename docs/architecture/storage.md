@@ -2,23 +2,26 @@
 
 ## Overview
 
-The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. All services reside under `../../internal/services/storage/`.
+The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Following the v1.0.10 refactor, the monolithic `AuditVaultService` is consolidated into `SQLAuditStore`, `GitLedgerService`, and `HistoryHandler`. All services reside under `../../internal/services/storage/`.
+
+Mandatory [encryption at rest](./encryption.md) is enforced across the storage layer. Services require an unlocked vault for secure operations, with specific fail-open or fail-closed behaviors depending on the criticality of data continuity versus confidentiality.
 
 - **Audit Store**: Append-only audit logging with encryption at rest
 - **Ledger**: git-backed version control for file modifications, session-isolated
 - **Execution Vault**: Compressed and encrypted storage for command execution results and file diffs
 - **Token Store**: Key-value storage for Sentinel token persistence with TTL support
 - **Replay Store**: Nonce-based replay protection
-- **Suspended Transaction Store**: L3 approval workflow transaction persistence
+- **Suspended Transaction Store**: [L3 approval workflow](./auth.md#layer-3-notary-l3notary) transaction persistence
 - **Commitment Ledger**: Commitment attestations with chain integrity verification
 - **History Handler**: Unified history retrieval combining audit store and ledger
 
 Shared implementation patterns across the services:
 
 - SQLite-based with `sqliteutil.DB` wrapper providing retry logic, transactions, and incremental vacuum
-- Encryption at rest via `vault.Vault` (AES-256-GCM) where applicable
+- Mandatory encryption at rest via `vault.Vault` (AES-256-GCM) where applicable
 - Background cleanup via `sqliteutil.Pruner` for most services
-- Thread-safe operations
+- Thread-safe operations via `sync.WaitGroup` and `sync.Once`
+- Standardized retention and database size pruning policies
 
 ---
 
@@ -37,8 +40,9 @@ Shared implementation patterns across the services:
 
 **Key Features:**
 
-- **Encryption at rest**: `content_text`, `command_stdout`, and `command_stderr` are encrypted using the vault when it is unlocked. When the vault is locked, content is stored as plaintext so audit records are never blocked by vault state (fail-open for audit continuity).
-- **Output truncation**: Large outputs are truncated using a head/tail strategy; thresholds are configurable.
+- **Encryption at rest**: `content_text`, `command_stdout`, and `command_stderr` are encrypted using the vault when it is unlocked. If the vault is locked, content is stored as plaintext to ensure audit records are never blocked by vault state (fail-open for audit continuity). The `encrypted` column tracks the encryption status of each event.
+- **Mandatory Vault**: `NewSQLAuditStore` requires an `EncryptionVault` in its configuration and returns an error if it is missing.
+- **Output truncation**: Large outputs are truncated using a head/tail strategy to prevent database bloat; thresholds are configurable.
 - **Session validation**: Events must reference a pre-existing session row. App sessions are auto-created on first write to satisfy the foreign key constraint.
 - **Batch recording**: `RecordEvents` performs atomic batch inserts within a single transaction.
 - **Retention pruning**: Background `sqliteutil.Pruner` deletes old events, file mutations, and receipts, then removes orphaned sessions.
@@ -88,10 +92,10 @@ Default values (`DefaultAuditStoreConfig`): `DataDir: ".g8e/data"`, `DBPath: "g8
 **Key Features:**
 
 - **Session isolation**: Each operator session maintains its own git repository under `{BaseDir}/sessions/{sessionID}/`. An empty session ID falls back to `{BaseDir}/files`.
-- **Two-phase commit**: File operations snapshot state before and after the mutation to produce diff content and statistics.
-- **Encryption at rest**: When the vault is unlocked, file copies are encrypted and stored with an `.enc` extension. The 100 MB size limit applies to encrypted copies. Unencrypted files are streamed to prevent OOM.
-- **Diff generation**: `calculateDiffContent` and `calculateDiffStat` use go-git's `Patch` API between two commit hashes.
-- **File restoration**: `RestoreFileFromCommit` decrypts and restores a file from any prior commit.
+- **Two-phase commit**: File operations snapshot state before and after the mutation to produce diff content and statistics. Diff generation is performed using the `go-git` Patch API.
+- **Encryption at rest**: When the vault is unlocked, file copies are encrypted using AES-256-GCM and stored with an `.enc` extension. The service enforces a 100 MB size limit on encrypted copies to prevent memory exhaustion during the full-read required by the encryption cipher.
+- **Streaming**: Unencrypted files are streamed to the ledger using `io.Copy` to prevent memory exhaustion.
+- **Fail-closed Retrieval**: `GetFileAtCommit` and `RestoreFileFromCommit` require an unlocked vault and return an error if the vault is locked.
 - **Path normalization**: `normalizeToGitPath` removes Windows drive letters and converts backslashes so paths are consistent across platforms.
 - **State merkle root**: `GetStateMerkleRoot` returns the HEAD commit hash of the global `files` ledger as a BFT-verifiable snapshot.
 
@@ -155,11 +159,12 @@ err = ledger.CompleteMirrorCreate(result, sessionID)
 
 **Key Features:**
 
-- **Encryption then compression**: Content is encrypted with the vault, then compressed via `sqliteutil.Compress` before storage.
+- **Encryption then compression**: Content is encrypted with the vault (AES-256-GCM), then compressed via `sqliteutil.Compress` before storage.
 - **Hash verification**: Content hashes are stored alongside compressed blobs for integrity checks.
 - **Case/task/investigation linking**: Execution records carry workflow metadata fields.
 - **Retention pruning**: Background `sqliteutil.Pruner` deletes records older than the retention threshold and prunes the oldest 10% of rows when the database exceeds the size limit.
-- **Fail-closed**: `encryptContent` returns an error if the vault is locked; no plaintext fallback.
+- **Fail-closed**: The service is fail-closed; `encryptContent` returns an error if the vault is locked, with no plaintext fallback.
+- **ID Persistence**: Both `execution_log` and `file_diff_log` use stable string IDs as primary keys.
 
 **Configuration:**
 
@@ -379,22 +384,17 @@ func NewHistoryHandler(auditStore *SQLAuditStore, ledger *GitLedgerService, logg
 
 ### Encryption at Rest
 
-Services requiring encryption use `vault.Vault` (AES-256-GCM):
-
-```go
-encrypted, err := v.Encrypt([]byte(plaintext))
-decrypted, err := v.Decrypt(ciphertext)
-```
+Services requiring encryption use `vault.Vault` (AES-256-GCM). Following v1.0.10, [encryption at rest](./encryption.md) is mandatory for sensitive data storage.
 
 Behavior when the vault is locked varies by service:
 
 - **Audit Store**: Stores plaintext and sets `encrypted = 0`. Audit continuity takes precedence over encryption (fail-open).
 - **Execution Vault**: Returns an error if the vault is locked. No plaintext fallback (fail-closed).
-- **Token Store**: Returns an error if the vault is locked on `KVSet` or `KVGet`. No plaintext fallback (fail-closed).
+- **Token Store**: Returns an error if the vault is locked on `KVSet`, `KVGet`, or `KVScanPrefix`. No plaintext fallback (fail-closed).
 - **Ledger**: `GetFileAtCommit` and `RestoreFileFromCommit` return an error if the vault is locked.
-- **Replay Store**: No encryption required.
-- **Suspended Transaction Store**: No encryption required.
-- **Commitment Ledger**: No encryption required.
+- **Replay Store**: No encryption required as nonces contain no sensitive content.
+- **Suspended Transaction Store**: No encryption required for governance envelopes.
+- **Commitment Ledger**: No encryption required for public audit attestations.
 
 ### SQLite Utilities
 
@@ -474,9 +474,19 @@ These implementations are kept separate from production code to avoid import cyc
 
 ### Approval Flow (L3)
 
-1. Suspended transaction store persists the transaction awaiting human approval.
+1. Suspended transaction store persists the transaction awaiting human [L3 approval](./auth.md#layer-3-notary-l3notary).
 2. CLI lists pending transactions for the user.
 3. User approves with a cryptographic signature.
 4. Suspended transaction store marks the record as approved.
 5. Governance layer executes the approved transaction.
 6. Suspended transaction store deletes the record after execution.
+
+---
+
+## Related Documentation
+
+- [**Authentication & Authorization**](./auth.md): Governance sequence and L3 Interlock
+- [**Encryption Architecture**](./encryption.md): Vault subsystem and mandatory encryption at rest
+- [**Network Architecture**](./network.md): Mutual TLS and identity binding
+- [**g8e Protocol**](./protocol.md): The wire contract and governance hierarchy
+

@@ -11,35 +11,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+networks:
+  g8e-net:
+    driver: bridge
+
+volumes:
+  g8e-gateway-data:
+    driver: local
+  g8e-operator-data:
+    driver: local
+
 services:
-  g8e-operator:
+  g8e-gateway:
     build:
       context: .
-      dockerfile: Dockerfile.operator
-    container_name: g8e-operator
-
-    # Set working directory so .g8e resolves correctly
-    working_dir: /root
-
-    # Volume mounts for runtime data and configuration
+      dockerfile: Dockerfile
+    container_name: g8e-gateway
+    networks:
+      - g8e-net
     volumes:
-      # Mount .g8e directory for runtime state (certificates, database, etc.)
-      - g8e-operator-data:/root/.g8e
-
-    # Use host network to connect to local gateway
-    network_mode: host
-
-    # Run operator connecting to gateway at 192.168.1.62
-    # Uses -e flag to specify gateway endpoint
-    command: ["-e", "192.168.1.62"]
-
-    # Restart policy - don't auto-restart to prevent enrollment loops
+      - g8e-gateway-data:/root/.g8e
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["gw", "start", "-f"]
     restart: "no"
-
-    # Note: Gateway should be running on host machine at localhost:8080
-    # The operator uses host network to connect to it
-
-    # Resource limits
     deploy:
       resources:
         limits:
@@ -49,6 +51,28 @@ services:
           cpus: '0.5'
           memory: 256M
 
-volumes:
-  g8e-operator-data:
-    driver: local
+  g8e-operator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: g8e-operator
+    networks:
+      - g8e-net
+    volumes:
+      - g8e-operator-data:/root/.g8e
+    depends_on:
+      g8e-gateway:
+        condition: service_healthy
+    # Connect to gateway via g8e.local (matches certificate SANs)
+    extra_hosts:
+      - "g8e.local:host-gateway"
+    command: ["-e", "g8e.local"]
+    restart: "no"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M

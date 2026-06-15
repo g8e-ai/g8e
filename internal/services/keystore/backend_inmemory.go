@@ -19,16 +19,12 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// sharedTestKeyStorage is package-level shared storage for test backend.
-// This allows all test instances to share the same master key.
-var sharedTestKeyStorage struct {
+// testBackend is an in-memory backend for testing only.
+// It is instance-based, ensuring each test instance has its own master key.
+type testBackend struct {
 	mu  sync.RWMutex
 	key []byte
 }
-
-// testBackend is an in-memory backend for testing only.
-// It uses shared package-level storage so all instances share the same master key.
-type testBackend struct{}
 
 func NewTestBackend() (Backend, error) {
 	return &testBackend{}, nil
@@ -39,36 +35,28 @@ func (b *testBackend) Name() string {
 }
 
 func (b *testBackend) RetrieveMasterKey() ([]byte, error) {
-	sharedTestKeyStorage.mu.RLock()
-	defer sharedTestKeyStorage.mu.RUnlock()
-	if sharedTestKeyStorage.key == nil {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if b.key == nil {
 		return nil, constants.ErrKeyStoreKeyNotFound
 	}
-	keyCopy := make([]byte, len(sharedTestKeyStorage.key))
-	copy(keyCopy, sharedTestKeyStorage.key)
+	keyCopy := make([]byte, len(b.key))
+	copy(keyCopy, b.key)
 	return keyCopy, nil
 }
 
 func (b *testBackend) StoreMasterKey(key []byte) error {
-	sharedTestKeyStorage.mu.Lock()
-	defer sharedTestKeyStorage.mu.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	keyCopy := make([]byte, len(key))
 	copy(keyCopy, key)
-	sharedTestKeyStorage.key = keyCopy
+	b.key = keyCopy
 	return nil
 }
 
 func (b *testBackend) DeleteMasterKey() error {
-	sharedTestKeyStorage.mu.Lock()
-	defer sharedTestKeyStorage.mu.Unlock()
-	sharedTestKeyStorage.key = nil
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.key = nil
 	return nil
-}
-
-// ResetTestStorage clears the shared test key storage.
-// Call in tests to prevent cross-test contamination.
-func ResetTestStorage() {
-	sharedTestKeyStorage.mu.Lock()
-	defer sharedTestKeyStorage.mu.Unlock()
-	sharedTestKeyStorage.key = nil
 }
