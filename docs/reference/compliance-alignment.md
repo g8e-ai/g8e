@@ -515,7 +515,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 
 | Document | Location | Purpose |
 |---------|----------|---------|
-| **Security Policy** | `/SECURITY.md` | Security posture and vulnerability reporting |
+| **Security Policy** | `/.github/SECURITY.md` | Security posture and vulnerability reporting |
 | **Architecture: Protocol** | `/docs/architecture/protocol.md` | Protocol specification and verification layers |
 | **Architecture: Auth** | `/docs/architecture/auth.md` | Authentication and authorization architecture |
 | **Architecture: Operator** | `/docs/architecture/operator.md` | Operator execution boundary |

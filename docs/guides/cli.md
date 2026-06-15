@@ -953,6 +953,7 @@ Available Commands:
   clean       Remove containers, volumes, and networks for a demo environment
   reset       Clean and restart a demo environment
   run         Run demo scenarios
+  audit       View audit logs and ledger history
 
 Flags:
   -h, --help   help for demos
@@ -1046,6 +1047,28 @@ Usage:
 
 Flags:
   -h, --help   help for run
+```
+
+### demos audit
+```
+View audit logs and ledger history for a demo environment.
+Without an action, it prints a summary of available audit resources.
+
+Actions:
+  logs              Tail the observability logs
+  gateway-db        Open the gateway audit database (SQLite)
+  operator-db       Open the operator audit database (SQLite)
+  ledger-log        View the git ledger log
+  ledger-files      List all files in the git ledger
+  ledger-history <file> View git history for a specific file
+  ledger-show <hash> View a specific git commit diff
+  vault             Open the execution vault database (SQLite)
+
+Usage:
+  g8e demos audit <org> [action] [flags]
+
+Flags:
+  -h, --help   help for audit
 ```
 
 ## mcp

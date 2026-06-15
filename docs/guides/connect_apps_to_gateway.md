@@ -396,32 +396,39 @@ Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
 
 ### CSR-Based Enrollment
 
-All authentication to the Gateway requires owner-approved invitations. The platform enforces a strict owner-centric model where every entity (operator, MCP server, AI client, user) must authenticate via invitation-based JIT provisioning.
+**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of
+sharing a secret (like an API key), a client generates its own key pair and asks the
+Gateway to sign a certificate attesting "this public key belongs to this identity." The
+Gateway acts as a Certificate Authority (CA) — it only signs CSRs for identities the
+Platform Owner has authorized. The client then proves its identity on every call by
+signing with its private key (via mTLS). No shared secrets, no API keys to leak.
 
-#### Owner-Centric Invitation Model
+All authentication to the Gateway uses CSR-based enrollment. The platform enforces a
+strict owner-centric model where the first human to authenticate becomes the Platform
+Owner, and all other entities (operators, MCP servers, AI clients, applications) must
+enroll via certificate signing requests.
 
-- **Platform Owner**: The first human to authenticate becomes the Platform Owner.
-- **Universal Requirement**: All entities must use invitations for JIT provisioning.
-- **Strict TTL**: Sessions have a 1-hour TTL by default.
-- **Owner Approval**: Only users with the `owner` role can create invitations.
+#### Enrollment Flow
 
-#### Creating Invitations
+1. **Platform Owner**: The first human to authenticate via `./g8e auth login` becomes the Platform Owner.
+2. **Client generates key pair and CSR**: The entity (device, app, or user) creates a
+   private key and a Certificate Signing Request (CSR) that states the desired identity
+   (e.g., `spiffe://g8e.local/app/etl-service`)
+3. **Gateway validates and signs**: The Gateway (acting as CA) verifies the request is
+   from an authorized source, then issues a signed mTLS certificate with a SPIFFE URI SAN
+4. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA)
+   and uses it with its private key for all subsequent authentication
+5. **Short-lived by design**: Certificates expire quickly (typically 1 day), so a
+   compromised key has limited lifetime
+6. **Certificate renewal**: Clients must re-enroll before certificate expiry
 
-Generate an invitation for external IdP authentication:
+#### Device Enrollment
 
-```bash
-./g8e data invitations create --sub "user@example.com" --roles "user" --ttl 3600
-```
+For device enrollment, use the `/api/v1/pki/devices/enroll` endpoint (see PKI section below).
 
-#### Invitation-Based JIT Authentication Flow
+#### Application Enrollment
 
-1. **Owner creates invitation**: Owner generates an invitation with specific TTL and roles
-2. **Client requests enrollment**: Client presents JWT with `sub` claim during registration
-3. **Gateway validates**: Gateway checks JWT signature and verifies invitation exists for the `sub`
-4. **User provisioning**: If invitation exists, user is provisioned and bound to owner's organization
-5. **Invitation consumption**: Invitation is consumed after successful provisioning
-6. **Session issuance**: Gateway issues short-lived mTLS certificate (1-day TTL) and cli/web/operator session (1-hour TTL)
-7. **Session renewal**: Client must re-authenticate before expiry
+Applications enroll via delegated credential enrollment to obtain an app identity (`spiffe://g8e.local/app/<appname>`). See the PKI section for CSR signing details.
 
 ---
 
@@ -605,6 +612,7 @@ If downstream MCP/A2A server is unavailable, the Gateway circuit breaker activat
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a g8e Operator
 - **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
+- **[Secure Data Transfer & Governed Pipelines](secure_data_transfer.md)** - Enroll an app, bind it to a live human session, and run a fully governed data pipeline via the API
 - **[MCP Protocol](../protocols/mcp/mcp.md)** - Detailed MCP protocol specification
 - **[A2A Protocol](../protocols/a2a/a2a.md)** - Detailed A2A protocol specification
 - **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals

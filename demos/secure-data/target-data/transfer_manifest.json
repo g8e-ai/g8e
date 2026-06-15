@@ -1,0 +1,46 @@
+{
+  "transfer_set": "case-7788-evidence",
+  "classification": "CUI//FOUO",
+  "source_host": "enclave-host (net_secure)",
+  "destination_host": "review-host (net_secure)",
+  "requested_by": "analyst@agency.gov",
+  "justification": "case review handoff to custodian",
+  "files": [
+    {
+      "id": "FILE-001",
+      "path": "/data/case-7788/intake.pdf",
+      "classification": "CUI",
+      "size_bytes": 184320,
+      "sha256": "9f2c4a1e8b7d6c5f0a3e2d1b4c6f8a9e0d2c4b6a8e1f3d5c7b9a0e2f4d6c8b1a",
+      "content_summary": "Intake report containing PII and case identifiers. Must be scrubbed before any frontier model sees it."
+    },
+    {
+      "id": "FILE-002",
+      "path": "/data/case-7788/financials.xlsx",
+      "classification": "CUI//SP-PRVCY",
+      "size_bytes": 65536,
+      "sha256": "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+      "content_summary": "Financial records subject to privacy controls. PCI-adjacent fields tokenized at the sovereignty boundary."
+    },
+    {
+      "id": "FILE-003",
+      "path": "/data/case-7788/correspondence.eml",
+      "classification": "CUI//FOUO",
+      "size_bytes": 24576,
+      "sha256": "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+      "content_summary": "Email correspondence between custodians. Names and addresses rehydrated only at execution on-host."
+    }
+  ],
+  "governance": {
+    "required_posture": "notary",
+    "transport_plane": "governed (run_shell_command over mTLS, L1-L5 verified)",
+    "out_of_band_transfer": "denied (break-glass only, must be on-host through governed shell)",
+    "receipt": "Ed25519-signed ActionReceipt written to hash-chained ledger before side effect"
+  },
+  "metadata": {
+    "org": "secure-data",
+    "compliance_standard": "NIST 800-171 / CMMC Level 2",
+    "last_audit": "2026-06-01",
+    "audit_status": "COMPLIANT"
+  }
+}

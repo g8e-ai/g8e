@@ -281,7 +281,6 @@ Tests for data model serialization and validation:
 - `fs_list_test.go` - File system list model tests
 - `gateway_test.go` - Gateway model tests
 - `heartbeat_test.go` - Heartbeat model tests
-- `invitation_test.go` - Invitation model tests
 - `suspended_test.go` - Suspended state model tests
 - `timestamp_test.go` - Timestamp model tests
 - `wire_test.go` - Wire format model tests

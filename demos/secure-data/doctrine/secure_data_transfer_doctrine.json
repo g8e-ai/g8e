@@ -1,0 +1,96 @@
+{
+  "source": "secure_data_transfer",
+  "version": "1.0.0",
+  "last_updated": "2026-06-15",
+  "license": "Proprietary",
+  "doctrines": [
+    {
+      "id": "governed_transfer_required",
+      "name": "Sensitive Payload Must Ride the Governed Plane",
+      "category": "data_transfer",
+      "severity": "critical",
+      "pattern": "(?i)(scp|sftp|rsync|robocopy|curl|wget).*(secret|classified|cui|phi|pci|itar|sensitive|case-\\d+)",
+      "mitre_attack": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.92,
+      "enabled": true
+    },
+    {
+      "id": "out_of_band_exfiltration",
+      "name": "Out-of-Band Data Exfiltration Attempt",
+      "category": "data_exfiltration",
+      "severity": "critical",
+      "pattern": "(?i)(exfil|exfiltrate|external.upload|leak|smuggle|mail.out|upload.to).*(data|file|document|payload|record)",
+      "mitre_attack": "T1567.001",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "destructive_shell_command",
+      "name": "Destructive Shell Command in Transfer",
+      "category": "command_injection",
+      "severity": "critical",
+      "pattern": "(?i)(rm\\s+-rf|mkfs|dd\\s+if=|:\\(\\)\\{|shred|wipe)",
+      "mitre_attack": "T1485",
+      "mitre_tactic": "Impact",
+      "confidence": 0.93,
+      "enabled": true
+    },
+    {
+      "id": "privilege_escalation_in_transfer",
+      "name": "Privilege Escalation During Transfer",
+      "category": "access_control",
+      "severity": "critical",
+      "pattern": "(?i)(sudo|su\\s+root|chmod\\s+777|setuid|--privileged)",
+      "mitre_attack": "T1548",
+      "mitre_tactic": "Privilege Escalation",
+      "confidence": 0.88,
+      "enabled": true
+    },
+    {
+      "id": "unencrypted_transit",
+      "name": "Unencrypted Transit of Sensitive Data",
+      "category": "encryption",
+      "severity": "high",
+      "pattern": "(?i)(http://|ftp://|telnet|plaintext|clear.text).*(secret|classified|cui|phi|sensitive)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.86,
+      "enabled": true
+    },
+    {
+      "id": "cross_domain_transfer",
+      "name": "Unauthorized Cross-Domain Transfer",
+      "category": "data_transfer",
+      "severity": "critical",
+      "pattern": "(?i)(cross.domain|domain.boundary|security.domain|net_untrusted|external.host).*(transfer|copy|move|push)",
+      "mitre_attack": "T1567.001",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "audit_logging_bypass",
+      "name": "Transfer Audit Logging Bypass",
+      "category": "audit",
+      "severity": "high",
+      "pattern": "(?i)(disable.log|bypass.audit|no.logging|--quiet.*--no-record|silent.transfer)",
+      "mitre_attack": "T1562.006",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.82,
+      "enabled": true
+    },
+    {
+      "id": "binary_integrity_check",
+      "name": "Binary Integrity Verification Required",
+      "category": "supply_chain",
+      "severity": "high",
+      "pattern": "(?i)(sha256|checksum|certutil|hashfile|verify.*binary|integrity.*check)",
+      "mitre_attack": "T1553.002",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.80,
+      "enabled": true
+    }
+  ]
+}

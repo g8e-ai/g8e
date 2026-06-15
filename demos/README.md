@@ -19,12 +19,20 @@ demos/
 │   ├── config/
 │   ├── doctrine/               # PHI/HIPAA scrub patterns
 │   └── target-data/            # Simulated EHR/PA records
-└── finance/                    # Finance/trading demo
+├── finance/                    # Finance/trading demo
+│   ├── compose.yml
+│   ├── config/
+│   ├── doctrine/               # Trading controls and dual-control triggers
+│   └── target-data/            # Simulated ledger/positions
+└── secure-data/                # Secure data transfer / governed pipeline demo
     ├── compose.yml
     ├── config/
-    ├── doctrine/               # Trading controls and dual-control triggers
-    └── target-data/            # Simulated ledger/positions
+    ├── doctrine/               # Transfer-screening L1 rules (exfil, destructive, cross-domain)
+    └── target-data/            # Simulated sensitive transfer set (evidence manifest)
 ```
+
+See the [Secure Data Transfer guide](../docs/guides/secure_data_transfer.md) for the
+full transport-plane vs. governed-data-plane model this demo illustrates.
 
 ## Network Topology
 
@@ -122,6 +130,10 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 **Finance Demo Scenarios:**
 - `g8e demos run finance 1` - Unauthorized Trade Blocked
 
+**Secure Data Transfer Demo Scenarios:**
+- `g8e demos run secure-data 1` - Governed Data Transfer with Signed Receipt
+- `g8e demos run secure-data 2` - Out-of-Band Transfer Blocked
+
 Note: The demo environment must be started before running scenarios. Use `g8e demos start <org>` first.
 
 ### Manual Docker Compose commands
@@ -192,6 +204,7 @@ Each org uses different host ports to allow simultaneous deployment:
 | gov | 8080 | 8443 | 3000 |
 | healthcare | 8081 | 8444 | 3001 |
 | finance | 8082 | 8445 | 3002 |
+| secure-data | 8083 | 8446 | 3003 |
 
 ## PKI and Enrollment
 
