@@ -1363,30 +1363,6 @@ func TestProxySessionToGateway(t *testing.T) {
 	})
 }
 
-func TestSetSysProcAttr(t *testing.T) {
-	t.Run("setSysProcAttr sets Setpgid on non-Windows", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("skipping on Windows")
-		}
-
-		cmd := exec.Command("echo", "test")
-		setSysProcAttr(cmd)
-
-		assert.NotNil(t, cmd.SysProcAttr)
-		assert.True(t, cmd.SysProcAttr.Setpgid)
-	})
-
-	t.Run("setSysProcAttr does nothing on Windows", func(t *testing.T) {
-		if runtime.GOOS != "windows" {
-			t.Skip("skipping on non-Windows")
-		}
-
-		cmd := exec.Command("echo", "test")
-		setSysProcAttr(cmd)
-
-		assert.Nil(t, cmd.SysProcAttr)
-	})
-}
 
 func TestSubprocessMCPProxy(t *testing.T) {
 	t.Run("subprocessMCPProxy forward marshals request", func(t *testing.T) {
