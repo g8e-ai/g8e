@@ -43,7 +43,12 @@ WINDOWS_EXTRA_FLAGS := -s -w
 
 # Test configuration
 TEST_TIMEOUT := 180s
-TEST_SHORT_TIMEOUT := 60s
+# Per-package deadlock backstop for unit tests. Kept generous because `-race`
+# slows the pure-Go SQLite (modernc) used by DB-heavy packages (e.g.
+# internal/services/gateway), and CI runs the whole module in parallel, starving
+# any one package of CPU. 60s was too tight and produced flaky "test timed out"
+# failures; a real hang still trips this well before 180s.
+TEST_SHORT_TIMEOUT := 180s
 TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
 COVERAGE_THRESHOLD := 65

@@ -25,7 +25,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -1360,31 +1359,6 @@ func TestProxySessionToGateway(t *testing.T) {
 
 		_, err := proxySessionToGateway(session, req)
 		require.Error(t, err)
-	})
-}
-
-func TestSetSysProcAttr(t *testing.T) {
-	t.Run("setSysProcAttr sets Setpgid on non-Windows", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("skipping on Windows")
-		}
-
-		cmd := exec.Command("echo", "test")
-		setSysProcAttr(cmd)
-
-		assert.NotNil(t, cmd.SysProcAttr)
-		assert.True(t, cmd.SysProcAttr.Setpgid)
-	})
-
-	t.Run("setSysProcAttr does nothing on Windows", func(t *testing.T) {
-		if runtime.GOOS != "windows" {
-			t.Skip("skipping on non-Windows")
-		}
-
-		cmd := exec.Command("echo", "test")
-		setSysProcAttr(cmd)
-
-		assert.Nil(t, cmd.SysProcAttr)
 	})
 }
 

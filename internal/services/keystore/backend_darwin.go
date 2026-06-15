@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // keychainBackend uses macOS Keychain for key storage.
