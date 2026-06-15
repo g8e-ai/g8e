@@ -143,7 +143,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
-	
+
 	// Initialize actuator key reader for device enrollment
 	actuatorKeyReader := &fileActuatorKeyReader{path: constants.Paths.Infra.ActuatorPubJSONPath}
 	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.SuspendedStore, deps.MCPGateway, deps.Responder, actuatorKeyReader)

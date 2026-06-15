@@ -23,6 +23,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func demosCmd() *cobra.Command {
@@ -457,7 +459,7 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 
 func printResultsTable(org string, results []scenarioResult) {
 	fmt.Printf("\n%s\n  %s Scenario Results Summary\n%s\n",
-		strings.Repeat("═", 60), strings.Title(org), strings.Repeat("═", 60))
+		strings.Repeat("═", 60), cases.Title(language.English).String(org), strings.Repeat("═", 60))
 	fmt.Println()
 
 	// Print header

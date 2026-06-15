@@ -332,9 +332,9 @@ func TestRegistrationService_ToOperatorDoc(t *testing.T) {
 		malformedDoc := &models.Document{
 			ID: "malformed",
 			Data: map[string]json.RawMessage{
-				"id": json.RawMessage(`"malformed"`),
+				"id":      json.RawMessage(`"malformed"`),
 				"user_id": json.RawMessage(`"user-123"`),
-				"status": json.RawMessage(`invalid-json`), // Invalid JSON
+				"status":  json.RawMessage(`invalid-json`), // Invalid JSON
 			},
 		}
 
@@ -561,8 +561,8 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 
 		// First bind the operator
 		update := map[string]interface{}{
-			"operator_session_id": "session-123",
-			"status":              string(constants.OperatorStatusActive),
+			"operator_session_id":  "session-123",
+			"status":               string(constants.OperatorStatusActive),
 			"bound_web_session_id": "web-123",
 		}
 		updateBytes, err := json.Marshal(update)
@@ -572,14 +572,14 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 
 		// Create bound sessions document
 		boundDoc := map[string]interface{}{
-			"id":                 "web-123",
-			"web_session_id":     "web-123",
-			"user_id":            "user-123",
+			"id":                   "web-123",
+			"web_session_id":       "web-123",
+			"user_id":              "user-123",
 			"operator_session_ids": []string{"session-123"},
-			"operator_ids":       []string{slot.ID},
-			"bound_at":           time.Now().UTC().Format(time.RFC3339),
-			"last_updated_at":    time.Now().UTC().Format(time.RFC3339),
-			"status":             string(constants.OperatorStatusActive),
+			"operator_ids":         []string{slot.ID},
+			"bound_at":             time.Now().UTC().Format(time.RFC3339),
+			"last_updated_at":      time.Now().UTC().Format(time.RFC3339),
+			"status":               string(constants.OperatorStatusActive),
 		}
 		boundBytes, err := json.Marshal(boundDoc)
 		require.NoError(t, err)
@@ -608,8 +608,8 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 
 		// Update slot1 to have an active session
 		update := map[string]interface{}{
-			"operator_session_id": "session-123",
-			"status":              string(constants.OperatorStatusActive),
+			"operator_session_id":  "session-123",
+			"status":               string(constants.OperatorStatusActive),
 			"bound_web_session_id": "web-123",
 		}
 		updateBytes, err := json.Marshal(update)
@@ -944,7 +944,7 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		// Generate a real CSR, then change the block type to CERTIFICATE (wrong type)
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		wrongTypePEM := strings.Replace(csr, "CERTIFICATE REQUEST", "CERTIFICATE", 1)
-		
+
 		req := models.OperatorRegistrationRequest{
 			SystemFingerprint: "test-fingerprint",
 			Hostname:          "test-host",
@@ -995,4 +995,3 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 		assert.Contains(t, err.Error(), "CSR required")
 	})
 }
-

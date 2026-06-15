@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"strings"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
@@ -31,6 +30,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -763,9 +763,9 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 		controller := newPKIController(cfg, logger, db, pki, nil, nil, resp)
 
 		validPayload := map[string]string{
-			"csr_pem":   testutil.GenerateTestCSRP256(t, "test-app"),
-			"app_name":  "test-app",
-			"app_type":  "mcp-client",
+			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
+			"app_name": "test-app",
+			"app_type": "mcp-client",
 		}
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader(mustMarshalJSON(t, validPayload)))
 		rr := httptest.NewRecorder()
@@ -786,9 +786,9 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 	t.Run("Success - valid CSR request", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
 		validPayload := map[string]string{
-			"csr_pem":   testutil.GenerateTestCSRP256(t, "test-app"),
-			"app_name":  "test-app",
-			"app_type":  "mcp-client",
+			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
+			"app_name": "test-app",
+			"app_type": "mcp-client",
 		}
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader(mustMarshalJSON(t, validPayload)))
 		rr := httptest.NewRecorder()

@@ -518,10 +518,10 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 	// Create an expired web session
 	webSessionID := "expired-web-session"
 	webSession := &models.WebSession{
-		ID:               webSessionID,
-		UserID:           "user-123",
-		ExpiresAtUnixMs:  time.Now().Add(-1 * time.Hour).UnixMilli(),
-		CreatedAtUnixMs:  time.Now().Add(-2 * time.Hour).UnixMilli(),
+		ID:              webSessionID,
+		UserID:          "user-123",
+		ExpiresAtUnixMs: time.Now().Add(-1 * time.Hour).UnixMilli(),
+		CreatedAtUnixMs: time.Now().Add(-2 * time.Hour).UnixMilli(),
 	}
 	webSessionBytes, err := json.Marshal(webSession)
 	require.NoError(t, err)
@@ -565,10 +565,10 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	// Create a valid web session for the inactive user
 	webSessionID := "web-session-inactive-user"
 	webSession := &models.WebSession{
-		ID:               webSessionID,
-		UserID:           userID,
-		ExpiresAtUnixMs:  time.Now().Add(1 * time.Hour).UnixMilli(),
-		CreatedAtUnixMs:  time.Now().UnixMilli(),
+		ID:              webSessionID,
+		UserID:          userID,
+		ExpiresAtUnixMs: time.Now().Add(1 * time.Hour).UnixMilli(),
+		CreatedAtUnixMs: time.Now().UnixMilli(),
 	}
 	webSessionBytes, err := json.Marshal(webSession)
 	require.NoError(t, err)
@@ -612,10 +612,10 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	// Create a valid web session
 	webSessionID := "valid-web-session"
 	webSession := &models.WebSession{
-		ID:               webSessionID,
-		UserID:           userID,
-		ExpiresAtUnixMs:  time.Now().Add(1 * time.Hour).UnixMilli(),
-		CreatedAtUnixMs:  time.Now().UnixMilli(),
+		ID:              webSessionID,
+		UserID:          userID,
+		ExpiresAtUnixMs: time.Now().Add(1 * time.Hour).UnixMilli(),
+		CreatedAtUnixMs: time.Now().UnixMilli(),
 	}
 	webSessionBytes, err := json.Marshal(webSession)
 	require.NoError(t, err)

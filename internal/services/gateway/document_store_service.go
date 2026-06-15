@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -81,7 +80,6 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 
-	fmt.Fprintf(os.Stderr, "DocSet: collection=%q id=%q\n", collection, id)
 	_, err = s.db.ExecWithRetry(
 		`INSERT INTO documents (collection, id, data, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?)`,

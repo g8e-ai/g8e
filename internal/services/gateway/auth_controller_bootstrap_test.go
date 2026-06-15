@@ -875,7 +875,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{
 			"system_fingerprint": "fp-123",
-			"hostname":          "test-host",
+			"hostname":           "test-host",
 		}
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
@@ -892,7 +892,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{
-			"csr_pem":   testutil.GenerateTestCSRP256(t, "test-device"),
+			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-device"),
 			"hostname": "test-host",
 		}
 		b, err := json.Marshal(body)
@@ -934,7 +934,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		body := map[string]string{
 			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
 			"system_fingerprint": "fp-123",
-			"hostname":          "test-host",
+			"hostname":           "test-host",
 		}
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
@@ -956,7 +956,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		body := map[string]string{
 			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
 			"system_fingerprint": "fp-123",
-			"hostname":          "test-host",
+			"hostname":           "test-host",
 		}
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
@@ -976,7 +976,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		body := map[string]string{
 			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
 			"system_fingerprint": "fp-123",
-			"hostname":          "test-host",
+			"hostname":           "test-host",
 		}
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
@@ -1003,7 +1003,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
 			"cli_csr_pem":        testutil.GenerateTestCSRP256(t, "test-cli"),
 			"system_fingerprint": "fp-123",
-			"hostname":          "test-host",
+			"hostname":           "test-host",
 		}
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
@@ -1039,7 +1039,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
 			"cli_csr_pem":        testutil.GenerateTestCSRP256(t, "test-cli"),
 			"system_fingerprint": "fp-124",
-			"hostname":          "test-host-2",
+			"hostname":           "test-host-2",
 		}
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
@@ -1069,7 +1069,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
 			"cli_csr_pem":        testutil.GenerateTestCSRP256(t, "test-cli"),
 			"system_fingerprint": "fp-125",
-			"hostname":          "test-host-3",
+			"hostname":           "test-host-3",
 		}
 		b, err := json.Marshal(body)
 		require.NoError(t, err)

@@ -102,10 +102,10 @@ func TestIsLocalNetworkOrigin(t *testing.T) {
 		// Public IPs should be rejected
 		{"http://8.8.8.8:8080", false},
 		{"http://1.1.1.1:8080", false},
-		{"http://172.32.0.1:8080", false}, // Outside 172.16.0.0/12
+		{"http://172.32.0.1:8080", false},     // Outside 172.16.0.0/12
 		{"http://172.15.255.255:8080", false}, // Outside 172.16.0.0/12
-		{"http://192.169.0.1:8080", false}, // Outside 192.168.0.0/16
-		{"http://11.0.0.1:8080", false}, // Outside 10.0.0.0/8
+		{"http://192.169.0.1:8080", false},    // Outside 192.168.0.0/16
+		{"http://11.0.0.1:8080", false},       // Outside 10.0.0.0/8
 		// Domain names should be rejected
 		{"http://example.com:8080", false},
 		{"http://google.com:8080", false},
@@ -149,16 +149,16 @@ func TestIsPrivateIP(t *testing.T) {
 		// Public IPs should be false
 		{"8.8.8.8", false},
 		{"1.1.1.1", false},
-		{"172.32.0.1", false}, // Outside 172.16.0.0/12
-		{"172.15.255.255", false}, // Outside 172.16.0.0/12
-		{"192.169.0.1", false}, // Outside 192.168.0.0/16
-		{"11.0.0.1", false}, // Outside 10.0.0.0/8
-		{"172.15.0.1", false}, // Just outside 172.16.0.0/12
-		{"172.32.0.1", false}, // Just outside 172.16.0.0/12
+		{"172.32.0.1", false},      // Outside 172.16.0.0/12
+		{"172.15.255.255", false},  // Outside 172.16.0.0/12
+		{"192.169.0.1", false},     // Outside 192.168.0.0/16
+		{"11.0.0.1", false},        // Outside 10.0.0.0/8
+		{"172.15.0.1", false},      // Just outside 172.16.0.0/12
+		{"172.32.0.1", false},      // Just outside 172.16.0.0/12
 		{"192.167.255.255", false}, // Just outside 192.168.0.0/16
-		{"192.169.0.0", false}, // Just outside 192.168.0.0/16
-		{"9.255.255.255", false}, // Just outside 10.0.0.0/8
-		{"11.0.0.0", false}, // Just outside 10.0.0.0/8
+		{"192.169.0.0", false},     // Just outside 192.168.0.0/16
+		{"9.255.255.255", false},   // Just outside 10.0.0.0/8
+		{"11.0.0.0", false},        // Just outside 10.0.0.0/8
 		// IPv6 addresses (not handled by this function, should return false)
 		{"::1", false},
 		{"2001:db8::1", false},
@@ -963,18 +963,16 @@ func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
-	nextCalled := false
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		nextCalled = true
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("next"))
-	})
-
-	middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
-
 	t.Run("No origin header - passes through", func(t *testing.T) {
 		t.Parallel()
-		nextCalled = false
+		var nextCalled bool
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("next"))
+		})
+		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
+
 		req := httptest.NewRequest(http.MethodPost, "/test", nil)
 		rr := httptest.NewRecorder()
 
@@ -987,7 +985,14 @@ func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
 
 	t.Run("Local network origin - sets CORS headers", func(t *testing.T) {
 		t.Parallel()
-		nextCalled = false
+		var nextCalled bool
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("next"))
+		})
+		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
+
 		req := httptest.NewRequest(http.MethodPost, "/test", nil)
 		req.Header.Set("Origin", "http://localhost:8080")
 		rr := httptest.NewRecorder()
@@ -1004,7 +1009,14 @@ func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
 
 	t.Run("Private IP origin - sets CORS headers", func(t *testing.T) {
 		t.Parallel()
-		nextCalled = false
+		var nextCalled bool
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("next"))
+		})
+		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
+
 		req := httptest.NewRequest(http.MethodPost, "/test", nil)
 		req.Header.Set("Origin", "http://192.168.1.1:8080")
 		rr := httptest.NewRecorder()
@@ -1018,7 +1030,14 @@ func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
 
 	t.Run("Non-local origin - rejected", func(t *testing.T) {
 		t.Parallel()
-		nextCalled = false
+		var nextCalled bool
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("next"))
+		})
+		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
+
 		req := httptest.NewRequest(http.MethodPost, "/test", nil)
 		req.Header.Set("Origin", "http://example.com:8080")
 		rr := httptest.NewRecorder()
@@ -1032,7 +1051,14 @@ func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
 
 	t.Run("OPTIONS request - returns 204", func(t *testing.T) {
 		t.Parallel()
-		nextCalled = false
+		var nextCalled bool
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("next"))
+		})
+		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
+
 		req := httptest.NewRequest(http.MethodOptions, "/test", nil)
 		req.Header.Set("Origin", "http://localhost:8080")
 		rr := httptest.NewRecorder()
@@ -1046,7 +1072,14 @@ func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
 
 	t.Run("127.0.0.1 origin - sets CORS headers", func(t *testing.T) {
 		t.Parallel()
-		nextCalled = false
+		var nextCalled bool
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("next"))
+		})
+		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
+
 		req := httptest.NewRequest(http.MethodPost, "/test", nil)
 		req.Header.Set("Origin", "http://127.0.0.1:8080")
 		rr := httptest.NewRecorder()

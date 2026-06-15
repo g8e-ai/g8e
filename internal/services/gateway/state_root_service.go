@@ -76,7 +76,9 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 
 	// Check state_version before persistence
 	var versionBefore int64
-	s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&versionBefore)
+	if err := s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&versionBefore); err != nil {
+		s.logger.Warn("Failed to check state_version before persistence", "error", err)
+	}
 
 	// Persist to state_root table
 	_, err = s.db.ExecWithRetry(
@@ -89,7 +91,9 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 
 	// Check state_version after persistence
 	var versionAfter int64
-	s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&versionAfter)
+	if err := s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&versionAfter); err != nil {
+		s.logger.Warn("Failed to check state_version after persistence", "error", err)
+	}
 	if err != nil {
 		return "", fmt.Errorf("state_root_service: persist state root: %w", err)
 	}
