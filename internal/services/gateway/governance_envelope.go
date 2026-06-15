@@ -20,9 +20,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/protocol"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // SetEnvelopeProcessor wires the synchronous envelope-processing pipeline
@@ -49,19 +50,23 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 		return fmt.Errorf("verifyEnvelopeIdentityBinding: client certificate missing URI SAN")
 	}
 
-	// Parse envelope to extract identity fields
-	var envelope struct {
-		OperatorSessionID string `json:"operator_session_id"`
-		OperatorID        string `json:"operator_id"`
-		SourceComponent   string `json:"source_component"`
-	}
-	if err := json.Unmarshal(envelopeBody, &envelope); err != nil {
+	// Parse the envelope from its canonical protojson wire form to extract
+	// identity claims. This MUST use the same codec the downstream processor
+	// uses (protojson) — decoding with encoding/json would miss the camelCase
+	// wire field names and silently bypass identity binding for every real
+	// BYO client.
+	var envelope commonv1.GovernanceEnvelope
+	if err := protojson.Unmarshal(envelopeBody, &envelope); err != nil {
 		// If we can't parse the envelope, let the downstream processor handle the parsing/decode error
 		return nil
 	}
 
+	operatorSessionID := envelope.GetOperatorSessionId()
+	operatorID := envelope.GetOperatorId()
+	sourceComponent := envelope.GetSourceComponent()
+
 	// If envelope has no identity fields, let the processor handle validation
-	if envelope.OperatorSessionID == "" && envelope.OperatorID == "" {
+	if operatorSessionID == "" && operatorID == "" {
 		return nil
 	}
 
@@ -72,17 +77,17 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 		spiffeID := uri.String()
 
 		// Check CLI session match — works with or without operator_id
-		if envelope.OperatorSessionID != "" {
-			if wid.MatchesCLISessionOnly(spiffeID, envelope.OperatorSessionID) {
+		if operatorSessionID != "" {
+			if wid.MatchesCLISessionOnly(spiffeID, operatorSessionID) {
 				return nil
 			}
 		}
 
 		// Operator cert match — requires both fields
-		if envelope.OperatorSessionID != "" && envelope.OperatorID != "" {
+		if operatorSessionID != "" && operatorID != "" {
 			// Format: spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>
 			// We check if the SPIFFE ID ends with the operator_id and operator_session_id
-			if strings.HasSuffix(spiffeID, "/"+envelope.OperatorID+"/"+envelope.OperatorSessionID) {
+			if strings.HasSuffix(spiffeID, "/"+operatorID+"/"+operatorSessionID) {
 				// Verify it's an Operator SPIFFE ID (starts with spiffe://g8e.local/operator/)
 				if strings.HasPrefix(spiffeID, "spiffe://"+protocol.TrustDomain+"/operator/") {
 					return nil
@@ -90,22 +95,26 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 			}
 		}
 
-		// For app workloads, verify the app SPIFFE ID matches operator_id
-		// This applies to any app component (g8e-compatible agentic ensemble or future BYO apps)
-		if envelope.SourceComponent != "" && envelope.OperatorID != "" {
-			// Check if this is an app component (not CLI or other sources)
-			// CLI components use session-based auth, apps use operator_id-based auth
-			if envelope.SourceComponent != string(constants.SessionTypeCLI) {
-				if wid.MatchesApp(spiffeID, envelope.OperatorID) {
-					return nil
-				}
+		// App workload match — only AGENT and CLIENT components use operator_id-based
+		// app SPIFFE identities. CLI/operator sessions are matched above via
+		// session-based auth, so they are not eligible for app matching.
+		if operatorID != "" && isAppComponent(sourceComponent) {
+			if wid.MatchesApp(spiffeID, operatorID) {
+				return nil
 			}
 		}
 	}
 
 	// No matching URI SAN found
 	return fmt.Errorf("verifyEnvelopeIdentityBinding: certificate URI SAN does not match envelope identity claims (operator_id=%s, operator_session_id=%s, source_component=%s)",
-		envelope.OperatorID, envelope.OperatorSessionID, envelope.SourceComponent)
+		operatorID, operatorSessionID, sourceComponent)
+}
+
+// isAppComponent reports whether the envelope's source component is an app
+// workload (AGENT or CLIENT) that authenticates via an app SPIFFE identity
+// (spiffe://<trust-domain>/app/<operator_id>).
+func isAppComponent(c commonv1.Component) bool {
+	return c == commonv1.Component_COMPONENT_AGENT || c == commonv1.Component_COMPONENT_CLIENT
 }
 
 // handleGovernanceEnvelope is the canonical synchronous mutation entry point

@@ -57,8 +57,8 @@ func TestGatewaySchema(t *testing.T) {
 
 func TestCanonicalDBService_GetDB(t *testing.T) {
 	t.Parallel()
-	dataDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dataDir := t.TempDir()
+	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
@@ -70,8 +70,8 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 
 func TestCanonicalDBService_Wait(t *testing.T) {
 	t.Parallel()
-	dataDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dataDir := t.TempDir()
+	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
@@ -86,8 +86,8 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	t.Parallel()
-	dataDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dataDir := t.TempDir()
+	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, nil)
@@ -114,8 +114,8 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 
 func newTestDB(t *testing.T) *CanonicalDBService {
 	t.Helper()
-	dir := tempDir(t)
-	secretsDir := tempDir(t)
+	dir := t.TempDir()
+	secretsDir := t.TempDir()
 	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
@@ -288,178 +288,13 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// KV Store
-// ---------------------------------------------------------------------------
-
-func TestKVSetAndGet(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	err := db.KVStore.KVSet("session:abc", `{"user":"alice"}`, 0)
-	require.NoError(t, err)
-
-	val, found := db.KVStore.KVGet("session:abc")
-	require.True(t, found)
-	assert.JSONEq(t, `{"user":"alice"}`, val)
-}
-
-func TestKVGetNotFound(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	_, found := db.KVStore.KVGet("nonexistent")
-	assert.False(t, found)
-}
-
-func TestKVSetWithTTL(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	err := db.KVStore.KVSet("temp:key", "value", 1)
-	require.NoError(t, err)
-
-	val, found := db.KVStore.KVGet("temp:key")
-	assert.True(t, found)
-	assert.Equal(t, "value", val)
-
-	// Wait for expiry with polling
-	require.Eventually(t, func() bool {
-		_, found := db.KVStore.KVGet("temp:key")
-		return !found
-	}, 2*time.Second, 100*time.Millisecond, "temp key should expire")
-}
-
-func TestKVDelete(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("key1", "val1", 0))
-	require.NoError(t, db.KVStore.KVDelete("key1"))
-
-	_, found := db.KVStore.KVGet("key1")
-	assert.False(t, found)
-}
-
-func TestKVDeletePattern(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("cache:user:1", "a", 0))
-	require.NoError(t, db.KVStore.KVSet("cache:user:2", "b", 0))
-	require.NoError(t, db.KVStore.KVSet("cache:config:1", "c", 0))
-
-	count, err := db.KVStore.KVDeletePattern("cache:user:*")
-	require.NoError(t, err)
-	assert.Equal(t, int64(2), count)
-
-	_, found := db.KVStore.KVGet("cache:config:1")
-	assert.True(t, found)
-}
-
-func TestKVKeys(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("session:a", "1", 0))
-	require.NoError(t, db.KVStore.KVSet("session:b", "2", 0))
-	require.NoError(t, db.KVStore.KVSet("other:c", "3", 0))
-
-	keys, err := db.KVStore.KVKeys("session:*")
-	require.NoError(t, err)
-	assert.Len(t, keys, 2)
-}
-
-func TestKVKeys_SpecialCharacters(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	// Keys with dots - SQL GLOB treats dots as literal characters
-	require.NoError(t, db.KVStore.KVSet("cache.doc", "1", 0))
-	require.NoError(t, db.KVStore.KVSet("cache.doc.backup", "2", 0))
-	require.NoError(t, db.KVStore.KVSet("cache:txt", "3", 0))
-
-	// Pattern with literal dot should match exactly
-	keys, err := db.KVStore.KVKeys("cache.doc")
-	require.NoError(t, err)
-	assert.Len(t, keys, 1)
-	assert.Equal(t, "cache.doc", keys[0])
-
-	// Pattern with wildcard after dot should match both
-	keys, err = db.KVStore.KVKeys("cache.doc*")
-	require.NoError(t, err)
-	assert.Len(t, keys, 2)
-
-	// Keys with brackets - SQL GLOB treats brackets as character class delimiters
-	// To match literal brackets, we can use a pattern that matches the prefix
-	require.NoError(t, db.KVStore.KVSet("array.0", "4", 0))
-	require.NoError(t, db.KVStore.KVSet("array.1", "5", 0))
-
-	keys, err = db.KVStore.KVKeys("array.*")
-	require.NoError(t, err)
-	assert.Len(t, keys, 2)
-
-	// Keys with plus signs - SQL GLOB treats plus as literal
-	require.NoError(t, db.KVStore.KVSet("user+id", "6", 0))
-	require.NoError(t, db.KVStore.KVSet("user+name", "7", 0))
-
-	keys, err = db.KVStore.KVKeys("user+*")
-	require.NoError(t, err)
-	assert.Len(t, keys, 2)
-
-	// Keys with dollar signs - SQL GLOB treats dollar as literal
-	require.NoError(t, db.KVStore.KVSet("$var1", "8", 0))
-	require.NoError(t, db.KVStore.KVSet("$var2", "9", 0))
-
-	keys, err = db.KVStore.KVKeys("$var*")
-	require.NoError(t, err)
-	assert.Len(t, keys, 2)
-}
-
-func TestKVExists(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("exists:key", "val", 0))
-	assert.True(t, db.KVStore.KVExists("exists:key"))
-	assert.False(t, db.KVStore.KVExists("missing:key"))
-}
-
-func TestKVTTL(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("ttl:key", "val", 60))
-	ttl := db.KVStore.KVTTL("ttl:key")
-	assert.True(t, ttl > 50 && ttl <= 60)
-
-	assert.Equal(t, -2, db.KVStore.KVTTL("nonexistent"))
-}
-
-func TestKVExpire(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("exp:key", "val", 0))
-	assert.Equal(t, -1, db.KVStore.KVTTL("exp:key"))
-
-	ok := db.KVStore.KVExpire("exp:key", 30)
-	assert.True(t, ok)
-
-	ttl := db.KVStore.KVTTL("exp:key")
-	assert.True(t, ttl > 0 && ttl <= 30)
-
-	ok = db.KVStore.KVExpire("nonexistent", 30)
-	assert.False(t, ok)
-}
-
-// ---------------------------------------------------------------------------
 // Schema initialization (idempotent)
 // ---------------------------------------------------------------------------
 
 func TestSchemaIdempotent(t *testing.T) {
 	t.Parallel()
-	dir := tempDir(t)
-	secretsDir := tempDir(t)
+	dir := t.TempDir()
+	secretsDir := t.TempDir()
 
 	db1, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(t, err)
@@ -483,9 +318,9 @@ func TestSchemaIdempotent(t *testing.T) {
 
 func TestCreateDataDir(t *testing.T) {
 	t.Parallel()
-	tmpDir := tempDir(t)
+	tmpDir := t.TempDir()
 	dir := filepath.Join(tmpDir, "nested", "deep", "data")
-	secretsDir := tempDir(t)
+	secretsDir := t.TempDir()
 
 	db, err := OpenCanonicalDBService(dir, secretsDir, filepath.Join(dir, "vault"), testutil.NewTestLogger(), true, "", false, nil)
 	require.NoError(t, err)
@@ -590,121 +425,7 @@ func TestDocQuery_UnknownOpIsSkipped(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// KVSet overwrite
-// ---------------------------------------------------------------------------
-
-func TestKVSet_OverwriteReplacesValue(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("key1", "first", 0))
-	require.NoError(t, db.KVStore.KVSet("key1", "second", 0))
-
-	val, found := db.KVStore.KVGet("key1")
-	require.True(t, found)
-	assert.Equal(t, "second", val)
-}
-
-// ---------------------------------------------------------------------------
-// KVTTL - no-expiry path
-// ---------------------------------------------------------------------------
-
-func TestKVTTL_NoExpiry(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("persistent", "val", 0))
-	assert.Equal(t, -1, db.KVStore.KVTTL("persistent"))
-}
-
-// ---------------------------------------------------------------------------
-// KVScan
-// ---------------------------------------------------------------------------
-
-func TestKVScan_BasicScan(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("scan:a", "1", 0))
-	require.NoError(t, db.KVStore.KVSet("scan:b", "2", 0))
-	require.NoError(t, db.KVStore.KVSet("scan:c", "3", 0))
-	require.NoError(t, db.KVStore.KVSet("other:d", "4", 0))
-
-	next, keys, err := db.KVStore.KVScan("scan:*", 0, 10)
-	require.NoError(t, err)
-	assert.Equal(t, 0, next, "no next page when all results fit")
-	assert.Len(t, keys, 3)
-}
-
-func TestKVScan_Pagination(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	for i := 0; i < 5; i++ {
-		require.NoError(t, db.KVStore.KVSet(fmt.Sprintf("page:%d", i), "v", 0))
-	}
-
-	next1, page1, err := db.KVStore.KVScan("page:*", 0, 2)
-	require.NoError(t, err)
-	assert.Len(t, page1, 2)
-	assert.Equal(t, 2, next1, "next cursor must be 2 after first page")
-
-	next2, page2, err := db.KVStore.KVScan("page:*", next1, 2)
-	require.NoError(t, err)
-	assert.Len(t, page2, 2)
-	assert.Equal(t, 4, next2)
-
-	next3, page3, err := db.KVStore.KVScan("page:*", next2, 2)
-	require.NoError(t, err)
-	assert.Len(t, page3, 1)
-	assert.Equal(t, 0, next3, "next cursor must be 0 on last page")
-}
-
-func TestKVScan_EmptyResult(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	next, keys, err := db.KVStore.KVScan("nothing:*", 0, 10)
-	require.NoError(t, err)
-	assert.Equal(t, 0, next)
-	assert.Empty(t, keys)
-}
-
-func TestKVScan_DefaultCountApplied(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	for i := 0; i < 5; i++ {
-		require.NoError(t, db.KVStore.KVSet(fmt.Sprintf("dc:%d", i), "v", 0))
-	}
-
-	_, keys, err := db.KVStore.KVScan("dc:*", 0, 0)
-	require.NoError(t, err)
-	assert.Len(t, keys, 5, "count=0 must default to 100 and return all 5 keys")
-}
-
-func TestKVScan_ExcludesExpiredKeys(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("live:key", "val", 0))
-	require.NoError(t, db.KVStore.KVSet("exp:key", "val", 1))
-
-	// Wait for expiry with polling
-	require.Eventually(t, func() bool {
-		_, keys, err := db.KVStore.KVScan("*", 0, 100)
-		require.NoError(t, err)
-		for _, k := range keys {
-			if k == "exp:key" {
-				return false
-			}
-		}
-		return true
-	}, 2*time.Second, 100*time.Millisecond, "expired key must not appear in scan results")
-}
-
-// ---------------------------------------------------------------------------
-// SSE Events
+// BlobStore overwrite
 // ---------------------------------------------------------------------------
 
 func TestSSEEventsCount_EmptyTable(t *testing.T) {
@@ -755,31 +476,8 @@ func TestSSEEventsWipe_EmptyTableReturnsZero(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Service Maintenance
+// BlobStore maintenance
 // ---------------------------------------------------------------------------
-
-func TestKVStoreService_RunMaintenance(t *testing.T) {
-	t.Parallel()
-	db := newTestDB(t)
-
-	require.NoError(t, db.KVStore.KVSet("ttl:keep", "val", 0))
-	require.NoError(t, db.KVStore.KVSet("ttl:expire", "val", 1))
-
-	// Wait for expiry with polling
-	require.Eventually(t, func() bool {
-		_, found := db.KVStore.KVGet("ttl:expire")
-		return !found
-	}, 2*time.Second, 100*time.Millisecond, "ttl:expire should expire")
-
-	// Run maintenance
-	require.NoError(t, db.KVStore.RunMaintenance())
-
-	_, kept := db.KVStore.KVGet("ttl:keep")
-	assert.True(t, kept, "non-expired key must survive cleanup")
-
-	_, expired := db.KVStore.KVGet("ttl:expire")
-	assert.False(t, expired, "expired key should be removed by maintenance")
-}
 
 func TestBlobStoreService_RunMaintenance(t *testing.T) {
 	t.Parallel()

@@ -22,10 +22,39 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // GitOpsTool provides git repository operations including status, log, branch info, and remote management.
-type GitOpsTool struct{}
+type GitOpsTool struct {
+	runner gitRunner
+	once   sync.Once
+}
+
+type gitRunner interface {
+	Run(ctx context.Context, repoPath string, args ...string) (string, error)
+	IsRepo(path string) bool
+}
+
+type realGitRunner struct{}
+
+func (r *realGitRunner) Run(ctx context.Context, repoPath string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = repoPath
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func (r *realGitRunner) IsRepo(path string) bool {
+	gitDir := filepath.Join(path, ".git")
+	if _, err := os.Stat(gitDir); err == nil {
+		return true
+	}
+	return false
+}
 
 // gitStatusResult represents the result of a git status operation
 type gitStatusResult struct {
@@ -148,6 +177,12 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 		repoPath = "."
 	}
 
+	t.once.Do(func() {
+		if t.runner == nil {
+			t.runner = &realGitRunner{}
+		}
+	})
+
 	if err := validateGitRepoPath(repoPath); err != nil {
 		errorResult := gitErrorResult{
 			Operation: req.Operation,
@@ -168,7 +203,7 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 		}, nil
 	}
 
-	if !isGitRepo(repoPath) {
+	if !t.runner.IsRepo(repoPath) {
 		errorResult := gitErrorResult{
 			Operation: req.Operation,
 			RepoPath:  repoPath,
@@ -193,27 +228,27 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 
 	switch req.Operation {
 	case "status":
-		result, err = gitStatus(ctx, repoPath)
+		result, err = t.gitStatus(ctx, repoPath)
 	case "log":
 		limit := req.Limit
 		if limit <= 0 {
 			limit = 10
 		}
-		result, err = gitLog(ctx, repoPath, limit)
+		result, err = t.gitLog(ctx, repoPath, limit)
 	case "branches":
-		result, err = gitBranches(ctx, repoPath)
+		result, err = t.gitBranches(ctx, repoPath)
 	case "remotes":
-		result, err = gitRemotes(ctx, repoPath)
+		result, err = t.gitRemotes(ctx, repoPath)
 	case "remote_url":
-		result, err = gitRemoteURL(ctx, repoPath)
+		result, err = t.gitRemoteURL(ctx, repoPath)
 	case "current_branch":
-		result, err = gitCurrentBranch(ctx, repoPath)
+		result, err = t.gitCurrentBranch(ctx, repoPath)
 	case "diff":
 		ref := req.Ref
 		if ref == "" {
 			ref = "HEAD"
 		}
-		result, err = gitDiff(ctx, repoPath, ref)
+		result, err = t.gitDiff(ctx, repoPath, ref)
 	default:
 		return CallToolResult{}, fmt.Errorf("git_ops: unsupported operation: %s", req.Operation)
 	}
@@ -253,15 +288,7 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 	}, nil
 }
 
-func isGitRepo(path string) bool {
-	gitDir := filepath.Join(path, ".git")
-	if _, err := os.Stat(gitDir); err == nil {
-		return true
-	}
-	return false
-}
-
-func runGitCommand(ctx context.Context, repoPath string, args ...string) (string, error) {
+func (t *GitOpsTool) runGitCommand(ctx context.Context, repoPath string, args ...string) (string, error) {
 	// Validate git subcommand is safe
 	if len(args) == 0 {
 		return "", fmt.Errorf("git_ops: no git subcommand provided")
@@ -290,17 +317,15 @@ func runGitCommand(ctx context.Context, repoPath string, args ...string) (string
 		return "", fmt.Errorf("git_ops: invalid repo path: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir = repoPath
-	output, err := cmd.CombinedOutput()
+	output, err := t.runner.Run(ctx, repoPath, args...)
 	if err != nil {
-		return string(output), fmt.Errorf("git_ops: git %s failed: %w", subcommand, err)
+		return output, fmt.Errorf("git_ops: git %s failed: %w", subcommand, err)
 	}
-	return strings.TrimSpace(string(output)), nil
+	return output, nil
 }
 
-func gitStatus(ctx context.Context, repoPath string) (*gitStatusResult, error) {
-	output, err := runGitCommand(ctx, repoPath, "status", "--porcelain")
+func (t *GitOpsTool) gitStatus(ctx context.Context, repoPath string) (*gitStatusResult, error) {
+	output, err := t.runGitCommand(ctx, repoPath, "status", "--porcelain")
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: git status failed: %w", err)
 	}
@@ -321,19 +346,18 @@ func gitStatus(ctx context.Context, repoPath string) (*gitStatusResult, error) {
 		status := line[:2]
 		file := strings.TrimSpace(line[2:])
 
-		switch status {
-		case "M", "MM":
+		if strings.Contains(status, "M") {
 			modified = append(modified, file)
-		case "A":
+		} else if strings.Contains(status, "A") {
 			added = append(added, file)
-		case "D":
+		} else if strings.Contains(status, "D") {
 			deleted = append(deleted, file)
-		case "??":
+		} else if strings.HasPrefix(status, "??") {
 			untracked = append(untracked, file)
 		}
 	}
 
-	branchResult, err := gitCurrentBranch(ctx, repoPath)
+	branchResult, err := t.gitCurrentBranch(ctx, repoPath)
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: failed to get current branch: %w", err)
 	}
@@ -348,7 +372,7 @@ func gitStatus(ctx context.Context, repoPath string) (*gitStatusResult, error) {
 	}, nil
 }
 
-func gitLog(ctx context.Context, repoPath string, limit int) (*gitLogResult, error) {
+func (t *GitOpsTool) gitLog(ctx context.Context, repoPath string, limit int) (*gitLogResult, error) {
 	// Bound the limit to prevent resource exhaustion
 	if limit <= 0 {
 		limit = 10
@@ -357,7 +381,7 @@ func gitLog(ctx context.Context, repoPath string, limit int) (*gitLogResult, err
 		limit = 1000
 	}
 
-	output, err := runGitCommand(ctx, repoPath, "log", "--max-count", strconv.Itoa(limit), "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso")
+	output, err := t.runGitCommand(ctx, repoPath, "log", "--max-count", strconv.Itoa(limit), "--pretty=format:%H|%an|%ae|%ad|%s", "--date=iso")
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: git log failed: %w", err)
 	}
@@ -395,15 +419,15 @@ func gitLog(ctx context.Context, repoPath string, limit int) (*gitLogResult, err
 	}, nil
 }
 
-func gitBranches(ctx context.Context, repoPath string) (*gitBranchesResult, error) {
-	output, err := runGitCommand(ctx, repoPath, "branch", "-a")
+func (t *GitOpsTool) gitBranches(ctx context.Context, repoPath string) (*gitBranchesResult, error) {
+	output, err := t.runGitCommand(ctx, repoPath, "branch", "-a")
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: git branch failed: %w", err)
 	}
 
 	var local []string
 	var remote []string
-	currentResult, err := gitCurrentBranch(ctx, repoPath)
+	currentResult, err := t.gitCurrentBranch(ctx, repoPath)
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: failed to get current branch: %w", err)
 	}
@@ -431,8 +455,8 @@ func gitBranches(ctx context.Context, repoPath string) (*gitBranchesResult, erro
 	}, nil
 }
 
-func gitRemotes(ctx context.Context, repoPath string) (*gitRemotesResult, error) {
-	output, err := runGitCommand(ctx, repoPath, "remote", "-v")
+func (t *GitOpsTool) gitRemotes(ctx context.Context, repoPath string) (*gitRemotesResult, error) {
+	output, err := t.runGitCommand(ctx, repoPath, "remote", "-v")
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: git remote failed: %w", err)
 	}
@@ -453,7 +477,7 @@ func gitRemotes(ctx context.Context, repoPath string) (*gitRemotesResult, error)
 
 		name := parts[0]
 		url := parts[1]
-		typ := strings.TrimSuffix(parts[2], "(")
+		typ := strings.Trim(parts[2], "()")
 
 		if remotes[name] == nil {
 			remotes[name] = make(map[string]string)
@@ -466,8 +490,8 @@ func gitRemotes(ctx context.Context, repoPath string) (*gitRemotesResult, error)
 	}, nil
 }
 
-func gitRemoteURL(ctx context.Context, repoPath string) (*gitRemoteURLResult, error) {
-	output, err := runGitCommand(ctx, repoPath, "config", "--get", "remote.origin.url")
+func (t *GitOpsTool) gitRemoteURL(ctx context.Context, repoPath string) (*gitRemoteURLResult, error) {
+	output, err := t.runGitCommand(ctx, repoPath, "config", "--get", "remote.origin.url")
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: git remote url failed: %w", err)
 	}
@@ -487,8 +511,8 @@ func gitRemoteURL(ctx context.Context, repoPath string) (*gitRemoteURLResult, er
 	}, nil
 }
 
-func gitCurrentBranch(ctx context.Context, repoPath string) (*gitCurrentBranchResult, error) {
-	output, err := runGitCommand(ctx, repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+func (t *GitOpsTool) gitCurrentBranch(ctx context.Context, repoPath string) (*gitCurrentBranchResult, error) {
+	output, err := t.runGitCommand(ctx, repoPath, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: git current branch failed: %w", err)
 	}
@@ -498,12 +522,12 @@ func gitCurrentBranch(ctx context.Context, repoPath string) (*gitCurrentBranchRe
 	}, nil
 }
 
-func gitDiff(ctx context.Context, repoPath string, ref string) (*gitDiffResult, error) {
+func (t *GitOpsTool) gitDiff(ctx context.Context, repoPath string, ref string) (*gitDiffResult, error) {
 	if err := validateGitRef(ref); err != nil {
 		return nil, fmt.Errorf("git_ops: invalid git reference: %w", err)
 	}
 
-	output, err := runGitCommand(ctx, repoPath, "diff", ref)
+	output, err := t.runGitCommand(ctx, repoPath, "diff", ref)
 	if err != nil {
 		return nil, fmt.Errorf("git_ops: git diff failed: %w", err)
 	}

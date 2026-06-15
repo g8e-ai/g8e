@@ -40,16 +40,13 @@ before changing project files.
 
 ## `make proto` fails before generating files
 
-`make proto` runs `make buf-install`, then calls Buf and post-processes the
-generated Python files with `find` and `sed`.
+`make proto` runs `make buf-install`, then calls Buf to generate Go Protobuf code from the schema definitions.
 
 Check the local prerequisites first:
 
 ```bash
 command -v curl
-command -v chmod
-command -v find
-command -v sed
+command -v go
 ```
 
 For air-gapped and sovereign setups, the Makefile is highly resilient:
@@ -63,15 +60,11 @@ For air-gapped and sovereign setups, the Makefile is highly resilient:
 If you are modifying `.proto` files in an offline environment and need to recompile,
 ensure that `buf` is installed globally on your path.
 
-If generation succeeds but Python imports fail later, rerun the full target
-instead of only calling Buf:
+For Python protocol generation, use the separate target:
 
 ```bash
-make proto
+make proto-python
 ```
-
-The full target also creates `__init__.py` files and rewrites generated Python
-imports for package-relative use.
 
 ## `./g8e gw start` does not become healthy
 
@@ -101,18 +94,44 @@ state. They intentionally remove runtime data under `.g8e/`.
 
 ## Tests fail because the gateway is not running
 
-The test runner uses real infrastructure. Start the gateway before tests that
-need the g8e Gateway, and start optional apps only when the test target requires
-them.
+The test suite uses a tiered structure with different infrastructure requirements:
+
+- **Tier 1 (Unit tests)**: Run immediately without external dependencies via `make test-unit`
+- **Tier 2 (In-Memory Integration)**: No external dependencies via `make test-integration`
+- **Tier 3 (Docker E2E)**: Requires Docker via `make test-docker` or `make test-gov`
+
+For integration tests that require a running gateway, start the gateway and authenticate first:
 
 ```bash
 ./g8e gw start
-make test
+./g8e auth login
+make test-integration
 ```
 
-If a test failure mentions missing trust bundles or client certificates, confirm
-that `.g8e/pki/` exists and that `./g8e gw status` reports the g8e Gateway as
-running.
+For gateway-specific tests that require mTLS authentication:
+
+```bash
+./g8e gw start
+./g8e auth login
+make test-gateway
+```
+
+If a test failure mentions missing trust bundles or client certificates, confirm that `.g8e/pki/` exists and that `./g8e gw status` reports the g8e Gateway as running.
+
+## Authentication failures after gateway start
+
+The gateway requires explicit authentication before it can be used. After starting the gateway, you must authenticate to bootstrap your credentials:
+
+```bash
+./g8e gw start
+./g8e auth login
+```
+
+If authentication fails, check the following:
+- Ensure the gateway is running via `./g8e gw status`
+- Verify the external IP displayed during gateway start matches your network interface
+- For passkey authentication, ensure your hardware security key or platform authenticator is available
+- For certificate-based authentication, ensure `.g8e/pki/operator.*` or `.g8e/pki/client.*` certificates exist
 
 ## Path resolution problems
 

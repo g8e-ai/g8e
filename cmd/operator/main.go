@@ -1284,7 +1284,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logFile := filepath.Join(runtimeDir, constants.OperatorLogPath)
+	logFile := filepath.Join(logDir, constants.OperatorLogPath)
 	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
@@ -1682,7 +1682,7 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 	}
 
 	// Write JSON format
-	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONPath)
+	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
 	jsonData := map[string]string{
 		"key_id":     keyID,
 		"public_key": hex.EncodeToString(pubKey),

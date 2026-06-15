@@ -147,7 +147,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 
 	// Initialize suspended transaction service for gateway mode
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               constants.Paths.Infra.SuspendedTransactionsDBPath,
+		DBPath:               constants.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -313,7 +313,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 
 	// Initialize suspended transaction service for gateway mode (test configuration)
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               constants.Paths.Infra.SuspendedTransactionsDBPath,
+		DBPath:               constants.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -499,7 +499,7 @@ func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 func (ls *GatewayModeService) GetHTTPSPort() int {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
-	if ls.publicServer == nil {
+	if !ls.running || ls.publicServer == nil {
 		return 0
 	}
 	_, port, err := net.SplitHostPort(ls.publicServer.Addr)
@@ -517,7 +517,7 @@ func (ls *GatewayModeService) GetHTTPSPort() int {
 func (ls *GatewayModeService) GetHTTPPort() int {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
-	if ls.server == nil {
+	if !ls.running || ls.server == nil {
 		return 0
 	}
 	_, port, err := net.SplitHostPort(ls.server.Addr)
@@ -685,6 +685,25 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		ls.mu.Unlock()
 		ls.logger.Info("operator Gateway Mode fully operational",
 			"posture", ls.cfg.Gateway.Posture)
+	}()
+
+	// Listen for context cancellation and trigger shutdown
+	// nolint:gosec // G118: ctx is already cancelled, need fresh context for shutdown timeout
+	go func() {
+		<-ctx.Done()
+		ls.logger.Info("Context cancelled, initiating server shutdown")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if ls.server != nil {
+			if err := ls.server.Shutdown(shutdownCtx); err != nil {
+				ls.logger.Error("Failed to shutdown server", "error", err)
+			}
+		}
+		if ls.publicServer != nil {
+			if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
+				ls.logger.Error("Failed to shutdown public server", "error", err)
+			}
+		}
 	}()
 
 	return <-errChan

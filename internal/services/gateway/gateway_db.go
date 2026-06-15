@@ -23,13 +23,10 @@ package gateway
 import (
 	"context"
 	_ "embed"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -215,11 +212,6 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 	if err != nil {
 		return err
 	}
-	// Migration: Add producer_id column to sse_events table if it doesn't exist
-	_, err = s.db.ExecWithRetry("ALTER TABLE sse_events ADD COLUMN producer_id TEXT")
-	if err != nil && !errors.Is(err, constants.ErrDuplicateColumn) && !sqliteutil.IsDuplicateColumnError(err) {
-		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
-	}
 	var ks *keystore.Keystore
 	if testKeystore != nil {
 		ks = testKeystore
@@ -246,11 +238,6 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 		keystore:   ks,
 	}
 	if err := sm.InitAppSettings(); err != nil {
-		return err
-	}
-
-	// Migration: Initialize state_version table for existing databases
-	if err := s.migrateStateVersion(); err != nil {
 		return err
 	}
 
@@ -308,12 +295,6 @@ func (s *CanonicalDBService) initSchema(secretsDir string) error {
 		return err
 	}
 
-	// Migration: Add producer_id column to sse_events table if it doesn't exist
-	_, err = s.db.ExecWithRetry("ALTER TABLE sse_events ADD COLUMN producer_id TEXT")
-	if err != nil && !errors.Is(err, constants.ErrDuplicateColumn) && !sqliteutil.IsDuplicateColumnError(err) {
-		s.logger.Warn("Failed to add producer_id column to sse_events (may already exist)", "error", err)
-	}
-
 	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
 	if err != nil {
 		return err
@@ -322,109 +303,6 @@ func (s *CanonicalDBService) initSchema(secretsDir string) error {
 		return err
 	}
 
-	// Migration: Move plaintext service certificate private keys to keystore
-	if err := s.migratePlaintextServiceKeys(secretsDir, sm); err != nil {
-		return err
-	}
-
-	// Migration: Initialize state_version table for existing databases
-	if err := s.migrateStateVersion(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// migratePlaintextServiceKeys moves existing plaintext service certificate private keys
-// to the keystore and deletes the plaintext files. This is a one-time migration.
-func (s *CanonicalDBService) migratePlaintextServiceKeys(secretsDir string, sm *SecretManager) error {
-	// Check if migration marker exists in keystore
-	_, err := sm.keystore.DecryptSecret("migration_plaintext_keys_migrated")
-	if err == nil {
-		// Already migrated
-		return nil
-	}
-
-	pkiDir := filepath.Join(filepath.Dir(secretsDir), constants.PkiDirname)
-	keyPaths := []string{
-		filepath.Join(pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayKey),
-	}
-
-	migratedCount := 0
-	for _, keyPath := range keyPaths {
-		if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-			continue
-		}
-
-		// Read the plaintext key
-		keyPEM, err := os.ReadFile(keyPath)
-		if err != nil {
-			s.logger.Warn("[Migration] Failed to read plaintext key file", "path", keyPath, "error", err)
-			continue
-		}
-
-		block, _ := pem.Decode(keyPEM)
-		if block == nil {
-			s.logger.Warn("[Migration] Failed to decode PEM key file", "path", keyPath)
-			continue
-		}
-
-		// Determine service name from path
-		var serviceName string
-		if strings.Contains(keyPath, constants.PkiGatewayKeyPath) {
-			serviceName = "operator-gateway"
-		} else {
-			s.logger.Warn("[Migration] Unknown service key file", "path", keyPath)
-			continue
-		}
-
-		// Store in keystore
-		if err := sm.StoreServicePrivateKey(serviceName, block.Bytes); err != nil {
-			s.logger.Warn("[Migration] Failed to store key in keystore", "service", serviceName, "error", err)
-			continue
-		}
-
-		// Delete plaintext file
-		if err := os.Remove(keyPath); err != nil {
-			s.logger.Warn("[Migration] Failed to delete plaintext key file", "path", keyPath, "error", err)
-			continue
-		}
-
-		s.logger.Info("[Migration] Migrated plaintext service key to keystore", "service", serviceName, "path", keyPath)
-		migratedCount++
-	}
-
-	if migratedCount > 0 {
-		// Mark migration as complete
-		if err := sm.keystore.EncryptSecret("migration_plaintext_keys_migrated", "true"); err != nil {
-			s.logger.Warn("[Migration] Failed to mark migration as complete", "error", err)
-		}
-		s.logger.Info("[Migration] Completed plaintext service key migration", "count", migratedCount)
-	}
-
-	return nil
-}
-
-// migrateStateVersion initializes the state_version table for existing databases.
-// This is a one-time migration for databases created before the change tracking feature.
-func (s *CanonicalDBService) migrateStateVersion() error {
-	// Check if state_version table exists and has a row
-	var count int
-	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_version").Scan(&count)
-	if err != nil {
-		// Table doesn't exist, will be created by schema
-		return nil
-	}
-	if count > 0 {
-		// Already initialized
-		return nil
-	}
-
-	// Table exists but is empty, initialize it
-	_, err = s.db.ExecWithRetry("INSERT INTO state_version (id, version) VALUES (1, 0)")
-	if err != nil && !errors.Is(err, constants.ErrAlreadyExists) && !sqliteutil.IsUniqueConstraintError(err) {
-		s.logger.Warn("Failed to initialize state_version", "error", err)
-	}
 	return nil
 }
 

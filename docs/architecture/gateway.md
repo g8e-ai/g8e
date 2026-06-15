@@ -158,7 +158,7 @@ The gateway provides a comprehensive set of native tools covering database opera
 - `fs_disk_profile`: Disk usage and filesystem profiling
 - `fs_disk_usage`: Disk usage analysis
 - `fs_file_checksum`: File integrity verification via checksum
-- `file_read`: Read file contents with validation
+- `read_file`: Read file contents with validation
 - `log_stream_filter`: Log stream filtering and analysis
 
 **Network Tools**:
@@ -284,10 +284,10 @@ The g8e Gateway (g8eg) provides JWT authentication and Just-In-Time (JIT) user p
 ### 4-Step JWT Flow
 The JWT authentication logic is implemented in `internal/services/gateway/gateway_auth.go` via the `JWTAuthMiddleware` function.
 
-**Step 1: Inbound HTTP Handshake & JWT Verification**
+**Step 1: Inbound HTTP Handshake and JWT Verification**
 The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens on public MCP endpoints before routing to downstream execution logic. The middleware cryptographically verifies the JWT signature using JWKS or static public keys, validates `exp` and `iss` claims, and extracts identity claims (`sub`, `tenant_id`, `roles`).
 
-**Step 2: Edge Validation & JIT Account Management**
+**Step 2: Edge Validation and JIT Account Management**
 Following successful token validation, the g8e Gateway (g8eg) ensures the user exists locally and maps their roles:
 - **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetBySub`. If the user does not exist, checks for an active invitation via `userSvc.FindActiveInvitationBySub` and creates the user account via `userSvc.CreateUserFromInvitation`.
 - **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests via `personaSvc.MapRolesToPersona` to determine the active `binding_persona`.
@@ -299,7 +299,7 @@ The g8e Gateway (g8eg) strips the heavy JWT and injects the evaluated security r
 - The pub/sub payload is strictly a canonical `GovernanceEnvelope` carrying typed payloads (e.g., `McpCallRequested`) alongside the validated security metadata.
 - The heavy JWT is discarded, reducing payload size.
 
-**Step 4: Native Execution & Data Scrubbing (g8e Operator)**
+**Step 4: Native Execution and Data Scrubbing (g8e Operator)**
 When the outbound g8e Operator (g8eo) pulls the message off the pub/sub queue, it acts natively on the injected security metadata without second-guessing the g8e Gateway (g8eg):
 - The g8e Operator (g8eo) decodes the `GovernanceEnvelope` and extracts `tenant_id` and `binding_persona`.
 - These fields propagate into the execution context.

@@ -51,12 +51,13 @@ RUN /build/g8e --help
 
 # =============================================================================
 # Stage 2: Runtime
-# Use distroless for minimal attack surface and smallest image size
-FROM gcr.io/distroless/static-debian12
+# Use standard Debian with common utilities
+FROM debian:bookworm
 
-# Create non-root user for security
-# Note: distroless doesn't support useradd, so we run as nonroot user
-# The distroless image already sets up a nonroot user
+# Install common utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl wget ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from builder
 COPY --from=builder /build/g8e /g8e
@@ -64,15 +65,12 @@ COPY --from=builder /build/g8e /g8e
 # Copy protocol constants (required for doctrine mode)
 COPY --from=builder /build/protocol/constants /protocol/constants
 
-# Set permissions
-# Note: distroless images are read-only, permissions are pre-configured
-
 # Expose default ports (can be overridden at runtime)
 EXPOSE 8080 8443
 
-# Health check - use HTTP endpoint instead of gw status (which doesn't detect foreground processes)
+# Health check - use HTTP endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/health || exit 1
+    CMD curl -f http://localhost:8080/api/v1/health || exit 1
 
 # Set entrypoint
 # The same binary can run in gateway mode (doctrine) or operator mode (standard)

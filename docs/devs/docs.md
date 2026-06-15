@@ -15,7 +15,8 @@ All documentation must maintain a professional systems-engineering tone. Avoid p
 ### Formatting and Punctuation
 - **No Em-Dashes**: Do not use em-dashes (—) under any circumstances. Construct compound clauses and modifiers using commas, semicolons, or single hyphens.
 - **No Emojis**: Maintain a standard engineering publication appearance. Do not use emojis, icons, or descriptive illustrations in headers, bullet points, or body text.
-- **Strict Markdown References**: When referencing files or line ranges in the codebase, you must use the absolute markdown citation syntax with backticks. Do not use plain text paths or generic lists.
+- **Codebase References (Portable)**: When referencing files, line ranges, or symbols in the codebase, use repository-relative paths (e.g., `internal/services/governance/l1_doctrine.go`). Do not use absolute filesystem paths (e.g., `/home/bob/...`) as this breaks portability.
+- **Documentation Links (Relative Only)**: All markdown links to other documentation files MUST use relative paths from the current document's location (e.g., `[Gateway](./gateway.md)` or `[Architecture](../architecture/gateway.md)`). Never use absolute paths.
 
 ---
 

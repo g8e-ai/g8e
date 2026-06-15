@@ -1184,3 +1184,138 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 }
+
+func TestDBControllerHandleAuditEvents(t *testing.T) {
+	dbController, _ := setupTestDBController(t)
+
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/events", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditEvents(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Success - empty events", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Equal(t, 0, int(resp["count"].(float64)))
+	})
+
+	t.Run("Success - with operator_session_id", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?operator_session_id=op-session-123", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+	})
+
+	t.Run("Success - with limit and offset", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?limit=10&offset=5", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditEvents(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+	})
+}
+
+func TestDBControllerHandleAuditSummary(t *testing.T) {
+	dbController, _ := setupTestDBController(t)
+
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/summary", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditSummary(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Success - empty summary", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/summary", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditSummary(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Equal(t, 0, int(resp["events_total"].(float64)))
+		assert.Equal(t, 0, int(resp["receipts_total"].(float64)))
+		assert.Equal(t, 0, int(resp["total_records"].(float64)))
+	})
+
+	t.Run("Success - with operator_session_id", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/summary?operator_session_id=op-session-123", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditSummary(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Contains(t, resp, "events_summary")
+		assert.Contains(t, resp, "receipts_summary")
+	})
+}
+
+func TestDBControllerHandleAuditReport(t *testing.T) {
+	dbController, _ := setupTestDBController(t)
+
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/report", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReport(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Success - empty report", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/report", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReport(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Contains(t, resp, "report")
+		report := resp["report"].(map[string]interface{})
+		assert.Equal(t, 0, int(report["events_count"].(float64)))
+		assert.Equal(t, 0, int(report["receipts_count"].(float64)))
+		assert.Equal(t, 0, int(report["total_records"].(float64)))
+		assert.Contains(t, report, "generated_at")
+	})
+
+	t.Run("Success - with operator_session_id", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/report?operator_session_id=op-session-123", nil)
+		rr := httptest.NewRecorder()
+		dbController.handleAuditReport(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp["success"].(bool))
+		assert.Contains(t, resp, "report")
+		report := resp["report"].(map[string]interface{})
+		assert.Equal(t, "op-session-123", report["operator_session_id"])
+	})
+}

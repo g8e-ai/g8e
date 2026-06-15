@@ -17,54 +17,186 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
 
-func TestNativeToolHandler_HandleTool(t *testing.T) {
+// mockNativeTool is a mock implementation of NativeTool for unit testing.
+type mockNativeTool struct {
+	name        string
+	description string
+	schema      *InputSchema
+	executeFn   func(ctx context.Context, args json.RawMessage) (CallToolResult, error)
+}
+
+func (m *mockNativeTool) Name() string              { return m.name }
+func (m *mockNativeTool) Description() string       { return m.description }
+func (m *mockNativeTool) InputSchema() *InputSchema { return m.schema }
+func (m *mockNativeTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+	if m.executeFn != nil {
+		return m.executeFn(ctx, args)
+	}
+	return CallToolResult{}, nil
+}
+
+func TestNewNativeToolHandler(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+		handler, err := NewNativeToolHandler(nil)
+		require.NoError(t, err)
+		require.NotNil(t, handler)
+		require.NotNil(t, handler.registry)
+		require.Greater(t, len(handler.ListTools()), 0)
+	})
+
+	t.Run("with logger", func(t *testing.T) {
+		t.Parallel()
+		logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+		handler, err := NewNativeToolHandler(logger)
+		require.NoError(t, err)
+		require.NotNil(t, handler)
+		require.Equal(t, logger, handler.logger)
+	})
+}
+
+func TestNewNativeToolHandlerWithRegistry(t *testing.T) {
+	t.Parallel()
+
+	registry := NewToolRegistry()
+	handler := NewNativeToolHandlerWithRegistry(registry)
+	require.NotNil(t, handler)
+	require.Equal(t, registry, handler.registry)
+}
+
+func TestNativeToolHandler_HandleTool_Unit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unknown tool returns error", func(t *testing.T) {
+		t.Parallel()
+		registry := NewToolRegistry()
+		handler := NewNativeToolHandlerWithRegistry(registry)
+
+		_, err := handler.HandleTool(context.Background(), "unknown_tool", nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unknown native tool: unknown_tool")
+	})
+
+	t.Run("success execution", func(t *testing.T) {
+		t.Parallel()
+		registry := NewToolRegistry()
+		mockTool := &mockNativeTool{
+			name:   "test_tool",
+			schema: &InputSchema{Type: "object"},
+			executeFn: func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+				return CallToolResult{
+					Content: []TextContent{{Type: "text", Text: "success"}},
+				}, nil
+			},
+		}
+		require.NoError(t, registry.Register(mockTool))
+
+		handler := NewNativeToolHandlerWithRegistry(registry)
+		result, err := handler.HandleTool(context.Background(), "test_tool", nil)
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		require.Len(t, result.Content, 1)
+		require.Equal(t, "success", result.Content[0].Text)
+	})
+
+	t.Run("execution error", func(t *testing.T) {
+		t.Parallel()
+		registry := NewToolRegistry()
+		mockTool := &mockNativeTool{
+			name:   "fail_tool",
+			schema: &InputSchema{Type: "object"},
+			executeFn: func(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
+				return CallToolResult{}, errors.New("execution failed")
+			},
+		}
+		require.NoError(t, registry.Register(mockTool))
+
+		handler := NewNativeToolHandlerWithRegistry(registry)
+		_, err := handler.HandleTool(context.Background(), "fail_tool", nil)
+		require.Error(t, err)
+		require.Equal(t, "execution failed", err.Error())
+	})
+
+	t.Run("logging verification", func(t *testing.T) {
+		t.Parallel()
+		// We use io.Discard but ensure it doesn't panic
+		logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+		registry := NewToolRegistry()
+		mockTool := &mockNativeTool{
+			name:   "log_tool",
+			schema: &InputSchema{Type: "object"},
+		}
+		require.NoError(t, registry.Register(mockTool))
+
+		handler := &NativeToolHandler{
+			registry: registry,
+			logger:   logger,
+		}
+
+		_, err := handler.HandleTool(context.Background(), "log_tool", nil)
+		require.NoError(t, err)
+
+		_, err = handler.HandleTool(context.Background(), "unknown", nil)
+		require.Error(t, err)
+	})
+}
+
+func TestNativeToolHandler_ListTools_Unit(t *testing.T) {
+	t.Parallel()
+
+	registry := NewToolRegistry()
+	mockTool := &mockNativeTool{
+		name:   "tool1",
+		schema: &InputSchema{Type: "object"},
+	}
+	require.NoError(t, registry.Register(mockTool))
+
+	handler := NewNativeToolHandlerWithRegistry(registry)
+	tools := handler.ListTools()
+	require.Len(t, tools, 1)
+	require.Equal(t, "tool1", tools[0].Name())
+}
+
+func TestNativeToolHandler_HandleTool_Integration(t *testing.T) {
 	handler, err := NewNativeToolHandler(nil)
 	require.NoError(t, err)
 
 	t.Run("unknown tool", func(t *testing.T) {
 		_, err := handler.HandleTool(context.Background(), "unknown_tool", json.RawMessage(`{}`))
-		if err == nil {
-			t.Error("expected error for unknown tool")
-		}
+		require.Error(t, err, "expected error for unknown tool")
+
 		// Verify error message includes the list of available tools
 		errStr := err.Error()
-		if !strings.Contains(errStr, "available tools:") {
-			t.Errorf("error message should include list of available tools, got: %s", errStr)
-		}
+		require.Contains(t, errStr, "available tools:", "error message should include list of available tools")
 		// Verify at least one known tool name is in the error
-		if !strings.Contains(errStr, "sys_info") {
-			t.Errorf("error message should include known tool names, got: %s", errStr)
-		}
+		require.Contains(t, errStr, "sys_info", "error message should include known tool names")
 	})
 
 	t.Run("custom registry", func(t *testing.T) {
 		customRegistry := NewToolRegistry()
 		customHandler := NewNativeToolHandlerWithRegistry(customRegistry)
-		if customHandler == nil {
-			t.Error("expected non-nil handler with custom registry")
-			return
-		}
-		if customHandler.registry != customRegistry {
-			t.Error("expected handler to use provided registry")
-		}
+		require.NotNil(t, customHandler, "expected non-nil handler with custom registry")
+		require.Equal(t, customRegistry, customHandler.registry, "expected handler to use provided registry")
 	})
 
 	t.Run("all 30 tools registered", func(t *testing.T) {
 		tools := handler.ListTools()
-		if len(tools) != 30 {
-			t.Errorf("expected 30 registered tools, got %d", len(tools))
-		}
+		require.Len(t, tools, 30, "expected 30 registered tools")
 
 		expectedTools := []string{
 			"db_discover_topology",
@@ -105,9 +237,7 @@ func TestNativeToolHandler_HandleTool(t *testing.T) {
 		}
 
 		for _, expected := range expectedTools {
-			if !toolNames[expected] {
-				t.Errorf("expected tool '%s' to be registered", expected)
-			}
+			require.True(t, toolNames[expected], "expected tool '%s' to be registered", expected)
 		}
 	})
 }
@@ -1245,9 +1375,7 @@ func TestIsValidIdentifier(t *testing.T) {
 	for _, id := range validIdentifiers {
 		t.Run("valid_"+id, func(t *testing.T) {
 			t.Parallel()
-			if !isValidIdentifier(id) {
-				t.Errorf("Expected '%s' to be valid identifier", id)
-			}
+			require.True(t, isValidIdentifier(id), "Expected '%s' to be valid identifier", id)
 		})
 	}
 
@@ -1267,9 +1395,7 @@ func TestIsValidIdentifier(t *testing.T) {
 	for _, id := range invalidIdentifiers {
 		t.Run("invalid_"+id, func(t *testing.T) {
 			t.Parallel()
-			if isValidIdentifier(id) {
-				t.Errorf("Expected '%s' to be invalid identifier", id)
-			}
+			require.False(t, isValidIdentifier(id), "Expected '%s' to be invalid identifier", id)
 		})
 	}
 }

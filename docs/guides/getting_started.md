@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-13
-Version: v1.1.0
+Last Updated: 2026-06-15
+Version: v1.1.1
 
 ---
 
@@ -14,8 +14,8 @@ Version: v1.1.0
 
 g8e is a zero-trust execution platform for agentic infrastructure. It consists of two components:
 
-- **g8e Gateway** — the central Policy Decision Point (PDP): PKI authority, state store, pub/sub broker, admission APIs.
-- **g8e Operator** — the host-side Policy Execution Point (PEP): outbound-only mTLS tunnel to the gateway, local audit vault, MCP server.
+- **g8e Gateway**, the central Policy Decision Point (PDP): PKI authority, state store, pub/sub broker, admission APIs.
+- **g8e Operator**, the host-side Policy Execution Point (PEP): outbound-only mTLS tunnel to the gateway, local audit vault, MCP server.
 
 Both roles are served by the same `g8e` binary. The mode is set via the command-line subcommand.
 
@@ -32,16 +32,16 @@ There are two ways to run g8e: **entirely in Docker** (no local toolchain requir
 | Docker | 24.0+ |
 | Docker Compose | v2 (included in Docker Desktop 4.x and Docker Engine 24.0+) |
 
-Everything else — Go compiler, OpenSSL, Git — runs inside the container. No local toolchain is needed to build or run the gateway with Docker.
+Everything, including the Go compiler, OpenSSL, and Git, runs inside the container. No local toolchain is needed to build or run the gateway with Docker.
 
 ### Local path (build and run natively)
 
 | Requirement | Notes |
 |---|---|
-| Go | 1.26.4 — required to build from source |
-| Git | Any recent version — required for the audit vault's Git-backed ledger |
-| OpenSSL | Any recent version — required for PKI operations at runtime |
-| Python | 3.11+ — optional, required only for demo environments and protocol library development |
+| Go | 1.26.4, required to build from source |
+| Git | Any recent version, required for the audit vault's Git-backed ledger |
+| OpenSSL | Any recent version, required for PKI operations at runtime |
+| Python | 3.11+, optional, required only for demo environments and protocol library development |
 
 ---
 
@@ -156,7 +156,7 @@ View logs in real time:
 
 ### Run the gateway in Docker
 
-Requires Docker 24.0+. No local binary needed — the Docker image builds and bundles the binary.
+Requires Docker 24.0+. No local binary needed; the Docker image builds and bundles the binary.
 
 Build the gateway image:
 
@@ -229,9 +229,35 @@ See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enr
 
 The root `docker-compose.yml` configures a Dockerized g8e Operator that dials out to a gateway running on the host machine (or a remote IP). This is useful for testing the operator in an isolated container while the gateway runs locally.
 
-Note: The root `docker-compose.yml` references `Dockerfile.operator` which is not included in the repository. This file must be created separately or use the demo configurations in `demos/healthcare`, `demos/gov`, or `demos/finance` as reference implementations.
-
 The operator connects to the gateway over `host` networking. The gateway must be running and reachable at the specified IP before the operator starts. The `restart: "no"` policy prevents enrollment loops if the gateway is not yet available.
+
+---
+
+## MCP Agent Integration
+
+g8e integrates with popular AI agent binaries (Claude, Cursor, Devin, etc.) to provide governed MCP tool access.
+
+### Launch an agent with governance
+
+Launch an agent with native tools disabled, forcing all I/O through the g8e MCP pipeline:
+
+```bash
+# Launch Claude with L1-L5 governance
+./g8e mcp agent run claude
+
+# Launch Cursor with g8e MCP configuration
+./g8e mcp agent run cursor
+```
+
+### Show agent configurations
+
+Print MCP client configurations for connecting to the g8e Gateway from local coding tools:
+
+```bash
+./g8e mcp agent show claude
+```
+
+The CLI displays configurations for `g8e.local` (mTLS), Direct IP (mTLS), and Stdio Transport. If `g8e.local` resolution fails, the proxy automatically falls back to direct IP access.
 
 ---
 
@@ -239,19 +265,17 @@ The operator connects to the gateway over `host` networking. The gateway must be
 
 The `demos/` directory contains Docker Compose environments for three industry scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), and **Government** (CUI/CMMC). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
 
-Note: The gov and finance demo configurations reference `Dockerfile.operator` which is not included in the repository. These demos require the operator Dockerfile to be created separately. The healthcare demo uses a different approach with binary bind-mounts and does not require Dockerfile.operator.
-
 ### What the demos use Docker for
 
 Each demo spins up a full isolated stack via Docker Compose:
 
-- **Gateway** — runs in a container on `net_perimeter` and `net_internal`
-- **Operator** — runs in a container on `net_internal` and `net_secure` (outbound-only to gateway)
-- **AI agent runtime** — simulated agent on `net_internal`
-- **Target system** — mock EHR/trading/classified-doc API on `net_secure`
-- **Observability** — log aggregator and audit viewer on `net_mgmt`
+- **Gateway**, runs in a container on `net_perimeter` and `net_internal`
+- **Operator**, runs in a container on `net_internal` and `net_secure` (outbound-only to gateway)
+- **AI agent runtime**, simulated agent on `net_internal`
+- **Target system**, mock EHR/trading/classified-doc API on `net_secure`
+- **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-The healthcare demo uses Alpine images with binary bind-mounts. The gov and finance demos build dedicated gateway and operator images using Dockerfile and Dockerfile.operator respectively.
+The healthcare demo uses Alpine images with binary bind-mounts. The gov and finance demos build dedicated gateway and operator images using the root `Dockerfile`.
 
 Note: The healthcare demo uses the `/api/v1/health` endpoint for health checks, while the gov and finance demos use `/healthz`. Both endpoints are valid for gateway health verification.
 
@@ -358,11 +382,11 @@ After the gateway is running and the CLI is authenticated:
 
 ## Next Steps
 
-- **[Build Gateway](build_gateway.md)** — Full gateway build reference, custom gateway implementations, and CLI flag reference
-- **[Build Operator](build_operator.md)** — Build and deploy a custom g8e Operator
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Enrollment, mTLS configuration, and session management
-- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Integrate application-layer adapters
-- **[Docker Gateway Guide](docker_gateway.md)** — Docker-specific configuration, volumes, and production considerations
-- **[Architecture](../architecture/gateway.md)** — Platform architecture and 5-layer verification sequence
-- **[MCP Protocol](../protocols/mcp/mcp.md)** — Connect AI clients via Model Context Protocol
-- **[A2A Protocol](../protocols/a2a/a2a.md)** — Agent-to-agent communication patterns
+- **[Build Gateway](build_gateway.md)**, Full gateway build reference, custom gateway implementations, and CLI flag reference
+- **[Build Operator](build_operator.md)**, Build and deploy a custom g8e Operator
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)**, Enrollment, mTLS configuration, and session management
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)**, Integrate application-layer adapters
+- **[Docker Gateway Guide](docker_gateway.md)**, Docker-specific configuration, volumes, and production considerations
+- **[Architecture](../architecture/gateway.md)**, Platform architecture and 5-layer verification sequence
+- **[MCP Protocol](../protocols/mcp/mcp.md)**, Connect AI clients via Model Context Protocol
+- **[A2A Protocol](../protocols/a2a/a2a.md)**, Agent-to-agent communication patterns

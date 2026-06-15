@@ -15,13 +15,24 @@ package gateway
 
 import (
 	"bytes"
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -60,9 +71,9 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	dbDir := tempDir(t)
-	pkiDir := tempDir(t)
-	secretsDir := tempDir(t)
+	dbDir := t.TempDir()
+	pkiDir := t.TempDir()
+	secretsDir := t.TempDir()
 
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
 	require.NoError(t, err, "failed to open gateway DB service")
@@ -74,14 +85,14 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	backend, err := keystore.NewTestBackend()
 	require.NoError(t, err, "failed to create test keystore backend")
 
-	ks, err := keystore.NewWithBackend(tempDir(t), logger, backend)
+	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
 	require.NoError(t, err, "failed to create keystore")
 	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
 	require.NoError(t, ks.EnforcePermissions(), "failed to enforce keystore permissions")
 
 	sm := &SecretManager{
 		db:         db.db,
-		secretsDir: tempDir(t),
+		secretsDir: t.TempDir(),
 		logger:     logger,
 		keystore:   ks,
 	}
@@ -97,7 +108,13 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 		t.Fatalf("Failed to initialize script templates: %v", err)
 	}
 
-	controller := newPKIController(cfg, logger, db, pki, appEnrollment, nil, resp)
+	// Create minimal registration service for tests that need it
+	userSvc := NewUserService(db, logger)
+	cliSessionSvc := NewCLISessionService(db, logger)
+	operatorSessionSvc := NewOperatorSessionService(db, logger)
+	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
+
+	controller := newPKIController(cfg, logger, db, pki, appEnrollment, reg, resp)
 	return controller, cfg, db
 }
 
@@ -127,6 +144,28 @@ func runHTTPTest(t *testing.T, tc httpTestCase, handler func(*httptest.ResponseR
 	if tc.validateResp != nil {
 		tc.validateResp(t, rr)
 	}
+}
+
+// makeTestSpiffeCert returns a self-signed cert with a SPIFFE URI SAN so that
+// ExtractUserIDFromCert succeeds with the given userID.
+func makeTestSpiffeCert(t *testing.T, userID string) *x509.Certificate {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	spiffeURI, err := url.Parse("spiffe://g8e.local/cli/" + userID + "/cli-session-test")
+	require.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test-cert"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		URIs:         []*url.URL{spiffeURI},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err)
+	return cert
 }
 
 func TestPKIController_HandlePKIHubBundle(t *testing.T) {
@@ -533,6 +572,45 @@ func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
 	assert.Contains(t, script, "g8e auth login")
 }
 
+func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
+	tests := []httpTestCase{
+		{
+			name:           "Failure - POST method not allowed",
+			method:         http.MethodPost,
+			expectedStatus: http.StatusMethodNotAllowed,
+			expectedBody:   `{"error":"method not allowed"}`,
+		},
+		{
+			name:           "Success - GET returns Windows script",
+			method:         http.MethodGet,
+			expectedStatus: http.StatusOK,
+			validateResp: func(t *testing.T, rr *httptest.ResponseRecorder) {
+				assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
+				assert.NotEmpty(t, rr.Body.Bytes())
+				script := rr.Body.String()
+				assert.Contains(t, script, "CA bundle installed")
+				assert.Contains(t, script, "Download g8e Node")
+				assert.Contains(t, script, "security pki enroll")
+				assert.Contains(t, script, "Enrollment complete")
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
+				c, _, _ := setupTestPKIController(t)
+				if tc.setup != nil {
+					tc.setup(t, c, nil)
+				}
+				c.handleTrustScriptWindowsAlias(rr, req)
+			})
+		})
+	}
+}
+
 func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
@@ -590,6 +668,293 @@ func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, rr.Code)
 		})
 	}
+}
+
+func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Failure - POST method not allowed", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/g8e-operator.sh", nil)
+		rr := httptest.NewRecorder()
+		c.handleDeployScriptLinux(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Success - GET returns Linux deploy script with GATEWAY_HOST", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/g8e-operator.sh", nil)
+		req.Host = "test.example.com"
+		rr := httptest.NewRecorder()
+		c.handleDeployScriptLinux(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "application/x-sh", rr.Header().Get("Content-Type"))
+		assert.NotEmpty(t, rr.Body.Bytes())
+		script := rr.Body.String()
+		assert.Contains(t, script, "GATEWAY_HOST")
+		assert.Contains(t, script, "test.example.com")
+	})
+}
+
+func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Failure - POST method not allowed", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/g8e-operator.ps1", nil)
+		rr := httptest.NewRecorder()
+		c.handleDeployScriptWindows(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Success - GET with X-Forwarded-Host uses external host", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/g8e-operator.ps1", nil)
+		req.Header.Set("X-Forwarded-Host", "external.host")
+		rr := httptest.NewRecorder()
+		c.handleDeployScriptWindows(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
+		script := rr.Body.String()
+		assert.Contains(t, script, "external.host")
+	})
+
+	t.Run("Success - GET with localhost uses LocalAddrContextKey IP", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/g8e-operator.ps1", nil)
+		req.Host = "localhost:8080"
+		// Set LocalAddrContextKey to simulate a non-loopback server address
+		localAddr := &net.TCPAddr{IP: net.ParseIP("10.0.0.1"), Port: 8080}
+		ctx := context.WithValue(req.Context(), http.LocalAddrContextKey, localAddr)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		c.handleDeployScriptWindows(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
+		script := rr.Body.String()
+		assert.Contains(t, script, "10.0.0.1")
+	})
+}
+
+func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Failure - GET method not allowed", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/pki/apps/enroll", nil)
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsEnroll(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - app enrollment service not available", func(t *testing.T) {
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		db := &CanonicalDBService{}
+		pki := &PKIAuthority{}
+		resp := response.NewWriter(logger)
+
+		// Initialize script templates
+		if err := scripts.Init(logger); err != nil {
+			t.Fatalf("Failed to initialize script templates: %v", err)
+		}
+
+		controller := newPKIController(cfg, logger, db, pki, nil, nil, resp)
+
+		validPayload := map[string]string{
+			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
+			"app_name": "test-app",
+			"app_type": "mcp-client",
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader(mustMarshalJSON(t, validPayload)))
+		rr := httptest.NewRecorder()
+		controller.handlePKIAppsEnroll(rr, req)
+		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
+		assert.JSONEq(t, `{"error":"pki: app enrollment service not available"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - malformed JSON", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader([]byte("invalid json")))
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsEnroll(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "pki: unmarshal app enrollment request")
+	})
+
+	t.Run("Success - valid CSR request", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		validPayload := map[string]string{
+			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
+			"app_name": "test-app",
+			"app_type": "mcp-client",
+		}
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/enroll", bytes.NewReader(mustMarshalJSON(t, validPayload)))
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsEnroll(rr, req)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+		var resp AppEnrollResponse
+		err := json.Unmarshal(rr.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		assert.True(t, resp.Success)
+		assert.NotEmpty(t, resp.AppCert)
+		assert.NotEmpty(t, resp.CertChain)
+		assert.NotEmpty(t, resp.AppID)
+	})
+}
+
+func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Failure - GET method not allowed", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/pki/devices/enroll", nil)
+		rr := httptest.NewRecorder()
+		c.handlePKIDevicesEnroll(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - no TLS", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", nil)
+		rr := httptest.NewRecorder()
+		c.handlePKIDevicesEnroll(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
+	})
+
+	t.Run("Failure - empty peer certificates", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", nil)
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{}}
+		rr := httptest.NewRecorder()
+		c.handlePKIDevicesEnroll(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
+	})
+
+	t.Run("Failure - invalid JSON body", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", bytes.NewReader([]byte("{invalid")))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
+		rr := httptest.NewRecorder()
+		c.handlePKIDevicesEnroll(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "unmarshal enrollment request")
+	})
+
+	t.Run("Failure - missing CSR", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		payload := map[string]string{}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/devices/enroll", bytes.NewReader(body))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
+		rr := httptest.NewRecorder()
+		c.handlePKIDevicesEnroll(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "csr_pem is required")
+	})
+}
+
+func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Failure - GET method not allowed", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/pki/apps/delegated", nil)
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - no TLS connection", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", nil)
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"pki: mTLS client certificate required"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - empty peer certificates", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", nil)
+		req.TLS = &tls.ConnectionState{}
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"pki: mTLS client certificate required"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - invalid JSON body", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", strings.NewReader("{invalid}"))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "pki: unmarshal delegated credential request")
+	})
+
+	t.Run("Failure - missing CSR", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		body := map[string]string{"app_name": "test-app"}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"pki: csr_pem is required"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - missing app_name", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		body := map[string]string{"csr_pem": testutil.GenerateTestCSRP256(t, "test-app")}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"pki: app_name is required"}`, rr.Body.String())
+	})
+
+	t.Run("Failure - invalid app name (special characters)", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		body := map[string]string{
+			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-app"),
+			"app_name": "invalid@name",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "pki: app_name must contain only alphanumeric characters")
+	})
+
+	t.Run("Failure - invalid CSR PEM format", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		body := map[string]string{
+			"csr_pem":  "not-a-valid-csr",
+			"app_name": "test-app",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/pki/apps/delegated", bytes.NewReader(b))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestSpiffeCert(t, "user-123")}}
+		rr := httptest.NewRecorder()
+		c.handlePKIAppsDelegated(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"pki: invalid CSR PEM format"}`, rr.Body.String())
+	})
 }
 
 func mustMarshalJSON(t *testing.T, v interface{}) []byte {

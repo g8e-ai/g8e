@@ -20,11 +20,20 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestExportActuatorPublicKey(t *testing.T) {
 	// Create a temporary directory for testing
 	tmpDir := t.TempDir()
+
+	// Initialize paths for the test environment
+	if err := constants.InitPathsWithBase(tmpDir); err != nil {
+		t.Fatalf("Failed to initialize paths: %v", err)
+	}
+
+	pkiDir := constants.Paths.Infra.PkiDir
 
 	// Generate a test Ed25519 key pair
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -35,13 +44,13 @@ func TestExportActuatorPublicKey(t *testing.T) {
 	keyID := hex.EncodeToString(pubKey)
 
 	// Call exportActuatorPublicKey with nil logger (logging is optional)
-	err = exportActuatorPublicKey(tmpDir, pubKey, keyID, nil)
+	err = exportActuatorPublicKey(pkiDir, pubKey, keyID, nil)
 	if err != nil {
 		t.Fatalf("exportActuatorPublicKey failed: %v", err)
 	}
 
 	// Verify PEM file exists and contains the correct key
-	pemPath := filepath.Join(tmpDir, "Actuator_pub.pem")
+	pemPath := filepath.Join(pkiDir, constants.ActuatorPubPEMFilename)
 	pemData, err := os.ReadFile(pemPath)
 	if err != nil {
 		t.Fatalf("Failed to read PEM file: %v", err)
@@ -58,7 +67,7 @@ func TestExportActuatorPublicKey(t *testing.T) {
 	}
 
 	// Verify JSON file exists and contains the correct data
-	jsonPath := filepath.Join(tmpDir, ".g8e", "pki", "Actuator_pub.json")
+	jsonPath := filepath.Join(pkiDir, constants.ActuatorPubJSONFilename)
 	jsonData, err := os.ReadFile(jsonPath)
 	if err != nil {
 		t.Fatalf("Failed to read JSON file: %v", err)
@@ -119,12 +128,12 @@ func TestExportActuatorPublicKeyCreatesDirectory(t *testing.T) {
 	}
 
 	// Verify files were created in the new directory
-	pemPath := filepath.Join(subDir, "Actuator_pub.pem")
+	pemPath := filepath.Join(subDir, constants.ActuatorPubPEMFilename)
 	if _, err := os.Stat(pemPath); err != nil {
 		t.Errorf("PEM file not created in new directory: %v", err)
 	}
 	// Also verify the JSON file was created at the nested path
-	jsonPath := filepath.Join(subDir, ".g8e", "pki", "Actuator_pub.json")
+	jsonPath := filepath.Join(subDir, constants.ActuatorPubJSONFilename)
 	if _, err := os.Stat(jsonPath); err != nil {
 		t.Errorf("JSON file not created in nested directory: %v", err)
 	}

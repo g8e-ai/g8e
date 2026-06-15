@@ -115,12 +115,14 @@ func TestRegisterNativeTools_DuplicateRegistration(t *testing.T) {
 }
 
 func TestRegisterNativeTools_NilRegistry(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("Expected panic when registering to nil registry, but did not panic")
-		}
-	}()
-	mcp.RegisterNativeTools(nil)
+	err := mcp.RegisterNativeTools(nil)
+	if err == nil {
+		t.Fatal("Expected error when registering to nil registry, got nil")
+	}
+	expectedError := "cannot register to nil registry"
+	if !containsSubstring(err.Error(), expectedError) {
+		t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
+	}
 }
 
 func TestRegisterNativeTools_ToolNameConsistency(t *testing.T) {

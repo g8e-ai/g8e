@@ -15,6 +15,9 @@ package pubsub
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"runtime"
@@ -24,8 +27,11 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -33,9 +39,10 @@ import (
 // building heartbeat payloads, handling inbound heartbeat requests,
 // sending automatic heartbeats, and managing the periodic scheduler.
 type HeartbeatService struct {
-	config  *config.Config
-	logger  *slog.Logger
-	results ResultsPublisher
+	config   *config.Config
+	logger   *slog.Logger
+	results  ResultsPublisher
+	actuator *governance.L5Actuator
 
 	ctx    context.Context
 	mu     sync.Mutex
@@ -51,6 +58,11 @@ func NewHeartbeatService(cfg *config.Config, logger *slog.Logger, wg *sync.WaitG
 		logger: logger,
 		wg:     wg,
 	}
+}
+
+// SetActuator sets the L5Actuator for the HeartbeatService.
+func (hs *HeartbeatService) SetActuator(actuator *governance.L5Actuator) {
+	hs.actuator = actuator
 }
 
 // SetResultsPublisher sets the results publisher for the HeartbeatService.
@@ -253,6 +265,11 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 	return p
 }
 
+// Publish publishes a heartbeat to the results publisher.
+func (hs *HeartbeatService) Publish(ctx context.Context, heartbeat *operatorv1.HeartbeatResult) error {
+	return hs.results.PublishHeartbeat(ctx, heartbeat)
+}
+
 // HandleRequest processes an inbound heartbeat request message.
 func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoReq operatorv1.HeartbeatRequested
@@ -288,19 +305,41 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg *PubSubComman
 func (hs *HeartbeatService) SendAutomatic() {
 	hs.logger.Info("[HEARTBEAT] Sending automatic heartbeat")
 	heartbeat := hs.Build(models.HeartbeatTypeAutomatic)
-	if hs.results != nil {
-		protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
-		if err := hs.results.PublishHeartbeat(hs.ctx, protoHeartbeat); err != nil {
-			hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", string(constants.ConnectionStateError), err)
-		} else {
-			hs.logger.Info("[HEARTBEAT] Automatic heartbeat sent successfully")
+
+	data, err := json.Marshal(heartbeat)
+	if err != nil {
+		hs.logger.Error("[HEARTBEAT] Failed to marshal heartbeat", "error", err)
+		return
+	}
+
+	hash := sha256.Sum256(data)
+	hashStr := hex.EncodeToString(hash[:])
+
+	env := &govpkg.GovernanceEnvelope{
+		Id:              uuid.New().String(),
+		TransactionHash: hashStr,
+		ActionType:      string(constants.ActionTypeHeartbeat),
+		Payload:         data,
+	}
+
+	vt := &governance.VerifiedTransaction{
+		Envelope:   env,
+		ActionType: constants.ActionTypeHeartbeat,
+	}
+
+	cmdMsg := &PubSubCommandMessage{
+		ID:        env.Id,
+		Payload:   data,
+		EventType: constants.Event.Operator.Heartbeat,
+	}
+
+	if hs.actuator != nil {
+		_, err := hs.actuator.Execute(hs.ctx, vt, cmdMsg)
+		if err != nil {
+			hs.logger.Error("[HEARTBEAT] Actuator execution failed", "error", err)
 		}
 	} else {
-		if hs.config.Gateway.Enabled {
-			hs.logger.Debug("[HEARTBEAT] Results publisher not set, skipping automatic heartbeat in gateway mode")
-		} else {
-			hs.logger.Warn("[HEARTBEAT] Results publisher not set, cannot send automatic heartbeat")
-		}
+		hs.logger.Warn("[HEARTBEAT] Actuator service not set, skipping receipted heartbeat dispatch")
 	}
 }
 

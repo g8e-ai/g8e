@@ -22,7 +22,19 @@ import (
 )
 
 // NetDNSResolveTool performs DNS resolution similar to dig/nslookup for network debugging.
-type NetDNSResolveTool struct{}
+type NetDNSResolveTool struct {
+	// resolver is used for DNS lookups. If nil, a default resolver is used.
+	// This is primarily for testing.
+	resolver dnsResolver
+}
+
+type dnsResolver interface {
+	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
+	LookupMX(ctx context.Context, name string) ([]*net.MX, error)
+	LookupTXT(ctx context.Context, name string) ([]string, error)
+	LookupCNAME(ctx context.Context, name string) (string, error)
+	LookupNS(ctx context.Context, name string) ([]*net.NS, error)
+}
 
 // Name returns the tool identifier.
 func (t *NetDNSResolveTool) Name() string {
@@ -69,17 +81,18 @@ func (t *NetDNSResolveTool) Execute(ctx context.Context, args json.RawMessage) (
 		recordType = "A"
 	}
 
-	resolver := &net.Resolver{
-		PreferGo: true,
-	}
-	if deadline, ok := ctx.Deadline(); ok {
-		resolver = &net.Resolver{
+	resolver := t.resolver
+	if resolver == nil {
+		netResolver := &net.Resolver{
 			PreferGo: true,
-			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+		}
+		if deadline, ok := ctx.Deadline(); ok {
+			netResolver.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
 				d := net.Dialer{Timeout: time.Until(deadline)}
 				return d.DialContext(ctx, network, address)
-			},
+			}
 		}
+		resolver = netResolver
 	}
 
 	var result NetDNSResolveResult
@@ -125,7 +138,7 @@ func (t *NetDNSResolveTool) Execute(ctx context.Context, args json.RawMessage) (
 	}, nil
 }
 
-func resolveA(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
+func resolveA(resolver dnsResolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	ips, err := resolver.LookupIPAddr(ctx, hostname)
 	if err != nil {
 		return NetDNSResolveResult{}, err
@@ -146,7 +159,7 @@ func resolveA(resolver *net.Resolver, ctx context.Context, hostname string) (Net
 	}, nil
 }
 
-func resolveAAAA(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
+func resolveAAAA(resolver dnsResolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	ips, err := resolver.LookupIPAddr(ctx, hostname)
 	if err != nil {
 		return NetDNSResolveResult{}, err
@@ -167,7 +180,7 @@ func resolveAAAA(resolver *net.Resolver, ctx context.Context, hostname string) (
 	}, nil
 }
 
-func resolveMX(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
+func resolveMX(resolver dnsResolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	records, err := resolver.LookupMX(ctx, hostname)
 	if err != nil {
 		return NetDNSResolveResult{}, err
@@ -189,7 +202,7 @@ func resolveMX(resolver *net.Resolver, ctx context.Context, hostname string) (Ne
 	}, nil
 }
 
-func resolveTXT(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
+func resolveTXT(resolver dnsResolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	records, err := resolver.LookupTXT(ctx, hostname)
 	if err != nil {
 		return NetDNSResolveResult{}, err
@@ -203,7 +216,7 @@ func resolveTXT(resolver *net.Resolver, ctx context.Context, hostname string) (N
 	}, nil
 }
 
-func resolveCNAME(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
+func resolveCNAME(resolver dnsResolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	cname, err := resolver.LookupCNAME(ctx, hostname)
 	if err != nil {
 		return NetDNSResolveResult{}, err
@@ -217,7 +230,7 @@ func resolveCNAME(resolver *net.Resolver, ctx context.Context, hostname string) 
 	}, nil
 }
 
-func resolveNS(resolver *net.Resolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
+func resolveNS(resolver dnsResolver, ctx context.Context, hostname string) (NetDNSResolveResult, error) {
 	records, err := resolver.LookupNS(ctx, hostname)
 	if err != nil {
 		return NetDNSResolveResult{}, err

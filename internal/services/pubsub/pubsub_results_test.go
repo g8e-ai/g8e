@@ -15,7 +15,6 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -26,6 +25,7 @@ import (
 	pb "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -38,8 +38,11 @@ func requireLastPublishedUniversal(t *testing.T, db *MockOperatorPubSubClient) [
 
 func mustUnmarshalGovernanceEnvelope(t *testing.T, data []byte) *commonv1.GovernanceEnvelope {
 	t.Helper()
+	// Decode using protojson — the canonical wire codec the publisher uses
+	// (protojson.Marshal). encoding/json cannot parse protojson output
+	// (RFC3339 timestamps, camelCase proto field names).
 	var env commonv1.GovernanceEnvelope
-	err := json.Unmarshal(data, &env)
+	err := protojson.Unmarshal(data, &env)
 	require.NoError(t, err, "failed to unmarshal GovernanceEnvelope")
 	return &env
 }

@@ -20,8 +20,24 @@ import (
 	"os/exec"
 )
 
+// commandExecutor defines the interface for executing commands.
+// This allows for dependency injection in tests.
+type commandExecutor interface {
+	CombinedOutput(name string, args ...string) ([]byte, error)
+}
+
+// realCommandExecutor wraps os/exec.Command for production use.
+type realCommandExecutor struct{}
+
+func (r *realCommandExecutor) CombinedOutput(name string, args ...string) ([]byte, error) {
+	cmd := exec.Command(name, args...)
+	return cmd.CombinedOutput()
+}
+
 // SysContainerStatusTool checks container health status (podman).
-type SysContainerStatusTool struct{}
+type SysContainerStatusTool struct {
+	executor commandExecutor
+}
 
 // Name returns the tool identifier.
 func (t *SysContainerStatusTool) Name() string {
@@ -60,7 +76,13 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 		return CallToolResult{}, fmt.Errorf("container_name required")
 	}
 
-	result, err := getContainerStatus(req.ContainerName)
+	// Use real executor if none provided (for production use)
+	executor := t.executor
+	if executor == nil {
+		executor = &realCommandExecutor{}
+	}
+
+	result, err := getContainerStatus(req.ContainerName, executor)
 	if err != nil {
 		return CallToolResult{}, fmt.Errorf("failed to get container status: %w", err)
 	}
@@ -80,11 +102,10 @@ func (t *SysContainerStatusTool) Execute(ctx context.Context, args json.RawMessa
 	}, nil
 }
 
-func getContainerStatus(containerName string) (map[string]interface{}, error) {
-	// containerName is passed as a separate argument to exec.Command to satisfy CodeQL command-injection rule.
+func getContainerStatus(containerName string, executor commandExecutor) (map[string]interface{}, error) {
+	// containerName is passed as a separate argument to executor.CombinedOutput to satisfy CodeQL command-injection rule.
 	// This prevents shell injection by avoiding shell interpretation.
-	cmd := exec.Command("podman", "inspect", containerName)
-	output, err := cmd.CombinedOutput()
+	output, err := executor.CombinedOutput("podman", "inspect", containerName)
 	if err != nil {
 		return map[string]interface{}{
 			"container_name": containerName,

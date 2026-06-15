@@ -253,6 +253,9 @@ func (c *Config) OperatorHTTPURL() string {
 
 // OperatorPublicURL returns the HTTPS port (constants.Ports.OperatorHttps) for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
+	if c.TestPortOverride != 0 {
+		return constants.LocalhostHTTPSURL(c.TestPortOverride)
+	}
 	return constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 }
 

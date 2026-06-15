@@ -16,21 +16,16 @@
 package tests
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // NewLiveOperatorHTTPClient creates an API client configured for mTLS
@@ -72,90 +67,6 @@ func ResolveRepoRootFromTestDir(t require.TestingT) string {
 	require.NotEmpty(t, repoRoot, "go list -m returned empty directory")
 
 	return repoRoot
-}
-
-// EnsureGatewayReady ensures the gateway is running and governance is ready.
-// It polls the health endpoint until governance_ready is true.
-func EnsureGatewayReady(t *testing.T, cliCfg *config.Config) {
-	t.Helper()
-
-	healthURL := fmt.Sprintf("http://127.0.0.1:%d%s", constants.Ports.OperatorHttp, "/api/v1/health")
-	client := &http.Client{Timeout: 5 * time.Second}
-
-	require.Eventually(t, func() bool {
-		resp, err := client.Get(healthURL)
-		if err != nil {
-			return false
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return false
-		}
-
-		var health struct {
-			Status          string `json:"status"`
-			Mode            string `json:"mode"`
-			Version         string `json:"version"`
-			GovernanceReady bool   `json:"governance_ready"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
-			return false
-		}
-
-		return health.GovernanceReady
-	}, 5*time.Second, 500*time.Millisecond, "gateway did not become governance-ready within timeout")
-}
-
-// EnsureAuthLogin ensures the CLI has a fresh session by running './g8e auth login'.
-// This is called automatically by integration tests to bootstrap credentials.
-func EnsureAuthLogin(t *testing.T, repoRoot string) {
-	t.Helper()
-
-	// Build the g8e binary if needed
-	g8ePath := filepath.Join(repoRoot, "g8e")
-	if _, err := os.Stat(g8ePath); os.IsNotExist(err) {
-		// Build the binary
-		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
-		buildCmd.Dir = repoRoot
-		if output, err := buildCmd.CombinedOutput(); err != nil {
-			require.NoError(t, err, "failed to build g8e binary: %s", string(output))
-		}
-	}
-
-	// Check if gateway is already running by examining status output
-	// (gw status always exits 0, so we must parse output rather than checking err)
-	checkCmd := exec.Command(g8ePath, "gw", "status")
-	checkCmd.Dir = repoRoot
-	checkOutput, _ := checkCmd.CombinedOutput()
-	if strings.Contains(string(checkOutput), "STOPPED") {
-		// Gateway not running, start it
-		t.Logf("Gateway not running, starting it...")
-		startCmd := exec.Command(g8ePath, "gw", "start")
-		startCmd.Dir = repoRoot
-		if output, err := startCmd.CombinedOutput(); err != nil {
-			require.NoError(t, err, "failed to start gateway: %s", string(output))
-		}
-		// Wait for gateway to be ready
-		time.Sleep(3 * time.Second)
-	}
-
-	// Skip re-enrollment if credentials are fresh (< 45 min old).
-	// CLI sessions last 1 hour; re-enrolling concurrently from parallel tests
-	// causes rate-limit failures and unnecessary churn.
-	credsPath := filepath.Join(repoRoot, ".g8e", "credentials")
-	if info, err := os.Stat(credsPath); err == nil {
-		if time.Since(info.ModTime()) < 45*time.Minute {
-			t.Logf("Credentials are fresh (%v old), skipping re-enrollment", time.Since(info.ModTime()).Round(time.Second))
-			return
-		}
-	}
-
-	// Run './g8e auth login' with explicit endpoint
-	loginCmd := exec.Command(g8ePath, "auth", "login")
-	loginCmd.Dir = repoRoot
-	if output, err := loginCmd.CombinedOutput(); err != nil {
-		require.NoError(t, err, "failed to run './g8e auth login': %s", string(output))
-	}
 }
 
 // RunCLICommand executes ./g8e commands with proper error handling and output capture.

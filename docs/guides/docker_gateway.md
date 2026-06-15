@@ -1,16 +1,20 @@
 # Docker Gateway Guide
 
-This guide explains how to build and run the g8e Gateway using Docker.
+This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
 ## Quick Start
 
-### Build the Docker Image
+### Build Image
+
+Build the g8e container image from the repository root:
 
 ```bash
 docker build -t g8e-gateway:latest .
 ```
 
-### Run the Container
+### Run Container
+
+Start the gateway in doctrine mode with default port mappings and volume persistence:
 
 ```bash
 docker run -d \
@@ -19,183 +23,135 @@ docker run -d \
   -p 8443:8443 \
   -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  gw start --posture doctrine
+  --doctrine
 ```
 
-### Using Docker Compose
+## Docker Compose Deployment
 
-The root `docker-compose.yml` references a `Dockerfile.operator` that does not exist in the repository. For working Gateway and Operator deployments, use the demo configurations in `demos/`.
+The repository includes a root `docker-compose.yml` that deploys both the Gateway and an Operator for testing purposes. Both services utilize the same `Dockerfile`.
 
-The healthcare demo uses a bind-mount approach where the `g8e` binary is mounted from the repository root:
+### Core Services
+
+- **g8e-gateway**: Provides the persistence layer and governance enforcement.
+- **g8e-operator**: Connects to the gateway to provide execution capabilities.
+
+### Execution
+
+Start the services from the repository root:
 
 ```bash
-# Example: Start the healthcare demo with gateway and operator
-cd demos/healthcare
 docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Stop the services
-docker compose down
 ```
 
-The gov and finance demos attempt to build images using `Dockerfile` for the gateway and reference a non-existent `Dockerfile.operator` for the operator. These configurations require the missing Dockerfile.operator to function correctly.
+### Demo Environments
+
+Functional demo environments are located in the `demos/` directory. These configurations demonstrate multi-network isolation and specialized doctrine enforcement:
+
+- **Healthcare**: FHIR R4 compliance and PHI protection.
+- **Government**: Public sector data residency and access control.
+- **Finance**: High-integrity ledger and audit requirements.
+
+To run a demo:
+
+```bash
+cd demos/healthcare
+docker compose up -d
+```
 
 ## Configuration
 
-### Custom Ports
+### Port Mapping
 
-You can customize the HTTP and HTTPS ports:
+The gateway exposes two primary ports:
+- **8080**: HTTP for bootstrap, MCP, and health checks.
+- **8443**: HTTPS for mTLS API and administrative interface.
 
-**Via Docker command:**
+Custom ports are configured via CLI flags or environment variables:
+
+**CLI Example:**
 ```bash
 docker run -d \
-  --name g8e-gateway \
-  -p 3000:3000 \
-  -p 3443:3443 \
-  -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  gw start --http-port 3000 --https-port 3443
+  --doctrine --http-port 3000 --https-port 3443
 ```
 
-**Via Docker Compose:**
-Edit the `ports` section in your compose file:
+**Compose Example:**
 ```yaml
-ports:
-  - "3000:3000"
-  - "3443:3443"
-command: ["/g8e", "gw", "start", "--http-port", "3000", "--https-port", "3443"]
+services:
+  gateway:
+    ports:
+      - "3000:3000"
+      - "3443:3443"
+    command: ["--doctrine", "--http-port", "3000", "--https-port", "3443"]
 ```
 
-### Volume Mounts
+### Data Persistence
 
-The Dockerfile does not define volumes. Volumes are specified at runtime via Docker run flags or docker-compose.yml:
+The gateway maintains state in `/root/.g8e` within the container. This directory contains:
+- **`data/`**: SQLite database.
+- **`pki/`**: TLS certificates and trust bundles.
+- **`secrets/`**: Platform secret keys.
+- **`vault/`**: Encrypted storage for sensitive materials.
 
-- **`/root/.g8e`**: Runtime state directory (certificates, database, configuration, vault)
-- **`/protocol/constants`**: Protocol constants copied during build (doctrine files, API paths, agents)
+Mount a persistent volume to preserve state across container lifecycles:
 
-The protocol constants are embedded in the image during the build stage and do not require runtime mounting.
+```bash
+docker run -v g8e-data:/root/.g8e g8e-gateway:latest --doctrine
+```
 
-### Health Check
+### Governance Posture
 
-The container includes a health check that queries the `/api/v1/health` endpoint every 30 seconds:
+Specify the security posture at startup using a mutually exclusive flag:
+
+- **`--doctrine`**: L1 enforced; L2/L3 audited.
+- **`--consensus`**: L1/L2 enforced; L3 audited.
+- **`--notary`**: L1/L2/L3 strictly enforced.
+
+## Architecture
+
+### Multi-Stage Build
+
+The `Dockerfile` employs a multi-stage build process:
+
+1. **Build Stage**: Utilizes `golang:1.26` to compile the `g8e` binary from `cmd/operator`.
+2. **Runtime Stage**: Utilizes `debian:bookworm` for the execution environment.
+
+The image includes:
+- The `g8e` binary at `/g8e`.
+- Protocol constants at `/protocol/constants`.
+- Required utilities including `curl`, `wget`, and `ca-certificates`.
+
+### Health Monitoring
+
+The container defines a health check that queries the `/api/v1/health` endpoint:
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' g8e-gateway
 ```
 
-The health check uses wget to verify the gateway HTTP endpoint is responsive. Note that some demo configurations use `/healthz` instead of `/api/v1/health`.
-
-## Architecture
-
-The Dockerfile uses a multi-stage build:
-
-1. **Build Stage**: Uses `golang:1.26-alpine` to compile the binary from `./cmd/operator`
-2. **Runtime Stage**: Uses `gcr.io/distroless/static-debian12` for minimal attack surface
-
-The resulting image contains:
-- The `g8e` binary at `/g8e`
-- Protocol constants at `/protocol/constants`
-- Exposed ports 8080 (HTTP) and 8443 (HTTPS)
-- A health check on `/api/v1/health`
-
-The same binary operates in gateway mode or operator mode depending on the command arguments. The binary is built from `cmd/operator` and supports both modes through CLI flags.
-
 ## Troubleshooting
 
-### View Logs
+### Log Inspection
 
 ```bash
-# Docker
+# Gateway logs
 docker logs g8e-gateway
 
-# Docker Compose
-docker compose logs -f g8e-gateway
+# Compose logs
+docker compose logs -f
 ```
 
-### Check Gateway Status
+### Service Status
+
+Verify the internal state of the gateway:
 
 ```bash
 docker exec g8e-gateway /g8e gw status
 ```
 
-### Gateway Posture Modes
-
-The gateway supports three security postures:
-
-- **doctrine**: L1 enforced, L2/L3 audited (default)
-- **consensus**: L1/L2 enforced, L3 audited
-- **notary**: L1/L2/L3 strictly enforced
-
-Specify the posture at startup:
-```bash
-docker run -d \
-  --name g8e-gateway \
-  -p 8080:8080 \
-  -p 8443:8443 \
-  -v g8e-data:/root/.g8e \
-  g8e-gateway:latest \
-  gw start --posture consensus
-```
-
-### Stop the Gateway
-
-```bash
-# Docker
-docker stop g8e-gateway
-docker rm g8e-gateway
-
-# Docker Compose
-docker compose down
-```
-
-### Rebuild After Code Changes
-
-```bash
-docker compose build --no-cache
-docker compose up -d
-```
-
 ## Production Considerations
 
-- **Security**: The image uses distroless for minimal attack surface
-- **Resource Limits**: Adjust CPU/memory limits in docker-compose.yml as needed
-- **Persistence**: Use named volumes for `.g8e` data to persist across container restarts
-- **Certificates**: The gateway generates certificates on first run. Use `--cert-mode full` for production deployments with proper hostnames
-- **Networking**: Consider using a reverse proxy (nginx, traefik) for production deployments
-- **Vault**: Ensure the vault is initialized and unlocked before starting the gateway in production
-- **Port Consolidation**: The gateway uses a 2-port model (8080 for HTTP, 8443 for HTTPS) as of v1.0.10
-
-## Advanced Usage
-
-### Gateway Configuration File
-
-For complex deployments, use a configuration file:
-
-```bash
-docker run -d \
-  --name g8e-gateway \
-  -p 8080:8080 \
-  -p 8443:8443 \
-  -v g8e-data:/root/.g8e \
-  -v ./config/gateway.yml:/etc/g8e/gateway.yml:ro \
-  g8e-gateway:latest \
-  gw start --config /etc/g8e/gateway.yml
-```
-
-### Additional Flags
-
-The gateway supports additional configuration flags:
-
-- `--data-dir`: Data directory for SQLite database
-- `--pki-dir`: Directory for TLS certificates
-- `--secrets-dir`: Directory for platform secrets
-- `--vault-dir`: Directory for encrypted vault
-- `--passkey-rp-id`: RP ID for passkey operations
-- `--passkey-rp-name`: RP Name for passkey operations
-- `--cert-mode`: Certificate mode (full or localhost)
-- `--rate-limit-rps`: Requests per second limit
-- `--rate-limit-burst`: Rate limit burst size
-
-Refer to `docs/guides/build_gateway.md` for complete flag documentation.
+- **Base Image**: The image uses Debian Bookworm. Maintain regular updates to the base image for security patches.
+- **Resource Constraints**: Define CPU and memory limits in production compose files to prevent resource exhaustion.
+- **Vault Management**: The vault must be initialized for production operations. Use `G8E_VAULT_REQUIRE_UNLOCK=true` to ensure the gateway only starts when the vault is available.
+- **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.

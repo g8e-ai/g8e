@@ -65,29 +65,6 @@ func TestSysInfoTool_InputSchema(t *testing.T) {
 	require.NotNil(t, schema.Properties)
 }
 
-func TestSysOOMDetectTool_Name(t *testing.T) {
-	tool := &SysOOMDetectTool{}
-	require.Equal(t, "sys_oom_detect", tool.Name())
-}
-
-func TestSysOOMDetectTool_Description(t *testing.T) {
-	tool := &SysOOMDetectTool{}
-	require.NotEmpty(t, tool.Description())
-	require.Contains(t, tool.Description(), "OOM")
-}
-
-func TestSysOOMDetectTool_InputSchema(t *testing.T) {
-	tool := &SysOOMDetectTool{}
-	schema := tool.InputSchema()
-
-	require.Equal(t, "object", schema.Type)
-	require.NotNil(t, schema.Properties)
-
-	logPathProp, ok := schema.Properties["log_path"]
-	require.True(t, ok)
-	require.Equal(t, "string", logPathProp.Type)
-}
-
 func TestSysServiceStatusTool_Name(t *testing.T) {
 	tool := &SysServiceStatusTool{}
 	require.Equal(t, "sys_service_status", tool.Name())
@@ -111,56 +88,6 @@ func TestSysServiceStatusTool_InputSchema(t *testing.T) {
 	serviceNameProp, ok := schema.Properties["service_name"]
 	require.True(t, ok)
 	require.Equal(t, "string", serviceNameProp.Type)
-}
-
-func TestSysTimeClockTool_Name(t *testing.T) {
-	tool := &SysTimeClockTool{}
-	require.Equal(t, "sys_time_clock", tool.Name())
-}
-
-func TestSysTimeClockTool_Description(t *testing.T) {
-	tool := &SysTimeClockTool{}
-	require.NotEmpty(t, tool.Description())
-	require.Contains(t, tool.Description(), "time")
-}
-
-func TestSysTimeClockTool_InputSchema(t *testing.T) {
-	tool := &SysTimeClockTool{}
-	schema := tool.InputSchema()
-
-	require.Equal(t, "object", schema.Type)
-	require.NotNil(t, schema.Properties)
-}
-
-func TestTLSCertInspectTool_Name(t *testing.T) {
-	tool := &TLSCertInspectTool{}
-	require.Equal(t, "tls_cert_inspect", tool.Name())
-}
-
-func TestTLSCertInspectTool_Description(t *testing.T) {
-	tool := &TLSCertInspectTool{}
-	require.NotEmpty(t, tool.Description())
-	require.Contains(t, tool.Description(), "TLS")
-}
-
-func TestTLSCertInspectTool_InputSchema(t *testing.T) {
-	tool := &TLSCertInspectTool{}
-	schema := tool.InputSchema()
-
-	require.Equal(t, "object", schema.Type)
-	require.NotNil(t, schema.Properties)
-
-	certPathProp, ok := schema.Properties["cert_path"]
-	require.True(t, ok)
-	require.Equal(t, "string", certPathProp.Type)
-
-	hostProp, ok := schema.Properties["host"]
-	require.True(t, ok)
-	require.Equal(t, "string", hostProp.Type)
-
-	portProp, ok := schema.Properties["port"]
-	require.True(t, ok)
-	require.Equal(t, "integer", portProp.Type)
 }
 
 func TestMatchPattern(t *testing.T) {

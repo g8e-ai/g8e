@@ -172,6 +172,7 @@ func TestStreamToHost_Success(t *testing.T) {
 		binaryData,
 		"", // no args
 		sshConfigPath,
+		khPath,
 		2*time.Second,
 		"", // no agent
 		"testuser",
@@ -201,6 +202,7 @@ func TestStreamToHost_ContextCancelled(t *testing.T) {
 		ctx,
 		"127.0.0.1",
 		[]byte("data"),
+		"",
 		"",
 		"",
 		2*time.Second,
@@ -255,6 +257,7 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 		[]byte("data"),
 		"",
 		sshConfigPath,
+		khPath,
 		500*time.Millisecond,
 		"",
 		"user",
@@ -415,4 +418,80 @@ func TestResolveHost_ProxyCommand(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ssh -W %h:%p jump@bastion", r.ProxyCommand)
 	assert.Equal(t, "proxyuser", r.User)
+}
+
+// ---------------------------------------------------------------------------
+// preFlightCheck
+// ---------------------------------------------------------------------------
+
+func TestPreFlightCheck_ContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Need to provide a valid key to get past auth method check
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "id_rsa")
+	generateTestSSHKey(t, keyPath)
+
+	// Create a known_hosts file to satisfy strict host-key checking
+	khPath := filepath.Join(dir, "known_hosts")
+	require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
+
+	r := ssh.HostConfig{
+		Hostname: "127.0.0.1",
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{keyPath},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", khPath, 5*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
+}
+
+func TestPreFlightCheck_NoAuthMethods(t *testing.T) {
+	ctx := context.Background()
+	r := ssh.HostConfig{
+		Hostname: "127.0.0.1",
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", "", 5*time.Second)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no SSH auth methods available")
+}
+
+func TestPreFlightCheck_InvalidKeyFile(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	badKey := filepath.Join(dir, "bad_key")
+	require.NoError(t, os.WriteFile(badKey, []byte("not a valid key"), 0600))
+
+	r := ssh.HostConfig{
+		Hostname: "127.0.0.1",
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{badKey},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", "", 5*time.Second)
+	assert.Error(t, err)
+}
+
+func TestPreFlightCheck_DialTimeout(t *testing.T) {
+	ctx := context.Background()
+
+	// Use a non-routable IP to trigger timeout
+	r := ssh.HostConfig{
+		Hostname: "192.0.2.1", // TEST-NET-1, guaranteed non-routable
+		Port:     "22",
+		User:     "testuser",
+		KeyFiles: []string{},
+	}
+
+	err := preFlightCheck(ctx, r, "", "", "", 100*time.Millisecond)
+	assert.Error(t, err)
+	// Should fail due to no auth methods or dial timeout
 }

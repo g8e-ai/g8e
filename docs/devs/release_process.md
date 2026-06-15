@@ -35,7 +35,7 @@ cat VERSION
 Update the VERSION file with the new version:
 
 ```bash
-echo "v1.0.5" > VERSION
+echo "v1.1.2" > VERSION
 ```
 
 The VERSION file must contain only the version string with a newline (no trailing spaces).
@@ -45,7 +45,7 @@ The VERSION file must contain only the version string with a newline (no trailin
 Add a new section at the top of CHANGELOG.md following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
 
 ```markdown
-## [1.0.5] - YYYY-MM-DD
+## [1.1.2] - YYYY-MM-DD
 
 ### Overview
 
@@ -88,7 +88,7 @@ Add a new section at the top of CHANGELOG.md following the [Keep a Changelog](ht
 Create a new release notes file in `docs/release_notes/`:
 
 ```bash
-touch docs/release_notes/v1.0.5.md
+touch docs/release_notes/v1.1.2.md
 ```
 
 The release notes file should mirror the CHANGELOG entry but can be more detailed. Include:
@@ -101,11 +101,11 @@ The release notes file should mirror the CHANGELOG entry but can be more detaile
 
 **Example structure:**
 ```markdown
-## [1.0.5] - YYYY-MM-DD
+## [1.1.2] - YYYY-MM-DD
 
 ### Overview
 
-v1.0.5 introduces [major feature], adds [another feature], and fixes [critical bug]. This release focuses on [theme].
+v1.1.2 introduces [major feature], adds [another feature], and fixes [critical bug]. This release focuses on [theme].
 
 ### Breaking Changes
 
@@ -141,12 +141,13 @@ If protocol changes are included in this release, update the protocol version:
 
 **Go Protocol:**
 - The protocol module is at `protocol/go.mod` (module: `github.com/g8e-ai/g8e/protocol`)
+- Requires Go 1.26
 - The protocol version follows the platform version but may be released independently
 - No separate version field in go.mod - version is managed via git tags
 
 **Python Protocol:**
 - Update `protocol/python/pyproject.toml` version (line 20: `version = "X.Y.Z"`)
-- The package name is `g8e` (not `g8e_protocol`)
+- The package name is `g8e-protocol` (not `g8e`)
 
 **Note:** Protocol packages are released via GitHub tags with the format `protocol/vX.Y.Z`. These can be released independently of platform releases.
 
@@ -155,20 +156,21 @@ If protocol changes are included in this release, update the protocol version:
 Build the g8e Node and verify it works:
 
 ```bash
-# Build the g8e Node
+# Build the g8e Operator
 make build
 
-# Verify the g8e Node
+# Verify the g8e Operator
 ./g8e --help
 
 # Run tests
 make test
 
-# Run integration tests (if applicable)
+# Run integration tests (Tier 2: In-Memory)
 make test-integration
-```
 
-**Note:** The build command outputs a single g8e Node named `g8e` (not `g8e operator`). The build process embeds version information via ldflags from the VERSION file.
+# Run Docker E2E tests (Tier 3)
+make test-docker
+```
 
 Check that the build includes the correct version:
 ```bash
@@ -182,8 +184,8 @@ Check that the build includes the correct version:
 Commit all release-related changes:
 
 ```bash
-git add VERSION CHANGELOG.md docs/release_notes/v1.0.5.md
-git commit -m "Release v1.0.5"
+git add VERSION CHANGELOG.md docs/release_notes/v1.1.2.md
+git commit -m "Release v1.1.2"
 ```
 
 **Commit message guidelines:**
@@ -203,7 +205,7 @@ cat VERSION
 head -n 50 CHANGELOG.md
 
 # Verify release notes file exists
-ls docs/release_notes/v1.0.5.md
+ls docs/release_notes/v1.1.2.md
 
 # Verify no uncommitted changes
 git status
@@ -224,11 +226,11 @@ Create and push an annotated tag for the release:
 
 ```bash
 # Create annotated tag
-git tag -a v1.0.5 -m "Release v1.0.5"
+git tag -a v1.1.2 -m "Release v1.1.2"
 
 # Push the commit and tag
 git push origin main
-git push origin v1.0.5
+git push origin v1.1.2
 ```
 
 **Tag guidelines:**
@@ -242,17 +244,17 @@ Create a GitHub release via the web interface or GitHub CLI:
 
 **Via GitHub CLI:**
 ```bash
-gh release create v1.0.5 \
-  --title "Release v1.0.5" \
-  --notes-file docs/release_notes/v1.0.5.md
+gh release create v1.1.2 \
+  --title "Release v1.1.2" \
+  --notes-file docs/release_notes/v1.1.2.md
 ```
 
 **Via Web Interface:**
 1. Go to GitHub repository → Releases
 2. Click "Draft a new release"
-3. Tag: Select `v1.0.5`
-4. Title: `Release v1.0.5`
-5. Description: Copy contents from `docs/release_notes/v1.0.5.md`
+3. Tag: Select `v1.1.2`
+4. Title: `Release v1.1.2`
+5. Description: Copy contents from `docs/release_notes/v1.1.2.md`
 6. Attach binaries if distributing via GitHub Releases (optional)
 7. Click "Publish release"
 
@@ -280,8 +282,8 @@ The Go and Python packages must use the same version number. Update the Python v
 # protocol/python/pyproject.toml: version = "X.Y.Z"
 
 # Tag the protocol release
-git tag -a protocol/v1.0.5 -m "Protocol v1.0.5"
-git push origin protocol/v1.0.5
+git tag -a protocol/v1.1.2 -m "Protocol v1.1.2"
+git push origin protocol/v1.1.2
 ```
 
 The tag format `protocol/vX.Y.Z` triggers both release workflows.
@@ -289,7 +291,7 @@ The tag format `protocol/vX.Y.Z` triggers both release workflows.
 #### Automated Workflows
 
 **Go Protocol** (`.github/workflows/release-go-protocol.yml`):
-- Runs tests with Go 1.26
+- Runs tests with Go 1.26.4
 - Creates GitHub release with installation instructions
 - Publishes Go module
 
@@ -306,10 +308,10 @@ After workflows complete, verify both packages:
 
 ```bash
 # Go verification
-go get github.com/g8e-ai/g8e/protocol@v1.0.5
+go get github.com/g8e-ai/g8e/protocol@v1.1.2
 
 # Python verification
-pip install g8e-protocol==1.0.5
+pip install g8e-protocol==1.1.2
 ```
 
 ### 4. Update Documentation
@@ -332,10 +334,10 @@ After the release is published:
 3. **Test Installation**: Verify users can install the new version
   ```bash
   # Test Go protocol installation
-  go get github.com/g8e-ai/g8e/protocol@v1.0.5
+  go get github.com/g8e-ai/g8e/protocol@v1.1.2
 
   # Test Python protocol installation
-  pip install g8e-protocol==1.0.5
+  pip install g8e-protocol==1.1.2
   ```
 4. **Monitor Issues**: Watch for any post-release issues or regressions
 
@@ -354,7 +356,7 @@ For critical security issues or production bugs, follow this expedited process:
 
 1. Create a release branch from the previous release tag:
    ```bash
-   git checkout -b release/v1.0.6 v1.0.5
+   git checkout -b release/v1.1.3 v1.1.2
    ```
 
 2. Apply the minimal fix necessary
@@ -366,12 +368,12 @@ For critical security issues or production bugs, follow this expedited process:
 5. Merge the hotfix back to main:
    ```bash
    git checkout main
-   git merge release/v1.0.6
+   git merge release/v1.1.3
    ```
 
 ## Version Compatibility
 
-- **Platform Version**: Tracked in `VERSION` file (e.g., `v1.0.5`)
+- **Platform Version**: Tracked in `VERSION` file (e.g., `v1.1.2`)
 - **Go Protocol Version**: Managed via git tags (module: `github.com/g8e-ai/g8e/protocol`)
 - **Python Protocol Version**: Tracked in `protocol/python/pyproject.toml` (package: `g8e-protocol`)
 

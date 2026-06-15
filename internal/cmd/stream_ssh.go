@@ -65,7 +65,10 @@ func isTransientError(err error) bool {
 
 // preFlightCheck validates SSH connectivity and authentication before binary transfer.
 // Returns nil if the host is reachable and auth works, error otherwise.
-func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassphrase string, dialTimeout time.Duration) error {
+func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassphrase, knownHostsPath string, dialTimeout time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
 	if err != nil {
 		return fmt.Errorf("preFlightCheck: build auth methods: %w", err)
@@ -74,7 +77,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 		return fmt.Errorf("preFlightCheck: no SSH auth methods available")
 	}
 
-	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback("")
+	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(knownHostsPath)
 	if cbErr != nil {
 		return fmt.Errorf("preFlightCheck: build host key callback: %w", cbErr)
 	}
@@ -197,6 +200,7 @@ func streamToHost(
 	binaryData []byte,
 	operatorArgs string,
 	sshConfigPath string,
+	sshKnownHostsPath string,
 	dialTimeout time.Duration,
 	sshAuthSock string,
 	username string,
@@ -235,7 +239,7 @@ func streamToHost(
 
 	// Pre-flight check if enabled
 	if enablePreFlightCheck {
-		if err := preFlightCheck(ctx, r, sshAuthSock, sshPassphrase, dialTimeout); err != nil {
+		if err := preFlightCheck(ctx, r, sshAuthSock, sshPassphrase, sshKnownHostsPath, dialTimeout); err != nil {
 			emit(constants.StreamStatusFailed, fmt.Sprintf("pre-flight check failed: %v", err))
 			return
 		}
@@ -251,7 +255,7 @@ func streamToHost(
 		return
 	}
 
-	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback("")
+	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(sshKnownHostsPath)
 	if cbErr != nil {
 		emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: build host key callback: %v", cbErr))
 		return

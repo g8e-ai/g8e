@@ -56,6 +56,8 @@ var Paths = struct {
 		PkiTrustDir                 string
 		PkiRevocationDir            string
 		PkiBinariesDir              string
+		ActuatorPubJSONPath         string
+		ActuatorPubPEMPath          string
 	}
 }{
 	Infra: struct {
@@ -91,6 +93,8 @@ var Paths = struct {
 		PkiTrustDir                 string
 		PkiRevocationDir            string
 		PkiBinariesDir              string
+		ActuatorPubJSONPath         string
+		ActuatorPubPEMPath          string
 	}{
 		DbPath:                  ".g8e/data/g8e.db",
 		PkiDir:                  ".g8e/pki",
@@ -121,6 +125,8 @@ var Paths = struct {
 		PkiIssuedGatewayPeerDir: ".g8e/pki/issued/gateway-peer",
 		PkiTrustDir:             ".g8e/pki/trust",
 		PkiRevocationDir:        ".g8e/pki/revocation",
+		ActuatorPubJSONPath:     ".g8e/pki/Actuator_pub.json",
+		ActuatorPubPEMPath:      ".g8e/pki/Actuator_pub.pem",
 	},
 }
 
@@ -172,7 +178,23 @@ func InitPathsWithBase(baseDir string) error {
 	Paths.Infra.PkiIssuedGatewayPeerDir = filepath.Join(Paths.Infra.PkiDir, "issued/gateway-peer")
 	Paths.Infra.PkiTrustDir = filepath.Join(Paths.Infra.PkiDir, "trust")
 	Paths.Infra.PkiRevocationDir = filepath.Join(Paths.Infra.PkiDir, "revocation")
+	Paths.Infra.ActuatorPubJSONPath = filepath.Join(Paths.Infra.PkiDir, ActuatorPubJSONFilename)
+	Paths.Infra.ActuatorPubPEMPath = filepath.Join(Paths.Infra.PkiDir, ActuatorPubPEMFilename)
+
+	// Update hardcoded path constants
+	GatewayIDPath = filepath.Join(Paths.Infra.DataDir, GatewayIDFilename)
+	NetworkIdentityPath = filepath.Join(Paths.Infra.PkiDir, NetworkIdentityFilename)
+	PeerCertPath = filepath.Join(Paths.Infra.PkiDir, PeerSubdir, PeerCertFilename)
+	PeerKeyPath = filepath.Join(Paths.Infra.PkiDir, PeerSubdir, PeerKeyFilename)
+	PeerChainPath = filepath.Join(Paths.Infra.PkiDir, PeerSubdir, PeerChainFilename)
+	PkiGatewayKeyPath = filepath.Join(Paths.Infra.PkiIssuedHubDir, PkiFileGatewayKey)
 	return nil
+}
+
+// GetSuspendedTransactionsDBPath constructs the suspended transaction database path
+// relative to the provided data directory.
+func GetSuspendedTransactionsDBPath(dataDir string) string {
+	return filepath.Join(dataDir, SuspendedTxFilename)
 }
 
 // System path constants for critical system directories and files
@@ -323,8 +345,11 @@ const (
 	PeerKeyFilename   = "peer.key"
 	PeerChainFilename = "peer.chain.pem"
 	PeerSubdir        = "peer"
+)
 
-	// FULL path constants (relative from runtime directory)
+// FULL path constants (relative from runtime directory)
+// These are variables to allow test path overrides via InitPathsWithBase
+var (
 	GatewayIDPath       = ".g8e/data/gateway-id"
 	ActuatorPubJSONPath = ".g8e/pki/Actuator_pub.json"
 	ActuatorPubPEMPath  = ".g8e/pki/Actuator_pub.pem"
@@ -334,9 +359,11 @@ const (
 	PeerChainPath       = ".g8e/pki/peer/peer.chain.pem"
 	PkiGatewayKeyPath   = ".g8e/pki/issued/hub/operator-gateway.key"
 	SwaggerFilePath     = "docs/swagger.json"
-	OperatorLogPath     = ".g8e/logs/operator.log"
+	OperatorLogPath     = "operator.log"
+)
 
-	// Project root discovery constants for test path initialization
+// Project root discovery constants for test path initialization
+const (
 	ProjectRootFromTestDir    = "../../"
 	ProjectRootFromCurrentDir = "."
 

@@ -28,7 +28,14 @@ The platform uses a four-tier PKI hierarchy issued by the g8e Gateway. See [Netw
 
 ### Enrollment & Bootstrap
 
-Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow. See [Network Architecture](./network.md) for detailed enrollment procedures, including CSR-based enrollment and Windows Certificate Store enrollment with TPM-backed keys.
+Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow. For Windows, enrollment utilizes the Windows Certificate Store with TPM-backed keys via Windows Hello for Business. See [Network Architecture](./network.md) for detailed enrollment procedures.
+
+### External IdP Support (JWT)
+
+The platform supports authentication via external Identity Providers (IdPs) for BYO clients on MCP and A2A endpoints.
+- **JWKS Integration**: The gateway validates JWT tokens against configured JWKS endpoints.
+- **JIT Provisioning**: Users are provisioned Just-In-Time (JIT) based on the JWT subject claim upon their first successful authentication, provided an active invitation exists.
+- **Persona Mapping**: JWT roles are mapped to internal binding personas via the `PersonaService` defined in @../../internal/services/gateway/gateway_auth.go:866.
 
 ---
 
@@ -49,10 +56,10 @@ See [Network Architecture](./network.md).
 
 ## 3. 5-Layer Verification Sequence (Interlock)
 
-The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:79-117`.
+The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in @../../protocol/proto/g8e/common/v1/common.proto:79.
 
 ### Layer 1: Technical Bedrock (L1Doctrine)
-*Implementation: `internal/services/governance/l1_doctrine.go:50`*
+*Implementation: @../../internal/services/governance/l1_doctrine.go:50*
 
 L1 is the foundational layer that executes deterministic security rules.
 - **Forbidden Patterns**: Uses Protobuf field options (`forbidden_patterns`) to reject strings matching dangerous regex patterns on typed payload fields.
@@ -61,7 +68,7 @@ L1 is the foundational layer that executes deterministic security rules.
 - **Hard Gates**: Rejects transactions immediately upon violation; cannot be bypassed by L2 or L3.
 
 ### Layer 2: Consensus (L2Consensus)
-*Implementation: `internal/services/governance/l2_consensus.go:45`*
+*Implementation: @../../internal/services/governance/l2_consensus.go:45*
 
 L2 provides multi-agent cryptographic attestation of payload safety.
 - **Payload Hash Verification**: Verifies that `envelope.Id` matches the computed message hash before signing, ensuring the envelope has not been tampered with in transit.
@@ -70,18 +77,18 @@ L2 provides multi-agent cryptographic attestation of payload safety.
 - **Fail-Closed on Missing Doctrine**: If the L1Doctrine reference is absent, L2 evaluates all payloads as unsafe and refuses to sign.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:32`*
+*Implementation: @../../internal/services/governance/l3_notary.go:32*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway suspends transactions requiring L3 approval, storing them in the `suspended_transactions` pool.
 - **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn passkey for web sessions.
 - **Approval Window**: CLI-based approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
 - **Cryptographic Binding**: The CLI proof requires a hex-encoded Ed25519 signature of exactly 64 bytes (`cli_signature`) and, when configured, an mTLS certificate fingerprint (`mtls_cert_fingerprint`) that must match the fingerprint recorded at suspension time.
-- **Passkey Service**: The `PasskeyService` in `internal/services/gateway/passkey_service.go` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
-- **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:52-62`) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
+- **Passkey Service**: The `PasskeyService` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
+- **L3Proof**: A successful approval generates an `L3Proof` (defined in @../../protocol/proto/g8e/common/v1/common.proto:52) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `internal/services/governance/l4_warden.go:393`*
+*Implementation: @../../internal/services/governance/l4_warden.go:393*
 
 The Warden is the final fail-closed gate before execution. It verifies in the following order:
 1. **In-Flight Tracking**: Prevents concurrent processing of transactions with the same nonce via an in-memory `sync.Map` guard.
@@ -91,7 +98,7 @@ The Warden is the final fail-closed gate before execution. It verifies in the fo
 5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification resolves the signer's Ed25519 public key from `SignerStore` by `key_id` and verifies the signature over `{transaction_hash}|{decision}`. L3 proof verification delegates to the configured `L3Notary` implementation.
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:76`*
+*Implementation: @../../internal/services/governance/l5_actuator.go:76*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Fail-Closed Pre-Execution**: Receipt signing and initial audit logging must both succeed before the execution handler is invoked. If either fails, the transaction is aborted.

@@ -36,7 +36,9 @@ volumes:
 
 services:
   gateway:
-    image: alpine:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     container_name: healthcare-gateway
     networks:
       net_perimeter:
@@ -45,7 +47,6 @@ services:
         ipv4_address: 10.22.0.10
     volumes:
       - gateway_state:/root/.g8e
-      - ../../g8e:/usr/local/bin/g8e:ro
       - ./doctrine:/etc/g8e/doctrine:ro
     ports:
       - "8081:8080"
@@ -57,10 +58,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["/usr/local/bin/g8e", "--consensus", "--http-port", "8080", "--https-port", "8443", "--data-dir", "/root/.g8e/data", "--pki-dir", "/root/.g8e/pki", "--secrets-dir", "/root/.g8e/secrets", "--vault-dir", "/root/.g8e/vault", "--log", "debug", "--passkey-rp-id", "localhost", "--passkey-rp-name", "g8e-healthcare", "--cert-mode", "localhost"]
+    command: ["gw", "start", "-f"]
 
   operator:
-    image: alpine:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     container_name: healthcare-operator
     networks:
       net_internal:
@@ -71,7 +74,6 @@ services:
       - "g8e.local:10.22.0.10"
     volumes:
       - operator_state:/root/.g8e
-      - ../../g8e:/usr/local/bin/g8e:ro
     depends_on:
       gateway:
         condition: service_healthy
@@ -82,7 +84,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["/usr/local/bin/g8e", "-e", "10.22.0.10", "--log", "debug"]
+    command: ["-e", "10.22.0.10"]
 
   # HB 3134 (2027 API Mandate): FHIR R4-compliant PA submission endpoint replacing fax-based workflows.
   # Bridges net_internal so the g8e gateway can enforce PHI doctrine on inbound requests.

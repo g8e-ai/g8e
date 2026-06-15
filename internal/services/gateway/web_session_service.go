@@ -85,6 +85,8 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 		return nil, fmt.Errorf("failed to unmarshal web session: %w", err)
 	}
 
+	webSession.ID = webSessionID
+
 	if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
 		return nil, fmt.Errorf("web session expired")
 	}

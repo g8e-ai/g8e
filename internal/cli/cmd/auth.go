@@ -234,13 +234,6 @@ func performStandardLogin(cmd *cobra.Command, cfg *config.Config) error {
 		cmd.Printf("User ID: %s\n", regResp.UserID)
 		cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
 
-		// Require passkey registration for first-time bootstrap
-		cmd.Println("\nInitializing passkey registration...")
-		if err := auth.RegisterPasskeyViaLocalhost(cfg, regResp.UserID, regResp.CLISessionID); err != nil {
-			cmd.Printf("Warning: passkey registration failed: %v\n", err)
-			cmd.Println("You can register a passkey later via the web interface.")
-		}
-
 		return nil
 	}
 

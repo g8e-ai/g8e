@@ -716,7 +716,7 @@ func TestEmitJSON_TsIsRFC3339(t *testing.T) {
 
 func TestRunConcurrentStream_NoHosts(t *testing.T) {
 	ctx := context.Background()
-	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", 10, 5*time.Second, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", "", 10, 5*time.Second, "", "", "", "", "", false)
 	assert.Empty(t, results)
 }
 
@@ -725,7 +725,7 @@ func TestRunConcurrentStream_ContextCancelled(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host1", "host2", "host3"}
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 100*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 10, 100*time.Millisecond, "", "", "", "", "", false)
 
 	assert.Len(t, results, len(hosts))
 	for _, res := range results {
@@ -739,7 +739,7 @@ func TestRunConcurrentStream_AllResultsCollected(t *testing.T) {
 	cancel()
 
 	hosts := []string{"a", "b", "c", "d", "e"}
-	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", 5, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", "", 5, 50*time.Millisecond, "", "", "", "", "", false)
 
 	assert.Len(t, results, len(hosts), "must collect exactly one result per host")
 
@@ -761,7 +761,7 @@ func TestRunConcurrentStream_ConcurrencyLimitRespected(t *testing.T) {
 		hosts[i] = "host"
 	}
 
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 3, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 3, 50*time.Millisecond, "", "", "", "", "", false)
 	assert.Len(t, results, len(hosts))
 }
 
@@ -776,7 +776,7 @@ func TestRunConcurrentStream_EmitsPerHostEventsToStdout(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host-a", "host-b"}
-	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 50*time.Millisecond, "", "", "", "", "", false)
+	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 10, 50*time.Millisecond, "", "", "", "", "", false)
 	w.Close()
 
 	var buf bytes.Buffer
@@ -878,7 +878,7 @@ func TestRunStream_ValidNodeBinaryWithCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", 1, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", "", 1, 50*time.Millisecond, "", "", "", "", "", false)
 	require.Len(t, results, 1)
 	assert.NotEmpty(t, results[0].Error)
 }
@@ -1006,4 +1006,145 @@ func generateTestSSHKey(t *testing.T, path string) {
 		Bytes: x509.MarshalPKCS1PrivateKey(privKey),
 	}
 	require.NoError(t, os.WriteFile(path, pem.EncodeToMemory(pemBlock), 0600))
+}
+
+// ---------------------------------------------------------------------------
+// getDefaultNodeBinaryDir
+// ---------------------------------------------------------------------------
+
+func TestGetDefaultNodeBinaryDir(t *testing.T) {
+	// Test that getDefaultNodeBinaryDir returns a valid path
+	dir := getDefaultNodeBinaryDir()
+	assert.NotEmpty(t, dir, "default binary dir should not be empty")
+	assert.Contains(t, dir, "bin", "default binary dir should contain 'bin'")
+}
+
+// ---------------------------------------------------------------------------
+// boundedBuffer
+// ---------------------------------------------------------------------------
+
+func TestBoundedBuffer_WriteWithinLimit(t *testing.T) {
+	buf := &boundedBuffer{limit: 100}
+	n, err := buf.Write([]byte("hello world"))
+	require.NoError(t, err)
+	assert.Equal(t, 11, n)
+	assert.Equal(t, "hello world", buf.String())
+}
+
+func TestBoundedBuffer_WriteExactlyAtLimit(t *testing.T) {
+	buf := &boundedBuffer{limit: 10}
+	n, err := buf.Write([]byte("0123456789"))
+	require.NoError(t, err)
+	assert.Equal(t, 10, n)
+	assert.Equal(t, "0123456789", buf.String())
+}
+
+func TestBoundedBuffer_WriteExceedsLimit(t *testing.T) {
+	buf := &boundedBuffer{limit: 5}
+	n, err := buf.Write([]byte("0123456789"))
+	require.NoError(t, err)
+	assert.Equal(t, 10, n, "Write should report full length even if truncated")
+	assert.Equal(t, "01234", buf.String(), "buffer should be truncated to limit")
+}
+
+func TestBoundedBuffer_WriteMultipleChunks(t *testing.T) {
+	buf := &boundedBuffer{limit: 10}
+
+	_, err := buf.Write([]byte("hello"))
+	require.NoError(t, err)
+
+	_, err = buf.Write([]byte(" "))
+	require.NoError(t, err)
+
+	_, err = buf.Write([]byte("world"))
+	require.NoError(t, err)
+
+	assert.Equal(t, "hello worl", buf.String(), "should truncate at limit")
+}
+
+func TestBoundedBuffer_ZeroLimit(t *testing.T) {
+	buf := &boundedBuffer{limit: 0}
+	n, err := buf.Write([]byte("anything"))
+	require.NoError(t, err)
+	assert.Equal(t, 8, n)
+	assert.Empty(t, buf.String(), "zero limit should result in empty buffer")
+}
+
+func TestBoundedBuffer_NegativeLimit(t *testing.T) {
+	buf := &boundedBuffer{limit: -1}
+	n, err := buf.Write([]byte("anything"))
+	require.NoError(t, err)
+	assert.Equal(t, 8, n)
+	assert.Empty(t, buf.String(), "negative limit should result in empty buffer")
+}
+
+func TestBoundedBuffer_StringOnEmpty(t *testing.T) {
+	buf := &boundedBuffer{limit: 100}
+	assert.Empty(t, buf.String(), "empty buffer should return empty string")
+}
+
+// ---------------------------------------------------------------------------
+// proxyAddr
+// ---------------------------------------------------------------------------
+
+func TestProxyAddr_Network(t *testing.T) {
+	addr := &proxyAddr{addr: "test:22"}
+	assert.Equal(t, "tcp", addr.Network())
+}
+
+func TestProxyAddr_String(t *testing.T) {
+	addr := &proxyAddr{addr: "proxy.example.com:1080"}
+	assert.Equal(t, "proxy.example.com:1080", addr.String())
+}
+
+func TestProxyAddr_EmptyAddr(t *testing.T) {
+	addr := &proxyAddr{addr: ""}
+	assert.Equal(t, "", addr.String())
+}
+
+// ---------------------------------------------------------------------------
+// Additional edge cases for shellQuote
+// ---------------------------------------------------------------------------
+
+func TestShellQuote_EmptyString(t *testing.T) {
+	assert.Equal(t, "''", shellQuote(""))
+}
+
+func TestShellQuote_MultipleSingleQuotes(t *testing.T) {
+	assert.Equal(t, "'a'\\''b'\\''c'", shellQuote("a'b'c"))
+}
+
+func TestShellQuote_SpecialCharacters(t *testing.T) {
+	assert.Equal(t, "'$VAR'", shellQuote("$VAR"))
+	assert.Equal(t, "'`cmd`'", shellQuote("`cmd`"))
+	assert.Equal(t, "'\\n'", shellQuote("\\n"))
+}
+
+// ---------------------------------------------------------------------------
+// Additional edge cases for humanBytes
+// ---------------------------------------------------------------------------
+
+func TestHumanBytes_VeryLarge(t *testing.T) {
+	// humanBytes only supports up to MB, so 1GB is formatted as 1024.0MB
+	assert.Equal(t, "1024.0MB", humanBytes(1<<30))
+	assert.Equal(t, "2048.0MB", humanBytes(1<<30*2))
+}
+
+func TestHumanBytes_Negative(t *testing.T) {
+	// Negative values should still format (though unusual in practice)
+	assert.Equal(t, "-512B", humanBytes(-512))
+}
+
+// ---------------------------------------------------------------------------
+// Additional edge cases for buildOperatorArgs
+// ---------------------------------------------------------------------------
+
+func TestBuildOperatorArgs_EndpointWithSpaces(t *testing.T) {
+	got := buildOperatorArgs("http://example.com:8080 with spaces", false)
+	assert.Contains(t, got, "'http://example.com:8080 with spaces'")
+}
+
+func TestBuildOperatorArgs_EndpointWithSpecialChars(t *testing.T) {
+	got := buildOperatorArgs("http://user:pass@host:port/path?query=value", false)
+	assert.Contains(t, got, "'http://user:pass@host:port/path?query=value'")
 }

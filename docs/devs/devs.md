@@ -17,9 +17,9 @@ g8e is a zero-trust execution platform for agentic infrastructure. The platform 
 - **BYO clients**: The platform is UI-less by design. The CLI (`./g8e`) is the default interface.
 
 For detailed architecture, see:
-- [docs/architecture/protocol.md](../architecture/protocol.md) - Platform architecture, governance model, and protocol wire format
-- [docs/architecture/gateway.md](../architecture/gateway.md) - Gateway service details
-- [docs/architecture/operator.md](../architecture/operator.md) - Operator service details
+- [g8e Protocol](../architecture/protocol.md) - Platform architecture, governance model, and protocol wire format
+- [g8e Gateway](../architecture/gateway.md) - Gateway service details
+- [g8e Operator](../architecture/operator.md) - Operator service details
 
 ## Getting Started
 
@@ -61,7 +61,7 @@ The platform consists of:
 
 All components run as native Go processes. Runtime state lives in `.g8e/`.
 
-For details, see [docs/architecture/](../architecture/).
+For details, see [Architecture](../architecture/).
 
 ## Build & Runtime
 
@@ -132,7 +132,7 @@ The platform is built via the Makefile. Run `make help` for available targets.
 
 **Wire format:** Canonical JSON (protojson) for all client-facing surfaces
 
-**Governance:** All mutations must pass through the `GovernanceEnvelope` and 5-layer verification gauntlet. See [docs/architecture/protocol.md](../architecture/protocol.md) for detailed layer responsibilities.
+**Governance:** All mutations must pass through the `GovernanceEnvelope` and 5-layer verification gauntlet. See [g8e Protocol](../architecture/protocol.md) for detailed layer responsibilities.
 
 ## Testing
 
@@ -188,7 +188,7 @@ Security doctrines are stored in `protocol/constants/doctrine/` as canonical JSO
 2. Run `make validate-doctrines`
 3. Restart g8e Operator to load new doctrines
 
-See [docs/architecture/protocol.md](../architecture/protocol.md) for doctrine schema details.
+See [g8e Protocol](../architecture/protocol.md) for doctrine schema details.
 
 ## Constants
 
@@ -212,7 +212,7 @@ Constants are defined in Go source files in `internal/constants/` (SSOT). JSON f
 - `make generate` - Generate protobuf code from `.proto` files
 - `make proto` - Generate Go Protobuf code (alias for generate)
 
-See [docs/reference/constants.md](../reference/constants.md) for details.
+See [Constants Reference](../reference/constants.md) for details.
 
 ## Native Tools
 

@@ -98,9 +98,9 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 
 	var events []oomEvent
 	oomRegex := regexp.MustCompile(`(?i)oom-killer|killed process`)
-	pidRegex := regexp.MustCompile(`pid\s*=\s*(\d+)`)
-	processRegex := regexp.MustCompile(`process\s+(\S+)`)
-	memoryRegex := regexp.MustCompile(`(\d+)\s*MB`)
+	pidRegex := regexp.MustCompile(`(?i)pid\s*[=:]\s*(\d+)`)
+	processRegex := regexp.MustCompile(`(?i)(?:process\s+|killed process\s+\d+\s+\()([^)\s]+)\)?`)
+	memoryRegex := regexp.MustCompile(`(?i)(\d+)\s*MB`)
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

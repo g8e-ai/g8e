@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build e2e
+//go:build integration
 
 package scenario
 
@@ -47,7 +47,7 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 	nonce := fmt.Sprintf("nonce-concurrency-test-%d", time.Now().UnixNano())
 	intentBytes, err := New().
 		WithCommand("echo hello").
-		WithOperatorID("").
+		WithOperatorID(ctx.Identity.OperatorID).
 		WithOperatorSessionID(ctx.OperatorSessionID).
 		WithStateRoot(stateRoot).
 		WithNonce(nonce).

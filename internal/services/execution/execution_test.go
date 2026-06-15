@@ -382,39 +382,62 @@ func TestExecutionService_Stop(t *testing.T) {
 		})
 	})
 
-	t.Run("stop with active executions", func(t *testing.T) {
+	t.Run("stop during initialization race", func(t *testing.T) {
+		cfg := testutil.NewTestConfig(t)
+		cfg.MaxConcurrentTasks = 1 // Ensure we only need to occupy one slot
+		logger := testutil.NewTestLogger()
+		svc := NewExecutionService(cfg, logger)
+
+		// Occupy the semaphore to block new tasks
+		svc.semaphore <- struct{}{}
+
 		req := &models.ExecutionRequestPayload{
-			ExecutionID:    "stop-test-1",
+			ExecutionID:    "race-test-1",
 			Command:        "sleep",
-			Args:           []string{"30"},
-			TimeoutSeconds: 60,
+			Args:           []string{"0.1"},
+			TimeoutSeconds: 5,
 		}
 
-		// Start execution in background
+		// Start execution in background - it will block on the semaphore
 		execDone := make(chan error, 1)
 		go func() {
 			_, err := svc.ExecuteCommand(context.Background(), req)
 			execDone <- err
 		}()
 
-		// Wait for execution to start and be tracked
-		require.Eventually(t, func() bool {
-			active := svc.GetActiveExecutions()
-			return len(active) == 1
-		}, 5*time.Second, 50*time.Millisecond)
+		// Give it a moment to reach the semaphore wait
+		time.Sleep(50 * time.Millisecond)
 
-		// Stop the service - this should cancel the execution
-		svc.Stop()
+		// Stop the service - it should set isStopping=true and then wait on wg
+		stopDone := make(chan struct{})
+		go func() {
+			svc.Stop()
+			close(stopDone)
+		}()
 
-		// Verify map is cleared
-		assert.Empty(t, svc.GetActiveExecutions())
+		// Give Stop() a moment to set isStopping=true and block on wg.Wait()
+		time.Sleep(50 * time.Millisecond)
 
-		// Verify execution completed (cancelled)
+		// Release the semaphore - the blocked task should now proceed and see isStopping=true
+		<-svc.semaphore
+
+		// Verify execution returns an error about stopping
 		select {
-		case <-execDone:
-			// Success - execution completed
-		case <-time.After(5 * time.Second):
-			t.Fatal("Execution did not complete after stop")
+		case err := <-execDone:
+			assert.Error(t, err)
+			if err != nil {
+				assert.Contains(t, err.Error(), "service is stopping")
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatal("Execution did not return after semaphore release")
+		}
+
+		// Verify Stop() completes
+		select {
+		case <-stopDone:
+			// Success
+		case <-time.After(2 * time.Second):
+			t.Fatal("Stop() did not complete")
 		}
 	})
 }

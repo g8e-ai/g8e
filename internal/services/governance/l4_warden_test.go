@@ -108,6 +108,8 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	case constants.ActionTypeInvestigationCreate:
 		// INVESTIGATION_CREATE has no typed payload, uses raw bytes
 		return []byte(`{"test": "data"}`)
+	case constants.ActionTypeCancel:
+		msg = &operatorv1.CommandCancelRequested{ExecutionId: "exec-1"}
 	default:
 		t.Fatalf("unsupported action type: %v", actionType)
 	}
@@ -417,14 +419,6 @@ func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
 			// signedEnvelope now adds L3 for mutation actions, so no manual adjustment needed
 
 			verified, err := verifier.VerifyEnvelope(context.Background(), env)
-			// HEARTBEAT has an empty protobuf message that marshals to empty bytes
-			// The verifier rejects empty payloads, so skip this special case
-			if actionType == constants.ActionTypeHeartbeat {
-				if err == nil {
-					t.Fatalf("expected error for HEARTBEAT (empty payload), got nil")
-				}
-				return
-			}
 			if err != nil {
 				t.Fatalf("verification failed for action type %s: %v", actionType, err)
 			}

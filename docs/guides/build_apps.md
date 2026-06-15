@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-06-10
-Version: v1.0.11
+Last Updated: 2026-06-15
+Version: v1.1.1
 
 ---
 
@@ -91,6 +91,8 @@ A valid GovernanceEnvelope must include:
 - **system_fingerprint**: Optional system fingerprint.
 - **tenant_id**: Optional tenant identifier.
 - **binding_persona**: Optional binding persona.
+- **requestor_user_id**: The human user who authorized the action (delegator).
+- **acting_app_id**: The app/tool acting on behalf of the user (delegate).
 
 ### Typed Payloads
 
@@ -157,6 +159,8 @@ Compute the deterministic transaction hash from the envelope fields using the ca
 - nonce
 - expires_at (UTC RFC3339Nano format)
 - intent_data (canonicalized map)
+- requestor_user_id
+- acting_app_id
 
 Refer to the `GenerateMessageID` function in `pkg/governance/types.go` for the exact canonicalization algorithm.
 
@@ -187,6 +191,8 @@ Construct the GovernanceEnvelope:
   "nonce": "<unique_nonce>",
   "transaction_hash": "<transaction_hash>",
   "protocol_version": "1.0",
+  "requestor_user_id": "<requestor_user_id>",
+  "acting_app_id": "<acting_app_id>",
   "governance": {
     "l1": {
       "validated": true,
@@ -254,6 +260,8 @@ Add the L2Consensus signatures to the envelope:
   "nonce": "<unique_nonce>",
   "transaction_hash": "<transaction_hash>",
   "protocol_version": "1.0",
+  "requestor_user_id": "<requestor_user_id>",
+  "acting_app_id": "<acting_app_id>",
   "governance": {
     "l1": {
       "validated": true,

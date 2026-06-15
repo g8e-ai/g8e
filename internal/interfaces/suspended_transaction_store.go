@@ -19,6 +19,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
+//go:generate mockery --name SuspendedTransactionStore --output ./mocks --dir .
+
 // SuspendedTransactionStore defines the interface for L3 approval workflow storage.
 // This service stores transactions awaiting human approval.
 //

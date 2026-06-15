@@ -17,13 +17,14 @@ Available Commands:
   operator    Manage Operator instances
   vault       Manage the encryption vault
   test        Run test suites (unit, integration, e2e, scenario, emulator, chaos)
-  setup       Run platform setup (validate dependencies, build binary)
   demos       Manage g8e demo environments
+  audit       Run audit reports for compliance
   swagger     Manage Swagger/OpenAPI documentation
   help        Help about any command
 
 Flags:
-  -h, --help   help for g8e
+  -h, --help      help for g8e
+  -v, --version   version for g8e
 
 Use "g8e [command] --help" for more information about a command.
 ```
@@ -38,17 +39,16 @@ Usage:
   g8e gw [command]
 
 Available Commands:
-  start           Start the g8e Gateway
-  stop            Stop the g8e Gateway
-  status          Check Gateway health and status
-  restart         Restart the g8e Gateway
-  logs            View Gateway logs
-  settings        Manage Gateway settings
-  reset           Reset Gateway data and secrets (preserves CA)
-  clean           Destructively remove all Gateway state
-  data            Administer the local platform over mTLS
-  security        Security validation checks
-  setup           Auto-discover and configure agentic coding tools for g8e integration
+  start       Start the g8e Gateway
+  stop        Stop the g8e Gateway
+  status      Check Gateway health and status
+  restart     Restart the g8e Gateway
+  logs        View Gateway logs
+  settings    Manage Gateway settings
+  reset       Reset Gateway data and secrets (preserves CA)
+  clean       Destructively remove all Gateway state
+  data        Administer the local platform over mTLS
+  security    Security validation checks
 
 Flags:
   -h, --help   help for gateway
@@ -80,8 +80,8 @@ Flags:
       --secrets-dir string       Directory for platform secrets (default: .g8e/secrets)
       --vault-dir string         Directory for vault data (default: .g8e/vault)
       --vault-key string         Path to vault private key (default: .g8e/secrets/vault.key)
-      --vault-require-unlock    Require vault to be unlocked at startup (fail if vault cannot be unlocked)
-  -f, --follow                 Follow log output after starting (like tail -f)
+      --vault-require-unlock     Require vault to be unlocked at startup (fail if vault cannot be unlocked)
+  -f, --follow                   Follow log output after starting (like tail -f)
 ```
 
 When `--cert-mode full` is selected, the CLI detects network identity once, writes it to a temporary JSON file in the runtime directory, and passes that file to the Gateway subprocess. `--cert-mode localhost` continues to use loopback-only identities, including IPv6 localhost when available.
@@ -198,7 +198,7 @@ Use "g8e auth [command] --help" for more information about a command.
 
 ### auth login
 ```
-Authenticate CLI with the running Gateway. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running. On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.
+Authenticate CLI with the running Gateway via CSR-based enrollment. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running (use './g8e gw start' first). On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.
 
 Usage:
   g8e auth login [flags]
@@ -220,7 +220,7 @@ Flags:
 
 ### auth enroll-windows
 ```
-Enroll via Windows Certificate Store (Windows only - advanced). Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert.
+Enroll via Windows Certificate Store (Windows only - advanced). Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.
 
 NOTE: This is now handled automatically by 'g8e auth login' on Windows. This command is for advanced use cases or manual re-enrollment.
 
@@ -451,7 +451,7 @@ Flags:
 
 ## test
 ```
-Run test suites (unit, integration, e2e, scenario, emulator, chaos)
+Run test suites (unit, integration, e2e, scenario, coverage, lint, emulator, chaos, summary)
 
 Usage:
   g8e test [command]
@@ -461,8 +461,11 @@ Available Commands:
   integration Run Tier 2 (In-Memory Integration) tests
   e2e         Run Tier 3 (Live Platform E2E) tests
   scenario    Run Tier 3 (Scenario) tests
+  coverage    Run tests with coverage report
+  lint        Run linting and quality checks
   emulator    Universal agent emulator for a real g8e Gateway/Operator
   chaos       Generate realistic governance events against the local g8e audit stack
+  summary     View chaos test summary from test vault
 
 Flags:
   -h, --help   help for test
@@ -516,9 +519,35 @@ Flags:
   -h, --help   help for scenario
 ```
 
+### test coverage
+```
+Run tests with coverage report and enforce a minimum coverage threshold (60%). Use --pkg flag to test a specific package, --verbose for detailed output.
+
+Usage:
+  g8e test coverage [flags]
+
+Flags:
+  -h, --help        help for coverage
+      --pkg string  Specific package to test (e.g., ./internal/services/auth)
+      --verbose     Verbose output
+```
+
+### test lint
+```
+Run linting and quality checks using golangci-lint with modern Go 1.26.3 best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
+
+Usage:
+  g8e test lint [flags]
+
+Flags:
+  -h, --help   help for lint
+```
+
 ### test emulator
 ```
 Universal agent emulator for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
+
+The emulator is a protocol compliance verifier that records every HTTP exchange with detailed metadata (request/response bodies, latency, status codes) and cross-references against the Operator's signed receipts. The ONLY fiction is the client identity, the Gateway and Operator are real infrastructure.
 
 Usage:
   g8e test emulator [command]
@@ -596,9 +625,9 @@ Flags:
 Generate realistic governance events against the local g8e audit stack. Bypasses network/TLS by driving the TransactionVerifier + Actuator stack directly in-process, which is the same path exercised by the live Operator when payloads arrive over pub/sub.
 
 Distribution:
-  70%  Good Actor  – valid sig, safe intent (FS_LIST)       → EXECUTED
-  20%  Prompt Inj  – valid sig, L1 forbidden cmd (sudo/rm)  → REJECTED (L1)
-  10%  MitM        – corrupted transaction hash              → REJECTED (hash mismatch)
+  70%  Good Actor  - valid sig, safe intent (FS_LIST)       -> EXECUTED
+  20%  Prompt Inj  - valid sig, L1 forbidden cmd (sudo/rm)  -> REJECTED (L1)
+  10%  MitM        - corrupted transaction hash              -> REJECTED (hash mismatch)
 
 Usage:
   g8e test chaos [flags]
@@ -608,6 +637,17 @@ Flags:
       --data-dir string audit vault data dir (default: <project-root>/.g8e/test-vault/<timestamp>)
   -h, --help            help for chaos
       --pki-dir string  PKI dir for trusted_signers (default: <cwd>/.g8e/pki)
+```
+
+### test summary
+```
+View aggregated chaos test results from the test vault database. This queries the chaos_events table across all test runs in the test vault directory.
+
+Usage:
+  g8e test summary [flags]
+
+Flags:
+  -h, --help   help for summary
 ```
 
 ## operator
@@ -812,15 +852,90 @@ Flags:
 ```
 
 
-## setup
+## audit
 ```
-Run platform setup (validate dependencies, build binary). Auto-detect OS and run the appropriate setup script to validate dependencies and build the g8e binary.
+Run audit reports for compliance evidence, signed receipts, and event logs.
 
 Usage:
-  g8e setup [flags]
+  g8e audit [command]
+
+Available Commands:
+  receipts    List signed receipts from the running Gateway
+  export      Export the full receipts bundle for archival
+  report      Generate a compliance report (JSON + Markdown)
+  events      Query raw audit events from the Gateway audit store
+  summary     Aggregate audit events and receipts by type
 
 Flags:
-  -h, --help   help for setup
+  -h, --help   help for audit
+
+Use "g8e audit [command] --help" for more information about a command.
+```
+
+### audit receipts
+```
+List signed receipts from the running Gateway. Auto-discovers session ID if omitted.
+
+Usage:
+  g8e audit receipts [flags]
+
+Flags:
+  -h, --help             help for receipts
+      --json             Raw JSON output
+      --session string   Operator session ID (auto-discovers if omitted)
+      --tx-id string     Get a single receipt by transaction ID
+```
+
+### audit export
+```
+Export the full receipts bundle for archival.
+
+Usage:
+  g8e audit export [flags]
+
+Flags:
+  -h, --help             help for export
+      --out string       Output file path (default "./receipts-export.json")
+      --session string   Operator session ID
+```
+
+### audit report
+```
+Generate a comprehensive compliance report (JSON + Markdown).
+
+Usage:
+  g8e audit report [flags]
+
+Flags:
+  -h, --help             help for report
+      --out string       Output directory (default "./reports")
+      --session string   Operator session ID
+```
+
+### audit events
+```
+Query raw audit events from the Gateway audit store.
+
+Usage:
+  g8e audit events [flags]
+
+Flags:
+  -h, --help             help for events
+      --json             Raw JSON output
+      --limit int        Max rows (default 100)
+      --session string   Filter by operator session ID (shows all if omitted)
+```
+
+### audit summary
+```
+Aggregate audit events and receipts by type.
+
+Usage:
+  g8e audit summary [flags]
+
+Flags:
+  -h, --help             help for summary
+      --session string   Filter by Operator session ID
 ```
 
 ## demos
@@ -998,7 +1113,7 @@ LAUNCH AN AGENT (one command does everything):
                                   Uses 'mcp stdio' with full L1-L5 governance
                                   (gateway must be running).
                                   All MCP tool calls are routed exclusively through
-                                  g8e — no other MCP servers are reachable.
+                                  g8e; no other MCP servers are reachable.
                                   Agent is automatically enrolled as an app identity
                                   for audit trail purposes.
 
@@ -1033,7 +1148,7 @@ DELEGATED CREDENTIAL MODEL:
   - Requestor User ID: spiffe://g8e.local/user/<id> (the human who launched the agent)
 
   Both identities are cryptographically bound in the certificate's URI SANs and presented
-  at the TLS handshake. No trusted identity headers are used — the certificate IS the
+  at the TLS handshake. No trusted identity headers are used; the certificate IS the
   session. Every governed transaction includes both identities in the signed hash,
   ensuring end-to-end identity correctness and auditability.
 
@@ -1047,7 +1162,7 @@ Flags:
 
 #### mcp agent show
 ```
-Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), Plain HTTP, and Stdio Transport.
+Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), and Stdio Transport.
 
 Usage:
   g8e mcp agent show <agent> [flags]
@@ -1095,6 +1210,9 @@ Flags:
 - **aider** - Aider AI pair programmer
 - **codeium** - Codeium AI assistant
 - **tabby** - Tabby AI autocomplete
+- **ollama** - Ollama local LLM runner
+- **gemini** - Google Gemini CLI
+- **goose** - Goose AI coding assistant
 - **generic** - Generic MCP-compatible agent
 
 ### Configuration Example
@@ -1121,7 +1239,7 @@ To wrap any external MCP server in g8e's L1 doctrine without running the full ga
 ./g8e mcp agent run --url http://localhost:3000
 ```
 
-Register the proxy as the MCP server in your agent config. The downstream tool's full `tools/list` and all pass-through methods are preserved — only `tools/call` is intercepted for governance.
+Register the proxy as the MCP server in your agent config. The downstream tool's full `tools/list` and all pass-through methods are preserved; only `tools/call` is intercepted for governance.
 
 For full L1-L5 governance (L2 consensus, L3 human approval via WebAuthn), start the gateway and use `g8e mcp stdio`.
 

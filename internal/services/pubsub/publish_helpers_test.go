@@ -15,15 +15,47 @@ package pubsub
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
+
+// mockAuditStore is a simple in-memory mock for testing
+type mockAuditStore struct {
+	mu               sync.Mutex
+	events           []*storage.Event
+	recordEventError bool
+}
+
+func (m *mockAuditStore) RecordEvent(event *storage.Event) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.recordEventError {
+		return 0, assert.AnError
+	}
+	m.events = append(m.events, event)
+	return int64(len(m.events)), nil
+}
+
+func (m *mockAuditStore) GetEvents() []*storage.Event {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.events
+}
+
+func (m *mockAuditStore) SetRecordEventError(err bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.recordEventError = err
+}
 
 func TestExecutionIDFromMessage(t *testing.T) {
 	t.Run("extracts execution_id from payload", func(t *testing.T) {
@@ -116,7 +148,7 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 			Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		}
 
-		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload)
+		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload, nil, nil)
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
@@ -145,7 +177,7 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 			Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		}
 
-		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload)
+		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload, nil, nil)
 		// Should log error and not panic
 	})
 
@@ -175,7 +207,7 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 			Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 		}
 
-		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload)
+		publishLFAATypedResponseTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Completed, payload, nil, nil)
 		// Should log error and not panic
 	})
 }
@@ -198,7 +230,7 @@ func TestPublishLFAAErrorTo(t *testing.T) {
 			Payload:           []byte("invalid protobuf"),
 		}
 
-		publishLFAAErrorTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Failed, "test error")
+		publishLFAAErrorTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Failed, "test error", nil, nil)
 
 		published := client.LastPublished()
 		require.NotNil(t, published)
@@ -223,7 +255,210 @@ func TestPublishLFAAErrorTo(t *testing.T) {
 			Payload:           []byte("invalid protobuf"),
 		}
 
-		publishLFAAErrorTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Failed, "test error")
+		publishLFAAErrorTo(context.Background(), client, cfg, logger, msg, constants.Event.Operator.Command.Failed, "test error", nil, nil)
 		// Should log error and not panic
+	})
+}
+
+func TestPublishObservedStateEvidence(t *testing.T) {
+	t.Run("persists observed-state content for FsListResult", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.FsListResult{
+			Entries: []*operatorv1.FsEntry{
+				{Name: "file1.txt", Size: 100},
+				{Name: "file2.txt", Size: 200},
+			},
+		}
+
+		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsList.Completed, payload, auditStore, nil)
+
+		events := auditStore.GetEvents()
+		require.Len(t, events, 1)
+		assert.Equal(t, constants.Event.Operator.FsList.Completed, events[0].Type)
+		assert.NotEmpty(t, events[0].ContentText)
+		assert.Contains(t, events[0].ContentText, "file1.txt")
+	})
+
+	t.Run("persists observed-state content for FsReadResult", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.FsReadResult{
+			Content: "file content here",
+		}
+
+		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
+
+		events := auditStore.GetEvents()
+		require.Len(t, events, 1)
+		assert.Equal(t, constants.Event.Operator.FsRead.Completed, events[0].Type)
+		assert.Equal(t, "file content here", events[0].ContentText)
+	})
+
+	t.Run("persists observed-state content for PortCheckResult", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.PortCheckResult{
+			Results: []*operatorv1.PortCheckEntry{
+				{Host: "localhost", Port: 8080, Open: true},
+			},
+		}
+
+		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.PortCheck.Completed, payload, auditStore, nil)
+
+		events := auditStore.GetEvents()
+		require.Len(t, events, 1)
+		assert.Equal(t, constants.Event.Operator.PortCheck.Completed, events[0].Type)
+		assert.NotEmpty(t, events[0].ContentText)
+	})
+
+	t.Run("scrubs sensitive content before persisting", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+		scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.FsReadResult{
+			Content: "password=secret123 api_key=ghp_test_token",
+		}
+
+		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, scrubbingSvc)
+
+		events := auditStore.GetEvents()
+		require.Len(t, events, 1)
+		assert.Equal(t, constants.Event.Operator.FsRead.Completed, events[0].Type)
+		// Content should be scrubbed
+		assert.NotContains(t, events[0].ContentText, "secret123")
+		assert.NotContains(t, events[0].ContentText, "ghp_test_token")
+	})
+
+	t.Run("does not persist for command events (double-recording guard)", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.CommandResult{
+			ExecutionId: "exec-1",
+			Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		}
+
+		// Command events should not be recorded via publishObservedStateEvidence
+		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.Command.Completed, payload, auditStore, nil)
+
+		events := auditStore.GetEvents()
+		assert.Empty(t, events, "command events should not be recorded via observed-state path")
+	})
+
+	t.Run("non-fatal: store errors do not prevent publish", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+		auditStore.SetRecordEventError(true) // Simulate store error
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.FsReadResult{
+			Content: "file content",
+		}
+
+		// Should not panic despite store error
+		assert.NotPanics(t, func() {
+			publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
+		})
+	})
+
+	t.Run("handles nil auditStore gracefully", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.FsReadResult{
+			Content: "file content",
+		}
+
+		// Should not panic with nil auditStore
+		assert.NotPanics(t, func() {
+			publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, nil, nil)
+		})
+	})
+
+	t.Run("handles empty content gracefully", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.FsListResult{
+			Entries: []*operatorv1.FsEntry{}, // Empty list
+		}
+
+		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsList.Completed, payload, auditStore, nil)
+
+		events := auditStore.GetEvents()
+		assert.Empty(t, events, "empty content should not be recorded")
+	})
+
+	t.Run("handles nil scrubbingService gracefully", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		auditStore := &mockAuditStore{}
+
+		msg := &PubSubCommandMessage{
+			ID:                "msg-1",
+			OperatorSessionID: "session-1",
+		}
+
+		payload := &operatorv1.FsReadResult{
+			Content: "password=secret123",
+		}
+
+		publishObservedStateEvidence(context.Background(), logger, msg, constants.Event.Operator.FsRead.Completed, payload, auditStore, nil)
+
+		events := auditStore.GetEvents()
+		require.Len(t, events, 1)
+		// Without scrubbing, content should be preserved as-is
+		assert.Contains(t, events[0].ContentText, "secret123")
 	})
 }
