@@ -61,7 +61,7 @@ func TestPeerConnectionManager_GatewayID(t *testing.T) {
 	infra := setupTestInfrastructure(t, true)
 
 	// Create data dir if it doesn't exist (InitPathsWithBase doesn't create them)
-	err = os.MkdirAll(filepath.Join(baseDir, ".g8e/data"), 0755)
+	err = os.MkdirAll(constants.Paths.Infra.DataDir, 0755)
 	require.NoError(t, err)
 
 	pcm := NewPeerConnectionManager(infra.Cfg, infra.Logger, infra.DB, infra.PKI)
@@ -94,9 +94,9 @@ func TestPeerConnectionManager_StartEnrollment(t *testing.T) {
 	infra.Cfg.Gateway.FederationSeedURL = "https://seed.g8e.local"
 
 	// Ensure data and pki dirs exist
-	err = os.MkdirAll(filepath.Join(baseDir, ".g8e/data"), 0755)
+	err = os.MkdirAll(constants.Paths.Infra.DataDir, 0755)
 	require.NoError(t, err)
-	err = os.MkdirAll(filepath.Join(baseDir, ".g8e/pki/peer"), 0755)
+	err = os.MkdirAll(filepath.Join(constants.Paths.Infra.PkiDir, "peer"), 0755)
 	require.NoError(t, err)
 
 	pcm := NewPeerConnectionManager(infra.Cfg, infra.Logger, infra.DB, infra.PKI)
