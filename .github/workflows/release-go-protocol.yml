@@ -50,7 +50,7 @@ jobs:
           echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.parse_version.outputs.tag }}
           name: g8e Protocol v${{ steps.parse_version.outputs.version }}
