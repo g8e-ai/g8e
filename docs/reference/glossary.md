@@ -4,7 +4,7 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-06-13
+Last Updated: 2026-06-15
 Version: v1.1.0
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
@@ -13,7 +13,7 @@ Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem 
 
 ## A2A (Agent2Agent)
 
-A Google protocol for agent-to-agent communication and orchestration. g8e supports A2A as a payload type within the GovernanceEnvelope, enabling standard AI agents to interact with the g8e Operator through the g8e protocol translation layer.
+A protocol for agent-to-agent communication and orchestration. g8e supports A2A as a payload type within the GovernanceEnvelope, enabling standard AI agents to interact with the g8e Operator through the g8e protocol translation layer.
 
 ---
 
@@ -23,9 +23,9 @@ The **L5Actuator** is the execution boundary in the g8e Operator that performs a
 
 ---
 
-## Execution Vault
+## Acting App ID
 
-An embedded SQLite database on the g8e Operator that stores command execution results and file diffs locally. Part of the Local-First Audit Architecture. The Execution VaultService provides encrypted storage for execution logs and file mutation tracking. Data is encrypted at rest when configured with the encryption vault. The vault supports retention-based pruning and size limits.
+A field in the **GovernanceEnvelope** (`acting_app_id`) that identifies the application or tool acting on behalf of the user. This establishes a delegation chain for auditing and policy enforcement.
 
 ---
 
@@ -35,10 +35,16 @@ The embedded SQLite database used by the g8e Gateway for durable storage of user
 
 ---
 
+## Execution Vault
+
+An embedded SQLite database on the g8e Operator that stores command execution results and file diffs locally. Part of the Local-First Audit Architecture. The Execution VaultService provides encrypted storage for execution logs and file mutation tracking. Data is encrypted at rest when configured with the encryption vault. The vault supports retention-based pruning and size limits.
+
+---
+
 ## Governance Envelope
 
 The canonical Protobuf container (`g8e.common.v1.GovernanceEnvelope`) for all g8e protocol mutations. It binds identity, intent, state, and governance proofs into one transaction. Fields include:
-- Identity: `id`, `timestamp`, `expires_at`, `source_component`, `operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`, `tenant_id`, `binding_persona`
+- Identity: `id`, `timestamp`, `expires_at`, `source_component`, `operator_id`, `operator_session_id`, `web_session_id`, `cli_session_id`, `tenant_id`, `binding_persona`, `requestor_user_id`, `acting_app_id`
 - Intent: `event_type`, `payload` (typed protobuf bytes), `intent_data` (structured JSON), `action_type`, `target_resource`
 - State: `state_merkle_root`, `nonce`, `transaction_hash`, `protocol_version`
 - Governance: `governance` (L1/L2/L3 metadata)
@@ -187,6 +193,12 @@ Security mechanisms that prevent captured requests from being replayed by attack
 ## Reputation Staking
 
 The mechanism by which L2 Consensus agents earn or lose standing based on the quality of their contributions. Each agent is assigned a reputation scalar (0.0 to 1.0) on the Reputation Scoreboard. Scalars are updated via an Exponential Moving Average (EMA) based on consensus participation and the eventual success or failure of the commands they proposed. Agents can be "slashed" for proposing high-risk or failing commands.
+
+---
+
+## Requestor User ID
+
+A field in the **GovernanceEnvelope** (`requestor_user_id`) that identifies the human user who authorized the action. This is the ultimate authority in the delegation chain.
 
 ---
 

@@ -4,7 +4,7 @@ title: SSE Streaming
 
 # SSE Streaming
 
-The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system is designed for g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
+The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
 
 ---
 
@@ -12,14 +12,14 @@ The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastru
 
 The SSE system provides three core endpoints:
 
-- **`POST /api/v1/sse/push`** - App workloads push events (authenticated via mTLS)
-- **`GET /api/v1/sse/events`** - Poll for historical events (with `since_id` and `limit` params)
-- **`GET /api/v1/sse/stream`** - Real-time SSE stream with live event delivery
+- **`POST /api/v1/sse/push`**: App workloads push events (authenticated via mTLS)
+- **`GET /api/v1/sse/events`**: Poll for historical events (with `since_id` and `limit` params)
+- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery
 
 Events are stored in the `sse_events` table and routed by one of three identifiers:
-- `web_session_id` - Web UI session events
-- `cli_session_id` - CLI / BYO session events
-- `user_id` - Background fan-out across every session a user owns
+- `web_session_id`: Web UI session events
+- `cli_session_id`: CLI / BYO session events
+- `user_id`: Background fan-out across every session a user owns
 
 ---
 
@@ -85,11 +85,12 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 ```
 
 **Behavior**:
-1. Validates mTLS peer certificate for app workload identity (SPIFFE ID with `/app/` prefix, excluding `g8eo` and `g8eg`)
-2. Validates route (exactly one routing target set)
-3. Appends event to `sse_events` table with auto-increment ID and producer_id
-4. Publishes event to Pub/Sub channel for real-time fan-out (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`)
-5. Returns success confirmation with delivered count
+1. Validates mTLS peer certificate for app workload identity (SPIFFE ID with `/app/` prefix, excluding `g8eo` and `g8eg`).
+2. Validates route (exactly one routing target set).
+3. Enforces producer-to-target ownership. The app identity must be associated with the target session or user.
+4. Appends event to `sse_events` table with auto-increment ID and `producer_id`.
+5. Publishes event to Pub/Sub channel for real-time fan-out (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`).
+6. Returns success confirmation with delivered count.
 
 ---
 
@@ -98,11 +99,11 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 **Authentication**: mTLS with Operator session
 
 **Query Parameters**:
-- `web_session_id` - Filter by web session
-- `cli_session_id` - Filter by CLI session
-- `user_id` - Filter by user
-- `since_id` - Return events with ID > since_id (default: 0)
-- `limit` - Maximum events to return (default: 200, max: 1000)
+- `web_session_id`: Filter by web session
+- `cli_session_id`: Filter by CLI session
+- `user_id`: Filter by user
+- `since_id`: Return events with ID > since_id (default: 0)
+- `limit`: Maximum events to return (default: 200, max: 1000)
 
 **Response**:
 ```json
@@ -123,9 +124,9 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 ```
 
 **Behavior**:
-1. Validates Operator session authorization for requested route
-2. Queries `sse_events` table for events matching route and since_id
-3. Returns ordered list (ascending by ID)
+1. Validates Operator session authorization for requested route.
+2. Queries `sse_events` table for events matching route and `since_id`.
+3. Returns ordered list (ascending by ID).
 
 ---
 
@@ -134,10 +135,10 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 **Authentication**: mTLS with Operator session
 
 **Query Parameters**:
-- `web_session_id` - Filter by web session
-- `cli_session_id` - Filter by CLI session
-- `user_id` - Filter by user
-- `since_id` - Start from event ID (supports `Last-Event-ID` header)
+- `web_session_id`: Filter by web session
+- `cli_session_id`: Filter by CLI session
+- `user_id`: Filter by user
+- `since_id`: Start from event ID (supports `Last-Event-ID` header)
 
 **Response**: SSE stream with format:
 ```
@@ -151,11 +152,11 @@ data: {"type":"...","data":{...}}
 ```
 
 **Behavior**:
-1. Validates Operator session authorization for requested route
-2. Subscribes to Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`)
-3. Flushes historical events since `since_id` in SSE format
-4. Streams new events as they arrive from Pub/Sub
-5. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`)
+1. Validates Operator session authorization for requested route.
+2. Subscribes to Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`).
+3. Flushes historical events since `since_id` in SSE format.
+4. Streams new events as they arrive from Pub/Sub.
+5. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
 
 ---
 
@@ -163,20 +164,17 @@ data: {"type":"...","data":{...}}
 
 The SSE system is generic and supports any event type. Defined audit event types include:
 
-### Operator Audit Events
-- `g8e.v1.operator.audit.ai.recorded` - AI action audit log
-- `g8e.v1.operator.audit.command.recorded` - Command execution audit log
-- `g8e.v1.operator.audit.direct.command.recorded` - Direct command audit log
-- `g8e.v1.operator.audit.direct.command.result.recorded` - Direct command result audit log
-- `g8e.v1.operator.audit.user.recorded` - User action audit log
-
-### Platform Events
-- `g8e.v1.platform.sse.connection.established` - SSE connection established
-- `g8e.v1.platform.sse.connection.opened` - SSE connection opened
-- `g8e.v1.platform.sse.connection.closed` - SSE connection closed
-- `g8e.v1.platform.sse.connection.failed` - SSE connection failed
-- `g8e.v1.platform.sse.connection.error` - SSE connection error
-- `g8e.v1.platform.sse.keepalive.sent` - SSE heartbeat sent
+- `g8e.v1.operator.audit.ai.recorded`: AI action audit log.
+- `g8e.v1.operator.audit.command.recorded`: Command execution audit log.
+- `g8e.v1.operator.audit.direct.command.recorded`: Direct command audit log.
+- `g8e.v1.operator.audit.direct.command.result.recorded`: Direct command result audit log.
+- `g8e.v1.operator.audit.user.recorded`: User action audit log.
+- `g8e.v1.platform.sse.connection.established`: SSE connection established.
+- `g8e.v1.platform.sse.connection.opened`: SSE connection opened.
+- `g8e.v1.platform.sse.connection.closed`: SSE connection closed.
+- `g8e.v1.platform.sse.connection.failed`: SSE connection failed.
+- `g8e.v1.platform.sse.connection.error`: SSE connection error.
+- `g8e.v1.platform.sse.keepalive.sent`: SSE heartbeat sent.
 
 See `protocol/constants/events.json` for the complete event type catalog.
 
@@ -210,9 +208,9 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 ```
 
 **Constraints**:
-- Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be non-null (enforced by CHECK constraint)
-- `producer_id` is the SPIFFE ID of the app workload that produced the event
-- Events are immutable once written (append-only)
+- Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be non-null (enforced by CHECK constraint).
+- `producer_id` is the SPIFFE ID of the app workload that produced the event.
+- Events are immutable once written (append-only).
 
 **Important**: SSE event inserts do NOT alter the state root. This is intentional to allow high-frequency event streaming without governance overhead.
 
@@ -221,23 +219,23 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 ## Security Model
 
 ### Producer Authorization
-- Only app workloads with valid mTLS certificates can push events
-- Certificate must have SPIFFE URI SAN with `/app/` prefix
-- Gateway identities (`g8eo`, `g8eg`) are explicitly blocked from pushing
-- Producer identity is recorded in `producer_id` for attribution
-- No producer-to-target ownership enforcement is performed at the push endpoint
+- Only app workloads with valid mTLS certificates can push events.
+- Certificate must have SPIFFE URI SAN with `/app/` prefix.
+- Gateway identities (`g8eo`, `g8eg`) are explicitly blocked from pushing.
+- Producer identity is recorded in `producer_id` for attribution.
+- The app identity must be associated with the target session or user. Ownership is verified against session bindings or ownership documents.
 
 ### Consumer Authorization
-- Only authenticated Operator sessions can consume events
+- Only authenticated Operator sessions can consume events.
 - Operator must be authorized for the requested route:
-  - For `web_session_id`: Must own the web session
-  - For `cli_session_id`: Must own the CLI session
-  - For `user_id`: Must be the user
-- Multi-tenant isolation enforced at the database query level
+  - For `web_session_id`: Must own the web session.
+  - For `cli_session_id`: Must own the CLI session.
+  - For `user_id`: Must be the user.
+- Multi-tenant isolation is enforced at the database query level.
 
 ### Transport Security
-- All SSE endpoints require mTLS (HTTPS port 8443)
-- Not available on HTTP bootstrap port (8080)
+- All SSE endpoints require mTLS (HTTPS port 8443).
+- Not available on HTTP bootstrap port (8080).
 - Pub/Sub channels are scoped to routing targets (format: `sse:cli:<id>`, `sse:web:<id>`, `sse:user:<id>`)
 
 ---
@@ -299,23 +297,23 @@ POST /api/v1/sse/push
 ## Implementation Details
 
 ### Core Files
-- `internal/services/gateway/gateway_http.go` - HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`)
-- `internal/services/gateway/sse_event_service.go` - SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsWipe`, `SSEEventsCount`)
-- `internal/services/gateway/gateway_pubsub.go` - Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`)
-- `internal/services/gateway/db_controller.go` - Admin endpoints for SSE event management (`handleSSEEvents`)
-- `internal/services/gateway/db/schema.sql` - Database schema for `sse_events` table
-- `internal/constants/api_paths.go` - API path constants
-- `protocol/constants/events.json` - Event type catalog
-- `internal/models/gateway.go` - SSE event row models (`SSEEventRow`)
+- `@/home/bob/g8e/internal/services/gateway/gateway_http.go`: HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`).
+- `@/home/bob/g8e/internal/services/gateway/sse_event_service.go`: SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsWipe`, `SSEEventsCount`).
+- `@/home/bob/g8e/internal/services/gateway/gateway_pubsub.go`: Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`).
+- `@/home/bob/g8e/internal/services/gateway/db_controller.go`: Admin endpoints for SSE event management (`handleSSEEvents`).
+- `@/home/bob/g8e/internal/services/gateway/db/schema.sql`: Database schema for `sse_events` table.
+- `@/home/bob/g8e/internal/constants/api_paths.go`: API path constants.
+- `@/home/bob/g8e/protocol/constants/events.json`: Event type catalog.
+- `@/home/bob/g8e/internal/models/gateway.go`: SSE event row models (`SSEEventRow`).
 
 ### State Root Impact
 SSE event inserts are deliberately excluded from state root calculation. The `sse_events` table has no triggers to increment `state_version`, allowing high-frequency event streaming without triggering governance consensus rounds. Events are considered ephemeral telemetry, not governance state.
 
 ### Pruning
 The `sse_events` table can be pruned via:
-- `DELETE /api/v1/data/_sse_events` - Admin wipe endpoint (requires mTLS)
-- `GET /api/v1/data/_sse_events/count` - Admin count endpoint (requires mTLS)
-- Direct database operations (not recommended in production)
+- `DELETE /api/v1/data/_sse_events`: Admin wipe endpoint (requires mTLS).
+- `GET /api/v1/data/_sse_events/count`: Admin count endpoint (requires mTLS).
+- Direct database operations (not recommended in production).
 
 Consider implementing time-based retention policies for production deployments.
 
@@ -323,15 +321,15 @@ Consider implementing time-based retention policies for production deployments.
 
 ## Best Practices
 
-1. **Event Batching**: For high-frequency events, consider batching before pushing to reduce database load
-2. **Error Handling**: Implement retry logic for failed push operations
-3. **Reconnection**: Clients should support automatic reconnection with `Last-Event-ID` header
-4. **Event Size**: Keep payloads under 1MB to avoid performance issues
-5. **Monitoring**: Monitor `sse_events` table size and growth rate
+1. **Event Batching**: For high-frequency events, consider batching before pushing to reduce database load.
+2. **Error Handling**: Implement retry logic for failed push operations.
+3. **Reconnection**: Clients should support automatic reconnection with `Last-Event-ID` header.
+4. **Event Size**: Keep payloads under 1MB to avoid performance issues.
+5. **Monitoring**: Monitor `sse_events` table size and growth rate.
 
 ---
 
 ## See Also
-- [Gateway Architecture](./gateway.md) - Overall gateway design
-- [Network Architecture](./network.md) - mTLS and PKI details
-- [Protocol Constants](../../protocol/constants/events.json) - Complete event type catalog
+- [Gateway Architecture](./gateway.md): Overall gateway design.
+- [Network Architecture](./network.md): mTLS and PKI details.
+- [Protocol Constants](../../protocol/constants/events.json): Complete event type catalog.

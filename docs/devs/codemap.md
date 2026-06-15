@@ -86,7 +86,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.KVStoreService (extracted field)
 │   ├── gateway.SSEEventService (extracted field)
 │   ├── gateway.BlobStoreService (extracted field)
-│   └── keystore (embedded in schema)
+│   └── keystore (embedded in schema, via keystore.Keystore)
 ├── storage.SuspendedTransactionService (for L3 approval workflow)
 │   └── sqliteutil.DB
 ├── gateway.GatewayWebSocketHandler
@@ -101,7 +101,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.SecretManager
 ├── gateway.SecretManager
 │   ├── sqliteutil.DB
-│   └── keystore.Keystore
+│   └── keystore.Keystore (via gateway.CanonicalDBService)
 ├── gateway.RegistrationService
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PKIAuthority
@@ -112,7 +112,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
-├── gateway.PersonaService
+├── gateway.PersonaService (embedded in gateway.UserService)
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
 │   └── gateway.CanonicalDBService [SHARED]
@@ -152,6 +152,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
 │   ├── mcp.GatewayService [SHARED]
+│   ├── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
 │   └── response.Writer
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
@@ -179,13 +180,14 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements interfaces.SuspendedTransactionStore).
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
 - **`storage.TokenStoreService`** is the Sentinel token persistence store for outbound mode.
-- **`storage.SQLAuditStore`** is shared by both modes and provides the SQL-based audit storage foundation.
+- **`storage.SQLAuditStore`** is embedded in CanonicalDBService as the `AuditStore` field and provides the SQL-based audit storage foundation for gateway mode. In outbound mode, a separate SQLAuditStore instance is used for the Local-First Audit Architecture (LFAA).
 - **`vault.Vault`** is shared across all storage services in outbound mode (reused from CanonicalDBService).
 
 ### Dependency Flow
 - `scrubbing.ScrubbingService` depends on `storage.TokenStoreService` (as `TokenStore`).
 - `storage.TokenStoreService` has no dependency on `scrubbing.ScrubbingService` (circular dependency removed).
 - All outbound storage services (ExecutionVaultService, TokenStoreService, SQLAuditStore, GitLedgerService) share the same `vault.Vault` instance from CanonicalDBService.
+- `gateway.SecretManager` depends on `gateway.CanonicalDBService` for keystore access.
 
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
@@ -210,6 +212,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `mcp.GatewayService` handles MCP/A2A protocol translation and downstream dispatch (shared between modes).
 - `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
+- `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 
 ## Critical Data Flows
 

@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-13
+Last Updated: 2026-06-15
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -29,7 +29,7 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 | --- | --- | --- | --- | --- | --- |
 | **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* (Runs by default) | None (mock/stub-only, no files/network/DB) | < 10ms per test |
 | **Tier 2** | **In-Memory Integration** | `internal/...` & `test/` | `//go:build integration` | SQLite in-memory, local PKI generation, local pubsub | < 2s per suite |
-| **Tier 3** | **Live-Platform E2E** | `test/` & `test/scenario/` | `//go:build e2e` | Running g8e gateway & operator processes | < 30s per suite |
+| **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Docker containers (gateway + operator) | < 30s per suite |
 
 ---
 
@@ -40,11 +40,14 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ```bash
 ./g8e test unit        # Run Tier 1 (Unit) tests - no external dependencies
 ./g8e test integration # Run Tier 2 (In-Memory Integration) tests - SQLite in-memory, local PKI
-./g8e test e2e         # Run Tier 3 (Live Platform E2E) tests - requires running gateway
-./g8e test scenario    # Run Tier 3 (Scenario) tests - requires running gateway
-./g8e test emulator     # Run emulator scenarios against real Gateway/Operator
-./g8e test chaos        # Generate realistic governance events for testing
-./g8e test summary      # View chaos test summary from test vault
+./g8e test e2e         # Run Tier 3 (Docker E2E) tests - requires Docker
+./g8e test scenario    # Run Tier 2 (Scenario) tests - requires running gateway
+./g8e test coverage    # Run tests with coverage report
+./g8e test lint        # Run linting and quality checks
+./g8e emulator list    # List emulator scenarios
+./g8e emulator run     # Run emulator scenarios against real Gateway/Operator
+./g8e test chaos       # Generate realistic governance events for testing
+./g8e test summary     # View chaos test summary from test vault
 ```
 
 The CLI test commands map directly to the 3-tier test architecture:
@@ -53,11 +56,17 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test integration`** - Runs in-memory integration tests with the `integration` build tag. These tests use SQLite in-memory databases, local PKI generation, and local pubsub. No running gateway required.
 
-- **`./g8e test e2e`** - Runs live-platform E2E tests with the `e2e` build tag. These tests require a running g8e gateway and authenticated CLI session (`./g8e gw start` and `./g8e auth login`).
+- **`./g8e test e2e`** - Runs Docker-based E2E tests with the `e2e` build tag. These tests require Docker and use `docker-compose.yml` to spin up gateway and operator containers.
 
-- **`./g8e test scenario`** - Runs scenario-specific E2E tests with the `e2e` build tag. These tests exercise end-to-end governance workflows across doctrine, consensus, and notary modes. Requires running gateway.
+- **`./g8e test scenario`** - Runs scenario-specific integration tests with the `integration` build tag. These tests exercise end-to-end governance workflows across doctrine, consensus, and notary modes. Requires running gateway and authenticated CLI session.
 
-- **`./g8e test emulator`** - Runs the universal agent emulator against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+- **`./g8e test coverage`** - Runs tests with coverage profiling and enforces a minimum coverage threshold (60%). Use PKG flag to test a specific package, VERBOSE for detailed output.
+
+- **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
+
+- **`./g8e emulator list`** - Lists available emulator scenarios with their posture requirements and personas.
+
+- **`./g8e emulator run`** - Runs emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
 
 - **`./g8e test chaos`** - Generates realistic governance events for testing. Creates a test vault with distributed event categories (70% Good Actor, 20% Prompt Injection, 10% MitM) to test governance pipeline behavior under various conditions.
 
@@ -72,7 +81,7 @@ Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer g
 ./g8e test scenario --run forge_signature
 ```
 
-Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the g8e Gateway to be running and authenticated CLI session.
+Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the g8e Gateway to be running and authenticated CLI session. These tests use the `integration` build tag.
 
 **Test Types**:
 - **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
@@ -82,6 +91,25 @@ Integration tests exercising end-to-end governance workflows across doctrine, co
 - **Negative controls** - Tests that intentionally flip expectations to prove the suite can detect failures
 - **Receipt verification** - Separate axis testing cryptographic receipt validation (signature verification, field tampering detection)
 - **Receipt persistence** - Database persistence verification for accepted transactions (receipts stored in `console_audit` collection), rejected transactions verify no persistence
+
+### Docker E2E Tests
+
+```bash
+make test-docker
+make test-gov
+```
+
+Docker-based E2E tests that spin up gateway and operator containers using docker-compose. These tests use the `e2e` build tag and require Docker to be installed and running.
+
+**TestDockerGateway_Health** (`test/e2e/gateway_e2e_test.go`):
+- Tests gateway HTTP health endpoint
+- Verifies CA bundle discoverable over HTTP
+- Checks HTTPS port reachability (no mTLS)
+- Validates operator container connection
+
+**TestDockerGateway_GovDemo** (`test/e2e/gateway_e2e_test.go`):
+- Tests the gov demo compose configuration
+- Same health checks as above but using gov demo compose file
 
 ### Emulator
 
@@ -180,6 +208,19 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 - `TestRegisterNativeTools_ToolNameConsistency` - Validates naming convention (lowercase with underscores)
 - `TestRegisterNativeTools_SchemaValidity` - Verifies all tool schemas are valid
 - `TestRegisterNativeTools_PartialRegistration` - Tests partial registration failure
+
+#### Docker E2E Tests (`test/e2e/`)
+
+**Gateway E2E** (`test/e2e/gateway_e2e_test.go`):
+- `TestDockerGateway_Health` - Tests Docker-based gateway health endpoints
+- `TestDockerGateway_GovDemo` - Tests Docker-based gateway using gov demo compose
+
+**E2E Harness** (`test/e2e/harness.go`):
+- `DockerE2EFixture` - Manages Docker-based E2E test infrastructure
+- `NewDockerE2EFixture` - Creates and starts Docker containers for testing
+- `GetHealth` - Retrieves gateway health status
+- `GetCABundle` - Retrieves CA bundle from gateway
+- `CheckOperatorContainer` - Verifies operator container connection
 
 #### Real Operator Tests
 
@@ -476,14 +517,17 @@ MCP gateway and native tool integration tests:
 # 2. Run in-memory integration tests (no gateway required)
 ./g8e test integration
 
-# 3. For E2E tests, start the Gateway
+# 3. For Docker E2E tests, ensure Docker is running
+make test-docker
+make test-gov
+
+# 4. For scenario tests, start the Gateway
 ./g8e gw start
 
-# 4. Authenticate (required for mTLS tests)
+# 5. Authenticate (required for mTLS tests)
 ./g8e auth login
 
-# 5. Run E2E tests
-./g8e test e2e
+# 6. Run scenario tests
 ./g8e test scenario
 ```
 
@@ -577,21 +621,21 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 
 ### Makefile Test Targets
 
-- **`make test`** - Runs all tests (unit + integration + e2e).
+- **`make test`** - Runs Tier 1 (Unit) and Tier 2 (In-Memory Integration) tests.
 - **`make test-unit`** - Runs Tier 1 (Unit) tests without build tags. No external dependencies.
 - **`make test-integration`** - Runs Tier 2 (In-Memory Integration) tests with `integration` build tag. Uses SQLite in-memory, local PKI, local pubsub.
-- **`make test-e2e`** - Runs Tier 3 (Live Platform E2E) tests with `e2e` build tag. Requires running gateway and auth login.
-- **`make test-scenario`** - Runs Tier 3 (Scenario) tests with `e2e` build tag. Requires running gateway and auth login.
+- **`make test-docker`** - Runs Tier 3 (Docker E2E) tests with `e2e` build tag. Requires Docker.
+- **`make test-gov`** - Runs Tier 3 (Gov Demo E2E) tests with `e2e` build tag. Requires Docker.
 - **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
-- **`make test-coverage`** - Note: This target is documented in the Makefile help text but is not implemented as a .PHONY target. Use `go test -coverprofile=coverage.out ./...` directly instead.
-- **`make test-pkg-<path>`** - Note: This target is documented in the Makefile help text but is not implemented as a .PHONY target. Use `go test ./path/to/pkg` directly instead.
+- **`make test-coverage`** - Runs tests with coverage (enforces 65% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
 - **`make test-shuffle`** - Runs all tests with randomized order.
-- **`make test-gateway`** - Runs gateway-specific tests (A2A gateway, MCP gateway, MCP stdio).
-- **`make test-mcp`** - Runs MCP tests (MCP gateway, MCP real operator, MCP stdio). Requires running gateway and auth login.
-- **`make test-a2a`** - Runs A2A tests (A2A gateway, A2A real operator). Requires running gateway and auth login.
-- **`make test-universal-gateway`** - Runs universal gateway integration tests. Requires running gateway and auth login.
-- **`make test-byo`** - Runs BYO client tests. Requires running gateway and auth login.
-- **`make test-native`** - Runs native real Operator tests. Requires running gateway and auth login.
+- **`make test-gateway`** - Runs gateway-specific integration tests (A2A gateway, MCP gateway, MCP stdio).
+- **`make test-mcp`** - Legacy target. Redirects to `make test-integration`.
+- **`make test-a2a`** - Legacy target. Redirects to `make test-integration`.
+- **`make test-universal-gateway`** - Legacy target. Redirects to `make test-integration`.
+- **`make test-byo`** - Legacy target. Redirects to `make test-integration`.
+- **`make test-native`** - Legacy target. Redirects to `make test-integration`.
+- **`make test-scenario`** - Legacy target. Redirects to `make test-integration`.
 
 ### Lints
 
@@ -626,4 +670,4 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - **`test-unit`** - Runs Tier 1 (Unit) tests without build tags.
 - **`test-integration`** - Runs Tier 2 (In-Memory Integration) tests with the `integration` build tag.
 
-The CI workflow does not run Tier 3 (E2E) tests. E2E tests require manual execution with a running gateway and authenticated CLI session.
+The CI workflow does not run Tier 3 (Docker E2E) tests. Docker E2E tests require manual execution with Docker installed.

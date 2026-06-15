@@ -63,10 +63,10 @@ The gateway handles certain tools locally without downstream proxy:
   - `git_ops`: Provides git repository operations including status, log, branch info, and remote management for GitHub/GitLab workflows
   - `cloud_metadata`: Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
   - `k8s_inspect`: Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
-  - `shell_execute`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits. Supports multi-host execution via SSH with optional `hostnames` parameter (defaults to localhost)
+  - `run_shell_command`: Executes shell commands with denylist enforcement for dangerous operations and timeout limits. Supports multi-host execution via SSH with optional `hostnames` parameter (defaults to localhost)
   - `net_ssh_known_hosts`: Lists known hosts from SSH config and known_hosts files based on OS type
   - `operator_deploy`: Deploys the g8e operator to a list of remote hosts via SSH
-  - `file_read`: Reads file contents with path validation and size limits
+  - `read_file`: Reads file contents with path validation and size limits
 
 ---
 
@@ -412,7 +412,6 @@ Default ports (configurable via flags or paths.json):
 |---|---|---|
 | `8080` | HTTP (bootstrap + MCP) | Plain HTTP (no TLS) |
 | `8443` | HTTPS (mTLS API + public) | mTLS (RequireAndVerifyClientCert) |
-| `18789` | Insecure MCP Gateway | Plain HTTP (no TLS) |
 
 ### Configuration
 

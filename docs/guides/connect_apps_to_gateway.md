@@ -5,14 +5,14 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-06-13
-Version: v1.1.0
+Last Updated: 2026-06-15
+Version: v1.1.1
 
 ---
 
 ## Overview
 
-This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) that enforces 3-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and HTTP APIs.
+This guide covers connecting applications to the g8e Gateway. The g8e Gateway serves as the central Policy Decision Point (PDP) that enforces 5-layer Byzantine Fault Tolerant governance over all AI agent mutations. Applications connect via multiple protocol surfaces: MCP (Model Context Protocol), A2A (Agent-to-Agent), direct governance envelopes, WebSocket pub/sub, and JSON API.
 
 ---
 
@@ -40,11 +40,11 @@ Start the g8e Gateway:
 ./g8e gw start
 ```
 
-The g8e Gateway runs in the default mode (doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
+The g8e Gateway runs in the default mode (Doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
 
 #### Doctrine Mode (Default)
 
-Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 signatures are audited but not required.
+Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2 consensus and L3 notary signatures are audited but not required.
 
 ```bash
 ./g8e gw start --posture doctrine
@@ -52,7 +52,7 @@ Enforces L1 technical bedrock (forbidden patterns, blacklist, whitelist). L2/L3 
 
 #### Consensus Mode
 
-Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature is audited but not required.
+Enforces L1 and L2 (multi-model Byzantine consensus). L3 notary signature is audited but not required.
 
 ```bash
 ./g8e gw start --posture consensus
@@ -60,26 +60,26 @@ Enforces L1 and L2 (multi-model Byzantine consensus). L3 signature is audited bu
 
 #### Notary Mode
 
-Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure mode.
+Enforces L1, L2, and L3 (human-in-the-loop via WebAuthn/FIDO2). This is the most secure posture.
 
 ```bash
 ./g8e gw start --posture notary
 ```
 
-### g8e Gateway Ports
+### g8e Gateway Surfaces
 
 The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves a specific purpose with distinct authentication requirements.
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP Port** | 8080 (HTTP) | None | Bootstrap enrollment, PKI discovery endpoints |
-| **HTTPS Port** | 8443 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, public browser access |
+| **HTTP Surface** | 8080 (HTTP) | None | Bootstrap enrollment, PKI discovery endpoints |
+| **HTTPS Surface** | 8443 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub |
 
 ### Port Multiplexing
 
 The g8e Gateway enforces strict port separation for security:
-- **HTTP only**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only
-- **HTTPS with mTLS**: TLS with `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary
+- **HTTP Surface**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only.
+- **HTTPS Surface with mTLS**: TLS with `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary.
 
 Port mixing is prohibited. The gateway fails startup if incompatible surfaces are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven` and weaken the execution boundary to an L7 check.
 
@@ -116,57 +116,58 @@ The Gateway provides a unified MCP endpoint architecture with a comprehensive in
 The Gateway includes a registry of native tools that execute locally with full governance enforcement. These tools are categorized by domain:
 
 **Database Tools**
-- `db_discover_topology` - Automatically scans database schemas, tables, and column data types
-- `db_index_triage` - Queries database fragmentation statistics and index information
-- `db_isolated_read` - Executes SELECT statements in read-only mode against a SQLite database
-- `db_query_validate` - Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
+- `db_discover_topology` - Scans database schemas, tables, and column data types.
+- `db_index_triage` - Queries database fragmentation statistics and index information.
+- `db_isolated_read` - Executes SELECT statements in read-only mode against a SQLite database.
+- `db_query_validate` - Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans.
 
 **Filesystem Tools**
-- `fs_disk_profile` - Recursively calculates directory sizes and disk usage
-- `fs_disk_usage` - Provides df-style free space reporting for mounted filesystems
-- `fs_file_checksum` - Computes SHA256 checksums for file integrity verification
-- `log_stream_filter` - Reads log files and applies regex filtering with sensitive data scrubbing
+- `fs_disk_profile` - Calculates directory sizes and disk usage.
+- `fs_disk_usage` - Provides df-style free space reporting for mounted filesystems.
+- `fs_file_checksum` - Computes SHA256 checksums for file integrity verification.
+- `read_file` - Reads file contents with path validation and safety checks.
+- `log_stream_filter` - Reads log files and applies regex filtering with sensitive data scrubbing.
 
 **Network Tools**
-- `net_endpoint_ping` - Performs TCP handshake to verify network endpoint connectivity and measure latency
-- `net_http_probe` - Performs lightweight HTTP requests to probe web endpoints
-- `net_socket_audit` - Inspects active network sockets (TCP/UDP) from /proc/net
-- `net_dns_resolve` - Performs DNS resolution (dig/nslookup equivalent) for network debugging
-- `net_ssh_known_hosts` - Lists known hosts from SSH config and known_hosts files based on OS type
+- `net_endpoint_ping` - Performs TCP handshake to verify network endpoint connectivity and measure latency.
+- `net_http_probe` - Performs lightweight HTTP requests to probe web endpoints.
+- `net_socket_audit` - Inspects active network sockets (TCP/UDP) from /proc/net.
+- `net_dns_resolve` - Performs DNS resolution (dig/nslookup equivalent) for network debugging.
+- `net_ssh_known_hosts` - Lists known hosts from SSH config and known_hosts files.
 
 **Process Tools**
-- `proc_metric_top` - Parses /proc to extract top resource-consuming processes by CPU and memory
-- `proc_signal_safe` - Sends signals to processes with denylist enforcement for protected PIDs
-- `proc_tree` - Provides parent-child process relationships and process tree
+- `proc_metric_top` - Parses /proc to extract resource-consuming processes by CPU and memory.
+- `proc_signal_safe` - Sends signals to processes with denylist enforcement for protected PIDs.
+- `proc_tree` - Provides parent-child process relationships and process tree.
 
 **System Tools**
-- `sys_oom_detect` - Scans system logs for OOM (Out of Memory) killer events
-- `sys_info` - Provides system information including hostname, OS version, kernel, uptime, and load average
-- `sys_env_vars` - Reads environment variables for configuration debugging
-- `sys_service_status` - Checks systemd service status (operator, gateway, etc.)
-- `sys_container_status` - Checks container health status (podman)
-- `sys_time_clock` - Provides NTP sync status and system time verification
+- `sys_oom_detect` - Scans system logs for OOM (Out of Memory) killer events.
+- `sys_info` - Provides system information including hostname, OS version, kernel, and uptime.
+- `sys_env_vars` - Reads environment variables for configuration debugging with automatic secret redaction.
+- `sys_service_status` - Checks systemd service status (operator, gateway, etc.).
+- `sys_container_status` - Checks container health status (podman).
+- `sys_time_clock` - Provides NTP sync status and system time verification.
 
 **Configuration Tools**
-- `config_diff_mask` - Compares configuration files with automatic secret masking for sensitive values
+- `config_diff_mask` - Compares configuration files with automatic secret masking.
 
 **Security Tools**
-- `tls_cert_inspect` - Parses TLS certificates, verifies chains, and checks expiration (critical for PKI debugging)
+- `tls_cert_inspect` - Parses TLS certificates, verifies chains, and checks expiration.
 
 **Cloud Tools**
-- `cloud_metadata` - Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata including region, instance type, and availability zone
+- `cloud_metadata` - Detects cloud provider (AWS, Azure, GCP) and retrieves instance metadata.
 
 **Git Tools**
-- `git_ops` - Provides git repository operations including status, log, branch info, and remote management for GitHub/GitLab workflows
+- `git_ops` - Provides git repository operations including status, log, and branch info.
 
 **Kubernetes Tools**
-- `k8s_inspect` - Provides Kubernetes cluster inspection including pods, nodes, services, and deployment status
+- `k8s_inspect` - Provides Kubernetes cluster inspection including pods, nodes, and services.
 
 **Shell Tools**
-- `shell_execute` - Executes shell commands with denylist enforcement for dangerous operations and timeout limits
+- `run_shell_command` - Executes shell commands with denylist enforcement for dangerous operations.
 
 **Operator Tools**
-- `operator_deploy` - Deploys the g8e operator to a list of remote hosts via SSH
+- `operator_deploy` - Deploys the g8e operator to remote hosts via SSH.
 
 All native tools include input validation to prevent SQL injection, SSRF attacks, path traversal, and other security vulnerabilities.
 
@@ -174,6 +175,7 @@ All native tools include input validation to prevent SQL injection, SSRF attacks
 
 | Endpoint | Method | Purpose |
 |---|---|---|
+| `/mcp` | POST/GET | Unified MCP JSON-RPC endpoint (recommended) |
 | `/api/v1/mcp/tools/list` | POST/GET | List available tools |
 | `/api/v1/mcp/tools/call` | POST | Invoke a tool |
 | `/api/v1/mcp/tools/call/sse` | POST | Invoke tool with SSE streaming |
@@ -182,10 +184,12 @@ All native tools include input validation to prevent SQL injection, SSRF attacks
 | `/api/v1/mcp/prompts/list` | POST/GET | List prompt templates |
 | `/api/v1/mcp/prompts/get` | POST | Get a prompt template |
 
-#### MCP Tool Invocation
+#### MCP Unified Endpoint Tool Invocation
+
+The unified `/mcp` endpoint is the recommended surface for AI IDEs. It implements the JSON-RPC 2.0 dispatch contract:
 
 ```bash
-curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
+curl -X POST https://localhost:8443/mcp \
   --cert .g8e/pki/client.crt \
   --key .g8e/pki/client.key \
   -H "Content-Type: application/json" \
@@ -193,7 +197,7 @@ curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
     "jsonrpc": "2.0",
     "method": "tools/call",
     "params": {
-      "name": "shell_execute",
+      "name": "run_shell_command",
       "arguments": {
         "command": "ls -la"
       }
@@ -271,7 +275,7 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -d @envelope.json
 ```
 
-The envelope `id` must match the deterministic `transaction_hash` computed from all envelope fields. The Gateway rejects envelopes with mismatched IDs.
+The envelope `id` must match the deterministic `transaction_hash` computed from critical envelope fields (action_type, target_resource, payload, state_merkle_root, nonce, expires_at, intent_data, requestor_user_id, acting_app_id). The Gateway rejects envelopes with mismatched IDs.
 
 ---
 
@@ -396,10 +400,10 @@ All authentication to the Gateway requires owner-approved invitations. The platf
 
 #### Owner-Centric Invitation Model
 
-- **Platform Owner**: The first human to authenticate becomes the Platform Owner
-- **Universal Requirement**: All entities must use invitations for JIT provisioning
-- **Strict TTL**: Sessions have a 1-hour TTL by default
-- **Owner Approval**: Only users with the `owner` role can create invitations
+- **Platform Owner**: The first human to authenticate becomes the Platform Owner.
+- **Universal Requirement**: All entities must use invitations for JIT provisioning.
+- **Strict TTL**: Sessions have a 1-hour TTL by default.
+- **Owner Approval**: Only users with the `owner` role can create invitations.
 
 #### Creating Invitations
 
@@ -468,13 +472,13 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 
 ### Suspension Flow
 
-1. Client submits MCP/A2A request without L3 signature
-2. Gateway stores transaction in `suspended_transactions` table
-3. Gateway returns approval URL: `https://localhost:8443/approve/{tx_hash}`
-4. User opens URL in browser and authenticates with passkey
-5. User approves transaction via WebAuthn
-6. Gateway attaches L3 proof and resumes verification
-7. Transaction proceeds to execution
+1. Client submits MCP/A2A request without L3 proof.
+2. Gateway stores transaction in `suspended_transactions` table.
+3. Gateway returns approval URL: `https://localhost:8443/approve/{tx_hash}`.
+4. User opens URL in browser and authenticates with passkey.
+5. User approves transaction via WebAuthn.
+6. Gateway attaches L3 proof and resumes verification.
+7. Transaction proceeds to execution.
 
 ### Approval API
 

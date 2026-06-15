@@ -3,7 +3,7 @@
 **Document Version:** 1.1  
 **Last Updated:** 2026-06-12  
 **Platform:** g8e v1.1.0  
-**Maintained by:** Lateralus Labs
+**Maintained by:** Lateralus Labs, LLC.
 
 ---
 
@@ -32,7 +32,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 |------------|---------------------|-------------------|-------------------|
 | **CC1.1** | Logical and physical access controls | mTLS with SPIFFE workload identity, WebAuthn L3 Notary | `internal/services/gateway/pki_controller.go`, `docs/architecture/auth.md` |
 | **CC1.2** | Logical access security software | 5-layer verification pipeline (L1-L5) | `internal/services/governance/l4_warden.go` |
-| **CC1.3** | Logical access to system components | Role-based session isolation (operator_session_id, cli_session_id, web_session_id) | `docs/architecture/protocol.md` |
+| **CC1.3** | Logical access to system components | Role-based session isolation (operator_session_id, cli_session_id, web_session_id) | `protocol/models/conversation.json` |
 | **CC1.4** | Logical access to stored data | Encrypted audit store with mandatory encryption at rest | `internal/services/storage/audit_store.go` |
 | **CC1.5** | Authentication of external users | WebAuthn/FIDO2 hardware-bound authentication, mTLS certificate verification | `internal/services/governance/l3_notary.go` |
 | **CC1.6** | Identification and authentication | SPIFFE URI SAN binding in certificates, Ed25519 signature verification | `protocol/workload_identity.go` |
@@ -123,7 +123,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 #### A.14 System Acquisition, Development, and Maintenance
 - **A.14.1 Security requirements:** Fail-closed verification by design
 - **A.14.2 Security in development:** Security testing in CI/CD (`.github/workflows/build-and-test.yml`)
-- **A.14.3 Test data:** Separate test fixtures in `protocol/test-fixtures/`
+- **A.14.3 Test data:** Separate test fixtures in `test/fixtures/`
 - **A.14.4 Change management:** Versioned releases with changelog
 - **A.14.5 Capacity management:** Configurable database size limits
 - **A.14.6 Change control:** Git-based version control
@@ -376,7 +376,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | ZIG Activity | Description | g8e Implementation | Evidence |
 |--------------|-------------|-------------------|----------|
 | **Identify Critical Data** | Catalog sensitive data and classification | Sovereign Execution Boundary with PII/secret detection | `internal/services/scrubbing/boundary.go` |
-| **Identify Critical Applications** | Map application dependencies and data flows | GovernanceEnvelope protocol with transaction tracking | `docs/architecture/protocol.md` |
+| **Identify Critical Applications** | Map application dependencies and data flows | GovernanceEnvelope protocol with transaction tracking | `protocol/proto/g8e/operator/v1/operator.proto` |
 | **Identify Critical Assets** | Inventory infrastructure components | Operator session tracking, ledger state | `internal/services/storage/ledger.go` |
 | **Identify Critical Services** | Catalog services and communication patterns | SPIFFE workload identity registry | `protocol/workload_identity.go` |
 | **Map Data Flows** | Document data movement across boundaries | Sensitive data scrubbing before external transmission | `internal/services/scrubbing/boundary.go` |
@@ -415,7 +415,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | **Certificate Management** | PKI lifecycle management | Root/intermediate CA hierarchy, CRL | `internal/services/gateway/pki_controller.go` |
 | **Key Management** | Secure key storage and rotation | PKI hierarchy with key separation | `internal/services/gateway/pki_controller.go` |
 | **API Security** | Secure API communication | mTLS for all platform APIs | `docs/architecture/auth.md` |
-| **Supply Chain Security** | Verify software integrity | Git-based version control, signed releases | `docs/architecture/protocol.md` |
+| **Supply Chain Security** | Verify software integrity | Git-based version control, signed releases | `protocol/proto/g8e/operator/v1/operator.proto` |
 
 ### ZIG Pillars Alignment
 
@@ -448,7 +448,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 | **Certificate Authority** | ECDSA P-256 | PKI hierarchy | `internal/services/gateway/pki_controller.go` |
 | **Workload Identity** | SPIFFE URI SAN | Identity binding | `protocol/workload_identity.go` |
 | **Transaction Signatures** | Ed25519 | L2 Consensus, L5 Actuator | `internal/services/governance/l2_consensus.go` |
-| **Hash Functions** | SHA-256 | Transaction hash, state roots | `docs/architecture/protocol.md` |
+| **Hash Functions** | SHA-256 | Transaction hash, state roots | `protocol/proto/g8e/operator/v1/operator.proto` |
 | **Transport Security** | TLS 1.3 | mTLS for all communication | `docs/architecture/auth.md` |
 | **Human Authentication** | WebAuthn/FIDO2 | L3 Notary | `internal/services/governance/l3_notary.go` |
 

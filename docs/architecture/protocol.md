@@ -4,7 +4,7 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-13
+Last Updated: 2026-06-15
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -162,7 +162,7 @@ A cryptographic proof that an independent ensemble agreed on the instruction. Si
 
 ### L3 Notary: Human Authorization
 Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in `../../internal/services/governance/l3_notary.go`.
-- **Web Sessions**: Real WebAuthn/FIDO2 proof with the transaction hash as the assertion challenge.
+- **Web Sessions**: Real WebAuthn/FIDO2 proof with the transaction hash as the assertion challenge. WebAuthn passkey bootstrap provides secure initial enrollment without password dependencies.
 - **CLI Sessions**: Authenticates via mTLS certificates with SPIFFE URI SANs. The L3 proof includes the SHA-256 fingerprint of the mTLS certificate (`mtls_cert_fingerprint`) and a cryptographic `cli_signature` over the `transaction_hash`. In outbound mode, transactions requiring L3 are suspended and must be approved via CLI commands such as `g8e approve <tx_hash>`.
 - **Auto-Approval**: Explicit policy permits auto-approval for benign diagnostic verbs. Auto-approval never bypasses L1 or L2 gates.
 
@@ -339,7 +339,11 @@ The g8e Gateway runs with three posture options:
 
 ### Port Configuration
 
-The g8e Gateway exposes two logical protocol surfaces. See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
+The g8e Gateway exposes two logical protocol surfaces in a consolidated 2-port configuration:
+- **HTTP port 8080**: Bootstrap and MCP routes for initial setup and stdio-based AI IDE connections
+- **HTTPS port 8443**: mTLS API and public surface for secure client communication
+
+See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
 
 ### Configuration
 
@@ -357,17 +361,45 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 
 ### Multi-Ledger Architecture
 
-Each Operator session owns an isolated, encrypted git repository tracking all mutations with `LedgerHashBefore` and `LedgerHashAfter`. Every file mutation triggers a native Go `go-git` commit.
+The storage layer has been refactored into specialized services for separation of concerns:
+
+- **GitLedgerService** (`ledger.go`): Maintains git-backed version control of all file mutations with `LedgerHashBefore` and `LedgerHashAfter`. Every file mutation triggers a native Go `go-git` commit.
+- **ExecutionVaultService** (`execution_vault.go`): SQLite-backed storage for command execution results and file diffs, with encryption at rest.
+- **CommitmentLedger** (`commitment_ledger.go`): SQLite-backed storage for commitment attestations with atomic append operations.
+- **SQLAuditStore** (`audit_store.go`): Fail-closed audit logging for events, sessions, and action receipts with mandatory encryption of sensitive fields.
 
 ### Fail-Closed Audit Store
 
-The SQLite-backed `SQLAuditStore` mandates valid session identifiers and rejects malformed events. If audit logging fails, execution is aborted.
+The SQLite-backed `SQLAuditStore` mandates valid session identifiers and rejects malformed events. Sensitive fields (`content_text`, `command_stdout`, `command_stderr`) are encrypted at rest using the required `vault.Vault`. Encryption at rest is mandatory for all storage services. If audit logging fails, execution is aborted.
 
 ### Sovereign Execution Boundary
 
 Output scrubbing is performed directly at the `L5Actuator` boundary to redact tokens, keys, and PII before any data leaves the host.
 
 ---
+
+## Test Coverage & Code Quality
+
+### Test Coverage Status
+
+The codebase maintains comprehensive test coverage across all layers:
+
+- **Governance Layer**: Unit tests for L1 Doctrine (`l1_doctrine_test.go`), L2 Consensus (`l2_consensus_test.go`), L3 Notary (`l3_notary_integration_test.go`), L4 Warden (`l4_warden_test.go`), and L5 Actuator (`l5_actuator_test.go`, `l5_actuator_integration_test.go`)
+- **Storage Layer**: Extensive test suites for SQLAuditStore (in `storagetest/`), GitLedgerService (`ledger_test.go`, `ledger_git_test.go`), ExecutionVaultService (`execution_vault_test.go`), and supporting stores (replay, token, suspended transaction)
+- **Gateway Layer**: Comprehensive tests for envelope construction (`governance_envelope_test.go`, `governance_envelope_quality_test.go`), authentication (`gateway_auth_test.go`, `auth_controller_test.go`), and session management
+- **MCP/A2A Layer**: Integration tests for MCP gateway translation and native tools
+- **E2E Tests**: Docker-based end-to-end tests supporting both root and demo environments via `G8E_TEST_ENV` environment variable
+
+All tests follow a Tier 1 philosophy where possible (no external network/DB requirements) to ensure fast, reliable CI/CD execution.
+
+### Refactoring Notes
+
+Minor technical debt items identified for future cleanup:
+
+- **L1 Doctrine Intent Validation**: The `ValidateIntent` method in `l1_doctrine.go` currently allows all intents as a temporary bridge. Integration with Sentinel's intent allowlist is planned for a follow-up (line 144).
+- **CLI TLS Configuration**: Some CLI commands still use legacy global TLS state. Migration to dependency injection-based TLS config is planned for `pubsub_commands.go` (line 136).
+
+These items do not impact protocol correctness or security posture and are tracked for incremental improvement.
 
 ## Implementation Reference
 
@@ -383,7 +415,12 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 | L4 Warden logic | `../../internal/services/governance/l4_warden.go` |
 | L5 Actuator logic | `../../internal/services/governance/l5_actuator.go` |
 | Audit storage | `../../internal/services/storage/audit_store.go` |
-| Ledger storage | `../../internal/services/storage/ledger.go` |
+| Git ledger storage | `../../internal/services/storage/ledger.go` |
+| Execution vault storage | `../../internal/services/storage/execution_vault.go` |
+| Commitment ledger storage | `../../internal/services/storage/commitment_ledger.go` |
+| Replay store | `../../internal/services/storage/replay_store.go` |
+| Token store | `../../internal/services/storage/token_store.go` |
+| Suspended transaction store | `../../internal/services/storage/suspended_transaction_store.go` |
 | Network architecture | `./network.md` |
 | Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
 | Gateway HTTP routing | `../../internal/services/gateway/gateway_http.go` |
