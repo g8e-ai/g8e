@@ -430,6 +430,10 @@ func TestPreFlightCheck_ContextCancelled(t *testing.T) {
 	keyPath := filepath.Join(dir, "id_rsa")
 	generateTestSSHKey(t, keyPath)
 
+	// Create a known_hosts file to satisfy strict host-key checking
+	khPath := filepath.Join(dir, "known_hosts")
+	require.NoError(t, os.WriteFile(khPath, []byte(""), 0600))
+
 	r := ssh.HostConfig{
 		Hostname: "127.0.0.1",
 		Port:     "22",
@@ -437,7 +441,7 @@ func TestPreFlightCheck_ContextCancelled(t *testing.T) {
 		KeyFiles: []string{keyPath},
 	}
 
-	err := preFlightCheck(ctx, r, "", "", 5*time.Second)
+	err := preFlightCheck(ctx, r, "", khPath, 5*time.Second)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context canceled")
 }

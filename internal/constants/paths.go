@@ -180,6 +180,14 @@ func InitPathsWithBase(baseDir string) error {
 	Paths.Infra.PkiRevocationDir = filepath.Join(Paths.Infra.PkiDir, "revocation")
 	Paths.Infra.ActuatorPubJSONPath = filepath.Join(Paths.Infra.PkiDir, ActuatorPubJSONFilename)
 	Paths.Infra.ActuatorPubPEMPath = filepath.Join(Paths.Infra.PkiDir, ActuatorPubPEMFilename)
+
+	// Update hardcoded path constants
+	GatewayIDPath = filepath.Join(Paths.Infra.DataDir, GatewayIDFilename)
+	NetworkIdentityPath = filepath.Join(Paths.Infra.PkiDir, NetworkIdentityFilename)
+	PeerCertPath = filepath.Join(Paths.Infra.PkiDir, PeerSubdir, PeerCertFilename)
+	PeerKeyPath = filepath.Join(Paths.Infra.PkiDir, PeerSubdir, PeerKeyFilename)
+	PeerChainPath = filepath.Join(Paths.Infra.PkiDir, PeerSubdir, PeerChainFilename)
+	PkiGatewayKeyPath = filepath.Join(Paths.Infra.PkiIssuedHubDir, PkiFileGatewayKey)
 	return nil
 }
 
@@ -337,8 +345,11 @@ const (
 	PeerKeyFilename   = "peer.key"
 	PeerChainFilename = "peer.chain.pem"
 	PeerSubdir        = "peer"
+)
 
-	// FULL path constants (relative from runtime directory)
+// FULL path constants (relative from runtime directory)
+// These are variables to allow test path overrides via InitPathsWithBase
+var (
 	GatewayIDPath       = ".g8e/data/gateway-id"
 	ActuatorPubJSONPath = ".g8e/pki/Actuator_pub.json"
 	ActuatorPubPEMPath  = ".g8e/pki/Actuator_pub.pem"
@@ -349,8 +360,10 @@ const (
 	PkiGatewayKeyPath   = ".g8e/pki/issued/hub/operator-gateway.key"
 	SwaggerFilePath     = "docs/swagger.json"
 	OperatorLogPath     = "operator.log"
+)
 
-	// Project root discovery constants for test path initialization
+// Project root discovery constants for test path initialization
+const (
 	ProjectRootFromTestDir    = "../../"
 	ProjectRootFromCurrentDir = "."
 

@@ -9,20 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Overview
 
-v1.1.1 is a maintenance and stability release focused on improving test coverage, fixing deployment issues, and refining core services. Significant work was done to increase gateway test coverage to over 65%, alongside critical bug fixes in docker deployments, ledger wiring, and heartbeat mechanisms.
+v1.1.1 is a comprehensive maintenance and stability release that significantly hardens the g8e platform. This release features a major architectural decomposition of the gateway's authentication controller, a systematic refactoring of MCP tools for improved testability, and a massive push for integration test coverage. Additionally, this release introduces full OpenAPI/Swagger documentation for the gateway and resolves critical data races in core services.
+
+### Added
+
+* **OpenAPI/Swagger Documentation** — Added complete Swagger and OpenAPI specifications for all gateway REST endpoints.
+* **Docker E2E Test Harness** — Introduced a new, robust end-to-end testing harness with dedicated Docker fixtures.
+* **New Test Scenarios** — Added comprehensive concurrency and scenario-based tests.
 
 ### Changed
 
-* **Test Coverage Improvement** — Significantly increased gateway test coverage to over 65%, improving reliability and future maintainability.
-* **Test Infrastructure Refactoring** — Refactored `testbackend` and improved unit tests for various scenarios to provide more robust testing foundations.
-* **Scrubbing Logic Enhancement** — Improved scrubbing logic for better data sanitization and security.
-* **Emulator Documentation** — Updated emulator documentation to provide clearer guidance for developers.
+* **Auth Controller Decomposition** — Refactored the monolithic `AuthController` into specialized components (`approvals`, `bootstrap`, `passkey`, `session`).
+* **MCP Tool Testability Refactor** — Systematic refactoring of native MCP tools to support dependency injection for unit testing.
+* **Test Coverage Improvement** — Significantly increased gateway test coverage to over 65%.
+* **Documentation Overhaul** — Updated and refined almost all user guides.
+* **PubSub Command Expansion** — Expanded internal pubsub command handlers for more robust orchestration.
+* **Scrubbing Logic Enhancement** — Improved data sanitization logic in the scrubber service.
 
 ### Fixed
 
-* **Docker Deployment Fixes** — Resolved issues in docker deployments to ensure smoother orchestration and setup.
-* **Ledger Wiring** — Fixed wiring issues in the ledger service for improved data consistency.
-* **Heartbeat Test Stability** — Fixed flaky heartbeat tests to ensure reliable CI/CD pipelines.
+* **Execution Service Race Conditions** — Resolved critical data races in the execution service.
+* **Gateway Data Races** — Fixed multiple race conditions in the gateway core.
+* **Docker Deployment Reliability** — Resolved orchestration issues in Docker configurations.
+* **Heartbeat Test Stability** — Eliminated flakiness in MCP heartbeat tests.
+* **Protocol Generation** — Fixed `make proto` command and improved protocol buffer generation.
+
+### Removed
+
+* **Deprecated Invitation Service** — Cleaned up the legacy invitation service.
+* **Database Migration Cruft** — Removed obsolete database migration logic and unused SQL utilities.
 
 ---
 
