@@ -2,7 +2,7 @@
 
 **Document Version:** 1.1  
 **Last Updated:** 2026-06-12  
-**Platform:** g8e v1.1.0  
+**Platform:** g8e v1.1.1  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
