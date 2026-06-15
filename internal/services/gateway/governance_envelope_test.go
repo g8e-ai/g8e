@@ -344,3 +344,24 @@ func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T)
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.NoError(t, err, "envelope without identity fields should pass through to processor")
 }
+
+func TestGatewayModeService_SetEnvelopeProcessor(t *testing.T) {
+	t.Parallel()
+	ls, _ := setupTestGatewayService(t)
+
+	// Initially envProc should be nil
+	require.Nil(t, ls.handler.envProc, "envProc should be nil initially")
+
+	// Create a fake processor
+	fakeProc := &fakeEnvelopeProcessor{}
+
+	// Set the processor
+	ls.SetEnvelopeProcessor(fakeProc)
+
+	// Verify it was set
+	require.Equal(t, fakeProc, ls.handler.envProc, "envProc should be set to the provided processor")
+
+	// Set to nil to disable
+	ls.SetEnvelopeProcessor(nil)
+	require.Nil(t, ls.handler.envProc, "envProc should be nil after setting to nil")
+}

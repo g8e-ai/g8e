@@ -481,6 +481,164 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 	assert.Contains(t, rr.Body.String(), "web session not found")
 }
 
+func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.WebSessionAuth(handler, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: ""})
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "invalid web session cookie")
+}
+
+func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	// Create an expired web session
+	webSessionID := "expired-web-session"
+	webSession := &models.WebSession{
+		ID:               webSessionID,
+		UserID:           "user-123",
+		ExpiresAtUnixMs:  time.Now().Add(-1 * time.Hour).UnixMilli(),
+		CreatedAtUnixMs:  time.Now().Add(-2 * time.Hour).UnixMilli(),
+	}
+	webSessionBytes, err := json.Marshal(webSession)
+	require.NoError(t, err)
+	require.NoError(t, db.DocStore.DocSet("web_sessions", webSessionID, webSessionBytes))
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.WebSessionAuth(handler, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "web session expired")
+}
+
+func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	// Create an inactive user
+	userID := "inactive-web-user"
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusDisabled,
+	}
+	userBytes, err := json.Marshal(userDoc)
+	require.NoError(t, err)
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
+
+	// Create a valid web session for the inactive user
+	webSessionID := "web-session-inactive-user"
+	webSession := &models.WebSession{
+		ID:               webSessionID,
+		UserID:           userID,
+		ExpiresAtUnixMs:  time.Now().Add(1 * time.Hour).UnixMilli(),
+		CreatedAtUnixMs:  time.Now().UnixMilli(),
+	}
+	webSessionBytes, err := json.Marshal(webSession)
+	require.NoError(t, err)
+	require.NoError(t, db.DocStore.DocSet("web_sessions", webSessionID, webSessionBytes))
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.WebSessionAuth(handler, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "identity disabled")
+}
+
+func TestAuthService_WebSessionAuth_Success(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	// Create an active user
+	userID := "active-web-user"
+	userDoc := &models.User{
+		ID:     userID,
+		Status: constants.UserStatusActive,
+	}
+	userBytes, err := json.Marshal(userDoc)
+	require.NoError(t, err)
+	require.NoError(t, db.DocStore.DocSet("users", userID, userBytes))
+
+	// Create a valid web session
+	webSessionID := "valid-web-session"
+	webSession := &models.WebSession{
+		ID:               webSessionID,
+		UserID:           userID,
+		ExpiresAtUnixMs:  time.Now().Add(1 * time.Hour).UnixMilli(),
+		CreatedAtUnixMs:  time.Now().UnixMilli(),
+	}
+	webSessionBytes, err := json.Marshal(webSession)
+	require.NoError(t, err)
+	require.NoError(t, db.DocStore.DocSet("web_sessions", webSessionID, webSessionBytes))
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify user_id is stamped in context
+		ctxUserID := r.Context().Value(constants.ContextKeyUserID)
+		assert.Equal(t, userID, ctxUserID)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.WebSessionAuth(handler, db)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+}
+
 func TestAuthService_HasJWKS(t *testing.T) {
 	t.Parallel()
 	db := newTestDB(t)
@@ -546,6 +704,58 @@ func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	assert.Contains(t, rr.Body.String(), "missing JWT bearer token")
+}
+
+func TestAuthService_JWTAuthMiddleware_InvalidBearerFormat(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := response.NewWriter(logger)
+	jwks := &JWKSProvider{}
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.JWTAuthMiddleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/tools", nil)
+	req.Header.Set("Authorization", "InvalidFormat token123")
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "missing JWT bearer token")
+}
+
+func TestAuthService_JWTAuthMiddleware_EmptyToken(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := response.NewWriter(logger)
+	jwks := &JWKSProvider{}
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", jwks, "", "", "")
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	middleware := auth.JWTAuthMiddleware(handler)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/mcp/tools", nil)
+	req.Header.Set("Authorization", "Bearer ")
+	rr := httptest.NewRecorder()
+
+	middleware.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	assert.Contains(t, rr.Body.String(), "missing JWT token")
 }
 
 func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {

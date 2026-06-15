@@ -15,8 +15,15 @@ package gateway
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -785,4 +792,592 @@ func TestHTTPHandler_handleLandingPage(t *testing.T) {
 	h.handleLandingPage(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Contains(t, rr.Body.String(), "g8e", "Landing page should contain g8e")
+}
+
+// makeTestAppWorkloadCert returns a self-signed cert with a SPIFFE URI SAN for an app workload identity.
+func makeTestAppWorkloadCert(t *testing.T, appID string) *x509.Certificate {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	spiffeURI, err := url.Parse("spiffe://g8e.local/app/" + appID)
+	require.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test-app-cert"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		URIs:         []*url.URL{spiffeURI},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err)
+	return cert
+}
+
+// makeTestOperatorCert returns a self-signed cert with a SPIFFE URI SAN for an operator identity.
+func makeTestOperatorCert(t *testing.T, operatorSessionID string) *x509.Certificate {
+	t.Helper()
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	// Use exact path /app/g8eo to test identity rejection
+	spiffeURI, err := url.Parse("spiffe://g8e.local/app/g8eo")
+	require.NoError(t, err)
+	tmpl := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test-operator-cert"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+		URIs:         []*url.URL{spiffeURI},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
+	require.NoError(t, err)
+	cert, err := x509.ParseCertificate(certDER)
+	require.NoError(t, err)
+	return cert
+}
+
+func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/push", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
+	})
+
+	t.Run("Missing mTLS client certificate", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sse/push", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String())
+	})
+
+	t.Run("Empty peer certificates", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sse/push", nil)
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{}}
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"mTLS client certificate required"}`, rr.Body.String())
+	})
+
+	t.Run("Invalid JSON body", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sse/push", bytes.NewReader([]byte("invalid json")))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestAppWorkloadCert(t, "test-app")}}
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"invalid JSON body"}`, rr.Body.String())
+	})
+
+	t.Run("Missing event field", func(t *testing.T) {
+		t.Parallel()
+		payload := map[string]string{
+			"web_session_id": "web-1",
+		}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/internal/sse/push", bytes.NewReader(body))
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestAppWorkloadCert(t, "test-app")}}
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEPush(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"event field is required"}`, rr.Body.String())
+	})
+}
+
+func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sse/events", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
+	})
+
+	t.Run("Missing operator session ID from mTLS", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+	})
+
+	t.Run("Missing required routing parameter", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
+		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestOperatorCert(t, "op-session-1")}}
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+	})
+
+	t.Run("Multiple routing parameters provided", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1&web_session_id=web-1", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+	})
+}
+
+func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	t.Run("Method not allowed", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodPost, "/internal/sse/stream", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
+	})
+
+	t.Run("Missing operator session ID from mTLS", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id=cli-1", nil)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+	})
+}
+
+func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	nextCalled := false
+	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		nextCalled = true
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("next"))
+	})
+
+	middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
+
+	t.Run("No origin header - passes through", func(t *testing.T) {
+		t.Parallel()
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.True(t, nextCalled, "next handler should be called")
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Empty(t, rr.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("Local network origin - sets CORS headers", func(t *testing.T) {
+		t.Parallel()
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.Header.Set("Origin", "http://localhost:8080")
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.True(t, nextCalled, "next handler should be called")
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "http://localhost:8080", rr.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, "true", rr.Header().Get("Access-Control-Allow-Credentials"))
+		assert.Equal(t, "POST, OPTIONS", rr.Header().Get("Access-Control-Allow-Methods"))
+		assert.Equal(t, "Content-Type, Authorization", rr.Header().Get("Access-Control-Allow-Headers"))
+	})
+
+	t.Run("Private IP origin - sets CORS headers", func(t *testing.T) {
+		t.Parallel()
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.Header.Set("Origin", "http://192.168.1.1:8080")
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.True(t, nextCalled, "next handler should be called")
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "http://192.168.1.1:8080", rr.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("Non-local origin - rejected", func(t *testing.T) {
+		t.Parallel()
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.Header.Set("Origin", "http://example.com:8080")
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.False(t, nextCalled, "next handler should not be called")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.JSONEq(t, `{"error":"origin not allowed"}`, rr.Body.String())
+	})
+
+	t.Run("OPTIONS request - returns 204", func(t *testing.T) {
+		t.Parallel()
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodOptions, "/test", nil)
+		req.Header.Set("Origin", "http://localhost:8080")
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.False(t, nextCalled, "next handler should not be called for OPTIONS")
+		assert.Equal(t, http.StatusNoContent, rr.Code)
+		assert.Equal(t, "http://localhost:8080", rr.Header().Get("Access-Control-Allow-Origin"))
+	})
+
+	t.Run("127.0.0.1 origin - sets CORS headers", func(t *testing.T) {
+		t.Parallel()
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.Header.Set("Origin", "http://127.0.0.1:8080")
+		rr := httptest.NewRecorder()
+
+		middleware.ServeHTTP(rr, req)
+
+		assert.True(t, nextCalled, "next handler should be called")
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "http://127.0.0.1:8080", rr.Header().Get("Access-Control-Allow-Origin"))
+	})
+}
+
+func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Rate limit disabled - passes through", func(t *testing.T) {
+		t.Parallel()
+		infra := setupTestInfrastructure(t, false)
+		infra.Cfg.Gateway.RateLimitRPS = 0 // Disabled
+
+		mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+			Logger:           infra.Logger,
+			Responder:        infra.Responder,
+			SuspendedStore:   infra.SuspendedStore,
+			ScrubbingService: nil,
+			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+			Posture:          string(infra.Cfg.Gateway.Posture),
+		})
+		require.NoError(t, err)
+
+		h, err := newHTTPHandler(HTTPHandlerDependencies{
+			Cfg:                infra.Cfg,
+			Logger:             infra.Logger,
+			DB:                 infra.DB,
+			Pubsub:             infra.Pubsub,
+			Auth:               infra.Auth,
+			PKI:                infra.PKI,
+			CLISessionSvc:      infra.CLISessionSvc,
+			OperatorSessionSvc: infra.OperatorSessionSvc,
+			WebSessionSvc:      infra.WebSessionSvc,
+			Reg:                infra.Reg,
+			Passkey:            infra.Passkey,
+			UserSvc:            infra.UserSvc,
+			Responder:          infra.Responder,
+			MCPGateway:         mcpGateway,
+			AppEnrollment:      nil,
+			IsReady:            func() bool { return true },
+			IsGovernanceReady:  func() bool { return true },
+		})
+		require.NoError(t, err)
+
+		nextCalled := false
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := h.rateLimitMiddleware(nextHandler)
+
+		// Make multiple requests - all should pass through
+		for i := 0; i < 10; i++ {
+			nextCalled = false
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
+			req.RemoteAddr = "192.168.1.1:12345"
+			rr := httptest.NewRecorder()
+
+			middleware.ServeHTTP(rr, req)
+
+			assert.True(t, nextCalled, "next handler should be called when rate limiting is disabled")
+			assert.Equal(t, http.StatusOK, rr.Code)
+		}
+	})
+
+	t.Run("Rate limit enabled - allows requests within limit", func(t *testing.T) {
+		t.Parallel()
+		infra := setupTestInfrastructure(t, false)
+		infra.Cfg.Gateway.RateLimitRPS = 10
+		infra.Cfg.Gateway.RateLimitBurst = 20
+
+		mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+			Logger:           infra.Logger,
+			Responder:        infra.Responder,
+			SuspendedStore:   infra.SuspendedStore,
+			ScrubbingService: nil,
+			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+			Posture:          string(infra.Cfg.Gateway.Posture),
+		})
+		require.NoError(t, err)
+
+		h, err := newHTTPHandler(HTTPHandlerDependencies{
+			Cfg:                infra.Cfg,
+			Logger:             infra.Logger,
+			DB:                 infra.DB,
+			Pubsub:             infra.Pubsub,
+			Auth:               infra.Auth,
+			PKI:                infra.PKI,
+			CLISessionSvc:      infra.CLISessionSvc,
+			OperatorSessionSvc: infra.OperatorSessionSvc,
+			WebSessionSvc:      infra.WebSessionSvc,
+			Reg:                infra.Reg,
+			Passkey:            infra.Passkey,
+			UserSvc:            infra.UserSvc,
+			Responder:          infra.Responder,
+			MCPGateway:         mcpGateway,
+			AppEnrollment:      nil,
+			IsReady:            func() bool { return true },
+			IsGovernanceReady:  func() bool { return true },
+		})
+		require.NoError(t, err)
+
+		nextCalled := false
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := h.rateLimitMiddleware(nextHandler)
+
+		// Make requests within burst limit - all should pass
+		for i := 0; i < 15; i++ {
+			nextCalled = false
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
+			req.RemoteAddr = "192.168.1.1:12345"
+			rr := httptest.NewRecorder()
+
+			middleware.ServeHTTP(rr, req)
+
+			assert.True(t, nextCalled, "request %d should be allowed within burst limit", i)
+			assert.Equal(t, http.StatusOK, rr.Code)
+		}
+	})
+
+	t.Run("Rate limit enabled - different IPs tracked separately", func(t *testing.T) {
+		t.Parallel()
+		infra := setupTestInfrastructure(t, false)
+		infra.Cfg.Gateway.RateLimitRPS = 1
+		infra.Cfg.Gateway.RateLimitBurst = 2
+
+		mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+			Logger:           infra.Logger,
+			Responder:        infra.Responder,
+			SuspendedStore:   infra.SuspendedStore,
+			ScrubbingService: nil,
+			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+			Posture:          string(infra.Cfg.Gateway.Posture),
+		})
+		require.NoError(t, err)
+
+		h, err := newHTTPHandler(HTTPHandlerDependencies{
+			Cfg:                infra.Cfg,
+			Logger:             infra.Logger,
+			DB:                 infra.DB,
+			Pubsub:             infra.Pubsub,
+			Auth:               infra.Auth,
+			PKI:                infra.PKI,
+			CLISessionSvc:      infra.CLISessionSvc,
+			OperatorSessionSvc: infra.OperatorSessionSvc,
+			WebSessionSvc:      infra.WebSessionSvc,
+			Reg:                infra.Reg,
+			Passkey:            infra.Passkey,
+			UserSvc:            infra.UserSvc,
+			Responder:          infra.Responder,
+			MCPGateway:         mcpGateway,
+			AppEnrollment:      nil,
+			IsReady:            func() bool { return true },
+			IsGovernanceReady:  func() bool { return true },
+		})
+		require.NoError(t, err)
+
+		nextCalled := false
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := h.rateLimitMiddleware(nextHandler)
+
+		// IP1 makes burst requests
+		for i := 0; i < 2; i++ {
+			nextCalled = false
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
+			req.RemoteAddr = "192.168.1.1:12345"
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+			assert.True(t, nextCalled, "IP1 request %d should be allowed", i)
+		}
+
+		// IP2 should also be allowed (separate limiter)
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.RemoteAddr = "192.168.1.2:12345"
+		rr := httptest.NewRecorder()
+		middleware.ServeHTTP(rr, req)
+		assert.True(t, nextCalled, "IP2 should have its own limiter")
+	})
+
+	t.Run("Rate limit exceeded - returns 429", func(t *testing.T) {
+		t.Parallel()
+		infra := setupTestInfrastructure(t, false)
+		infra.Cfg.Gateway.RateLimitRPS = 1
+		infra.Cfg.Gateway.RateLimitBurst = 2
+
+		mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+			Logger:           infra.Logger,
+			Responder:        infra.Responder,
+			SuspendedStore:   infra.SuspendedStore,
+			ScrubbingService: nil,
+			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+			Posture:          string(infra.Cfg.Gateway.Posture),
+		})
+		require.NoError(t, err)
+
+		h, err := newHTTPHandler(HTTPHandlerDependencies{
+			Cfg:                infra.Cfg,
+			Logger:             infra.Logger,
+			DB:                 infra.DB,
+			Pubsub:             infra.Pubsub,
+			Auth:               infra.Auth,
+			PKI:                infra.PKI,
+			CLISessionSvc:      infra.CLISessionSvc,
+			OperatorSessionSvc: infra.OperatorSessionSvc,
+			WebSessionSvc:      infra.WebSessionSvc,
+			Reg:                infra.Reg,
+			Passkey:            infra.Passkey,
+			UserSvc:            infra.UserSvc,
+			Responder:          infra.Responder,
+			MCPGateway:         mcpGateway,
+			AppEnrollment:      nil,
+			IsReady:            func() bool { return true },
+			IsGovernanceReady:  func() bool { return true },
+		})
+		require.NoError(t, err)
+
+		nextCalled := false
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			nextCalled = true
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := h.rateLimitMiddleware(nextHandler)
+
+		// Exhaust burst limit
+		for i := 0; i < 3; i++ {
+			nextCalled = false
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
+			req.RemoteAddr = "192.168.1.1:12345"
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+			// First 2 should be allowed (burst), 3rd might be rate limited
+		}
+
+		// Make another request immediately - should be rate limited
+		nextCalled = false
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.RemoteAddr = "192.168.1.1:12345"
+		rr := httptest.NewRecorder()
+		middleware.ServeHTTP(rr, req)
+
+		assert.False(t, nextCalled, "request should be rate limited")
+		assert.Equal(t, http.StatusTooManyRequests, rr.Code)
+		assert.JSONEq(t, `{"error":"rate limit exceeded"}`, rr.Body.String())
+	})
+
+	t.Run("Stale limiter cleanup", func(t *testing.T) {
+		t.Parallel()
+		infra := setupTestInfrastructure(t, false)
+		infra.Cfg.Gateway.RateLimitRPS = 10
+		infra.Cfg.Gateway.RateLimitBurst = 20
+
+		mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+			Logger:           infra.Logger,
+			Responder:        infra.Responder,
+			SuspendedStore:   infra.SuspendedStore,
+			ScrubbingService: nil,
+			MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
+			Posture:          string(infra.Cfg.Gateway.Posture),
+		})
+		require.NoError(t, err)
+
+		h, err := newHTTPHandler(HTTPHandlerDependencies{
+			Cfg:                infra.Cfg,
+			Logger:             infra.Logger,
+			DB:                 infra.DB,
+			Pubsub:             infra.Pubsub,
+			Auth:               infra.Auth,
+			PKI:                infra.PKI,
+			CLISessionSvc:      infra.CLISessionSvc,
+			OperatorSessionSvc: infra.OperatorSessionSvc,
+			WebSessionSvc:      infra.WebSessionSvc,
+			Reg:                infra.Reg,
+			Passkey:            infra.Passkey,
+			UserSvc:            infra.UserSvc,
+			Responder:          infra.Responder,
+			MCPGateway:         mcpGateway,
+			AppEnrollment:      nil,
+			IsReady:            func() bool { return true },
+			IsGovernanceReady:  func() bool { return true },
+		})
+		require.NoError(t, err)
+
+		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+
+		middleware := h.rateLimitMiddleware(nextHandler)
+
+		// Create limiters for multiple IPs
+		ips := []string{"192.168.1.1:12345", "192.168.1.2:12345", "192.168.1.3:12345"}
+		for _, ip := range ips {
+			req := httptest.NewRequest(http.MethodPost, "/test", nil)
+			req.RemoteAddr = ip
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+		}
+
+		// Manually set last used time to trigger cleanup
+		h.muLimiters.Lock()
+		for ip := range h.limiters {
+			h.limiterLastUsed[ip] = time.Now().Add(-10 * time.Minute)
+		}
+		h.muLimiters.Unlock()
+
+		// Make a new request - should trigger cleanup
+		req := httptest.NewRequest(http.MethodPost, "/test", nil)
+		req.RemoteAddr = "192.168.1.4:12345"
+		rr := httptest.NewRecorder()
+		middleware.ServeHTTP(rr, req)
+
+		// Verify old limiters were cleaned up
+		h.muLimiters.Lock()
+		assert.LessOrEqual(t, len(h.limiters), 2, "stale limiters should be cleaned up")
+		h.muLimiters.Unlock()
+	})
 }
