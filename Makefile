@@ -430,7 +430,7 @@ test-gateway:
 .PHONY: test-coverage
 test-coverage:
 	@echo "Running tests with coverage (threshold: $(COVERAGE_THRESHOLD)%)..."
-	@go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
+	@go test -tags=integration $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
 		-coverprofile=coverage.out -covermode=atomic \
 		$(if $(VERBOSE),-v,) \
 		$(if $(PKG),$(PKG),$(TEST_PKGS))
