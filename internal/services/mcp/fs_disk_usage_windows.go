@@ -61,9 +61,9 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 	var err error
 
 	if req.Path != "" {
-		result, err = getDiskUsageForPath(req.Path)
+		result, err = getDiskUsageForPath(req.Path, nil)
 	} else {
-		result, err = getAllDiskUsage()
+		result, err = getAllDiskUsage(nil)
 	}
 
 	if err != nil {
@@ -85,28 +85,21 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 	}, nil
 }
 
-var (
-	modkernel32             = syscall.NewLazyDLL("kernel32.dll")
-	procGetDiskFreeSpaceExW = modkernel32.NewProc("GetDiskFreeSpaceExW")
-	procGetDriveTypeW       = modkernel32.NewProc("GetDriveTypeW")
-)
+// windowsDiskAPI provides an interface for Windows disk-related API calls.
+type windowsDiskAPI interface {
+	getDiskFreeSpaceEx(path string) (freeBytes, totalBytes, availableBytes uint64, err error)
+	getDriveType(path string) (driveType uintptr, err error)
+}
 
-func getDiskUsageForPath(path string) (FSDiskUsageResult, error) {
-	// Convert path to absolute path if not already
-	absPath, err := filepath.Abs(path)
+// realWindowsDiskAPI implements windowsDiskAPI using actual Windows system calls.
+type realWindowsDiskAPI struct{}
+
+func (r *realWindowsDiskAPI) getDiskFreeSpaceEx(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
+	pathPtr, err := syscall.UTF16PtrFromString(path)
 	if err != nil {
-		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: get absolute path: %w", err)
+		return 0, 0, 0, err
 	}
 
-	// Convert to UTF-16 pointer for Windows API
-	pathPtr, err := syscall.UTF16PtrFromString(absPath)
-	if err != nil {
-		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: convert path to UTF-16: %w", err)
-	}
-
-	var freeBytes, totalBytes, availableBytes uint64
-
-	// Call GetDiskFreeSpaceExW
 	ret, _, err := procGetDiskFreeSpaceExW.Call(
 		uintptr(unsafe.Pointer(pathPtr)),
 		uintptr(unsafe.Pointer(&freeBytes)),
@@ -115,6 +108,42 @@ func getDiskUsageForPath(path string) (FSDiskUsageResult, error) {
 	)
 
 	if ret == 0 {
+		return 0, 0, 0, err
+	}
+	return freeBytes, totalBytes, availableBytes, nil
+}
+
+func (r *realWindowsDiskAPI) getDriveType(path string) (uintptr, error) {
+	driveTypePtr, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		return 0, err
+	}
+	driveType, _, _ := procGetDriveTypeW.Call(uintptr(unsafe.Pointer(driveTypePtr)))
+	return driveType, nil
+}
+
+var (
+	modkernel32             = syscall.NewLazyDLL("kernel32.dll")
+	procGetDiskFreeSpaceExW = modkernel32.NewProc("GetDiskFreeSpaceExW")
+	procGetDriveTypeW       = modkernel32.NewProc("GetDriveTypeW")
+
+	// Default Windows API implementation
+	defaultDiskAPI windowsDiskAPI = &realWindowsDiskAPI{}
+)
+
+func getDiskUsageForPath(path string, api windowsDiskAPI) (FSDiskUsageResult, error) {
+	if api == nil {
+		api = defaultDiskAPI
+	}
+
+	// Convert path to absolute path if not already
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: get absolute path: %w", err)
+	}
+
+	freeBytes, totalBytes, availableBytes, err := api.getDiskFreeSpaceEx(absPath)
+	if err != nil {
 		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: GetDiskFreeSpaceExW failed: %w", err)
 	}
 
@@ -134,7 +163,11 @@ func getDiskUsageForPath(path string) (FSDiskUsageResult, error) {
 	}, nil
 }
 
-func getAllDiskUsage() (FSDiskUsageResult, error) {
+func getAllDiskUsage(api windowsDiskAPI) (FSDiskUsageResult, error) {
+	if api == nil {
+		api = defaultDiskAPI
+	}
+
 	// Enumerate all logical drives (A: through Z:)
 	var filesystems []FilesystemInfo
 
@@ -143,11 +176,10 @@ func getAllDiskUsage() (FSDiskUsageResult, error) {
 		driveRoot := string(drive) + ":"
 
 		// Check if drive exists using GetDriveType
-		driveTypePtr, err := syscall.UTF16PtrFromString(drivePath)
+		driveType, err := api.getDriveType(drivePath)
 		if err != nil {
 			continue
 		}
-		driveType, _, _ := procGetDriveTypeW.Call(uintptr(unsafe.Pointer(driveTypePtr)))
 
 		// DRIVE_FIXED = 3 (hard drive), DRIVE_REMOVABLE = 2, DRIVE_CDROM = 5
 		// We skip drives that don't exist (DRIVE_UNKNOWN = 0, DRIVE_NO_ROOT_DIR = 1)
@@ -155,7 +187,7 @@ func getAllDiskUsage() (FSDiskUsageResult, error) {
 			continue
 		}
 
-		result, err := getDiskUsageForPath(driveRoot)
+		result, err := getDiskUsageForPath(driveRoot, api)
 		if err != nil {
 			// Skip drives that fail (e.g., no media in removable drive)
 			continue

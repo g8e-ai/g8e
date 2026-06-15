@@ -1,129 +1,85 @@
-<div align="left">
-
 # g8e
 
-**Verify, then execute.**
+g8e is a reference monitor for agentic infrastructure that provides a fail-closed admission boundary and a sovereign context plane. It is implemented as a single static Go binary. The platform governs state-changing actions on a host and maintains a tamper-evident record of those actions for agent context.
 
-g8e is a Reference Monitor for agentic infrastructure, a fail-closed admission boundary and a sovereign context plane in a single static Go binary. It governs every state-changing action on a host, and the tamper-evident record of those actions *is* the context your agents reason from. One proof chain. Both planes.
+## Architectural Model
 
-**2 Roles. 1 Binary. 0 Trust.**
+The g8e platform treats cloud providers as stateless inference utilities. The cloud model functions as a reasoning coprocessor rather than a stateful execution environment. This design ensures that canonical state resides within the Local-First Audit Architecture (LFAA) on the host.
 
+Context is composed locally from the hash-chained ledger and live host state accessed through governed tools. Only tokenized and scrubbed intent material crosses the sovereignty boundary to the cloud. Payload rehydration occurs at the L5 Actuator layer on the host where the data resides. The model reasons over references while the underlying data remains on the host.
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) 
-[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) 
-[![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) 
-[![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) 
-[![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) 
-[![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status-v1110--core-platform) 
-[![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) 
-[![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) 
+This approach integrates the control plane and data plane into a single system. The proof chain that governs execution also serves as the context substrate. Context delivery and action governance are performed as a single operation on the same object.
 
+### State Settlement and Sovereignty
 
-[Quick start](#quick-start) · [The two planes](#the-two-planes) · [Mental model](#the-mental-model) · [Admission pipeline](#the-admission-pipeline) · [Docs](#documentation)
+The platform operates as a context settlement layer where the cloud reasoning layer possesses zero custody of underlying data. The cloud provider is restricted to viewing commitments, such as tokenized payloads, transaction hashes, and state roots. Real state is maintained on the host and updated per transaction, with each update cryptographically superseding the previous state.
 
-</div>
+The hash-chained ledger serves as a state history. Settlement is performed through execution at the L5 layer and verified against the latest committed state. The system enforces state freshness through the L4 Warden, which rejects any envelope bound to a stale Merkle root.
 
----
+The platform maintains an asymmetric trust topology where the host is sovereign and the cloud is an untrusted utility. Trust is not extended to the cloud; instead, cloud exposure is limited to cryptographic commitments and dispute resolution.
 
-## The problem
+## Technical Overview
 
-AI agents now hold write access to terminals, cloud APIs, CI/CD, source control, and databases, wired in through MCP, A2A, and function calls. Those protocols establish **capability**, they prove an agent *can* act. They say nothing about **authority**, whether a given action, right now, on this host, is safe to execute.
+The g8e platform operates as a reference monitor that is tamper-evident, always invoked, and verifiable. It is built as a pure-Go static binary with zero external dependencies. The system functions in two primary roles:
 
-The industry made a second mistake at the same time. To give agents memory, it moved context *into the provider*, managed threads, session stores, provider-side caches. Your data became someone else's state.
+- **Governance Gateway (`g8e gw`)**: This role serves as the Policy Decision Point. It admits signed `GovernanceEnvelope` transactions, manages the platform PKI (mTLS, SPIFFE workload identities), and enforces freshness and replay defense. The gateway relays envelopes to operators and does not possess privileged bypass or execution authority. It does not initiate connections to operators.
 
-g8e refuses both defaults.
+- **Governed Operator (`g8e op`)**: This role serves as the Policy Execution Point. It initiates outbound-only mTLS connections to the gateway and does not listen on any ports. It re-verifies every proof locally against its internal state and is the only component authorized to mutate the host.
 
-```
-The mandatory invariant:
-A state-changing action reaches the host only as a typed, signed, state-bound
-transaction; the host verifies that transaction before it executes.
-The record of that execution never leaves the host, and becomes the
-verifiable context for the next action.
-```
+g8e is actor-agnostic and governs actions rather than actors. AI agents, human users, CI/CD pipelines, and scheduled tasks submit actions through the same admission API. Any component that produces a conformant `GovernanceEnvelope` is treated as a principal.
 
----
+## System Architecture
 
-## What g8e is
+g8e integrates action and context planes into a single architectural model.
 
-A Reference Monitor in the original Anderson Report sense, tamper-evident, always invoked, small enough to verify. Implemented as one pure-Go static binary (`CGO_ENABLED=0`, zero standing dependencies) running in two roles:
+### Action Plane
+Every mutation must clear a five-layer admission pipeline at the host before execution. The system drops and records any actions that are stale, unsigned, unauthorized, or non-compliant with policy. The default state is closed.
 
-- **Governance Gateway (`g8e gw`)**, the Policy Decision Point. Admits signed `GovernanceEnvelope` transactions, owns the platform PKI (mTLS, SPIFFE workload identities), enforces freshness and replay defense, and relays envelopes to operators. It holds **no privileged bypass** and no execution authority. It cannot reach into your hosts; it cannot even connect to them.
+### Context Plane
+Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger called the Local-First Audit Architecture (LFAA). This occurs before the side effect is executed. The ledger provides a cryptographically provable chain of intent, interpretation, and outcome. Agents derive context from this chain and verify it against live host state through governed tools.
 
-- **Governed Operator (`g8e op`)**, the Policy Execution Point and the center of gravity. It dials **outbound-only** over mTLS to the Gateway, it listens on nothing, which means it governs hosts behind firewalls, in private subnets, and in air-gapped enclaves. It re-derives every proof locally against its own state, trusts nothing upstream including the Gateway, and is the only component permitted to mutate the host.
+## Admission Pipeline
 
-g8e is actor-agnostic. It governs the **action**, not the actor. An AI agent, a human at a CLI, a CI/CD pipeline, and a cron job all submit through the same admission API with zero privilege difference. Any conformant `GovernanceEnvelope` producer is a Principal.
+The admission pipeline consists of five layers with independent failure domains:
 
----
+1. **L1 Doctrine**: Deterministic static analysis. It enforces rules against forbidden patterns and MITRE ATT&CK indicators. This layer is active for every action.
+2. **L2 Consensus**: Multi-model consensus. It requires Ed25519 signing over the canonical SHA-256 transaction hash.
+3. **L3 Notary**: Hardware-bound human authorization. It utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash.
+4. **L4 Warden**: Fail-closed verification authority. It re-verifies all proofs against local state, signatures, freshness, and the state Merkle root.
+5. **L5 Actuator**: Single dispatch path. It handles tool invocation and enforces data sovereignty.
 
-## The two planes
+## Data Sovereignty
 
-Every governance product on the market is a control plane bolted onto someone else's data plane. g8e collapses them into one object.
+The platform enforces data sovereignty through several mechanisms:
+- Raw data remains on the host. Tokenization and scrubbing occur before intent material crosses the boundary.
+- The transaction hash is computed over the tokenized payload.
+- Transport credentials function as evidence within the envelope rather than bypass mechanisms.
+- The audit record is written before any side effect occurs.
 
-**The action plane.** Every mutation clears a five-layer admission pipeline at the host before it runs. Anything stale, unsigned, unauthorized, or off-policy is dropped at the boundary and recorded. The default is closed.
+## Quick Start
 
-**The context plane.** Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger, the Local-First Audit Architecture (LFAA), *before* the side effect occurs. That ledger is not a compliance artifact that happens to be readable. It is the only memory tier in modern agent architecture with integrity guarantees, a cryptographically provable chain of intent, interpretation, and outcome that an agent reads to form its next action. The agent doesn't *retrieve* context from a store it must trust, it *derives* context from a chain it can independently verify, and compares it against live host state through governed tools.
-
-The same proof chain that gates execution is the substrate agents remember through. Acting and remembering are one operation on one object.
-
-**The consequence for cloud AI:** the frontier model becomes a stateless reasoning utility. Canonical state lives in the LFAA on your host. Context is composed locally. Only tokenized, scrubbed intent material ever crosses the sovereignty boundary, rehydration happens at execution, where the data already lives. The cloud sees commitments, transaction hashes, state roots, tokenized payloads, never custody. You get frontier reasoning with on-prem data physics.
-
----
-
-## The mental model
-
-g8e follows standard MCP topology with integrated governance:
-
-| Reference | g8e Role | Implementation |
-| --- | --- | --- |
-| **MCP server** | **Governed Operator** | Tool-calling facade where every execution clears the host-local admission pipeline. No inbound ports. Runs on remote, private, or air-gapped hosts. |
-| **MCP gateway** | **Governance Gateway** | Admits signed, state-bound envelopes, dispatches to operators, centralized audit authority with zero raw-data exposure. |
-
-The Gateway proposes. The Operator disposes. Verification happens on the host that lives with the consequences.
-
----
-
-## The admission pipeline
-
-Five layers, two independent failure domains, semantic grading and mathematical verification, interleaved with no shared failure modes:
-
-1. **L1 Doctrine**, deterministic static analysis. Forbidden patterns, MITRE ATT&CK indicators, CUI/PHI doctrine rules. Always active, for every action, no exceptions.
-2. **L2 Consensus**, heterogeneous multi-model k-of-n Ed25519 signing over the canonical SHA-256 transaction hash. No single model's output executes.
-3. **L3 Notary**, hardware-bound human authorization. A WebAuthn/FIDO2 passkey assertion computed over the transaction hash, bound to one action, forever. Not a session. Not a scope.
-4. **L4 Warden**, the fail-closed verification authority. Re-derives every proof against local state, signatures, freshness, nonce, expiry, and the envelope's expected state Merkle root against the Operator's own ledger root.
-5. **L5 Actuator**, the single dispatch path. Handler invocation with data-sovereignty enforcement, tokenized payloads are rehydrated here, at the boundary, on the host.
-
-Compromising any single layer is insufficient to cause an unauthorized mutation. An attacker must simultaneously defeat orthogonal, independently audited proofs.
-
----
-
-## Data sovereignty, enforced, not promised
-
-- Raw data never leaves the host. Tokenization and scrubbing happen before intent material crosses the boundary; rehydration happens at L5.
-- The transaction hash is computed over the **tokenized** payload, and the token keymap's integrity is bound into the state Merkle root, substitution at rehydration breaks the transaction.
-- Transport credentials (OAuth tokens, bearer tokens) become **evidence in the envelope**, never bypass mechanisms.
-- The audit record is written before the side effect. There is no window where something ran but nothing was recorded.
-
----
-
-## Quick start
-
-Download the binary for your platform from [g8e.ai](https://g8e.ai) (darwin/linux/windows, amd64/arm64), or build from source:
+The binary is available for linux, darwin, and windows on amd64 and arm64 architectures. It can also be built from source.
 
 ```bash
-# Start the Gateway (choose your posture)
+# Start the Gateway
 ./g8e gw start
 
-# Enroll an Operator on any host that can dial out
-./g8e operator deploy --hosts <host1,host2>
+# Authenticate the CLI
+./g8e auth login
 
-# Run agentic tools
+# Deploy an Operator to remote hosts
+./g8e operator deploy --hosts <host1,host2> --background
+
+# Check Gateway status
 ./g8e gw status
 
 # Query the audit vault
 ./g8e gw data audit list --operator-session-id <session-id>
 ```
 
-Three postures, one enforcement model:
+### Posture Configurations
+
+The gateway supports three posture configurations:
 
 | Posture | L1 Doctrine | L2 Consensus | L3 Notary |
 | --- | --- | --- | --- |
@@ -131,46 +87,29 @@ Three postures, one enforcement model:
 | `consensus` | enforced | enforced | audited |
 | `notary` | enforced | enforced | enforced |
 
-L4 Warden and L5 Actuator are always active. There is no posture where the boundary is open.
+L4 Warden and L5 Actuator layers are always active in all configurations.
 
----
+## Compliance and Standards
 
-## What g8e is not
-
-- **Not an agent framework.** LangChain, CrewAI, and every ensemble are Principals, intent producers submitting through the same admission API as everyone else, with zero privilege advantage.
-- **Not a cloud service.** Self-hosted, local-first, runs air-gapped. No phone-home, no SaaS dependency, no telemetry leaving your perimeter.
-- **Not a prompt filter.** g8e governs at the execution boundary with cryptographic proofs, not at the prompt with heuristics.
-- **Not paywalled.** Apache 2.0, forever. Safe AI runtime governance must never be gated by a paywall.
-
----
-
-## Compliance posture
-
-Designed for environments where "trust us" is not an acceptable answer, NIST 800-207 zero trust architecture, NIST AI RMF, CMMC/CUI handling, FedRAMP-aligned deployment paths, ISO 42001, SOC 2. The LFAA ledger produces the evidence trail these frameworks ask for as a side effect of normal operation.
-
----
+The g8e platform is designed for environments requiring zero trust architecture as defined in NIST 800-207. It aligns with NIST AI RMF, CMMC, FedRAMP, ISO 42001, and SOC 2 requirements. The LFAA ledger provides a continuous evidence trail for these frameworks.
 
 ## Status
 
-**v1.1.0 — shipped.** Core protocol, Gateway and Operator roles, five-layer pipeline, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, 13 native tools, multi-platform binaries.
-
-In active development, transparent interception (`g8e run <cmd>` per-process proxy and TPROXY whole-host mode), gateway federation mesh, multi-operator Byzantine fault tolerance.
-
----
+**v1.1.1**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, and multi-platform support.
 
 ## Documentation
+
+Documentation is available in the `docs/` directory:
 
 - [Getting Started](docs/guides/getting_started.md)
 - [Position Paper](docs/core/position_paper.md)
 - [Operator Architecture](docs/architecture/operator.md)
 - [Gateway Architecture](docs/architecture/gateway.md)
 - [Security Model](docs/architecture/auth.md)
-- [MCP Integration](docs/protocols/mcp/mcp.md) · [A2A Integration](docs/protocols/a2a/a2a.md)
+- [MCP Integration](docs/protocols/mcp/mcp.md)
 - [CLI Reference](docs/guides/cli.md)
 - [Glossary](docs/reference/glossary.md)
 
 ---
 
-Apache 2.0 · Built by [Lateralus Labs](https://g8e.ai) · Veteran-owned
-
-*This ran because it proved it should, not because nothing stopped it.*
+Apache 2.0. Built by Lateralus Labs.

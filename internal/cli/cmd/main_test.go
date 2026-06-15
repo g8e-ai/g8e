@@ -27,27 +27,7 @@ import (
 
 func TestExecute(t *testing.T) {
 	t.Run("root command structure matches main.go implementation", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		assert.Equal(t, "g8e", rootCmd.Use)
 		assert.Contains(t, rootCmd.Short, "g8e Platform Manager")
@@ -57,27 +37,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	})
 
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "audit", "swagger"}
 		for _, expected := range expectedCommands {
@@ -93,41 +53,13 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	})
 
 	t.Run("root command has correct completion options", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
+		rootCmd := NewRootCmd()
 
 		assert.True(t, rootCmd.CompletionOptions.DisableDefaultCmd, "default completion command should be disabled")
 	})
 
 	t.Run("root command help displays correctly", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -150,15 +82,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	})
 
 	t.Run("root command long description contains key components", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
+		rootCmd := NewRootCmd()
 
 		assert.Contains(t, rootCmd.Long, "zero-trust execution platform")
 		assert.Contains(t, rootCmd.Long, "agentic infrastructure")
@@ -188,27 +112,7 @@ func TestRootCommandValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rootCmd := &cobra.Command{
-				Use:   "g8e",
-				Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-				Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-				CompletionOptions: cobra.CompletionOptions{
-					DisableDefaultCmd: true,
-				},
-			}
-
-			rootCmd.AddCommand(
-				gatewayCmd(),
-				authCmd(),
-				mcpCmd(),
-				operatorCmd(),
-				vaultCmd(),
-				testCmd(),
-				demosCmd(),
-				auditCmd(),
-				swaggerCmd(),
-			)
+			rootCmd := NewRootCmd()
 
 			assert.Contains(t, rootCmd.Use, tt.expectedUse)
 			assert.Contains(t, rootCmd.Short, tt.expectedShort)
@@ -231,27 +135,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 
 func TestCommandExecutionErrorHandling(t *testing.T) {
 	t.Run("invalid command returns error", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -264,27 +148,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	})
 
 	t.Run("no arguments shows help", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -346,27 +210,7 @@ func TestExecuteStderrErrorOutput(t *testing.T) {
 			r.Close()
 		}()
 
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		rootCmd.SetArgs([]string{"invalid-command"})
 		err := rootCmd.Execute()
@@ -385,27 +229,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 
 func TestRootCommandConsistency(t *testing.T) {
 	t.Run("subcommand names are unique", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		cmdNames := make(map[string]bool)
 		for _, cmd := range rootCmd.Commands() {
@@ -441,27 +265,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 
 func TestExecuteWithHelpFlag(t *testing.T) {
 	t.Run("--help flag displays help", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -478,27 +282,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	})
 
 	t.Run("help command displays help", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -516,66 +300,22 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 
 func TestExecuteVersionConsistency(t *testing.T) {
 	t.Run("version command is available if configured", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
+		rootCmd := NewRootCmd()
 
 		rootCmd.SetArgs([]string{"--version"})
 		err := rootCmd.Execute()
 
-		// Version command may or may not be configured, so we just check it doesn't panic
-		// If version is not configured, cobra will return an error
-		if err != nil {
-			errStr := err.Error()
-			assert.True(t, assert.Contains(t, errStr, "unknown flag") || assert.Contains(t, errStr, "version"))
-		}
+		// Version command should now be configured and return nil error
+		assert.NoError(t, err)
 	})
 }
 
 func TestRootCommandRunFunction(t *testing.T) {
 	t.Run("root command without subcommand shows help", func(t *testing.T) {
-		rootCmd := &cobra.Command{
-			Use:   "g8e",
-			Short: "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
-			Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
-			CompletionOptions: cobra.CompletionOptions{
-				DisableDefaultCmd: true,
-			},
-			Run: func(cmd *cobra.Command, args []string) {
-				cmd.Help()
-			},
+		rootCmd := NewRootCmd()
+		rootCmd.Run = func(cmd *cobra.Command, args []string) {
+			cmd.Help()
 		}
-
-		rootCmd.AddCommand(
-			gatewayCmd(),
-			authCmd(),
-			mcpCmd(),
-			operatorCmd(),
-			vaultCmd(),
-			testCmd(),
-			demosCmd(),
-			auditCmd(),
-			swaggerCmd(),
-		)
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)

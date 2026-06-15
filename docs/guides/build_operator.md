@@ -16,13 +16,31 @@ A g8e-compatible g8e Operator implements the host-side Policy Execution Point (P
 
 The reference implementation is a single Go codebase that compiles into the g8e binary. The same binary serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom Operator implementations must implement the same protocol contracts and invariants.
 
+### Role Selection
+
+The g8e binary operates in either Gateway or Operator mode depending on the provided flags.
+
+#### Gateway Mode (PDP)
+A Gateway enforces governance postures across all connected Operators. Enable Gateway mode by specifying one of the following posture flags:
+- `--doctrine`, Enforces L1 hard gates; audits L2/L3.
+- `--consensus`, Enforces L1/L2; audits L3.
+- `--notary`, Enforces L1/L2/L3 strictly.
+
+#### Operator Mode (PEP)
+An Operator executes tools on a host and connects back to a Gateway. Enable Operator mode by specifying a Gateway endpoint:
+- `-e, --endpoint <host>`, Connects to the specified Gateway.
+- `-k, --key <path>`, Specifies the Operator private key.
+- `--cert <path>`, Specifies the Operator certificate.
+
+If no role flags are provided, the binary defaults to CLI mode and executes subcommands.
+
 ---
 
 ## Reference Implementation
 
 ### Prerequisites
 
-- **Go 1.26.4+** — Required for building the reference operator.
+- **Go 1.26.4+**, required for building the reference operator.
 
 ### Build from Source
 
@@ -41,12 +59,14 @@ This produces the `g8e` binary in the repository root. The binary is statically 
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the g8e binary for the current platform.
-- `make build-all` — Builds the g8e binary for all platforms (linux, windows, darwin).
-- `make build-linux` — Builds the g8e binary for Linux (amd64, arm64, 386).
-- `make build-windows` — Builds the g8e binary for Windows (amd64, arm64).
-- `make build-darwin` — Builds the g8e binary for Darwin (amd64, arm64).
-- `make clean` — Removes compiled binaries and test artifacts.
+- `make build`, Builds the g8e binary for the current platform.
+- `make build-all`, Builds the g8e binary for all platforms (linux, windows, darwin).
+- `make build-linux`, Builds the g8e binary for Linux (amd64, arm64, 386).
+- `make build-windows`, Builds the g8e binary for Windows (amd64, arm64).
+- `make build-darwin`, Builds the g8e binary for Darwin (amd64, arm64).
+- `make build-docker`, Builds the g8e binary for linux/amd64 inside a Docker container.
+- `make build-all-docker`, Builds all platform binaries using Docker.
+- `make clean`, Removes compiled binaries and test artifacts.
 
 ### Cross-Compilation
 
@@ -74,6 +94,16 @@ make build-windows
 ```
 
 This builds for both amd64 and arm64 architectures. On Windows hosts, use the same Makefile targets with a Windows-compatible make implementation (such as MinGW make or WSL).
+
+### Deployment and Remote Management
+
+The `operator` subcommand provides tools for managing remote Operator instances:
+
+- `./g8e operator list`, Lists all Operators currently connected to the Gateway.
+- `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH.
+- `./g8e operator stream --hosts <hosts>`, Streams the binary to remote hosts without saving to disk.
+- `./g8e operator cp <target>`, Copies the binary to a local path.
+- `./g8e operator scp <user@host:path>`, Copies the binary to a remote host.
 
 ---
 
@@ -196,33 +226,11 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 
 A custom Operator implementation must pass the platform test suite to claim g8e compatibility:
 
-```bash
-make test-unit
-```
-
-This runs unit tests covering:
-- Pub/Sub command dispatch
-- SQLAuditStore writes
-- LedgerService commits
-- L1/L2/L3 verification gates
-- GovernanceEnvelope validation
-- State root computation
-- Nonce management
-- PKI operations
-- MCP/A2A translation
-- Sensitive data scrubbing
-
-For integration tests:
-
-```bash
-make test-integration
-```
-
-For the full CI pipeline:
-
-```bash
-make ci
-```
+- `make test-unit`, Runs Tier 1 unit tests.
+- `make test-integration`, Runs Tier 2 in-memory integration tests.
+- `make test-docker`, Runs Tier 3 E2E tests requiring Docker.
+- `make test-gov`, Runs Tier 3 Government demo E2E tests.
+- `make ci`, Runs the full CI pipeline.
 
 ---
 
@@ -263,14 +271,13 @@ Environment variables:
 
 Additional vault management commands:
 
-- `./g8e vault status`: Check vault status
-- `./g8e vault rekey`: Re-encrypt vault with new private key
-- `./g8e vault reset`: Reset vault (DESTROYS ALL DATA)
-- `./g8e vault export`: Export vault private key
-- `./g8e vault import`: Import vault private key
-- `./g8e vault key generate`: Generate new vault key
-- `./g8e vault key import`: Import existing vault key
-- `./g8e vault key export`: Export vault key
+- `init`, Initializes a new vault and saves the key to `~/.g8e/vault/key`.
+- `unlock`, Unlocks the vault using the private key.
+- `rekey`, Re-encrypts the vault with a new key.
+- `status`, Displays initialization and lock state.
+- `reset`, Destroys all vault data (irreversible).
+- `export`, Exports the private key to stdout.
+- `import`, Imports a private key from hex string or stdin.
 
 For detailed vault architecture and security guarantees, see [Encryption Architecture](../architecture/encryption.md).
 
@@ -278,5 +285,5 @@ For detailed vault architecture and security guarantees, see [Encryption Archite
 
 ## Next Steps
 
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a g8e Operator.
-- **[Build Apps](build_apps.md)** — Build g8e-compatible applications using a Gateway.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)**, Deploy and use a g8e Operator.
+- **[Build Apps](build_apps.md)**, Build g8e-compatible applications using a Gateway.

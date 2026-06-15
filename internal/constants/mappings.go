@@ -36,6 +36,8 @@ func MapEventTypeToActionType(eventType EventType) ActionType {
 		return ActionTypeShutdown
 	case Event.Operator.Command.Requested:
 		return ActionTypeExecuteBash
+	case Event.Operator.Command.CancelRequested:
+		return ActionTypeCancel
 	case Event.Operator.FileEdit.Requested:
 		return ActionTypeFileEdit
 	case Event.Operator.FetchFileHistory.Requested:
@@ -80,6 +82,8 @@ func MapActionTypeToEventType(actionType ActionType) EventType {
 		return Event.Operator.ShutdownRequested
 	case ActionTypeExecuteBash:
 		return Event.Operator.Command.Requested
+	case ActionTypeCancel:
+		return Event.Operator.Command.CancelRequested
 	case ActionTypeFileEdit:
 		return Event.Operator.FileEdit.Requested
 	case ActionTypeFetchFileHistory:

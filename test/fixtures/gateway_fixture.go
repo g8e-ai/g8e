@@ -28,6 +28,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -233,12 +234,13 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	err = ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 	require.NoError(t, err)
 
-	// Start the gateway service
+	// Start the gateway service. The Start error is delivered on a buffered
+	// channel and drained by Cleanup, so the goroutine never logs after the
+	// test has completed (which would panic the test runtime under -race).
 	ctx, cancel := context.WithCancel(context.Background())
+	serverErr := make(chan error, 1)
 	go func() {
-		if err := ls.Start(ctx); err != nil {
-			t.Logf("gateway start error: %v", err)
-		}
+		serverErr <- ls.Start(ctx)
 	}()
 
 	// Wait for the gateway service to be ready
@@ -247,6 +249,11 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	// Create cleanup function
 	cleanup := func() {
 		cancel()
+		// Join the Start goroutine before the test ends. A graceful shutdown
+		// surfaces http.ErrServerClosed, which is expected and not an error.
+		if err := <-serverErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			t.Logf("gateway start error: %v", err)
+		}
 		if downstreamServer != nil {
 			downstreamServer.Close()
 		}

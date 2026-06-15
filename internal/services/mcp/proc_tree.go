@@ -26,9 +26,10 @@ import (
 const (
 	defaultRootPID  = 1
 	defaultMaxDepth = 10
-	procDirectory   = "/proc"
 	minStatFields   = 4
 )
+
+var procDirectory = "/proc"
 
 // ProcTreeTool provides parent-child process relationships.
 type ProcTreeTool struct{}

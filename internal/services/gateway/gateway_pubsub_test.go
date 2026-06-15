@@ -15,7 +15,11 @@ package gateway
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"log/slog"
+	"net/http/httptest"
+	"net/url"
 	"sync"
 	"testing"
 
@@ -352,4 +356,110 @@ func TestIsDone(t *testing.T) {
 			assert.Equal(t, tt.expected, sub.isDone())
 		})
 	}
+}
+
+func TestExtractMTLSIdentity_NoTLS(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest("GET", "/test", nil)
+
+	spiffeID, operatorID := extractMTLSIdentity(req)
+
+	assert.Empty(t, spiffeID, "SPIFFE ID should be empty when no TLS")
+	assert.Empty(t, operatorID, "operator ID should be empty when no TLS")
+}
+
+func TestExtractMTLSIdentity_NoPeerCertificates(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.TLS = &tls.ConnectionState{}
+
+	spiffeID, operatorID := extractMTLSIdentity(req)
+
+	assert.Empty(t, spiffeID, "SPIFFE ID should be empty when no peer certificates")
+	assert.Empty(t, operatorID, "operator ID should be empty when no peer certificates")
+}
+
+func TestExtractMTLSIdentity_NoURISANs(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{}},
+	}
+
+	spiffeID, operatorID := extractMTLSIdentity(req)
+
+	assert.Empty(t, spiffeID, "SPIFFE ID should be empty when no URI SANs")
+	assert.Empty(t, operatorID, "operator ID should be empty when no URI SANs")
+}
+
+func TestExtractMTLSIdentity_OperatorSPIFFEID(t *testing.T) {
+	t.Parallel()
+	spiffeURL, err := url.Parse("spiffe://g8e.local/operator/org-123/op-456/session-789")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+
+	spiffeID, operatorID := extractMTLSIdentity(req)
+
+	assert.Equal(t, "spiffe://g8e.local/operator/org-123/op-456/session-789", spiffeID)
+	assert.Equal(t, "op-456", operatorID, "operator ID should be extracted from operator SPIFFE ID")
+}
+
+func TestExtractMTLSIdentity_AppSPIFFEID(t *testing.T) {
+	t.Parallel()
+	spiffeURL, err := url.Parse("spiffe://g8e.local/app/op-123")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+
+	spiffeID, operatorID := extractMTLSIdentity(req)
+
+	assert.Equal(t, "spiffe://g8e.local/app/op-123", spiffeID)
+	assert.Equal(t, "op-123", operatorID, "operator ID should be extracted from app SPIFFE ID")
+}
+
+func TestExtractMTLSIdentity_UnknownSPIFFEID(t *testing.T) {
+	t.Parallel()
+	spiffeURL, err := url.Parse("spiffe://g8e.local/unknown/type")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+
+	spiffeID, operatorID := extractMTLSIdentity(req)
+
+	assert.Equal(t, "spiffe://g8e.local/unknown/type", spiffeID)
+	assert.Empty(t, operatorID, "operator ID should be empty for unknown SPIFFE ID types")
+}
+
+func TestExtractMTLSIdentity_MalformedOperatorSPIFFEID(t *testing.T) {
+	t.Parallel()
+	spiffeURL, err := url.Parse("spiffe://g8e.local/operator/too-short")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{{
+			URIs: []*url.URL{spiffeURL},
+		}},
+	}
+
+	spiffeID, operatorID := extractMTLSIdentity(req)
+
+	assert.Equal(t, "spiffe://g8e.local/operator/too-short", spiffeID)
+	assert.Empty(t, operatorID, "operator ID should be empty for malformed operator SPIFFE ID")
 }

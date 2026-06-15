@@ -156,6 +156,7 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 	rs.heartbeat = NewHeartbeatService(c.Config, c.Logger, &rs.wg)
 	rs.heartbeat.ctx = serviceCtx
 	rs.heartbeat.results = c.ResultsService
+	rs.heartbeat.SetActuator(rs.actuator)
 
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
@@ -167,18 +168,23 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 
 	rs.fileOps = NewFileOpsService(c.Config, c.Logger, c.FileEdit, client)
 	rs.fileOps.results = c.ResultsService
-	rs.fileOps.scrubbing = c.Scrubbing
+	rs.fileOps.SetScrubbingService(c.Scrubbing)
 	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.ExecutionVault)
 	rs.fileOps.auditStore = c.AuditStore
 	rs.fileOps.ledger = c.Ledger
+	rs.fileOps.auditStoreForObserved = c.AuditStore
 
 	rs.ports = NewPortService(c.Config, c.Logger, client)
+	rs.ports.SetScrubbingService(c.Scrubbing)
+	rs.ports.auditStore = c.AuditStore
 
 	rs.audit = NewAuditService(c.Config, c.Logger, c.AuditStore)
 
 	rs.history = NewHistoryService(c.Config, c.Logger, client)
 	rs.history.executionVault = c.ExecutionVault
 	rs.history.historyHandler = c.HistoryHandler
+	rs.history.SetScrubbingService(c.Scrubbing)
+	rs.history.auditStore = c.AuditStore
 
 	rs.mcpGateway = c.MCPGateway
 
@@ -310,6 +316,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 func (rs *OperatorPubSubService) buildHandlers() {
 	rs.handlers = map[constants.EventType]func(context.Context, *PubSubCommandMessage){
 		constants.Event.Operator.HeartbeatRequested:         rs.heartbeat.HandleRequest,
+		constants.Event.Operator.Heartbeat:                  rs.handleHeartbeatEvent,
 		constants.Event.Operator.Command.Requested:          rs.commands.HandleExecutionRequest,
 		constants.Event.Operator.Command.CancelRequested:    rs.commands.HandleCancelRequest,
 		constants.Event.Operator.FileEdit.Requested:         rs.fileOps.HandleFileEditRequest,
@@ -517,12 +524,6 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 	}
 }
 
-// HandleCommandData processes a typed command message from the Gateway transport.
-func (rs *OperatorPubSubService) HandleCommandData(msg *PubSubCommandMessage) {
-	rs.logger.Info("Processing request (via Gateway)")
-	rs.dispatchCommand(msg)
-}
-
 func (rs *OperatorPubSubService) handleCommandPayload(payload []byte) {
 	rs.logger.Info("Received message from g8e",
 		"operator_session_id", rs.config.OperatorSessionId,
@@ -685,15 +686,6 @@ func (rs *OperatorPubSubService) SetActuator(a *governance.L5Actuator) {
 // SetL4Warden sets the L4 warden (used for testing).
 func (rs *OperatorPubSubService) SetL4Warden(w *governance.L4Warden) {
 	rs.l4warden = w
-}
-
-func (rs *OperatorPubSubService) dispatchCommand(cmdMsg *PubSubCommandMessage) {
-	handler, ok := rs.handlers[cmdMsg.EventType]
-	if !ok {
-		rs.logger.Warn("Unknown request type", "event_type", cmdMsg.EventType)
-		return
-	}
-	handler(rs.ctx, cmdMsg)
 }
 
 // ExecuteVerifiedTransaction implements governance.ExecutionHandler.
@@ -889,6 +881,18 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 	}
 
 	return summary, nil
+}
+
+// handleHeartbeatEvent processes a heartbeat event through the heartbeat service for publication.
+func (rs *OperatorPubSubService) handleHeartbeatEvent(ctx context.Context, msg *PubSubCommandMessage) {
+	var heartbeat operatorv1.HeartbeatResult
+	if err := proto.Unmarshal(msg.Payload, &heartbeat); err != nil {
+		rs.logger.Error("Failed to unmarshal heartbeat payload", "error", err)
+		return
+	}
+	if err := rs.heartbeat.Publish(ctx, &heartbeat); err != nil {
+		rs.logger.Error("Failed to publish heartbeat", "error", err)
+	}
 }
 
 // SendAutomaticHeartbeat publishes an automatic heartbeat immediately.

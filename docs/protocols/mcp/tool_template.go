@@ -21,8 +21,10 @@
 // 2. Replace YOUR_TOOL_NAME with your tool name (snake_case)
 // 3. Replace YourTool with your tool name (PascalCase)
 // 4. Implement the Execute() method
-// 5. Add your tool to the tools list in RegisterNativeTools() in native_tool_registry.go
-// 6. Done! No init() function needed
+// 5. Add YourToolRequest and YourToolResult structs to internal/services/mcp/models.go
+// 6. Add your tool to the tools list in RegisterNativeTools() in native_tool_registry.go
+// 7. Create a test file internal/services/mcp/your_tool_name_test.go
+// 8. Done! No init() function needed
 
 package mcp
 
@@ -31,6 +33,21 @@ import (
 	"encoding/json"
 	"fmt"
 )
+
+// YourToolRequest represents the input for your tool.
+// Ideally, move this to internal/services/mcp/models.go
+type YourToolRequest struct {
+	Param1 string `json:"param1"`
+	Param2 int    `json:"param2,omitempty"`
+}
+
+// YourToolResult represents the output of your tool.
+// Ideally, move this to internal/services/mcp/models.go
+type YourToolResult struct {
+	Success bool   `json:"success"`
+	Data    string `json:"data"`
+	Error   string `json:"error,omitempty"`
+}
 
 // YourTool implements a custom native tool
 type YourTool struct{}
@@ -46,50 +63,51 @@ func (t *YourTool) Description() string {
 }
 
 // InputSchema returns the JSON Schema for tool validation
-func (t *YourTool) InputSchema() map[string]interface{} {
-	return map[string]interface{}{
-		"type": "object",
-		"properties": map[string]interface{}{
-			"param1": map[string]interface{}{
-				"type":        "string",
-				"description": "Description of param1",
+func (t *YourTool) InputSchema() *InputSchema {
+	return &InputSchema{
+		Type: "object",
+		Properties: map[string]*PropertySchema{
+			"param1": {
+				Type:        "string",
+				Description: "Description of param1",
 			},
-			"param2": map[string]interface{}{
-				"type":        "integer",
-				"description": "Description of param2 (optional)",
+			"param2": {
+				Type:        "integer",
+				Description: "Description of param2 (optional)",
 			},
 		},
-		"required": []string{"param1"},
+		Required: []string{"param1"},
 	}
 }
 
 // Execute implements the tool logic
 func (t *YourTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	// Parse request
-	var req struct {
-		Param1 string `json:"param1"`
-		Param2 int    `json:"param2,omitempty"`
-	}
+	var req YourToolRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("your_tool_name: unmarshal arguments: %w", err)
 	}
 
-	// Validate required fields
+	// Validate required fields (optional, but good practice for clarity)
 	if req.Param1 == "" {
-		return CallToolResult{}, fmt.Errorf("param1 is required")
+		return CallToolResult{}, fmt.Errorf("your_tool_name: param1 is required")
+	}
+
+	// Example: Check context for cancellation
+	if err := ctx.Err(); err != nil {
+		return CallToolResult{}, err
 	}
 
 	// YOUR TOOL LOGIC HERE
 	// Implement your tool's functionality
-	result := map[string]interface{}{
-		"success": true,
-		"data":    "Tool executed successfully",
+	result := YourToolResult{
+		Success: true,
+		Data:    "Tool executed successfully",
 	}
 
 	// Marshal result to JSON
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("your_tool_name: marshal result: %w", err)
 	}
 
 	// Return result

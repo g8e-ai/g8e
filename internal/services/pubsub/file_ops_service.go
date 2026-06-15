@@ -62,6 +62,9 @@ type FileOpsService struct {
 	auditStore  *storage.SQLAuditStore
 	ledger      *storage.GitLedgerService
 	client      PubSubClient
+	// auditStoreForObserved is the audit store for observed-state content evidence
+	// (separate from the auditStore used for bound-state file mutations)
+	auditStoreForObserved AuditEventRecorder
 }
 
 // NewFileOpsService creates a new FileOpsService.
@@ -74,6 +77,16 @@ func NewFileOpsService(cfg *config.Config, logger *slog.Logger, fileEditSvc *exe
 		fsGrep:   execution.NewFsGrepService(cfg.WorkDir, logger),
 		client:   client,
 	}
+}
+
+// SetAuditStoreForObserved sets the audit store for observed-state content evidence.
+func (fs *FileOpsService) SetAuditStoreForObserved(auditStore AuditEventRecorder) {
+	fs.auditStoreForObserved = auditStore
+}
+
+// SetScrubbingService sets the scrubbing service for observed-state content evidence.
+func (fs *FileOpsService) SetScrubbingService(scrubbingSvc *scrubbing.ScrubbingService) {
+	fs.scrubbing = scrubbingSvc
 }
 
 // HandleFileEditRequest processes an inbound file edit request.
@@ -636,11 +649,11 @@ func (fs *FileOpsService) HandleFsReadRequest(ctx context.Context, msg *PubSubCo
 }
 
 func (fs *FileOpsService) publishLFAATypedResponse(ctx context.Context, msg *PubSubCommandMessage, eventType constants.EventType, payload proto.Message) {
-	publishLFAATypedResponseTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, payload)
+	publishLFAATypedResponseTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, payload, fs.auditStoreForObserved, fs.scrubbing)
 }
 
 func (fs *FileOpsService) publishLFAAError(ctx context.Context, msg *PubSubCommandMessage, eventType constants.EventType, errorMsg string) {
-	publishLFAAErrorTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, errorMsg)
+	publishLFAAErrorTo(ctx, fs.client, fs.config, fs.logger, msg, eventType, errorMsg, fs.auditStoreForObserved, fs.scrubbing)
 }
 
 // payloadToFileEditRequest is a package-level helper shared by FileOpsService and tests.

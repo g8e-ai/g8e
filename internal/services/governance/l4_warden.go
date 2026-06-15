@@ -531,7 +531,9 @@ func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (pr
 		return nil, "", ErrUnknownActionType
 	}
 
-	if len(envelope.Payload) == 0 {
+	// ActionTypeHeartbeat uses HeartbeatRequested{} which has no fields and marshals
+	// to zero bytes — this is a valid empty proto, not a missing payload.
+	if len(envelope.Payload) == 0 && actionType != constants.ActionTypeHeartbeat {
 		return nil, "", ErrPayloadMissing
 	}
 
@@ -794,6 +796,8 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		msg = &operatorv1.RevokeIntentRequested{}
 	case constants.ActionTypeHeartbeat:
 		msg = &operatorv1.HeartbeatRequested{}
+	case constants.ActionTypeCancel:
+		msg = &operatorv1.CommandCancelRequested{}
 	case constants.ActionTypeInvestigationCreate:
 		// No typed payload for investigation create, it uses raw bytes
 		return nil, nil

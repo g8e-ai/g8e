@@ -22,7 +22,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestNewAuditService(t *testing.T) {
@@ -321,13 +320,4 @@ func TestAuditService_HandleDirectCmdResultRequest(t *testing.T) {
 		svc.HandleDirectCmdResultRequest(context.Background(), msg)
 		// Should attempt to record
 	})
-}
-
-func mustMarshalProto(t *testing.T, msg proto.Message) []byte {
-	t.Helper()
-	data, err := proto.Marshal(msg)
-	if err != nil {
-		t.Fatalf("failed to marshal proto: %v", err)
-	}
-	return data
 }

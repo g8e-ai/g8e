@@ -14,12 +14,9 @@
 package cmd
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestGatewayCmd(t *testing.T) {
@@ -28,6 +25,34 @@ func TestGatewayCmd(t *testing.T) {
 		assert.Equal(t, "gw", cmd.Use)
 		assert.Contains(t, cmd.Short, "g8e Gateway")
 		assert.Contains(t, cmd.Long, "lifecycle")
+	})
+
+	t.Run("gw command has gateway alias", func(t *testing.T) {
+		cmd := gatewayCmd()
+		assert.Contains(t, cmd.Aliases, "gateway")
+	})
+
+	t.Run("gw command has all expected subcommands", func(t *testing.T) {
+		cmd := gatewayCmd()
+		subcommands := cmd.Commands()
+		subcommandNames := make(map[string]bool)
+		for _, sub := range subcommands {
+			subcommandNames[sub.Name()] = true
+		}
+
+		// Verify core lifecycle commands
+		assert.True(t, subcommandNames["start"], "start subcommand should exist")
+		assert.True(t, subcommandNames["stop"], "stop subcommand should exist")
+		assert.True(t, subcommandNames["status"], "status subcommand should exist")
+		assert.True(t, subcommandNames["restart"], "restart subcommand should exist")
+		assert.True(t, subcommandNames["logs"], "logs subcommand should exist")
+		assert.True(t, subcommandNames["settings"], "settings subcommand should exist")
+		assert.True(t, subcommandNames["reset"], "reset subcommand should exist")
+		assert.True(t, subcommandNames["clean"], "clean subcommand should exist")
+
+		// Verify data and security subcommands
+		assert.True(t, subcommandNames["data"], "data subcommand should exist")
+		assert.True(t, subcommandNames["security"], "security subcommand should exist")
 	})
 }
 
@@ -38,6 +63,90 @@ func TestGatewayStartCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Start")
 		assert.Contains(t, cmd.Short, "g8e Gateway")
 	})
+
+	t.Run("start command has all required flags", func(t *testing.T) {
+		cmd := gatewayStartCmd()
+		flags := cmd.Flags()
+
+		// Verify posture flag
+		postureFlag := flags.Lookup("posture")
+		assert.NotNil(t, postureFlag, "posture flag should exist")
+		assert.Equal(t, "doctrine", postureFlag.DefValue)
+
+		// Verify port flags
+		httpPortFlag := flags.Lookup("http-port")
+		assert.NotNil(t, httpPortFlag, "http-port flag should exist")
+		assert.Equal(t, "0", httpPortFlag.DefValue)
+
+		httpsPortFlag := flags.Lookup("https-port")
+		assert.NotNil(t, httpsPortFlag, "https-port flag should exist")
+		assert.Equal(t, "0", httpsPortFlag.DefValue)
+
+		// Verify directory flags
+		dataDirFlag := flags.Lookup("data-dir")
+		assert.NotNil(t, dataDirFlag, "data-dir flag should exist")
+		assert.Equal(t, "", dataDirFlag.DefValue)
+
+		pkiDirFlag := flags.Lookup("pki-dir")
+		assert.NotNil(t, pkiDirFlag, "pki-dir flag should exist")
+		assert.Equal(t, "", pkiDirFlag.DefValue)
+
+		secretsDirFlag := flags.Lookup("secrets-dir")
+		assert.NotNil(t, secretsDirFlag, "secrets-dir flag should exist")
+		assert.Equal(t, "", secretsDirFlag.DefValue)
+
+		vaultDirFlag := flags.Lookup("vault-dir")
+		assert.NotNil(t, vaultDirFlag, "vault-dir flag should exist")
+		assert.Equal(t, "", vaultDirFlag.DefValue)
+
+		vaultKeyFlag := flags.Lookup("vault-key")
+		assert.NotNil(t, vaultKeyFlag, "vault-key flag should exist")
+		assert.Equal(t, "", vaultKeyFlag.DefValue)
+
+		// Verify vault unlock flag
+		vaultRequireUnlockFlag := flags.Lookup("vault-require-unlock")
+		assert.NotNil(t, vaultRequireUnlockFlag, "vault-require-unlock flag should exist")
+		assert.Equal(t, "false", vaultRequireUnlockFlag.DefValue)
+
+		// Verify passkey flags
+		passkeyRpIDFlag := flags.Lookup("passkey-rp-id")
+		assert.NotNil(t, passkeyRpIDFlag, "passkey-rp-id flag should exist")
+		assert.Equal(t, "", passkeyRpIDFlag.DefValue)
+
+		passkeyRpNameFlag := flags.Lookup("passkey-rp-name")
+		assert.NotNil(t, passkeyRpNameFlag, "passkey-rp-name flag should exist")
+		assert.Equal(t, "", passkeyRpNameFlag.DefValue)
+
+		// Verify rate limiting flags
+		rateLimitRPSFlag := flags.Lookup("rate-limit-rps")
+		assert.NotNil(t, rateLimitRPSFlag, "rate-limit-rps flag should exist")
+		assert.Equal(t, "0", rateLimitRPSFlag.DefValue)
+
+		rateLimitBurstFlag := flags.Lookup("rate-limit-burst")
+		assert.NotNil(t, rateLimitBurstFlag, "rate-limit-burst flag should exist")
+		assert.Equal(t, "0", rateLimitBurstFlag.DefValue)
+
+		// Verify log level flag
+		logLevelFlag := flags.Lookup("log")
+		assert.NotNil(t, logLevelFlag, "log flag should exist")
+		assert.Equal(t, "info", logLevelFlag.DefValue)
+
+		// Verify cert mode flag
+		certModeFlag := flags.Lookup("cert-mode")
+		assert.NotNil(t, certModeFlag, "cert-mode flag should exist")
+		assert.Equal(t, "", certModeFlag.DefValue)
+
+		// Verify follow flag
+		followFlag := flags.Lookup("follow")
+		assert.NotNil(t, followFlag, "follow flag should exist")
+		assert.Equal(t, "false", followFlag.DefValue)
+		assert.Equal(t, "f", followFlag.Shorthand)
+	})
+
+	t.Run("start command has RunE function set", func(t *testing.T) {
+		cmd := gatewayStartCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
+	})
 }
 
 func TestGatewayStopCmd(t *testing.T) {
@@ -46,6 +155,11 @@ func TestGatewayStopCmd(t *testing.T) {
 		assert.Equal(t, "stop", cmd.Use)
 		assert.Contains(t, cmd.Short, "Stop")
 		assert.Contains(t, cmd.Short, "g8e Gateway")
+	})
+
+	t.Run("stop command has RunE function set", func(t *testing.T) {
+		cmd := gatewayStopCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
 	})
 }
 
@@ -56,6 +170,11 @@ func TestGatewayStatusCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "health")
 		assert.Contains(t, cmd.Short, "status")
 	})
+
+	t.Run("status command has RunE function set", func(t *testing.T) {
+		cmd := gatewayStatusCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
+	})
 }
 
 func TestGatewayRestartCmd(t *testing.T) {
@@ -65,6 +184,11 @@ func TestGatewayRestartCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Restart")
 		assert.Contains(t, cmd.Short, "g8e Gateway")
 	})
+
+	t.Run("restart command has RunE function set", func(t *testing.T) {
+		cmd := gatewayRestartCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
+	})
 }
 
 func TestGatewayLogsCmd(t *testing.T) {
@@ -73,6 +197,21 @@ func TestGatewayLogsCmd(t *testing.T) {
 		assert.Equal(t, "logs", cmd.Use)
 		assert.Contains(t, cmd.Short, "logs")
 	})
+
+	t.Run("logs command has follow flag", func(t *testing.T) {
+		cmd := gatewayLogsCmd()
+		flags := cmd.Flags()
+
+		followFlag := flags.Lookup("follow")
+		assert.NotNil(t, followFlag, "follow flag should exist")
+		assert.Equal(t, "false", followFlag.DefValue)
+		assert.Equal(t, "f", followFlag.Shorthand)
+	})
+
+	t.Run("logs command has RunE function set", func(t *testing.T) {
+		cmd := gatewayLogsCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
+	})
 }
 
 func TestGatewaySettingsCmd(t *testing.T) {
@@ -80,6 +219,11 @@ func TestGatewaySettingsCmd(t *testing.T) {
 		cmd := gatewaySettingsCmd()
 		assert.Equal(t, "settings", cmd.Use)
 		assert.Contains(t, cmd.Short, "settings")
+	})
+
+	t.Run("settings command has RunE function set", func(t *testing.T) {
+		cmd := gatewaySettingsCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
 	})
 }
 
@@ -96,21 +240,27 @@ func TestGatewayResetCmd(t *testing.T) {
 		cmd := gatewayResetCmd()
 		flag := cmd.Flags().Lookup("force")
 		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
 	})
 
 	t.Run("reset has y shorthand flag", func(t *testing.T) {
 		cmd := gatewayResetCmd()
-		// The y flag is an alias for force, check force flag exists
-		forceFlag := cmd.Flags().Lookup("force")
-		assert.NotNil(t, forceFlag)
+		flag := cmd.Flags().Lookup("y")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
 	})
 
 	t.Run("reset has yes flag", func(t *testing.T) {
 		cmd := gatewayResetCmd()
 		flag := cmd.Flags().Lookup("yes")
 		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
 	})
 
+	t.Run("reset command has RunE function set", func(t *testing.T) {
+		cmd := gatewayResetCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
+	})
 }
 
 func TestGatewayCleanCmd(t *testing.T) {
@@ -125,21 +275,27 @@ func TestGatewayCleanCmd(t *testing.T) {
 		cmd := gatewayCleanCmd()
 		flag := cmd.Flags().Lookup("force")
 		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
 	})
 
 	t.Run("clean has y shorthand flag", func(t *testing.T) {
 		cmd := gatewayCleanCmd()
-		// The y flag is an alias for force, check force flag exists
-		forceFlag := cmd.Flags().Lookup("force")
-		assert.NotNil(t, forceFlag)
+		flag := cmd.Flags().Lookup("y")
+		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
 	})
 
 	t.Run("clean has yes flag", func(t *testing.T) {
 		cmd := gatewayCleanCmd()
 		flag := cmd.Flags().Lookup("yes")
 		assert.NotNil(t, flag)
+		assert.Equal(t, "false", flag.DefValue)
 	})
 
+	t.Run("clean command has RunE function set", func(t *testing.T) {
+		cmd := gatewayCleanCmd()
+		assert.NotNil(t, cmd.RunE, "RunE should be set")
+	})
 }
 
 func TestGatewayCommandFlags(t *testing.T) {
@@ -153,70 +309,4 @@ func TestGatewayCommandFlags(t *testing.T) {
 		assert.NotNil(t, resetForce)
 		assert.NotNil(t, cleanForce)
 	})
-}
-
-func TestGatewayStartWithAlreadyRunningOperator(t *testing.T) {
-	t.Run("start command structure is correct", func(t *testing.T) {
-		cmd := gatewayStartCmd()
-		assert.Equal(t, "start", cmd.Use)
-		assert.Contains(t, cmd.Short, "Start")
-	})
-}
-
-func TestGatewayStopWithNotRunningOperator(t *testing.T) {
-	t.Run("stop command structure is correct", func(t *testing.T) {
-		cmd := gatewayStopCmd()
-		assert.Equal(t, "stop", cmd.Use)
-		assert.Contains(t, cmd.Short, "Stop")
-	})
-}
-
-func TestGatewayStatusWithNotRunningOperator(t *testing.T) {
-	t.Run("status command structure is correct", func(t *testing.T) {
-		cmd := gatewayStatusCmd()
-		assert.Equal(t, "status", cmd.Use)
-		assert.Contains(t, cmd.Short, "health")
-	})
-}
-
-func TestGatewayResetConfirmation(t *testing.T) {
-	t.Run("reset command structure is correct", func(t *testing.T) {
-		cmd := gatewayResetCmd()
-		assert.Equal(t, "reset", cmd.Use)
-		assert.Contains(t, cmd.Short, "Reset")
-	})
-}
-
-func TestGatewayCleanConfirmation(t *testing.T) {
-	t.Run("clean command structure is correct", func(t *testing.T) {
-		cmd := gatewayCleanCmd()
-		assert.Equal(t, "clean", cmd.Use)
-		assert.Contains(t, cmd.Short, "Destructively")
-	})
-}
-
-func TestGatewayLogsCommand(t *testing.T) {
-	t.Run("logs command structure is correct", func(t *testing.T) {
-		cmd := gatewayLogsCmd()
-		assert.Equal(t, "logs", cmd.Use)
-		assert.Contains(t, cmd.Short, "logs")
-	})
-}
-
-func setupGatewayTestConfig(t *testing.T, tmpDir string) {
-	runtimeDir := filepath.Join(tmpDir, ".g8e")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
-
-	require.NoError(t, os.MkdirAll(pkiDir, 0755))
-	require.NoError(t, os.MkdirAll(secretsDir, 0700))
-
-	// Create minimal paths.json structure
-	protocolDir := filepath.Join(tmpDir, "protocol")
-	constantsDir := filepath.Join(protocolDir, "constants")
-	require.NoError(t, os.MkdirAll(constantsDir, 0755))
-
-	pathsJSON := minimalPathsJSON(t)
-	pathsPath := filepath.Join(constantsDir, "paths.json")
-	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 }

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-06-10
-Version: v1.0.11
+Last Updated: 2026-06-15
+Version: v1.1.1
 
 ---
 
@@ -22,9 +22,8 @@ The reference implementation is the g8e Node running in gateway mode. The same g
 
 ### Prerequisites
 
-- **Go 1.26+** — Required for building the reference gateway.
-- **OpenSSL** — Required for PKI operations during runtime.
-- **Git** — Required for the audit vault's Git-backed commit history.
+- **Go 1.26.4+** - Required for building the reference gateway.
+- **OpenSSL** - Required for PKI operations during runtime.
 
 ### Build from Source
 
@@ -41,12 +40,12 @@ This produces the `g8e` g8e Node in the repository root and platform-specific bi
 
 The Makefile provides several build targets:
 
-- `make build` — Builds the g8e Node for the current platform.
-- `make build-all` — Builds the g8e Node for all platforms (linux, windows, darwin).
-- `make build-linux` — Builds g8e Node for Linux (amd64, arm64, 386).
-- `make build-windows` — Builds g8e Node for Windows (amd64, arm64).
-- `make build-darwin` — Builds g8e Node for Darwin (amd64, arm64).
-- `make clean` — Removes compiled g8e Nodes and test artifacts.
+- `make build` - Builds the g8e Node for the current platform.
+- `make build-all` - Builds the g8e Node for all platforms (linux, windows, darwin).
+- `make build-linux` - Builds g8e Node for Linux (amd64, arm64, 386).
+- `make build-windows` - Builds g8e Node for Windows (amd64, arm64).
+- `make build-darwin` - Builds g8e Node for Darwin (amd64, arm64).
+- `make clean` - Removes compiled g8e Nodes and test artifacts.
 
 ### Build in Docker (no local Go required)
 
@@ -60,11 +59,11 @@ This builds a `g8e-builder` image from the `builder` stage of the Dockerfile and
 
 Additional Docker build targets:
 
-- `make build-docker` — Linux amd64 only.
-- `make build-linux-docker` — Linux: amd64, arm64, 386.
-- `make build-darwin-docker` — macOS: amd64, arm64.
-- `make build-windows-docker` — Windows: amd64, arm64.
-- `make build-all-docker` — All platforms.
+- `make build-docker` - Linux amd64 only.
+- `make build-linux-docker` - Linux: amd64, arm64, 386.
+- `make build-darwin-docker` - macOS: amd64, arm64.
+- `make build-windows-docker` - Windows: amd64, arm64.
+- `make build-all-docker` - All platforms.
 
 All Docker build outputs are placed in `bin/` with a `.sha256` checksum file alongside each binary.
 
@@ -113,23 +112,22 @@ To start the gateway, use the CLI gateway command:
 
 ### Gateway Mode Flags
 
-- `--posture <mode>` — g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
-- `--http-port <port>` — Plain HTTP port for bootstrap and MCP routes (default: from constants.Ports.OperatorHttp, 8080)
-- `--https-port <port>` — HTTPS port for mTLS API and public surface (default: from constants.Ports.OperatorHttps, 8443)
-- `--data-dir <dir>` — Data directory for SQLite database (default: .g8e/data in working directory)
-- `--pki-dir <dir>` — Directory for TLS certificates (default: .g8e/pki)
-- `--secrets-dir <dir>` — Directory for platform secrets (default: .g8e/secrets)
-- `--vault-dir <dir>` — Directory for vault data (default: .g8e/vault)
-- `--vault-key <path>` — Path to vault private key (default: .g8e/secrets/vault.key)
-- `--vault-require-unlock` — Require vault to be unlocked at startup (fail if vault cannot be unlocked)
-- `--passkey-rp-id <id>` — RP ID for passkey operations (default: localhost)
-- `--passkey-rp-name <name>` — RP Name for passkey operations (default: g8e)
-- `--rate-limit-rps <rps>` — Gateway requests per second limit (set to 0 to disable, default: 0)
-- `--rate-limit-burst <burst>` — Gateway rate limit burst size (default: 0)
-- `--log <level>` — Log level: info, error, debug (default: info)
-- `--cert-mode <mode>` — Certificate mode: full (all hostnames/IPs), localhost (only localhost)
-- `--network-identity-file <path>` — Path to JSON file containing pre-detected network identity
-- `-f, --follow` — Follow log output after starting (like tail -f)
+- `--posture <mode>` - g8e Gateway posture: doctrine (L1 enforced, L2/L3 audited, default), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)
+- `--http-port <port>` - Plain HTTP port for bootstrap and MCP routes (default: 0, uses constants.Ports.OperatorHttp)
+- `--https-port <port>` - HTTPS port for mTLS API and public surface (default: 0, uses constants.Ports.OperatorHttps)
+- `--data-dir <dir>` - Data directory for SQLite database (default: .g8e/data in working directory)
+- `--pki-dir <dir>` - Directory for TLS certificates (default: .g8e/pki)
+- `--secrets-dir <dir>` - Directory for platform secrets (default: .g8e/secrets)
+- `--vault-dir <dir>` - Directory for vault data (default: .g8e/vault)
+- `--vault-key <path>` - Path to vault private key (default: .g8e/secrets/vault.key)
+- `--vault-require-unlock` - Require vault to be unlocked at startup (fail if vault cannot be unlocked)
+- `--passkey-rp-id <id>` - RP ID for passkey operations (default: localhost)
+- `--passkey-rp-name <name>` - RP Name for passkey operations (default: g8e)
+- `--rate-limit-rps <rps>` - Gateway requests per second limit (set to 0 to disable, default: 0)
+- `--rate-limit-burst <burst>` - Gateway rate limit burst size (default: 0)
+- `--log <level>` - Log level: info, error, debug (default: info)
+- `--cert-mode <mode>` - Certificate mode: full (all hostnames/IPs), localhost (only localhost)
+- `-f, --follow` - Follow log output after starting (like tail -f)
 
 ---
 
@@ -364,5 +362,5 @@ Query the gateway's data store for operators, users, and audit events:
 
 ## Next Steps
 
-- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Build Operator](build_operator.md)** — Build a custom g8e-compatible g8e Operator.
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** - Connect to, authenticate, use, maintain, and pull reports from a Gateway.
+- **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator.

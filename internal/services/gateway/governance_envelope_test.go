@@ -27,11 +27,45 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
+
+// marshalEnvelope encodes a GovernanceEnvelope in its canonical protojson wire
+// form — the exact bytes a BYO client POSTs and the format the downstream
+// processor decodes. Identity-binding tests must use this rather than
+// hand-written snake_case JSON, which is not the wire format.
+func marshalEnvelope(t *testing.T, env *commonv1.GovernanceEnvelope) []byte {
+	t.Helper()
+	b, err := protojson.Marshal(env)
+	require.NoError(t, err)
+	return b
+}
+
+// identityEnvelope builds a wire envelope carrying only operator/session
+// identity, for CLI- and operator-cert binding cases that have no source
+// component.
+func identityEnvelope(t *testing.T, operatorID, operatorSessionID string) []byte {
+	t.Helper()
+	return marshalEnvelope(t, &commonv1.GovernanceEnvelope{
+		OperatorId:        operatorID,
+		OperatorSessionId: operatorSessionID,
+	})
+}
+
+// appEnvelope builds a wire envelope for an app workload (AGENT/CLIENT) that
+// authenticates via an app SPIFFE identity.
+func appEnvelope(t *testing.T, operatorID string, source commonv1.Component) []byte {
+	t.Helper()
+	return marshalEnvelope(t, &commonv1.GovernanceEnvelope{
+		OperatorId:      operatorID,
+		SourceComponent: source,
+	})
+}
 
 // fakeEnvelopeProcessor is a test double that returns predetermined results
 // for ProcessEnvelope. It captures the payload it was called with so tests
@@ -253,7 +287,7 @@ func TestGovernanceEnvelope_NilReceiptNilError_Returns500(t *testing.T) {
 func TestVerifyEnvelopeIdentityBinding_NoMTLS_ReturnsError(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
-	err := verifyEnvelopeIdentityBinding(req, []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`))
+	err := verifyEnvelopeIdentityBinding(req, identityEnvelope(t, "op-1", "sess-1"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "mTLS client certificate required")
 }
@@ -264,7 +298,7 @@ func TestVerifyEnvelopeIdentityBinding_NoURISAN_ReturnsError(t *testing.T) {
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{}},
 	}
-	err := verifyEnvelopeIdentityBinding(req, []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`))
+	err := verifyEnvelopeIdentityBinding(req, identityEnvelope(t, "op-1", "sess-1"))
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "client certificate missing URI SAN")
 }
@@ -279,7 +313,7 @@ func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *te
 			URIs: []*url.URL{spiffeURL},
 		}},
 	}
-	envelope := []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`)
+	envelope := identityEnvelope(t, "op-1", "sess-1")
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.NoError(t, err)
 }
@@ -294,7 +328,7 @@ func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *test
 			URIs: []*url.URL{spiffeURL},
 		}},
 	}
-	envelope := []byte(`{"operator_id":"op-1","operator_session_id":"sess-1"}`)
+	envelope := identityEnvelope(t, "op-1", "sess-1")
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "certificate URI SAN does not match envelope identity claims")
@@ -310,7 +344,7 @@ func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing
 			URIs: []*url.URL{spiffeURL},
 		}},
 	}
-	envelope := []byte(`{"operator_id":"op-1","source_component":"agent"}`)
+	envelope := appEnvelope(t, "op-1", commonv1.Component_COMPONENT_AGENT)
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.NoError(t, err)
 }
@@ -340,7 +374,29 @@ func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T)
 			URIs: []*url.URL{spiffeURL},
 		}},
 	}
-	envelope := []byte(`{"event_type":"test"}`)
+	envelope, marshalErr := protojson.Marshal(&commonv1.GovernanceEnvelope{EventType: "test"})
+	require.NoError(t, marshalErr)
 	err := verifyEnvelopeIdentityBinding(req, envelope)
 	require.NoError(t, err, "envelope without identity fields should pass through to processor")
+}
+
+func TestGatewayModeService_SetEnvelopeProcessor(t *testing.T) {
+	t.Parallel()
+	ls, _ := setupTestGatewayService(t)
+
+	// Initially envProc should be nil
+	require.Nil(t, ls.handler.envProc, "envProc should be nil initially")
+
+	// Create a fake processor
+	fakeProc := &fakeEnvelopeProcessor{}
+
+	// Set the processor
+	ls.SetEnvelopeProcessor(fakeProc)
+
+	// Verify it was set
+	require.Equal(t, fakeProc, ls.handler.envProc, "envProc should be set to the provided processor")
+
+	// Set to nil to disable
+	ls.SetEnvelopeProcessor(nil)
+	require.Nil(t, ls.handler.envProc, "envProc should be nil after setting to nil")
 }
