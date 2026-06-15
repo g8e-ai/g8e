@@ -25,7 +25,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -1362,7 +1361,6 @@ func TestProxySessionToGateway(t *testing.T) {
 		require.Error(t, err)
 	})
 }
-
 
 func TestSubprocessMCPProxy(t *testing.T) {
 	t.Run("subprocessMCPProxy forward marshals request", func(t *testing.T) {
