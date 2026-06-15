@@ -172,6 +172,7 @@ func TestStreamToHost_Success(t *testing.T) {
 		binaryData,
 		"", // no args
 		sshConfigPath,
+		khPath,
 		2*time.Second,
 		"", // no agent
 		"testuser",
@@ -201,6 +202,7 @@ func TestStreamToHost_ContextCancelled(t *testing.T) {
 		ctx,
 		"127.0.0.1",
 		[]byte("data"),
+		"",
 		"",
 		"",
 		2*time.Second,
@@ -255,6 +257,7 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 		[]byte("data"),
 		"",
 		sshConfigPath,
+		khPath,
 		500*time.Millisecond,
 		"",
 		"user",
@@ -441,7 +444,7 @@ func TestPreFlightCheck_ContextCancelled(t *testing.T) {
 		KeyFiles: []string{keyPath},
 	}
 
-	err := preFlightCheck(ctx, r, "", khPath, 5*time.Second)
+	err := preFlightCheck(ctx, r, "", "", khPath, 5*time.Second)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context canceled")
 }
@@ -455,7 +458,7 @@ func TestPreFlightCheck_NoAuthMethods(t *testing.T) {
 		KeyFiles: []string{},
 	}
 
-	err := preFlightCheck(ctx, r, "", "", 5*time.Second)
+	err := preFlightCheck(ctx, r, "", "", "", 5*time.Second)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no SSH auth methods available")
 }
@@ -473,7 +476,7 @@ func TestPreFlightCheck_InvalidKeyFile(t *testing.T) {
 		KeyFiles: []string{badKey},
 	}
 
-	err := preFlightCheck(ctx, r, "", "", 5*time.Second)
+	err := preFlightCheck(ctx, r, "", "", "", 5*time.Second)
 	assert.Error(t, err)
 }
 
@@ -488,7 +491,7 @@ func TestPreFlightCheck_DialTimeout(t *testing.T) {
 		KeyFiles: []string{},
 	}
 
-	err := preFlightCheck(ctx, r, "", "", 100*time.Millisecond)
+	err := preFlightCheck(ctx, r, "", "", "", 100*time.Millisecond)
 	assert.Error(t, err)
 	// Should fail due to no auth methods or dial timeout
 }

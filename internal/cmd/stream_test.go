@@ -716,7 +716,7 @@ func TestEmitJSON_TsIsRFC3339(t *testing.T) {
 
 func TestRunConcurrentStream_NoHosts(t *testing.T) {
 	ctx := context.Background()
-	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", 10, 5*time.Second, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, nil, []byte("bin"), "", "", "", 10, 5*time.Second, "", "", "", "", "", false)
 	assert.Empty(t, results)
 }
 
@@ -725,7 +725,7 @@ func TestRunConcurrentStream_ContextCancelled(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host1", "host2", "host3"}
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 100*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 10, 100*time.Millisecond, "", "", "", "", "", false)
 
 	assert.Len(t, results, len(hosts))
 	for _, res := range results {
@@ -739,7 +739,7 @@ func TestRunConcurrentStream_AllResultsCollected(t *testing.T) {
 	cancel()
 
 	hosts := []string{"a", "b", "c", "d", "e"}
-	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", 5, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, []byte("x"), "", "", "", 5, 50*time.Millisecond, "", "", "", "", "", false)
 
 	assert.Len(t, results, len(hosts), "must collect exactly one result per host")
 
@@ -761,7 +761,7 @@ func TestRunConcurrentStream_ConcurrencyLimitRespected(t *testing.T) {
 		hosts[i] = "host"
 	}
 
-	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 3, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 3, 50*time.Millisecond, "", "", "", "", "", false)
 	assert.Len(t, results, len(hosts))
 }
 
@@ -776,7 +776,7 @@ func TestRunConcurrentStream_EmitsPerHostEventsToStdout(t *testing.T) {
 	cancel()
 
 	hosts := []string{"host-a", "host-b"}
-	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", 10, 50*time.Millisecond, "", "", "", "", "", false)
+	runConcurrentStream(ctx, hosts, []byte("bin"), "", "", "", 10, 50*time.Millisecond, "", "", "", "", "", false)
 	w.Close()
 
 	var buf bytes.Buffer
@@ -878,7 +878,7 @@ func TestRunStream_ValidNodeBinaryWithCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", 1, 50*time.Millisecond, "", "", "", "", "", false)
+	results := runConcurrentStream(ctx, []string{"host1"}, binaryData, "", "", "", 1, 50*time.Millisecond, "", "", "", "", "", false)
 	require.Len(t, results, 1)
 	assert.NotEmpty(t, results[0].Error)
 }

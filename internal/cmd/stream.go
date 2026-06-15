@@ -77,6 +77,7 @@ func RunStream(args []string) {
 		endpoint        string
 		noGit           bool
 		sshConfigArg    string
+		sshKnownHosts   string
 		binaryDir       string
 		sshIdentityFile string
 		sshUser         string
@@ -91,6 +92,7 @@ func RunStream(args []string) {
 	fs.StringVar(&endpoint, "endpoint", "", "Platform endpoint - if set, starts Operator on each remote host")
 	fs.BoolVar(&noGit, "no-git", false, "Disable ledger")
 	fs.StringVar(&sshConfigArg, "ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
+	fs.StringVar(&sshKnownHosts, "known-hosts", "", "Path to SSH known_hosts file (default: ~/.ssh/known_hosts)")
 	fs.StringVar(&binaryDir, "binary-dir", getDefaultNodeBinaryDir(), "Directory containing arch-specific Operator builds")
 	fs.StringVar(&sshIdentityFile, "ssh-identity-file", "", "SSH identity file path")
 	fs.StringVar(&sshUser, "ssh-user", "", "SSH username")
@@ -171,7 +173,7 @@ func RunStream(args []string) {
 
 	// Run concurrent streaming
 	wallStart := time.Now()
-	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, concurrency, dialTimeout, os.Getenv("SSH_AUTH_SOCK"), os.Getenv("USER"), sshIdentityFile, sshUser, sshPassphrase, preFlightCheck)
+	results := runConcurrentStream(ctx, hosts, binaryData, operatorArgs, sshConfigArg, sshKnownHosts, concurrency, dialTimeout, os.Getenv("SSH_AUTH_SOCK"), os.Getenv("USER"), sshIdentityFile, sshUser, sshPassphrase, preFlightCheck)
 
 	// Tally results
 	var succeeded, failed int
@@ -212,6 +214,7 @@ func runConcurrentStream(
 	binaryData []byte,
 	operatorArgs string,
 	sshConfigPath string,
+	sshKnownHostsPath string,
 	concurrency int,
 	dialTimeout time.Duration,
 	sshAuthSock string,
@@ -231,7 +234,7 @@ func runConcurrentStream(
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			streamToHost(ctx, h, binaryData, operatorArgs, sshConfigPath, dialTimeout, sshAuthSock, username, sshIdentityFile, sshUser, sshPassphrase, preFlightCheck, resultCh)
+			streamToHost(ctx, h, binaryData, operatorArgs, sshConfigPath, sshKnownHostsPath, dialTimeout, sshAuthSock, username, sshIdentityFile, sshUser, sshPassphrase, preFlightCheck, resultCh)
 		}(host)
 	}
 
