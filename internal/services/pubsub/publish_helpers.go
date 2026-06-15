@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
@@ -93,7 +94,7 @@ func publishLFAATypedResponseTo(
 		return
 	}
 
-	data, err := json.Marshal(env)
+	data, err := protojson.Marshal(env)
 	if err != nil {
 		logger.Error("Failed to marshal LFAA typed response Governance Envelope", string(constants.ConnectionStateError), err)
 		return
@@ -138,7 +139,7 @@ func publishLFAAErrorTo(
 		return
 	}
 
-	data, err := json.Marshal(env)
+	data, err := protojson.Marshal(env)
 	if err != nil {
 		logger.Error("Failed to marshal LFAA error Governance Envelope", string(constants.ConnectionStateError), err)
 		return

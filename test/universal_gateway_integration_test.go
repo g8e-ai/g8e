@@ -61,8 +61,11 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	t.Run("health check", func(t *testing.T) {
-		httpURL := constants.LocalhostHTTPURL(f.Service.GetHTTPPort())
-		resp, err := apiClient.Get(httpURL + constants.APIPaths.Health)
+		// The full health response (including StateMerkleRoot) is served on the
+		// mTLS HTTPS API surface; the plain HTTP port only serves bootstrap
+		// health, which omits the state root.
+		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		resp, err := apiClient.Get(mtlsURL + constants.APIPaths.Health)
 		require.NoError(t, err)
 
 		var health models.HealthResponse

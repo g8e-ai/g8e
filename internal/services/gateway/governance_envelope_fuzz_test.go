@@ -14,7 +14,12 @@
 package gateway
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 )
 
@@ -55,16 +60,19 @@ func FuzzEnvelopeJSONParsing(f *testing.F) {
 	})
 }
 
-// FuzzEnvelopeIdentityBinding tests the identity binding extraction with random inputs
-// to catch edge-case panics in JSON parsing.
+// FuzzEnvelopeIdentityBinding fuzzes the real verifyEnvelopeIdentityBinding
+// against random request bodies. It exercises the canonical protojson decode
+// path (the format real BYO clients send) and asserts the function never
+// panics — malformed input must pass through gracefully to the processor.
 func FuzzEnvelopeIdentityBinding(f *testing.F) {
-	// Add seed corpus with valid and edge-case inputs
-	f.Add(`{"operator_session_id":"sess-123","operator_id":"op-456","source_component":"client"}`)
-	f.Add(`{"operator_session_id":"","operator_id":"","source_component":""}`)
-	f.Add(`{"operator_session_id":"test"}`)
-	f.Add(`{"operator_id":"test"}`)
-	f.Add(`{"source_component":"test"}`)
-	f.Add(`{"operator_session_id":"` + string(make([]byte, 10000)) + `"}`)
+	// Seed corpus in canonical protojson wire form (camelCase, enum-as-string)
+	// plus malformed/edge-case inputs.
+	f.Add(`{"operatorSessionId":"sess-123","operatorId":"op-456","sourceComponent":"COMPONENT_CLIENT"}`)
+	f.Add(`{"operatorSessionId":"","operatorId":""}`)
+	f.Add(`{"operatorSessionId":"test"}`)
+	f.Add(`{"operatorId":"test"}`)
+	f.Add(`{"sourceComponent":"COMPONENT_AGENT"}`)
+	f.Add(`{"operatorSessionId":"` + string(make([]byte, 10000)) + `"}`)
 	f.Add(`{"nested":{"deep":{"value":"test"}}}`)
 	f.Add(`invalid json`)
 	f.Add(``)
@@ -72,13 +80,17 @@ func FuzzEnvelopeIdentityBinding(f *testing.F) {
 	f.Add(`[]`)
 	f.Add(`null`)
 
+	spiffeURL, err := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
+	if err != nil {
+		f.Fatal(err)
+	}
+
 	f.Fuzz(func(t *testing.T, data string) {
-		// This should never panic - JSON decoding must handle all inputs gracefully
-		var envelope struct {
-			OperatorSessionID string `json:"operator_session_id"`
-			OperatorID        string `json:"operator_id"`
-			SourceComponent   string `json:"source_component"`
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.TLS = &tls.ConnectionState{
+			PeerCertificates: []*x509.Certificate{{URIs: []*url.URL{spiffeURL}}},
 		}
-		_ = json.Unmarshal([]byte(data), &envelope)
+		// Must never panic regardless of input.
+		_ = verifyEnvelopeIdentityBinding(req, []byte(data))
 	})
 }

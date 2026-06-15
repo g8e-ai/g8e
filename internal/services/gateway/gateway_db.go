@@ -23,13 +23,10 @@ package gateway
 import (
 	"context"
 	_ "embed"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 

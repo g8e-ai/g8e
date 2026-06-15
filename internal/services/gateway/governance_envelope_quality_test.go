@@ -24,8 +24,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 func TestIndexOf(t *testing.T) {
@@ -125,82 +125,94 @@ func TestVerifyEnvelopeIdentityBinding_Exhaustive(t *testing.T) {
 	}
 
 	cases := []struct {
-		name      string
-		uris      []*url.URL
-		envelope  string
-		expectErr bool
+		name              string
+		uris              []*url.URL
+		operatorID        string
+		operatorSessionID string
+		source            commonv1.Component
+		expectErr         bool
 	}{
 		{
-			name:      "CLI session match",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/cli/user-1/sess-1")},
-			envelope:  `{"operator_session_id":"sess-1"}`,
-			expectErr: false,
+			name:              "CLI session match",
+			uris:              []*url.URL{mustParseURL("spiffe://g8e.local/cli/user-1/sess-1")},
+			operatorSessionID: "sess-1",
+			expectErr:         false,
 		},
 		{
-			name:      "CLI session mismatch",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/cli/user-1/sess-2")},
-			envelope:  `{"operator_session_id":"sess-1"}`,
-			expectErr: true,
+			name:              "CLI session mismatch",
+			uris:              []*url.URL{mustParseURL("spiffe://g8e.local/cli/user-1/sess-2")},
+			operatorSessionID: "sess-1",
+			expectErr:         true,
 		},
 		{
-			name:      "Operator ID and session match",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/operator/org-1/op-1/sess-1")},
-			envelope:  `{"operator_id":"op-1", "operator_session_id":"sess-1"}`,
-			expectErr: false,
+			name:              "Operator ID and session match",
+			uris:              []*url.URL{mustParseURL("spiffe://g8e.local/operator/org-1/op-1/sess-1")},
+			operatorID:        "op-1",
+			operatorSessionID: "sess-1",
+			expectErr:         false,
 		},
 		{
-			name:      "Operator ID mismatch",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/operator/org-1/op-2/sess-1")},
-			envelope:  `{"operator_id":"op-1", "operator_session_id":"sess-1"}`,
-			expectErr: true,
+			name:              "Operator ID mismatch",
+			uris:              []*url.URL{mustParseURL("spiffe://g8e.local/operator/org-1/op-2/sess-1")},
+			operatorID:        "op-1",
+			operatorSessionID: "sess-1",
+			expectErr:         true,
 		},
 		{
-			name:      "Operator session mismatch",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/operator/org-1/op-1/sess-2")},
-			envelope:  `{"operator_id":"op-1", "operator_session_id":"sess-1"}`,
-			expectErr: true,
+			name:              "Operator session mismatch",
+			uris:              []*url.URL{mustParseURL("spiffe://g8e.local/operator/org-1/op-1/sess-2")},
+			operatorID:        "op-1",
+			operatorSessionID: "sess-1",
+			expectErr:         true,
 		},
 		{
-			name:      "App match",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/app/op-1")},
-			envelope:  `{"operator_id":"op-1", "source_component":"agent"}`,
-			expectErr: false,
+			name:       "App match",
+			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/app/op-1")},
+			operatorID: "op-1",
+			source:     commonv1.Component_COMPONENT_AGENT,
+			expectErr:  false,
 		},
 		{
-			name:      "App mismatch",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/app/op-2")},
-			envelope:  `{"operator_id":"op-1", "source_component":"agent"}`,
-			expectErr: true,
+			name:       "App mismatch",
+			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/app/op-2")},
+			operatorID: "op-1",
+			source:     commonv1.Component_COMPONENT_AGENT,
+			expectErr:  true,
 		},
 		{
-			name:      "CLI component skips App check",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/app/op-1")},
-			envelope:  fmt.Sprintf(`{"operator_id":"op-1", "source_component":"%s"}`, constants.SessionTypeCLI),
-			expectErr: true,
+			name:       "Non-app component skips App check",
+			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/app/op-1")},
+			operatorID: "op-1",
+			source:     commonv1.Component_COMPONENT_G8EO,
+			expectErr:  true,
 		},
 		{
-			name:      "Multiple URIs, one matches",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/unknown"), mustParseURL("spiffe://g8e.local/app/op-1")},
-			envelope:  `{"operator_id":"op-1", "source_component":"agent"}`,
-			expectErr: false,
+			name:       "Multiple URIs, one matches",
+			uris:       []*url.URL{mustParseURL("spiffe://g8e.local/unknown"), mustParseURL("spiffe://g8e.local/app/op-1")},
+			operatorID: "op-1",
+			source:     commonv1.Component_COMPONENT_AGENT,
+			expectErr:  false,
 		},
 		{
-			name:      "Wrong trust domain",
-			uris:      []*url.URL{mustParseURL("spiffe://other.local/operator/org-1/op-1/sess-1")},
-			envelope:  `{"operator_id":"op-1", "operator_session_id":"sess-1"}`,
-			expectErr: true,
+			name:              "Wrong trust domain",
+			uris:              []*url.URL{mustParseURL("spiffe://other.local/operator/org-1/op-1/sess-1")},
+			operatorID:        "op-1",
+			operatorSessionID: "sess-1",
+			expectErr:         true,
 		},
 		{
-			name:      "Operator match but wrong path prefix",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/other/org-1/op-1/sess-1")},
-			envelope:  `{"operator_id":"op-1", "operator_session_id":"sess-1"}`,
-			expectErr: true,
+			name:              "Operator match but wrong path prefix",
+			uris:              []*url.URL{mustParseURL("spiffe://g8e.local/other/org-1/op-1/sess-1")},
+			operatorID:        "op-1",
+			operatorSessionID: "sess-1",
+			expectErr:         true,
 		},
 		{
-			name:      "Multiple URIs, none match",
-			uris:      []*url.URL{mustParseURL("spiffe://g8e.local/unknown1"), mustParseURL("spiffe://g8e.local/unknown2")},
-			envelope:  `{"operator_id":"op-1", "operator_session_id":"sess-1"}`,
-			expectErr: true,
+			name:              "Multiple URIs, none match",
+			uris:              []*url.URL{mustParseURL("spiffe://g8e.local/unknown1"), mustParseURL("spiffe://g8e.local/unknown2")},
+			operatorID:        "op-1",
+			operatorSessionID: "sess-1",
+			expectErr:         true,
 		},
 	}
 
@@ -214,7 +226,12 @@ func TestVerifyEnvelopeIdentityBinding_Exhaustive(t *testing.T) {
 					},
 				},
 			}
-			err := verifyEnvelopeIdentityBinding(req, []byte(tc.envelope))
+			envelope := marshalEnvelope(t, &commonv1.GovernanceEnvelope{
+				OperatorId:        tc.operatorID,
+				OperatorSessionId: tc.operatorSessionID,
+				SourceComponent:   tc.source,
+			})
+			err := verifyEnvelopeIdentityBinding(req, envelope)
 			if tc.expectErr {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), "certificate URI SAN does not match envelope identity claims")

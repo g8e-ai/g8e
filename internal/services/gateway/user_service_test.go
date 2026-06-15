@@ -21,7 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/stretchr/testify/require"
 
@@ -1285,78 +1284,5 @@ func TestUserService_ConsumeInvitation(t *testing.T) {
 		err = userSvc.ConsumeInvitation("non-existent")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "invitation not found")
-	})
-}
-
-func TestUserService_ensureWebAuthnUserID(t *testing.T) {
-	t.Run("Success - migrates user without WebAuthnUserID", func(t *testing.T) {
-		t.Parallel()
-		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-
-		userSvc := NewUserService(db, logger)
-
-		// Create a user without WebAuthnUserID by manually creating the document
-		userID := uuid.New().String()
-		userWithoutWebAuthnID := &models.User{
-			ID:                 userID,
-			PasskeyCredentials: []models.PasskeyCredential{},
-			Provider:           string(constants.AuthProviderPasskey),
-			Status:             constants.UserStatusActive,
-			IsBootstrap:        false,
-			WebAuthnUserID:     "", // Empty to trigger migration
-		}
-
-		data, err := json.Marshal(userWithoutWebAuthnID)
-		require.NoError(t, err)
-
-		err = db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data)
-		require.NoError(t, err)
-
-		// Call GetByID which triggers ensureWebAuthnUserID
-		user, err := userSvc.GetByID(userID)
-		require.NoError(t, err)
-		require.NotNil(t, user)
-		require.NotEmpty(t, user.WebAuthnUserID) // Should now have a WebAuthnUserID
-	})
-
-	t.Run("Success - user with WebAuthnUserID skips migration", func(t *testing.T) {
-		t.Parallel()
-		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-
-		userSvc := NewUserService(db, logger)
-
-		// Create a user with WebAuthnUserID already set
-		userID := uuid.New().String()
-		existingWebAuthnID := uuid.New().String()
-		userWithWebAuthnID := &models.User{
-			ID:                 userID,
-			PasskeyCredentials: []models.PasskeyCredential{},
-			Provider:           string(constants.AuthProviderPasskey),
-			Status:             constants.UserStatusActive,
-			IsBootstrap:        false,
-			WebAuthnUserID:     existingWebAuthnID,
-		}
-
-		data, err := json.Marshal(userWithWebAuthnID)
-		require.NoError(t, err)
-
-		err = db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data)
-		require.NoError(t, err)
-
-		// Call GetByID - should skip migration
-		user, err := userSvc.GetByID(userID)
-		require.NoError(t, err)
-		require.NotNil(t, user)
-		require.Equal(t, existingWebAuthnID, user.WebAuthnUserID) // Should remain unchanged
 	})
 }

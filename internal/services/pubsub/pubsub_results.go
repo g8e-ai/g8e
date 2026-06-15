@@ -15,10 +15,10 @@ package pubsub
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
@@ -208,7 +208,7 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 		return fmt.Errorf("failed to build Universal heartbeat envelope: %w", err)
 	}
 
-	data, err := json.Marshal(env)
+	data, err := protojson.Marshal(env)
 	if err != nil {
 		return fmt.Errorf("failed to marshal Universal heartbeat envelope: %w", err)
 	}
@@ -220,10 +220,10 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 	return nil
 }
 
-// publishUniversal marshals a GovernanceEnvelope as JSON and publishes it to the results channel.
+// publishUniversal marshals a GovernanceEnvelope as protojson and publishes it to the results channel.
 // operatorID overrides rr.config.OperatorID for channel routing (e.g. gateway mode where config has no operator ID).
 func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.GovernanceEnvelope, operatorID, operatorSessionID string) error {
-	data, err := json.Marshal(env)
+	data, err := protojson.Marshal(env)
 	if err != nil {
 		return fmt.Errorf("failed to marshal Governance Envelope: %w", err)
 	}

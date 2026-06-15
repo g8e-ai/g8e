@@ -31,9 +31,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/emulator/client"
 	emulatorconfig "github.com/g8e-ai/g8e/internal/emulator/config"
-	"github.com/g8e-ai/g8e/test/fixtures"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+	"github.com/g8e-ai/g8e/test/fixtures"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -136,44 +136,20 @@ func setupTestContext(t *testing.T) *TestContext {
 	}
 }
 
-func logStateVersion(t *testing.T, label string, f *fixtures.GatewayFixture) {
-	t.Helper()
-	db := f.Service.GetDB().GetDB()
-	var version int64
-	if err := db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&version); err != nil {
-		t.Logf("state_version [%s]: query error: %v", label, err)
-		return
-	}
-	t.Logf("state_version [%s]: %d", label, version)
-	rows, err := db.QueryWithRetry("SELECT collection, id FROM documents ORDER BY collection, id")
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var col, id string
-			rows.Scan(&col, &id)
-			t.Logf("  doc: %s/%s", col, id)
-		}
-	}
-	var kvCount int
-	db.QueryRowWithRetry("SELECT COUNT(*) FROM kv_store").Scan(&kvCount)
-	t.Logf("  kv_store rows: %d", kvCount)
-}
-
 func TestScenarios(t *testing.T) {
 	// Setup test infrastructure
 	ctx := setupTestContext(t)
 	defer ctx.Fixture.Cleanup()
 
-	logStateVersion(t, "after-setup", ctx.Fixture)
-
-	// Fetch actual state root directly from StateRootService
-	stateRoot, err := ctx.Fixture.Service.GetDB().StateRootSvc.GetCurrentStateRoot()
+	// Fetch the current state root via the public health API so the envelope
+	// binds to the same state the gateway will verify against.
+	stateRoot, err := ctx.Client.StateRoot(context.Background())
 	if err != nil {
 		t.Fatalf("failed to fetch state root: %v", err)
 	}
-	t.Logf("State root from service: %q", stateRoot)
-
-	logStateVersion(t, "after-state-root-fetch", ctx.Fixture)
+	if stateRoot == "" {
+		t.Fatal("gateway returned empty state root")
+	}
 
 	// Build a valid envelope using the builder
 	intentBytes, err := New().
@@ -185,12 +161,6 @@ func TestScenarios(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to build test envelope: %v", err)
 	}
-
-	// Debug: check state root directly before submission
-	directRoot, directErr := ctx.Fixture.Service.GetDB().StateRootSvc.GetCurrentStateRoot()
-	t.Logf("Direct state root before submit: %q (err=%v)", directRoot, directErr)
-	t.Logf("Envelope state root:             %q", stateRoot)
-	t.Logf("Roots match: %v", directRoot == stateRoot)
 
 	// Submit via real HTTP client
 	creds := &auth.Credentials{
