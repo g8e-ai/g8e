@@ -6,7 +6,7 @@
 - [g8e/pubsub/v1/pubsub.proto](#g8e_pubsub_v1_pubsub-proto)
     - [PubSubEvent](#g8e-pubsub-v1-PubSubEvent)
     - [PubSubMessage](#g8e-pubsub-v1-PubSubMessage)
-- [Channel Conventions](#channel-conventions)
+  
 - [Scalar Value Types](#scalar-value-types)
 
 
@@ -22,44 +22,31 @@
 
 ### PubSubEvent
 
-PubSubEvent represents a message or acknowledgment sent from the gateway to a connected client.
+
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| type | [string](#string) |  | The event type. Supported values include `message`, `pmessage`, and `subscribed`. |
-| channel | [string](#string) |  | The specific channel name associated with this event. |
-| pattern | [string](#string) |  | The subscription pattern that matched this event (used with `pmessage`). |
-| data | [bytes](#bytes) |  | The raw payload data associated with the event. |
+| type | [string](#string) |  |  |
+| channel | [string](#string) |  |  |
+| pattern | [string](#string) |  |  |
+| data | [bytes](#bytes) |  |  |
+
+
+
+
+
 
 <a name="g8e-pubsub-v1-PubSubMessage"></a>
 
 ### PubSubMessage
 
-PubSubMessage represents an action or publication request sent from a client to the gateway.
+
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| action | [string](#string) |  | The requested action. Supported values include `subscribe`, `psubscribe`, `unsubscribe`, and `publish`. |
-| channel | [string](#string) |  | The target channel name for the action. |
-| data | [bytes](#bytes) |  | The raw payload data to be published (used with the `publish` action). |
-
-## Channel Conventions
-
-The platform employs a structured channel naming convention to ensure secure routing and isolation. Channels are typically formatted as `{prefix}:{operator_id}:{session_id}`.
-
-### Standard Channels
-
-- **cmd**: Transmits execution requests from the gateway to an operator.
-- **results**: Transmits execution receipts and logs from an operator back to the gateway.
-- **heartbeat**: Transmits periodic status updates from an operator to maintain connection state.
-- **governance**: Transmits signed governance envelopes for L4 verification.
-- **sse_event**: Pushes events to Server-Sent Events (SSE) subscribers.
-
-### Storage Channels
-
-- **storage_document**: Manages document-oriented storage operations.
-- **storage_kv**: Manages key-value pair storage operations.
-- **storage_blob**: Manages binary large object storage operations.
+| action | [string](#string) |  |  |
+| channel | [string](#string) |  |  |
+| data | [bytes](#bytes) |  |  |
 
 
 

@@ -112,7 +112,7 @@ help:
 	@echo "  generate      Generate all protocol artifacts (proto)"
 	@echo "  proto         Generate all Protobuf code (Go)"
 	@echo "  buf-install   Install Buf CLI locally if not found"
-	@echo "  protoc-install Install protoc compiler"
+	@echo "  protoc-install Install protoc compiler (optional; buf does not require it)"
 	@echo ""
 	@echo "Build:"
 	@echo "  build			Build g8e for current OS and architecture"
@@ -159,8 +159,10 @@ help:
 generate: proto
 
 
+# Note: buf has its own built-in compiler (protocompile) and invokes the
+# protoc-gen-* plugins directly, so the standalone protoc binary is NOT required.
 .PHONY: proto
-proto: buf-install protoc-install
+proto: buf-install
 	@if command -v buf &> /dev/null || [ -f "./buf" ]; then \
 		echo "Generating Go Protobuf code with Buf..."; \
 		$(BUF) generate protocol/proto; \
@@ -194,6 +196,10 @@ proto-force: buf-install
 
 # =============================================================================
 # TOOL INSTALLATION
+#
+# NOTE: protoc-install is OPTIONAL. `make proto` uses buf, which ships its own
+# compiler and does not require the standalone protoc binary. This target exists
+# only for manual use (e.g. invoking protoc directly for debugging).
 # =============================================================================
 .PHONY: buf-install
 buf-install:
@@ -212,7 +218,21 @@ buf-install:
 protoc-install:
 	@if ! command -v protoc &> /dev/null; then \
 		echo "Installing protoc $(PROTOC_VERSION)..."; \
-		cd $(TMPDIR) && curl -fSL https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/protoc-35.0-linux-x86_64.zip -o protoc.zip && \
+		PROTOC_VER=$$(echo "$(PROTOC_VERSION)" | sed 's/^v//'); \
+		case "$(HOST_OS)" in \
+			linux)   PROTOC_OS=linux ;; \
+			darwin)  PROTOC_OS=osx ;; \
+			windows) PROTOC_OS=win64 ;; \
+			*) echo "Error: unsupported OS $(HOST_OS) for protoc install" >&2; exit 1 ;; \
+		esac; \
+		case "$(HOST_ARCH)" in \
+			amd64) PROTOC_ARCH=x86_64 ;; \
+			arm64) PROTOC_ARCH=aarch_64 ;; \
+			*) echo "Error: unsupported arch $(HOST_ARCH) for protoc install" >&2; exit 1 ;; \
+		esac; \
+		if [ "$(HOST_OS)" = "windows" ]; then PROTOC_ASSET="protoc-$$PROTOC_VER-win64.zip"; \
+		else PROTOC_ASSET="protoc-$$PROTOC_VER-$$PROTOC_OS-$$PROTOC_ARCH.zip"; fi; \
+		cd $(TMPDIR) && curl -fSL "https://github.com/protocolbuffers/protobuf/releases/download/$(PROTOC_VERSION)/$$PROTOC_ASSET" -o protoc.zip && \
 		unzip -o protoc.zip -d protoc && \
 		sudo cp protoc/bin/protoc /usr/local/bin/protoc && \
 		sudo chmod +x /usr/local/bin/protoc && \
@@ -542,7 +562,6 @@ ci-platform: _ci-verify-proto _ci-swagger _ci-lint _ci-vulncheck _ci-test
 .PHONY: _ci-verify-proto
 _ci-verify-proto:
 	@echo "=== verify-proto ==="
-	@$(MAKE) protoc-install
 	@$(MAKE) proto
 	@CHANGES=$$(git status --porcelain | grep -E "^\s*M.*\.pb\.go$$|^\s*M.*\.proto$$" || true); \
 	if [ -n "$$CHANGES" ]; then \
