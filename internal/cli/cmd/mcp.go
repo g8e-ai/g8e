@@ -29,10 +29,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
@@ -885,14 +883,6 @@ type subprocessMCPProxy struct {
 	stdin   io.WriteCloser
 	scanner *bufio.Scanner
 	mu      sync.Mutex
-}
-
-func setSysProcAttr(cmd *exec.Cmd) {
-	if runtime.GOOS != "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-		}
-	}
 }
 
 func (d *subprocessMCPProxy) start() error {
