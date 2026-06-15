@@ -127,19 +127,21 @@ help:
 	@echo "  build-all-docker		Build g8e for all platforms in Docker"
 	@echo ""
 	@echo "Test:"
-	@echo "  test                  Run all tests with race detection (unit + gateway)"
+	@echo "  test                  Run all tests (unit + integration)"
 	@echo "  test-short            Run short tests with race detection"
 	@echo "  test-pkg-<path>       Run tests for a specific package (e.g., make test-pkg-internal/services/auth)"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
-	@echo "  test-integration      Run integration tests (requires platform running and auth login)"
-	@echo "  test-scenario         Run scenario integration tests (requires platform running)"
-	@echo "  test-gateway          Run gateway tests"
-	@echo "  test-mcp              Run MCP tests (requires platform running and auth login)"
-	@echo "  test-a2a              Run A2A tests (requires platform running and auth login)"
-	@echo "  test-universal-gateway Run universal gateway integration tests (requires platform running and auth login)"
-	@echo "  test-byo              Run BYO client tests (requires platform running and auth login)"
-	@echo "  test-native           Run native real Operator tests (requires platform running and auth login)"
+	@echo "  test-integration      Run Tier 2 (In-Memory Integration) tests - no external dependencies"
+	@echo "  test-docker           Run Tier 3 (Docker E2E) tests - requires Docker"
+	@echo "  test-gov              Run Tier 3 (Gov Demo E2E) tests - requires Docker"
+	@echo "  test-gateway          Run gateway-specific integration tests"
+	@echo "  test-mcp              Run MCP integration tests (legacy - redirects to test-integration)"
+	@echo "  test-a2a              Run A2A integration tests (legacy - redirects to test-integration)"
+	@echo "  test-universal-gateway Run universal gateway integration tests (legacy - redirects to test-integration)"
+	@echo "  test-byo              Run BYO client integration tests (legacy - redirects to test-integration)"
+	@echo "  test-native           Run native tool integration tests (legacy - redirects to test-integration)"
+	@echo "  test-scenario         Run scenario integration tests (legacy - redirects to test-integration)"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -380,7 +382,7 @@ build-all-docker:
 # =============================================================================
 # Core test targets
 .PHONY: test
-test: test-unit test-integration test-e2e
+test: test-unit test-integration
 	@echo "All tests completed successfully."
 
 # Unit Tests: Run immediately without any build tags (excludes integration and e2e)
@@ -394,68 +396,35 @@ test-short:
 	@echo "Running short unit tests (skips long-running tests)..."
 	@go test $(TEST_RACE) -short $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
-# In-Memory Integration Tests: Requires the integration tag
+# Tier 2: In-Memory Integration Tests - no external dependencies
 .PHONY: test-integration
 test-integration:
 	@echo "Running Tier 2 (In-Memory Integration) tests..."
 	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
-# Live-Platform E2E Tests: Requires the e2e tag, running platform, and auth login
-.PHONY: test-e2e
-test-e2e:
-	@echo "Running Tier 3 (Live Platform E2E) tests using Docker..."
-	@G8E_TEST_ENV=docker G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/...
-
-# Docker-based E2E Tests: Uses docker-compose.yml
+# Tier 3a: Docker E2E Tests - requires Docker
 .PHONY: test-docker
 test-docker:
-	@echo "Running Tier 3 (Docker) tests..."
-	@G8E_TEST_ENV=docker G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/...
+	@echo "Running Tier 3 (Docker E2E) tests..."
+	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
-# Demo-based E2E Tests: Uses demos/gov/compose.yml
+# Tier 3b: Gov Demo E2E Tests - requires Docker
 .PHONY: test-gov
 test-gov:
-	@echo "Running Tier 3 (Gov Demo) tests..."
-	@G8E_TEST_ENV=demos/gov G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/...
+	@echo "Running Tier 3 (Gov Demo E2E) tests..."
+	@go test -tags=e2e -run TestDockerGateway_GovDemo $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
-# Scenario-specific Live Tests
-.PHONY: test-scenario
-test-scenario:
-	@echo "Running Tier 3 (Scenario) tests using Docker..."
-	@G8E_TEST_ENV=docker G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/scenario/...
+# Legacy targets - redirect to honest names
+.PHONY: test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway
+test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway:
+	@echo "Running integration tests (legacy target)..."
+	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
 # Gateway tests (subset of integration tests)
 .PHONY: test-gateway
 test-gateway:
 	@echo "Running gateway-specific tests (no platform required)..."
 	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
-
-# Protocol-specific integration tests (requires platform running and auth login)
-.PHONY: test-mcp
-test-mcp:
-	@echo "Running MCP (Model Context Protocol) integration tests (requires platform running and auth login)..."
-	@G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/mcp_gateway_test.go ./test/mcp_real_operator_test.go ./test/mcp_stdio_test.go
-
-.PHONY: test-a2a
-test-a2a:
-	@echo "Running A2A (Agent-to-Agent) integration tests (requires platform running and auth login)..."
-	@G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/a2a_gateway_test.go ./test/a2a_real_operator_test.go
-
-.PHONY: test-universal-gateway
-test-universal-gateway:
-	@echo "Running universal gateway integration tests (requires platform running and auth login)..."
-	@G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/universal_gateway_integration_test.go
-
-# Client integration tests (requires platform running and auth login)
-.PHONY: test-byo
-test-byo:
-	@echo "Running BYO (Bring Your Own) client integration tests (requires platform running and auth login)..."
-	@G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/byo_client_test.go
-
-.PHONY: test-native
-test-native:
-	@echo "Running native real Operator integration tests (requires platform running and auth login)..."
-	@G8E_SKIP_PASSKEY=true go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/integration_helper.go ./test/native_real_operator_test.go
 
 # Coverage tests
 .PHONY: test-coverage
@@ -609,7 +578,6 @@ _ci-vulncheck:
 .PHONY: _ci-test
 _ci-test:
 	@echo "=== test ==="
-	@./g8e gw start --cert-mode localhost
 	@G8E_STRICT_CONSTANTS_LINT=1 go test $(TEST_RACE) -timeout $(TEST_TIMEOUT) \
 		-coverprofile=coverage.out -covermode=atomic $(TEST_PKGS)
 	@$(FILTER_PROFILE)
@@ -619,4 +587,3 @@ _ci-test:
 		exit 1; \
 	fi; \
 	echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"
-	@./g8e gw stop

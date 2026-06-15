@@ -74,6 +74,10 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 	s.cachedStateRoot = root
 	s.cachedStateVersion = currentVersion
 
+	// Check state_version before persistence
+	var versionBefore int64
+	s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&versionBefore)
+
 	// Persist to state_root table
 	_, err = s.db.ExecWithRetry(
 		`INSERT INTO state_root (id, root, updated_at)
@@ -82,6 +86,10 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 		root,
 		sqliteutil.FormatTimestamp(time.Now().UTC()),
 	)
+
+	// Check state_version after persistence
+	var versionAfter int64
+	s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&versionAfter)
 	if err != nil {
 		return "", fmt.Errorf("state_root_service: persist state root: %w", err)
 	}
@@ -146,7 +154,8 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	// 2. KV Store (Authoritative)
 	// Filter for active entries only. Exclude created_at.
 	// expires_at IS included because it affects the active state of the entry.
-	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE expires_at IS NULL OR expires_at > ? ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
+	// Exclude cache management entries (g8e:cache:*) as they are ephemeral and not authoritative state.
+	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
 			return fmt.Errorf("state_root_service: scan kv_store row: %w", err)

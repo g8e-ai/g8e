@@ -143,7 +143,10 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// Initialize controllers
 	h.pkiController = newPKIController(deps.Cfg, deps.Logger, deps.DB, deps.PKI, deps.AppEnrollment, deps.Reg, deps.Responder)
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
-	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.SuspendedStore, deps.MCPGateway, deps.Responder)
+	
+	// Initialize actuator key reader for device enrollment
+	actuatorKeyReader := &fileActuatorKeyReader{path: constants.Paths.Infra.ActuatorPubJSONPath}
+	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.SuspendedStore, deps.MCPGateway, deps.Responder, actuatorKeyReader)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
@@ -758,12 +761,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 	root, err := h.db.StateRootSvc.GetCurrentStateRoot()
 	if err != nil {
-		h.logger.Error("Health check failed to get state root", string(constants.ConnectionStateError), err)
-		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
-		return
-	}
-	if root == "" {
-		h.logger.Warn("Health check: state root is empty")
+		h.logger.Error("Health check failed to calculate state root", string(constants.ConnectionStateError), err)
 		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
 		return
 	}

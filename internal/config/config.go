@@ -284,7 +284,7 @@ type GatewayOptions struct {
 // requested ports. This allows multiple operators to run on the same host.
 func ResolveGatewayPorts(httpPort, httpsPort int) (int, int) {
 	if httpPort <= 0 {
-		httpPort = constants.Ports.OperatorHttps
+		httpPort = constants.Ports.OperatorHttp
 	}
 	if httpsPort <= 0 {
 		httpsPort = constants.Ports.OperatorHttps

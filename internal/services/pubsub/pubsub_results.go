@@ -28,10 +28,6 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-func (rr *PubSubResultsService) resultsChannel(operatorSessionID string) string {
-	return constants.ResultsChannel(rr.config.OperatorID, operatorSessionID)
-}
-
 // PubSubResultsService handles publishing results back to g8e-Compliant Agentic Ensemble via Operator pub/sub
 type PubSubResultsService struct {
 	client PubSubClient
@@ -187,7 +183,11 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 		return fmt.Errorf("failed to build Universal status envelope: %w", err)
 	}
 
-	if err := rr.publishUniversal(ctx, env, originalMsg.OperatorSessionID); err != nil {
+	operatorID := rr.config.OperatorID
+	if originalMsg.OperatorID != nil && *originalMsg.OperatorID != "" {
+		operatorID = *originalMsg.OperatorID
+	}
+	if err := rr.publishUniversal(ctx, env, operatorID, originalMsg.OperatorSessionID); err != nil {
 		return fmt.Errorf("failed to publish Universal status update: %w", err)
 	}
 
@@ -221,12 +221,16 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 }
 
 // publishUniversal marshals a GovernanceEnvelope as JSON and publishes it to the results channel.
-func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.GovernanceEnvelope, operatorSessionID string) error {
+// operatorID overrides rr.config.OperatorID for channel routing (e.g. gateway mode where config has no operator ID).
+func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.GovernanceEnvelope, operatorID, operatorSessionID string) error {
 	data, err := json.Marshal(env)
 	if err != nil {
 		return fmt.Errorf("failed to marshal Governance Envelope: %w", err)
 	}
-	channel := rr.resultsChannel(operatorSessionID)
+	if operatorID == "" {
+		operatorID = rr.config.OperatorID
+	}
+	channel := constants.ResultsChannel(operatorID, operatorSessionID)
 	rr.logger.Info("Publishing result (Universal)",
 		"channel", channel,
 		"event_type", env.EventType,
@@ -256,5 +260,5 @@ func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 		return fmt.Errorf("failed to build Governance Envelope: %w", err)
 	}
 
-	return rr.publishUniversal(ctx, env, originalMsg.OperatorSessionID)
+	return rr.publishUniversal(ctx, env, senderID, originalMsg.OperatorSessionID)
 }

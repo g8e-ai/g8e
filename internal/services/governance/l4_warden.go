@@ -599,6 +599,7 @@ func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (tim
 	}
 
 	if currentRoot != envelope.StateMerkleRoot {
+		fmt.Fprintf(os.Stderr, "verifyStateful: envelope=%q current=%q\n", envelope.StateMerkleRoot, currentRoot)
 		tv.logger.Error("State root mismatch",
 			"envelope_root", envelope.StateMerkleRoot,
 			"current_root", currentRoot)
