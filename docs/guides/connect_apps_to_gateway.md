@@ -399,28 +399,27 @@ Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
 **The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of
 sharing a secret (like an API key), a client generates its own key pair and asks the
 Gateway to sign a certificate attesting "this public key belongs to this identity." The
-Gateway acts as a Certificate Authority (CA) — it only signs CSRs for identities the
-Platform Owner has authorized. The client then proves its identity on every call by
+Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is itself
+the Platform Owner's authorization — there are no standing invite codes, pre-shared keys,
+or manual approval steps. The client then proves its identity on every subsequent call by
 signing with its private key (via mTLS). No shared secrets, no API keys to leak.
 
-All authentication to the Gateway uses CSR-based enrollment. The platform enforces a
-strict owner-centric model where the first human to authenticate becomes the Platform
-Owner, and all other entities (operators, MCP servers, AI clients, applications) must
-enroll via certificate signing requests.
+All authentication to the Gateway uses CSR-based enrollment. The first human to
+authenticate via `./g8e auth login` becomes the Platform Owner. All other entities
+(operators, MCP servers, AI clients, applications) enroll via the same CSR flow.
 
 #### Enrollment Flow
 
-1. **Platform Owner**: The first human to authenticate via `./g8e auth login` becomes the Platform Owner.
-2. **Client generates key pair and CSR**: The entity (device, app, or user) creates a
+1. **Client generates key pair and CSR**: The entity (device, app, or user) creates a
    private key and a Certificate Signing Request (CSR) that states the desired identity
    (e.g., `spiffe://g8e.local/app/etl-service`)
-3. **Gateway validates and signs**: The Gateway (acting as CA) verifies the request is
-   from an authorized source, then issues a signed mTLS certificate with a SPIFFE URI SAN
-4. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA)
+2. **Gateway validates and signs**: The Gateway (acting as CA) issues a signed mTLS
+   certificate with a SPIFFE URI SAN
+3. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA)
    and uses it with its private key for all subsequent authentication
-5. **Short-lived by design**: Certificates expire quickly (typically 1 day), so a
+4. **Short-lived by design**: Certificates expire quickly (typically 1 day), so a
    compromised key has limited lifetime
-6. **Certificate renewal**: Clients must re-enroll before certificate expiry
+5. **Certificate renewal**: Clients must re-enroll before certificate expiry
 
 #### Device Enrollment
 

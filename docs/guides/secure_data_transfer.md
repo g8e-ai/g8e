@@ -286,17 +286,19 @@ Three conditions make a governed pipeline possible:
 **The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of
 sharing a secret (like an API key), the application generates its own key pair and asks
 the Gateway to sign a certificate attesting "this public key belongs to this identity."
-The Gateway acts as a Certificate Authority (CA) — it only signs CSRs for identities the
-Platform Owner has authorized. The application then proves its identity on every call by
-signing with its private key (via mTLS). No shared secrets, no API keys to leak.
+The Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is
+itself the Platform Owner's authorization — there are no standing invite codes,
+pre-shared keys, or manual approval steps. The application then proves its identity on
+every subsequent call by signing with its private key (via mTLS). No shared secrets, no
+API keys to leak.
 
 **The enrollment flow:**
 
 1. **App generates key pair**: The app creates `private.key` and a Certificate Signing
    Request (CSR) that says "I want to be `spiffe://g8e.local/app/etl-service`"
 2. **App submits CSR**: The app sends the CSR to the Gateway's enrollment endpoint
-3. **Gateway validates and signs**: The Gateway (acting as CA) verifies the request is
-   from an authorized source, then issues a signed mTLS certificate
+3. **Gateway validates and signs**: The Gateway (acting as CA) validates the CSR and
+   issues a signed mTLS certificate
 4. **App receives certificate**: The app gets `client.crt` (signed by the Gateway's CA)
    and uses it with `private.key` for all subsequent authentication
 5. **Short-lived by design**: Certificates expire quickly (typically 1 day), so a

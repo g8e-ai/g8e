@@ -86,6 +86,17 @@ func generateTestCertificateWithSPIFFE(t *testing.T, agentName string, notAfter 
 	return certPEM, keyPEM
 }
 
+// writeTestCredentials writes a credentials file with a synthetic CLISessionID so
+// EnrollAgentApp can pass the LoadCredentials check without a real gateway session.
+func writeTestCredentials(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	creds := &Credentials{
+		UserID:       "test-user",
+		CLISessionID: "test-session-id",
+	}
+	require.NoError(t, SaveCredentials(cfg, creds))
+}
+
 // writeTestCLICert generates a self-signed CLI cert and writes it to cfg.CLICertFile()/CLIKeyFile().
 func writeTestCLICert(t *testing.T, cfg *config.Config) {
 	t.Helper()
@@ -252,7 +263,7 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
 	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
 
-	// Expiring cert → must re-enroll → needs TLS server + CLI cert
+	// Expiring cert → must re-enroll → needs TLS server + CLI cert + credentials
 	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
 		assert.Equal(t, "POST", r.Method)
@@ -271,6 +282,7 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 		w.Write(enrollResponse(t, agentName))
 	})
 	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
 
 	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
@@ -317,6 +329,7 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 	})
 	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
 	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
 
 	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
@@ -384,6 +397,7 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 		w.Write(enrollResponse(t, agentName))
 	})
 	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
 
 	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
@@ -423,6 +437,7 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 		w.Write(enrollResponse(t, agentName))
 	})
 	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
 
 	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
 
@@ -453,6 +468,7 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 		json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 	})
 	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
 
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
@@ -477,8 +493,9 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 
 	agentName := "test-agent"
 
-	// CLI cert and CA bundle must exist so we reach the POST before failing.
+	// CLI cert, CA bundle, and credentials must exist so we reach the POST before failing.
 	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
 	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
 	caPath := filepath.Join(tmpDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))

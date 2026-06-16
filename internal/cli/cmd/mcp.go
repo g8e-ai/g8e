@@ -1296,16 +1296,24 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("load config after gateway start: %w", err)
 	}
 
+	// Ensure CLI credentials exist, auto-enroll if needed
+	creds, err := auth.LoadCredentials(cfg)
+	if err != nil || creds == nil {
+		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
+		if err := auth.EnrollCLI(cfg); err != nil {
+			return fmt.Errorf("auto-enroll CLI: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")
+		creds, err = auth.LoadCredentials(cfg)
+		if err != nil || creds == nil {
+			return fmt.Errorf("load credentials after enrollment: %w", err)
+		}
+	}
+
 	// Enroll the agent as an external app for audit trail attribution
 	appID, appCert, appKey, err := auth.EnrollAgentApp(cfg, strings.ToLower(agentID))
 	if err != nil {
 		return fmt.Errorf("enroll agent app identity: %w", err)
-	}
-
-	// Load the credentials established by ensureGatewayRunning.
-	creds, err := auth.LoadCredentials(cfg)
-	if err != nil || creds == nil {
-		return fmt.Errorf("load CLI credentials: %w", err)
 	}
 
 	// Require an authenticated human with passkey registration

@@ -28,9 +28,37 @@ The platform uses a four-tier PKI hierarchy issued by the g8e Gateway. See [Netw
 
 ### Enrollment & Bootstrap
 
-**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret (like an API key), a client generates its own key pair and asks the Gateway to sign a certificate attesting "this public key belongs to this identity." The Gateway acts as a Certificate Authority (CA) — it only signs CSRs for identities the Platform Owner has authorized. The client then proves its identity on every call by signing with its private key (via mTLS). No shared secrets, no API keys to leak.
+**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret (like an API key), a client generates its own key pair and asks the Gateway to sign a certificate attesting "this public key belongs to this identity." The Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is itself the Platform Owner's authorization — there are no standing invite codes, pre-shared keys, or manual approval steps. The Platform Owner's intent to give AI governed access to the physical world is expressed by running the Gateway; the Gateway's willingness to sign CSRs flows from that decision. The client then proves its identity on every subsequent call by signing with its private key (via mTLS). No shared secrets, no API keys to leak.
 
-Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow. For Windows, enrollment utilizes the Windows Certificate Store with TPM-backed keys via Windows Hello for Business. See [Network Architecture](./network.md) for detailed enrollment procedures.
+#### CLI Enrollment Paths
+
+There are three distinct CLI enrollment paths depending on gateway and credential state. The `EnrollCLI` function (`internal/cli/auth/agent_enroll.go`) encapsulates the first two paths as a reusable, idempotent call used by both `g8e auth login` and the agent launcher.
+
+| Path | Trigger | Transport | Function |
+| :--- | :--- | :--- | :--- |
+| **First-time bootstrap** | Gateway never bootstrapped | Plain HTTP (discovery port) | `Bootstrap()` |
+| **New CLI, existing gateway** | Gateway bootstrapped, no local credentials | Plain HTTP (discovery port) | `CLIEnroll()` |
+| **Re-enrollment** | Credentials present, certificate rotation | mTLS (HTTPS port) | `ReEnroll()` or `CLIEnroll()` |
+
+Plain HTTP is used only for the bootstrap and CLI enrollment paths because the CLI has no mTLS certificate yet — these endpoints exist on the unauthenticated discovery port and are gated by the gateway's own authorization policy. All subsequent communication uses mTLS exclusively.
+
+**`EnrollCLI(cfg)`** selects between `Bootstrap` and `CLIEnroll` based on `CheckBootstrapStatus`, then saves the signed certificate, trust bundle, and credential file. Callers (`g8e auth login`, `g8e mcp agent run`) add their own user-facing output; `EnrollCLI` itself is silent.
+
+**Re-enrollment** (`g8e auth login` when credentials already exist) uses `ReEnroll` over mTLS when an operator certificate is present, or falls back to `CLIEnroll` for CLI-only deployments. It also runs `AutoRenewCertificate` to short-circuit if the existing certificate is still valid.
+
+#### Agent App Enrollment (Delegated Credentials)
+
+When `g8e mcp agent run` launches an AI agent, it calls `EnrollAgentApp` to issue the agent a short-lived delegated credential (1-hour certificate). This certificate carries:
+- A SPIFFE URI SAN identifying the agent: `spiffe://g8e.local/app/<agent-name>`
+- The requestor's human identity (bound at issuance time on the gateway)
+
+The request is made over mTLS using the CLI certificate and requires a valid `X-CLI-Session-ID` header. The gateway's `/api/v1/pki/apps/delegated` endpoint is on the mTLS-only router. The resulting credential is injected into the agent subprocess via `G8E_APP_CERT` / `G8E_APP_KEY` environment variables and is idempotent — an existing certificate with more than 7 days remaining and the correct SPIFFE URI SAN is reused without contacting the gateway.
+
+`EnrollAgentApp` also verifies that the authenticated user has a registered passkey (`VerifyPasskeyRegistration`, mTLS) before proceeding, enforcing that agent sessions are always backed by a human with hardware-bound authentication.
+
+#### Windows Enrollment
+
+On Windows, enrollment uses the Windows Certificate Store with TPM-backed keys via Windows Hello for Business. `g8e auth login` detects the platform and delegates to the Windows-specific path automatically. See [Network Architecture](./network.md) for details.
 
 ### External IdP Support (JWT)
 

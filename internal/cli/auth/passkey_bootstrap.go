@@ -16,6 +16,8 @@ package auth
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -23,6 +25,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"os/user"
 	"runtime"
@@ -408,7 +411,33 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) {
 	url := fmt.Sprintf("%s/api/v1/auth/passkeys?user_id=%s", cfg.OperatorPublicURL(), userID)
 
-	resp, err := http.Get(url)
+	// Load CLI mTLS certificate for authentication
+	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	if err != nil {
+		return false, fmt.Errorf("failed to load CLI certificate: %w", err)
+	}
+
+	// Load CA bundle for server verification
+	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
+	if err != nil {
+		return false, fmt.Errorf("failed to read CA bundle: %w", err)
+	}
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caBundleBytes)
+
+	// Create HTTP client with TLS configuration
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cliCert},
+		RootCAs:      caPool,
+		MinVersion:   tls.VersionTLS13,
+	}
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+	}
+
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("failed to check passkey status: %w", err)
 	}

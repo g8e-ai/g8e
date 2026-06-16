@@ -16,6 +16,7 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -284,6 +285,14 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 		Paths:            &config.PathsConfig{},
 		TestPortOverride: 59999, // Non-existent port
 	}
+
+	// VerifyPasskeyRegistration now uses mTLS: supply CLI cert and a CA bundle
+	// so the test reaches the network dial (and fails there, as expected).
+	writeTestCLICert(t, cfg)
+	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	cfg.Paths.Infra.CACertPath = caPath
 
 	hasPasskey, err := VerifyPasskeyRegistration(cfg, "test-user")
 
