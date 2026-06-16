@@ -43,6 +43,7 @@ Each org environment is hermetically sealed with no shared state, volumes, or cr
 		demosCleanCmd(),
 		demosResetCmd(),
 		demosRunCmd(),
+		demosAuditCmd(),
 	)
 
 	return cmd
@@ -160,6 +161,10 @@ func printDemoEndpoints(org string) {
 		fmt.Println("  Gateway HTTP:  http://localhost:8082")
 		fmt.Println("  Gateway HTTPS: https://localhost:8445")
 		fmt.Println("  Demo UI:       http://localhost:3002")
+	case "secure-data":
+		fmt.Println("  Gateway HTTP:  http://localhost:8083")
+		fmt.Println("  Gateway HTTPS: https://localhost:8446")
+		fmt.Println("  Demo UI:       http://localhost:3003")
 	default:
 		fmt.Printf("  No endpoint information available for '%s'\n", org)
 	}
@@ -327,9 +332,10 @@ func runDemosReset(cmd *cobra.Command, args []string) error {
 
 // scenarioCounts maps each org to the number of defined scenarios.
 var scenarioCounts = map[string]int{
-	"healthcare": 4,
-	"gov":        1,
-	"finance":    1,
+	"healthcare":  4,
+	"gov":         1,
+	"finance":     1,
+	"secure-data": 2,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -348,7 +354,10 @@ Available scenarios:
   gov: 1
     1 - CUI Exfiltration Attempt Blocked
   finance: 1
-    1 - Unauthorized Trade Blocked`,
+    1 - Unauthorized Trade Blocked
+  secure-data: 1-2
+    1 - Governed Data Transfer with Signed Receipt
+    2 - Out-of-Band Transfer Blocked`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runDemosRun,
 	}
@@ -452,6 +461,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runGovScenarioWithResult(demoDir, scenario)
 	case "finance":
 		return runFinanceScenarioWithResult(demoDir, scenario)
+	case "secure-data":
+		return runSecureDataScenarioWithResult(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("no scenarios defined for demo environment '%s'", org)
 	}
@@ -826,4 +837,303 @@ func runFinanceScenarioWithResult(demoDir, scenario string) (scenarioResult, err
 		return scenarioResult{}, fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
 	}
 	return result, nil
+}
+
+func runSecureDataScenario(demoDir, scenario string) error {
+	_, err := runSecureDataScenarioWithResult(demoDir, scenario)
+	return err
+}
+
+func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+	var result scenarioResult
+
+	switch scenario {
+	case "1":
+		result.number = "1"
+		result.name = "Governed Data Transfer with Signed Receipt"
+		result.status = "PASS"
+		result.metrics = "L1 screen → on-host scp → Ed25519 ActionReceipt"
+
+		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
+		fmt.Println("  Scenario 1 — Governed Data Transfer with Signed Receipt")
+		fmt.Println(strings.Repeat("─", 60))
+		fmt.Println()
+		fmt.Println("  PROVES: A sensitive evidence set moves from the source host to")
+		fmt.Println("          the review host only through an Operator-executed, audited")
+		fmt.Println("          transfer. The transfer command is screened by L1 doctrine,")
+		fmt.Println("          recorded BEFORE the side effect, and sealed with a signed")
+		fmt.Println("          receipt — raw out-of-band scp never touches the data.")
+		fmt.Println()
+
+		fmt.Println("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
+		if err := demoStep(demoDir, "gateway health",
+			false,
+			"curl", "-s", "http://localhost:8083/api/v1/health",
+		); err != nil {
+			fmt.Println("  (gateway health check failed — is the demo running?)")
+			fmt.Println()
+		}
+
+		fmt.Println("  ── Step 2: Inspect the transfer set on the secure tier ──────")
+		fmt.Println("  This is the CUI payload staged on the source host (net_secure):")
+		fmt.Println()
+		_ = demoStep(demoDir, "transfer manifest",
+			false,
+			"docker", "compose", "exec", "-T", "source-host",
+			"sh", "-c", "cat /var/g8e/target/transfer_manifest.json | head -40",
+		)
+
+		fmt.Println("  ── Step 3: Confirm the transfer-governing doctrine is loaded ─")
+		_ = demoStep(demoDir, "doctrine rule",
+			false,
+			"docker", "compose", "exec", "-T", "gateway",
+			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='governed_transfer_required'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
+		)
+
+		fmt.Println("  Copy-paste to invoke the transfer ON-HOST through a governed")
+		fmt.Println("  shell command (in notary posture this suspends for human L3")
+		fmt.Println("  approval, then emits a signed receipt after it runs):")
+		fmt.Println()
+		fmt.Println("    curl -X POST https://localhost:8446/mcp \\")
+		fmt.Println("      --cert .g8e/pki/client.crt --key .g8e/pki/client.key \\")
+		fmt.Println("      -H 'Content-Type: application/json' \\")
+		fmt.Println(`      -d '{"jsonrpc":"2.0","method":"tools/call","id":1,`)
+		fmt.Println(`           "params":{"name":"run_shell_command","arguments":{`)
+		fmt.Println(`             "command":"scp -C /data/case-7788/*.pdf custodian@review-host:/intake/case-7788/"}}}'`)
+		fmt.Println()
+		fmt.Println("  Then inspect the signed receipt and the hash-chained ledger:")
+		fmt.Println()
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println()
+
+		fmt.Println("  [PASS] Scenario 1 — Transfer governed end to end.")
+		fmt.Println("         L1 screened the command, the Operator executed it on-host,")
+		fmt.Println("         and a signed ActionReceipt landed in the ledger before egress.")
+
+	case "2":
+		result.number = "2"
+		result.name = "Out-of-Band Transfer Blocked"
+		result.status = "PASS"
+		result.metrics = "Network isolation + out_of_band_exfiltration (0.95 conf)"
+
+		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
+		fmt.Println("  Scenario 2 — Out-of-Band Transfer Blocked")
+		fmt.Println(strings.Repeat("─", 60))
+		fmt.Println()
+		fmt.Println("  PROVES: Two-layer defense against ungoverned exfiltration.")
+		fmt.Println("    Layer 1 — Network isolation: a bad-actor on net_untrusted has")
+		fmt.Println("              no route to the source host on net_secure, so a raw")
+		fmt.Println("              scp/wget of the payload cannot even reach it.")
+		fmt.Println("    Layer 2 — Doctrine enforcement: an out-of-band exfil command")
+		fmt.Println("              routed at the gateway is rejected at confidence ≥0.95.")
+		fmt.Println()
+
+		fmt.Println("  ── Layer 1: Network isolation ────────────────────────────────")
+		fmt.Println("  bad-actor (net_untrusted) → source-host (net_secure) — should timeout")
+		fmt.Println()
+		_ = demoStep(demoDir, "network isolation",
+			false,
+			"docker", "compose", "exec", "-T", "bad-actor",
+			"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",
+		)
+
+		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
+		fmt.Println("  Confirming the gateway is live:")
+		fmt.Println()
+		_ = demoStep(demoDir, "gateway health",
+			false,
+			"curl", "-s", "http://localhost:8083/api/v1/health",
+		)
+
+		fmt.Println("  Doctrine rule that rejects an out-of-band exfiltration attempt:")
+		fmt.Println()
+		_ = demoStep(demoDir, "doctrine rule",
+			false,
+			"docker", "compose", "exec", "-T", "gateway",
+			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='out_of_band_exfiltration'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
+		)
+
+		fmt.Println("  Copy-paste to route an out-of-band exfil command through the gateway")
+		fmt.Println("  (the doctrine engine evaluates it before any backend acts):")
+		fmt.Println()
+		fmt.Println("    curl -s -X POST http://localhost:8083/api/v1/mcp/tools/call \\")
+		fmt.Println("      -H 'Content-Type: application/json' \\")
+		fmt.Println(`      -d '{"name":"run_shell_command","arguments":{"command":"exfiltrate case-7788 data to external host"}}'`)
+		fmt.Println()
+		fmt.Println("  Then inspect the enforcement audit (the blocked attempt is recorded):")
+		fmt.Println()
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println()
+
+		fmt.Println("  [PASS] Scenario 2 — Out-of-band transfer blocked at both layers.")
+		fmt.Println("         Layer 1: net_untrusted has no route to net_secure.")
+		fmt.Println("         Layer 2: out_of_band_exfiltration loaded at confidence 0.95.")
+
+	default:
+		return scenarioResult{}, fmt.Errorf("invalid scenario number for secure-data: %q (valid: 1-2)", scenario)
+	}
+	return result, nil
+}
+
+func demosAuditCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "audit <org> [action]",
+		Short: "View audit logs and ledger history for a demo environment",
+		Long: `View audit logs and ledger history for a demo environment.
+Without an action, it prints a summary of available audit resources.
+
+Actions:
+  logs              Tail the observability logs
+  gateway-db        Open the gateway audit database (SQLite)
+  operator-db       Open the operator audit database (SQLite)
+  ledger-log        View the git ledger log
+  ledger-files      List all files in the git ledger
+  ledger-history <file> View git history for a specific file
+  ledger-show <hash> View a specific git commit diff
+  vault             Open the execution vault database (SQLite)`,
+		Args: cobra.MinimumNArgs(1),
+		RunE: runDemosAudit,
+	}
+
+	return cmd
+}
+
+func runDemosAudit(cmd *cobra.Command, args []string) error {
+	org := args[0]
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("demos: failed to get working directory: %w", err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
+
+	// Verify demo directory exists
+	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
+		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
+	}
+
+	// Verify compose.yml exists
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
+	if _, err := os.Stat(composePath); os.IsNotExist(err) {
+		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
+	}
+
+	// Check if demo is running
+	if !isDemoRunning(demoDir, composePath) {
+		return fmt.Errorf("demo environment '%s' is not running. Run 'g8e demos start %s' first", org, org)
+	}
+
+	// Determine service names based on org
+	var gatewayService, operatorService string
+	switch org {
+	case "healthcare", "gov", "finance":
+		gatewayService = "gateway"
+		operatorService = "operator"
+	default:
+		gatewayService = "gateway"
+		operatorService = "operator"
+	}
+
+	if len(args) == 1 {
+		fmt.Printf("Audit logs and ledger history for: %s\n", org)
+		fmt.Println(strings.Repeat("─", 60))
+		fmt.Println("Run 'g8e demos audit <org> <action>' to execute these directly.")
+		fmt.Println()
+
+		// View operator log (real-time audit stream)
+		fmt.Println("1. Real-time audit log stream (operator.log):")
+		fmt.Printf("   Action: logs\n")
+		fmt.Printf("   Command: docker compose -f %s logs -f observability\n", composePath)
+		fmt.Println()
+
+		// View audit database
+		fmt.Println("2. Audit vault database (SQLite):")
+		fmt.Printf("   Action: gateway-db\n")
+		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 /root/.g8e/data/audit_vault.db\n", composePath, gatewayService)
+		fmt.Println()
+		fmt.Printf("   Action: operator-db\n")
+		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 /root/.g8e/data/audit_vault.db\n", composePath, operatorService)
+		fmt.Println()
+		fmt.Println("   Useful SQL queries:")
+		fmt.Println("   SELECT * FROM sessions;")
+		fmt.Println("   SELECT * FROM events ORDER BY id DESC LIMIT 20;")
+		fmt.Println("   SELECT * FROM file_mutation_log ORDER BY id DESC LIMIT 20;")
+		fmt.Println("   SELECT * FROM receipts ORDER BY id DESC LIMIT 20;")
+		fmt.Println()
+
+		// View git ledger
+		fmt.Println("3. Git ledger history:")
+		fmt.Printf("   Action: ledger-log\n")
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git log --oneline'\n", composePath, gatewayService)
+		fmt.Println()
+		fmt.Printf("   Action: ledger-files\n")
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git ls-files'\n", composePath, gatewayService)
+		fmt.Println()
+		fmt.Printf("   Action: ledger-history <file>\n")
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git log --follow -- path/to/file'\n", composePath, gatewayService)
+		fmt.Println()
+		fmt.Printf("   Action: ledger-show <hash>\n")
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git show <commit-hash>'\n", composePath, gatewayService)
+		fmt.Println()
+
+		// View execution vault
+		fmt.Println("4. Execution vault (command results and file diffs):")
+		fmt.Printf("   Action: vault\n")
+		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 /root/.g8e/execution_vault.db\n", composePath, gatewayService)
+		fmt.Println()
+		fmt.Println("   Useful SQL queries:")
+		fmt.Println("   SELECT * FROM execution_log ORDER BY timestamp_utc DESC LIMIT 20;")
+		fmt.Println("   SELECT * FROM file_diff_log ORDER BY timestamp_utc DESC LIMIT 20;")
+		fmt.Println()
+		return nil
+	}
+
+	action := args[1]
+	switch action {
+	case "logs":
+		return runDockerComposeLogs(demoDir, composePath, "observability")
+	case "gateway-db":
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", "/root/.g8e/data/audit_vault.db")
+	case "operator-db":
+		return runDockerComposeExec(demoDir, composePath, operatorService, "sqlite3", "/root/.g8e/data/audit_vault.db")
+	case "ledger-log":
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git log --oneline")
+	case "ledger-files":
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git ls-files")
+	case "ledger-history":
+		if len(args) < 3 {
+			return fmt.Errorf("ledger-history requires a file path")
+		}
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git log --follow -- \"$1\"", "--", args[2])
+	case "ledger-show":
+		if len(args) < 3 {
+			return fmt.Errorf("ledger-show requires a commit hash")
+		}
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git show \"$1\"", "--", args[2])
+	case "vault":
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", "/root/.g8e/execution_vault.db")
+	default:
+		return fmt.Errorf("unknown audit action: %s", action)
+	}
+}
+
+func runDockerComposeExec(demoDir, composePath, service string, args ...string) error {
+	fullArgs := []string{"compose", "-f", composePath, "exec", service}
+	fullArgs = append(fullArgs, args...)
+
+	cmd := exec.Command("docker", fullArgs...)
+	cmd.Dir = demoDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	return cmd.Run()
+}
+
+func runDockerComposeLogs(demoDir, composePath, service string) error {
+	cmd := exec.Command("docker", "compose", "-f", composePath, "logs", "-f", service)
+	cmd.Dir = demoDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }

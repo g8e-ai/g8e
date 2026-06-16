@@ -79,11 +79,13 @@ All peer connections enforce mTLS with SPIFFE URI SAN validation. Certificates u
 
 ### CSR-Based Enrollment
 
+**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret (like an API key), a client generates its own key pair and asks the Gateway to sign a certificate attesting "this public key belongs to this identity." The Gateway acts as a Certificate Authority (CA) — it only signs CSRs for identities the Platform Owner has authorized. The client then proves its identity on every call by signing with its private key (via mTLS). No shared secrets, no API keys to leak.
+
 Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
 
 1. **CA Discovery**: Clients fetch the platform root CA bundle from the endpoint `/.well-known/g8e/pki/ca-bundle`.
 2. **CSR Submission**: Clients generate a local ECDSA P-256 key pair and submit a CSR to `/api/v1/pki/csr/sign`.
-3. **Registration**: The g8e Gateway validates the CSR and binds the certificate to a user identity via invitation-based Just-In-Time (JIT) provisioning.
+3. **Registration**: The g8e Gateway validates the CSR and binds the certificate to a user identity subject to platform owner authorization.
 4. **Session Issuance**: Upon successful enrollment, the g8e Gateway issues a specific `operator_session_id` or `cli_session_id`.
 
 ### No-DNS / Direct IP Configuration

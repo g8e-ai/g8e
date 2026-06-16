@@ -119,3 +119,10 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 4. **Fail-Closed Design**: If any component requires a missing or unavailable external resource, it terminates immediately with a clear error instead of attempting unencrypted or insecure fallbacks.
 5. **Mandatory Encryption at Rest**: All sensitive data stored in SQLite databases is encrypted using platform-managed encryption keys.
 
+---
+
+## See Also
+
+- **[Secure Data Transfer & Governed Pipelines](secure_data_transfer.md)** — Distribute the binary into the enclave with OS-native tools (scp/robocopy), then govern every subsequent data touch by AI agents and external applications through the API.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Remote management commands (cp, scp, stream, deploy) for operators inside the air-gapped environment.
+

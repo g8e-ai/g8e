@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-06-16
+
+### Overview
+
+v1.1.2 is a maintenance release focused on documentation cleanup, dependency updates, and build infrastructure improvements. This release removes deprecated invitation service references from documentation, reorganizes community health documentation into the standard `.github/` location, improves binary building processes, and updates critical Go dependencies for security and stability.
+
+### Changed
+
+* **Documentation Cleanup** — Removed all references to the deprecated invitation service from documentation files.
+* **Community Health Documentation** — Moved community health documentation into `.github/` directory for standard GitHub project structure compliance.
+* **Binary Building Improvements** — Enhanced binary build processes for better cross-platform compatibility and reliability.
+
+### Fixed
+
+* **Dependency Updates** — Bumped critical Go dependencies:
+  * `golang.org/x/sys` from 0.45.0 to 0.46.0
+  * `golang.org/x/crypto` from 0.52.0 to 0.53.0
+* **GitHub Actions** — Updated `softprops/action-gh-release` from version 2 to 3 for improved release workflow reliability.
+
+---
+
 ## [1.1.1] - 2026-06-15
 
 ### Overview

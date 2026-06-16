@@ -28,13 +28,15 @@ The platform uses a four-tier PKI hierarchy issued by the g8e Gateway. See [Netw
 
 ### Enrollment & Bootstrap
 
+**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret (like an API key), a client generates its own key pair and asks the Gateway to sign a certificate attesting "this public key belongs to this identity." The Gateway acts as a Certificate Authority (CA) — it only signs CSRs for identities the Platform Owner has authorized. The client then proves its identity on every call by signing with its private key (via mTLS). No shared secrets, no API keys to leak.
+
 Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow. For Windows, enrollment utilizes the Windows Certificate Store with TPM-backed keys via Windows Hello for Business. See [Network Architecture](./network.md) for detailed enrollment procedures.
 
 ### External IdP Support (JWT)
 
 The platform supports authentication via external Identity Providers (IdPs) for BYO clients on MCP and A2A endpoints.
 - **JWKS Integration**: The gateway validates JWT tokens against configured JWKS endpoints.
-- **JIT Provisioning**: Users are provisioned Just-In-Time (JIT) based on the JWT subject claim upon their first successful authentication, provided an active invitation exists.
+- **JIT Provisioning**: Users are provisioned Just-In-Time (JIT) based on the JWT subject claim upon their first successful authentication, subject to platform owner authorization.
 - **Persona Mapping**: JWT roles are mapped to internal binding personas via the `PersonaService` defined in @../../internal/services/gateway/gateway_auth.go:866.
 
 ---

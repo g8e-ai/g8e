@@ -112,11 +112,12 @@ The g8e Operator compiles native tool playbooks directly into the g8e Node to pr
 The g8e Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
 
 ### JWT Authentication Isolation
-The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled** and requires an active invitation:
-- **Owner-Centric Model**: All authentication requires owner approval via invitations. The platform owner creates invitations for specific identities (IdP `sub` or email) before JIT provisioning can occur.
-- **Invitation-Based JIT**: When a JWT is presented, the g8e Gateway validates the signature and checks for an active invitation. If no invitation exists, authentication is rejected (403 Forbidden). If a valid invitation exists, the user is provisioned and bound to the owner's organization, then the invitation is consumed.
+The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled**:
+- **Owner-Centric Model**: All authentication requires platform owner authorization. The first human to authenticate becomes the Platform Owner, and subsequent user provisioning is subject to owner authorization.
+- **CSR-Based Enrollment**: For mTLS-based authentication, clients enroll via Certificate Signing Request (CSR) where they generate their own key pair and the Gateway acts as a Certificate Authority (CA) to sign certificates for authorized identities. No shared secrets, no API keys to leak.
+- **JWT-Based JIT**: When a JWT is presented, the g8e Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
 - **Strict TTL**: Sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication.
-- **g8e Gateway Responsibility**: The g8e Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs invitation-gated JIT user provisioning, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
+- **g8e Gateway Responsibility**: The g8e Gateway validates inbound `Authorization: Bearer <JWT>` tokens, performs JIT user provisioning subject to owner authorization, maps JWT roles to Personas, and injects `tenant_id` and `binding_persona` into the `GovernanceEnvelope`.
 - **g8e Operator Responsibility**: The g8e Operator receives only the pre-validated, enriched security metadata in the envelope. It decodes `tenant_id` and `binding_persona` from the envelope, propagates them into the execution context, and applies Persona-based data scrubbing (column masks, redaction) before returning results.
 - **No IdP Dependency**: The Operator never requires outbound internet access to verify tokens or manage user state. This enables air-gapped and high-security deployments where the Operator has no external network connectivity.
 
