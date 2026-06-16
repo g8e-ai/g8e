@@ -1316,13 +1316,16 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("enroll agent app identity: %w", err)
 	}
 
-	// Require an authenticated human with passkey registration
+	// Require an authenticated human with passkey registration; auto-register if missing
 	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID)
 	if err != nil {
 		return fmt.Errorf("verify passkey registration: %w", err)
 	}
 	if !hasPasskey {
-		return fmt.Errorf("agent run requires a passkey-enrolled user. Please register a passkey via 'g8e auth register-passkey'")
+		fmt.Fprintf(os.Stderr, "[g8e] No passkey registered, starting passkey enrollment...\n")
+		if err := auth.RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
+			return fmt.Errorf("passkey registration: %w", err)
+		}
 	}
 
 	// Validate agent binary exists before writing any config files

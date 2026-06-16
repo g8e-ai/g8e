@@ -546,10 +546,10 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		return fmt.Errorf("failed to load credentials: %w", err)
 	}
 	if creds == nil || creds.UserID == "" {
-		return fmt.Errorf("no user ID found in credentials; run 'g8e auth login' to enroll first")
+		return fmt.Errorf("no user ID found in credentials; run 'g8e auth enroll' first")
 	}
 	if creds.CLISessionID == "" {
-		return fmt.Errorf("no CLI session ID found in credentials; run 'g8e auth login' to enroll first")
+		return fmt.Errorf("no CLI session ID found in credentials; run 'g8e auth enroll' first")
 	}
 
 	fmt.Printf("→ Loaded credentials - User ID: %s, CLI Session ID: %s\n", creds.UserID, creds.CLISessionID)

@@ -127,7 +127,7 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("failed to load credentials: %w", err)
 	}
 	if creds == nil || creds.CLISessionID == "" {
-		return "", "", "", fmt.Errorf("no CLI session found; run 'g8e auth login' first")
+		return "", "", "", fmt.Errorf("no CLI session found; run 'g8e auth enroll' first")
 	}
 
 	// Create mTLS HTTP client

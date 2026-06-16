@@ -73,7 +73,7 @@ func auditReceiptsCmd() *cobra.Command {
 					return fmt.Errorf("failed to load credentials: %w", err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
+					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -183,7 +183,7 @@ func auditExportCmd() *cobra.Command {
 					return fmt.Errorf("failed to load credentials: %w", err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
+					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -243,7 +243,7 @@ func auditReportCmd() *cobra.Command {
 					return fmt.Errorf("failed to load credentials: %w", err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
+					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -327,7 +327,7 @@ func auditEventsCmd() *cobra.Command {
 					return fmt.Errorf("failed to load credentials: %w", err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
+					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -443,7 +443,7 @@ func auditSummaryCmd() *cobra.Command {
 					return fmt.Errorf("failed to load credentials: %w", err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
+					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
