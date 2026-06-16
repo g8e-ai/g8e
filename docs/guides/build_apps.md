@@ -372,4 +372,5 @@ Refer to `protocol/examples/governance_envelope/` for example envelope construct
 ## Next Steps
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
+- **[Secure Data Transfer & Governed Pipelines](secure_data_transfer.md)** — Use an enrolled app and a live human session to run a fully governed, audited data pipeline.
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a g8e Operator.

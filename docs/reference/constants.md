@@ -13,7 +13,7 @@ Canonical collection names for the operator embedded SQLite database:
 - `CollectionUsers`, `CollectionWebSessions`, `CollectionOperatorSessions`, `CollectionCLISessions`
 - `CollectionLoginAudit`, `CollectionAuthAdminAudit`, `CollectionAccountLocks`
 - `CollectionOrganizations`, `CollectionOperators`, `CollectionOperatorUsage`
-- `CollectionCases`, `CollectionInvestigations`, `CollectionInvitations`, `CollectionTasks`
+- `CollectionCases`, `CollectionInvestigations`, `CollectionTasks`
 - `CollectionMemories`, `CollectionSettings`, `CollectionConsoleAudit`, `CollectionBoundSessions`
 - `CollectionPasskeyChallenges`, `CollectionPersonas`, `CollectionAgentActivityMetadata`
 - `CollectionReputationState`, `CollectionReputationCommitments`, `CollectionStakeResolutions`

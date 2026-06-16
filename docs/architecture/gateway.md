@@ -289,7 +289,7 @@ The g8e Gateway (g8eg) intercepts inbound `Authorization: Bearer <JWT>` tokens o
 
 **Step 2: Edge Validation and JIT Account Management**
 Following successful token validation, the g8e Gateway (g8eg) ensures the user exists locally and maps their roles:
-- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetBySub`. If the user does not exist, checks for an active invitation via `userSvc.FindActiveInvitationBySub` and creates the user account via `userSvc.CreateUserFromInvitation`.
+- **JIT Provisioning**: Checks the SQLite `users` collection for the `sub` (User ID) via `userSvc.GetBySub`. If the user does not exist, provisions the user account subject to platform owner authorization.
 - **Persona Mapping**: Loads declarative Persona manifests (e.g., YAML definitions representing `security-analyst`, `admin`). Evaluates the JWT `roles` against these manifests via `personaSvc.MapRolesToPersona` to determine the active `binding_persona`.
 - **Context Injection**: Stores the resolved `binding_persona` and `tenant_id` into the request context.
 
@@ -363,7 +363,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Collection | Description |
 |---|---|
 | **Authentication & Sessions** | `users`, `web_sessions`, `operator_sessions`, `cli_sessions`, `bound_sessions`, `passkey_challenges` |
-| **Organizations & Tenants** | `organizations`, `invitations` |
+| **Organizations & Tenants** | `organizations` |
 | **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
 | **Operators & Usage** | `operators`, `operator_usage` |
 | **Cases & Investigations** | `cases`, `investigations`, `tasks` |
