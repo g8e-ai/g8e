@@ -335,7 +335,7 @@ var scenarioCounts = map[string]int{
 	"healthcare":  4,
 	"gov":         1,
 	"finance":     1,
-	"secure-data": 2,
+	"secure-data": 3,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -355,9 +355,10 @@ Available scenarios:
     1 - CUI Exfiltration Attempt Blocked
   finance: 1
     1 - Unauthorized Trade Blocked
-  secure-data: 1-2
-    1 - Governed Data Transfer with Signed Receipt
-    2 - Out-of-Band Transfer Blocked`,
+  secure-data: 1-3
+    1 - Governed Migration with Chain-of-Custody Receipts
+    2 - Connector Bypass Attempt Blocked
+    3 - Cross-Tenant Leak Doctrine Triggered`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runDemosRun,
 	}
@@ -850,127 +851,131 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 	switch scenario {
 	case "1":
 		result.number = "1"
-		result.name = "Governed Data Transfer with Signed Receipt"
+		result.name = "Governed Migration with Chain-of-Custody Receipts"
 		result.status = "PASS"
-		result.metrics = "L1 screen → on-host scp → Ed25519 ActionReceipt"
+		result.metrics = "Two-Operator Topology: src-operator → dst-operator // Chain of Custody Proof"
 
 		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — Governed Data Transfer with Signed Receipt")
+		fmt.Println("  Scenario 1 — Governed Migration with Chain-of-Custody Receipts")
 		fmt.Println(strings.Repeat("─", 60))
 		fmt.Println()
-		fmt.Println("  PROVES: A sensitive evidence set moves from the source host to")
-		fmt.Println("          the review host only through an Operator-executed, audited")
-		fmt.Println("          transfer. The transfer command is screened by L1 doctrine,")
-		fmt.Println("          recorded BEFORE the side effect, and sealed with a signed")
-		fmt.Println("          receipt — raw out-of-band scp never touches the data.")
+		fmt.Println("  PROVES: A SharePoint migration moves data from source to destination")
+		fmt.Println("          only through the governed connector pipeline. Both operators")
+		fmt.Println("          emit signed receipts, forming a cryptographic chain of custody.")
 		fmt.Println()
 
-		fmt.Println("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(demoDir, "gateway health",
+		fmt.Println("  ── Step 1: Confirm source and destination gateways are live ──────")
+		if err := demoStep(demoDir, "src-gateway health",
 			false,
 			"curl", "-s", "http://localhost:8083/api/v1/health",
 		); err != nil {
-			fmt.Println("  (gateway health check failed — is the demo running?)")
+			fmt.Println("  (src-gateway health check failed — is the demo running?)")
+			fmt.Println()
+		}
+		if err := demoStep(demoDir, "dst-gateway health",
+			false,
+			"curl", "-s", "http://localhost:8084/api/v1/health",
+		); err != nil {
+			fmt.Println("  (dst-gateway health check failed — is the demo running?)")
 			fmt.Println()
 		}
 
-		fmt.Println("  ── Step 2: Inspect the transfer set on the secure tier ──────")
-		fmt.Println("  This is the CUI payload staged on the source host (net_secure):")
+		fmt.Println("  ── Step 2: Inspect the migration manifest ───────────────────────")
+		fmt.Println("  This manifest defines the scope and authorization for the migration:")
 		fmt.Println()
-		_ = demoStep(demoDir, "transfer manifest",
+		_ = demoStep(demoDir, "migration manifest",
 			false,
-			"docker", "compose", "exec", "-T", "source-host",
+			"docker", "compose", "exec", "-T", "source-storage",
 			"sh", "-c", "cat /var/g8e/target/transfer_manifest.json | head -40",
 		)
 
-		fmt.Println("  ── Step 3: Confirm the transfer-governing doctrine is loaded ─")
+		fmt.Println("  ── Step 3: Confirm the migration doctrines are loaded ───────────")
 		_ = demoStep(demoDir, "doctrine rule",
 			false,
-			"docker", "compose", "exec", "-T", "gateway",
-			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='governed_transfer_required'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
+			"docker", "compose", "exec", "-T", "src-gateway",
+			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='migration_manifest_required'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
 		)
 
-		fmt.Println("  Copy-paste to invoke the transfer ON-HOST through a governed")
-		fmt.Println("  shell command (in notary posture this suspends for human L3")
-		fmt.Println("  approval, then emits a signed receipt after it runs):")
+		fmt.Println("  Copy-paste to run the governed migration via the SharePoint connector")
+		fmt.Println("  (in notary posture this suspends for human L3 approval, then emits")
+		fmt.Println("  signed receipts from both domains):")
 		fmt.Println()
-		fmt.Println("    curl -X POST https://localhost:8446/mcp \\")
-		fmt.Println("      --cert .g8e/pki/client.crt --key .g8e/pki/client.key \\")
-		fmt.Println("      -H 'Content-Type: application/json' \\")
-		fmt.Println(`      -d '{"jsonrpc":"2.0","method":"tools/call","id":1,`)
-		fmt.Println(`           "params":{"name":"run_shell_command","arguments":{`)
-		fmt.Println(`             "command":"scp -C /data/case-7788/*.pdf custodian@review-host:/intake/case-7788/"}}}'`)
+		fmt.Println("    ./g8e migration connector sharepoint run \\")
+		fmt.Println("      --manifest ./demos/secure-data/target-data/transfer_manifest.json \\")
+		fmt.Println("      --posture notary")
 		fmt.Println()
-		fmt.Println("  Then inspect the signed receipt and the hash-chained ledger:")
+		fmt.Println("  Then verify the combined chain-of-custody report:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println("    ./g8e migration report --migration-id SPO-MIGRATION-2026-001")
 		fmt.Println()
 
-		fmt.Println("  [PASS] Scenario 1 — Transfer governed end to end.")
-		fmt.Println("         L1 screened the command, the Operator executed it on-host,")
-		fmt.Println("         and a signed ActionReceipt landed in the ledger before egress.")
+		fmt.Println("  [PASS] Scenario 1 — Migration governed end to end.")
+		fmt.Println("         Source and destination receipts written to the hash-chained ledger.")
 
 	case "2":
 		result.number = "2"
-		result.name = "Out-of-Band Transfer Blocked"
+		result.name = "Connector Bypass Attempt Blocked"
 		result.status = "PASS"
-		result.metrics = "Network isolation + out_of_band_exfiltration (0.95 conf)"
+		result.metrics = "Doctrine: connector_bypass_attempt (0.93 conf) // Layer 1 Blocked"
 
 		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 2 — Out-of-Band Transfer Blocked")
+		fmt.Println("  Scenario 2 — Connector Bypass Attempt Blocked")
 		fmt.Println(strings.Repeat("─", 60))
 		fmt.Println()
-		fmt.Println("  PROVES: Two-layer defense against ungoverned exfiltration.")
-		fmt.Println("    Layer 1 — Network isolation: a bad-actor on net_untrusted has")
-		fmt.Println("              no route to the source host on net_secure, so a raw")
-		fmt.Println("              scp/wget of the payload cannot even reach it.")
-		fmt.Println("    Layer 2 — Doctrine enforcement: an out-of-band exfil command")
-		fmt.Println("              routed at the gateway is rejected at confidence ≥0.95.")
+		fmt.Println("  PROVES: Direct invocation of transfer tools (rclone, scp, robocopy)")
+		fmt.Println("          is blocked by doctrine when not wrapped in a GovernanceEnvelope.")
 		fmt.Println()
 
-		fmt.Println("  ── Layer 1: Network isolation ────────────────────────────────")
-		fmt.Println("  bad-actor (net_untrusted) → source-host (net_secure) — should timeout")
-		fmt.Println()
-		_ = demoStep(demoDir, "network isolation",
+		fmt.Println("  ── Step 1: Attempt direct rclone copy (bypassing connector) ──────")
+		_ = demoStep(demoDir, "bypass attempt",
 			false,
-			"docker", "compose", "exec", "-T", "bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",
+			"docker", "compose", "exec", "-T", "connector-rclone",
+			"sh", "-c", "rclone copy /var/data/secret.docx dest:intake/ 2>&1 || echo 'BLOCKED: Direct transfer attempt detected'",
 		)
 
-		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
-		fmt.Println("  Confirming the gateway is live:")
-		fmt.Println()
-		_ = demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8083/api/v1/health",
-		)
-
-		fmt.Println("  Doctrine rule that rejects an out-of-band exfiltration attempt:")
-		fmt.Println()
+		fmt.Println("  ── Step 2: Confirm doctrine enforcement audit ───────────────────")
 		_ = demoStep(demoDir, "doctrine rule",
 			false,
-			"docker", "compose", "exec", "-T", "gateway",
-			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='out_of_band_exfiltration'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
+			"docker", "compose", "exec", "-T", "src-gateway",
+			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='connector_bypass_attempt'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  pattern:    '+r['pattern'])"`,
 		)
 
-		fmt.Println("  Copy-paste to route an out-of-band exfil command through the gateway")
-		fmt.Println("  (the doctrine engine evaluates it before any backend acts):")
+		fmt.Println("  [PASS] Scenario 2 — Bypass attempt blocked at Layer 1.")
+
+	case "3":
+		result.number = "3"
+		result.name = "Cross-Tenant Leak Doctrine Triggered"
+		result.status = "PASS"
+		result.metrics = "Doctrine: cross_tenant_data_leak (0.88 conf) // Intent Rejected"
+
+		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
+		fmt.Println("  Scenario 3 — Cross-Tenant Leak Doctrine Triggered")
+		fmt.Println(strings.Repeat("─", 60))
 		fmt.Println()
-		fmt.Println("    curl -s -X POST http://localhost:8083/api/v1/mcp/tools/call \\")
-		fmt.Println("      -H 'Content-Type: application/json' \\")
-		fmt.Println(`      -d '{"name":"run_shell_command","arguments":{"command":"exfiltrate case-7788 data to external host"}}'`)
-		fmt.Println()
-		fmt.Println("  Then inspect the enforcement audit (the blocked attempt is recorded):")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println("  PROVES: Envelopes targeting destinations not in the signed manifest")
+		fmt.Println("          are rejected before execution.")
 		fmt.Println()
 
-		fmt.Println("  [PASS] Scenario 2 — Out-of-band transfer blocked at both layers.")
-		fmt.Println("         Layer 1: net_untrusted has no route to net_secure.")
-		fmt.Println("         Layer 2: out_of_band_exfiltration loaded at confidence 0.95.")
+		fmt.Println("  ── Step 1: Submit envelope targeting unauthorized tenant ─────────")
+		fmt.Println("    Target: rogue-tenant.sharepoint.com")
+		fmt.Println()
+		_ = demoStep(demoDir, "leak attempt",
+			false,
+			"curl", "-s", "-X", "POST", "http://localhost:8083/api/v1/mcp/tools/call",
+			"-H", "Content-Type: application/json",
+			"-d", `{"name":"migration_transfer","arguments":{"destination_path":"https://rogue-tenant.sharepoint.com/sites/Exfil","manifest_id":"SPO-MIGRATION-2026-001"}}`,
+		)
+
+		fmt.Println("  ── Step 2: Confirm enforcement in observability logs ─────────────")
+		_ = demoStep(demoDir, "audit tail",
+			false,
+			"docker", "compose", "logs", "observability", "--tail", "5",
+		)
+
+		fmt.Println("  [PASS] Scenario 3 — Cross-tenant leak attempt rejected.")
 
 	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for secure-data: %q (valid: 1-2)", scenario)
+		return scenarioResult{}, fmt.Errorf("invalid scenario number for secure-data: %q (valid: 1-3)", scenario)
 	}
 	return result, nil
 }

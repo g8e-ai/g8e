@@ -32,7 +32,7 @@ The platform uses a four-tier PKI hierarchy issued by the g8e Gateway. See [Netw
 
 #### CLI Enrollment Paths
 
-There are three distinct CLI enrollment paths depending on gateway and credential state. The `EnrollCLI` function (`internal/cli/auth/agent_enroll.go`) encapsulates the first two paths as a reusable, idempotent call used by both `g8e auth login` and the agent launcher.
+There are three distinct CLI enrollment paths depending on gateway and credential state. The `EnrollCLI` function (`internal/cli/auth/agent_enroll.go`) encapsulates the first two paths as a reusable, idempotent call used by both `g8e auth enroll` and the agent launcher.
 
 | Path | Trigger | Transport | Function |
 | :--- | :--- | :--- | :--- |
@@ -42,9 +42,16 @@ There are three distinct CLI enrollment paths depending on gateway and credentia
 
 Plain HTTP is used only for the bootstrap and CLI enrollment paths because the CLI has no mTLS certificate yet — these endpoints exist on the unauthenticated discovery port and are gated by the gateway's own authorization policy. All subsequent communication uses mTLS exclusively.
 
-**`EnrollCLI(cfg)`** selects between `Bootstrap` and `CLIEnroll` based on `CheckBootstrapStatus`, then saves the signed certificate, trust bundle, and credential file. Callers (`g8e auth login`, `g8e mcp agent run`) add their own user-facing output; `EnrollCLI` itself is silent.
+**Trusting the Self-Signed CA**: Since the g8e Gateway uses self-signed certificates for its internal PKI, non-Windows clients must trust the platform's Root CA before browser-based passkey registration can succeed. The platform provides automated trust scripts for this purpose:
+- **Linux**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca | sh`
+- **macOS**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca-macos | sh`
+- **Windows**: `iwr http://<gateway-ip>:8080/bootstrap-ca.ps1 -UseBasicParsing | iex`
 
-**Re-enrollment** (`g8e auth login` when credentials already exist) uses `ReEnroll` over mTLS when an operator certificate is present, or falls back to `CLIEnroll` for CLI-only deployments. It also runs `AutoRenewCertificate` to short-circuit if the existing certificate is still valid.
+**CRITICAL**: After running a trust script, the user **MUST restart all open browsers** for the newly installed CA to be recognized. Failure to do so will result in WebAuthn registration errors in the browser.
+
+**`EnrollCLI(cfg)`** selects between `Bootstrap` and `CLIEnroll` based on `CheckBootstrapStatus`, then saves the signed certificate, trust bundle, and credential file. Callers (`g8e auth enroll`, `g8e mcp agent run`) add their own user-facing output; `EnrollCLI` itself is silent.
+
+**Re-enrollment** (`g8e auth enroll` when credentials already exist) uses `ReEnroll` over mTLS when an operator certificate is present, or falls back to `CLIEnroll` for CLI-only deployments. It also runs `AutoRenewCertificate` to short-circuit if the existing certificate is still valid.
 
 #### Agent App Enrollment (Delegated Credentials)
 
@@ -58,7 +65,7 @@ The request is made over mTLS using the CLI certificate and requires a valid `X-
 
 #### Windows Enrollment
 
-On Windows, enrollment uses the Windows Certificate Store with TPM-backed keys via Windows Hello for Business. `g8e auth login` detects the platform and delegates to the Windows-specific path automatically. See [Network Architecture](./network.md) for details.
+On Windows, enrollment uses the Windows Certificate Store with TPM-backed keys via Windows Hello for Business. `g8e auth enroll` detects the platform and delegates to the Windows-specific path automatically. See [Network Architecture](./network.md) for details.
 
 ### External IdP Support (JWT)
 

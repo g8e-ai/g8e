@@ -1,509 +1,372 @@
 ---
-title: Secure Data Transfer & Governed Pipelines
+title: Governed Data Migration
 parent: Guides
 ---
 
-# Secure Data Transfer & Governed Data Pipelines
+# Governed Data Migration
 
-Last Updated: 2026-06-15
-Version: v1.1.1
+> "The transfer happened. Here's the proof it should have."
+
+Last Updated: 2026-06-16
+Version: v1.1.3
 
 ---
 
 ## Who this is for
 
-This guide is written for high-assurance operators — defense, intelligence, federal
-civilian, healthcare, and financial institutions — that hold data they cannot let leave
-the perimeter (classified, CUI, PHI, PCI, ITAR) but still want to put modern AI and
-external applications to work against it.
+Organizations moving large volumes of sensitive data between storage systems — a SharePoint
+on-premises farm to Microsoft 365, a file server to S3, an on-prem NAS to Azure Blob —
+who need a tamper-evident audit record proving that the transfer was authorized, executed
+correctly, and received by the destination **before** any compliance question is ever asked.
 
-The forced choice these organizations face today is *frontier reasoning **or** data
-sovereignty*. g8e's answer is **both**: the model and the application reason over a
-scrubbed projection of reality; the host remembers, verifies, and acts; and every byte
-that moves does so through a fail-closed pipeline that writes a tamper-evident audit
-record **before** the side effect occurs. See
-[Position Paper §9](../core/position_paper.md) for the underlying argument.
+This guide is also for the **procurement and compliance reviewers** who evaluate migration
+vendors: g8e does not replace your transfer tool (rclone, the SharePoint Migration Tool,
+robocopy). It **governs** it. The transfer tool runs inside the g8e L5 Actuator; every byte
+it moves was authorized by a signed `GovernanceEnvelope` before it left the source.
 
-This guide shows two things:
-
-1. **How to move data and the g8e binary itself using OS-native tools** (`scp`,
-   `ssh`, `robocopy`) — what crosses by raw copy, and how to keep that surface minimal
-   and verifiable.
-2. **How to turn every subsequent data touch — by an AI agent or an external
-   application — into a governed, audited API call** through the same single `g8e`
-   binary.
+The forced choice migration projects face today is *speed **or** audit completeness*. g8e's
+answer is **both**: fast, parallelized bulk transfer via best-in-class tools, with
+cryptographic chain of custody at the source **and** the destination.
 
 ---
 
-## The two planes
+## The governing idea
 
-A correct g8e deployment cleanly separates two planes. Conflating them is the most
-common security mistake.
+**g8e governs the action, not the actor.**
 
-| Plane | What crosses | Mechanism | Governance |
-|---|---|---|---|
-| **Transport / bootstrap plane** | The single static `g8e` binary, protocol schemas, and (optionally) a one-time data seed | OS-native: `scp`, `ssh`, `robocopy`, removable media | None at the wire — minimized to a single, checksum-verifiable artifact |
-| **Governed data plane** | Every read, edit, copy, query, and command against sensitive data thereafter | `GovernanceEnvelope` over mTLS, via CLI / MCP / A2A / direct API | Full L1–L5 verification, signed receipts, hash-chained ledger |
+A *connector* is a minimal application that knows how to describe a migration step as a
+typed `GovernanceEnvelope`. The connector does not transfer data itself — it produces the
+authorization record. The actual transfer tool (rclone, the SharePoint Migration Tool)
+runs inside the **L5 Actuator**, which verifies the envelope against L1 Doctrine, L2
+Consensus, and L3 human approval before executing anything.
 
-The transport plane is used **once**, to stand the platform up. Everything an AI or an
-application does afterward rides the governed data plane. Raw `scp`/`robocopy` of
-*sensitive payloads* should be treated as a break-glass exception, and even then it is
-best invoked **on-host through a governed shell command** so it lands in the audit trail
-(see [§4](#4-governed-bulk-movement-scp-and-robocopy-on-host)).
+This means:
 
----
+- The transfer tool cannot run without a signed, verified envelope
+- The connector cannot bypass L1 Doctrine (it has no direct execution rights)
+- A poisoned or misconfigured connector produces at most a rejected envelope and a
+  recorded violation — it cannot move data unilaterally
 
-## 1. Distribute the g8e binary with OS-native tools
+The transfer tool is interchangeable. The governance record is not.
 
-g8e is a single, statically compiled binary with zero standing runtime dependencies —
-which is exactly what makes it safe to push into a locked-down or air-gapped enclave. It
-is the only thing you copy by hand, and it is fully verifiable by checksum.
-
-### Linux / macOS (scp, ssh)
-
-The CLI wraps `scp` and `ssh` directly so you can use your existing key-based auth and
-SSH config:
-
-```bash
-# Copy the operator binary to a remote host (thin wrapper over scp; supports -P, -i, -C…)
-./g8e operator scp deploy@enclave-host:/opt/g8e/g8e -i ~/.ssh/enclave_ed25519 -C
-
-# Or stream-and-execute without leaving a copy on disk (good for ephemeral/air-gapped runs)
-./g8e operator stream --hosts deploy@enclave-host -i ~/.ssh/enclave_ed25519
-
-# Or deploy to several hosts and start them in the background
-./g8e operator deploy --hosts host1,host2,host3 --background -i ~/.ssh/enclave_ed25519
-```
-
-Plain `scp` works identically if you prefer the raw tool — the binary is just a file:
-
-```bash
-scp -C -i ~/.ssh/enclave_ed25519 ./bin/g8e deploy@enclave-host:/opt/g8e/g8e
-ssh deploy@enclave-host 'chmod +x /opt/g8e/g8e'
-```
-
-### Windows (robocopy)
-
-On a Windows host or across an SMB share into the enclave, use `robocopy` to stage the
-binary and schemas. `robocopy` gives you restartable, mirror-mode, logged copies — useful
-for moving the binary plus the `protocol/` schema directory in one pass:
-
-```bat
-robocopy \\staging\g8e-release C:\g8e g8e.exe /Z /COPY:DAT /LOG:C:\g8e\transfer.log
-robocopy \\staging\g8e-release\protocol C:\g8e\protocol /E /Z /LOG+:C:\g8e\transfer.log
-```
-
-`/Z` enables restartable mode for large/flaky links; `/COPY:DAT` preserves data,
-attributes, and timestamps; `/LOG` gives you a transfer record to attach to your change
-ticket.
-
-### Verify the artifact before you trust it
-
-Whatever tool moved the bytes, the binary is the attack surface — so verify it. After
-transfer, confirm the checksum matches the release manifest:
-
-```bash
-# Linux/macOS
-sha256sum /opt/g8e/g8e
-
-# Windows
-certutil -hashfile C:\g8e\g8e.exe SHA256
-```
-
-Once g8e is running, the same check is available as a **governed, audited** tool
-(`fs_file_checksum`) so binary-integrity verification itself becomes part of the record —
-see [§3](#3-replace-raw-file-operations-with-governed-equivalents).
-
-### Air-gapped enclaves
-
-For fully disconnected environments, compile on a connected staging host
-(`make build`), then carry `bin/g8e` + `protocol/` across the gap by `scp`/`robocopy`/
-removable media. At runtime g8e requires **zero** external network access: local PKI,
-local SQLite state, local pub/sub, local WebAuthn bootstrap. Full procedure in the
-[Air-Gap guide](./air_gap.md).
+**What g8e is not:** a universal storage API. Veeam, Commvault, and their peers own that
+lane. g8e is a thin connector interface — two first-party connectors covering the vast
+majority of enterprise migration targets — layered over a governance pipeline that makes
+every transfer legally auditable.
 
 ---
 
-## 2. Stand up the governed boundary
+## Two-Operator topology
 
-Once the binary is on the host, bring up the Gateway (Policy Decision Point) and Operator
-(Policy Execution Point). For a high-security posture, start in **notary mode**, which
-strictly enforces all of L1 Doctrine, L2 Consensus, and L3 human-in-the-loop:
+A production governed migration uses **two Operators**: one at the source, one at the
+destination. Each signs its own `ActionReceipt`. Both receipts together form the
+cryptographic chain of custody — proof that the data left the source under authorization
+and arrived at the destination under verification.
 
-```bash
-# Strictest posture: L1 + L2 + L3 all enforced (human signature required for mutations)
-./g8e gw start --posture notary
-
-# Authenticate the human operator; issues a short-lived mTLS cert bound to a SPIFFE user ID
-./g8e auth login
+```
+Source Domain                                   Destination Domain
+┌──────────────────────────────┐               ┌──────────────────────────────┐
+│  src-gateway  (PDPoint)      │               │  dst-gateway  (PDPoint)      │
+│  src-operator (L5 Actuator)  │──── bytes ───▶│  dst-operator (L5 Actuator)  │
+│  connector  ──▶ Envelope ───▶│               │  ◀── ingress verification    │
+│  [source storage]            │               │  [destination storage]        │
+└──────────────────────────────┘               └──────────────────────────────┘
+        ↓ src ActionReceipt                            ↓ dst ActionReceipt
+        └──────────────────────────────────────────────┘
+                         Chain of Custody
 ```
 
-The first human to authenticate becomes the **Platform Owner**. All other entities
-(operators, AI clients, applications, additional users) must enroll via CSR-based
-enrollment — there is no ambient trust and no standing credential to steal.
+Neither operator trusts the other implicitly. The source receipt proves authorized egress;
+the destination receipt proves authorized ingress. An auditor with both receipts can prove
+the transfer happened exactly once, under authorization, to the right destination.
 
-Enroll remote operators over mTLS via CSR (no inbound ports required on the host — the
-operator dials out):
-
-```bash
-# On the enclave host, enroll with the gateway and obtain operator mTLS certs
-./g8e gw security pki enroll -e <gateway-ip>
-```
-
-Confirm the boundary is live:
-
-```bash
-./g8e gw status
-./g8e operator list      # operators currently connected to the gateway
-```
-
-At this point: nothing mutates host reality except through the L1→L2→L3→L4→L5 pipeline,
-every attempt is recorded before execution, and raw data never leaves the `.g8e`
-directory on the host.
+A single-operator deployment is valid for internal migrations where source and destination
+share a security domain. Add the destination operator when the migration crosses a trust
+boundary — cloud tenant, agency boundary, contractor network.
 
 ---
 
-## 3. Replace raw file operations with governed equivalents
+## Connector interface
 
-This is the core of the model. Instead of an AI or an application reaching for the
-filesystem (or `scp`-ing data out), it expresses **intent** as a typed
-`GovernanceEnvelope`. The Operator verifies the proofs against live host state, executes
-on-host, scrubs the output at the sovereignty boundary, and returns a **signed receipt**.
+A connector is any enrolled process that can produce a valid `GovernanceEnvelope`. It must:
 
-The AI sees only a scrubbed projection — secrets and regulated fields are replaced with
-opaque tokens and rehydrated to real values **only at the moment of execution, on the
-host where the data already lives**. The frontier model never takes custody.
+1. **Hold an enrolled mTLS identity** — `spiffe://g8e.local/app/<connector-name>`,
+   obtained via CSR-based enrollment with the source gateway
+2. **Reference a signed migration manifest** — a JSON document listing source paths,
+   destination paths, classification, and justification, signed by the migration admin
+3. **Submit one envelope per transfer action** — `MIGRATION_TRANSFER` action type, with
+   `source_path`, `destination_path`, `connector`, and `manifest_id` in `intent_data`
+4. **Record the ActionReceipt** — append the signed receipt to the migration log; submit
+   to the destination gateway for ingress verification
 
-### Canonical file/data event types
+The connector does **not** open connections to destination storage, read source files, or
+write destination files. Those are L5 Actuator actions, executed by the Operator after
+the envelope passes L1–L4.
 
-Applications and agents use these typed events (full list in
-[Build Apps](./build_apps.md)):
-
-| Operation | Event type |
-|---|---|
-| Read a file | `g8e.v1.operator.filesystem.read.requested` |
-| Edit a file | `g8e.v1.operator.file.edit.requested` |
-| List a directory | `g8e.v1.operator.filesystem.list.requested` |
-| Grep / search | `g8e.v1.operator.filesystem.grep.requested` |
-| File history / diff / restore | `g8e.v1.operator.file.history.fetch.requested`, `…file.diff.fetch.requested`, `…file.restore.requested` |
-| Run a command | `g8e.v1.operator.command.requested` |
-
-### Let an AI agent touch sensitive data — governed end to end
-
-Launch the agent so that **all** of its I/O is forced through g8e and native tools are
-disabled. The agent receives a short-lived delegated credential carrying *both* the app
-identity and the accountable human's identity:
-
-```bash
-# Gateway must be running. Launches Claude with g8e as its ONLY MCP provider;
-# Bash/Read/Write/Edit/WebSearch/WebFetch are disabled so nothing bypasses governance.
-./g8e mcp agent run claude
-```
-
-Every tool call the agent makes is converted to a governed envelope, verified L1–L5, and
-recorded against a per-agent SPIFFE identity (`spiffe://g8e.local/app/claude`) **and** the
-human who launched it. A file the agent "reads" arrives scrubbed; a file it "edits" goes
-through a two-phase, git-backed commit with `state_root_before`/`state_root_after`
-captured around it, so the change is reversible and provable.
-
-Governed integrity check (the audited replacement for the manual `sha256sum` in §1):
-
-```bash
-curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/pki/client.crt --key .g8e/pki/client.key \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","id":1,
-       "params":{"name":"fs_file_checksum","arguments":{"path":"/data/case-7788/intake.pdf"}}}'
-```
-
----
-
-## 4. Governed bulk movement: scp and robocopy on-host
-
-When you genuinely need to move *files in bulk* (not the binary) — e.g. stage an evidence
-set or replicate a dataset between governed hosts — do not run `scp`/`robocopy` out of
-band. Invoke them **on the host, through a governed shell command**, so the transfer
-itself becomes a verified, audited mutation:
-
-```bash
-# A governed shell command. In notary posture this suspends for human L3 approval
-# before it runs, and emits a signed receipt after.
-curl -X POST https://localhost:8443/mcp \
-  --cert .g8e/pki/client.crt --key .g8e/pki/client.key \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","id":1,
-       "params":{"name":"run_shell_command","arguments":{
-         "command":"scp -C /data/case-7788/*.pdf custodian@review-host:/intake/case-7788/"
-       }}}'
-```
-
-On Windows the same pattern wraps `robocopy`:
-
-```json
-{"jsonrpc":"2.0","method":"tools/call","id":1,
- "params":{"name":"run_shell_command","arguments":{
-   "command":"robocopy D:\\data\\case-7788 \\\\review-host\\intake\\case-7788 /E /Z /LOG:C:\\g8e\\xfer.log"
- }}}
-```
-
-What this buys you over raw `scp`/`robocopy`:
-
-- **L1 Doctrine** screens the command against MITRE ATT&CK patterns and a denylist before
-  it ever executes — a `rm -rf`, a `sudo`, or an exfiltration pattern is rejected.
-- **L3 Notary** (in notary posture) suspends the transfer until a human signs the **exact
-  transaction hash** with a hardware key — approval is bound to that one transfer, not a
-  session.
-- The command and its result land in the hash-chained ledger with a signed
-  `ActionReceipt`. The transfer is now reconstructible and non-repudiable.
-
-> Raw `scp`/`robocopy` run outside g8e move bytes with **no** intent verification, **no**
-> human bond, and **no** audit record. Reserve them for the one-time binary distribution
-> in §1; route sensitive-data movement through the governed path.
-
----
-
-## 5. External applications via the API
-
-This is the pattern for *every other* application that needs to reach the data — a case
-management system, an ETL job, a SIEM connector, a custom analytics service. The
-application never touches the host or the filesystem directly. It becomes a
-**`GovernanceEnvelope` producer** and a **receipt consumer**, and rides the same
-governed pipeline through the same `g8e` binary.
-
-Three conditions make a governed pipeline possible:
-
-1. **The application is enrolled** — it holds its own mTLS/SPIFFE identity
-   (`spiffe://g8e.local/app/<app>`), obtained via CSR-based enrollment. It
-   gets no ambient trust; the Gateway evaluates its envelopes with the same rigor as any
-   stranger.
-2. **A human session is live** — the user's CLI session (mTLS) or web session (WebAuthn)
-   is active and unexpired. This is the accountable party.
-3. **The operator is bound to that session** — the envelope carries both identities, so
-   the action is attributable to *the app acting on behalf of the human*.
-
-### 5.1 Enroll the application
-
-**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of
-sharing a secret (like an API key), the application generates its own key pair and asks
-the Gateway to sign a certificate attesting "this public key belongs to this identity."
-The Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is
-itself the Platform Owner's authorization — there are no standing invite codes,
-pre-shared keys, or manual approval steps. The application then proves its identity on
-every subsequent call by signing with its private key (via mTLS). No shared secrets, no
-API keys to leak.
-
-**The enrollment flow:**
-
-1. **App generates key pair**: The app creates `private.key` and a Certificate Signing
-   Request (CSR) that says "I want to be `spiffe://g8e.local/app/etl-service`"
-2. **App submits CSR**: The app sends the CSR to the Gateway's enrollment endpoint
-3. **Gateway validates and signs**: The Gateway (acting as CA) validates the CSR and
-   issues a signed mTLS certificate
-4. **App receives certificate**: The app gets `client.crt` (signed by the Gateway's CA)
-   and uses it with `private.key` for all subsequent authentication
-5. **Short-lived by design**: Certificates expire quickly (typically 1 day), so a
-   compromised key has limited lifetime
-
-```bash
-# The app generates a CSR and submits it to the gateway for enrollment
-# See [Connect Apps to Gateway §CSR-Based Enrollment](./connect_apps_to_gateway.md)
-# for the full enrollment flow and API details.
-```
-
-The app receives `client.crt` / `client.key` and authenticates cryptographically on every
-call — there is no API key to leak.
-
-### 5.2 Bind the operator to the live human session
-
-g8e uses a **delegated credential** model. The envelope (or, for `agent run`, the minted
-certificate) carries *both* parties, and both are folded into the signed transaction
-hash:
-
-- `acting_app_id` → `spiffe://g8e.local/app/etl-service` (the delegate — drives policy at
-  the TLS edge)
-- `requestor_user_id` → `spiffe://g8e.local/user/<id>` (the delegator — the accountable
-  human)
-- `cli_session_id` / `operator_session_id` → the live session the action is bound to
-
-Because both identities are part of the canonical hash, the receipt names *the human who
-authorized it and the app that acted* — not just "a tool." The Gateway rejects the
-envelope if the bound session is not live, so an enrolled app with no active human session
-authorizes nothing.
-
-### 5.3 Submit a governed envelope
-
-The full, maximum-control path — the only customer-facing mutation API on the Gateway:
-
-```bash
-# 1) Fetch the current state root (binds the action to the world it was approved against)
-curl -s https://localhost:8443/api/v1/health \
-  --cert app.crt --key app.key | jq -r .state_merkle_root
-
-# 2) POST the canonical-JSON envelope. id MUST equal the deterministic transaction_hash
-#    computed over: action_type, target_resource, payload, state_merkle_root, nonce,
-#    expires_at, intent_data, requestor_user_id, acting_app_id.
-curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert app.crt --key app.key \
-  -H "Content-Type: application/json" \
-  -d @envelope.json
-```
-
-A minimal envelope skeleton (see [Build Apps](./build_apps.md) for the full field list and
-the `GenerateMessageID` hashing rules):
+A minimal envelope for a migration step:
 
 ```json
 {
   "id": "<transaction_hash>",
-  "event_type": "g8e.v1.operator.filesystem.read.requested",
-  "action_type": "FS_READ",
-  "target_resource": "/data/case-7788/intake.pdf",
-  "payload": "<base64-protobuf>",
-  "intent_data": { "path": "/data/case-7788/intake.pdf", "justification": "case review" },
+  "event_type": "g8e.v1.operator.migration.transfer.requested",
+  "action_type": "MIGRATION_TRANSFER",
+  "target_resource": "/sites/Legal/Documents/2024/contract-001.docx",
+  "intent_data": {
+    "source_path": "/sites/Legal/Documents/2024/contract-001.docx",
+    "destination_path": "/sites/Legal-Archive/Documents/2024/contract-001.docx",
+    "connector": "sharepoint-graph-api",
+    "manifest_id": "SPO-MIGRATION-2026-001",
+    "justification": "Legal hold migration — SharePoint On-Prem to M365"
+  },
   "state_merkle_root": "<state_root>",
   "nonce": "<unique-nonce>",
   "expires_at": "<rfc3339nano>",
-  "cli_session_id": "<live-cli-session>",
-  "operator_session_id": "<operator-session>",
-  "requestor_user_id": "spiffe://g8e.local/user/<id>",
-  "acting_app_id": "spiffe://g8e.local/app/etl-service",
+  "requestor_user_id": "spiffe://g8e.local/user/<migration-admin>",
+  "acting_app_id": "spiffe://g8e.local/app/sharepoint-connector",
   "transaction_hash": "<transaction_hash>",
-  "protocol_version": "1.0",
-  "governance": { "l1": { "validated": true, "violations": [] }, "l2": {}, "l3": {}, "gateway_signed": false }
+  "protocol_version": "1.0"
 }
 ```
 
-Prefer not to build envelopes by hand? Submit through the Gateway's **MCP** or **A2A**
-translation layer instead and let it construct the envelope and run L1 Doctrine for you:
-
-```bash
-# MCP: governed tool call
-curl -X POST https://localhost:8443/mcp \
-  --cert app.crt --key app.key -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"tools/call","id":1,
-       "params":{"name":"read_file","arguments":{"path":"/data/case-7788/intake.pdf"}}}'
-
-# A2A: governed skill call
-curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert app.crt --key app.key -H "Content-Type: application/json" \
-  -d '{"skill_name":"file.read","payload_json":"{\"path\":\"/data/case-7788/intake.pdf\"}","execution_id":"task-1"}'
-```
-
-### 5.4 Out-of-band human approval
-
-When the app submits a high-risk mutation without an L3 proof, the Gateway **suspends**
-the transaction and returns an approval URL:
-
-```
-https://<gateway>:8443/approve/{tx_hash}
-```
-
-The accountable human opens it, authenticates with their passkey, and signs the exact
-transaction. Approval is bound to that one action's hash and authorizes nothing else. The
-CLI equivalent:
-
-```bash
-./g8e auth approve <transaction_hash>
-```
-
-The Gateway attaches the L3 proof, resumes verification, and the transaction proceeds —
-producing a signed receipt like any other.
+See [Build Apps](./build_apps.md) for the full field list and `GenerateMessageID` hashing
+rules.
 
 ---
 
-## 6. The audit trail
+## First-party connectors
 
-Every admitted action — and every *rejected* one — is written to a host-local, git-backed,
-hash-chained ledger **before** the side effect, and sealed with an Ed25519-signed
-`ActionReceipt`. This is your compliance evidence, and it never leaves the host except as
-an explicit export you control.
+g8e ships two first-party connectors covering the majority of enterprise migration targets.
+
+### rclone connector
+
+**Coverage:** Amazon S3, Google Cloud Storage, Azure Blob, SMB/CIFS shares, SFTP, NFS,
+and any other [rclone-supported backend](https://rclone.org/overview/).
+
+The rclone connector enumerates the source tree, submits one `MIGRATION_TRANSFER` envelope
+per batch, and the src-operator executes `rclone copyto` for each approved transfer.
+rclone runs inside the L5 Actuator — the connector never touches source data directly.
 
 ```bash
-# Per-session receipts (auto-discovers session if omitted)
-./g8e audit receipts
+# Configure source and destination remotes (once, on the source operator host)
+./g8e migration connector rclone configure \
+  --source s3:source-bucket \
+  --destination azure:dest-container \
+  --name s3-to-azure
 
-# Per-agent / per-app activity (note the SPIFFE identity)
-./g8e gateway data audit list   --operator-session-id spiffe://g8e.local/app/etl-service
-./g8e gateway data audit summary --operator-session-id spiffe://g8e.local/app/etl-service
+# Plan: enumerate the manifest without transferring anything
+./g8e migration connector rclone plan --name s3-to-azure --out migration-manifest.json
 
-# Export the full signed bundle for archival
-./g8e audit export --out ./receipts-export.json
-
-# Generate a compliance report (JSON + Markdown)
-./g8e audit report --out ./reports
+# Execute: submit envelopes; Operator runs rclone for each approved batch
+./g8e migration connector rclone run --manifest migration-manifest.signed.json
 ```
 
-Each receipt carries the typed intent, the proofs that authorized it, the `state_root`
-before and after, the (scrubbed) result, and the chain link to its predecessor — so an
-auditor can answer *who authorized this, on what basis, against what state, and prove it
-later*, for every byte that moved.
+### SharePoint connector
+
+**Coverage:** SharePoint On-Premises → SharePoint Online, SharePoint → Azure Blob,
+SharePoint → S3.
+
+The SharePoint connector uses the Microsoft Graph API (`Sites.Read`, `Files.ReadWrite`)
+for item-level operations and the SharePoint Migration API for parallelized package
+ingestion on large libraries:
+
+```bash
+# Authenticate and configure the connector
+./g8e migration connector sharepoint configure \
+  --tenant contoso.onmicrosoft.com \
+  --source https://sp-farm.corp/sites/Legal \
+  --destination https://contoso.sharepoint.com/sites/Legal-Archive \
+  --name spo-legal-migration
+
+# Plan: enumerate source library, build manifest
+./g8e migration connector sharepoint plan \
+  --name spo-legal-migration \
+  --out migration-manifest.json
+
+# Execute: governed, receipted transfer
+./g8e migration connector sharepoint run \
+  --manifest migration-manifest.signed.json \
+  --posture notary
+```
 
 ---
 
-## 7. End-to-end: an external app reads regulated data
+## Running a governed migration
 
-Putting it together — an ETL service reads a CUI document for a human analyst, with full
-governance:
+### 1. Stand up source and destination operators
 
-1. **Bootstrap (once):** `scp` the verified `g8e` binary into the enclave; start the
-   gateway in notary posture; the analyst runs `auth login` (becomes/authenticates as an
-   accountable user).
-2. **Enroll the app (once):** the service enrolls via CSR-based enrollment and holds an
-   mTLS app identity (`spiffe://g8e.local/app/etl-service`).
-3. **Live session:** the analyst's CLI session is active.
-4. **Request:** the ETL service fetches the state root, builds a `FS_READ` envelope for
-   `/data/cui/report.docx` carrying `acting_app_id` (the service) + `requestor_user_id`
-   (the analyst) + the live session, and POSTs it.
-5. **Govern:** L1 screens the path/intent; L4 checks nonce, expiry, and that the state
-   root still matches; in notary posture the Gateway suspends and returns an approve URL.
-6. **Approve:** the analyst signs the transaction hash with their passkey.
-7. **Execute & scrub:** the Operator reads the file on-host, scrubs CUI markers at the
-   sovereignty boundary, returns a tokenized projection, and writes a signed receipt.
-8. **Evidence:** `g8e audit report` produces the record showing exactly who authorized
-   the read, against which state, and what the app received.
+On the source host:
 
-An attempt to instead *exfiltrate* that document (e.g. a poisoned prompt telling the agent
-to mail it out) is rejected at L1 and recorded as a blocked attempt.
+```bash
+./g8e gw start --posture notary
+./g8e auth login   # migration admin becomes the accountable party
+```
 
-### Run it live
+On the destination host:
 
-The `secure-data` demo environment stands up this exact two-plane model — a sensitive
-transfer set staged on a secure-tier host, a governed destination, and an isolated bad
-actor — and exercises both the governed and the ungoverned path:
+```bash
+./g8e gw start --posture notary
+./g8e auth login
+```
+
+Register the destination gateway as a trusted peer so the source receipt can be submitted
+for ingress verification:
+
+```bash
+# On source: register destination gateway
+./g8e gw peer add --endpoint https://dst-gateway:8443 --name destination
+```
+
+### 2. Enroll the connector
+
+The connector enrolls with the source gateway via CSR-based enrollment — same model as
+any other enrolled application. It receives a short-lived mTLS cert and authenticates on
+every envelope submission:
+
+```bash
+./g8e migration connector sharepoint enroll --gateway https://src-gateway:8443
+# → issues spiffe://g8e.local/app/sharepoint-connector cert (1-day TTL)
+```
+
+No API key, no shared secret. A compromised cert expires within a day; the connector
+cannot re-enroll without the migration admin's live session.
+
+### 3. Sign the migration manifest
+
+The manifest is the contract: every source path, every destination path, the data
+classification, and the justification. The migration admin signs it before any transfer
+begins. The `migration_manifest_required` doctrine rejects connectors that submit
+envelopes referencing an unsigned manifest.
+
+```bash
+./g8e migration manifest sign \
+  --manifest migration-manifest.json \
+  --out migration-manifest.signed.json
+```
+
+### 4. Run the migration
+
+```bash
+./g8e migration connector sharepoint run \
+  --manifest migration-manifest.signed.json \
+  --posture notary
+```
+
+In notary posture the connector submits batches of envelopes. Each batch suspends for
+human L3 approval — the accountable party signs the exact batch hash with their passkey:
+
+```
+Transfer batch 1/47 pending approval:
+  48 files · 1.3 GB · Confidential // Legal Hold
+  Approve at: https://src-gateway:8443/approve/a7f3d9c1...
+
+./g8e auth approve a7f3d9c1
+```
+
+After approval, src-operator executes the transfers, writes a signed `ActionReceipt`,
+and submits the receipt to dst-gateway for ingress verification. dst-operator confirms
+arrival and writes its own receipt.
+
+### 5. Verify chain of custody
+
+```bash
+# Source receipts
+./g8e audit receipts --migration-id SPO-MIGRATION-2026-001
+
+# Destination receipts
+./g8e audit receipts \
+  --gateway https://dst-gateway:8443 \
+  --migration-id SPO-MIGRATION-2026-001
+
+# Combined chain-of-custody report (JSON + Markdown)
+./g8e migration report \
+  --migration-id SPO-MIGRATION-2026-001 \
+  --out ./migration-report/
+```
+
+The report shows every file transferred, the source receipt hash, the destination receipt
+hash, the accountable human, and the manifest entry that authorized it.
+
+---
+
+## The audit trail
+
+Every transfer — admitted or rejected — lands in the host-local, git-backed, hash-chained
+ledger **before** the side effect, sealed with an Ed25519-signed `ActionReceipt`:
+
+```bash
+# Per-migration summary
+./g8e audit report --migration-id SPO-MIGRATION-2026-001 --out ./reports
+
+# Per-connector activity (by SPIFFE identity)
+./g8e gateway data audit list \
+  --operator-session-id spiffe://g8e.local/app/sharepoint-connector
+
+# Export signed bundles for archival (both domains)
+./g8e audit export --out ./audit-src.json
+./g8e audit export --gateway https://dst-gateway:8443 --out ./audit-dst.json
+```
+
+Each receipt carries the typed intent, the manifest entry it was authorized against, the
+L1–L4 proofs, the state root before and after, the transfer hash, and the chain link to
+the previous receipt. An auditor can verify every file in the migration against the
+original signed manifest.
+
+---
+
+## What you can tell your auditor
+
+| Claim | Mechanism | Controls |
+|---|---|---|
+| Authorization before transfer | No byte moved without a signed, L1–L4 verified envelope and (in notary posture) a human WebAuthn signature bound to the exact manifest batch | NIST AC-3, CMMC 2.1.3 |
+| Chain of custody | Source and destination operators each hold a signed, non-repudiable receipt; neither can be altered without breaking the hash chain | NIST AU-10, NIST SI-7 |
+| Data classification preserved | Signed manifest carries the classification of every object; L1 Doctrine rejects transfers to destinations inconsistent with the classification | NIST SC-28, CMMC 3.13.16 |
+| No standing privileges | Connector cert is 1-day TTL; migration admin session is live-only; no API key to revoke after the migration | NIST AC-6, NSA ZIG PAM |
+| Connector cannot self-authorize | Connector produces envelopes; execution requires Operator L5 verification; a compromised connector cannot move data unilaterally | NIST SC-39 |
+
+---
+
+## Demo: governed SharePoint migration
+
+The `secure-data` demo stands up the two-operator topology — source gateway + operator,
+destination gateway + operator, an enrolled SharePoint connector, an rclone connector,
+and an isolated bad actor — and exercises both the governed and ungoverned paths:
 
 ```bash
 ./g8e demos start secure-data
-./g8e demos run   secure-data 1   # Governed Data Transfer with Signed Receipt
-./g8e demos run   secure-data 2   # Out-of-Band Transfer Blocked
+./g8e demos run   secure-data 1   # Governed Migration with Chain-of-Custody Receipts
+./g8e demos run   secure-data 2   # Connector Bypass Attempt Blocked
+./g8e demos run   secure-data 3   # Cross-Tenant Leak Doctrine Triggered
 ```
 
-Scenario 1 walks the §4 governed-bulk-movement path (on-host `scp` through
-`run_shell_command`, screened by L1, sealed with a signed receipt); scenario 2 is the
-contrast — a raw out-of-band copy that is stopped by network isolation and rejected by the
-`out_of_band_exfiltration` doctrine. The companion `gov` demo shows the same blocking for
-CUI specifically:
+**Scenario 1:** The SharePoint connector submits a `MIGRATION_TRANSFER` envelope,
+src-operator approves (notary posture: human signs the batch), executes the transfer,
+and writes a receipt. The receipt is submitted to dst-gateway; dst-operator verifies
+arrival and writes its own receipt. `./g8e migration report` produces the combined
+chain-of-custody record.
 
-```bash
-./g8e demos run gov 1     # CUI Exfiltration Attempt Blocked
-```
+**Scenario 2:** A connector attempts to `scp` data directly, bypassing the envelope
+pipeline. Blocked at L1 by `connector_bypass_attempt` doctrine; recorded as a violation.
+
+**Scenario 3:** A connector submits an envelope targeting an unregistered tenant URL.
+Rejected by `cross_tenant_data_leak` doctrine; recorded and alerted.
 
 ---
 
-## 8. What you can tell your auditor
+## Bootstrap: distributing the g8e binary
 
-The mechanisms above map directly onto controls in the
-[Compliance Alignment Report](../reference/compliance-alignment.md):
+The binary still travels by OS-native tools — this surface is intentional and used once.
+Everything after it rides the governed data plane.
 
-- **Data sovereignty / no custody transfer** — Sovereign Execution Boundary scrubs before
-  egress; rehydration only at execution (NIST SC-7, GDPR data minimization, HIPAA
-  transmission security).
-- **No standing privileges** — JIT mTLS credentials via CSR-based enrollment (NIST
-  AC-6/SI-14, NSA ZIG PAM).
-- **Non-repudiable audit** — Ed25519-signed receipts on a git-backed ledger, written
-  before the side effect (NIST AU-10, fail-closed AU-5).
-- **Human accountability** — L3 WebAuthn/CLI signatures bound to the transaction hash, with
-  both delegator and delegate in the signed record (NSA ZIG MFA, PCI 8.4).
-- **Air-gap capable** — single binary, zero runtime external dependencies (NIST SC-22,
-  ISO A.15.2).
+```bash
+# Copy verified binary to source and destination hosts
+scp -C -i ~/.ssh/enclave_ed25519 ./bin/g8e deploy@src-host:/opt/g8e/g8e
+scp -C -i ~/.ssh/enclave_ed25519 ./bin/g8e deploy@dst-host:/opt/g8e/g8e
+
+# Verify on both hosts before starting
+sha256sum /opt/g8e/g8e   # match against release manifest
+```
+
+For fully disconnected environments, see the [Air-Gap guide](./air_gap.md).
 
 ---
 

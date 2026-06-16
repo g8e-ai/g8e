@@ -88,6 +88,18 @@ Clients enroll in the platform using a Certificate Signing Request (CSR) bootstr
 3. **Registration**: The g8e Gateway validates the CSR and binds the certificate to a user identity.
 4. **Session Issuance**: Upon successful enrollment, the g8e Gateway issues a specific `operator_session_id` or `cli_session_id`.
 
+### Trusting the Self-Signed Root CA
+
+Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust the platform Root CA to allow secure HTTPS communication, especially for browser-based WebAuthn registration. The gateway serves platform-specific bootstrap scripts that automate the installation of the CA bundle into the system trust store.
+
+| Platform | Endpoint | Action |
+| :--- | :--- | :--- |
+| **Linux** | `/bootstrap-ca` | Downloads CA and installs to system store via `update-ca-certificates`. |
+| **macOS** | `/bootstrap-ca-macos` | Downloads CA and installs to System Keychain via `security add-trusted-cert`. |
+| **Windows** | `/bootstrap-ca.ps1` | Downloads CA and installs to Root store via `Import-Certificate`. |
+
+**Browser Restart**: After running any trust script, users **must restart all open browsers**. Browsers often cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA.
+
 ### No-DNS / Direct IP Configuration
 
 The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `@/home/bob/g8e/internal/cli/cmd/mcp.go:278-331`.

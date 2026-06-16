@@ -59,6 +59,7 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 
 	// Trust script endpoints (public for initial bootstrap)
 	r.addExact(constants.APIPaths.BootstrapCALinux)
+	r.addExact(constants.APIPaths.BootstrapCAMacos)
 	r.addExact(constants.APIPaths.BootstrapCAWindows)
 	r.addExact("/.well-known/g8e/pki/trust-windows")
 

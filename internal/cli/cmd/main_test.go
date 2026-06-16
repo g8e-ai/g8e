@@ -33,13 +33,13 @@ func TestExecute(t *testing.T) {
 		assert.Contains(t, rootCmd.Short, "g8e Platform Manager")
 		assert.Contains(t, rootCmd.Short, "g8e Gateway")
 		assert.Contains(t, rootCmd.Short, "g8e Operator")
-		assert.Len(t, rootCmd.Commands(), 9)
+		assert.Len(t, rootCmd.Commands(), 10)
 	})
 
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
 		rootCmd := NewRootCmd()
 
-		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "audit", "swagger"}
+		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "migration", "test", "demos", "audit", "swagger"}
 		for _, expected := range expectedCommands {
 			found := false
 			for _, cmd := range rootCmd.Commands() {
@@ -105,8 +105,8 @@ func TestRootCommandValidation(t *testing.T) {
 			expectedUse:    "g8e",
 			expectedShort:  "g8e Platform Manager",
 			expectedLong:   "zero-trust execution platform",
-			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "audit", "swagger"},
-			expectedCmdLen: 9,
+			expectedCmds:   []string{"gw", "auth", "mcp", "operator", "vault", "migration", "test", "demos", "audit", "swagger"},
+			expectedCmdLen: 10,
 		},
 	}
 

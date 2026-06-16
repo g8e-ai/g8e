@@ -35,14 +35,16 @@ func TestNewPasskeyBootstrapServer(t *testing.T) {
 	t.Parallel()
 
 	gatewayURL := "https://test-gateway.example.com"
+	bootstrapURL := "http://test-bootstrap.example.com"
 	userID := "test-user-id"
 	userName := "test-user"
 	cliSessionID := "test-session-id"
 
-	server := NewPasskeyBootstrapServer(gatewayURL, userID, userName, cliSessionID)
+	server := NewPasskeyBootstrapServer(gatewayURL, bootstrapURL, userID, userName, cliSessionID)
 
 	require.NotNil(t, server)
 	assert.Equal(t, gatewayURL, server.gatewayURL)
+	assert.Equal(t, bootstrapURL, server.bootstrapURL)
 	assert.Equal(t, userID, server.userID)
 	assert.Equal(t, userName, server.userName)
 	assert.Equal(t, cliSessionID, server.cliSessionID)
@@ -58,7 +60,7 @@ func TestNewPasskeyBootstrapServer(t *testing.T) {
 func TestPasskeyBootstrapServer_Start(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	url, err := server.Start()
 	require.NoError(t, err)
@@ -72,8 +74,8 @@ func TestPasskeyBootstrapServer_Start(t *testing.T) {
 func TestPasskeyBootstrapServer_Start_ListensOnRandomPort(t *testing.T) {
 	t.Parallel()
 
-	server1 := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
-	server2 := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server1 := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
+	server2 := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	url1, err := server1.Start()
 	require.NoError(t, err)
@@ -94,7 +96,7 @@ func TestPasskeyBootstrapServer_Start_ListensOnRandomPort(t *testing.T) {
 func TestPasskeyBootstrapServer_Stop(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	url, err := server.Start()
 	require.NoError(t, err)
@@ -118,7 +120,7 @@ func TestPasskeyBootstrapServer_Stop(t *testing.T) {
 func TestPasskeyBootstrapServer_Wait_Success(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 	server.success = true
 	close(server.done)
 
@@ -131,7 +133,7 @@ func TestPasskeyBootstrapServer_Wait_Success(t *testing.T) {
 func TestPasskeyBootstrapServer_Wait_Timeout(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	success, timedOut := server.Wait(100 * time.Millisecond)
 
@@ -142,7 +144,7 @@ func TestPasskeyBootstrapServer_Wait_Timeout(t *testing.T) {
 func TestPasskeyBootstrapServer_Wait_Failure(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 	server.success = false
 	server.errMessage = "test error"
 	close(server.done)
@@ -161,7 +163,7 @@ func TestPasskeyBootstrapServer_Wait_Failure(t *testing.T) {
 func TestPasskeyBootstrapServer_handleIndex(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "test-user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "test-user", "session-id")
 
 	req := httptest.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
@@ -178,7 +180,7 @@ func TestPasskeyBootstrapServer_handleIndex(t *testing.T) {
 func TestPasskeyBootstrapServer_handleIndex_NonRootPath(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	req := httptest.NewRequest("GET", "/other", nil)
 	w := httptest.NewRecorder()
@@ -195,7 +197,7 @@ func TestPasskeyBootstrapServer_handleIndex_NonRootPath(t *testing.T) {
 func TestPasskeyBootstrapServer_handleRegister_Success(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	req := httptest.NewRequest("POST", "/register?status=success", nil)
 	w := httptest.NewRecorder()
@@ -211,7 +213,7 @@ func TestPasskeyBootstrapServer_handleRegister_Success(t *testing.T) {
 func TestPasskeyBootstrapServer_handleRegister_Error(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	req := httptest.NewRequest("POST", "/register?status=error&error=test%20error", nil)
 	w := httptest.NewRecorder()
@@ -226,7 +228,7 @@ func TestPasskeyBootstrapServer_handleRegister_Error(t *testing.T) {
 func TestPasskeyBootstrapServer_handleRegister_InvalidMethod(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	req := httptest.NewRequest("GET", "/register", nil)
 	w := httptest.NewRecorder()
@@ -239,7 +241,7 @@ func TestPasskeyBootstrapServer_handleRegister_InvalidMethod(t *testing.T) {
 func TestPasskeyBootstrapServer_handleRegister_Options(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	req := httptest.NewRequest("OPTIONS", "/register", nil)
 	req.Header.Set("Origin", "https://example.com")
@@ -255,7 +257,7 @@ func TestPasskeyBootstrapServer_handleRegister_Options(t *testing.T) {
 func TestPasskeyBootstrapServer_handleRegister_WithOrigin(t *testing.T) {
 	t.Parallel()
 
-	server := NewPasskeyBootstrapServer("https://test.com", "user-id", "user", "session-id")
+	server := NewPasskeyBootstrapServer("https://test.com", "http://test.com", "user-id", "user", "session-id")
 
 	req := httptest.NewRequest("POST", "/register?status=success", nil)
 	req.Header.Set("Origin", "https://example.com")

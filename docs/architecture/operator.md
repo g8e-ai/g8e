@@ -155,7 +155,7 @@ The reference implementation (`g8eo`) currently supports:
 
 ## 6. Post-Bootstrap Workflow
 
-After completing platform bootstrap via `./g8e auth login`, follow this workflow to begin using the Operator:
+After completing platform bootstrap via `./g8e auth enroll`, follow this workflow to begin using the Operator:
 
 ### 1. Verify Gateway Health
 
