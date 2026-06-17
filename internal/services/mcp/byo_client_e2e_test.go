@@ -318,7 +318,7 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 
 	require.Equal(t, "suspended", result["status"])
 	require.Contains(t, result["approval_url"].(string), "/approve/")
-	require.Equal(t, "Execution paused for L3 authorization", result["message"])
+	require.Equal(t, approvalPausedMessage(result["approval_url"].(string)), result["message"])
 
 	// Extract transaction hash
 	txHash := result["id"].(string)

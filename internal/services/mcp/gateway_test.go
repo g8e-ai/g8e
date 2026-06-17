@@ -219,7 +219,10 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 		require.Equal(t, "test-tool", tx.ToolName)
 		require.JSONEq(t, `{"foo":"bar"}`, string(tx.ToolArguments))
 	}
-	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:%d/approve/%s to authorize via WebAuthn, then retry."}]}}`, constants.Ports.OperatorHttps, txHash)
+	approvalURL := fmt.Sprintf("https://localhost:%d/approve/%s", constants.Ports.OperatorHttps, txHash)
+	textJSON, err := json.Marshal(approvalPausedMessage(approvalURL))
+	require.NoError(t, err)
+	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":%s}]}}`, textJSON)
 	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 

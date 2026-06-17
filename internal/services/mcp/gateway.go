@@ -51,6 +51,29 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// ApprovalRequestTTL is the lifetime of a human-approval request created when a
+// state-changing action is paused under the notary posture. It is deliberately
+// short: notary enforces *proof of human presence*, so the passkey (WebAuthn)
+// authorization must be completed close in time to the action it authorizes.
+// Once this window lapses the suspended transaction expires (the store filters on
+// expires_at) and a fresh approval must be requested by retrying the action.
+const ApprovalRequestTTL = 2 * time.Minute
+
+// approvalPausedMessage builds the directive returned to the calling agent when a
+// mutation is paused awaiting human passkey authorization under notary posture.
+// It is phrased as an instruction to the AI: what happened, what a human must do,
+// the short deadline, and—critically—what to do once that deadline passes (retry
+// the call to open a fresh approval request).
+func approvalPausedMessage(approvalURL string) string {
+	return fmt.Sprintf("Execution paused: this is a state-changing action and the gateway is running in "+
+		"notary posture, which REQUIRES live human passkey (WebAuthn) authorization before it can run. "+
+		"A human must approve this exact change at %s within %d minutes. "+
+		"Wait for the human to approve, then retry this identical tool call to proceed. "+
+		"This window is intentionally short so the approval proves a human was present for this specific action. "+
+		"If it lapses before approval the request is voided for security — call this tool again to open a fresh approval request.",
+		approvalURL, int(ApprovalRequestTTL.Minutes()))
+}
+
 // StateRootProvider defines the interface for obtaining the current state root.
 type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
@@ -680,7 +703,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 				Content: []TextContent{
 					{
 						Type: "text",
-						Text: fmt.Sprintf("Execution paused. Please visit %s to authorize via WebAuthn, then retry.", approvalURL),
+						Text: approvalPausedMessage(approvalURL),
 					},
 				},
 			}, nil
@@ -1124,7 +1147,7 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 				Content: []TextContent{
 					{
 						Type: "text",
-						Text: fmt.Sprintf("Execution paused. Please visit %s to authorize via WebAuthn, then retry.", approvalURL),
+						Text: approvalPausedMessage(approvalURL),
 					},
 				},
 			})
@@ -1339,7 +1362,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 				Status:      "suspended",
 				TxHash:      hash,
 				ApprovalURL: approvalURL,
-				Message:     "Execution paused for L3 authorization",
+				Message:     approvalPausedMessage(approvalURL),
 			}, nil
 		}
 		return nil, err
@@ -1421,7 +1444,7 @@ func (g *GatewayService) StoreSuspendedTransaction(ctx context.Context, txHash s
 		TransactionHash:         txHash,
 		Envelope:                json.RawMessage(envelope),
 		CreatedAt:               time.Now().UTC(),
-		ExpiresAt:               time.Now().UTC().Add(5 * time.Minute),
+		ExpiresAt:               time.Now().UTC().Add(ApprovalRequestTTL),
 		ToolName:                toolName,
 		ToolArguments:           toolArgs,
 		UserID:                  userID,
