@@ -6,12 +6,6 @@
 
 </div>
 
-<style>
-img[alt="License"], img[alt="Go"], img[alt="CI"], img[alt="Go Report Card"], img[alt="Latest Release"], img[alt="Status"], img[alt="Compliance"], img[alt="Secure MCP"], img[alt="Protocol g8e"] {
-  height: 28px;
-}
-</style>
-
 g8e is a reference monitor for agentic infrastructure that provides a fail-closed admission boundary and a sovereign context plane. It is implemented as a single static Go binary. The platform governs state-changing actions on a host and maintains a tamper-evident record of those actions for agent context.
 
 ## Architectural Model
