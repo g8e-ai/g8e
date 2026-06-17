@@ -180,10 +180,56 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	return g, nil
 }
 
+// runMaintenanceSweep performs a single maintenance sweep to audit and delete expired transactions.
+func (g *GatewayService) runMaintenanceSweep(ctx context.Context) error {
+	if g.suspendedStore == nil {
+		return nil
+	}
+
+	// Get expired transactions for audit before deletion
+	expiredTxs, err := g.suspendedStore.GetExpiredSuspendedTransactions(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get expired transactions for audit: %w", err)
+	}
+
+	// Audit each expired transaction to the originating session's chain
+	for _, tx := range expiredTxs {
+		// Use the originating operator session ID for the audit event
+		// so the agent reading its own session chain can detect the expiry
+		operatorSessionID := tx.OperatorID
+		if operatorSessionID == "" {
+			operatorSessionID = tx.UserID
+		}
+
+		if g.auditStore != nil && operatorSessionID != "" {
+			event := &storage.Event{
+				OperatorSessionID: operatorSessionID,
+				Timestamp:         time.Now().UTC(),
+				Type:              constants.Event.Operator.Notary.TransactionExpired,
+				ContentText:       fmt.Sprintf("Transaction %s approval expired (tool: %s)", tx.TransactionHash, tx.ToolName),
+			}
+			if _, err := g.auditStore.RecordEvent(event); err != nil {
+				g.logger.Warn("Failed to record transaction expiry event", "error", err, "tx_hash", tx.TransactionHash, "operator_session_id", operatorSessionID)
+			}
+		}
+	}
+
+	// Delete expired transactions after audit
+	deletedCount, err := g.suspendedStore.CleanupExpiredSuspendedTransactions(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired transactions: %w", err)
+	}
+
+	if deletedCount > 0 {
+		g.logger.Info("Pruned expired suspended transactions", "count", deletedCount)
+	}
+
+	return nil
+}
+
 // RunMaintenance periodically prunes expired suspended transactions.
-// Although the underlying store may perform its own cleanup (e.g., CanonicalDBService
-// does this via RunMaintenance), the GatewayService provides this routine to
-// ensure memory and state consistency regardless of the store implementation.
+// It audits expired transactions before deletion by recording expiry events
+// to the originating session's audit-vault chain, then deletes them.
 func (g *GatewayService) RunMaintenance(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -193,11 +239,9 @@ func (g *GatewayService) RunMaintenance(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// If the store is the CanonicalDBService, it already prunes.
-			// If it's another implementation, we might need an explicit cleanup call.
-			// For now, we rely on the store's internal expiration logic during GET,
-			// but we can add an explicit DELETE call here if the interface is expanded.
-			g.logger.Debug("Gateway maintenance: pruning expired transactions")
+			if err := g.runMaintenanceSweep(ctx); err != nil {
+				g.logger.Error("Maintenance sweep failed", "error", err)
+			}
 		}
 	}
 }
@@ -1453,6 +1497,26 @@ func (g *GatewayService) StoreSuspendedTransaction(ctx context.Context, txHash s
 	}
 	if err := g.suspendedStore.StoreSuspendedTransaction(ctx, tx); err != nil {
 		g.logger.Error("Failed to store suspended transaction", "tx_hash", txHash, "error", err)
+		return
+	}
+
+	// Emit approval.requested event to the originating session's audit-vault chain
+	// This is the opening bookend for the approval lifecycle
+	operatorSessionID := operatorID
+	if operatorSessionID == "" {
+		operatorSessionID = userID
+	}
+
+	if g.auditStore != nil && operatorSessionID != "" {
+		event := &storage.Event{
+			OperatorSessionID: operatorSessionID,
+			Timestamp:         time.Now().UTC(),
+			Type:              constants.Event.Operator.Notary.ApprovalRequested,
+			ContentText:       fmt.Sprintf("Transaction %s approval requested (tool: %s, expires at: %s)", txHash, toolName, tx.ExpiresAt.Format(time.RFC3339)),
+		}
+		if _, err := g.auditStore.RecordEvent(event); err != nil {
+			g.logger.Warn("Failed to record approval requested event", "error", err, "tx_hash", txHash, "operator_session_id", operatorSessionID)
+		}
 	}
 }
 
@@ -1498,7 +1562,11 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 		return nil, fmt.Errorf("failed to get suspended transaction: %w", err)
 	}
 	if !ok {
-		return nil, fmt.Errorf("suspended transaction %s not found or expired", txHash)
+		// The maintenance sweep now owns expiry event recording.
+		// ResumeWithL3Proof cannot positively confirm the not-found reason
+		// (expired vs never-existed vs already-approved), so it returns
+		// ErrTransactionExpired without writing to the audit vault.
+		return nil, fmt.Errorf("suspended transaction %s not found or expired: %w", txHash, constants.ErrTransactionExpired)
 	}
 
 	// Re-parse the stored envelope JSON so we can attach L3 metadata without
