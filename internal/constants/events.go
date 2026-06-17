@@ -167,6 +167,8 @@ const EventOperatorAuditCommandRecorded EventType = "g8e.v1.operator.audit.comma
 const EventOperatorAuditDirectCommandRecorded EventType = "g8e.v1.operator.audit.direct.command.recorded"
 const EventOperatorAuditDirectCommandResultRecorded EventType = "g8e.v1.operator.audit.direct.command.result.recorded"
 const EventOperatorAuditMcpCallRecorded EventType = "g8e.v1.operator.audit.mcp.call.recorded"
+const EventOperatorNotaryApprovalRequested EventType = "g8e.v1.operator.notary.approval.requested"
+const EventOperatorNotaryTransactionExpired EventType = "g8e.v1.operator.notary.transaction.expired"
 const EventOperatorBootstrapRequested EventType = "g8e.v1.operator.bootstrap.requested"
 const EventOperatorBootstrapReceived EventType = "g8e.v1.operator.bootstrap.received"
 const EventOperatorBootstrapCompleted EventType = "g8e.v1.operator.bootstrap.completed"
@@ -401,6 +403,10 @@ type _EventOperatorIntent struct {
 type _EventOperatorMcp struct {
 	CallRequested EventType
 }
+type _EventOperatorNotary struct {
+	ApprovalRequested  EventType
+	TransactionExpired EventType
+}
 type _EventOperatorNetworkPing struct {
 	Completed EventType
 	Failed    EventType
@@ -461,6 +467,7 @@ type _EventOperator struct {
 	Intent                   _EventOperatorIntent
 	Mcp                      _EventOperatorMcp
 	NetworkPing              _EventOperatorNetworkPing
+	Notary                   _EventOperatorNotary
 	PanelListUpdated         EventType
 	PortCheck                _EventOperatorPortCheck
 	RestoreFile              _EventOperatorRestoreFile
@@ -608,6 +615,10 @@ var Event = struct {
 			Failed:    EventOperatorNetworkPingFailed,
 			Received:  EventOperatorNetworkPingReceived,
 			Requested: EventOperatorNetworkPingRequested,
+		},
+		Notary: _EventOperatorNotary{
+			ApprovalRequested:  EventOperatorNotaryApprovalRequested,
+			TransactionExpired: EventOperatorNotaryTransactionExpired,
 		},
 		PanelListUpdated: EventOperatorPanelListUpdated,
 		PortCheck: _EventOperatorPortCheck{

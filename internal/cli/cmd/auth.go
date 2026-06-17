@@ -33,7 +33,8 @@ func authCmd() *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		loginCmd(),
+		enrollCmd(),
+		loginCmd(), // hidden alias for backward compatibility
 		logoutCmd(),
 		enrollWindowsCmd(),
 		approveCmd(),
@@ -42,15 +43,23 @@ func authCmd() *cobra.Command {
 	return cmd
 }
 
-func loginCmd() *cobra.Command {
-	return loginCmdWithConfig(config.Load)
+func enrollCmd() *cobra.Command {
+	return enrollCmdWithConfig(config.Load)
 }
 
-func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+// loginCmd is a hidden backward-compatible alias for enrollCmd.
+func loginCmd() *cobra.Command {
+	cmd := enrollCmdWithConfig(config.Load)
+	cmd.Use = "login"
+	cmd.Hidden = true
+	return cmd
+}
+
+func enrollCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "login",
-		Short: "Authenticate CLI with the running Gateway",
-		Long:  `Authenticate your local CLI with the running Gateway via CSR-based enrollment. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running (use './g8e gw start' first). On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.`,
+		Use:   "enroll",
+		Short: "Enroll CLI with the running Gateway and register a passkey",
+		Long:  `Enroll your local CLI with the running Gateway via CSR-based enrollment, then register a passkey for secure authentication. Generates client keypairs, submits CSRs to the Gateway's CA, saves signed mTLS credentials, and opens a browser to register a WebAuthn/FIDO2 passkey. The Gateway must already be running (use './g8e gw start' first). On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -63,19 +72,19 @@ func loginCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobr
 
 			// On Windows, use Windows Certificate Store enrollment for passkey auth
 			if runtime.GOOS == "windows" {
-				return performWindowsLogin(cmd, cfg)
+				return performWindowsEnroll(cmd, cfg)
 			}
 
 			// Non-Windows: use standard CLI enrollment flow
-			return performStandardLogin(cmd, cfg)
+			return performStandardEnroll(cmd, cfg)
 		},
 	}
 
 	return cmd
 }
 
-// performWindowsLogin handles Windows-specific login with Certificate Store enrollment
-func performWindowsLogin(cmd *cobra.Command, cfg *config.Config) error {
+// performWindowsEnroll handles Windows-specific enrollment with Certificate Store and passkey registration.
+func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	cmd.Println("Windows detected: Using Windows Certificate Store for passkey authentication")
 
 	// Check if platform is already bootstrapped
@@ -171,14 +180,8 @@ func performWindowsLogin(cmd *cobra.Command, cfg *config.Config) error {
 	return nil
 }
 
-// performStandardLogin handles standard CLI enrollment for non-Windows platforms
-func performStandardLogin(cmd *cobra.Command, cfg *config.Config) error {
-	// Check if platform is already bootstrapped
-	bootstrapped, err := auth.CheckBootstrapStatus(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to check bootstrap status: %w", err)
-	}
-
+// performStandardEnroll handles standard CLI enrollment and passkey registration for non-Windows platforms.
+func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	// Check if local credentials exist
 	hasLocalCreds := true
 	if _, err := os.Stat(cfg.CredentialsFile()); os.IsNotExist(err) {
@@ -188,105 +191,29 @@ func performStandardLogin(cmd *cobra.Command, cfg *config.Config) error {
 		hasLocalCreds = false
 	}
 
-	// If platform is not bootstrapped, perform first-time bootstrap
-	if !bootstrapped {
-		cmd.Println("Gateway not bootstrapped. Performing first-time client enrollment...")
-
-		cmd.Println("Generating keys and CSRs...")
-		hostname, _ := os.Hostname()
-		cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
-		if err != nil {
-			return fmt.Errorf("failed to generate CLI CSR: %w", err)
-		}
-
-		cmd.Println("Bootstrapping with operator...")
-		regResp, err := auth.Bootstrap(cfg, "", cliCSR, "")
-		if err != nil {
-			return err
-		}
-
-		if regResp.CLISessionID == "" || regResp.CLICert == "" {
-			return fmt.Errorf("unexpected bootstrap response (missing required fields)")
-		}
-
-		if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
-			return fmt.Errorf("failed to save CLI credentials: %w", err)
-		}
-
-		if regResp.HubTrustBundle != "" {
-			if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
-				return fmt.Errorf("failed to save hub trust bundle: %w", err)
-			}
-		}
-
-		creds := &auth.Credentials{
-			OperatorSessionID: regResp.OperatorSessionID,
-			UserID:            regResp.UserID,
-			OperatorID:        regResp.OperatorID,
-			CLISessionID:      regResp.CLISessionID,
-		}
-
-		if err := auth.SaveCredentials(cfg, creds); err != nil {
-			return fmt.Errorf("failed to save credentials: %w", err)
-		}
-
-		cmd.Printf("\nClient enrollment complete\n")
-		cmd.Printf("User ID: %s\n", regResp.UserID)
-		cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
-
-		return nil
-	}
-
-	// Platform is bootstrapped but local credentials are missing
+	// No local credentials: first-time bootstrap or new CLI on an existing gateway.
 	if !hasLocalCreds {
-		cmd.Println("Gateway already bootstrapped. Performing CLI enrollment...")
-
-		cmd.Println("Generating keys and CSRs...")
-		hostname, _ := os.Hostname()
-		cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
-		if err != nil {
-			return fmt.Errorf("failed to generate CLI CSR: %w", err)
-		}
-
-		cmd.Println("Enrolling with gateway...")
-		regResp, err := auth.CLIEnroll(cfg, cliCSR)
-		if err != nil {
+		cmd.Println("Performing CLI enrollment...")
+		if err := auth.EnrollCLI(cfg); err != nil {
 			return err
 		}
-
-		if regResp.CLISessionID == "" || regResp.CLICert == "" {
-			return fmt.Errorf("unexpected CLI enrollment response (missing required fields)")
+		creds, err := auth.LoadCredentials(cfg)
+		if err != nil || creds == nil {
+			return fmt.Errorf("failed to load credentials after enrollment: %w", err)
 		}
-
-		if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
-			return fmt.Errorf("failed to save CLI credentials: %w", err)
-		}
-
-		if regResp.HubTrustBundle != "" {
-			if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
-				return fmt.Errorf("failed to save hub trust bundle: %w", err)
-			}
-		}
-
-		creds := &auth.Credentials{
-			OperatorSessionID: regResp.OperatorSessionID,
-			UserID:            regResp.UserID,
-			OperatorID:        regResp.OperatorID,
-			CLISessionID:      regResp.CLISessionID,
-		}
-
-		if err := auth.SaveCredentials(cfg, creds); err != nil {
-			return fmt.Errorf("failed to save credentials: %w", err)
-		}
-
 		cmd.Printf("\nClient enrollment complete\n")
-		cmd.Printf("User ID: %s\n", regResp.UserID)
-		cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
+		cmd.Printf("User ID: %s\n", creds.UserID)
+		cmd.Printf("CLI Session ID: %s\n", creds.CLISessionID)
 
+		// Register passkey for the newly enrolled user
+		cmd.Println("\nRegistering passkey for secure authentication...")
+		if err := auth.RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
+			return fmt.Errorf("passkey registration failed: %w", err)
+		}
 		return nil
 	}
 
-	// Platform already bootstrapped and has local credentials - attempt CSR-based re-enrollment with mTLS
+	// Local credentials present — attempt CSR-based re-enrollment with mTLS.
 	cmd.Println("Gateway already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
 
 	// Check if operator certificate exists (CLI-only bootstrap has no operator)
@@ -316,7 +243,7 @@ func performStandardLogin(cmd *cobra.Command, cfg *config.Config) error {
 		if err != nil {
 			// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 			if errors.Is(err, constants.ErrTrustBundleStale) {
-				return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth login. Original error: %w", err)
+				return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth enroll. Original error: %w", err)
 			}
 			return err
 		}
@@ -400,7 +327,7 @@ func enrollWindowsCmd() *cobra.Command {
 		Short: "Enroll via Windows Certificate Store (Windows only - advanced)",
 		Long: `Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.
 
-NOTE: This is now handled automatically by './g8e auth login' on Windows. This command is for advanced use cases or manual re-enrollment.`,
+NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This command is for advanced use cases or manual re-enrollment.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {

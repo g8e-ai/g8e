@@ -24,11 +24,11 @@ demos/
 │   ├── config/
 │   ├── doctrine/               # Trading controls and dual-control triggers
 │   └── target-data/            # Simulated ledger/positions
-└── secure-data/                # Secure data transfer / governed pipeline demo
+└── secure-data/                # Governed data migration / two-operator pipeline demo
     ├── compose.yml
     ├── config/
-    ├── doctrine/               # Transfer-screening L1 rules (exfil, destructive, cross-domain)
-    └── target-data/            # Simulated sensitive transfer set (evidence manifest)
+    ├── doctrine/               # Migration-screening L1 rules (bypass, exfil, cross-tenant)
+    └── target-data/            # Simulated SharePoint migration manifest
 ```
 
 See the [Secure Data Transfer guide](../docs/guides/secure_data_transfer.md) for the
@@ -41,7 +41,7 @@ Each org deploys five isolated networks:
 - **net_untrusted**: External/internet simulation. Bad actor services live here.
 - **net_perimeter**: DMZ equivalent. Gateway public surface and demo UI.
 - **net_internal**: Trusted application tier. AI agents, LLM backend, workflow orchestrators.
-- **net_secure**: Privileged tier. Operator and target system only. No direct route from net_internal.
+- **net_secure**: Privileged tier. Operator and target system only. No direct route from net_internal. In the `secure-data` demo, this is split into **net_src_internal**, **net_dst_internal**, and **net_migration**.
 - **net_mgmt**: Out-of-band observability. Log aggregator and audit tail viewer.
 
 ## Service Placement
@@ -130,9 +130,10 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 **Finance Demo Scenarios:**
 - `g8e demos run finance 1` - Unauthorized Trade Blocked
 
-**Secure Data Transfer Demo Scenarios:**
-- `g8e demos run secure-data 1` - Governed Data Transfer with Signed Receipt
-- `g8e demos run secure-data 2` - Out-of-Band Transfer Blocked
+**Governed Data Migration Demo Scenarios:**
+- `g8e demos run secure-data 1` - Governed Migration with Chain-of-Custody Receipts
+- `g8e demos run secure-data 2` - Connector Bypass Attempt Blocked
+- `g8e demos run secure-data 3` - Cross-Tenant Leak Doctrine Triggered
 
 Note: The demo environment must be started before running scenarios. Use `g8e demos start <org>` first.
 
@@ -204,7 +205,8 @@ Each org uses different host ports to allow simultaneous deployment:
 | gov | 8080 | 8443 | 3000 |
 | healthcare | 8081 | 8444 | 3001 |
 | finance | 8082 | 8445 | 3002 |
-| secure-data | 8083 | 8446 | 3003 |
+| secure-data (src) | 8083 | 8446 | 3003 |
+| secure-data (dst) | 8084 | 8447 | -    |
 
 ## PKI and Enrollment
 

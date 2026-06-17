@@ -38,7 +38,7 @@ func setupTestHistoryHandler(t *testing.T) (*HistoryHandler, *SQLAuditStore, *va
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	vaultDir := filepath.Join(tempDir, "vault")
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	logger := testutil.NewTestLogger()
 

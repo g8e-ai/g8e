@@ -275,15 +275,15 @@ func gatewayStartCmd() *cobra.Command {
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n\n", pid)
 
-			// CLI authentication must be performed explicitly via 'g8e auth login'
+			// CLI enrollment must be performed explicitly via 'g8e auth enroll'
 			cmd.Println("╔════════════════════════════════════════════════════════════════════════════╗")
 			cmd.Println("║  IMPORTANT: The gateway is now running. Before it can be used, you must    ║")
-			cmd.Println("║  authenticate to bootstrap your credentials and allow remote operators to  ║")
+			cmd.Println("║  enroll to bootstrap your credentials and allow remote operators to        ║")
 			cmd.Println("║  connect.                                                                  ║")
 			cmd.Println("╚════════════════════════════════════════════════════════════════════════════╝")
 			cmd.Println()
-			cmd.Println("Bootstrap Authentication:")
-			cmd.Printf("  %s auth login\n\n", getBinaryName())
+			cmd.Println("Bootstrap Enrollment:")
+			cmd.Printf("  %s auth enroll\n\n", getBinaryName())
 			cmd.Println("Deploy/Stream Operators from this machine to Remote Hosts:")
 			cmd.Printf("  %s operator deploy --hosts <host1,host2>\n", getBinaryName())
 			cmd.Printf("  %s operator stream --hosts <host1,host2>\n", getBinaryName())
@@ -499,7 +499,7 @@ func gatewayRestartCmd() *cobra.Command {
 			cmd.Println("g8e Gateway restarted successfully")
 			postureObj, _ := governance.ParseGovernancePosture(currentPosture)
 			cmd.Printf("Governance mode: %s\n", postureObj.Description())
-			cmd.Printf("\nNext step: Run '%s auth login' to authenticate\n", getBinaryName())
+			cmd.Printf("\nNext step: Run '%s auth enroll' to authenticate\n", getBinaryName())
 			return nil
 		},
 	}
@@ -646,7 +646,7 @@ func gatewayCleanCmd() *cobra.Command {
 				cmd.Println("  4. All trust routes and credentials will be permanently destroyed")
 				cmd.Println()
 				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
-				cmd.Println("You will need to run './g8e auth login' again after restarting the gateway.")
+				cmd.Println("You will need to run './g8e auth enroll' again after restarting the gateway.")
 				cmd.Print("\nContinue? [y/N]: ")
 				var response string
 				_, _ = fmt.Scanln(&response)

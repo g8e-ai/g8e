@@ -37,7 +37,7 @@ func TestSQLAuditStore_FileMutation(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -108,7 +108,7 @@ func TestSQLAuditStore_MultipleFileMutationsPerEvent(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -177,7 +177,7 @@ func TestSQLAuditStore_GetFileMutationsNoMutations(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -209,7 +209,7 @@ func TestSQLAuditStore_FileMutationOperationTypes(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,

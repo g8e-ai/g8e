@@ -259,6 +259,19 @@ paths:
       summary: Bootstrap CA Linux script
       tags:
       - bootstrap
+  /bootstrap-ca-macos:
+    get:
+      description: Returns the macOS CA trust bootstrap script
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Bootstrap CA macOS script
+      tags:
+      - bootstrap
   /bootstrap-ca.ps1:
     get:
       description: Returns the Windows CA trust bootstrap script

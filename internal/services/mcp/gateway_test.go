@@ -24,23 +24,23 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/interfaces"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
-
+	"github.com/g8e-ai/g8e/internal/services/governance"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
-
-	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/governance"
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 type fakeEnvelopeProcessor struct {
@@ -112,6 +112,16 @@ func (f *fakeSuspendedStore) CleanupExpiredSuspendedTransactions(_ context.Conte
 		}
 	}
 	return count, nil
+}
+
+func (f *fakeSuspendedStore) GetExpiredSuspendedTransactions(_ context.Context) ([]*models.SuspendedTransaction, error) {
+	var expired []*models.SuspendedTransaction
+	for _, tx := range f.txs {
+		if tx.ExpiresAt.Before(time.Now()) {
+			expired = append(expired, tx)
+		}
+	}
+	return expired, nil
 }
 
 func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
@@ -219,7 +229,10 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 		require.Equal(t, "test-tool", tx.ToolName)
 		require.JSONEq(t, `{"foo":"bar"}`, string(tx.ToolArguments))
 	}
-	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Execution paused. Please visit https://localhost:%d/approve/%s to authorize via WebAuthn, then retry."}]}}`, constants.Ports.OperatorHttps, txHash)
+	approvalURL := fmt.Sprintf("https://localhost:%d/approve/%s", constants.Ports.OperatorHttps, txHash)
+	textJSON, err := json.Marshal(approvalPausedMessage(approvalURL))
+	require.NoError(t, err)
+	expectedJSON := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":%s}]}}`, textJSON)
 	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
@@ -257,6 +270,96 @@ func TestGatewayService_ResumeWithL3Proof(t *testing.T) {
 	// Verify L3 proof was attached in the call to ProcessEnvelope
 	require.Contains(t, string(proc.gotPayload), `"l3"`)
 	require.Contains(t, string(proc.gotPayload), `"credentialId"`)
+}
+
+func TestGatewayService_ResumeWithL3Proof_ExpiredTransaction(t *testing.T) {
+	t.Parallel()
+	proc := &fakeEnvelopeProcessor{}
+	store := &fakeSuspendedStore{}
+
+	g := newTestGatewayService(t,
+		withEnvProc(proc),
+		withSuspendedStore(store),
+	)
+
+	proof := &commonv1.L3Proof{
+		CredentialId: "cred-1",
+	}
+
+	// Attempt to resume a non-existent (expired) transaction
+	_, err := g.ResumeWithL3Proof(context.Background(), "expired-hash", "user-1", proof)
+	require.Error(t, err)
+	require.ErrorIs(t, err, constants.ErrTransactionExpired)
+}
+
+func TestGatewayService_RunMaintenance_AuditsExpiredTransactions(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	// Create test vault
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	testVault := storagetest.CreateTestVault(t, vaultDir, privKey)
+
+	// Create audit store
+	auditConfig := &storage.AuditStoreConfig{
+		DataDir:                   tempDir,
+		DBPath:                    filepath.Join(tempDir, "audit.db"),
+		MaxDBSizeMB:               100,
+		RetentionDays:             7,
+		PruneIntervalMinutes:      60,
+		OutputTruncationThreshold: 102400,
+		HeadTailSize:              51200,
+		EncryptionVault:           testVault,
+	}
+	auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default())
+	require.NoError(t, err)
+	defer auditStore.Close()
+
+	// Create session for the operator
+	operatorSessionID := "session-maintenance-test"
+	err = auditStore.CreateSession(operatorSessionID, "operator", "Maintenance Test", "user@test.com")
+	require.NoError(t, err)
+
+	// Create a fake store with an expired transaction
+	store := &fakeSuspendedStore{}
+	expiredTx := &models.SuspendedTransaction{
+		TransactionHash: "expired-hash-123",
+		Envelope:        []byte(`{"id":"123"}`),
+		CreatedAt:       time.Now().UTC().Add(-10 * time.Minute),
+		ExpiresAt:       time.Now().UTC().Add(-5 * time.Minute),
+		ToolName:        "test-tool",
+		ToolArguments:   json.RawMessage(`{}`),
+		UserID:          "user-1",
+		OperatorID:      operatorSessionID,
+	}
+	store.StoreSuspendedTransaction(context.Background(), expiredTx)
+
+	g := newTestGatewayService(t,
+		withSuspendedStore(store),
+		withAuditStore(auditStore),
+	)
+
+	// Run a single maintenance sweep directly
+	err = g.runMaintenanceSweep(context.Background())
+	require.NoError(t, err)
+
+	// Verify expiry event was recorded in audit store
+	events, err := auditStore.GetEvents(operatorSessionID, 10, 0)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+
+	// Verify the event details
+	require.Equal(t, constants.Event.Operator.Notary.TransactionExpired, events[0].Type)
+	require.Contains(t, events[0].ContentText, "expired-hash-123")
+	require.Contains(t, events[0].ContentText, "test-tool")
+	require.Contains(t, events[0].ContentText, "expired")
+
+	// Verify the expired transaction was deleted
+	_, found, err := store.GetSuspendedTransaction(context.Background(), "expired-hash-123")
+	require.NoError(t, err)
+	require.False(t, found)
 }
 
 func TestGatewayService_HandleResourcesRead(t *testing.T) {
@@ -1136,6 +1239,57 @@ func TestGatewayService_StoreSuspendedTransaction(t *testing.T) {
 		// Should not panic
 		g.StoreSuspendedTransaction(context.Background(), "test-hash", []byte(`{}`), "test-tool", json.RawMessage(`{}`), "user-1", "op-1", "")
 	})
+
+	t.Run("records approval requested event", func(t *testing.T) {
+		t.Parallel()
+		tempDir := t.TempDir()
+		vaultDir := filepath.Join(tempDir, "vault")
+
+		// Create test vault
+		_, privKey, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		testVault := storagetest.CreateTestVault(t, vaultDir, privKey)
+
+		// Create audit store
+		auditConfig := &storage.AuditStoreConfig{
+			DataDir:                   tempDir,
+			DBPath:                    filepath.Join(tempDir, "audit.db"),
+			MaxDBSizeMB:               100,
+			RetentionDays:             7,
+			PruneIntervalMinutes:      60,
+			OutputTruncationThreshold: 102400,
+			HeadTailSize:              51200,
+			EncryptionVault:           testVault,
+		}
+		auditStore, err := storage.NewSQLAuditStore(auditConfig, slog.Default())
+		require.NoError(t, err)
+		defer auditStore.Close()
+
+		// Create session for the operator
+		operatorSessionID := "session-approval-requested-test"
+		err = auditStore.CreateSession(operatorSessionID, "operator", "Approval Requested Test", "user@test.com")
+		require.NoError(t, err)
+
+		store := &fakeSuspendedStore{}
+		g := newTestGatewayService(t,
+			withSuspendedStore(store),
+			withAuditStore(auditStore),
+		)
+
+		txHash := "hash-approval-123"
+		g.StoreSuspendedTransaction(context.Background(), txHash, []byte(`{"id":"123"}`), "test-tool", json.RawMessage(`{"arg":"val"}`), "user-1", operatorSessionID, "cert-fp-abc123")
+
+		// Verify approval requested event was recorded in audit store
+		events, err := auditStore.GetEvents(operatorSessionID, 10, 0)
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+
+		// Verify the event details
+		require.Equal(t, constants.Event.Operator.Notary.ApprovalRequested, events[0].Type)
+		require.Contains(t, events[0].ContentText, txHash)
+		require.Contains(t, events[0].ContentText, "test-tool")
+		require.Contains(t, events[0].ContentText, "approval requested")
+	})
 }
 
 func TestGatewayService_GetSuspendedTransaction(t *testing.T) {
@@ -1682,6 +1836,13 @@ func withEnvProc(proc governance.EnvelopeProcessor) testGatewayOption {
 func withSuspendedStore(store interfaces.SuspendedTransactionStore) testGatewayOption {
 	return func(g *GatewayService) {
 		g.suspendedStore = store
+	}
+}
+
+// withAuditStore sets a custom audit store for the test GatewayService
+func withAuditStore(auditStore *storage.SQLAuditStore) testGatewayOption {
+	return func(g *GatewayService) {
+		g.auditStore = auditStore
 	}
 }
 

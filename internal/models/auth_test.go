@@ -468,7 +468,6 @@ func TestAppPolicy(t *testing.T) {
 			AllowedCollections: []string{"collection1", "collection2"},
 			AllowedEventTypes:  []string{"event1", "event2"},
 			AllowedIntents:     []string{"intent1"},
-			AutoApproveIntents: []string{"diagnostic"},
 			RateLimitRPS:       10,
 			MaxPayloadBytes:    1048576,
 			RequireL3Approval:  true,
