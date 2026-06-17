@@ -81,6 +81,9 @@ var (
 	ErrTransactionApproveFailed = errors.New("failed to approve transaction")
 	ErrResponseParseFailed      = errors.New("failed to parse response")
 
+	// Notary errors
+	ErrTransactionExpired = errors.New("transaction approval expired")
+
 	// CLI authentication errors
 	ErrNotAuthenticated              = errors.New("not authenticated")
 	ErrFailedToLoadCredentials       = errors.New("failed to load credentials")

@@ -351,6 +351,76 @@ func (sts *SuspendedTransactionService) CleanupExpiredSuspendedTransactions(ctx 
 	return result.RowsAffected()
 }
 
+// GetExpiredSuspendedTransactions retrieves expired suspended transactions for audit.
+// Returns the list of expired transactions with their full details.
+func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx context.Context) ([]*models.SuspendedTransaction, error) {
+	if sts == nil || sts.db == nil {
+		return nil, fmt.Errorf("suspended_transaction_store: get expired transactions: store not initialized")
+	}
+
+	query := "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE expires_at < ? ORDER BY expires_at ASC"
+
+	type suspendedTxRow struct {
+		txHash                  sql.NullString
+		envelopeStr             sql.NullString
+		createdAtStr            sql.NullString
+		expiresAtStr            sql.NullString
+		toolName                sql.NullString
+		toolArgsStr             sql.NullString
+		userID                  sql.NullString
+		operatorID              sql.NullString
+		approved                int
+		approvedAtStr           sql.NullString
+		approvedBy              sql.NullString
+		approvalSignature       sql.NullString
+		expectedCertFingerprint sql.NullString
+	}
+
+	rows, err := sqliteutil.MaterializeRows(sts.db, query, []interface{}{sqliteutil.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
+		var row suspendedTxRow
+		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("suspended_transaction_store: get expired transactions: %w", err)
+	}
+
+	var transactions []*models.SuspendedTransaction
+	for _, row := range rows {
+		createdAt, _ := sqliteutil.ParseTimestamp(row.createdAtStr.String)
+		expiresAt, _ := sqliteutil.ParseTimestamp(row.expiresAtStr.String)
+
+		var toolArgs []byte
+		if row.toolArgsStr.Valid {
+			toolArgs = []byte(row.toolArgsStr.String)
+		}
+
+		var approvedAt *time.Time
+		if row.approvedAtStr.Valid {
+			ts, _ := sqliteutil.ParseTimestamp(row.approvedAtStr.String)
+			approvedAt = &ts
+		}
+
+		transactions = append(transactions, &models.SuspendedTransaction{
+			TransactionHash:         row.txHash.String,
+			Envelope:                []byte(row.envelopeStr.String),
+			CreatedAt:               createdAt,
+			ExpiresAt:               expiresAt,
+			ToolName:                row.toolName.String,
+			ToolArguments:           toolArgs,
+			UserID:                  row.userID.String,
+			OperatorID:              row.operatorID.String,
+			Approved:                row.approved == 1,
+			ApprovedAt:              approvedAt,
+			ApprovedBy:              row.approvedBy.String,
+			ApprovalSignature:       row.approvalSignature.String,
+			ExpectedCertFingerprint: row.expectedCertFingerprint.String,
+		})
+	}
+
+	return transactions, nil
+}
+
 // suspendedTransactionPrune returns a PruneFunc for retention and size-based pruning.
 func suspendedTransactionPrune(config *SuspendedTransactionConfig) sqliteutil.PruneFunc {
 	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {

@@ -42,7 +42,7 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -108,7 +108,7 @@ func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -188,7 +188,7 @@ func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -220,7 +220,7 @@ func TestSQLAuditStore_ListActionReceipts(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -315,7 +315,7 @@ func TestSQLAuditStore_ListActionReceipts_AllSessions(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -369,7 +369,7 @@ func TestSQLAuditStore_ListActionReceiptsSince(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -430,7 +430,7 @@ func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -462,7 +462,7 @@ func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -523,7 +523,7 @@ func TestSQLAuditStore_ActionReceipts_MultipleStatuses(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,

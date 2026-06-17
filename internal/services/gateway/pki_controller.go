@@ -502,8 +502,56 @@ if [ ! -f "${LOCAL_CA_PATH}" ]; then
 fi
 
 echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
-echo "[g8e] You can now use: ./g8e auth login"
+echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
+echo "[g8e] You can now use: ./g8e auth enroll"
 `, port, caBundleURL, localCAPath)
+
+	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
+	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
+	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(script))
+}
+
+// @Summary		Bootstrap CA macOS script
+// @Description	Returns the macOS CA trust bootstrap script
+// @Tags			bootstrap
+// @Produce		text/plain
+// @Success		200	{string}	string
+// @Router			/bootstrap-ca-macos [get]
+func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	port := strconv.Itoa(constants.Ports.OperatorHttp)
+	caBundleURL := constants.APIPaths.WellKnownPKICABundle
+
+	script := fmt.Sprintf(`#!/bin/sh
+set -e
+
+GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
+GATEWAY_PORT="${GATEWAY_PORT:-%s}"
+CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
+TEMP_CA_PATH="/tmp/g8e-ca.crt"
+
+echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
+curl -fsSL "${CA_BUNDLE_URL}" -o "${TEMP_CA_PATH}"
+
+if [ ! -f "${TEMP_CA_PATH}" ]; then
+    echo "[g8e] ERROR: Failed to download CA bundle"
+    exit 1
+fi
+
+echo "[g8e] Installing CA bundle to macOS Keychain..."
+echo "[g8e] Sudo password may be required to trust the certificate."
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${TEMP_CA_PATH}"
+
+echo "[g8e] CA bundle installed and trusted."
+echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
+echo "[g8e] You can now use: ./g8e auth enroll"
+`, port, caBundleURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -584,6 +632,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[g8e] Enrollment complete"
+
+Write-Host "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
 
 # Start the operator
 Write-Host "[g8e] Starting Operator with endpoint ${GatewayHost}..."

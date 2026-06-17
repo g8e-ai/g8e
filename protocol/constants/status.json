@@ -133,6 +133,12 @@
         "_python_const": "MCP_RESOURCE_READ",
         "value": "MCP_RESOURCE_READ"
       },
+      "MIGRATION_TRANSFER": {
+        "_go_const": "ActionTypeMigrationTransfer",
+        "_mutation": true,
+        "_python_const": "MIGRATION_TRANSFER",
+        "value": "MIGRATION_TRANSFER"
+      },
       "PORT_CHECK": {
         "_go_const": "ActionTypePortCheck",
         "_python_const": "PORT_CHECK",

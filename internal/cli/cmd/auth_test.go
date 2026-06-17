@@ -35,14 +35,20 @@ func TestAuthCmd(t *testing.T) {
 	})
 }
 
-func TestLoginCmd(t *testing.T) {
-	t.Run("login command has correct use", func(t *testing.T) {
-		cmd := loginCmd()
-		assert.Equal(t, "login", cmd.Use)
-		assert.Contains(t, cmd.Short, "Authenticate")
+func TestEnrollCmd(t *testing.T) {
+	t.Run("enroll command has correct use", func(t *testing.T) {
+		cmd := enrollCmd()
+		assert.Equal(t, "enroll", cmd.Use)
+		assert.Contains(t, cmd.Short, "Enroll")
 	})
 
-	t.Run("login fails when Operator not running", func(t *testing.T) {
+	t.Run("login alias is hidden and has correct use", func(t *testing.T) {
+		cmd := loginCmd()
+		assert.Equal(t, "login", cmd.Use)
+		assert.True(t, cmd.Hidden)
+	})
+
+	t.Run("enroll fails when Operator not running", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
 		cfg.TestPortOverride = 99999 // Use non-existent port to ensure gateway is not reachable
@@ -51,7 +57,7 @@ func TestLoginCmd(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(cfg.TrustBundlePath()), 0755))
 
 		// Use injectable config loader for hermetic test with unique port
-		cmd := loginCmdWithConfig(func(_ string) (*config.Config, error) {
+		cmd := enrollCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
 		})
 		var buf bytes.Buffer
@@ -67,14 +73,14 @@ func TestLoginCmd(t *testing.T) {
 		assert.Contains(t, err.Error(), "g8e Gateway is not running")
 	})
 
-	t.Run("login fails with no active session", func(t *testing.T) {
-		// This test verifies that login fails when Operator is not running
+	t.Run("enroll fails with no active session", func(t *testing.T) {
+		// This test verifies that enroll fails when Operator is not running
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
 		cfg.TestPortOverride = 99999 // Use non-existent port to ensure gateway is not reachable
 
 		// Use injectable config loader for hermetic test with unique port
-		cmd := loginCmdWithConfig(func(_ string) (*config.Config, error) {
+		cmd := enrollCmdWithConfig(func(_ string) (*config.Config, error) {
 			return cfg, nil
 		})
 		var buf bytes.Buffer

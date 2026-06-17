@@ -37,7 +37,7 @@ func TestSQLAuditStore_Event(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -98,7 +98,7 @@ func TestSQLAuditStore_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -147,7 +147,7 @@ func TestSQLAuditStore_RecordEvent_RejectsMissingSession(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -183,7 +183,7 @@ func TestSQLAuditStore_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -236,7 +236,7 @@ func TestSQLAuditStore_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -287,7 +287,7 @@ func TestSQLAuditStore_OutputTruncation(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -351,7 +351,7 @@ func TestSQLAuditStore_StderrTruncation(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -410,7 +410,7 @@ func TestSQLAuditStore_EventPagination(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -483,7 +483,7 @@ func TestSQLAuditStore_EventOrdering(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -538,7 +538,7 @@ func TestSQLAuditStore_NullExitCode(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -587,7 +587,7 @@ func TestSQLAuditStore_DifferentEventTypes(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -649,7 +649,7 @@ func TestSQLAuditStore_GetEventsEmptySession(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -684,7 +684,7 @@ func TestSQLAuditStore_LongContentFields(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,

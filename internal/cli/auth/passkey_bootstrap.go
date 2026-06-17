@@ -16,6 +16,8 @@ package auth
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -23,6 +25,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"os/user"
 	"runtime"
@@ -39,6 +42,7 @@ import (
 type PasskeyBootstrapServer struct {
 	server       *http.Server
 	gatewayURL   string
+	bootstrapURL string
 	userID       string
 	userName     string
 	cliSessionID string
@@ -48,9 +52,10 @@ type PasskeyBootstrapServer struct {
 }
 
 // NewPasskeyBootstrapServer creates a new localhost server for passkey registration
-func NewPasskeyBootstrapServer(gatewayURL, userID, userName, cliSessionID string) *PasskeyBootstrapServer {
+func NewPasskeyBootstrapServer(gatewayURL, bootstrapURL, userID, userName, cliSessionID string) *PasskeyBootstrapServer {
 	return &PasskeyBootstrapServer{
 		gatewayURL:   gatewayURL,
+		bootstrapURL: bootstrapURL,
 		userID:       userID,
 		userName:     userName,
 		cliSessionID: cliSessionID,
@@ -117,27 +122,46 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
 <head>
     <title>Register Passkey - g8e</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
-        .container { border: 1px solid #ddd; border-radius: 8px; padding: 20px; }
-        h1 { color: #333; }
-        .info { background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.5; }
+        .container { border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        h1 { color: #333; margin-top: 0; }
+        .info { background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0; border: 1px solid #eee; }
+        .warning { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin: 20px 0; border: 1px solid #ffeeba; }
         .label { font-weight: bold; margin-bottom: 5px; }
-        .value { margin-bottom: 15px; word-break: break-all; }
+        .value { margin-bottom: 15px; word-break: break-all; font-family: monospace; }
         .actions { margin-top: 20px; }
-        button { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button { padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.2s; }
         .register { background: #4CAF50; color: white; }
         .register:hover { background: #45a049; }
-        .status { margin-top: 20px; padding: 10px; border-radius: 4px; display: none; }
-        .success { background: #d4edda; color: #155724; }
-        .error { background: #f8d7da; color: #721c24; }
-        .loading { background: #fff3cd; color: #856404; }
+        .status { margin-top: 20px; padding: 15px; border-radius: 4px; display: none; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { background: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
+        code { background: #eee; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
+        pre { background: #2d2d2d; color: #ccc; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        .trust-link { display: block; margin-top: 10px; color: #0066cc; text-decoration: none; }
+        .trust-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Register Passkey for g8e CLI</h1>
-        <p>To complete your CLI enrollment, please register a passkey (WebAuthn/FIDO2). This will allow you to authenticate securely without passwords.</p>
+        <p>To complete your CLI enrollment, please register a passkey (WebAuthn/FIDO2).</p>
         
+        <div class="warning">
+            <strong>Self-Signed Certificate Required</strong>
+            <p>Since this platform uses a self-signed CA, you must trust the root certificate before proceeding, or your browser will block the passkey registration.</p>
+            
+            <div class="label">1. Install Trust Script:</div>
+            <p>Linux / macOS:</p>
+            <pre>curl -fsSL ` + html.EscapeString(s.bootstrapURL) + constants.APIPaths.BootstrapCALinux + ` | sh</pre>
+            <p>Windows (PowerShell):</p>
+            <pre>irm ` + html.EscapeString(s.bootstrapURL) + constants.APIPaths.BootstrapCAWindows + ` | iex</pre>
+
+            <div class="label">2. Restart Browser:</div>
+            <p><strong>RESTART ALL OPEN BROWSERS</strong> after running the script for the new CA to be recognized.</p>
+        </div>
+
         <div class="info">
             <div class="label">User ID:</div>
             <div class="value">` + html.EscapeString(s.userID) + `</div>
@@ -348,7 +372,8 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	}
 	userName := currentUser.Username
 
-	server := NewPasskeyBootstrapServer(gatewayURL, userID, userName, cliSessionID)
+	bootstrapURL := fmt.Sprintf("http://%s:%d", externalIP, constants.Ports.OperatorHttp)
+	server := NewPasskeyBootstrapServer(gatewayURL, bootstrapURL, userID, userName, cliSessionID)
 
 	url, err := server.Start()
 	if err != nil {
@@ -359,6 +384,11 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	// Replace 0.0.0.0 with external IP for the display URL
 	portStr := strings.TrimPrefix(url, "http://0.0.0.0:")
 	displayURL := fmt.Sprintf("http://%s:%s", externalIP, portStr)
+
+	// Trust script URLs for both Unix and Windows platforms
+	httpPort := constants.Ports.OperatorHttp
+	linuxURL := fmt.Sprintf("http://%s:%d%s", externalIP, httpPort, constants.APIPaths.BootstrapCALinux)
+	windowsURL := fmt.Sprintf("http://%s:%d%s", externalIP, httpPort, constants.APIPaths.BootstrapCAWindows)
 
 	// Attempt to auto-open the browser (best-effort)
 	if err := openBrowser(displayURL); err != nil {
@@ -373,8 +403,18 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	fmt.Printf("To complete your CLI enrollment, you need to register a passkey.\n")
 	fmt.Printf("This will enable secure passwordless authentication.\n")
 	fmt.Printf("\n")
-	fmt.Printf("A browser window should have opened automatically.\n")
-	fmt.Printf("If not, please open the following URL manually:\n")
+	fmt.Printf("IMPORTANT: Since we use self-signed certificates, you must:\n")
+	fmt.Printf("1. Run the trust script to install the platform CA:\n")
+	fmt.Printf("\n")
+	fmt.Printf("   Linux / macOS:\n")
+	fmt.Printf("   curl -fsSL %s | sh\n", linuxURL)
+	fmt.Printf("\n")
+	fmt.Printf("   Windows (PowerShell):\n")
+	fmt.Printf("   irm %s | iex\n", windowsURL)
+	fmt.Printf("\n")
+	fmt.Printf("2. RESTART ALL OPEN BROWSERS for the new CA to be recognized.\n")
+	fmt.Printf("\n")
+	fmt.Printf("Once trusted, open this URL in your browser:\n")
 	fmt.Printf("\n")
 	fmt.Printf("  %s\n", displayURL)
 	fmt.Printf("\n")
@@ -408,7 +448,33 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) {
 	url := fmt.Sprintf("%s/api/v1/auth/passkeys?user_id=%s", cfg.OperatorPublicURL(), userID)
 
-	resp, err := http.Get(url)
+	// Load CLI mTLS certificate for authentication
+	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	if err != nil {
+		return false, fmt.Errorf("failed to load CLI certificate: %w", err)
+	}
+
+	// Load CA bundle for server verification
+	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
+	if err != nil {
+		return false, fmt.Errorf("failed to read CA bundle: %w", err)
+	}
+	caPool := x509.NewCertPool()
+	caPool.AppendCertsFromPEM(caBundleBytes)
+
+	// Create HTTP client with TLS configuration
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cliCert},
+		RootCAs:      caPool,
+		MinVersion:   tls.VersionTLS13,
+	}
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsCfg,
+		},
+	}
+
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("failed to check passkey status: %w", err)
 	}

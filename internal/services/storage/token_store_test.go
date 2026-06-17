@@ -38,7 +38,7 @@ func setupTestTokenStore(t *testing.T) (*TokenStoreService, *vault.Vault, string
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	logger := testutil.NewTestLogger()
 
@@ -84,7 +84,7 @@ func TestNewTokenStoreService_NilConfig(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 	defer testVault.Close()
 
 	// Override DB path to temp dir
@@ -120,7 +120,7 @@ func TestNewTokenStoreService_DatabaseInitFailure(t *testing.T) {
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	vaultDir := t.TempDir()
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 	defer testVault.Close()
 
 	// Create a file (not a directory) and try to use a path inside it

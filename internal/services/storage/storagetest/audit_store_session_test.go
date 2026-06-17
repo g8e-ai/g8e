@@ -33,7 +33,7 @@ func TestSQLAuditStore_Session(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -74,7 +74,7 @@ func TestSQLAuditStore_MultipleSessions(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -127,7 +127,7 @@ func TestSQLAuditStore_GetSessionNotFound(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
@@ -158,7 +158,7 @@ func TestSQLAuditStore_SessionWithNullFields(t *testing.T) {
 	// Create test vault
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	testVault := createTestVault(t, vaultDir, privKey)
+	testVault := CreateTestVault(t, vaultDir, privKey)
 
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,

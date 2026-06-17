@@ -62,7 +62,7 @@ func TestAllActionTypes(t *testing.T) {
 
 	t.Run("has correct length", func(t *testing.T) {
 		result := AllActionTypes()
-		assert.Len(t, result, 24, "AllActionTypes should return 24 action types")
+		assert.Len(t, result, 25, "AllActionTypes should return 25 action types")
 	})
 
 	t.Run("all values are unique", func(t *testing.T) {

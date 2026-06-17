@@ -53,4 +53,9 @@ type SuspendedTransactionStore interface {
 	// Returns the count of deleted transactions.
 	// Returns an error if cleanup fails, wrapping the underlying error with context.
 	CleanupExpiredSuspendedTransactions(ctx context.Context) (int64, error)
+
+	// GetExpiredSuspendedTransactions retrieves expired suspended transactions for audit.
+	// Returns the list of expired transactions with their full details.
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	GetExpiredSuspendedTransactions(ctx context.Context) ([]*models.SuspendedTransaction, error)
 }

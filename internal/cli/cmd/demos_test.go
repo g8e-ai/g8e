@@ -187,7 +187,7 @@ func TestDemosRunCmd(t *testing.T) {
 		assert.Contains(t, cmd.Long, "FHIR PA Request")
 		assert.Contains(t, cmd.Long, "CUI Exfiltration")
 		assert.Contains(t, cmd.Long, "Unauthorized Trade")
-		assert.Contains(t, cmd.Long, "Governed Data Transfer")
+		assert.Contains(t, cmd.Long, "Governed Migration")
 	})
 }
 
@@ -196,7 +196,7 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 4, scenarioCounts["healthcare"])
 		assert.Equal(t, 1, scenarioCounts["gov"])
 		assert.Equal(t, 1, scenarioCounts["finance"])
-		assert.Equal(t, 2, scenarioCounts["secure-data"])
+		assert.Equal(t, 3, scenarioCounts["secure-data"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
@@ -337,7 +337,7 @@ func TestRunScenario(t *testing.T) {
 		err := runSecureDataScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for secure-data")
-		assert.Contains(t, err.Error(), "valid: 1-2")
+		assert.Contains(t, err.Error(), "valid: 1-3")
 	})
 
 	t.Run("healthcare scenario functions exist", func(t *testing.T) {
@@ -384,10 +384,10 @@ func TestRunAllScenarios(t *testing.T) {
 		assert.Equal(t, 1, count)
 	})
 
-	t.Run("secure-data has 2 scenarios", func(t *testing.T) {
+	t.Run("secure-data has 3 scenarios", func(t *testing.T) {
 		count, ok := scenarioCounts["secure-data"]
 		assert.True(t, ok)
-		assert.Equal(t, 2, count)
+		assert.Equal(t, 3, count)
 	})
 }
 
@@ -918,8 +918,9 @@ func TestFinanceScenarioDescriptions(t *testing.T) {
 func TestSecureDataScenarioDescriptions(t *testing.T) {
 	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
 		cmd := demosRunCmd()
-		assert.Contains(t, cmd.Long, "secure-data: 1-2")
-		assert.Contains(t, cmd.Long, "Governed Data Transfer with Signed Receipt")
-		assert.Contains(t, cmd.Long, "Out-of-Band Transfer Blocked")
+		assert.Contains(t, cmd.Long, "secure-data: 1-3")
+		assert.Contains(t, cmd.Long, "Governed Migration with Chain-of-Custody Receipts")
+		assert.Contains(t, cmd.Long, "Connector Bypass Attempt Blocked")
+		assert.Contains(t, cmd.Long, "Cross-Tenant Leak Doctrine Triggered")
 	})
 }

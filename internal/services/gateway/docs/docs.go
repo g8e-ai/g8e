@@ -320,6 +320,26 @@ const docTemplate = `{
                 }
             }
         },
+        "/bootstrap-ca-macos": {
+            "get": {
+                "description": "Returns the macOS CA trust bootstrap script",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "bootstrap"
+                ],
+                "summary": "Bootstrap CA macOS script",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/bootstrap-ca.ps1": {
             "get": {
                 "description": "Returns the Windows CA trust bootstrap script",

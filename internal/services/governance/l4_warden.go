@@ -678,35 +678,6 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
-	// Check if this is an external app transaction that can bypass L3 via policy
-	// This check must come before the mutation check so that read-only actions
-	// with explicit app policy bypasses get L3Valid=true
-	var bypassedByPolicy bool
-	if envelope.Governance != nil && envelope.Governance.L2 != nil && envelope.Governance.L2.KeyId != "" {
-		if tv.appPolicyStore != nil {
-			appID := envelope.Governance.L2.KeyId
-			policy, err := tv.appPolicyStore.GetAppPolicy(appID)
-			if err != nil {
-				tv.logger.Warn("Failed to retrieve app policy for L3 bypass check", "app_id", appID, string(constants.ConnectionStateError), err)
-				// Fail-closed: if policy lookup fails, require standard L3
-			} else if policy != nil {
-				// Check if this action type is in AutoApproveIntents
-				actionStr := string(actionType)
-				for _, autoApproveIntent := range policy.AutoApproveIntents {
-					if autoApproveIntent == actionStr {
-						tv.logger.Info("L3 bypassed via app policy", "app_id", appID, "action_type", actionStr)
-						bypassedByPolicy = true
-						break
-					}
-				}
-			}
-		}
-	}
-
-	if bypassedByPolicy {
-		return true, nil
-	}
-
 	// Check if L3 is auto-approved (for doctrine/consensus postures in gateway mode)
 	autoApproved := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.AutoApproved
 	if autoApproved {
@@ -798,9 +769,13 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		msg = &operatorv1.HeartbeatRequested{}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{}
+	case constants.ActionTypeMigrationTransfer:
+		// TODO: Implement payload for MIGRATION_TRANSFER
+		return nil, nil
 	case constants.ActionTypeInvestigationCreate:
 		// No typed payload for investigation create, it uses raw bytes
 		return nil, nil
+
 	default:
 		return nil, ErrUnknownActionType
 	}

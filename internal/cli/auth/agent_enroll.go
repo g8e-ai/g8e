@@ -28,6 +28,51 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// EnrollCLI performs idempotent first-time CLI enrollment. It bootstraps the
+// gateway if it has never been bootstrapped, or enrolls a new CLI identity if
+// the gateway is already running. It does NOT handle re-enrollment of existing
+// credentials — that is the login command's responsibility.
+func EnrollCLI(cfg *config.Config) error {
+	bootstrapped, err := CheckBootstrapStatus(cfg)
+	if err != nil {
+		return fmt.Errorf("check bootstrap status: %w", err)
+	}
+
+	hostname, _ := os.Hostname()
+	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	if err != nil {
+		return fmt.Errorf("generate CSR: %w", err)
+	}
+
+	var regResp *RegistrationResponse
+	if !bootstrapped {
+		regResp, err = Bootstrap(cfg, "", cliCSR, "")
+	} else {
+		regResp, err = CLIEnroll(cfg, cliCSR)
+	}
+	if err != nil {
+		return err
+	}
+	if regResp.CLISessionID == "" || regResp.CLICert == "" {
+		return fmt.Errorf("unexpected enrollment response (missing required fields)")
+	}
+
+	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
+		return fmt.Errorf("save cert: %w", err)
+	}
+	if regResp.HubTrustBundle != "" {
+		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
+			return fmt.Errorf("save trust bundle: %w", err)
+		}
+	}
+	return SaveCredentials(cfg, &Credentials{
+		OperatorSessionID: regResp.OperatorSessionID,
+		UserID:            regResp.UserID,
+		OperatorID:        regResp.OperatorID,
+		CLISessionID:      regResp.CLISessionID,
+	})
+}
+
 // EnrollAgentApp enrolls an agent as an external app with the gateway using the delegated credential model.
 // It requires an authenticated human CLI session (mTLS) and issues a short-lived cert (1 hour) that carries
 // both the app SPIFFE ID and the requestor's user identity.
@@ -76,6 +121,15 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 	caPool := x509.NewCertPool()
 	caPool.AppendCertsFromPEM(caBundleBytes)
 
+	// Load credentials to get CLI session ID
+	creds, err := LoadCredentials(cfg)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to load credentials: %w", err)
+	}
+	if creds == nil || creds.CLISessionID == "" {
+		return "", "", "", fmt.Errorf("no CLI session found; run 'g8e auth enroll' first")
+	}
+
 	// Create mTLS HTTP client
 	tlsCfg := &tls.Config{
 		Certificates: []tls.Certificate{cliCert},
@@ -90,7 +144,13 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 
 	// POST to the delegated credential endpoint (requires mTLS)
 	enrollURL := cfg.OperatorHTTPURL() + constants.APIPaths.PKIAppsDelegated
-	resp, err := httpClient.Post(enrollURL, "application/json", strings.NewReader(string(reqBody)))
+	httpReq, err := http.NewRequest("POST", enrollURL, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to create request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set(constants.HeaderCLISessionID, creds.CLISessionID)
+	resp, err := httpClient.Do(httpReq)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to POST delegated credential request: %w", err)
 	}

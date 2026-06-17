@@ -115,6 +115,7 @@ var APIPaths = struct {
 	WellKnownBinPrefix      string `json:"well_known_bin_prefix"`
 	// Bootstrap scripts
 	BootstrapCALinux   string `json:"bootstrap_ca_linux"`
+	BootstrapCAMacos   string `json:"bootstrap_ca_macos"`
 	BootstrapCAWindows string `json:"bootstrap_ca_windows"`
 	// Deploy scripts
 	DeployScriptLinux   string `json:"deploy_script_linux"`
@@ -229,6 +230,7 @@ var APIPaths = struct {
 	WellKnownBinPrefix:      "/.well-known/g8e/bin/",
 	// Bootstrap scripts
 	BootstrapCALinux:   "/bootstrap-ca",
+	BootstrapCAMacos:   "/bootstrap-ca-macos",
 	BootstrapCAWindows: "/bootstrap-ca.ps1",
 	// Deploy scripts
 	DeployScriptLinux:   "/g8e-operator.sh",

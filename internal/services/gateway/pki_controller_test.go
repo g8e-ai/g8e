@@ -569,7 +569,7 @@ func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
 	assert.NotEmpty(t, rr.Body.Bytes())
 	script := rr.Body.String()
 	assert.Contains(t, script, "CA bundle installed")
-	assert.Contains(t, script, "g8e auth login")
+	assert.Contains(t, script, "g8e auth enroll")
 }
 
 func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {

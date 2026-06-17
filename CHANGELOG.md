@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-06-17
+
+### Overview
+
+v1.1.3 introduces a new governed migration command suite, enhances auth enrollment flows, and improves storage reliability. This release focuses on expanding migration capabilities and hardening core notary approval flows.
+
+### Added
+
+* **Governed Migration Suite** — New `migration` CLI command suite to manage governed bulk data transfers, including manifest signing and connectors for rclone and SharePoint.
+* **Notary Approval Expiry** — Implemented automated audit and cleanup for expired suspended transactions awaiting notary approval.
+* **Migration Transfer Action** — Added support for `MIGRATION_TRANSFER` action types.
+
+### Changed
+
+* **Auth Enrollment Flow** — Refactored and improved the agent enrollment flow for better usability.
+* **L3 Posture Hardening** — Removed deprecated L3 bypass mechanisms to enforce stricter security posture.
+* **Documentation** — Updated architecture and guide documentation to reflect migration suite and new auth flows.
+
+### Fixed
+
+* **Storage Reliability** — Fixed various issues in the storage layer related to transaction handling and auditing.
+* **Swagger Documentation** — Updated OpenAPI/Swagger documentation to reflect current API endpoints.
+
 ## [1.1.2] - 2026-06-16
 
 ### Overview
