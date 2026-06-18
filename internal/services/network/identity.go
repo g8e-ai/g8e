@@ -28,6 +28,36 @@ import (
 	"time"
 )
 
+// GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host.
+// This is used for the Operator Bootstrap endpoint which remote operators rely on.
+func GetExternalInterfaceIP() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "localhost"
+	}
+
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+				return ip.String()
+			}
+		}
+	}
+
+	return "localhost"
+}
+
 // NetworkIdentity represents all detected network identities for the machine.
 type NetworkIdentity struct {
 	IPs          []string

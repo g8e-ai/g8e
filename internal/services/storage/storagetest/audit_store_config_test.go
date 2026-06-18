@@ -46,7 +46,7 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 	assert.Equal(t, 51200, config.HeadTailSize)
 }
 
-func TestSQLAuditStore_Bootstrap(t *testing.T) {
+func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 	t.Parallel()
 	gitPath := testGitPath(t)
 

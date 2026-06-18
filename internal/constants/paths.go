@@ -274,6 +274,12 @@ const (
 	PkiSubdirBinaries    = "binaries"
 	PkiSubdirClient      = "client"
 
+	// File extensions
+	FileExtCert = ".crt"
+	FileExtKey  = ".key"
+	FileExtPEM  = ".pem"
+	FileExtJSON = ".json"
+
 	PkiFileRootCA          = "root_ca.crt"
 	PkiFileRootCAKey       = "root_ca.key"
 	PkiFileHubCA           = "hub_ca.crt"
@@ -329,8 +335,9 @@ const (
 	LogDirname = "logs"
 
 	// CLI certificate and key filenames
-	CliCertFilename = "cli.crt"
-	CliKeyFilename  = "cli.key"
+	CliCertFilename     = "cli.crt"
+	CliKeyFilename      = "cli.key"
+	CredentialsFilename = "credentials"
 
 	// Gateway-specific filenames
 	GatewayIDFilename       = "gateway-id"

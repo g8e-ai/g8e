@@ -40,6 +40,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/spf13/cobra"
 )
 
@@ -321,7 +322,7 @@ func buildGatewayConn(cfg *config.Config) (*gatewayConn, error) {
 	}
 
 	// DNS failed, fall back to IP
-	externalIP := config.GetExternalInterfaceIP()
+	externalIP := network.GetExternalInterfaceIP()
 	gatewayURL = fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
 	session.gatewayURL = gatewayURL
 	slog.Info("g8e.local DNS resolution failed, falling back to direct IP", "ip", externalIP)
@@ -610,7 +611,7 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	externalIP := config.GetExternalInterfaceIP()
+	externalIP := network.GetExternalInterfaceIP()
 	cmd.Printf("# Add this entry to /etc/hosts to enable %s resolution:\n", constants.GatewayInternalHostname)
 	cmd.Printf("%s %s\n\n", externalIP, constants.GatewayInternalHostname)
 
@@ -640,7 +641,7 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	externalIP := config.GetExternalInterfaceIP()
+	externalIP := network.GetExternalInterfaceIP()
 	gatewayURL := fmt.Sprintf("https://%s:%d/mcp", externalIP, constants.Ports.OperatorHttps)
 
 	actualCertPath := filepath.ToSlash(cfg.CLICertFile())

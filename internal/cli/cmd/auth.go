@@ -88,7 +88,7 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	cmd.Println("Windows detected: Using Windows Certificate Store for passkey authentication")
 
 	// Check if platform is already bootstrapped
-	bootstrapped, err := auth.CheckBootstrapStatus(cfg)
+	bootstrapped, err := auth.CheckBootstrapStatus(cfg, "")
 	if err != nil {
 		return fmt.Errorf("failed to check bootstrap status: %w", err)
 	}
@@ -116,13 +116,13 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 		var regResp *auth.RegistrationResponse
 		if !bootstrapped {
 			cmd.Println("Submitting CSR to Gateway for CLI enrollment...")
-			regResp, err = auth.Bootstrap(cfg, "", csr, "")
+			regResp, err = auth.BootstrapWithURL(cfg, "", csr, "", "")
 			if err != nil {
 				return fmt.Errorf("failed to submit CSR: %w", err)
 			}
 		} else {
 			cmd.Println("Platform already bootstrapped. Attempting CLI re-enrollment...")
-			regResp, err = auth.CLIEnroll(cfg, csr)
+			regResp, err = auth.CLIEnroll(cfg, csr, "")
 			if err != nil {
 				return fmt.Errorf("failed to re-enroll CLI: %w", err)
 			}
@@ -239,7 +239,7 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	if hasOperatorCert {
 		// Full re-enrollment with operator CSR
 		cmd.Println("Re-enrolling with operator...")
-		regResp, err = auth.ReEnroll(cfg, "", cliCSR, "")
+		regResp, err = auth.ReEnroll(cfg, "", cliCSR, "", "")
 		if err != nil {
 			// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 			if errors.Is(err, constants.ErrTrustBundleStale) {
@@ -250,7 +250,7 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	} else {
 		// CLI-only re-enrollment (no operator)
 		cmd.Println("Re-enrolling CLI credentials...")
-		regResp, err = auth.CLIEnroll(cfg, cliCSR)
+		regResp, err = auth.CLIEnroll(cfg, cliCSR, "")
 		if err != nil {
 			return err
 		}
@@ -339,7 +339,7 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 			}
 
 			// Check if platform is already bootstrapped
-			bootstrapped, err := auth.CheckBootstrapStatus(cfg)
+			bootstrapped, err := auth.CheckBootstrapStatus(cfg, "")
 			if err != nil {
 				return fmt.Errorf("failed to check bootstrap status: %w", err)
 			}
@@ -354,13 +354,13 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 			var regResp *auth.RegistrationResponse
 			if !bootstrapped {
 				cmd.Println("Submitting CSR to Gateway for bootstrap...")
-				regResp, err = auth.Bootstrap(cfg, csr, "", "")
+				regResp, err = auth.BootstrapWithURL(cfg, csr, "", "", "")
 				if err != nil {
 					return fmt.Errorf("failed to submit CSR: %w", err)
 				}
 			} else {
 				cmd.Println("Platform already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
-				regResp, err = auth.ReEnroll(cfg, csr, "", "")
+				regResp, err = auth.ReEnroll(cfg, csr, "", "", "")
 				if err != nil {
 					// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 					if errors.Is(err, constants.ErrTrustBundleStale) {

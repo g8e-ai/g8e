@@ -28,7 +28,6 @@ func TestEnrollCmd_Integration(t *testing.T) {
 	t.Run("enroll fails when Operator not running", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
-		cfg.TestPortOverride = 99999 // Use non-existent port to ensure gateway is not reachable
 
 		// Create pki/trust dir so the file path is valid for writing if needed
 		require.NoError(t, os.MkdirAll(filepath.Dir(cfg.TrustBundlePath()), 0755))
@@ -54,7 +53,6 @@ func TestEnrollCmd_Integration(t *testing.T) {
 		// This test verifies that enroll fails when Operator is not running
 		tmpDir := t.TempDir()
 		cfg := setupTestConfig(t, tmpDir)
-		cfg.TestPortOverride = 99999 // Use non-existent port to ensure gateway is not reachable
 
 		// Use injectable config loader for hermetic test with unique port
 		cmd := enrollCmdWithConfig(func(_ string) (*config.Config, error) {

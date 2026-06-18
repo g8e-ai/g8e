@@ -22,9 +22,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"math/big"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -174,14 +172,7 @@ func setupTestCredentials(t *testing.T, cfg *config.Config) {
 func setupTLSClient(t *testing.T, cfg *config.Config, server *httptest.Server) *Client {
 	t.Helper()
 
-	_, portStr, err := net.SplitHostPort(server.Listener.Addr().String())
-	require.NoError(t, err)
-	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
-	cfg.TestPortOverride = port
-
-	client, err := NewClient(cfg)
+	client, err := NewClientWithURL(cfg, server.URL)
 	require.NoError(t, err)
 
 	caCertPool := x509.NewCertPool()

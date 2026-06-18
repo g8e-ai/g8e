@@ -70,13 +70,12 @@ func TestBootstrap_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL), // Use test server port
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -85,7 +84,7 @@ func TestBootstrap_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test the success case - the function should successfully bootstrap
-	resp, err := Bootstrap(cfg, operatorCSR, cliCSR, "")
+	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.NoError(t, err)
 	assert.Equal(t, "op-sess-123", resp.OperatorSessionID)
 	assert.Equal(t, "cli-sess-456", resp.CLISessionID)
@@ -98,13 +97,12 @@ func TestBootstrap_HTTPError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -112,7 +110,7 @@ func TestBootstrap_HTTPError(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := Bootstrap(cfg, operatorCSR, cliCSR, "")
+	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", "")
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to bootstrap")
@@ -133,13 +131,12 @@ func TestBootstrap_ErrorResponse(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -147,7 +144,7 @@ func TestBootstrap_ErrorResponse(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := Bootstrap(cfg, operatorCSR, cliCSR, "")
+	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "bootstrap failed")
@@ -163,13 +160,12 @@ func TestBootstrap_InvalidJSONResponse(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -177,7 +173,7 @@ func TestBootstrap_InvalidJSONResponse(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := Bootstrap(cfg, operatorCSR, cliCSR, "")
+	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to parse response")
@@ -206,13 +202,12 @@ func TestBootstrap_FingerprintVerification(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -221,12 +216,12 @@ func TestBootstrap_FingerprintVerification(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test with correct fingerprint
-	resp, err := Bootstrap(cfg, operatorCSR, cliCSR, expectedFP)
+	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, expectedFP, server.URL)
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
 
 	// Test with wrong fingerprint
-	resp, err = Bootstrap(cfg, operatorCSR, cliCSR, "deadbeef")
+	resp, err = BootstrapWithURL(cfg, operatorCSR, cliCSR, "deadbeef", server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "CA fingerprint verification failed")
@@ -261,13 +256,12 @@ func TestEnrollWithGateway_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -301,13 +295,12 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -350,19 +343,18 @@ func TestCLIEnroll_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := CLIEnroll(cfg, cliCSR)
+	resp, err := CLIEnroll(cfg, cliCSR, server.URL)
 	require.NoError(t, err)
 	assert.Equal(t, "cli-sess-456", resp.CLISessionID)
 	assert.NotEmpty(t, resp.CLICert)
@@ -373,19 +365,18 @@ func TestCLIEnroll_HTTPError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := CLIEnroll(cfg, cliCSR)
+	resp, err := CLIEnroll(cfg, cliCSR, "")
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to enroll CLI")
@@ -406,19 +397,18 @@ func TestCLIEnroll_ErrorResponse(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := CLIEnroll(cfg, cliCSR)
+	resp, err := CLIEnroll(cfg, cliCSR, server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "CLI enrollment failed")
@@ -434,19 +424,18 @@ func TestCLIEnroll_InvalidJSONResponse(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := CLIEnroll(cfg, cliCSR)
+	resp, err := CLIEnroll(cfg, cliCSR, server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to parse response")
@@ -457,13 +446,12 @@ func TestEnrollWithGateway_HTTPError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -489,13 +477,12 @@ func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -534,13 +521,12 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -575,16 +561,15 @@ func TestCheckBootstrapStatus_Success(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
-	bootstrapped, err := CheckBootstrapStatus(cfg)
+	bootstrapped, err := CheckBootstrapStatus(cfg, server.URL)
 	require.NoError(t, err)
 	assert.True(t, bootstrapped)
 }
@@ -602,16 +587,15 @@ func TestCheckBootstrapStatus_NotBootstrapped(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
-	bootstrapped, err := CheckBootstrapStatus(cfg)
+	bootstrapped, err := CheckBootstrapStatus(cfg, server.URL)
 	require.NoError(t, err)
 	assert.False(t, bootstrapped)
 }
@@ -621,17 +605,16 @@ func TestCheckBootstrapStatus_HTTPError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	// When gateway is not reachable, CheckBootstrapStatus returns false without error
-	bootstrapped, err := CheckBootstrapStatus(cfg)
+	bootstrapped, err := CheckBootstrapStatus(cfg, "")
 	require.NoError(t, err)
 	assert.False(t, bootstrapped)
 }
@@ -647,16 +630,15 @@ func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
-	bootstrapped, err := CheckBootstrapStatus(cfg)
+	bootstrapped, err := CheckBootstrapStatus(cfg, server.URL)
 	require.Error(t, err)
 	assert.False(t, bootstrapped)
 	assert.Contains(t, err.Error(), "failed to parse response")
@@ -667,13 +649,12 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	tmpDir := t.TempDir()
 	trustBundlePath := filepath.Join(tmpDir, "trust-bundle.pem")
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = trustBundlePath
 
@@ -682,7 +663,7 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "")
+	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to fetch trust bundle")
 }
@@ -699,13 +680,12 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -713,7 +693,7 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "")
+	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fetched trust bundle is empty")
 }
@@ -730,13 +710,12 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	operatorCSR, _, err := GenerateCSR("test-operator")
@@ -744,7 +723,7 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "")
+	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "trust bundle fetch returned HTTP")
 }
@@ -763,13 +742,12 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
 
@@ -779,7 +757,7 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "")
+	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	// The error should be related to missing CLI certificate
 	assert.Contains(t, err.Error(), "failed to load")
@@ -797,13 +775,12 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: extractPortFromURL(server.URL),
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 	cfg.Paths.Infra.CACertPath = filepath.Join(tmpDir, "trust-bundle.pem")
 
@@ -824,7 +801,7 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "")
+	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	// The error should be related to the invalid CA bundle
 	assert.Contains(t, err.Error(), "failed to parse")
