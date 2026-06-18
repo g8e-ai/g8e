@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -155,10 +156,11 @@ func TestFSDiskUsageTool_Execute_AllDrives_Success(t *testing.T) {
 			return 0, nil
 		},
 		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
-			if path == "C:" {
+			driveLetter := strings.ToUpper(string([]rune(path)[0]))
+			if driveLetter == "C" {
 				return 500 * 1024 * 1024 * 1024, 1000 * 1024 * 1024 * 1024, 400 * 1024 * 1024 * 1024, nil
 			}
-			if path == "D:" {
+			if driveLetter == "D" {
 				return 200 * 1024 * 1024 * 1024, 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, nil
 			}
 			return 0, 0, 0, errors.New("unknown drive")
@@ -230,7 +232,8 @@ func TestFSDiskUsageTool_Execute_AllDrives_SkipFailedDrives(t *testing.T) {
 			return 0, nil
 		},
 		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
-			if path == "C:" {
+			driveLetter := strings.ToUpper(string([]rune(path)[0]))
+			if driveLetter == "C" {
 				return 500 * 1024 * 1024 * 1024, 1000 * 1024 * 1024 * 1024, 400 * 1024 * 1024 * 1024, nil
 			}
 			// D: fails

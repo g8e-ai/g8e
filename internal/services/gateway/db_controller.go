@@ -1056,3 +1056,42 @@ func (c *DBController) handlePubSubPublish(w http.ResponseWriter, r *http.Reques
 	}
 	c.responder.JSON(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
 }
+
+var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.GovernanceEnvelopes
+
+func isDirectDBMutationAllowed(collection string) bool {
+	switch constants.CollectionName(collection) {
+	// Platform infrastructure collections (internal use, no governance required)
+	case constants.CollectionSettings,
+		constants.CollectionUsers,
+		constants.CollectionOperators,
+		constants.CollectionOperatorSessions,
+		constants.CollectionBoundSessions,
+		constants.CollectionPasskeyChallenges,
+		constants.CollectionRevokedCertificates,
+		constants.CollectionTrustedSigners,
+		constants.CollectionConsoleAudit:
+		return true
+	// Governed collections must use POST /api/v1/governance/envelopes
+	case constants.CollectionCases,
+		constants.CollectionInvestigations,
+		constants.CollectionTasks,
+		constants.CollectionMemories,
+		constants.CollectionReputationState,
+		constants.CollectionReputationCommitments,
+		constants.CollectionAgentActivityMetadata,
+		constants.CollectionStakeResolutions:
+		return false
+	default:
+		return false
+	}
+}
+
+func isMutationPubSubChannelAllowed(channel string) bool {
+	for _, prefix := range []string{"heartbeat:", "results:", "sse:", "ws_session:", "internal:"} {
+		if strings.HasPrefix(channel, prefix) {
+			return true
+		}
+	}
+	return false
+}

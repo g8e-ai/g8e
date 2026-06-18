@@ -51,6 +51,9 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 	err := os.WriteFile(logPath, []byte(logContent), 0644)
 	require.NoError(t, err)
 
+	logPathJSON, err := json.Marshal(logPath)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name          string
 		args          string
@@ -61,7 +64,7 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 	}{
 		{
 			name:          "Successful detection",
-			args:          `{"log_path": "` + logPath + `"}`,
+			args:          `{"log_path": ` + string(logPathJSON) + `}`,
 			ctx:           context.Background(),
 			expectedCount: 3,
 		},
@@ -79,7 +82,7 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 		},
 		{
 			name: "Context cancellation",
-			args: `{"log_path": "` + logPath + `"}`,
+			args: `{"log_path": ` + string(logPathJSON) + `}`,
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -156,8 +159,11 @@ func TestSysOOMDetectTool_Execute_NoEvents(t *testing.T) {
 	err := os.WriteFile(logPath, []byte("system boot successful\nno errors found"), 0644)
 	require.NoError(t, err)
 
+	logPathJSON, err := json.Marshal(logPath)
+	require.NoError(t, err)
+
 	tool := &SysOOMDetectTool{}
-	args := `{"log_path": "` + logPath + `"}`
+	args := `{"log_path": ` + string(logPathJSON) + `}`
 	result, err := tool.Execute(context.Background(), json.RawMessage(args))
 
 	require.NoError(t, err)

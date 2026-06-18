@@ -34,7 +34,7 @@ func (t *FSDiskUsageTool) Name() string {
 
 // Description returns a human-readable description.
 func (t *FSDiskUsageTool) Description() string {
-	return "Provides df-style free space reporting for mounted filesystems."
+	return "Provides df-style disk free space reporting for mounted filesystems."
 }
 
 // InputSchema returns the JSON Schema for tool validation.
