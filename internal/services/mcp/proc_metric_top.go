@@ -64,7 +64,7 @@ func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (
 
 	limit := req.Limit
 	if limit <= 0 {
-		limit = defaultProcessLimit
+		limit = constants.DefaultProcessLimit
 	}
 
 	entries, err := os.ReadDir(constants.PathProc)

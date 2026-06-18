@@ -20,6 +20,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // FSDiskProfileTool recursively calculates directory sizes.
@@ -66,7 +68,7 @@ func (t *FSDiskProfileTool) Execute(ctx context.Context, args json.RawMessage) (
 
 	maxDepth := req.MaxDepth
 	if maxDepth <= 0 {
-		maxDepth = defaultDiskProfileDepth
+		maxDepth = constants.DefaultDiskProfileDepth
 	}
 
 	var entries []DirEntry

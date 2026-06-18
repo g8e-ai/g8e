@@ -47,7 +47,7 @@ func TestNetSSHKnownHostsTool_Execute_Validation(t *testing.T) {
 		})
 		_, err := tool.Execute(ctx, args)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "file path must not contain parent directory references")
+		assert.Contains(t, err.Error(), "parent directory references")
 	})
 
 	t.Run("dangerous path known_hosts", func(t *testing.T) {
@@ -56,7 +56,7 @@ func TestNetSSHKnownHostsTool_Execute_Validation(t *testing.T) {
 		})
 		_, err := tool.Execute(ctx, args)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "file path must not contain null bytes")
+		assert.Contains(t, err.Error(), "null bytes")
 	})
 }
 

@@ -64,7 +64,7 @@ func TestResourceModelsJSON(t *testing.T) {
 			Name:        "test-resource",
 			Description: "a test resource",
 			MimeType:    "text/plain",
-			Metadata:    map[string]interface{}{"key": "value"},
+			Metadata:    &Metadata{Custom: map[string]string{"key": "value"}},
 		}
 		data, err := json.Marshal(res)
 		require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestResourceModelsJSON(t *testing.T) {
 		assert.Contains(t, string(data), `"name":"test-resource"`)
 		assert.Contains(t, string(data), `"description":"a test resource"`)
 		assert.Contains(t, string(data), `"mimeType":"text/plain"`)
-		assert.Contains(t, string(data), `"metadata":{"key":"value"}`)
+		assert.Contains(t, string(data), `"metadata":{"custom":{"key":"value"}}`)
 	})
 
 	t.Run("ListResourcesResult marshalling", func(t *testing.T) {

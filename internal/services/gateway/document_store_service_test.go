@@ -487,24 +487,26 @@ func TestGetField_Success(t *testing.T) {
 	// Get string field
 	field, err := svc.GetField("users", "u18", "name")
 	require.NoError(t, err)
-	assert.Equal(t, "olivia", field)
+	require.NotNil(t, field.String)
+	assert.Equal(t, "olivia", *field.String)
 
 	// Get number field
 	field, err = svc.GetField("users", "u18", "age")
 	require.NoError(t, err)
-	assert.InEpsilon(t, float64(30), field, 0.0)
+	require.NotNil(t, field.Float64)
+	assert.InEpsilon(t, float64(30), *field.Float64, 0.0)
 
 	// Get boolean field - SQLite json_extract may return float64 for true/false
 	field, err = svc.GetField("users", "u18", "admin")
 	require.NoError(t, err)
 	// JSON true unmarshals to bool in Go, but SQLite json_extract may return float64(1)
 	// Accept either representation
-	if b, ok := field.(bool); ok {
-		assert.True(t, b)
-	} else if f, ok := field.(float64); ok {
-		assert.Equal(t, float64(1), f)
+	if field.Bool != nil {
+		assert.True(t, *field.Bool)
+	} else if field.Float64 != nil {
+		assert.Equal(t, float64(1), *field.Float64)
 	} else {
-		assert.Fail(t, "unexpected type for boolean field", field)
+		assert.Fail(t, "unexpected type for boolean field")
 	}
 }
 
@@ -525,14 +527,12 @@ func TestGetField_FieldNotFound(t *testing.T) {
 	err := svc.DocSet("users", "u19", data)
 	require.NoError(t, err)
 
-	// When a field doesn't exist in the document, json_extract returns NULL
-	// json_quote(NULL) returns NULL, which scans as nil for the *string pointer
-	// The service should return ErrNotFound in this case
+	// When a field doesn't exist, json_extract returns SQL NULL, and
+	// json_quote(NULL) returns the JSON text "null", which unmarshals to Go nil.
+	// convertToFieldValue(nil) produces FieldValue{Null: true}.
 	field, err := svc.GetField("users", "u19", "nonexistent_field")
-	// The current implementation returns (nil, nil) when field doesn't exist
-	// This is the actual behavior - document exists but field doesn't
 	require.NoError(t, err)
-	assert.Nil(t, field)
+	assert.True(t, field.Null)
 }
 
 func TestGetField_DocumentNotFound(t *testing.T) {

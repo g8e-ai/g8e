@@ -1683,7 +1683,7 @@ func TestHandleNetDNSResolve(t *testing.T) {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if resolve.Records == nil {
+		if resolve.Count == 0 {
 			t.Error("expected records in result")
 		}
 	})

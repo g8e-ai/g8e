@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 )
 
@@ -60,7 +61,7 @@ func (t *NetSSHKnownHostsTool) InputSchema() *InputSchema {
 func (t *NetSSHKnownHostsTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req NetSSHKnownHostsRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("net_ssh_known_hosts: unmarshal arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_ssh_known_hosts: %w", constants.ErrMCPUnmarshalArguments)
 	}
 
 	// Validate input paths
@@ -74,17 +75,17 @@ func (t *NetSSHKnownHostsTool) Execute(ctx context.Context, args json.RawMessage
 	// Determine default paths based on OS
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("net_ssh_known_hosts: get home directory: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_ssh_known_hosts: %w", constants.ErrMCPGetHomeDirectory)
 	}
 
 	configPath := req.SSHConfigPath
 	if configPath == "" {
-		configPath = filepath.Join(home, ".ssh", "config")
+		configPath = filepath.Join(home, constants.SshDirname, constants.SshConfigBasename)
 	}
 
 	knownHostsPath := req.KnownHostsPath
 	if knownHostsPath == "" {
-		knownHostsPath = filepath.Join(home, ".ssh", "known_hosts")
+		knownHostsPath = filepath.Join(home, constants.SshDirname, constants.SshKnownHostsBasename)
 	}
 
 	// Parse SSH config
@@ -151,6 +152,9 @@ func (t *NetSSHKnownHostsTool) Execute(ctx context.Context, args json.RawMessage
 			}
 			knownHosts = append(knownHosts, knownHost)
 		}
+		if err := scanner.Err(); err != nil {
+			return CallToolResult{}, fmt.Errorf("net_ssh_known_hosts: scan known_hosts file: %w", err)
+		}
 	}
 
 	result := NetSSHKnownHostsResult{
@@ -163,7 +167,7 @@ func (t *NetSSHKnownHostsTool) Execute(ctx context.Context, args json.RawMessage
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("net_ssh_known_hosts: marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_ssh_known_hosts: %w", constants.ErrMCPMarshalResult)
 	}
 
 	return CallToolResult{

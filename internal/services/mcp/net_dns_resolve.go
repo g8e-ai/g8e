@@ -144,18 +144,18 @@ func resolveA(resolver dnsResolver, ctx context.Context, hostname string) (NetDN
 		return NetDNSResolveResult{}, err
 	}
 
-	var ipv4Addrs []string
+	var aRecords []DNSARecord
 	for _, ip := range ips {
 		if ip.IP.To4() != nil {
-			ipv4Addrs = append(ipv4Addrs, ip.IP.String())
+			aRecords = append(aRecords, DNSARecord{IP: ip.IP.String()})
 		}
 	}
 
 	return NetDNSResolveResult{
 		Hostname:   hostname,
 		RecordType: "A",
-		Records:    ipv4Addrs,
-		Count:      len(ipv4Addrs),
+		Records:    DNSRecords{A: aRecords},
+		Count:      len(aRecords),
 	}, nil
 }
 
@@ -165,18 +165,18 @@ func resolveAAAA(resolver dnsResolver, ctx context.Context, hostname string) (Ne
 		return NetDNSResolveResult{}, err
 	}
 
-	var ipv6Addrs []string
+	var aaaaRecords []DNSAAAARecord
 	for _, ip := range ips {
 		if ip.IP.To4() == nil {
-			ipv6Addrs = append(ipv6Addrs, ip.IP.String())
+			aaaaRecords = append(aaaaRecords, DNSAAAARecord{IP: ip.IP.String()})
 		}
 	}
 
 	return NetDNSResolveResult{
 		Hostname:   hostname,
 		RecordType: "AAAA",
-		Records:    ipv6Addrs,
-		Count:      len(ipv6Addrs),
+		Records:    DNSRecords{AAAA: aaaaRecords},
+		Count:      len(aaaaRecords),
 	}, nil
 }
 
@@ -197,7 +197,7 @@ func resolveMX(resolver dnsResolver, ctx context.Context, hostname string) (NetD
 	return NetDNSResolveResult{
 		Hostname:   hostname,
 		RecordType: "MX",
-		Records:    mxRecords,
+		Records:    DNSRecords{MX: mxRecords},
 		Count:      len(mxRecords),
 	}, nil
 }
@@ -208,11 +208,16 @@ func resolveTXT(resolver dnsResolver, ctx context.Context, hostname string) (Net
 		return NetDNSResolveResult{}, err
 	}
 
+	var txtRecords []DNSTXTRecord
+	for _, txt := range records {
+		txtRecords = append(txtRecords, DNSTXTRecord{Text: txt})
+	}
+
 	return NetDNSResolveResult{
 		Hostname:   hostname,
 		RecordType: "TXT",
-		Records:    records,
-		Count:      len(records),
+		Records:    DNSRecords{TXT: txtRecords},
+		Count:      len(txtRecords),
 	}, nil
 }
 
@@ -225,7 +230,7 @@ func resolveCNAME(resolver dnsResolver, ctx context.Context, hostname string) (N
 	return NetDNSResolveResult{
 		Hostname:   hostname,
 		RecordType: "CNAME",
-		Records:    []string{cname},
+		Records:    DNSRecords{CNAME: &DNSCNAMERecord{Target: cname}},
 		Count:      1,
 	}, nil
 }
@@ -236,15 +241,15 @@ func resolveNS(resolver dnsResolver, ctx context.Context, hostname string) (NetD
 		return NetDNSResolveResult{}, err
 	}
 
-	var nsRecords []string
+	var nsRecords []DNSNSRecord
 	for _, ns := range records {
-		nsRecords = append(nsRecords, ns.Host)
+		nsRecords = append(nsRecords, DNSNSRecord{Host: ns.Host})
 	}
 
 	return NetDNSResolveResult{
 		Hostname:   hostname,
 		RecordType: "NS",
-		Records:    nsRecords,
+		Records:    DNSRecords{NS: nsRecords},
 		Count:      len(nsRecords),
 	}, nil
 }

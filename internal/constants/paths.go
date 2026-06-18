@@ -401,13 +401,16 @@ const (
 	ProjectRootFromCurrentDir = "."
 
 	// Directory names (single path segment, no separators)
-	RuntimeDirname    = ".g8e"
-	DataDirname       = "data"
-	VaultDirname      = "vault"
-	SecretsDirname    = "secrets"
-	LedgerDirname     = "ledger"
-	SshConfigFilename = "ssh_config"
-	PidDirname        = "pids"
+	RuntimeDirname        = ".g8e"
+	DataDirname           = "data"
+	VaultDirname          = "vault"
+	SecretsDirname        = "secrets"
+	LedgerDirname         = "ledger"
+	SshConfigFilename     = "ssh_config"
+	SshDirname            = ".ssh"
+	SshConfigBasename     = "config"
+	SshKnownHostsBasename = "known_hosts"
+	PidDirname            = "pids"
 
 	// Ledger-specific directory and file names
 	FilesDirname      = "files"

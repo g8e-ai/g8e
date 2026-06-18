@@ -122,19 +122,19 @@ func (r *FieldPathRegistry) ValidateFieldPath(collection string, fieldPath strin
 }
 
 // ParseFieldPath extracts a field value from a JSON document using dot notation
-func ParseFieldPath(document json.RawMessage, fieldPath string) (interface{}, error) {
+func ParseFieldPath(document json.RawMessage, fieldPath string) (FieldValue, error) {
 	if document == nil {
-		return nil, errors.New("document is nil")
+		return FieldValue{}, errors.New("document is nil")
 	}
 
 	if fieldPath == "" {
-		return nil, ErrEmptyFieldPath
+		return FieldValue{}, ErrEmptyFieldPath
 	}
 
 	// Parse the document into a generic map
 	var docMap map[string]interface{}
 	if err := json.Unmarshal(document, &docMap); err != nil {
-		return nil, fmt.Errorf("failed to parse document JSON: %w", err)
+		return FieldValue{}, fmt.Errorf("failed to parse document JSON: %w", err)
 	}
 
 	// Navigate the path
@@ -147,12 +147,51 @@ func ParseFieldPath(document json.RawMessage, fieldPath string) (interface{}, er
 			var ok bool
 			current, ok = v[component]
 			if !ok {
-				return nil, fmt.Errorf("field path component '%s' not found", component)
+				return FieldValue{}, fmt.Errorf("field path component '%s' not found", component)
 			}
 		default:
-			return nil, fmt.Errorf("cannot access field '%s' on non-object type", component)
+			return FieldValue{}, fmt.Errorf("cannot access field '%s' on non-object type", component)
 		}
 	}
 
-	return current, nil
+	return convertToFieldValue(current), nil
+}
+
+// ConvertToFieldValue converts an interface{} value (e.g., from JSON unmarshal
+// or DocumentStoreService.GetField) to a typed FieldValue. Exported so the
+// document store layer can use it at the package boundary.
+func ConvertToFieldValue(val interface{}) FieldValue {
+	return convertToFieldValue(val)
+}
+
+// convertToFieldValue converts an interface{} value to a typed FieldValue.
+func convertToFieldValue(val interface{}) FieldValue {
+	if val == nil {
+		return FieldValue{Null: true}
+	}
+
+	switch v := val.(type) {
+	case string:
+		return FieldValue{Str: &v}
+	case float64:
+		return FieldValue{Float64: &v}
+	case bool:
+		return FieldValue{Bool: &v}
+	case []interface{}:
+		arr := make([]FieldValue, len(v))
+		for i, item := range v {
+			arr[i] = convertToFieldValue(item)
+		}
+		return FieldValue{Array: arr}
+	case map[string]interface{}:
+		obj := make(map[string]FieldValue)
+		for key, item := range v {
+			obj[key] = convertToFieldValue(item)
+		}
+		return FieldValue{Object: obj}
+	default:
+		// Fallback to string representation for unknown types
+		s := fmt.Sprintf("%v", v)
+		return FieldValue{Str: &s}
+	}
 }

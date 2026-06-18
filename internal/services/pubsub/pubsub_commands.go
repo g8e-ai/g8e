@@ -906,13 +906,13 @@ type pubsubAuditLogger struct {
 	logger *slog.Logger
 }
 
-func (l *pubsubAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error {
+func (l *pubsubAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value mcp.FieldValue) error {
 	event := &storage.Event{
 		OperatorSessionID: operatorSessionID,
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.EventOperatorFieldReadRequested,
 		ContentText:       fmt.Sprintf("%s/%s.%s", collection, documentID, fieldPath),
-		CommandStdout:     fmt.Sprintf("%v", value),
+		CommandStdout:     value.String(),
 	}
 	if _, err := l.store.RecordEvent(event); err != nil {
 		l.logger.Warn("Failed to record field read in audit store", "error", err,

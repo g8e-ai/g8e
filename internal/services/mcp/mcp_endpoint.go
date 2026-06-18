@@ -275,7 +275,7 @@ func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, erro
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema().ToMap(),
+				InputSchema: nt.InputSchema(),
 			})
 		}
 		return ToolsListResult{Tools: tools}, nil

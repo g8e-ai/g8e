@@ -136,6 +136,7 @@ var (
 	ErrMCPToolNameEmpty           = errors.New("tool name cannot be empty")
 	ErrMCPToolNameInvalid         = errors.New("invalid tool name: must contain only lowercase letters, digits, and underscores")
 	ErrMCPToolAlreadyRegistered   = errors.New("tool is already registered")
+	ErrMCPRegistryNil             = errors.New("registry cannot be nil")
 
 	// MCP validation errors
 	ErrMCPValidateSQLQueryEmpty                 = errors.New("SQL query cannot be empty")
@@ -179,6 +180,10 @@ var (
 	ErrMCPOpenLogFile         = errors.New("open log file")
 	ErrMCPReadLogFile         = errors.New("read log file")
 	ErrMCPMarshalOOMResult    = errors.New("marshal OOM result")
+
+	// MCP SSH known hosts errors
+	ErrMCPGetHomeDirectory = errors.New("get home directory")
+	ErrMCPMarshalResult    = errors.New("marshal result")
 
 	// Run shell command errors
 	ErrMCPRunShellCommandRequired              = errors.New("command is required")
@@ -238,4 +243,44 @@ var (
 	ErrPubSubA2AGateway           = errors.New("A2A gateway not configured")
 	ErrPubSubA2AMissingSkillName  = errors.New("A2A call missing skill_name")
 	ErrPubSubActuatorOrAuditStore = errors.New("actuator or ConsoleAuditStore not configured")
+
+	// Scrubbing service errors
+	ErrScrubbingInvalidPattern = errors.New("invalid custom scrub pattern")
+	ErrScrubbingRegexTimeout   = errors.New("regex compilation timeout")
+	ErrScrubbingTokenPersist   = errors.New("failed to persist token to local store")
+	ErrScrubbingTokenLoad      = errors.New("failed to load persisted tokens from TokenStore")
+	ErrScrubbingTokenKeyFormat = errors.New("invalid token key format")
+	ErrScrubbingTokenSequence  = errors.New("failed to parse token sequence")
+
+	// Gateway service errors
+	ErrGatewayToolNameRequired             = errors.New("tool name required")
+	ErrGatewayInvalidToolArguments         = errors.New("invalid tool arguments: must be a valid JSON object")
+	ErrGatewayFieldPathRegistryNotInit     = errors.New("field path registry not initialized")
+	ErrGatewayDatabaseServiceNotConfigured = errors.New("database service not configured")
+	ErrGatewayCollectionRequired           = errors.New("collection required")
+	ErrGatewayDocumentIDRequired           = errors.New("document_id required")
+	ErrGatewayFieldPathRequired            = errors.New("field_path required")
+	ErrGatewayOperatorSessionIDRequired    = errors.New("operator_session_id required")
+	ErrGatewayOperatorSessionInvalid       = errors.New("operator session is invalid or expired")
+	ErrGatewayURIRequired                  = errors.New("uri required")
+	ErrGatewayNameRequired                 = errors.New("name required")
+	ErrGatewaySkillNameRequired            = errors.New("skill_name required")
+	ErrGatewayNoDownstreamConfigured       = errors.New("no downstream MCP server configured")
+	ErrGatewayDownstreamUnavailable        = errors.New("downstream MCP server is temporarily unavailable (circuit open)")
+	ErrGatewayNoA2ADownstreamConfigured    = errors.New("no downstream A2A server configured")
+	ErrGatewayNotReady                     = errors.New("g8e Gateway not ready")
+	ErrGatewayL3ProofRequired              = errors.New("L3 proof required")
+	ErrGatewayUserIDRequired               = errors.New("user_id required")
+	ErrGatewayInvalidPosture               = errors.New("invalid posture")
+	ErrGatewayForbiddenPattern             = errors.New("forbidden pattern detected")
+	ErrGatewaySuspendedTransactionNotFound = errors.New("suspended transaction not found or expired")
+	ErrGatewayDownstreamHTTPError          = errors.New("downstream server returned HTTP error")
+	ErrGatewayMCPError                     = errors.New("MCP error")
+	ErrGatewayA2AError                     = errors.New("A2A error")
+
+	// MCP native handler errors
+	ErrMCPNativeToolRegistration = errors.New("native tool registration failed")
+	ErrMCPNativeToolUnknown      = errors.New("unknown native tool")
+	ErrMCPParseSocketPort        = errors.New("parse socket port")
+	ErrMCPParseSocketIPOctet     = errors.New("parse socket IP octet")
 )

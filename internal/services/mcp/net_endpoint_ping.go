@@ -85,11 +85,11 @@ func (t *NetEndpointPingTool) Execute(ctx context.Context, args json.RawMessage)
 	address := net.JoinHostPort(req.Host, strconv.Itoa(req.Port))
 	start := time.Now()
 
-	dialer := &net.Dialer{Timeout: defaultNetworkTimeout}
+	dialer := &net.Dialer{Timeout: constants.DefaultNetworkTimeout}
 	if deadline, ok := ctx.Deadline(); ok {
 		dialer.Timeout = time.Until(deadline)
 		if dialer.Timeout <= 0 {
-			dialer.Timeout = defaultNetworkTimeout
+			dialer.Timeout = constants.DefaultNetworkTimeout
 		}
 	}
 

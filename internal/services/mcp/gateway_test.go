@@ -1122,9 +1122,11 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 	t.Parallel()
 	g := newTestGatewayService(t)
 
+	strVal := func(s string) FieldValue { return FieldValue{Str: &s} }
+
 	t.Run("detects sudo with context", func(t *testing.T) {
 		t.Parallel()
-		err := g.scanForForbiddenPatterns("sudo rm -rf /")
+		err := g.scanForForbiddenPatterns(strVal("sudo rm -rf /"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "L1 hard gate")
 		require.Contains(t, err.Error(), "sudo")
@@ -1133,7 +1135,7 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 
 	t.Run("detects password with context", func(t *testing.T) {
 		t.Parallel()
-		err := g.scanForForbiddenPatterns("password=secret123")
+		err := g.scanForForbiddenPatterns(strVal("password=secret123"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "L1 hard gate")
 		require.Contains(t, err.Error(), "password")
@@ -1142,7 +1144,7 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 
 	t.Run("detects api_key with context", func(t *testing.T) {
 		t.Parallel()
-		err := g.scanForForbiddenPatterns("api_key=sk-12345")
+		err := g.scanForForbiddenPatterns(strVal("api_key=sk-12345"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "L1 hard gate")
 		require.Contains(t, err.Error(), "api_key")
@@ -1151,27 +1153,27 @@ func TestGatewayService_ScanForForbiddenPatterns(t *testing.T) {
 
 	t.Run("detects destructive file operation", func(t *testing.T) {
 		t.Parallel()
-		err := g.scanForForbiddenPatterns("rm -rf /")
+		err := g.scanForForbiddenPatterns(strVal("rm -rf /"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "destructive file operation")
 	})
 
 	t.Run("detects external URL pattern", func(t *testing.T) {
 		t.Parallel()
-		err := g.scanForForbiddenPatterns("visit https://example.com")
+		err := g.scanForForbiddenPatterns(strVal("visit https://example.com"))
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "external URL")
 	})
 
 	t.Run("allows safe values", func(t *testing.T) {
 		t.Parallel()
-		err := g.scanForForbiddenPatterns("safe value 123")
+		err := g.scanForForbiddenPatterns(strVal("safe value 123"))
 		require.NoError(t, err)
 	})
 
-	t.Run("nil value allowed", func(t *testing.T) {
+	t.Run("null value allowed", func(t *testing.T) {
 		t.Parallel()
-		err := g.scanForForbiddenPatterns(nil)
+		err := g.scanForForbiddenPatterns(FieldValue{Null: true})
 		require.NoError(t, err)
 	})
 }
@@ -1525,7 +1527,8 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	t.Run("forbidden pattern in field value", func(t *testing.T) {
 		t.Parallel()
 		registry, _ := NewFieldPathRegistry(slog.Default())
-		db := &fakeDBService{value: "password=secret123"}
+		s := "password=secret123"
+		db := &fakeDBService{fieldValue: &FieldValue{Str: &s}}
 		validator := &fakeSessionValidator{valid: true}
 		g := newTestGatewayService(t, withFieldPathRegistry(registry), withDBService(db), withSessionValidator(validator))
 
@@ -1784,14 +1787,15 @@ func TestGatewayService_RunMaintenance(t *testing.T) {
 // Helper fakes for dependency tests
 
 type fakeDBService struct {
-	value interface{}
+	fieldValue *FieldValue
 }
 
-func (f *fakeDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
-	if f.value != nil {
-		return f.value, nil
+func (f *fakeDBService) GetField(collection, id, fieldPath string) (FieldValue, error) {
+	if f.fieldValue != nil {
+		return *f.fieldValue, nil
 	}
-	return "test-value", nil
+	s := "test-value"
+	return FieldValue{Str: &s}, nil
 }
 
 type fakeSessionValidator struct {
@@ -1804,7 +1808,7 @@ func (f *fakeSessionValidator) ValidateSession(operatorSessionID string) (bool, 
 
 type fakeAuditLogger struct{}
 
-func (f *fakeAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error {
+func (f *fakeAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value FieldValue) error {
 	return nil
 }
 
@@ -1912,9 +1916,7 @@ func withFieldPathRegistry(registry *FieldPathRegistry) testGatewayOption {
 }
 
 // withDBService sets a custom database service for the test GatewayService
-func withDBService(db interface {
-	GetField(collection, id, fieldPath string) (interface{}, error)
-}) testGatewayOption {
+func withDBService(db FieldReader) testGatewayOption {
 	return func(g *GatewayService) {
 		g.dbService = db
 	}

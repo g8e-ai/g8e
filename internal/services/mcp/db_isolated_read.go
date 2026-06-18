@@ -70,41 +70,11 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	queryUpper := strings.ToUpper(strings.TrimSpace(req.Query))
 	if !strings.HasPrefix(queryUpper, "SELECT") {
-		result := map[string]interface{}{
-			"error": "Only SELECT queries are allowed in isolated read mode",
-		}
-		resultJSON, err := json.Marshal(result)
-		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		return CallToolResult{
-			Content: []TextContent{
-				{
-					Type: "text",
-					Text: string(resultJSON),
-				},
-			},
-			IsError: true,
-		}, nil
+		return dbErrorResult("Only SELECT queries are allowed in isolated read mode"), nil
 	}
 
 	if err := validateSQLQuery(req.Query); err != nil {
-		result := map[string]interface{}{
-			"error": fmt.Sprintf("Query validation failed: %v", err),
-		}
-		resultJSON, err := json.Marshal(result)
-		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		return CallToolResult{
-			Content: []TextContent{
-				{
-					Type: "text",
-					Text: string(resultJSON),
-				},
-			},
-			IsError: true,
-		}, nil
+		return dbErrorResult(fmt.Sprintf("Query validation failed: %v", err)), nil
 	}
 
 	dsn := fmt.Sprintf("file:%s?mode=ro", req.DatabasePath)
@@ -117,22 +87,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 	// Query is validated by validateSQLQuery to satisfy CodeQL sql-injection rule.
 	rows, err := db.Query(req.Query)
 	if err != nil {
-		result := map[string]interface{}{
-			"error": fmt.Sprintf("Query execution failed: %v", err),
-		}
-		resultJSON, err := json.Marshal(result)
-		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		return CallToolResult{
-			Content: []TextContent{
-				{
-					Type: "text",
-					Text: string(resultJSON),
-				},
-			},
-			IsError: true,
-		}, nil
+		return dbErrorResult(fmt.Sprintf("Query execution failed: %v", err)), nil
 	}
 	defer rows.Close()
 
@@ -141,7 +96,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 		return CallToolResult{}, fmt.Errorf("failed to get columns: %w", err)
 	}
 
-	var resultRows []map[string]interface{}
+	var resultRows []DBRow
 	for rows.Next() {
 		if ctx.Err() != nil {
 			return CallToolResult{}, ctx.Err()
@@ -157,21 +112,17 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 			continue
 		}
 
-		row := make(map[string]interface{})
+		rowValues := make(map[string]DBValue)
 		for i, col := range columns {
 			val := values[i]
-			if b, ok := val.([]byte); ok {
-				row[col] = string(b)
-			} else {
-				row[col] = val
-			}
+			rowValues[col] = convertToDBValue(val)
 		}
-		resultRows = append(resultRows, row)
+		resultRows = append(resultRows, DBRow{Values: rowValues})
 	}
 
-	result := map[string]interface{}{
-		"rows":    resultRows,
-		"columns": columns,
+	result := DBIsolatedReadResult{
+		Rows:    resultRows,
+		Columns: columns,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
@@ -186,4 +137,40 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 			},
 		},
 	}, nil
+}
+
+// dbErrorResult builds an error CallToolResult.
+func dbErrorResult(msg string) CallToolResult {
+	return CallToolResult{
+		Content: []TextContent{{Type: "text", Text: msg}},
+		IsError: true,
+	}
+}
+
+// convertToDBValue converts an interface{} value to a typed DBValue.
+func convertToDBValue(val interface{}) DBValue {
+	if val == nil {
+		return DBValue{Null: true}
+	}
+
+	switch v := val.(type) {
+	case []byte:
+		s := string(v)
+		return DBValue{String: &s}
+	case string:
+		return DBValue{String: &v}
+	case int:
+		i := int64(v)
+		return DBValue{Int64: &i}
+	case int64:
+		return DBValue{Int64: &v}
+	case float64:
+		return DBValue{Float64: &v}
+	case bool:
+		return DBValue{Bool: &v}
+	default:
+		// Fallback to string representation for unknown types
+		s := fmt.Sprintf("%v", v)
+		return DBValue{String: &s}
+	}
 }

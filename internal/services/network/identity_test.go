@@ -15,8 +15,6 @@ package network
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -192,20 +190,6 @@ func TestNetworkIdentity_FormatForDisplay(t *testing.T) {
 	assert.Contains(t, display, "gateway.local")
 }
 
-func TestUnique(t *testing.T) {
-	t.Parallel()
-	input := []string{"a", "b", "a", "c", "b", "d"}
-	result := unique(input)
-	assert.Equal(t, []string{"a", "b", "c", "d"}, result)
-}
-
-func TestContains(t *testing.T) {
-	t.Parallel()
-	slice := []string{"a", "b", "c"}
-	assert.True(t, contains(slice, "b"))
-	assert.False(t, contains(slice, "d"))
-}
-
 func TestDetector_DetectWindowsIdentity(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
@@ -339,52 +323,6 @@ func TestNetworkIdentity_FormatForDisplay_AllFields(t *testing.T) {
 	assert.Contains(t, display, "DNS PTR")
 	assert.Contains(t, display, "SSH hosts")
 	assert.Contains(t, display, "Windows")
-}
-
-func TestGetHostsFilePath(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		goos     string
-		expected string
-	}{
-		{
-			name:     "Linux",
-			goos:     "linux",
-			expected: "/etc/hosts",
-		},
-		{
-			name:     "Darwin",
-			goos:     "darwin",
-			expected: "/etc/hosts",
-		},
-		{
-			name:     "Windows",
-			goos:     "windows",
-			expected: filepath.Join(os.Getenv("SystemRoot"), "System32", "drivers", "etc", "hosts"),
-		},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			// Save original GOOS
-			origGOOS := runtime.GOOS
-
-			// This test verifies the path logic for different OSes
-			// Note: We can't actually change runtime.GOOS in tests,
-			// so we verify the current OS returns the expected path
-			if runtime.GOOS == tt.goos {
-				path := getHostsFilePath()
-				assert.Equal(t, tt.expected, path)
-			} else {
-				t.Skipf("Skipping test for %s on %s", tt.goos, origGOOS)
-			}
-		})
-	}
 }
 
 func TestDetector_DetectAll_ContextCancellation(t *testing.T) {
