@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -151,6 +152,9 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 	t.Run("command with environment variables", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("custom env var inheritance not reliable with POSIX shell on Windows")
+		}
 		// Use single command string - shell handles variable expansion
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-6",

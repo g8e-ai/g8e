@@ -14,8 +14,11 @@
 package mcp
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestRegisterNativeTools_Success(t *testing.T) {
@@ -96,9 +99,8 @@ func TestRegisterNativeTools_NilRegistry(t *testing.T) {
 		t.Fatal("Expected error when registry is nil, got nil")
 	}
 
-	expectedErr := "registry: cannot register to nil registry"
-	if err.Error() != expectedErr {
-		t.Errorf("Expected error %q, got %q", expectedErr, err.Error())
+	if !errors.Is(err, constants.ErrMCPRegistryNil) {
+		t.Errorf("Expected error wrapping %v, got %q", constants.ErrMCPRegistryNil, err.Error())
 	}
 }
 

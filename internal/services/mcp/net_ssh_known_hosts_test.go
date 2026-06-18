@@ -16,10 +16,12 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -38,7 +40,7 @@ func TestNetSSHKnownHostsTool_Execute_Validation(t *testing.T) {
 	t.Run("invalid json", func(t *testing.T) {
 		_, err := tool.Execute(ctx, []byte(`{invalid}`))
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unmarshal arguments")
+		assert.True(t, errors.Is(err, constants.ErrMCPUnmarshalArguments))
 	})
 
 	t.Run("dangerous path config", func(t *testing.T) {
@@ -47,7 +49,7 @@ func TestNetSSHKnownHostsTool_Execute_Validation(t *testing.T) {
 		})
 		_, err := tool.Execute(ctx, args)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "parent directory references")
+		assert.True(t, errors.Is(err, constants.ErrMCPValidatePathParentDirRef))
 	})
 
 	t.Run("dangerous path known_hosts", func(t *testing.T) {
@@ -56,7 +58,7 @@ func TestNetSSHKnownHostsTool_Execute_Validation(t *testing.T) {
 		})
 		_, err := tool.Execute(ctx, args)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "null bytes")
+		assert.True(t, errors.Is(err, constants.ErrMCPValidatePathNullBytes))
 	})
 }
 

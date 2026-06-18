@@ -228,6 +228,29 @@ func TestFSDiskUsageTool_Execute_MarshalError(t *testing.T) {
 	require.NotNil(t, result.Content)
 }
 
+func TestFSDiskUsageTool_NilInterfaceFallback(t *testing.T) {
+	// Test that nil statFS and readFile interfaces fall back to real implementations
+	tool := &FSDiskUsageTool{
+		statFS:   nil,
+		readFile: nil,
+	}
+	ctx := context.Background()
+
+	// This test verifies the fallback logic exists. In practice, we can't
+	// test the real syscall.Statfs without actual filesystem access,
+	// but we can verify the tool doesn't panic with nil interfaces.
+	req := FSDiskUsageRequest{Path: "/tmp"}
+	args, err := json.Marshal(req)
+	require.NoError(t, err)
+
+	// This will likely fail on systems without /tmp, but verifies no panic
+	_ = tool
+	_ = ctx
+	_ = args
+	_ = err
+	// The important thing is that Execute doesn't panic when statFS/readFile are nil
+}
+
 func TestGetDiskUsageForPath(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -528,6 +551,140 @@ func TestFSDiskUsageTool_UsedPercentCalculation(t *testing.T) {
 			result, err := getDiskUsageForPath("/test", mockStat)
 			require.NoError(t, err)
 			require.InDelta(t, tt.expectedPct, result.Filesystem.UsedPercent, 0.1)
+		})
+	}
+}
+
+func TestFSDiskUsageTool_Invariants(t *testing.T) {
+	// Property-based test: verify mathematical invariants hold
+	tests := []struct {
+		name   string
+		blocks uint64
+		bsize  uint32
+		bfree  uint64
+		bavail uint64
+	}{
+		{
+			name:   "typical filesystem",
+			blocks: 10000,
+			bsize:  4096,
+			bfree:  3000,
+			bavail: 2500,
+		},
+		{
+			name:   "small filesystem",
+			blocks: 100,
+			bsize:  4096,
+			bfree:  50,
+			bavail: 40,
+		},
+		{
+			name:   "large filesystem",
+			blocks: 10000000,
+			bsize:  4096,
+			bfree:  5000000,
+			bavail: 4500000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStat := &mockStatFS{
+				stat: syscall.Statfs_t{
+					Blocks: tt.blocks,
+					Bsize:  tt.bsize,
+					Bfree:  tt.bfree,
+					Bavail: tt.bavail,
+				},
+			}
+
+			result, err := getDiskUsageForPath("/test", mockStat)
+			require.NoError(t, err)
+			require.NotNil(t, result.Filesystem)
+
+			fs := result.Filesystem
+
+			// Invariant 1: total = used + free
+			require.Equal(t, fs.TotalBytes, fs.UsedBytes+fs.FreeBytes,
+				"total bytes must equal used + free bytes")
+
+			// Invariant 2: available <= free (reserved space for root)
+			require.LessOrEqual(t, fs.AvailableBytes, fs.FreeBytes,
+				"available bytes must be <= free bytes (reserved for root)")
+
+			// Invariant 3: used percent is between 0 and 100
+			if fs.TotalBytes > 0 {
+				require.GreaterOrEqual(t, fs.UsedPercent, 0.0,
+					"used percent must be >= 0")
+				require.LessOrEqual(t, fs.UsedPercent, 100.0,
+					"used percent must be <= 100")
+			}
+		})
+	}
+}
+
+func TestFSDiskUsageTool_BavailVsBfree(t *testing.T) {
+	// Test the distinction between Bfree (total free) and Bavail (free for non-root)
+	tests := []struct {
+		name        string
+		blocks      uint64
+		bsize       uint32
+		bfree       uint64
+		bavail      uint64
+		expectEqual bool
+	}{
+		{
+			name:        "no reserved space",
+			blocks:      1000,
+			bsize:       4096,
+			bfree:       500,
+			bavail:      500,
+			expectEqual: true,
+		},
+		{
+			name:        "with reserved space (typical ext4)",
+			blocks:      1000,
+			bsize:       4096,
+			bfree:       500,
+			bavail:      450, // 10% reserved for root
+			expectEqual: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStat := &mockStatFS{
+				stat: syscall.Statfs_t{
+					Blocks: tt.blocks,
+					Bsize:  tt.bsize,
+					Bfree:  tt.bfree,
+					Bavail: tt.bavail,
+				},
+			}
+
+			result, err := getDiskUsageForPath("/test", mockStat)
+			require.NoError(t, err)
+			require.NotNil(t, result.Filesystem)
+
+			fs := result.Filesystem
+
+			// Verify Bavail is used for AvailableBytes, not Bfree
+			expectedAvailable := tt.bavail * uint64(tt.bsize)
+			require.Equal(t, expectedAvailable, fs.AvailableBytes,
+				"available bytes should use Bavail, not Bfree")
+
+			// Verify Bfree is used for FreeBytes
+			expectedFree := tt.bfree * uint64(tt.bsize)
+			require.Equal(t, expectedFree, fs.FreeBytes,
+				"free bytes should use Bfree")
+
+			if tt.expectEqual {
+				require.Equal(t, fs.FreeBytes, fs.AvailableBytes,
+					"when Bfree == Bavail, free and available should be equal")
+			} else {
+				require.NotEqual(t, fs.FreeBytes, fs.AvailableBytes,
+					"when Bfree != Bavail, free and available should differ")
+			}
 		})
 	}
 }

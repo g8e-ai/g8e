@@ -57,6 +57,9 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 
 	t.Run("output redirection", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
+		}
 		tmpDir := t.TempDir()
 		outputFile := filepath.ToSlash(filepath.Join(tmpDir, "output.txt"))
 
@@ -78,6 +81,9 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 
 	t.Run("input redirection", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
+		}
 		tmpDir := t.TempDir()
 		inputFile := filepath.ToSlash(filepath.Join(tmpDir, "input.txt"))
 		os.WriteFile(inputFile, []byte("input content"), 0644)
@@ -100,6 +106,9 @@ func TestExecutionService_ShellOperators(t *testing.T) {
 
 	t.Run("append redirection", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
+		}
 		tmpDir := t.TempDir()
 		outputFile := filepath.ToSlash(filepath.Join(tmpDir, "append.txt"))
 
@@ -563,6 +572,9 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 
 	t.Run("large output truncation", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("seq command not available on Windows")
+		}
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "error-largeout-1",
 			CaseID:         "test-error",
@@ -665,6 +677,9 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 	t.Run("stderr to file redirection", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
+		}
 		tmpDir := t.TempDir()
 		errFile := filepath.ToSlash(filepath.Join(tmpDir, "error.log"))
 
@@ -686,6 +701,9 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 	t.Run("both stdout and stderr redirection", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("file redirection to absolute Windows paths not reliable in POSIX shell")
+		}
 		tmpDir := t.TempDir()
 		outFile := filepath.ToSlash(filepath.Join(tmpDir, "output.log"))
 		errFile := filepath.ToSlash(filepath.Join(tmpDir, "error.log"))
@@ -708,6 +726,9 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 	t.Run("environment variable expansion in shell", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("custom env var inheritance not reliable with POSIX shell on Windows")
+		}
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "complex-envexpand-1",
 			CaseID:         "test-complex",
@@ -728,6 +749,9 @@ func TestExecutionService_ShellComplexity(t *testing.T) {
 
 	t.Run("script with multiple commands", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("shell script execution via absolute Windows paths not reliable in POSIX shell")
+		}
 		tmpDir := t.TempDir()
 		scriptPath := filepath.Join(tmpDir, "test-script.sh")
 

@@ -20,6 +20,8 @@ import (
 	"os"
 	"strings"
 	"syscall"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // ProcSignalSafeTool sends signals to processes with denylist enforcement.
@@ -60,11 +62,11 @@ func (t *ProcSignalSafeTool) Execute(ctx context.Context, args json.RawMessage) 
 		Signal string `json:"signal"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	if req.PID <= 0 || req.Signal == "" {
-		return CallToolResult{}, fmt.Errorf("pid and signal required")
+		return CallToolResult{}, fmt.Errorf("%w", constants.ErrMCPProcSignalRequired)
 	}
 
 	denylist := []int{1, 2}

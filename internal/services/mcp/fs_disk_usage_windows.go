@@ -22,10 +22,14 @@ import (
 	"path/filepath"
 	"syscall"
 	"unsafe"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // FSDiskUsageTool provides df-style free space reporting for Windows.
-type FSDiskUsageTool struct{}
+type FSDiskUsageTool struct {
+	diskAPI windowsDiskAPI
+}
 
 // Name returns the tool identifier.
 func (t *FSDiskUsageTool) Name() string {
@@ -54,25 +58,30 @@ func (t *FSDiskUsageTool) InputSchema() *InputSchema {
 func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req FSDiskUsageRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("fs_disk_usage: unmarshal arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: %w", constants.ErrMCPUnmarshalArguments)
 	}
 
 	var result FSDiskUsageResult
 	var err error
 
+	diskAPI := t.diskAPI
+	if diskAPI == nil {
+		diskAPI = defaultDiskAPI
+	}
+
 	if req.Path != "" {
-		result, err = getDiskUsageForPath(req.Path, nil)
+		result, err = getDiskUsageForPath(req.Path, diskAPI)
 	} else {
-		result, err = getAllDiskUsage(nil)
+		result, err = getAllDiskUsage(diskAPI)
 	}
 
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("fs_disk_usage: get disk usage: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: %w", constants.ErrMCPGetDiskUsage)
 	}
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("fs_disk_usage: marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: %w", constants.ErrMCPMarshalResult)
 	}
 
 	return CallToolResult{
@@ -139,12 +148,12 @@ func getDiskUsageForPath(path string, api windowsDiskAPI) (FSDiskUsageResult, er
 	// Convert path to absolute path if not already
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: get absolute path: %w", err)
+		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: %w: %w", constants.ErrMCPGetAbsolutePath, err)
 	}
 
 	freeBytes, totalBytes, availableBytes, err := api.getDiskFreeSpaceEx(absPath)
 	if err != nil {
-		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: GetDiskFreeSpaceExW failed: %w", err)
+		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: %w: %w", constants.ErrMCPGetDiskUsage, err)
 	}
 
 	usedBytes := totalBytes - freeBytes

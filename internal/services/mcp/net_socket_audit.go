@@ -24,8 +24,22 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// fileOpener is an interface for opening files, enabling test mocking.
+type fileOpener interface {
+	Open(name string) (*os.File, error)
+}
+
+// osFileOpener implements fileOpener using os.Open.
+type osFileOpener struct{}
+
+func (o *osFileOpener) Open(name string) (*os.File, error) {
+	return os.Open(name)
+}
+
 // NetSocketAuditTool inspects active network sockets.
-type NetSocketAuditTool struct{}
+type NetSocketAuditTool struct {
+	fileOpener fileOpener
+}
 
 // Name returns the tool identifier.
 func (t *NetSocketAuditTool) Name() string {
@@ -54,7 +68,13 @@ func (t *NetSocketAuditTool) InputSchema() *InputSchema {
 func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req NetSocketAuditRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("net_socket_audit: unmarshal arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
+	}
+
+	// Use default file opener if not set
+	opener := t.fileOpener
+	if opener == nil {
+		opener = &osFileOpener{}
 	}
 
 	var sockets []SocketInfo
@@ -71,7 +91,7 @@ func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) 
 	for _, proto := range protocols {
 		path := getProcNetPath(proto)
 		// proto is validated by validateProcNetPath to satisfy CodeQL uncontrolled-data-in-path-expression rule.
-		file, err := os.Open(path)
+		file, err := opener.Open(path)
 		if err != nil {
 			// Skip protocols that are not available on this system
 			continue
@@ -153,6 +173,14 @@ func parseProcNetFile(ctx context.Context, file *os.File, protocol string) ([]So
 		if len(fields) > 3 {
 			state = fields[3]
 		}
+
+		// /proc/net format uses colon to separate IP and port (e.g., 0100007F:1F90).
+		// Skip lines where either address field lacks the expected colon separator.
+		if !strings.Contains(localAddr, ":") || !strings.Contains(remoteAddr, ":") {
+			continue
+		}
+		localAddr = strings.ReplaceAll(localAddr, ":", "")
+		remoteAddr = strings.ReplaceAll(remoteAddr, ":", "")
 
 		localIP, localPort, err := parseSocketAddr(localAddr)
 		if err != nil {

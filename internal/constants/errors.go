@@ -125,6 +125,8 @@ var (
 	ErrMCPParseMounts        = errors.New("parse mounts")
 	ErrMCPReadMounts         = errors.New("read /proc/mounts")
 	ErrMCPHostPortRequired   = errors.New("host and port required")
+	ErrMCPGetAbsolutePath    = errors.New("get absolute path")
+	ErrMCPGetDiskFreeSpaceEx = errors.New("GetDiskFreeSpaceExW failed")
 
 	// MCP registry errors
 	ErrMCPSchemaNil               = errors.New("schema cannot be nil")
@@ -184,6 +186,15 @@ var (
 	// MCP SSH known hosts errors
 	ErrMCPGetHomeDirectory = errors.New("get home directory")
 	ErrMCPMarshalResult    = errors.New("marshal result")
+
+	// MCP proc signal safe errors
+	ErrMCPProcSignalRequired = errors.New("pid and signal required")
+
+	// MCP git ops errors
+	ErrMCPGitOpsUnsupportedOperation = errors.New("unsupported operation")
+
+	// MCP TLS cert inspect errors
+	ErrMCPTLSCertInspectRequired = errors.New("either cert_path or host must be specified")
 
 	// Run shell command errors
 	ErrMCPRunShellCommandRequired              = errors.New("command is required")
@@ -273,7 +284,6 @@ var (
 	ErrGatewayUserIDRequired               = errors.New("user_id required")
 	ErrGatewayInvalidPosture               = errors.New("invalid posture")
 	ErrGatewayForbiddenPattern             = errors.New("forbidden pattern detected")
-	ErrGatewaySuspendedTransactionNotFound = errors.New("suspended transaction not found or expired")
 	ErrGatewayDownstreamHTTPError          = errors.New("downstream server returned HTTP error")
 	ErrGatewayMCPError                     = errors.New("MCP error")
 	ErrGatewayA2AError                     = errors.New("A2A error")

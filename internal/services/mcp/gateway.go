@@ -1566,7 +1566,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 		// ResumeWithL3Proof cannot positively confirm the not-found reason
 		// (expired vs never-existed vs already-approved), so it returns
 		// ErrTransactionExpired without writing to the audit vault.
-		return nil, fmt.Errorf("gateway: suspended transaction %s not found or expired: %w", txHash, constants.ErrGatewaySuspendedTransactionNotFound)
+		return nil, fmt.Errorf("gateway: suspended transaction %s not found or expired: %w", txHash, constants.ErrTransactionExpired)
 	}
 
 	// Re-parse the stored envelope JSON so we can attach L3 metadata without

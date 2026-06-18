@@ -72,13 +72,13 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 			name:          "Invalid log path (traversal)",
 			args:          `{"log_path": "../../../etc/passwd"}`,
 			ctx:           context.Background(),
-			expectedError: "invalid log path",
+			expectedError: "invalid path",
 		},
 		{
 			name:          "Invalid JSON arguments",
 			args:          `{invalid}`,
 			ctx:           context.Background(),
-			expectedError: "invalid arguments",
+			expectedError: "unmarshal arguments",
 		},
 		{
 			name: "Context cancellation",
