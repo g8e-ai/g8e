@@ -655,3 +655,21 @@ type OperatorDeploymentResult struct {
 	Error    string `json:"error,omitempty"`
 	Output   string `json:"output,omitempty"`
 }
+
+// SysServiceStatusRequest is the params for the "sys_service_status" tool.
+type SysServiceStatusRequest struct {
+	ServiceName string `json:"service_name"`
+}
+
+// SysServiceStatusResult is the result for the "sys_service_status" tool.
+type SysServiceStatusResult struct {
+	ServiceName string `json:"service_name"`
+	LoadState   string `json:"load_state"`
+	ActiveState string `json:"active_state"`
+	SubState    string `json:"sub_state"`
+	Enabled     bool   `json:"enabled"`
+	Description string `json:"description"`
+	MainPID     string `json:"main_pid"`
+	ExecStart   string `json:"exec_start"`
+	Error       string `json:"error,omitempty"`
+}

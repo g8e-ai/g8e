@@ -251,6 +251,8 @@ const (
 	PathVar                                                   = "/var"
 	PathTmp                                                   = "/tmp"
 	PathVarLib                                                = "/var/lib"
+	PathVarLog                                                = "/var/log"
+	PathVarLogDmesg                                           = "/var/log/dmesg"
 	PathVarWWW                                                = "/var/www"
 	PathOpt                                                   = "/opt"
 	PathHome                                                  = "/home"
@@ -269,6 +271,15 @@ const (
 	PathProcNetUDP6                                           = "/proc/net/udp6"
 	PathProcNetRaw                                            = "/proc/net/raw"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
+
+	// SSH paths
+	PathEtcSshKnownHosts      = "/etc/ssh/known_hosts"
+	PathEtcSshSshKnownHosts   = "/etc/ssh/ssh_known_hosts"
+	PathHomeSshKnownHosts     = "$HOME/.ssh/known_hosts"
+	PathWindowsSshKnownHosts  = "$USERPROFILE\\.ssh\\known_hosts"
+	PathWindowsProgramDataSsh = "C:\\ProgramData\\ssh\\known_hosts"
+	PathWindowsSystemRoot     = "SystemRoot"
+	PathWindowsHostsFile      = "System32\\drivers\\etc\\hosts"
 )
 
 // Environment variable constants

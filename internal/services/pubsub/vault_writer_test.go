@@ -60,7 +60,7 @@ func TestNewVaultWriter(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc := NewVaultWriter(cfg, logger, nil, nil)
+		svc := NewVaultWriter(cfg, logger, nil)
 		require.NotNil(t, svc)
 		assert.Equal(t, cfg, svc.config)
 		assert.Equal(t, logger, svc.logger)
@@ -71,7 +71,7 @@ func TestNewVaultWriter(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		mockVault := &mockExecutionVault{}
-		svc := NewVaultWriter(cfg, logger, nil, mockVault)
+		svc := NewVaultWriter(cfg, logger, mockVault)
 		require.NotNil(t, svc)
 		assert.Equal(t, mockVault, svc.executionVault)
 	})
@@ -82,7 +82,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc := NewVaultWriter(cfg, logger, nil, nil)
+		svc := NewVaultWriter(cfg, logger, nil)
 
 		params := executionWriteParams{
 			id:         "exec-1",
@@ -103,7 +103,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		mockVault := &mockExecutionVault{}
-		svc := NewVaultWriter(cfg, logger, nil, mockVault)
+		svc := NewVaultWriter(cfg, logger, mockVault)
 
 		params := executionWriteParams{
 			id:              "exec-1",
@@ -131,7 +131,7 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc := NewVaultWriter(cfg, logger, nil, nil)
+		svc := NewVaultWriter(cfg, logger, nil)
 
 		params := fileDiffWriteParams{
 			diffID:           "diff-1",
@@ -153,7 +153,7 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		mockVault := &mockExecutionVault{}
-		svc := NewVaultWriter(cfg, logger, nil, mockVault)
+		svc := NewVaultWriter(cfg, logger, mockVault)
 
 		params := fileDiffWriteParams{
 			diffID:            "diff-1",
@@ -178,7 +178,7 @@ func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		svc := NewVaultWriter(cfg, logger, nil, nil)
+		svc := NewVaultWriter(cfg, logger, nil)
 
 		svc.StoreFileDiffFromLedger(context.Background(), filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", nil)
 		// Should not panic
@@ -190,7 +190,7 @@ func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		ledger := &storage.GitLedgerService{}
-		svc := NewVaultWriter(cfg, logger, nil, nil)
+		svc := NewVaultWriter(cfg, logger, nil)
 
 		svc.StoreFileDiffFromLedger(context.Background(), filepath.Join(tmpDir, "test.txt"), "write", "event-1", "session-1", "case-1", ledger)
 		// Should handle gracefully

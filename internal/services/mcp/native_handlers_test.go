@@ -564,7 +564,7 @@ func TestHandleLogStreamFilter(t *testing.T) {
 
 func TestHandleSysOOMDetect(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("skipping on Windows - /var/log/dmesg not available")
+		t.Skip("skipping on Windows - dmesg not available")
 	}
 
 	handler, err := NewNativeToolHandler(nil)

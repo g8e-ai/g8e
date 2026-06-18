@@ -23,21 +23,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/security"
 )
-
-// oomEvent represents a single OOM killer event extracted from logs.
-type oomEvent struct {
-	Timestamp string `json:"timestamp"`
-	PID       int    `json:"pid,omitempty"`
-	Process   string `json:"process,omitempty"`
-	MemoryMB  int    `json:"memory_mb,omitempty"`
-}
-
-// oomDetectResult represents the structured output of the OOM detection tool.
-type oomDetectResult struct {
-	Events []oomEvent `json:"events"`
-}
 
 // SysOOMDetectTool scans system logs for OOM killer events.
 type SysOOMDetectTool struct{}
@@ -71,32 +59,32 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 		LogPath string `json:"log_path,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_oom_detect: %w", constants.ErrMCPUnmarshalArguments)
 	}
 
 	logPath := req.LogPath
 	if logPath == "" {
-		logPath = "/var/log/dmesg"
+		logPath = constants.PathVarLogDmesg
 	}
 
 	// Validate path to prevent directory traversal attacks
 	// Use current working directory as root for relative paths
 	cwd, err := os.Getwd()
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to get current working directory: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_oom_detect: %w", constants.ErrMCPGetWorkingDirectory)
 	}
 	safePath, err := security.ValidatePath(logPath, cwd)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid log path: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_oom_detect: %w", constants.ErrPathValidation)
 	}
 
 	file, err := os.Open(safePath)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to open log file: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_oom_detect: %w", constants.ErrMCPOpenLogFile)
 	}
 	defer file.Close()
 
-	var events []oomEvent
+	var events []OOMEvent
 	oomRegex := regexp.MustCompile(`(?i)oom-killer|killed process`)
 	pidRegex := regexp.MustCompile(`(?i)pid\s*[=:]\s*(\d+)`)
 	processRegex := regexp.MustCompile(`(?i)(?:process\s+|killed process\s+\d+\s+\()([^)\s]+)\)?`)
@@ -110,7 +98,7 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 
 		line := scanner.Text()
 		if oomRegex.MatchString(line) {
-			event := oomEvent{
+			event := OOMEvent{
 				Timestamp: time.Now().Format(time.RFC3339),
 			}
 
@@ -133,15 +121,15 @@ func (t *SysOOMDetectTool) Execute(ctx context.Context, args json.RawMessage) (C
 	}
 
 	if err := scanner.Err(); err != nil {
-		return CallToolResult{}, fmt.Errorf("error reading log file: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_oom_detect: %w", constants.ErrMCPReadLogFile)
 	}
 
-	result := oomDetectResult{
+	result := SysOOMDetectResult{
 		Events: events,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_oom_detect: %w", constants.ErrMCPMarshalOOMResult)
 	}
 
 	return CallToolResult{

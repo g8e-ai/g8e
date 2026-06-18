@@ -17,7 +17,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"reflect"
@@ -161,7 +160,7 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 	rs.commands = NewCommandService(c.Config, c.Logger, c.Execution)
 	rs.commands.results = c.ResultsService
 	rs.commands.scrubbing = c.Scrubbing
-	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.ExecutionVault)
+	rs.commands.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.ExecutionVault)
 	rs.commands.auditStore = c.AuditStore
 	rs.commands.ledger = c.Ledger
 	rs.commands.historyHandler = c.HistoryHandler
@@ -169,7 +168,7 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 	rs.fileOps = NewFileOpsService(c.Config, c.Logger, c.FileEdit, client)
 	rs.fileOps.results = c.ResultsService
 	rs.fileOps.SetScrubbingService(c.Scrubbing)
-	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.Scrubbing, c.ExecutionVault)
+	rs.fileOps.vaultWriter = NewVaultWriter(c.Config, c.Logger, c.ExecutionVault)
 	rs.fileOps.auditStore = c.AuditStore
 	rs.fileOps.ledger = c.Ledger
 	rs.fileOps.auditStoreForObserved = c.AuditStore
@@ -564,7 +563,7 @@ func (rs *OperatorPubSubService) handleCommandPayload(payload []byte) {
 // returned error wraps the corresponding governance.ErrXxx sentinel.
 func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []byte) (*operatorv1.ActionReceipt, error) {
 	if len(payload) == 0 {
-		return nil, errors.New("empty payload")
+		return nil, constants.ErrPubSubEmptyPayload
 	}
 	if len(payload) > MaxPayloadSize {
 		return nil, fmt.Errorf("payload exceeds %d byte limit", MaxPayloadSize)
@@ -576,7 +575,7 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 	}
 
 	if rs.l4warden == nil {
-		return nil, errors.New("transaction verifier not configured")
+		return nil, constants.ErrPubSubTransactionVerifier
 	}
 	verified, err := rs.l4warden.VerifyEnvelope(ctx, envelope)
 	if err != nil {
@@ -585,7 +584,7 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 	}
 
 	if rs.actuator == nil {
-		return nil, errors.New("actuator not configured")
+		return nil, constants.ErrPubSubActuator
 	}
 
 	eventType := constants.MapActionTypeToEventType(verified.ActionType)
@@ -626,7 +625,7 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 		rs.logger.Info("Transaction verification passed", "message_id", verified.Envelope.Id)
 	} else {
 		rs.logger.Error("FATAL: L4Warden missing - command rejected", "message_id", env.Id)
-		rs.logBlockedTransaction(env, errors.New("L4Warden not configured"))
+		rs.logBlockedTransaction(env, constants.ErrPubSubL4Warden)
 		return
 	}
 
@@ -729,7 +728,7 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 // stamp it into the signed ActionReceipt.
 func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
-		return "", errors.New("MCP gateway not configured - cannot dispatch downstream call")
+		return "", constants.ErrPubSubMCPGateway
 	}
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
@@ -742,7 +741,7 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 		return "", fmt.Errorf("invalid payload type for MCP call: %T", req)
 	}
 	if mcpReq.ToolName == "" {
-		return "", errors.New("MCP call missing tool_name")
+		return "", constants.ErrPubSubMCPMissingToolName
 	}
 
 	args := json.RawMessage(mcpReq.ArgumentsJson)
@@ -759,8 +758,8 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 		return "", fmt.Errorf("downstream MCP dispatch failed: %w", err)
 	}
 	// Bound the receipt summary to avoid unbounded growth on chatty tools.
-	if len(summary) > 4096 {
-		summary = summary[:4096]
+	if len(summary) > constants.ReceiptSummaryMaxBytes {
+		summary = summary[:constants.ReceiptSummaryMaxBytes]
 	}
 
 	return summary, nil
@@ -772,7 +771,7 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 // stamp it into the signed ActionReceipt.
 func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, msg *PubSubCommandMessage) (string, error) {
 	if rs.mcpGateway == nil {
-		return "", errors.New("A2A gateway not configured - cannot dispatch downstream call")
+		return "", constants.ErrPubSubA2AGateway
 	}
 
 	req, err := unmarshalPayload(msg.EventType, msg.Payload)
@@ -785,7 +784,7 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 		return "", fmt.Errorf("invalid payload type for A2A call: %T", req)
 	}
 	if a2aReq.SkillName == "" {
-		return "", errors.New("A2A call missing skill_name")
+		return "", constants.ErrPubSubA2AMissingSkillName
 	}
 
 	payload := json.RawMessage(a2aReq.PayloadJson)
@@ -802,8 +801,8 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 		return "", fmt.Errorf("downstream A2A dispatch failed: %w", err)
 	}
 	// Bound the receipt summary to avoid unbounded growth on chatty tools.
-	if len(summary) > 4096 {
-		summary = summary[:4096]
+	if len(summary) > constants.ReceiptSummaryMaxBytes {
+		summary = summary[:constants.ReceiptSummaryMaxBytes]
 	}
 	return summary, nil
 }
@@ -812,7 +811,7 @@ func (rs *OperatorPubSubService) handleAppInvestigationCreatedSync(ctx context.C
 	rs.logger.Info("App investigation creation request received", "investigation_id", msg.ID)
 
 	if rs.actuator == nil || rs.actuator.ConsoleAuditStore == nil {
-		return "", errors.New("actuator or ConsoleAuditStore not configured")
+		return "", constants.ErrPubSubActuatorOrAuditStore
 	}
 
 	// DocSet expects collection, id, and data.
@@ -876,8 +875,8 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 
 	// Truncate answer to sane bound for receipt (4 KiB per plan)
 	summary := evalReq.Answer
-	if len(summary) > 4096 {
-		summary = summary[:4096]
+	if len(summary) > constants.ReceiptSummaryMaxBytes {
+		summary = summary[:constants.ReceiptSummaryMaxBytes]
 	}
 
 	return summary, nil
