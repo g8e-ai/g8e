@@ -472,8 +472,13 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		if !result.IsError {
-			t.Error("expected error for non-SELECT query")
+		var readResult map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &readResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if readResult["error"] == nil {
+			t.Error("expected error field in result for non-SELECT query")
 		}
 	})
 }

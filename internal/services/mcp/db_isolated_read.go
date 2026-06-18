@@ -70,11 +70,33 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	queryUpper := strings.ToUpper(strings.TrimSpace(req.Query))
 	if !strings.HasPrefix(queryUpper, "SELECT") {
-		return dbErrorResult("Only SELECT queries are allowed in isolated read mode"), nil
+		result := map[string]interface{}{
+			"rows":    []DBRow{},
+			"columns": []string{},
+			"error":   "Only SELECT queries are allowed in isolated read mode",
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		}
+		return CallToolResult{
+			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
+		}, nil
 	}
 
 	if err := validateSQLQuery(req.Query); err != nil {
-		return dbErrorResult(fmt.Sprintf("Query validation failed: %v", err)), nil
+		result := map[string]interface{}{
+			"rows":    []DBRow{},
+			"columns": []string{},
+			"error":   fmt.Sprintf("Query validation failed: %v", err),
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		}
+		return CallToolResult{
+			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
+		}, nil
 	}
 
 	dsn := fmt.Sprintf("file:%s?mode=ro", req.DatabasePath)
@@ -87,7 +109,18 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 	// Query is validated by validateSQLQuery to satisfy CodeQL sql-injection rule.
 	rows, err := db.Query(req.Query)
 	if err != nil {
-		return dbErrorResult(fmt.Sprintf("Query execution failed: %v", err)), nil
+		result := map[string]interface{}{
+			"rows":    []DBRow{},
+			"columns": []string{},
+			"error":   fmt.Sprintf("Query execution failed: %v", err),
+		}
+		resultJSON, err := json.Marshal(result)
+		if err != nil {
+			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		}
+		return CallToolResult{
+			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
+		}, nil
 	}
 	defer rows.Close()
 
@@ -137,14 +170,6 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 			},
 		},
 	}, nil
-}
-
-// dbErrorResult builds an error CallToolResult.
-func dbErrorResult(msg string) CallToolResult {
-	return CallToolResult{
-		Content: []TextContent{{Type: "text", Text: msg}},
-		IsError: true,
-	}
 }
 
 // convertToDBValue converts an interface{} value to a typed DBValue.
