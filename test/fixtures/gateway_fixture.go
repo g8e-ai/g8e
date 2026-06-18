@@ -66,6 +66,8 @@ type GatewayFixture struct {
 	MCPGateway       *mcp.GatewayService
 	ActuatorPriv     ed25519.PrivateKey
 	ActuatorKeyID    string
+	DownstreamURL    string // URL of the downstream MCP/A2A server
+	A2ADownstreamURL string // URL used for A2A (same as DownstreamURL if not overridden)
 	Cleanup          func()
 }
 
@@ -73,7 +75,8 @@ type GatewayFixture struct {
 type GatewayFixtureOptions struct {
 	TestName          string
 	Posture           config.GatewayPosture
-	DownstreamURL     string // If empty, creates a mock server
+	DownstreamURL     string // MCP downstream; creates mock server if empty
+	A2ADownstreamURL  string // A2A downstream; if empty, reuses MCP downstream server
 	AllowTestPortZero bool
 }
 
@@ -182,6 +185,12 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamURL
 
+	a2aURL := opts.A2ADownstreamURL
+	if a2aURL == "" {
+		a2aURL = downstreamURL
+	}
+	cfg.Gateway.A2ADownstreamURL = a2aURL
+
 	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
@@ -218,7 +227,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		TransactionAudit:   govDeps.TransactionAudit,
 		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayRejectingL3Notary{},
+		L3Notary:           RejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -257,6 +266,10 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		if downstreamServer != nil {
 			downstreamServer.Close()
 		}
+		// Stop the gateway service to close all databases and release file locks
+		if err := ls.Stop(context.Background()); err != nil {
+			t.Logf("gateway stop error: %v", err)
+		}
 		// Clean up test data directory
 		os.RemoveAll(dataDir)
 	}
@@ -271,6 +284,8 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		MCPGateway:       mcpGateway,
 		ActuatorPriv:     ActuatorPriv,
 		ActuatorKeyID:    ActuatorKeyID,
+		DownstreamURL:    downstreamURL,
+		A2ADownstreamURL: a2aURL,
 		Cleanup:          cleanup,
 	}
 }
@@ -296,10 +311,10 @@ func (f *GatewayFixture) SetPublicBaseURL(baseURL string) {
 	f.MCPGateway.SetPublicBaseURL(baseURL)
 }
 
-// gatewayRejectingL3Notary is a test implementation that always rejects L3 proofs.
-type gatewayRejectingL3Notary struct{}
+// RejectingL3Notary is a test implementation that always rejects L3 proofs.
+type RejectingL3Notary struct{}
 
-func (gatewayRejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (RejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return false, nil
 }
 

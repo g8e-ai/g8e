@@ -233,11 +233,6 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 **Native Real Operator** (`test/native_real_operator_test.go`):
 - `TestNativeRealOperator_Smoke` - Smoke test for native real operator integration
 
-#### BYO Client Tests
-
-**BYO Client** (`test/byo_client_test.go`):
-- `TestBYOClientParity_EndToEnd` - Protocol-aware BYO client testing canonical JSON wire format, mTLS enrollment, state binding, fail-closed L3, and real execution
-
 #### Integration Helpers
 
 **Integration Helper** (`test/integration_helper.go`):

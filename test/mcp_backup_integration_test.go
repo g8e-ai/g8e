@@ -27,12 +27,10 @@ import (
 )
 
 func TestBackupConfigFile(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "g8e-test-*")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
+	tmpDir := t.TempDir()
 
 	configPath := filepath.Join(tmpDir, "test.json")
-	err = os.WriteFile(configPath, []byte("{}"), 0644)
+	err := os.WriteFile(configPath, []byte("{}"), 0644)
 	require.NoError(t, err)
 
 	err = cmd.BackupConfigFile(configPath)

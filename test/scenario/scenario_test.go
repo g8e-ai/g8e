@@ -69,6 +69,7 @@ func setupTestContext(t *testing.T) *TestContext {
 		TestName: "scenario-test",
 		Posture:  config.PostureDoctrine,
 	})
+	defer f.Cleanup()
 
 	// Enroll a client identity for mTLS authentication
 	identity := fixtures.EnrollClientIdentity(t, f, "scenario-user", "scenario-org", "scenario-fingerprint", "scenario-host")
