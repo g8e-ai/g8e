@@ -48,7 +48,6 @@ services:
     volumes:
       - gateway_state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
-      - ./inspect_doctrine_rule.sh:/app/inspect_doctrine_rule.sh:ro
     ports:
       - "8081:8080"
       - "8444:8443"
@@ -104,7 +103,6 @@ services:
     volumes:
       - ./target-data:/var/g8e/target:ro
       - ./pa_api_server.py:/app/pa_api_server.py:ro
-      - ./inspect_pa_request.py:/app/inspect_pa_request.py:ro
     depends_on:
       operator:
         condition: service_healthy
