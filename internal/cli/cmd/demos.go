@@ -27,6 +27,15 @@ import (
 	"golang.org/x/text/language"
 )
 
+// toDockerPath converts a filepath to a Docker-compatible path format.
+// On Windows, Docker expects forward slashes even though the OS uses backslashes.
+func toDockerPath(path string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.ToSlash(path)
+	}
+	return path
+}
+
 func demosCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "demos",
@@ -125,7 +134,9 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 
 	// Start the demo environment
 	fmt.Printf("Starting demo environment: %s\n", org)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d")
+	dockerPath := toDockerPath(composePath)
+	fmt.Printf("Debug: composePath=%s, dockerPath=%s\n", composePath, dockerPath)
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", dockerPath, "up", "-d")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -202,7 +213,7 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 
 	// Stop the demo environment
 	fmt.Printf("Stopping demo environment: %s\n", org)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "down")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -247,7 +258,7 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show status
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "ps")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "ps")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -291,7 +302,7 @@ func runDemosClean(cmd *cobra.Command, args []string) error {
 
 	// Clean the demo environment (remove containers, volumes, and networks)
 	fmt.Printf("Cleaning demo environment: %s\n", org)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "down", "-v")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down", "-v")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -406,7 +417,7 @@ func runDemosRun(cmd *cobra.Command, args []string) error {
 }
 
 func isDemoRunning(demoDir, composePath string) bool {
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "ps", "-q")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "ps", "-q")
 	dockerComposeCmd.Dir = demoDir
 	output, err := dockerComposeCmd.Output()
 	if err != nil {
@@ -599,8 +610,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		if err := demoStep(demoDir, "seed data",
 			false,
 			"docker", "compose", "exec", "-T", "pa-submission-service",
-			"sh", "-c",
-			`python3 -c "import json; data=json.load(open('/var/g8e/target/pa_requests.json')); [print(json.dumps(r, indent=2)) for r in data['requests'] if r.get('id')=='PA-2026-0043']"`,
+			"python3", "/app/inspect_pa_request.py", "PA-2026-0043",
 		); err != nil {
 			fmt.Println("  (seed data inspection skipped)")
 			fmt.Println()
@@ -642,8 +652,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		if err := demoStep(demoDir, "seed data",
 			false,
 			"docker", "compose", "exec", "-T", "pa-submission-service",
-			"sh", "-c",
-			`python3 -c "import json; data=json.load(open('/var/g8e/target/pa_requests.json')); [print(json.dumps(r, indent=2)) for r in data['requests'] if r.get('id')=='PA-2026-0044']"`,
+			"python3", "/app/inspect_pa_request.py", "PA-2026-0044",
 		); err != nil {
 			fmt.Println("  (seed data inspection skipped)")
 			fmt.Println()
@@ -711,7 +720,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		_ = demoStep(demoDir, "doctrine rule",
 			false,
 			"docker", "compose", "exec", "-T", "gateway",
-			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/phi_hipaa_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='phi_exfil_attempt'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
+			"sh", "/app/inspect_doctrine_rule.sh", "phi_exfil_attempt",
 		)
 
 		fmt.Println("  Copy-paste to send a PHI exfiltration payload through the gateway")
@@ -1122,7 +1131,7 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 }
 
 func runDockerComposeExec(demoDir, composePath, service string, args ...string) error {
-	fullArgs := []string{"compose", "-f", composePath, "exec", service}
+	fullArgs := []string{"compose", "-f", toDockerPath(composePath), "exec", service}
 	fullArgs = append(fullArgs, args...)
 
 	cmd := exec.Command("docker", fullArgs...)
@@ -1135,7 +1144,7 @@ func runDockerComposeExec(demoDir, composePath, service string, args ...string) 
 }
 
 func runDockerComposeLogs(demoDir, composePath, service string) error {
-	cmd := exec.Command("docker", "compose", "-f", composePath, "logs", "-f", service)
+	cmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "logs", "-f", service)
 	cmd.Dir = demoDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
