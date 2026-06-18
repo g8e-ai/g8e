@@ -111,69 +111,39 @@ func (k *Keystore) generateAndStoreMasterKey() error {
 	return nil
 }
 
-// EncryptSecret encrypts a plaintext secret value and writes it to disk.
-func (k *Keystore) EncryptSecret(name, plaintext string) error {
+// encrypt performs AES-256-GCM encryption on plaintext and returns the EncryptedSecret structure.
+func (k *Keystore) encrypt(plaintext string) (*EncryptedSecret, error) {
 	key, err := k.backend.RetrieveMasterKey()
 	if err != nil {
-		return fmt.Errorf("retrieve master key for encryption: %w", err)
+		return nil, fmt.Errorf("retrieve master key for encryption: %w", err)
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return fmt.Errorf("create AES cipher: %w", err)
+		return nil, fmt.Errorf("create AES cipher: %w", err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return fmt.Errorf("create GCM mode: %w", err)
+		return nil, fmt.Errorf("create GCM mode: %w", err)
 	}
 
 	nonce := make([]byte, nonceSize)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return fmt.Errorf("generate nonce: %w", err)
+		return nil, fmt.Errorf("generate nonce: %w", err)
 	}
 
 	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
 
-	enc := EncryptedSecret{
+	return &EncryptedSecret{
 		Version:    keyVersion,
 		Nonce:      nonce,
 		Ciphertext: ciphertext,
-	}
-
-	data, err := json.Marshal(enc)
-	if err != nil {
-		return fmt.Errorf("marshal encrypted secret: %w", err)
-	}
-
-	path := filepath.Join(k.secretsDir, name)
-	tmpPath := path + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		return fmt.Errorf("write encrypted secret: %w", err)
-	}
-
-	if err := os.Rename(tmpPath, path); err != nil {
-		_ = os.Remove(tmpPath)
-		return fmt.Errorf("atomic rename: %w", err)
-	}
-
-	k.logger.Debug("[Keystore] Secret encrypted and written", "name", name)
-	return nil
+	}, nil
 }
 
-// DecryptSecret reads and decrypts a secret value from disk.
-func (k *Keystore) DecryptSecret(name string) (string, error) {
-	path := filepath.Join(k.secretsDir, name)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read encrypted secret: %w", err)
-	}
-
-	var enc EncryptedSecret
-	if err := json.Unmarshal(data, &enc); err != nil {
-		return "", fmt.Errorf("unmarshal encrypted secret: %w", err)
-	}
-
+// decrypt performs AES-256-GCM decryption on an EncryptedSecret and returns plaintext.
+func (k *Keystore) decrypt(enc *EncryptedSecret) (string, error) {
 	if enc.Version != keyVersion {
 		return "", fmt.Errorf("unsupported secret version %d, expected %d", enc.Version, keyVersion)
 	}
@@ -198,39 +168,63 @@ func (k *Keystore) DecryptSecret(name string) (string, error) {
 		return "", fmt.Errorf("%w: %v", constants.ErrInvalidCiphertext, err)
 	}
 
-	k.logger.Debug("[Keystore] Secret decrypted", "name", name)
 	return string(plaintext), nil
+}
+
+// EncryptSecret encrypts a plaintext secret value and writes it to disk.
+func (k *Keystore) EncryptSecret(name, plaintext string) error {
+	enc, err := k.encrypt(plaintext)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(enc)
+	if err != nil {
+		return fmt.Errorf("marshal encrypted secret: %w", err)
+	}
+
+	path := filepath.Join(k.secretsDir, name)
+	tmpPath := path + constants.TmpFileSuffix
+	if err := os.WriteFile(tmpPath, data, constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("write encrypted secret: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("atomic rename: %w", err)
+	}
+
+	k.logger.Debug("[Keystore] Secret encrypted and written", "name", name)
+	return nil
+}
+
+// DecryptSecret reads and decrypts a secret value from disk.
+func (k *Keystore) DecryptSecret(name string) (string, error) {
+	path := filepath.Join(k.secretsDir, name)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read encrypted secret: %w", err)
+	}
+
+	var enc EncryptedSecret
+	if err := json.Unmarshal(data, &enc); err != nil {
+		return "", fmt.Errorf("unmarshal encrypted secret: %w", err)
+	}
+
+	plaintext, err := k.decrypt(&enc)
+	if err != nil {
+		return "", err
+	}
+
+	k.logger.Debug("[Keystore] Secret decrypted", "name", name)
+	return plaintext, nil
 }
 
 // Encrypt encrypts a plaintext value and returns a base64-encoded ciphertext string.
 // This is for in-memory encryption (e.g., SQLite values), not file-based secrets.
 func (k *Keystore) Encrypt(plaintext string) (string, error) {
-	key, err := k.backend.RetrieveMasterKey()
+	enc, err := k.encrypt(plaintext)
 	if err != nil {
-		return "", fmt.Errorf("retrieve master key for encryption: %w", err)
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", fmt.Errorf("create AES cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("create GCM mode: %w", err)
-	}
-
-	nonce := make([]byte, nonceSize)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", fmt.Errorf("generate nonce: %w", err)
-	}
-
-	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
-
-	enc := EncryptedSecret{
-		Version:    keyVersion,
-		Nonce:      nonce,
-		Ciphertext: ciphertext,
+		return "", err
 	}
 
 	data, err := json.Marshal(enc)
@@ -254,31 +248,7 @@ func (k *Keystore) Decrypt(encodedCiphertext string) (string, error) {
 		return "", fmt.Errorf("unmarshal encrypted value: %w", err)
 	}
 
-	if enc.Version != keyVersion {
-		return "", fmt.Errorf("unsupported secret version %d, expected %d", enc.Version, keyVersion)
-	}
-
-	key, err := k.backend.RetrieveMasterKey()
-	if err != nil {
-		return "", fmt.Errorf("retrieve master key for decryption: %w", err)
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", fmt.Errorf("create AES cipher: %w", err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("create GCM mode: %w", err)
-	}
-
-	plaintext, err := gcm.Open(nil, enc.Nonce, enc.Ciphertext, nil)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", constants.ErrInvalidCiphertext, err)
-	}
-
-	return string(plaintext), nil
+	return k.decrypt(&enc)
 }
 
 // DeleteSecret removes a secret file from disk.
@@ -302,14 +272,19 @@ func (k *Keystore) Purge() error {
 		return fmt.Errorf("read secrets directory: %w", err)
 	}
 
+	var purgeErrors []error
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		path := filepath.Join(k.secretsDir, entry.Name())
 		if err := os.Remove(path); err != nil {
-			k.logger.Warn("[Keystore] Failed to delete secret file", "path", path, "error", err)
+			purgeErrors = append(purgeErrors, fmt.Errorf("delete secret file %s: %w", path, err))
 		}
+	}
+
+	if len(purgeErrors) > 0 {
+		return fmt.Errorf("purge failed with %d errors: %w", len(purgeErrors), purgeErrors[0])
 	}
 
 	k.logger.Info("[Keystore] All secrets purged", "backend", k.backend.Name())
@@ -318,12 +293,10 @@ func (k *Keystore) Purge() error {
 
 // EnforcePermissions enforces strict filesystem permissions on the secrets directory.
 func (k *Keystore) EnforcePermissions() error {
-	// Enforce 0700 on directory
-	if err := os.Chmod(k.secretsDir, 0700); err != nil {
+	if err := os.Chmod(k.secretsDir, constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("chmod secrets directory: %w", err)
 	}
 
-	// Enforce 0600 on all files
 	entries, err := os.ReadDir(k.secretsDir)
 	if err != nil {
 		return fmt.Errorf("read secrets directory: %w", err)
@@ -334,7 +307,7 @@ func (k *Keystore) EnforcePermissions() error {
 			continue
 		}
 		path := filepath.Join(k.secretsDir, entry.Name())
-		if err := os.Chmod(path, 0600); err != nil {
+		if err := os.Chmod(path, constants.PermFilePrivate); err != nil {
 			return fmt.Errorf("chmod secret file: %w", err)
 		}
 	}

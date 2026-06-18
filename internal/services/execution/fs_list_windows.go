@@ -23,6 +23,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/security"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -77,18 +78,18 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return s.failResult(result, "path_not_found", fmt.Sprintf("path does not exist: %s", path))
+			return s.failResult(result, constants.ErrPathNotFound, fmt.Sprintf("path does not exist: %s", path))
 		}
-		return s.failResult(result, "stat_error", fmt.Sprintf("failed to stat path: %v", err))
+		return s.failResult(result, constants.ErrStatFailed, fmt.Sprintf("failed to stat path: %v", err))
 	}
 	if !info.IsDir() {
-		return s.failResult(result, "not_a_directory", fmt.Sprintf("path is not a directory: %s", path))
+		return s.failResult(result, constants.ErrNotADirectory, fmt.Sprintf("path is not a directory: %s", path))
 	}
 
 	// Validate and resolve path (security check) - only after confirming it exists
 	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
-		return s.failResult(result, "validation_error", fmt.Sprintf("invalid path: %v", err))
+		return s.failResult(result, constants.ErrPathValidation, fmt.Sprintf("invalid path: %v", err))
 	}
 
 	result.Path = absPath
@@ -96,21 +97,21 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	// Apply limits
 	maxDepth := req.MaxDepth
 	if maxDepth < 0 {
-		maxDepth = 0
+		maxDepth = constants.FsListDefaultDepth
 	}
-	if maxDepth > 3 {
-		maxDepth = 3
+	if maxDepth > constants.FsListMaxDepth {
+		maxDepth = constants.FsListMaxDepth
 	}
 
 	maxEntries := req.MaxEntries
 	if maxEntries <= 0 {
-		maxEntries = 1000
+		maxEntries = constants.FsListDefaultEntries
 	}
 
 	// List directory contents
 	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		return s.failResult(result, "read_error", fmt.Sprintf("failed to read directory: %v", err))
+		return s.failResult(result, constants.ErrDirectoryRead, fmt.Sprintf("failed to read directory: %v", err))
 	}
 
 	// Build entry list
@@ -146,14 +147,15 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 }
 
 // failResult creates a failed result with error information
-func (s *FsListService) failResult(result *models.FsListResult, errorType, errorMessage string) (*models.FsListResult, error) {
+func (s *FsListService) failResult(result *models.FsListResult, err error, errorMessage string) (*models.FsListResult, error) {
 	endTime := time.Now().UTC()
 	result.EndTime = &endTime
 	if result.StartTime != nil {
 		result.DurationSeconds = endTime.Sub(*result.StartTime).Seconds()
 	}
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
+	errorType := err.Error()
 	result.ErrorType = &errorType
 	result.ErrorMessage = &errorMessage
-	return result, fmt.Errorf("%s: %s", errorType, errorMessage)
+	return result, nil
 }

@@ -22,6 +22,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,28 +53,29 @@ func (m *mockReadFile) ReadFile(path string) ([]byte, error) {
 	return m.data, nil
 }
 
-func TestFSDiskUsageTool_Name(t *testing.T) {
+func TestFSDiskUsageTool_Properties(t *testing.T) {
 	tool := &FSDiskUsageTool{}
-	require.Equal(t, "fs_disk_usage", tool.Name())
-}
 
-func TestFSDiskUsageTool_Description(t *testing.T) {
-	tool := &FSDiskUsageTool{}
-	require.NotEmpty(t, tool.Description())
-	require.Contains(t, tool.Description(), "filesystem")
-	require.Contains(t, tool.Description(), "free")
-}
+	t.Run("Name", func(t *testing.T) {
+		require.Equal(t, "fs_disk_usage", tool.Name())
+	})
 
-func TestFSDiskUsageTool_InputSchema(t *testing.T) {
-	tool := &FSDiskUsageTool{}
-	schema := tool.InputSchema()
+	t.Run("Description", func(t *testing.T) {
+		desc := tool.Description()
+		require.NotEmpty(t, desc)
+		require.Contains(t, desc, "filesystem")
+		require.Contains(t, desc, "free")
+	})
 
-	require.Equal(t, "object", schema.Type)
+	t.Run("InputSchema", func(t *testing.T) {
+		schema := tool.InputSchema()
+		require.Equal(t, "object", schema.Type)
 
-	properties := schema.Properties
-	require.Contains(t, properties, "path")
-	require.Equal(t, "string", properties["path"].Type)
-	require.NotEmpty(t, properties["path"].Description)
+		properties := schema.Properties
+		require.Contains(t, properties, "path")
+		require.Equal(t, "string", properties["path"].Type)
+		require.NotEmpty(t, properties["path"].Description)
+	})
 }
 
 func TestFSDiskUsageTool_Execute_InvalidJSON(t *testing.T) {
@@ -82,7 +84,7 @@ func TestFSDiskUsageTool_Execute_InvalidJSON(t *testing.T) {
 
 	_, err := tool.Execute(ctx, json.RawMessage(`{invalid json}`))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unmarshal arguments")
+	require.ErrorIs(t, err, constants.ErrMCPUnmarshalArguments)
 }
 
 func TestFSDiskUsageTool_Execute_WithValidPath_Success(t *testing.T) {
@@ -159,38 +161,46 @@ proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 	require.Nil(t, diskResult.Filesystem)
 }
 
-func TestFSDiskUsageTool_Execute_StatFSError(t *testing.T) {
-	tool := &FSDiskUsageTool{
-		statFS: &mockStatFS{
-			error: errors.New("permission denied"),
+func TestFSDiskUsageTool_Execute_Errors(t *testing.T) {
+	tests := []struct {
+		name    string
+		tool    *FSDiskUsageTool
+		req     FSDiskUsageRequest
+		wantErr error
+	}{
+		{
+			name: "StatFS error",
+			tool: &FSDiskUsageTool{
+				statFS: &mockStatFS{
+					error: errors.New("permission denied"),
+				},
+			},
+			req:     FSDiskUsageRequest{Path: "/root"},
+			wantErr: constants.ErrMCPGetDiskUsage,
+		},
+		{
+			name: "ReadFile error",
+			tool: &FSDiskUsageTool{
+				readFile: &mockReadFile{
+					error: errors.New("file not found"),
+				},
+			},
+			req:     FSDiskUsageRequest{Path: ""},
+			wantErr: constants.ErrMCPGetDiskUsage,
 		},
 	}
-	ctx := context.Background()
 
-	req := FSDiskUsageRequest{Path: "/root"}
-	args, err := json.Marshal(req)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			args, err := json.Marshal(tt.req)
+			require.NoError(t, err)
 
-	_, err = tool.Execute(ctx, args)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "get disk usage")
-}
-
-func TestFSDiskUsageTool_Execute_ReadFileError(t *testing.T) {
-	tool := &FSDiskUsageTool{
-		readFile: &mockReadFile{
-			error: errors.New("file not found"),
-		},
+			_, err = tt.tool.Execute(ctx, args)
+			require.Error(t, err)
+			require.ErrorIs(t, err, tt.wantErr)
+		})
 	}
-	ctx := context.Background()
-
-	req := FSDiskUsageRequest{Path: ""}
-	args, err := json.Marshal(req)
-	require.NoError(t, err)
-
-	_, err = tool.Execute(ctx, args)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "get disk usage")
 }
 
 func TestFSDiskUsageTool_Execute_MarshalError(t *testing.T) {
@@ -218,58 +228,82 @@ func TestFSDiskUsageTool_Execute_MarshalError(t *testing.T) {
 	require.NotNil(t, result.Content)
 }
 
-func TestGetDiskUsageForPath_Success(t *testing.T) {
-	mockStat := &mockStatFS{
-		stat: syscall.Statfs_t{
-			Blocks: 5000,
-			Bsize:  4096,
-			Bfree:  2000,
-			Bavail: 1800,
+func TestGetDiskUsageForPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		stat    syscall.Statfs_t
+		error   error
+		path    string
+		wantErr error
+		verify  func(t *testing.T, result FSDiskUsageResult)
+	}{
+		{
+			name: "success",
+			stat: syscall.Statfs_t{
+				Blocks: 5000,
+				Bsize:  4096,
+				Bfree:  2000,
+				Bavail: 1800,
+			},
+			path: "/var",
+			verify: func(t *testing.T, result FSDiskUsageResult) {
+				require.Equal(t, "/var", result.Path)
+				require.NotNil(t, result.Filesystem)
+				require.Equal(t, "/var", result.Filesystem.Path)
+				require.Equal(t, uint64(5000*4096), result.Filesystem.TotalBytes)
+				require.Equal(t, uint64(2000*4096), result.Filesystem.FreeBytes)
+				require.Equal(t, uint64(1800*4096), result.Filesystem.AvailableBytes)
+				require.Equal(t, uint64(3000*4096), result.Filesystem.UsedBytes)
+				require.InDelta(t, 60.0, result.Filesystem.UsedPercent, 0.1)
+			},
+		},
+		{
+			name:    "statfs error",
+			error:   errors.New("no such file or directory"),
+			path:    "/nonexistent",
+			wantErr: constants.ErrMCPStatFS,
+		},
+		{
+			name: "zero blocks",
+			stat: syscall.Statfs_t{
+				Blocks: 0,
+				Bsize:  4096,
+				Bfree:  0,
+				Bavail: 0,
+			},
+			path: "/empty",
+			verify: func(t *testing.T, result FSDiskUsageResult) {
+				require.Equal(t, uint64(0), result.Filesystem.TotalBytes)
+				require.Equal(t, uint64(0), result.Filesystem.UsedBytes)
+				require.Equal(t, uint64(0), result.Filesystem.FreeBytes)
+				require.Equal(t, uint64(0), result.Filesystem.AvailableBytes)
+				// Used percent should be 0 when total is 0 (NaN check)
+				require.True(t, result.Filesystem.UsedPercent == 0 || result.Filesystem.UsedPercent != result.Filesystem.UsedPercent)
+			},
 		},
 	}
 
-	result, err := getDiskUsageForPath("/var", mockStat)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockStat := &mockStatFS{
+				stat:  tt.stat,
+				error: tt.error,
+			}
 
-	require.Equal(t, "/var", result.Path)
-	require.NotNil(t, result.Filesystem)
-	require.Equal(t, "/var", result.Filesystem.Path)
-	require.Equal(t, uint64(5000*4096), result.Filesystem.TotalBytes)
-	require.Equal(t, uint64(2000*4096), result.Filesystem.FreeBytes)
-	require.Equal(t, uint64(1800*4096), result.Filesystem.AvailableBytes)
-	require.Equal(t, uint64(3000*4096), result.Filesystem.UsedBytes)
-	require.InDelta(t, 60.0, result.Filesystem.UsedPercent, 0.1)
-}
+			result, err := getDiskUsageForPath(tt.path, mockStat)
 
-func TestGetDiskUsageForPath_StatFSError(t *testing.T) {
-	mockStat := &mockStatFS{
-		error: errors.New("no such file or directory"),
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			if tt.verify != nil {
+				tt.verify(t, result)
+			}
+		})
 	}
-
-	_, err := getDiskUsageForPath("/nonexistent", mockStat)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "statfs")
-}
-
-func TestGetDiskUsageForPath_ZeroBlocks(t *testing.T) {
-	mockStat := &mockStatFS{
-		stat: syscall.Statfs_t{
-			Blocks: 0,
-			Bsize:  4096,
-			Bfree:  0,
-			Bavail: 0,
-		},
-	}
-
-	result, err := getDiskUsageForPath("/empty", mockStat)
-	require.NoError(t, err)
-
-	require.Equal(t, uint64(0), result.Filesystem.TotalBytes)
-	require.Equal(t, uint64(0), result.Filesystem.UsedBytes)
-	require.Equal(t, uint64(0), result.Filesystem.FreeBytes)
-	require.Equal(t, uint64(0), result.Filesystem.AvailableBytes)
-	// Used percent should be 0 when total is 0 (NaN check)
-	require.True(t, result.Filesystem.UsedPercent == 0 || result.Filesystem.UsedPercent != result.Filesystem.UsedPercent)
 }
 
 func TestGetAllDiskUsage_Success(t *testing.T) {
@@ -305,7 +339,7 @@ func TestGetAllDiskUsage_ReadFileError(t *testing.T) {
 
 	_, err := getAllDiskUsage(nil, mockRead)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "parse mounts")
+	require.ErrorIs(t, err, constants.ErrMCPParseMounts)
 }
 
 func TestGetAllDiskUsage_SkipsFailedStatFS(t *testing.T) {
@@ -352,122 +386,101 @@ func (c *customStatFS) StatFS(path string, stat *syscall.Statfs_t) error {
 	return nil
 }
 
-func TestParseMounts_Success(t *testing.T) {
-	mountsData := `sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
+func TestParseMounts(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      string
+		error     error
+		wantCount int
+		want      []string
+		exclude   []string
+	}{
+		{
+			name: "success with special mounts excluded",
+			data: `sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
 proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
 udev /dev devtmpfs rw,nosuid,relatime,size=8171996k,nr_inodes=2042999,mode=755 0 0
 devpts /dev/pts devpts rw,nosuid,noexec,relatime,gid=5,mode=620,ptmxmode=000 0 0
 /dev/sda1 / ext4 rw,relatime 0 0
 /dev/sda2 /home ext4 rw,relatime 0 0
-`
-
-	mockRead := &mockReadFile{
-		data: []byte(mountsData),
-	}
-
-	mounts, err := parseMounts(mockRead)
-	require.NoError(t, err)
-
-	// Should include / and /home, but exclude /sys, /proc, /dev
-	require.Contains(t, mounts, "/")
-	require.Contains(t, mounts, "/home")
-	require.NotContains(t, mounts, "/sys")
-	require.NotContains(t, mounts, "/proc")
-	require.NotContains(t, mounts, "/dev")
-}
-
-func TestParseMounts_EmptyLines(t *testing.T) {
-	mountsData := `sysfs /sys sysfs rw 0 0
+`,
+			want:    []string{"/", "/home"},
+			exclude: []string{"/sys", "/proc", "/dev"},
+		},
+		{
+			name: "empty lines handled",
+			data: `sysfs /sys sysfs rw 0 0
 
 /dev/sda1 / ext4 rw 0 0
 
 /dev/sda2 /home ext4 rw 0 0
-`
-
-	mockRead := &mockReadFile{
-		data: []byte(mountsData),
-	}
-
-	mounts, err := parseMounts(mockRead)
-	require.NoError(t, err)
-	require.Greater(t, len(mounts), 0)
-}
-
-func TestParseMounts_ReadFileError(t *testing.T) {
-	mockRead := &mockReadFile{
-		error: errors.New("file not found"),
-	}
-
-	_, err := parseMounts(mockRead)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "read /proc/mounts")
-}
-
-func TestParseMounts_MalformedLine(t *testing.T) {
-	mountsData := `sysfs /sys sysfs rw 0 0
+`,
+			wantCount: 1,
+		},
+		{
+			name:  "read file error",
+			data:  "",
+			error: errors.New("file not found"),
+		},
+		{
+			name: "malformed line skipped",
+			data: `sysfs /sys sysfs rw 0 0
 malformed_line
 /dev/sda1 / ext4 rw 0 0
-`
-
-	mockRead := &mockReadFile{
-		data: []byte(mountsData),
-	}
-
-	mounts, err := parseMounts(mockRead)
-	require.NoError(t, err)
-	// Should skip malformed line and still return valid mounts
-	require.Greater(t, len(mounts), 0)
-}
-
-func TestParseMounts_ExcludesSpecialMounts(t *testing.T) {
-	mountsData := `sysfs /sys sysfs rw 0 0
+`,
+			wantCount: 1,
+		},
+		{
+			name: "excludes special mounts",
+			data: `sysfs /sys sysfs rw 0 0
 proc /proc proc rw 0 0
 devtmpfs /dev devtmpfs rw 0 0
 /dev/sda1 / ext4 rw 0 0
 /dev/sda2 /home ext4 rw 0 0
 /run/user/1000 /run/user/1000 tmpfs rw 0 0
-`
-
-	mockRead := &mockReadFile{
-		data: []byte(mountsData),
+`,
+			want:    []string{"/", "/home", "/run/user/1000"},
+			exclude: []string{"/sys", "/proc", "/dev"},
+		},
 	}
 
-	mounts, err := parseMounts(mockRead)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRead := &mockReadFile{
+				data:  []byte(tt.data),
+				error: tt.error,
+			}
 
-	// Should exclude /sys, /proc, /dev
-	require.NotContains(t, mounts, "/sys")
-	require.NotContains(t, mounts, "/proc")
-	require.NotContains(t, mounts, "/dev")
-	// Should include /, /home, and /run/user/1000
-	require.Contains(t, mounts, "/")
-	require.Contains(t, mounts, "/home")
-	require.Contains(t, mounts, "/run/user/1000")
-}
+			mounts, err := parseMounts(mockRead)
 
-func TestFSDiskUsageTool_NilDependencies(t *testing.T) {
-	// Test that nil dependencies use real implementations
-	tool := &FSDiskUsageTool{}
-	ctx := context.Background()
+			if tt.error != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, constants.ErrMCPReadMounts)
+				return
+			}
 
-	// This will use real syscall.Statfs and os.ReadFile
-	// We can't predict the exact result, but we can verify it doesn't panic
-	req := FSDiskUsageRequest{Path: "/tmp"}
-	args, err := json.Marshal(req)
-	require.NoError(t, err)
+			require.NoError(t, err)
 
-	// This may fail if /tmp doesn't exist or isn't accessible
-	// but it shouldn't panic
-	_, err = tool.Execute(ctx, args)
-	// We don't assert error here because it depends on the test environment
-	_ = err
+			if tt.wantCount > 0 {
+				require.GreaterOrEqual(t, len(mounts), tt.wantCount)
+			}
+
+			for _, w := range tt.want {
+				require.Contains(t, mounts, w)
+			}
+
+			for _, e := range tt.exclude {
+				require.NotContains(t, mounts, e)
+			}
+		})
+	}
 }
 
 func TestFSDiskUsageTool_UsedPercentCalculation(t *testing.T) {
 	tests := []struct {
 		name        string
 		blocks      uint64
-		bsize       int64
+		bsize       uint32
 		bfree       uint64
 		expectedPct float64
 	}{

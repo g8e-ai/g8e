@@ -17,6 +17,10 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // mockTool is a test implementation of NativeTool for testing purposes.
@@ -48,12 +52,8 @@ func (m *mockTool) Execute(ctx context.Context, args json.RawMessage) (CallToolR
 
 func TestNewToolRegistry(t *testing.T) {
 	registry := NewToolRegistry()
-	if registry == nil {
-		t.Fatal("NewToolRegistry returned nil")
-	}
-	if registry.Count() != 0 {
-		t.Errorf("Expected empty registry, got %d tools", registry.Count())
-	}
+	assert.NotNil(t, registry, "NewToolRegistry returned nil")
+	assert.Equal(t, 0, registry.Count(), "Expected empty registry")
 }
 
 func TestToolRegistry_Register(t *testing.T) {
@@ -68,22 +68,14 @@ func TestToolRegistry_Register(t *testing.T) {
 	}
 
 	err := registry.Register(tool)
-	if err != nil {
-		t.Fatalf("Failed to register tool: %v", err)
-	}
+	require.NoError(t, err, "Failed to register tool")
 
-	if registry.Count() != 1 {
-		t.Errorf("Expected 1 tool, got %d", registry.Count())
-	}
+	assert.Equal(t, 1, registry.Count(), "Expected 1 tool")
 
 	// Verify tool can be retrieved
 	retrieved, ok := registry.Get("test_tool")
-	if !ok {
-		t.Fatal("Tool not found after registration")
-	}
-	if retrieved.Name() != "test_tool" {
-		t.Errorf("Retrieved wrong tool: got %s, want test_tool", retrieved.Name())
-	}
+	assert.True(t, ok, "Tool not found after registration")
+	assert.Equal(t, "test_tool", retrieved.Name(), "Retrieved wrong tool")
 }
 
 func TestToolRegistry_RegisterDuplicate(t *testing.T) {
@@ -106,33 +98,19 @@ func TestToolRegistry_RegisterDuplicate(t *testing.T) {
 	}
 
 	err := registry.Register(tool1)
-	if err != nil {
-		t.Fatalf("Failed to register first tool: %v", err)
-	}
+	require.NoError(t, err, "Failed to register first tool")
 
 	err = registry.Register(tool2)
-	if err == nil {
-		t.Fatal("Expected error when registering duplicate tool, got nil")
-	}
-
-	expectedError := "registry: tool 'duplicate_tool' is already registered"
-	if err.Error() != expectedError {
-		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
-	}
+	assert.Error(t, err, "Expected error when registering duplicate tool")
+	assert.ErrorIs(t, err, constants.ErrMCPToolAlreadyRegistered, "Error should wrap ErrMCPToolAlreadyRegistered")
 }
 
 func TestToolRegistry_RegisterNil(t *testing.T) {
 	registry := NewToolRegistry()
 
 	err := registry.Register(nil)
-	if err == nil {
-		t.Fatal("Expected error when registering nil tool, got nil")
-	}
-
-	expectedError := "registry: cannot register nil tool"
-	if err.Error() != expectedError {
-		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
-	}
+	assert.Error(t, err, "Expected error when registering nil tool")
+	assert.ErrorIs(t, err, constants.ErrMCPToolNil, "Error should be ErrMCPToolNil")
 }
 
 func TestToolRegistry_RegisterEmptyName(t *testing.T) {
@@ -147,49 +125,22 @@ func TestToolRegistry_RegisterEmptyName(t *testing.T) {
 	}
 
 	err := registry.Register(tool)
-	if err == nil {
-		t.Fatal("Expected error when registering tool with empty name, got nil")
-	}
-
-	expectedError := "registry: tool name cannot be empty"
-	if err.Error() != expectedError {
-		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
-	}
+	assert.Error(t, err, "Expected error when registering tool with empty name")
+	assert.ErrorIs(t, err, constants.ErrMCPToolNameEmpty, "Error should be ErrMCPToolNameEmpty")
 }
 
 func TestToolRegistry_RegisterInvalidName(t *testing.T) {
 	registry := NewToolRegistry()
 
 	testCases := []struct {
-		name        string
-		toolName    string
-		expectedErr string
+		name     string
+		toolName string
 	}{
-		{
-			name:        "uppercase letters",
-			toolName:    "InvalidTool",
-			expectedErr: "registry: invalid tool name 'InvalidTool'",
-		},
-		{
-			name:        "hyphens",
-			toolName:    "invalid-tool",
-			expectedErr: "registry: invalid tool name 'invalid-tool'",
-		},
-		{
-			name:        "spaces",
-			toolName:    "invalid tool",
-			expectedErr: "registry: invalid tool name 'invalid tool'",
-		},
-		{
-			name:        "starts with digit",
-			toolName:    "1invalid",
-			expectedErr: "registry: invalid tool name '1invalid'",
-		},
-		{
-			name:        "starts with underscore",
-			toolName:    "_invalid",
-			expectedErr: "registry: invalid tool name '_invalid'",
-		},
+		{"uppercase letters", "InvalidTool"},
+		{"hyphens", "invalid-tool"},
+		{"spaces", "invalid tool"},
+		{"starts with digit", "1invalid"},
+		{"starts with underscore", "_invalid"},
 	}
 
 	for _, tc := range testCases {
@@ -203,13 +154,8 @@ func TestToolRegistry_RegisterInvalidName(t *testing.T) {
 			}
 
 			err := registry.Register(tool)
-			if err == nil {
-				t.Fatalf("Expected error for tool name '%s', got nil", tc.toolName)
-			}
-
-			if err.Error()[:len(tc.expectedErr)] != tc.expectedErr {
-				t.Errorf("Expected error to start with '%s', got '%s'", tc.expectedErr, err.Error())
-			}
+			assert.Error(t, err, "Expected error for tool name '%s'", tc.toolName)
+			assert.ErrorIs(t, err, constants.ErrMCPToolNameInvalid, "Error should wrap ErrMCPToolNameInvalid")
 		})
 	}
 }
@@ -234,9 +180,7 @@ func TestToolRegistry_RegisterValidNames(t *testing.T) {
 		}
 
 		err := registry.Register(tool)
-		if err != nil {
-			t.Errorf("Expected no error for valid name '%s', got: %v", name, err)
-		}
+		assert.NoError(t, err, "Expected no error for valid name '%s'", name)
 	}
 }
 
@@ -244,25 +188,13 @@ func TestToolRegistry_RegisterInvalidSchema(t *testing.T) {
 	registry := NewToolRegistry()
 
 	testCases := []struct {
-		name        string
-		schema      *InputSchema
-		expectedErr string
+		name   string
+		schema *InputSchema
+		err    error
 	}{
-		{
-			name:        "nil schema",
-			schema:      nil,
-			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema cannot be nil",
-		},
-		{
-			name:        "missing type",
-			schema:      &InputSchema{},
-			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema missing required 'type' field",
-		},
-		{
-			name:        "invalid type",
-			schema:      &InputSchema{Type: "array"},
-			expectedErr: "registry: invalid input schema for tool 'test_tool': registry: schema 'type' must be 'object'",
-		},
+		{"nil schema", nil, constants.ErrMCPSchemaNil},
+		{"missing type", &InputSchema{}, constants.ErrMCPSchemaMissingType},
+		{"invalid type", &InputSchema{Type: "array"}, constants.ErrMCPSchemaInvalidType},
 	}
 
 	for _, tc := range testCases {
@@ -274,13 +206,8 @@ func TestToolRegistry_RegisterInvalidSchema(t *testing.T) {
 			}
 
 			err := registry.Register(tool)
-			if err == nil {
-				t.Fatal("Expected error for invalid schema, got nil")
-			}
-
-			if err.Error() != tc.expectedErr {
-				t.Errorf("Expected error '%s', got '%s'", tc.expectedErr, err.Error())
-			}
+			assert.Error(t, err, "Expected error for invalid schema")
+			assert.ErrorIs(t, err, tc.err, "Error should wrap %v", tc.err)
 		})
 	}
 }
@@ -300,18 +227,12 @@ func TestToolRegistry_Get(t *testing.T) {
 
 	// Test getting existing tool
 	retrieved, ok := registry.Get("get_test")
-	if !ok {
-		t.Fatal("Failed to get existing tool")
-	}
-	if retrieved.Name() != "get_test" {
-		t.Errorf("Got wrong tool: %s", retrieved.Name())
-	}
+	assert.True(t, ok, "Failed to get existing tool")
+	assert.Equal(t, "get_test", retrieved.Name(), "Got wrong tool")
 
 	// Test getting non-existent tool
 	_, ok = registry.Get("non_existent")
-	if ok {
-		t.Fatal("Expected false for non-existent tool")
-	}
+	assert.False(t, ok, "Expected false for non-existent tool")
 }
 
 func TestToolRegistry_List(t *testing.T) {
@@ -328,9 +249,7 @@ func TestToolRegistry_List(t *testing.T) {
 	}
 
 	listed := registry.List()
-	if len(listed) != 3 {
-		t.Errorf("Expected 3 tools, got %d", len(listed))
-	}
+	assert.Equal(t, 3, len(listed), "Expected 3 tools")
 
 	// Verify all tools are present
 	names := make(map[string]bool)
@@ -339,18 +258,14 @@ func TestToolRegistry_List(t *testing.T) {
 	}
 
 	for _, expectedName := range []string{"tool1", "tool2", "tool3"} {
-		if !names[expectedName] {
-			t.Errorf("Expected tool '%s' in list", expectedName)
-		}
+		assert.True(t, names[expectedName], "Expected tool '%s' in list", expectedName)
 	}
 }
 
 func TestToolRegistry_Count(t *testing.T) {
 	registry := NewToolRegistry()
 
-	if registry.Count() != 0 {
-		t.Errorf("Expected count 0, got %d", registry.Count())
-	}
+	assert.Equal(t, 0, registry.Count(), "Expected count 0")
 
 	registry.Register(&mockTool{
 		name:        "tool1",
@@ -358,9 +273,7 @@ func TestToolRegistry_Count(t *testing.T) {
 		schema:      &InputSchema{Type: "object"},
 	})
 
-	if registry.Count() != 1 {
-		t.Errorf("Expected count 1, got %d", registry.Count())
-	}
+	assert.Equal(t, 1, registry.Count(), "Expected count 1")
 
 	registry.Register(&mockTool{
 		name:        "tool2",
@@ -368,9 +281,7 @@ func TestToolRegistry_Count(t *testing.T) {
 		schema:      &InputSchema{Type: "object"},
 	})
 
-	if registry.Count() != 2 {
-		t.Errorf("Expected count 2, got %d", registry.Count())
-	}
+	assert.Equal(t, 2, registry.Count(), "Expected count 2")
 }
 
 func TestToolRegistry_ConcurrentAccess(t *testing.T) {
@@ -396,9 +307,7 @@ func TestToolRegistry_ConcurrentAccess(t *testing.T) {
 	}
 
 	// Only one should have succeeded (no duplicates)
-	if registry.Count() != 1 {
-		t.Errorf("Expected 1 tool after concurrent registration, got %d", registry.Count())
-	}
+	assert.Equal(t, 1, registry.Count(), "Expected 1 tool after concurrent registration")
 }
 
 func TestIsValidToolName(t *testing.T) {
@@ -410,9 +319,7 @@ func TestIsValidToolName(t *testing.T) {
 	}
 
 	for _, name := range validNames {
-		if !isValidToolName(name) {
-			t.Errorf("Expected '%s' to be valid", name)
-		}
+		assert.True(t, isValidToolName(name), "Expected '%s' to be valid", name)
 	}
 
 	invalidNames := []string{
@@ -427,9 +334,7 @@ func TestIsValidToolName(t *testing.T) {
 	}
 
 	for _, name := range invalidNames {
-		if isValidToolName(name) {
-			t.Errorf("Expected '%s' to be invalid", name)
-		}
+		assert.False(t, isValidToolName(name), "Expected '%s' to be invalid", name)
 	}
 }
 
@@ -450,27 +355,21 @@ func TestValidateInputSchema(t *testing.T) {
 
 	for _, schema := range validSchemas {
 		err := validateInputSchema(schema)
-		if err != nil {
-			t.Errorf("Expected valid schema to pass validation: %v", err)
-		}
+		assert.NoError(t, err, "Expected valid schema to pass validation")
 	}
 
 	invalidSchemas := []struct {
-		schema      *InputSchema
-		expectedErr string
+		schema *InputSchema
+		err    error
 	}{
-		{nil, ErrSchemaNil},
-		{&InputSchema{Type: ""}, ErrSchemaMissingType},
-		{&InputSchema{Type: "array"}, ErrSchemaInvalidType},
+		{nil, constants.ErrMCPSchemaNil},
+		{&InputSchema{Type: ""}, constants.ErrMCPSchemaMissingType},
+		{&InputSchema{Type: "array"}, constants.ErrMCPSchemaInvalidType},
 	}
 
 	for _, tc := range invalidSchemas {
 		err := validateInputSchema(tc.schema)
-		if err == nil {
-			t.Fatal("Expected error for invalid schema, got nil")
-		}
-		if err.Error() != tc.expectedErr {
-			t.Errorf("Expected error '%s', got '%s'", tc.expectedErr, err.Error())
-		}
+		assert.Error(t, err, "Expected error for invalid schema")
+		assert.ErrorIs(t, err, tc.err, "Error should be %v", tc.err)
 	}
 }

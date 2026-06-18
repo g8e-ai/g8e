@@ -101,4 +101,39 @@ var (
 	ErrPIDWriteFailed     = errors.New("failed to write PID file")
 	ErrPostureReadFailed  = errors.New("failed to read posture file")
 	ErrPostureWriteFailed = errors.New("failed to write posture file")
+
+	// File system errors
+	ErrPathNotFound   = errors.New("path not found")
+	ErrStatFailed     = errors.New("failed to stat path")
+	ErrNotADirectory  = errors.New("path is not a directory")
+	ErrPathValidation = errors.New("invalid path")
+	ErrDirectoryList  = errors.New("failed to list directory")
+	ErrDirectoryRead  = errors.New("failed to read directory")
+
+	// Execution service errors
+	ErrExecutionServiceStopping = errors.New("execution service is stopping")
+	ErrExecutionNotFound        = errors.New("execution not found")
+	ErrEmptyCommand             = errors.New("empty command")
+	ErrCommandLookup            = errors.New("command lookup failed")
+	ErrShellRequired            = errors.New("shell required but not found")
+	ErrCloudCLIBlocked          = errors.New("cloud CLI command blocked")
+
+	// MCP service errors
+	ErrMCPUnmarshalArguments = errors.New("unmarshal arguments")
+	ErrMCPGetDiskUsage       = errors.New("get disk usage")
+	ErrMCPStatFS             = errors.New("statfs")
+	ErrMCPParseMounts        = errors.New("parse mounts")
+	ErrMCPReadMounts         = errors.New("read /proc/mounts")
+	ErrMCPHostPortRequired   = errors.New("host and port required")
+
+	// MCP registry errors
+	ErrMCPSchemaNil               = errors.New("schema cannot be nil")
+	ErrMCPSchemaMissingType       = errors.New("schema missing required 'type' field")
+	ErrMCPSchemaInvalidType       = errors.New("schema 'type' must be 'object'")
+	ErrMCPSchemaInvalidProperties = errors.New("schema 'properties' must be an object")
+	ErrMCPSchemaInvalidRequired   = errors.New("schema 'required' must be an array")
+	ErrMCPToolNil                 = errors.New("cannot register nil tool")
+	ErrMCPToolNameEmpty           = errors.New("tool name cannot be empty")
+	ErrMCPToolNameInvalid         = errors.New("invalid tool name: must contain only lowercase letters, digits, and underscores")
+	ErrMCPToolAlreadyRegistered   = errors.New("tool is already registered")
 )

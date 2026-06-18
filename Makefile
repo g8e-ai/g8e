@@ -414,7 +414,7 @@ test: test-unit test-integration
 .PHONY: test-unit
 test-unit:
 	@echo "Running Tier 1 (Unit) tests..."
-	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
+	@go test -p=1 $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 .PHONY: test-short
 test-short:

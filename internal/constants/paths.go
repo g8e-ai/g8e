@@ -260,7 +260,20 @@ const (
 	PathProcSysKernelRandomBootID                             = "/proc/sys/kernel/random/boot_id"
 	PathProcSelfCgroup                                        = "/proc/self/cgroup"
 	PathProcSelfMountinfo                                     = "/proc/self/mountinfo"
+	PathProcLoadAvg                                           = "/proc/loadavg"
+	PathProcMemInfo                                           = "/proc/meminfo"
+	PathProcNet                                               = "/proc/net"
+	PathProcNetTCP                                            = "/proc/net/tcp"
+	PathProcNetUDP                                            = "/proc/net/udp"
+	PathProcNetTCP6                                           = "/proc/net/tcp6"
+	PathProcNetUDP6                                           = "/proc/net/udp6"
+	PathProcNetRaw                                            = "/proc/net/raw"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
+)
+
+// Environment variable constants
+const (
+	EnvPathDefault = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 )
 
 // PKI filesystem constants for subdirectories and filenames.
@@ -448,4 +461,16 @@ const (
 	TestDBSubdirName           = "db"
 	TestLedgerDirname          = "ledger"
 	TestGitDirname             = ".git"
+	TestFileTxtFilename        = "test.txt"
+	TestNonexistentTxtFilename = "nonexistent.txt"
+
+	// File system listing limits
+	FsListMaxDepth       = 3
+	FsListDefaultDepth   = 0
+	FsListMaxEntries     = 500
+	FsListDefaultEntries = 100
+	FsListBatchSize      = 100
+
+	// Temporary file suffix for atomic writes
+	TmpFileSuffix = ".tmp"
 )

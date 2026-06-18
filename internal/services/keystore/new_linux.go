@@ -19,23 +19,25 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // New creates a new Keystore instance with the libsecret backend.
 // Falls back to file-based storage if libsecret is not available.
+// Production callers should pass constants.Paths.Infra.SecretsDir for secretsDir.
 func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
+	if err := os.MkdirAll(secretsDir, constants.PermDirPrivate); err != nil {
+		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
+	}
+
 	backend, err := newLibsecretBackend()
 	if err != nil {
 		backend, err = newFileBackend(secretsDir)
 		if err != nil {
 			return nil, fmt.Errorf("keystore: initialize file backend: %w", err)
 		}
-		// Log fallback only once per backend type to avoid duplicate warnings
 		logger.Info("[Keystore] Using file-based storage (libsecret unavailable)", "backend", backend.Name())
-	}
-
-	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
 	}
 
 	return &Keystore{

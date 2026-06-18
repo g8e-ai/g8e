@@ -36,7 +36,7 @@ func newFileBackend(secretsDir string) (Backend, error) {
 }
 
 func (b *fileBackend) Name() string {
-	return string(constants.ToolDisplayCategoryFile)
+	return "file"
 }
 
 func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
@@ -64,8 +64,8 @@ func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
 
 func (b *fileBackend) StoreMasterKey(key []byte) error {
 	// Validate key length (AES-256 requires 32 bytes)
-	if len(key) != 32 {
-		return fmt.Errorf("invalid master key length %d, expected 32", len(key))
+	if len(key) != keySize {
+		return fmt.Errorf("invalid master key length %d, expected %d", len(key), keySize)
 	}
 
 	// Encode as base64 for safe storage
@@ -73,7 +73,7 @@ func (b *fileBackend) StoreMasterKey(key []byte) error {
 	path := filepath.Join(b.secretsDir, constants.MasterKeyFilename)
 	tmpPath := path + ".tmp"
 
-	if err := os.WriteFile(tmpPath, []byte(encoded), 0600); err != nil {
+	if err := os.WriteFile(tmpPath, []byte(encoded), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("write master key file: %w", err)
 	}
 

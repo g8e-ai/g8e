@@ -624,7 +624,12 @@ func (fes *FileEditService) collectFileStats(filePath string, fileInfo os.FileIn
 	}
 
 	// Platform-specific ownership information
-	fes.collectFileOwnership(fileInfo, stats)
+	if err := fes.collectFileOwnership(fileInfo, stats); err != nil {
+		fes.logger.Warn("Failed to collect file ownership information",
+			"path", filePath,
+			"error", err)
+		// Continue without ownership info - non-critical for file operations
+	}
 
 	return stats, nil
 }

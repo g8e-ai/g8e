@@ -23,7 +23,8 @@ import (
 )
 
 // collectFileOwnership is a no-op on Windows (ownership handled differently)
-func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *models.FileStats) {
+func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *models.FileStats) error {
 	// Windows file ownership is handled via ACLs, not UID/GID
 	// For now, leave ownership fields nil
+	return nil
 }
