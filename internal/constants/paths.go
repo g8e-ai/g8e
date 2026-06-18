@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/g8e-ai/g8e/internal/pathutil"
 )
 
 // Paths defines canonical G8E filesystem paths.
@@ -145,33 +147,33 @@ func InitPaths() error {
 // This allows tests and specific use cases to override the default cwd behavior.
 func InitPathsWithBase(baseDir string) error {
 	// Resolve all paths relative to baseDir
-	Paths.Infra.RuntimeDir = filepath.Join(baseDir, ".g8e")
-	Paths.Infra.DataDir = filepath.Join(baseDir, ".g8e/data")
-	Paths.Infra.PkiDir = filepath.Join(baseDir, ".g8e/pki")
-	Paths.Infra.SecretsDir = filepath.Join(baseDir, ".g8e/secrets")
-	Paths.Infra.ProtocolDir = filepath.Join(baseDir, ".g8e/protocol")
-	Paths.Infra.VaultDir = filepath.Join(baseDir, ".g8e/vault")
-	Paths.Infra.VaultKeyPath = filepath.Join(Paths.Infra.VaultDir, "key")
+	Paths.Infra.RuntimeDir = pathutil.SafeJoin(baseDir, ".g8e")
+	Paths.Infra.DataDir = pathutil.SafeJoin(baseDir, ".g8e/data")
+	Paths.Infra.PkiDir = pathutil.SafeJoin(baseDir, ".g8e/pki")
+	Paths.Infra.SecretsDir = pathutil.SafeJoin(baseDir, ".g8e/secrets")
+	Paths.Infra.ProtocolDir = pathutil.SafeJoin(baseDir, ".g8e/protocol")
+	Paths.Infra.VaultDir = pathutil.SafeJoin(baseDir, ".g8e/vault")
+	Paths.Infra.VaultKeyPath = pathutil.SafeJoin(Paths.Infra.VaultDir, "key")
 
 	// Update derived paths
-	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")
-	Paths.Infra.ProtocolModelsDir = filepath.Join(Paths.Infra.ProtocolDir, "models")
-	Paths.Infra.DbPath = filepath.Join(Paths.Infra.DataDir, "g8e.db")
-	Paths.Infra.LocalStateDBPath = filepath.Join(Paths.Infra.RuntimeDir, "local_state.db")
-	Paths.Infra.SuspendedTransactionsDBPath = filepath.Join(Paths.Infra.DataDir, "suspended_transactions.db")
-	Paths.Infra.AuditVaultDBPath = filepath.Join(Paths.Infra.DataDir, "audit_vault.db")
-	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
-	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
-	Paths.Infra.DocsDir = filepath.Join(baseDir, ".g8e/docs")
-	Paths.Infra.SshConfigPath = filepath.Join(baseDir, ".g8e/ssh_config")
-	Paths.Infra.TestVaultDir = filepath.Join(baseDir, ".g8e/test-vault")
-	Paths.Infra.RootCAPath = filepath.Join(Paths.Infra.PkiDir, "root/root_ca.crt")
-	Paths.Infra.HubCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/hub_ca.crt")
-	Paths.Infra.OperatorCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/operator_ca.crt")
-	Paths.Infra.GatewayPeerCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/gateway_peer_ca.crt")
-	Paths.Infra.GatewayChainPath = filepath.Join(Paths.Infra.PkiDir, "issued/hub/operator-gateway.chain.pem")
-	Paths.Infra.TrustDomainJSONPath = filepath.Join(Paths.Infra.PkiDir, "trust/trust-domain.json")
-	Paths.Infra.ServiceCertPath = filepath.Join(Paths.Infra.PkiDir, "issued/hub/operator-gateway.crt")
+	Paths.Infra.ProtocolConstantsDir = pathutil.SafeJoin(Paths.Infra.ProtocolDir, "constants")
+	Paths.Infra.ProtocolModelsDir = pathutil.SafeJoin(Paths.Infra.ProtocolDir, "models")
+	Paths.Infra.DbPath = pathutil.SafeJoin(Paths.Infra.DataDir, "g8e.db")
+	Paths.Infra.LocalStateDBPath = pathutil.SafeJoin(Paths.Infra.RuntimeDir, "local_state.db")
+	Paths.Infra.SuspendedTransactionsDBPath = pathutil.SafeJoin(Paths.Infra.DataDir, "suspended_transactions.db")
+	Paths.Infra.AuditVaultDBPath = pathutil.SafeJoin(Paths.Infra.DataDir, "audit_vault.db")
+	Paths.Infra.CaCertPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
+	Paths.Infra.AppCertDir = pathutil.SafeJoin(Paths.Infra.PkiDir, "issued/apps")
+	Paths.Infra.DocsDir = pathutil.SafeJoin(baseDir, ".g8e/docs")
+	Paths.Infra.SshConfigPath = pathutil.SafeJoin(baseDir, ".g8e/ssh_config")
+	Paths.Infra.TestVaultDir = pathutil.SafeJoin(baseDir, ".g8e/test-vault")
+	Paths.Infra.RootCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "root/root_ca.crt")
+	Paths.Infra.HubCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "authorities/hub_ca.crt")
+	Paths.Infra.OperatorCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "authorities/operator_ca.crt")
+	Paths.Infra.GatewayPeerCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "authorities/gateway_peer_ca.crt")
+	Paths.Infra.GatewayChainPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "issued/hub/operator-gateway.chain.pem")
+	Paths.Infra.TrustDomainJSONPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "trust/trust-domain.json")
+	Paths.Infra.ServiceCertPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "issued/hub/operator-gateway.crt")
 	Paths.Infra.PkiRootDir = filepath.Join(Paths.Infra.PkiDir, "root")
 	Paths.Infra.PkiAuthoritiesDir = filepath.Join(Paths.Infra.PkiDir, "authorities")
 	Paths.Infra.PkiIssuedHubDir = filepath.Join(Paths.Infra.PkiDir, "issued/hub")

@@ -400,37 +400,6 @@ func TestAuditReportResponseParsing(t *testing.T) {
 	})
 }
 
-// Integration test placeholder for when gateway is running
-func TestAuditReceiptsCmd_Integration(t *testing.T) {
-	t.Run("receipts with running gateway", func(t *testing.T) {
-		t.Skip("Integration test requiring running gateway - test with ./g8e test e2e")
-	})
-}
-
-func TestAuditExportCmd_Integration(t *testing.T) {
-	t.Run("export with running gateway", func(t *testing.T) {
-		t.Skip("Integration test requiring running gateway - test with ./g8e test e2e")
-	})
-}
-
-func TestAuditReportCmd_Integration(t *testing.T) {
-	t.Run("report with running gateway", func(t *testing.T) {
-		t.Skip("Integration test requiring running gateway - test with ./g8e test e2e")
-	})
-}
-
-func TestAuditEventsCmd_Integration(t *testing.T) {
-	t.Run("events with running gateway", func(t *testing.T) {
-		t.Skip("Integration test requiring running gateway - test with ./g8e test e2e")
-	})
-}
-
-func TestAuditSummaryCmd_Integration(t *testing.T) {
-	t.Run("summary with running gateway", func(t *testing.T) {
-		t.Skip("Integration test requiring running gateway - test with ./g8e test e2e")
-	})
-}
-
 // Error handling tests
 
 func TestAuditReceiptsCmd_ConfigLoadFailure(t *testing.T) {

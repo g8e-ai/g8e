@@ -13,28 +13,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package platform
+package tests
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/cli/cmd"
 )
 
-func TestOpenBrowser(t *testing.T) {
-	t.Run("OpenBrowser returns error for invalid URL", func(t *testing.T) {
-		err := OpenBrowser("")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to open browser")
-	})
+func TestBackupConfigFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "g8e-test-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tmpDir)
 
-	t.Run("OpenBrowser attempts to open valid URL", func(t *testing.T) {
-		err := OpenBrowser("https://example.com")
-		// This will likely fail in test environment due to no display,
-		// but should not panic
-		if err != nil {
-			assert.Contains(t, err.Error(), "failed to open browser")
-		}
-	})
+	configPath := filepath.Join(tmpDir, "test.json")
+	err = os.WriteFile(configPath, []byte("{}"), 0644)
+	require.NoError(t, err)
+
+	err = cmd.BackupConfigFile(configPath)
+	require.NoError(t, err)
+
+	backupPath := configPath + ".bak"
+	_, err = os.Stat(backupPath)
+	require.NoError(t, err, "Backup file should exist")
+
+	content, err := os.ReadFile(backupPath)
+	require.NoError(t, err)
+	assert.Equal(t, "{}", string(content))
 }
