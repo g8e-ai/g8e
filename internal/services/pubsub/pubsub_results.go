@@ -141,15 +141,15 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	}
 
 	// Use original message ID for correlation and context from originalMsg
-	env, err := BuildUniversalResultEnvelope(rr.config, eventType, status, originalMsg.ID, rr.config.OperatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
-	if err != nil {
-		return fmt.Errorf("failed to build Universal status envelope: %w", err)
-	}
-
 	operatorID := rr.config.OperatorID
 	if originalMsg.OperatorID != nil && *originalMsg.OperatorID != "" {
 		operatorID = *originalMsg.OperatorID
 	}
+	env, err := BuildUniversalResultEnvelope(rr.config, eventType, status, originalMsg.ID, operatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
+	if err != nil {
+		return fmt.Errorf("failed to build Universal status envelope: %w", err)
+	}
+
 	if err := rr.publishUniversal(ctx, env, operatorID, originalMsg.OperatorSessionID); err != nil {
 		return fmt.Errorf("failed to publish Universal status update: %w", err)
 	}

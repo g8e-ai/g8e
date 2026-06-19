@@ -902,7 +902,7 @@ func (rs *OperatorPubSubService) SendAutomaticHeartbeat() {
 // pubsubAuditLogger implements mcp.AuditLogger using the SQLAuditStore so that
 // read_field tool calls produce audit records in operator mode.
 type pubsubAuditLogger struct {
-	store  *storage.SQLAuditStore
+	store  AuditEventRecorder
 	logger *slog.Logger
 }
 

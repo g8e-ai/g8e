@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	storagetest "github.com/g8e-ai/g8e/internal/services/storage/storagetest"
@@ -1011,5 +1012,217 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		// Verify the secrets were redacted by default patterns
 		assert.NotContains(t, events[0].ContentText, "secret123", "password secret should be redacted")
 		assert.NotContains(t, events[0].ContentText, "ghp_test_token", "api key should be redacted")
+	})
+}
+
+func TestOperatorPubSubService_SetL4Warden(t *testing.T) {
+	t.Run("sets L4 warden for testing", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		mockWarden := &governance.L4Warden{}
+		svc.SetL4Warden(mockWarden)
+
+		assert.Equal(t, mockWarden, svc.l4warden)
+	})
+}
+
+func TestOperatorPubSubService_handleEvalAnswerRequest(t *testing.T) {
+	t.Run("handles eval answer request asynchronously", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		req := &operatorv1.EvalAnswerRequested{
+			Benchmark: "test-benchmark",
+			PromptId:  "prompt-1",
+			Answer:    "test answer",
+		}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.Eval.AnswerRequested,
+			Payload:   payload,
+		}
+
+		// Should not panic
+		svc.handleEvalAnswerRequest(context.Background(), msg)
+	})
+}
+
+func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
+	t.Run("handles heartbeat event and publishes", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		// Set up heartbeat service with mock publisher
+		mockPublisher := &mockResultsPublisher{}
+		svc.heartbeat.SetResultsPublisher(mockPublisher)
+
+		heartbeat := &operatorv1.HeartbeatResult{
+			OperatorId:        "op-1",
+			OperatorSessionId: "session-1",
+			Status:            "automatic",
+		}
+		payload, _ := proto.Marshal(heartbeat)
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.Heartbeat,
+			Payload:   payload,
+		}
+
+		svc.handleHeartbeatEvent(context.Background(), msg)
+		assert.True(t, mockPublisher.publishHeartbeatCalled)
+	})
+
+	t.Run("logs error when payload unmarshal fails", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.Heartbeat,
+			Payload:   []byte("invalid protobuf"),
+		}
+
+		// Should not panic, should log error
+		svc.handleHeartbeatEvent(context.Background(), msg)
+	})
+}
+
+func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
+	t.Run("sends automatic heartbeat via heartbeat service", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		// Should not panic
+		svc.SendAutomaticHeartbeat()
+	})
+}
+
+func TestPubsubAuditLogger_LogFieldRead(t *testing.T) {
+	t.Run("records field read event in audit store", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		mockStore := &mockAuditStore{}
+		auditLogger := &pubsubAuditLogger{
+			store:  mockStore,
+			logger: logger,
+		}
+
+		testVal := "test-value"
+		err := auditLogger.LogFieldRead("session-1", "collection", "doc-1", "field.path", mcp.FieldValue{Str: &testVal})
+		require.NoError(t, err)
+
+		events := mockStore.GetEvents()
+		require.Len(t, events, 1)
+		assert.Equal(t, "session-1", events[0].OperatorSessionID)
+		assert.Equal(t, constants.EventOperatorFieldReadRequested, events[0].Type)
+		assert.Contains(t, events[0].ContentText, "collection/doc-1.field.path")
+		assert.Equal(t, "test-value", events[0].CommandStdout)
+	})
+
+	t.Run("returns error when store fails", func(t *testing.T) {
+		t.Parallel()
+		logger := testutil.NewTestLogger()
+		mockStore := &mockAuditStore{}
+		mockStore.SetRecordEventError(true)
+		auditLogger := &pubsubAuditLogger{
+			store:  mockStore,
+			logger: logger,
+		}
+
+		testVal := "test-value"
+		err := auditLogger.LogFieldRead("session-1", "collection", "doc-1", "field.path", mcp.FieldValue{Str: &testVal})
+		assert.Error(t, err)
+	})
+}
+
+func TestOperatorPubSubService_ValidateSession(t *testing.T) {
+	t.Run("always returns true for operator mode", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		valid, err := svc.ValidateSession("session-1")
+		assert.True(t, valid)
+		assert.NoError(t, err)
+	})
+
+	t.Run("always returns true for any session ID", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		svc, err := NewOperatorPubSubService(CommandServiceConfig{
+			Config:            cfg,
+			Logger:            testutil.NewTestLogger(),
+			PubSubClient:      NewMockOperatorPubSubClient(),
+			ReplayStore:       &testutil.MockReplayStore{},
+			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
+			TransactionAudit:  &testutil.MockTransactionAudit{},
+			L3Notary:          &testutil.MockL3Notary{},
+		})
+		require.NoError(t, err)
+
+		valid, err := svc.ValidateSession("")
+		assert.True(t, valid)
+		assert.NoError(t, err)
 	})
 }

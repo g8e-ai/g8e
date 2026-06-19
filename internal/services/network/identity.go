@@ -30,10 +30,24 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// netInterfacesFunc is a function type for getting network interfaces.
+// This allows dependency injection for testing.
+type netInterfacesFunc func() ([]net.Interface, error)
+
+// defaultNetInterfaces is the default implementation using net.Interfaces.
+func defaultNetInterfaces() ([]net.Interface, error) {
+	return net.Interfaces()
+}
+
 // GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host.
 // This is used for the Operator Bootstrap endpoint which remote operators rely on.
 func GetExternalInterfaceIP() string {
-	ifaces, err := net.Interfaces()
+	return getExternalInterfaceIPWithFunc(defaultNetInterfaces)
+}
+
+// getExternalInterfaceIPWithFunc is the testable implementation that accepts a netInterfaces function.
+func getExternalInterfaceIPWithFunc(getInterfaces netInterfacesFunc) string {
+	ifaces, err := getInterfaces()
 	if err != nil {
 		return "localhost"
 	}
@@ -579,19 +593,33 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 	return hostnames, nil
 }
 
+// commandExecutor is a function type for executing commands.
+// This allows dependency injection for testing.
+type commandExecutor func(name string, args ...string) ([]byte, error)
+
+// defaultCommandExecutor is the default implementation using exec.Command.
+func defaultCommandExecutor(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).Output()
+}
+
 // detectWindowsIdentity detects Windows-specific network identities.
 func (d *Detector) detectWindowsIdentity() (WindowsIdentity, error) {
+	return d.detectWindowsIdentityWithExecutor(defaultCommandExecutor)
+}
+
+// detectWindowsIdentityWithExecutor is the testable implementation that accepts a command executor.
+func (d *Detector) detectWindowsIdentityWithExecutor(executor commandExecutor) (WindowsIdentity, error) {
 	var winID WindowsIdentity
 
 	// Try to get NetBIOS name using hostname command
-	hn, err := exec.Command("hostname").Output()
+	hn, err := executor("hostname")
 	if err != nil {
 		return winID, fmt.Errorf("network: %s: %w", constants.ErrNetworkGetHostname, err)
 	}
 	winID.NetBIOSName = strings.TrimSpace(string(hn))
 
 	// Try to get AD FQDN using systeminfo
-	info, err := exec.Command("systeminfo").Output()
+	info, err := executor("systeminfo")
 	if err != nil {
 		return winID, fmt.Errorf("network: %s: %w", constants.ErrNetworkGetSysteminfo, err)
 	}
