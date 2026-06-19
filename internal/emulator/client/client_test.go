@@ -197,7 +197,7 @@ func TestClient_StateRoot(t *testing.T) {
 			usePublicBase: true,
 		},
 		{
-			name:          "state_root field (legacy)",
+			name:          "state_root field",
 			responseBody:  `{"state_root": "def456"}`,
 			expectedRoot:  "def456",
 			wantErr:       false,

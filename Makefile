@@ -133,7 +133,6 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests (unit + integration)"
-	@echo "  test-short            Run short tests with race detection"
 	@echo "  test-pkg-<path>       Run tests for a specific package (e.g., make test-pkg-internal/services/auth)"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
@@ -141,12 +140,6 @@ help:
 	@echo "  test-docker           Run Tier 3 (Docker E2E) tests - requires Docker"
 	@echo "  test-gov              Run Tier 3 (Gov Demo E2E) tests - requires Docker"
 	@echo "  test-gateway          Run gateway-specific integration tests"
-	@echo "  test-mcp              Run MCP integration tests (legacy - redirects to test-integration)"
-	@echo "  test-a2a              Run A2A integration tests (legacy - redirects to test-integration)"
-	@echo "  test-universal-gateway Run universal gateway integration tests (legacy - redirects to test-integration)"
-	@echo "  test-byo              Run BYO client integration tests (legacy - redirects to test-integration)"
-	@echo "  test-native           Run native tool integration tests (legacy - redirects to test-integration)"
-	@echo "  test-scenario         Run scenario integration tests (legacy - redirects to test-integration)"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -416,10 +409,6 @@ test-unit:
 	@echo "Running Tier 1 (Unit) tests..."
 	@go test -p=1 -tags=!integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
-.PHONY: test-short
-test-short:
-	@echo "Running short unit tests (skips long-running tests)..."
-	@go test $(TEST_RACE) -short $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 # Tier 2: In-Process Integration Tests - no external dependencies
 .PHONY: test-integration
@@ -439,11 +428,6 @@ test-gov:
 	@echo "Running Tier 3 (Gov Demo E2E) tests..."
 	@go test -tags=e2e -run TestDockerGateway_GovDemo $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
-# Legacy targets - redirect to honest names
-.PHONY: test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway
-test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway:
-	@echo "Running integration tests (legacy target)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
 # Gateway tests (subset of integration tests)
 .PHONY: test-gateway

@@ -635,16 +635,9 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-integration`** - Runs Tier 2 (In-Process Integration) tests with `integration` build tag. Uses on-disk SQLite, local PKI, local pubsub.
 - **`make test-docker`** - Runs Tier 3 (Docker E2E) tests with `e2e` build tag. Requires Docker.
 - **`make test-gov`** - Runs Tier 3 (Gov Demo E2E) tests with `e2e` build tag. Requires Docker.
-- **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
 - **`make test-coverage`** - Runs tests with coverage (enforces 70% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
 - **`make test-shuffle`** - Runs all tests with randomized order.
 - **`make test-gateway`** - Runs gateway-specific integration tests (A2A gateway, MCP gateway, MCP stdio).
-- **`make test-mcp`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-a2a`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-universal-gateway`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-byo`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-native`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-scenario`** - Legacy target. Redirects to `make test-integration`.
 
 ### Lints
 
