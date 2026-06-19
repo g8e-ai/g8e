@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 // TestDefaultAuditStoreConfig verifies the default configuration values
@@ -441,5 +442,25 @@ func TestRecordFileMutationNilStore(t *testing.T) {
 	err := ass.RecordFileMutation(mutation)
 	if err != nil {
 		t.Errorf("RecordFileMutation() on nil store should return nil, got %v", err)
+	}
+}
+
+// TestSQLAuditStore_NilEncryptionVault verifies that NewSQLAuditStore
+// requires EncryptionVault in config and returns an error when vault is nil.
+func TestSQLAuditStore_NilEncryptionVault(t *testing.T) {
+	logger := testutil.NewTestLogger()
+
+	config := DefaultAuditStoreConfig()
+
+	// Test that service fails to initialize with nil EncryptionVault
+	ass, err := NewSQLAuditStore(config, logger)
+	if err == nil {
+		t.Error("NewSQLAuditStore with nil EncryptionVault should return error")
+	}
+	if !strings.Contains(err.Error(), "EncryptionVault is required") {
+		t.Errorf("Error should mention 'EncryptionVault is required', got: %v", err)
+	}
+	if ass != nil {
+		t.Error("NewSQLAuditStore with nil EncryptionVault should return nil store")
 	}
 }
