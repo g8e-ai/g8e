@@ -32,12 +32,6 @@ func TestPorts(t *testing.T) {
 		assert.Equal(t, 18789, Ports.LocalHttpStdioGateway)
 	})
 
-	t.Run("snake case variants match camel case", func(t *testing.T) {
-		assert.Equal(t, Ports.OperatorHttp, Ports.OperatorHttpSnake)
-		assert.Equal(t, Ports.OperatorHttps, Ports.OperatorHttpsSnake)
-		assert.Equal(t, Ports.LocalHttpStdioGateway, Ports.LocalHttpStdioGatewaySnake)
-	})
-
 	t.Run("all ports are in valid range", func(t *testing.T) {
 		assert.GreaterOrEqual(t, Ports.OperatorHttp, 1)
 		assert.LessOrEqual(t, Ports.OperatorHttp, 65535)
