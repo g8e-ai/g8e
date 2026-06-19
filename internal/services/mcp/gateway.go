@@ -120,7 +120,7 @@ type GatewayService struct {
 // MCP gateway's read_field operation. It is implemented by the gateway's
 // document store (DocumentStoreService).
 type FieldReader interface {
-	GetField(collection, id, fieldPath string) (interface{}, error)
+	GetField(collection, id, fieldPath string) (FieldValue, error)
 }
 
 // SessionValidator validates Operator sessions for L3 authorization
@@ -130,7 +130,7 @@ type SessionValidator interface {
 
 // AuditLogger logs field read operations to the audit vault
 type AuditLogger interface {
-	LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error
+	LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value FieldValue) error
 }
 
 // Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
@@ -151,7 +151,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		"notary":    true,
 	}
 	if deps.Posture != "" && !validPostures[deps.Posture] {
-		return nil, fmt.Errorf("invalid posture '%s': must be one of doctrine, consensus, or notary", deps.Posture)
+		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)
 	}
 
 	fieldPathRegistry, err := NewFieldPathRegistry(deps.Logger)
@@ -162,7 +162,7 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 
 	nativeToolHandler, err := NewNativeToolHandler(deps.Logger)
 	if err != nil {
-		return nil, fmt.Errorf("initialize native tool handler: %w", err)
+		return nil, fmt.Errorf("gateway: initialize native tool handler: %w", err)
 	}
 
 	g := &GatewayService{
@@ -189,7 +189,7 @@ func (g *GatewayService) runMaintenanceSweep(ctx context.Context) error {
 	// Get expired transactions for audit before deletion
 	expiredTxs, err := g.suspendedStore.GetExpiredSuspendedTransactions(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get expired transactions for audit: %w", err)
+		return fmt.Errorf("gateway: failed to get expired transactions for audit: %w", err)
 	}
 
 	// Audit each expired transaction to the originating session's chain
@@ -217,7 +217,7 @@ func (g *GatewayService) runMaintenanceSweep(ctx context.Context) error {
 	// Delete expired transactions after audit
 	deletedCount, err := g.suspendedStore.CleanupExpiredSuspendedTransactions(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to cleanup expired transactions: %w", err)
+		return fmt.Errorf("gateway: failed to cleanup expired transactions: %w", err)
 	}
 
 	if deletedCount > 0 {
@@ -354,7 +354,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema().ToMap(),
+				InputSchema: nt.InputSchema(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -373,7 +373,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema().ToMap(),
+				InputSchema: nt.InputSchema(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -419,7 +419,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema().ToMap(),
+				InputSchema: nt.InputSchema(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -443,7 +443,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema().ToMap(),
+				InputSchema: nt.InputSchema(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -466,7 +466,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			tools = append(tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema().ToMap(),
+				InputSchema: nt.InputSchema(),
 			})
 		}
 		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -488,7 +488,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 				tools = append(tools, Tool{
 					Name:        nt.Name(),
 					Description: nt.Description(),
-					InputSchema: nt.InputSchema().ToMap(),
+					InputSchema: nt.InputSchema(),
 				})
 			}
 			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -505,7 +505,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 				tools = append(tools, Tool{
 					Name:        nt.Name(),
 					Description: nt.Description(),
-					InputSchema: nt.InputSchema().ToMap(),
+					InputSchema: nt.InputSchema(),
 				})
 			}
 			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
@@ -531,7 +531,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 			downstreamResult.Tools = append(downstreamResult.Tools, Tool{
 				Name:        nt.Name(),
 				Description: nt.Description(),
-				InputSchema: nt.InputSchema().ToMap(),
+				InputSchema: nt.InputSchema(),
 			})
 		}
 	}
@@ -698,18 +698,18 @@ func (g *GatewayService) HandleToolsCall(w http.ResponseWriter, r *http.Request)
 func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params json.RawMessage) (interface{}, error) {
 	var callParams CallToolRequest
 	if err := json.Unmarshal(params, &callParams); err != nil {
-		return nil, fmt.Errorf("invalid tools/call params: %w", err)
+		return nil, fmt.Errorf("gateway: invalid tools/call params: %w", err)
 	}
 
 	if callParams.Name == "" {
-		return nil, errors.New("tool name required")
+		return nil, constants.ErrGatewayToolNameRequired
 	}
 
 	argumentsJSON := "{}"
 	if len(callParams.Arguments) > 0 {
 		var probe interface{}
 		if err := json.Unmarshal(callParams.Arguments, &probe); err != nil {
-			return nil, errors.New("invalid tool arguments: must be a valid JSON object")
+			return nil, constants.ErrGatewayInvalidToolArguments
 		}
 		argumentsJSON = string(callParams.Arguments)
 	}
@@ -721,7 +721,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
+		return nil, fmt.Errorf("gateway: failed to marshal MCP payload: %w", err)
 	}
 
 	hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
@@ -772,57 +772,57 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 // handleReadField processes the read_field tool with governed access controls
 func (g *GatewayService) handleReadField(ctx context.Context, arguments json.RawMessage) (interface{}, error) {
 	if g.fieldPathRegistry == nil {
-		return nil, errors.New("field path registry not initialized")
+		return nil, constants.ErrGatewayFieldPathRegistryNotInit
 	}
 
 	if g.dbService == nil {
-		return nil, errors.New("database service not configured")
+		return nil, constants.ErrGatewayDatabaseServiceNotConfigured
 	}
 
 	var req FieldReadRequest
 	if err := json.Unmarshal(arguments, &req); err != nil {
-		return nil, fmt.Errorf("invalid read_field arguments: %w", err)
+		return nil, fmt.Errorf("gateway: invalid read_field arguments: %w", err)
 	}
 
 	// Validate required fields
 	if req.Collection == "" {
-		return nil, errors.New("collection required")
+		return nil, constants.ErrGatewayCollectionRequired
 	}
 	if req.DocumentID == "" {
-		return nil, errors.New("document_id required")
+		return nil, constants.ErrGatewayDocumentIDRequired
 	}
 	if req.FieldPath == "" {
-		return nil, errors.New("field_path required")
+		return nil, constants.ErrGatewayFieldPathRequired
 	}
 	if req.OperatorSessionID == "" {
-		return nil, errors.New("operator_session_id required")
+		return nil, constants.ErrGatewayOperatorSessionIDRequired
 	}
 
 	// L1: Validate field path against schema registry
 	if err := g.fieldPathRegistry.ValidateFieldPath(req.Collection, req.FieldPath); err != nil {
-		return nil, fmt.Errorf("field path validation failed: %w", err)
+		return nil, fmt.Errorf("gateway: field path validation failed: %w", err)
 	}
 
 	// L3: Validate Operator session
 	if g.sessionValidator != nil {
 		valid, err := g.sessionValidator.ValidateSession(req.OperatorSessionID)
 		if err != nil {
-			return nil, fmt.Errorf("session validation failed: %w", err)
+			return nil, fmt.Errorf("gateway: session validation failed: %w", err)
 		}
 		if !valid {
-			return nil, errors.New("operator session is invalid or expired")
+			return nil, constants.ErrGatewayOperatorSessionInvalid
 		}
 	}
 
 	// Extract field value from database
 	value, err := g.dbService.GetField(req.Collection, req.DocumentID, req.FieldPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get field: %w", err)
+		return nil, fmt.Errorf("gateway: failed to get field: %w", err)
 	}
 
 	// L1: Scan field value for forbidden patterns
 	if err := g.scanForForbiddenPatterns(value); err != nil {
-		return nil, fmt.Errorf("field value contains forbidden patterns: %w", err)
+		return nil, fmt.Errorf("gateway: field value contains forbidden patterns: %w", err)
 	}
 
 	// Audit vault logging
@@ -836,19 +836,19 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 		Content: []TextContent{
 			{
 				Type: "text",
-				Text: fmt.Sprintf("%v", value),
+				Text: value.String(),
 			},
 		},
 	}, nil
 }
 
-// scanForbiddenPatterns checks if a value contains forbidden patterns (L1 hard gates)
-func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
-	if value == nil {
+// scanForForbiddenPatterns checks if a FieldValue contains forbidden patterns (L1 hard gates)
+func (g *GatewayService) scanForForbiddenPatterns(value FieldValue) error {
+	if value.Null {
 		return nil
 	}
 
-	valueStr := fmt.Sprintf("%v", value)
+	valueStr := value.String()
 
 	// Forbidden patterns from L1 hard gates with context describing the threat category
 	forbiddenPatterns := []struct {
@@ -868,7 +868,7 @@ func (g *GatewayService) scanForForbiddenPatterns(value interface{}) error {
 
 	for _, fp := range forbiddenPatterns {
 		if strings.Contains(strings.ToLower(valueStr), fp.pattern) {
-			return fmt.Errorf("L1 hard gate: forbidden pattern detected (%s): %s", fp.context, fp.pattern)
+			return fmt.Errorf("gateway: L1 hard gate: forbidden pattern detected (%s): %s: %w", fp.context, fp.pattern, constants.ErrGatewayForbiddenPattern)
 		}
 	}
 
@@ -893,11 +893,11 @@ func (g *GatewayService) HandleResourcesRead(w http.ResponseWriter, r *http.Requ
 func (g *GatewayService) readResource(ctx context.Context, params json.RawMessage) (interface{}, error) {
 	var readParams ReadResourceRequest
 	if err := json.Unmarshal(params, &readParams); err != nil {
-		return nil, fmt.Errorf("invalid resources/read params: %w", err)
+		return nil, fmt.Errorf("gateway: invalid resources/read params: %w", err)
 	}
 
 	if readParams.URI == "" {
-		return nil, errors.New("uri required")
+		return nil, constants.ErrGatewayURIRequired
 	}
 
 	mcpPayload := &operatorv1.McpResourceReadRequested{
@@ -906,7 +906,7 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
+		return nil, fmt.Errorf("gateway: failed to marshal MCP payload: %w", err)
 	}
 
 	_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
@@ -1026,11 +1026,11 @@ func (g *GatewayService) HandlePromptsGet(w http.ResponseWriter, r *http.Request
 func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) (interface{}, error) {
 	var getParams GetPromptRequest
 	if err := json.Unmarshal(params, &getParams); err != nil {
-		return nil, fmt.Errorf("invalid prompts/get params: %w", err)
+		return nil, fmt.Errorf("gateway: invalid prompts/get params: %w", err)
 	}
 
 	if getParams.Name == "" {
-		return nil, errors.New("name required")
+		return nil, constants.ErrGatewayNameRequired
 	}
 
 	mcpPayload := &operatorv1.McpPromptGetRequested{
@@ -1039,7 +1039,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal MCP payload: %w", err)
+		return nil, fmt.Errorf("gateway: failed to marshal MCP payload: %w", err)
 	}
 
 	_, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
@@ -1312,7 +1312,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 
 	hash, err = govpkg.GenerateMessageID(env)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to compute transaction hash: %w", err)
+		return "", nil, fmt.Errorf("gateway: failed to compute transaction hash: %w", err)
 	}
 	env.Id = hash
 	env.TransactionHash = hash
@@ -1332,7 +1332,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 
 	envelopeBytes, err = (protojson.MarshalOptions{Multiline: false}).Marshal(env)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to marshal envelope: %w", err)
+		return "", nil, fmt.Errorf("gateway: failed to marshal envelope: %w", err)
 	}
 
 	return hash, envelopeBytes, nil
@@ -1360,11 +1360,11 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 		ExecutionID string          `json:"execution_id,omitempty"`
 	}
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, fmt.Errorf("invalid a2a/call params: %w", err)
+		return nil, fmt.Errorf("gateway: invalid a2a/call params: %w", err)
 	}
 
 	if req.SkillName == "" {
-		return nil, errors.New("skill_name required")
+		return nil, constants.ErrGatewaySkillNameRequired
 	}
 
 	payloadStr := "{}"
@@ -1379,7 +1379,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 	}
 	payloadBytes, err := proto.Marshal(a2aPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal A2A payload: %w", err)
+		return nil, fmt.Errorf("gateway: failed to marshal A2A payload: %w", err)
 	}
 
 	hash, envelopeBytes, err := g.processGatewayTransaction(ctx, processGatewayOptions{
@@ -1548,32 +1548,32 @@ func (g *GatewayService) DeleteSuspendedTransaction(ctx context.Context, txHash 
 // the OOB approval UI can surface the downstream tool result to the user.
 func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID string, proof *commonv1.L3Proof) (*operatorv1.ActionReceipt, error) {
 	if g.envProc == nil {
-		return nil, fmt.Errorf("g8e Gateway not ready")
+		return nil, constants.ErrGatewayNotReady
 	}
 	if proof == nil {
-		return nil, fmt.Errorf("L3 proof required")
+		return nil, constants.ErrGatewayL3ProofRequired
 	}
 	if userID == "" {
-		return nil, fmt.Errorf("user_id required")
+		return nil, constants.ErrGatewayUserIDRequired
 	}
 
 	tx, ok, err := g.GetSuspendedTransaction(ctx, txHash)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get suspended transaction: %w", err)
+		return nil, fmt.Errorf("gateway: failed to get suspended transaction: %w", err)
 	}
 	if !ok {
 		// The maintenance sweep now owns expiry event recording.
 		// ResumeWithL3Proof cannot positively confirm the not-found reason
 		// (expired vs never-existed vs already-approved), so it returns
 		// ErrTransactionExpired without writing to the audit vault.
-		return nil, fmt.Errorf("suspended transaction %s not found or expired: %w", txHash, constants.ErrTransactionExpired)
+		return nil, fmt.Errorf("gateway: suspended transaction %s not found or expired: %w", txHash, constants.ErrTransactionExpired)
 	}
 
 	// Re-parse the stored envelope JSON so we can attach L3 metadata without
 	// touching the hashed fields.
 	env := &commonv1.GovernanceEnvelope{}
 	if err := protojson.Unmarshal([]byte(tx.Envelope), env); err != nil {
-		return nil, fmt.Errorf("failed to re-parse suspended envelope: %w", err)
+		return nil, fmt.Errorf("gateway: failed to re-parse suspended envelope: %w", err)
 	}
 
 	env.OperatorId = userID
@@ -1584,7 +1584,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 
 	resubmitted, err := (protojson.MarshalOptions{Multiline: false}).Marshal(env)
 	if err != nil {
-		return nil, fmt.Errorf("failed to re-marshal resumed envelope: %w", err)
+		return nil, fmt.Errorf("gateway: failed to re-marshal resumed envelope: %w", err)
 	}
 
 	receipt, procErr := g.envProc.ProcessEnvelope(ctx, resubmitted)
@@ -1608,12 +1608,12 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	if toolName == "read_field" {
 		result, err := g.handleReadField(ctx, toolArgs)
 		if err != nil {
-			return "", fmt.Errorf("read_field execution failed: %w", err)
+			return "", fmt.Errorf("gateway: read_field execution failed: %w", err)
 		}
 		// Extract text content for summary
 		callResult, ok := result.(CallToolResult)
 		if !ok {
-			return "", fmt.Errorf("read_field returned unexpected type: %T", result)
+			return "", fmt.Errorf("gateway: read_field returned unexpected type: %T", result)
 		}
 		var sb strings.Builder
 		for _, c := range callResult.Content {
@@ -1632,7 +1632,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	if g.isNativeTool(toolName) && g.nativeToolHandler != nil {
 		result, err := g.nativeToolHandler.HandleTool(ctx, toolName, toolArgs)
 		if err != nil {
-			return "", fmt.Errorf("native tool execution failed: %w", err)
+			return "", fmt.Errorf("gateway: native tool execution failed: %w", err)
 		}
 		var sb strings.Builder
 		for _, c := range result.Content {
@@ -1655,11 +1655,11 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	}
 
 	if g.downstreamURL == "" {
-		return "", fmt.Errorf("no downstream MCP server configured")
+		return "", constants.ErrGatewayNoDownstreamConfigured
 	}
 
 	if g.isCircuitOpen() {
-		return "", fmt.Errorf("downstream MCP server is temporarily unavailable (circuit open)")
+		return "", constants.ErrGatewayDownstreamUnavailable
 	}
 
 	// Construct MCP tools/call request
@@ -1672,14 +1672,14 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 
 	reqBody, err := json.Marshal(mcpReq)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal MCP request: %w", err)
+		return "", fmt.Errorf("gateway: failed to marshal MCP request: %w", err)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Post(g.downstreamURL, "application/json", strings.NewReader(string(reqBody)))
 	if err != nil {
 		g.recordFailure()
-		return "", fmt.Errorf("failed to call downstream MCP server: %w", err)
+		return "", fmt.Errorf("gateway: failed to call downstream MCP server: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -1691,7 +1691,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		if resp.StatusCode >= 500 {
 			g.recordFailure()
 		}
-		return "", fmt.Errorf("downstream MCP server returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("gateway: downstream MCP server returned status %d: %w", resp.StatusCode, constants.ErrGatewayDownstreamHTTPError)
 	}
 
 	g.recordSuccess()
@@ -1699,17 +1699,17 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	// Parse MCP response
 	var mcpResp JSONRPCResponse
 	if err := json.NewDecoder(resp.Body).Decode(&mcpResp); err != nil {
-		return "", fmt.Errorf("failed to decode MCP response: %w", err)
+		return "", fmt.Errorf("gateway: failed to decode MCP response: %w", err)
 	}
 
 	if mcpResp.Error != nil {
-		return "", fmt.Errorf("MCP error: %s", mcpResp.Error.Message)
+		return "", fmt.Errorf("gateway: MCP error: %s: %w", mcpResp.Error.Message, constants.ErrGatewayMCPError)
 	}
 
 	// Extract result from MCP response
 	var callResult CallToolResult
 	if err := json.Unmarshal(mcpResp.Result, &callResult); err != nil {
-		return "", fmt.Errorf("failed to unmarshal MCP result: %w", err)
+		return "", fmt.Errorf("gateway: failed to unmarshal MCP result: %w", err)
 	}
 
 	// Concatenate text content for result summary
@@ -1747,13 +1747,13 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 // DispatchToA2ADownstream forwards a verified A2A call to the downstream A2A server.
 func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName string, payload json.RawMessage) (string, error) {
 	if g.a2aDownstreamURL == "" {
-		return "", fmt.Errorf("no downstream A2A server configured")
+		return "", constants.ErrGatewayNoA2ADownstreamConfigured
 	}
 
 	// TODO: Circuit breaker for A2A if needed. For now we use the same cooldown logic
 	// if we decide to share the state or add a separate one.
 	if g.isCircuitOpen() {
-		return "", fmt.Errorf("downstream A2A server is temporarily unavailable (circuit open)")
+		return "", constants.ErrGatewayDownstreamUnavailable
 	}
 
 	// Construct A2A request
@@ -1764,14 +1764,14 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 
 	reqBody, err := json.Marshal(a2aReq)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal A2A request: %w", err)
+		return "", fmt.Errorf("gateway: failed to marshal A2A request: %w", err)
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Post(g.a2aDownstreamURL, "application/json", strings.NewReader(string(reqBody)))
 	if err != nil {
 		g.recordFailure()
-		return "", fmt.Errorf("failed to call downstream A2A server: %w", err)
+		return "", fmt.Errorf("gateway: failed to call downstream A2A server: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -1783,7 +1783,7 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 		if resp.StatusCode >= 500 {
 			g.recordFailure()
 		}
-		return "", fmt.Errorf("downstream A2A server returned status %d", resp.StatusCode)
+		return "", fmt.Errorf("gateway: downstream A2A server returned status %d: %w", resp.StatusCode, constants.ErrGatewayDownstreamHTTPError)
 	}
 
 	g.recordSuccess()
@@ -1795,11 +1795,11 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 		Summary string `json:"summary,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&a2aResp); err != nil {
-		return "", fmt.Errorf("failed to decode A2A response: %w", err)
+		return "", fmt.Errorf("gateway: failed to decode A2A response: %w", err)
 	}
 
 	if a2aResp.Error != "" {
-		return "", fmt.Errorf("A2A error: %s", a2aResp.Error)
+		return "", fmt.Errorf("gateway: A2A error: %s: %w", a2aResp.Error, constants.ErrGatewayA2AError)
 	}
 
 	if a2aResp.Summary != "" {

@@ -281,7 +281,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	assert.True(t, user.IsActive())
 }
 
-func TestGateway_JITPasskeyBootstrap(t *testing.T) {
+func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	privKey, idpServer := setupTestIdP(t)
 
 	cfg := testutil.NewTestConfig(t)

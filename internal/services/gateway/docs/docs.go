@@ -445,6 +445,29 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/state": {
+            "get": {
+                "description": "Returns the current state merkle root for envelope binding",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "state"
+                ],
+                "summary": "State root",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.StateResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -512,6 +535,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "certificate_pem": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.StateResponse": {
+            "type": "object",
+            "properties": {
+                "state_merkle_root": {
                     "type": "string"
                 }
             }

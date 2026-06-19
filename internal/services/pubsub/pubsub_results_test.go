@@ -80,7 +80,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 
 		receivedMsg := requireLastPublishedUniversal(t, db)
 		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
-		assert.Equal(t, "HEARTBEAT_RESULT", env.EventType)
+		assert.Equal(t, string(constants.Event.Operator.Heartbeat), env.EventType)
 	})
 }
 

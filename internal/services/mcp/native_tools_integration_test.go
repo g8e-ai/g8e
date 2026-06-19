@@ -171,7 +171,9 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, result.Rows, 1)
-		require.Equal(t, "test_value", result.Rows[0]["value"])
+		v := result.Rows[0].Values["value"]
+		require.NotNil(t, v.String)
+		require.Equal(t, "test_value", *v.String)
 	})
 
 	t.Run("db_isolated_read_rejects_mutation", func(t *testing.T) {

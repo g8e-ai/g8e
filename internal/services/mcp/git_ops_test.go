@@ -16,9 +16,11 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -267,7 +269,7 @@ func TestGitOpsTool_Execute_UnsupportedOperation(t *testing.T) {
 	args := json.RawMessage(`{"operation": "invalid"}`)
 	_, err := tool.Execute(ctx, args)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported operation")
+	assert.True(t, errors.Is(err, constants.ErrMCPGitOpsUnsupportedOperation))
 }
 
 func TestGitOpsTool_Execute_GitCommandError(t *testing.T) {

@@ -22,6 +22,8 @@ import (
 	"os"
 	"strings"
 	"syscall"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // FSDiskUsageTool provides df-style free space reporting.
@@ -81,7 +83,7 @@ func (t *FSDiskUsageTool) InputSchema() *InputSchema {
 func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req FSDiskUsageRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("fs_disk_usage: unmarshal arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: %w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	var result FSDiskUsageResult
@@ -104,7 +106,7 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 	}
 
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("fs_disk_usage: get disk usage: %w", err)
+		return CallToolResult{}, fmt.Errorf("fs_disk_usage: %w: %w", constants.ErrMCPGetDiskUsage, err)
 	}
 
 	resultJSON, err := json.Marshal(result)
@@ -125,7 +127,7 @@ func (t *FSDiskUsageTool) Execute(ctx context.Context, args json.RawMessage) (Ca
 func getDiskUsageForPath(path string, statFS statFSInterface) (FSDiskUsageResult, error) {
 	var stat syscall.Statfs_t
 	if err := statFS.StatFS(path, &stat); err != nil {
-		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: statfs: %w", err)
+		return FSDiskUsageResult{}, fmt.Errorf("%w: %w", constants.ErrMCPStatFS, err)
 	}
 
 	total := stat.Blocks * uint64(stat.Bsize)
@@ -150,7 +152,7 @@ func getDiskUsageForPath(path string, statFS statFSInterface) (FSDiskUsageResult
 func getAllDiskUsage(statFS statFSInterface, readFile readFileInterface) (FSDiskUsageResult, error) {
 	mounts, err := parseMounts(readFile)
 	if err != nil {
-		return FSDiskUsageResult{}, fmt.Errorf("fs_disk_usage: parse mounts: %w", err)
+		return FSDiskUsageResult{}, fmt.Errorf("%w: %w", constants.ErrMCPParseMounts, err)
 	}
 
 	var filesystems []FilesystemInfo
@@ -173,7 +175,7 @@ func getAllDiskUsage(statFS statFSInterface, readFile readFileInterface) (FSDisk
 func parseMounts(readFile readFileInterface) ([]string, error) {
 	data, err := readFile.ReadFile("/proc/mounts")
 	if err != nil {
-		return nil, fmt.Errorf("fs_disk_usage: read /proc/mounts: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrMCPReadMounts, err)
 	}
 
 	lines := strings.Split(string(data), "\n")

@@ -18,9 +18,11 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
@@ -119,9 +121,8 @@ func TestRegisterNativeTools_NilRegistry(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error when registering to nil registry, got nil")
 	}
-	expectedError := "cannot register to nil registry"
-	if !containsSubstring(err.Error(), expectedError) {
-		t.Errorf("Expected error to contain '%s', got '%s'", expectedError, err.Error())
+	if !errors.Is(err, constants.ErrMCPRegistryNil) {
+		t.Errorf("Expected error wrapping %v, got %q", constants.ErrMCPRegistryNil, err.Error())
 	}
 }
 

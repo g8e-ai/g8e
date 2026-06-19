@@ -746,6 +746,13 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	// Close pub/sub broker (disconnects all WebSocket clients)
 	ls.pubsub.Close()
 
+	// Close suspended transaction service database
+	if ls.suspendedTxService != nil {
+		if err := ls.suspendedTxService.Close(); err != nil {
+			ls.logger.Error("Suspended transaction service close error", string(constants.ConnectionStateError), err)
+		}
+	}
+
 	// Close database
 	if err := ls.db.Close(); err != nil {
 		ls.logger.Error("Database close error", string(constants.ConnectionStateError), err)

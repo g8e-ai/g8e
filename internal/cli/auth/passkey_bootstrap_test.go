@@ -1,3 +1,5 @@
+//go:build integration
+
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -279,13 +281,12 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Non-existent port
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	// VerifyPasskeyRegistration now uses mTLS: supply CLI cert and a CA bundle
@@ -312,13 +313,12 @@ func TestRegisterPasskeyDirectly(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Non-existent port to ensure network error
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	err := RegisterPasskeyDirectly(cfg, "test-user")

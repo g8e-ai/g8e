@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // GitOpsTool provides git repository operations including status, log, branch info, and remote management.
@@ -250,7 +252,7 @@ func (t *GitOpsTool) Execute(ctx context.Context, args json.RawMessage) (CallToo
 		}
 		result, err = t.gitDiff(ctx, repoPath, ref)
 	default:
-		return CallToolResult{}, fmt.Errorf("git_ops: unsupported operation: %s", req.Operation)
+		return CallToolResult{}, fmt.Errorf("%w: %s", constants.ErrMCPGitOpsUnsupportedOperation, req.Operation)
 	}
 
 	if err != nil {

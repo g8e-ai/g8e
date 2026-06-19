@@ -45,6 +45,11 @@ definitions:
       certificate_pem:
         type: string
     type: object
+  models.StateResponse:
+    properties:
+      state_merkle_root:
+        type: string
+    type: object
   models.StatusResponse:
     properties:
       status:
@@ -342,6 +347,21 @@ paths:
       summary: Bootstrap health check
       tags:
       - health
+  /state:
+    get:
+      consumes:
+      - application/json
+      description: Returns the current state merkle root for envelope binding
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.StateResponse'
+      summary: State root
+      tags:
+      - state
 securityDefinitions:
   BearerAuth:
     description: Bearer token authentication (JWT or mTLS certificate)

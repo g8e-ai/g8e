@@ -24,6 +24,22 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// marshalResult converts a result struct to a CallToolResult with JSON text content.
+func marshalResult(result interface{}) (CallToolResult, error) {
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return CallToolResult{}, fmt.Errorf("net_endpoint_ping: failed to marshal result: %w", err)
+	}
+	return CallToolResult{
+		Content: []TextContent{
+			{
+				Type: "text",
+				Text: string(resultJSON),
+			},
+		},
+	}, nil
+}
+
 // NetEndpointPingTool performs TCP handshake to verify connectivity.
 type NetEndpointPingTool struct{}
 
@@ -59,21 +75,21 @@ func (t *NetEndpointPingTool) InputSchema() *InputSchema {
 func (t *NetEndpointPingTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req NetEndpointPingRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("net_endpoint_ping: invalid arguments: %w", err)
 	}
 
 	if req.Host == "" || req.Port <= 0 {
-		return CallToolResult{}, fmt.Errorf("host and port required")
+		return CallToolResult{}, fmt.Errorf("net_endpoint_ping: %w", constants.ErrMCPHostPortRequired)
 	}
 
 	address := net.JoinHostPort(req.Host, strconv.Itoa(req.Port))
 	start := time.Now()
 
-	dialer := &net.Dialer{Timeout: defaultNetworkTimeout}
+	dialer := &net.Dialer{Timeout: constants.DefaultNetworkTimeout}
 	if deadline, ok := ctx.Deadline(); ok {
 		dialer.Timeout = time.Until(deadline)
 		if dialer.Timeout <= 0 {
-			dialer.Timeout = defaultNetworkTimeout
+			dialer.Timeout = constants.DefaultNetworkTimeout
 		}
 	}
 
@@ -86,18 +102,7 @@ func (t *NetEndpointPingTool) Execute(ctx context.Context, args json.RawMessage)
 			LatencyMs: latency,
 			Error:     err.Error(),
 		}
-		resultJSON, err := json.Marshal(result)
-		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
-		}
-		return CallToolResult{
-			Content: []TextContent{
-				{
-					Type: "text",
-					Text: string(resultJSON),
-				},
-			},
-		}, nil
+		return marshalResult(result)
 	}
 	defer conn.Close()
 
@@ -105,17 +110,5 @@ func (t *NetEndpointPingTool) Execute(ctx context.Context, args json.RawMessage)
 		Reachable: true,
 		LatencyMs: latency,
 	}
-	resultJSON, err := json.Marshal(result)
-	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
-	}
-
-	return CallToolResult{
-		Content: []TextContent{
-			{
-				Type: "text",
-				Text: string(resultJSON),
-			},
-		},
-	}, nil
+	return marshalResult(result)
 }

@@ -16,6 +16,7 @@
 package execution
 
 import (
+	"fmt"
 	"os"
 	"os/user"
 	"strconv"
@@ -25,13 +26,30 @@ import (
 )
 
 // collectFileOwnership collects file ownership information (Unix-specific)
-func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *models.FileStats) {
-	if stat, ok := fileInfo.Sys().(*syscall.Stat_t); ok {
-		if u, err := user.LookupId(strconv.Itoa(int(stat.Uid))); err == nil {
-			stats.Owner = &u.Username
-		}
-		if g, err := user.LookupGroupId(strconv.Itoa(int(stat.Gid))); err == nil {
-			stats.Group = &g.Name
-		}
+func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *models.FileStats) error {
+	stat, ok := fileInfo.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("file_edit: collect ownership: failed to extract syscall.Stat_t from FileInfo")
 	}
+
+	uidStr := strconv.Itoa(int(stat.Uid))
+	gidStr := strconv.Itoa(int(stat.Gid))
+
+	if u, err := user.LookupId(uidStr); err != nil {
+		fes.logger.Warn("Failed to lookup user by UID",
+			"uid", uidStr,
+			"error", err)
+	} else {
+		stats.Owner = &u.Username
+	}
+
+	if g, err := user.LookupGroupId(gidStr); err != nil {
+		fes.logger.Warn("Failed to lookup group by GID",
+			"gid", gidStr,
+			"error", err)
+	} else {
+		stats.Group = &g.Name
+	}
+
+	return nil
 }

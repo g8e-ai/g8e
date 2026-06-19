@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/pathutil"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -113,9 +115,9 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) 
 	avs := &TestSQLAuditStore{
 		config:          config,
 		logger:          logger,
-		ledgerPath:      filepath.Join(config.DataDir, config.LedgerDir),
-		filesPath:       filepath.Join(config.DataDir, config.LedgerDir, "files"),
-		sessionsRoot:    filepath.Join(config.DataDir, config.LedgerDir, "sessions"),
+		ledgerPath:      pathutil.SafeJoin(config.DataDir, config.LedgerDir),
+		filesPath:       pathutil.SafeJoin(config.DataDir, config.LedgerDir, "files"),
+		sessionsRoot:    pathutil.SafeJoin(config.DataDir, config.LedgerDir, "sessions"),
 		encryptionVault: config.EncryptionVault,
 		gitPath:         config.GitPath,
 	}
@@ -131,7 +133,7 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) 
 	encryptionEnabled := avs.encryptionVault.IsUnlocked()
 	avs.logger.Info("Audit vault initialized",
 		"data_dir", config.DataDir,
-		"db_path", filepath.Join(config.DataDir, config.DBPath),
+		"db_path", pathutil.ResolveDBPath(config.DataDir, config.DBPath),
 		"ledger_path", avs.ledgerPath,
 		"encryption_enabled", encryptionEnabled)
 
@@ -290,7 +292,7 @@ func (avs *TestSQLAuditStore) initGitRepo(path string) error {
 
 // initDatabase creates the database and schema
 func (avs *TestSQLAuditStore) initDatabase() error {
-	dbPath := filepath.Join(avs.config.DataDir, avs.config.DBPath)
+	dbPath := pathutil.ResolveDBPath(avs.config.DataDir, avs.config.DBPath)
 
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, avs.logger)

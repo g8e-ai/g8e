@@ -113,10 +113,6 @@ linters:
         path: internal/testutil/pubsub\.go
         text: Dial
       - linters:
-          - bodyclose
-        path: tests/byo_client_test\.go
-        text: Dial
-      - linters:
           - gosec
         path: internal/services/vault/vault_crypto\.go
         text: G115

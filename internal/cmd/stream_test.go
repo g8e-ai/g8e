@@ -396,7 +396,7 @@ Host myhost
 }
 
 func TestResolveHost_DefaultPort(t *testing.T) {
-	r, err := ssh.ResolveHost("somehost", "/nonexistent", "", "", "")
+	r, err := ssh.ResolveHost("somehost", filepath.Join(t.TempDir(), "nonexistent"), "", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "22", r.Port)
 }

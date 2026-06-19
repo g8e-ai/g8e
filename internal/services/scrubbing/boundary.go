@@ -342,7 +342,7 @@ func (s *ScrubbingService) initializeScrubbers() {
 		compiled, err := compileRegexWithTimeout(ctx, pattern)
 		cancel()
 		if err != nil {
-			s.logger.Warn("Invalid custom scrub pattern", "name", name, string(constants.ConnectionStateError), err)
+			s.logger.Warn("scrubbing: failed to compile custom pattern", "name", name, "error", err)
 			continue
 		}
 		s.scrubbers = append(s.scrubbers, &RegexScrubber{
@@ -365,14 +365,18 @@ func compileRegexWithTimeout(ctx context.Context, pattern string) (*regexp.Regex
 
 	go func() {
 		re, err := regexp.Compile(pattern)
-		resultChan <- result{re: re, err: err}
+		select {
+		case resultChan <- result{re: re, err: err}:
+		case <-ctx.Done():
+			// Context cancelled, don't block sending to channel
+		}
 	}()
 
 	select {
 	case res := <-resultChan:
 		return res.re, res.err
 	case <-ctx.Done():
-		return nil, fmt.Errorf("regex compilation timeout: %w", ctx.Err())
+		return nil, fmt.Errorf("scrubbing: %w: %w", constants.ErrScrubbingRegexTimeout, ctx.Err())
 	}
 }
 
@@ -534,7 +538,11 @@ func (s *ScrubbingService) ScrubCommandResult(result *CommandResult) *ScrubbedRe
 	return scrubbed
 }
 
-// ScrubMap scrubs all string values in a map recursively
+// ScrubMap scrubs all string values in a map recursively.
+// NOTE: Uses map[string]interface{} because this is a boundary layer that must handle
+// arbitrary JSON payloads from external sources (cloud AI, command outputs) where the
+// schema is unknown by design. This is an intentional exception to the "no map[string]interface{}"
+// rule for known shapes - the shapes here are explicitly unknown.
 func (s *ScrubbingService) ScrubMap(data map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
 	for key, value := range data {
@@ -961,7 +969,7 @@ func (s *ScrubbingService) GetTokenForValue(value string) string {
 		const tokenTTLSeconds = 24 * 60 * 60
 		key := fmt.Sprintf("uei_token_%s", token)
 		if err := s.tokenStore.KVSet(context.Background(), key, value, tokenTTLSeconds); err != nil {
-			s.logger.Error("Failed to persist token to local store - failing closed", "token", token, "error", err)
+			s.logger.Error("scrubbing: failed to persist token", "token", token, "error", err)
 			// Rollback the in-memory token since persistence failed
 			delete(s.tokenMap, token)
 			delete(s.reverseMap, value)
@@ -987,7 +995,7 @@ func (s *ScrubbingService) loadPersistedTokens() {
 
 	tokens, err := s.tokenStore.KVScanPrefix(context.Background(), "uei_token_")
 	if err != nil {
-		s.logger.Error("Failed to load persisted tokens from TokenStore", "error", err)
+		s.logger.Error("scrubbing: failed to load persisted tokens", "error", err)
 		return
 	}
 
@@ -1000,7 +1008,7 @@ func (s *ScrubbingService) loadPersistedTokens() {
 		// Extract token from key format: uei_token_{{UEI_N}}
 		token := strings.TrimPrefix(key, "uei_token_")
 		if token == key {
-			s.logger.Warn("Invalid token key format", "key", key)
+			s.logger.Warn("scrubbing: invalid token key format", "key", key)
 			continue
 		}
 
@@ -1008,7 +1016,7 @@ func (s *ScrubbingService) loadPersistedTokens() {
 		var seq int
 		_, err := fmt.Sscanf(token, "{{UEI_%d}}", &seq)
 		if err != nil {
-			s.logger.Warn("Failed to parse token sequence", "token", token, "error", err)
+			s.logger.Warn("scrubbing: failed to parse token sequence", "token", token, "error", err)
 			continue
 		}
 

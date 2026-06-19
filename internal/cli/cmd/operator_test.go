@@ -27,56 +27,81 @@ import (
 )
 
 func TestOperatorCmd(t *testing.T) {
-	t.Run("operator command has correct use and description", func(t *testing.T) {
-		cmd := operatorCmd()
-		assert.Equal(t, "operator", cmd.Use)
-		assert.Contains(t, cmd.Short, "Manage Operator instances")
-		assert.Contains(t, cmd.Long, "Gateway")
-	})
+	tests := []struct {
+		name     string
+		use      string
+		short    string
+		long     string
+		expected bool
+	}{
+		{
+			name:     "operator command has correct use and description",
+			use:      "operator",
+			short:    "Manage Operator instances",
+			long:     "Gateway",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := operatorCmd()
+			assert.Equal(t, tt.use, cmd.Use)
+			assert.Contains(t, cmd.Short, tt.short)
+			assert.Contains(t, cmd.Long, tt.long)
+		})
+	}
 
 	t.Run("operator command has all subcommands", func(t *testing.T) {
 		cmd := operatorCmd()
-		// Check that subcommands are registered by name (Use includes args)
-		hasList := false
-		hasCp := false
-		hasScp := false
-		hasDeploy := false
-		hasStream := false
+		expectedSubcommands := map[string]bool{
+			"list":   false,
+			"cp":     false,
+			"scp":    false,
+			"deploy": false,
+			"stream": false,
+		}
 
 		for _, sub := range cmd.Commands() {
-			switch {
-			case strings.HasPrefix(sub.Use, "list"):
-				hasList = true
-			case strings.HasPrefix(sub.Use, "cp"):
-				hasCp = true
-			case strings.HasPrefix(sub.Use, "scp"):
-				hasScp = true
-			case strings.HasPrefix(sub.Use, "deploy"):
-				hasDeploy = true
-			case strings.HasPrefix(sub.Use, "stream"):
-				hasStream = true
+			for name := range expectedSubcommands {
+				if strings.HasPrefix(sub.Use, name) {
+					expectedSubcommands[name] = true
+				}
 			}
 		}
 
-		assert.True(t, hasList, "should have list subcommand")
-		assert.True(t, hasCp, "should have cp subcommand")
-		assert.True(t, hasScp, "should have scp subcommand")
-		assert.True(t, hasDeploy, "should have deploy subcommand")
-		assert.True(t, hasStream, "should have stream subcommand")
+		for name, found := range expectedSubcommands {
+			assert.True(t, found, "should have %s subcommand", name)
+		}
 	})
 }
 
 func TestOperatorListCmd(t *testing.T) {
-	t.Run("list command has correct use and description", func(t *testing.T) {
-		cmd := operatorListCmd()
-		assert.Equal(t, "list", cmd.Use)
-		assert.Contains(t, cmd.Short, "List all Operator instances")
-		assert.Contains(t, cmd.Long, "Gateway")
-	})
+	tests := []struct {
+		name  string
+		use   string
+		short string
+		long  string
+	}{
+		{
+			name:  "list command has correct use and description",
+			use:   "list",
+			short: "List all Operator instances",
+			long:  "Gateway",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := operatorListCmd()
+			assert.Equal(t, tt.use, cmd.Use)
+			assert.Contains(t, cmd.Short, tt.short)
+			assert.Contains(t, cmd.Long, tt.long)
+		})
+	}
 
 	t.Run("list command has no required flags", func(t *testing.T) {
 		cmd := operatorListCmd()
-		// Check that there are no required flags
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			assert.False(t, flag.Changed, "flag should not be required")
 		})
@@ -84,21 +109,35 @@ func TestOperatorListCmd(t *testing.T) {
 }
 
 func TestOperatorCpCmd(t *testing.T) {
-	t.Run("cp command has correct use and description", func(t *testing.T) {
-		cmd := operatorCpCmd()
-		assert.Equal(t, "cp <target>", cmd.Use)
-		assert.Contains(t, cmd.Short, "Copy the operator binary")
-		assert.Contains(t, cmd.Long, "directory")
-	})
+	tests := []struct {
+		name  string
+		use   string
+		short string
+		long  string
+	}{
+		{
+			name:  "cp command has correct use and description",
+			use:   "cp <target>",
+			short: "Copy the operator binary",
+			long:  "directory",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := operatorCpCmd()
+			assert.Equal(t, tt.use, cmd.Use)
+			assert.Contains(t, cmd.Short, tt.short)
+			assert.Contains(t, cmd.Long, tt.long)
+		})
+	}
 
 	t.Run("cp command requires exactly one argument", func(t *testing.T) {
 		cmd := operatorCpCmd()
-		// Test that it requires exactly one argument by running with wrong count
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		// No arguments should fail
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		assert.Error(t, err)
@@ -106,7 +145,6 @@ func TestOperatorCpCmd(t *testing.T) {
 
 	t.Run("cp command has no flags", func(t *testing.T) {
 		cmd := operatorCpCmd()
-		// Check that there are no flags
 		flagCount := 0
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
 			flagCount++
@@ -116,21 +154,35 @@ func TestOperatorCpCmd(t *testing.T) {
 }
 
 func TestOperatorScpCmd(t *testing.T) {
-	t.Run("scp command has correct use and description", func(t *testing.T) {
-		cmd := operatorScpCmd()
-		assert.Equal(t, "scp <user@host:path>", cmd.Use)
-		assert.Contains(t, cmd.Short, "Copy the operator binary")
-		assert.Contains(t, cmd.Long, "scp")
-	})
+	tests := []struct {
+		name  string
+		use   string
+		short string
+		long  string
+	}{
+		{
+			name:  "scp command has correct use and description",
+			use:   "scp <user@host:path>",
+			short: "Copy the operator binary",
+			long:  "scp",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := operatorScpCmd()
+			assert.Equal(t, tt.use, cmd.Use)
+			assert.Contains(t, cmd.Short, tt.short)
+			assert.Contains(t, cmd.Long, tt.long)
+		})
+	}
 
 	t.Run("scp command requires exactly one argument", func(t *testing.T) {
 		cmd := operatorScpCmd()
-		// Test that it requires exactly one argument by running with wrong count
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
 
-		// No arguments should fail
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		assert.Error(t, err)
@@ -140,100 +192,115 @@ func TestOperatorScpCmd(t *testing.T) {
 		cmd := operatorScpCmd()
 		flags := cmd.Flags()
 
-		portFlag := flags.Lookup("port")
-		assert.NotNil(t, portFlag)
-		assert.Equal(t, "P", portFlag.Shorthand)
+		expectedFlags := []struct {
+			name      string
+			shorthand string
+		}{
+			{"port", "P"},
+			{"identity", "i"},
+			{"recursive", "r"},
+			{"preserve", "p"},
+			{"verbose", "v"},
+			{"compression", "C"},
+			{"prompt", ""},
+		}
 
-		identityFlag := flags.Lookup("identity")
-		assert.NotNil(t, identityFlag)
-		assert.Equal(t, "i", identityFlag.Shorthand)
-
-		recursiveFlag := flags.Lookup("recursive")
-		assert.NotNil(t, recursiveFlag)
-		assert.Equal(t, "r", recursiveFlag.Shorthand)
-
-		preserveFlag := flags.Lookup("preserve")
-		assert.NotNil(t, preserveFlag)
-		assert.Equal(t, "p", preserveFlag.Shorthand)
-
-		verboseFlag := flags.Lookup("verbose")
-		assert.NotNil(t, verboseFlag)
-		assert.Equal(t, "v", verboseFlag.Shorthand)
-
-		compressionFlag := flags.Lookup("compression")
-		assert.NotNil(t, compressionFlag)
-		assert.Equal(t, "C", compressionFlag.Shorthand)
-
-		promptFlag := flags.Lookup("prompt")
-		assert.NotNil(t, promptFlag)
-		assert.Empty(t, promptFlag.Shorthand)
+		for _, ef := range expectedFlags {
+			flag := flags.Lookup(ef.name)
+			assert.NotNil(t, flag, "flag %s should exist", ef.name)
+			assert.Equal(t, ef.shorthand, flag.Shorthand, "flag %s shorthand should match", ef.name)
+		}
 	})
 }
 
 func TestOperatorDeployCmd(t *testing.T) {
-	t.Run("deploy command has correct use and description", func(t *testing.T) {
-		cmd := operatorDeployCmd()
-		assert.Equal(t, "deploy", cmd.Use)
-		assert.Contains(t, cmd.Short, "Deploy the operator binary")
-		assert.Contains(t, cmd.Long, "SSH")
-	})
+	tests := []struct {
+		name  string
+		use   string
+		short string
+		long  string
+	}{
+		{
+			name:  "deploy command has correct use and description",
+			use:   "deploy",
+			short: "Deploy the operator binary",
+			long:  "SSH",
+		},
+	}
 
-	t.Run("deploy command has hosts flag", func(t *testing.T) {
-		cmd := operatorDeployCmd()
-		hostsFlag := cmd.Flags().Lookup("hosts")
-		assert.NotNil(t, hostsFlag)
-		assert.Empty(t, hostsFlag.Shorthand)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := operatorDeployCmd()
+			assert.Equal(t, tt.use, cmd.Use)
+			assert.Contains(t, cmd.Short, tt.short)
+			assert.Contains(t, cmd.Long, tt.long)
+		})
+	}
 
-	t.Run("deploy command has port flag", func(t *testing.T) {
+	t.Run("deploy command has all expected flags", func(t *testing.T) {
 		cmd := operatorDeployCmd()
-		portFlag := cmd.Flags().Lookup("port")
-		assert.NotNil(t, portFlag)
-		assert.Equal(t, "P", portFlag.Shorthand)
-	})
+		flags := cmd.Flags()
 
-	t.Run("deploy command has identity flag", func(t *testing.T) {
-		cmd := operatorDeployCmd()
-		identityFlag := cmd.Flags().Lookup("identity")
-		assert.NotNil(t, identityFlag)
-		assert.Equal(t, "i", identityFlag.Shorthand)
-	})
+		expectedFlags := []struct {
+			name      string
+			shorthand string
+		}{
+			{"hosts", ""},
+			{"port", "P"},
+			{"identity", "i"},
+			{"background", ""},
+		}
 
-	t.Run("deploy command has background flag", func(t *testing.T) {
-		cmd := operatorDeployCmd()
-		backgroundFlag := cmd.Flags().Lookup("background")
-		assert.NotNil(t, backgroundFlag)
-		assert.Empty(t, backgroundFlag.Shorthand)
+		for _, ef := range expectedFlags {
+			flag := flags.Lookup(ef.name)
+			assert.NotNil(t, flag, "flag %s should exist", ef.name)
+			assert.Equal(t, ef.shorthand, flag.Shorthand, "flag %s shorthand should match", ef.name)
+		}
 	})
 }
 
 func TestOperatorStreamCmd(t *testing.T) {
-	t.Run("stream command has correct use and description", func(t *testing.T) {
-		cmd := operatorStreamCmd()
-		assert.Equal(t, "stream", cmd.Use)
-		assert.Contains(t, cmd.Short, "Stream and execute")
-		assert.Contains(t, cmd.Long, "SSH")
-	})
+	tests := []struct {
+		name  string
+		use   string
+		short string
+		long  string
+	}{
+		{
+			name:  "stream command has correct use and description",
+			use:   "stream",
+			short: "Stream and execute",
+			long:  "SSH",
+		},
+	}
 
-	t.Run("stream command has hosts flag", func(t *testing.T) {
-		cmd := operatorStreamCmd()
-		hostsFlag := cmd.Flags().Lookup("hosts")
-		assert.NotNil(t, hostsFlag)
-		assert.Empty(t, hostsFlag.Shorthand)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := operatorStreamCmd()
+			assert.Equal(t, tt.use, cmd.Use)
+			assert.Contains(t, cmd.Short, tt.short)
+			assert.Contains(t, cmd.Long, tt.long)
+		})
+	}
 
-	t.Run("stream command has port flag", func(t *testing.T) {
+	t.Run("stream command has all expected flags", func(t *testing.T) {
 		cmd := operatorStreamCmd()
-		portFlag := cmd.Flags().Lookup("port")
-		assert.NotNil(t, portFlag)
-		assert.Equal(t, "P", portFlag.Shorthand)
-	})
+		flags := cmd.Flags()
 
-	t.Run("stream command has identity flag", func(t *testing.T) {
-		cmd := operatorStreamCmd()
-		identityFlag := cmd.Flags().Lookup("identity")
-		assert.NotNil(t, identityFlag)
-		assert.Equal(t, "i", identityFlag.Shorthand)
+		expectedFlags := []struct {
+			name      string
+			shorthand string
+		}{
+			{"hosts", ""},
+			{"port", "P"},
+			{"identity", "i"},
+		}
+
+		for _, ef := range expectedFlags {
+			flag := flags.Lookup(ef.name)
+			assert.NotNil(t, flag, "flag %s should exist", ef.name)
+			assert.Equal(t, ef.shorthand, flag.Shorthand, "flag %s shorthand should match", ef.name)
+		}
 	})
 }
 
@@ -357,252 +424,217 @@ func TestBuildScpArgs(t *testing.T) {
 }
 
 func TestCopyFile(t *testing.T) {
-	t.Run("copyFile copies file successfully", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		srcFile := filepath.Join(tmpDir, "source.txt")
-		dstFile := filepath.Join(tmpDir, "dest.txt")
+	tests := []struct {
+		name       string
+		srcContent []byte
+		srcMode    os.FileMode
+		dstPath    string
+		setup      func(tmpDir string) (string, string)
+		wantErr    bool
+		errorCheck func(t *testing.T, err error)
+		skipOn     string
+	}{
+		{
+			name:       "copyFile copies file successfully",
+			srcContent: []byte("test content"),
+			srcMode:    0644,
+			dstPath:    "dest.txt",
+			setup: func(tmpDir string) (string, string) {
+				srcFile := filepath.Join(tmpDir, "source.txt")
+				dstFile := filepath.Join(tmpDir, "dest.txt")
+				return srcFile, dstFile
+			},
+			wantErr: false,
+		},
+		{
+			name:       "copyFile returns error when source does not exist",
+			srcContent: nil,
+			srcMode:    0,
+			dstPath:    "dest.txt",
+			setup: func(tmpDir string) (string, string) {
+				srcFile := filepath.Join(tmpDir, "nonexistent.txt")
+				dstFile := filepath.Join(tmpDir, "dest.txt")
+				return srcFile, dstFile
+			},
+			wantErr: true,
+		},
+		{
+			name:       "copyFile returns error when destination cannot be created",
+			srcContent: []byte("test content"),
+			srcMode:    0644,
+			dstPath:    "subdir/dest.txt",
+			setup: func(tmpDir string) (string, string) {
+				srcFile := filepath.Join(tmpDir, "source.txt")
+				dstFile := filepath.Join(tmpDir, "subdir", "dest.txt")
+				return srcFile, dstFile
+			},
+			wantErr: true,
+		},
+		{
+			name:       "copyFile preserves file permissions",
+			srcContent: []byte("test content"),
+			srcMode:    0755,
+			dstPath:    "dest.txt",
+			setup: func(tmpDir string) (string, string) {
+				srcFile := filepath.Join(tmpDir, "source.txt")
+				dstFile := filepath.Join(tmpDir, "dest.txt")
+				return srcFile, dstFile
+			},
+			wantErr: false,
+			skipOn:  "windows",
+		},
+	}
 
-		content := []byte("test content")
-		require.NoError(t, os.WriteFile(srcFile, content, 0644))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skipOn != "" && os.Getenv("GOOS") == tt.skipOn {
+				t.Skipf("Test skipped on %s", tt.skipOn)
+			}
 
-		err := copyFile(srcFile, dstFile)
-		require.NoError(t, err)
+			tmpDir := t.TempDir()
+			srcFile, dstFile := tt.setup(tmpDir)
 
-		dstContent, err := os.ReadFile(dstFile)
-		require.NoError(t, err)
-		assert.Equal(t, content, dstContent)
+			if tt.srcContent != nil {
+				require.NoError(t, os.WriteFile(srcFile, tt.srcContent, tt.srcMode))
+			}
 
-		srcInfo, _ := os.Stat(srcFile)
-		dstInfo, _ := os.Stat(dstFile)
-		assert.Equal(t, srcInfo.Mode(), dstInfo.Mode())
-	})
+			err := copyFile(srcFile, dstFile)
 
-	t.Run("copyFile returns error when source does not exist", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		srcFile := filepath.Join(tmpDir, "nonexistent.txt")
-		dstFile := filepath.Join(tmpDir, "dest.txt")
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
 
-		err := copyFile(srcFile, dstFile)
-		assert.Error(t, err)
-	})
+			require.NoError(t, err)
 
-	t.Run("copyFile returns error when destination cannot be created", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		srcFile := filepath.Join(tmpDir, "source.txt")
-		dstFile := filepath.Join(tmpDir, "subdir", "dest.txt")
+			dstContent, err := os.ReadFile(dstFile)
+			require.NoError(t, err)
+			assert.Equal(t, tt.srcContent, dstContent)
 
-		content := []byte("test content")
-		require.NoError(t, os.WriteFile(srcFile, content, 0644))
-
-		err := copyFile(srcFile, dstFile)
-		assert.Error(t, err)
-	})
-
-	t.Run("copyFile preserves file permissions", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		srcFile := filepath.Join(tmpDir, "source.txt")
-		dstFile := filepath.Join(tmpDir, "dest.txt")
-
-		content := []byte("test content")
-		require.NoError(t, os.WriteFile(srcFile, content, 0755))
-
-		err := copyFile(srcFile, dstFile)
-		require.NoError(t, err)
-
-		srcInfo, _ := os.Stat(srcFile)
-		dstInfo, _ := os.Stat(dstFile)
-		assert.Equal(t, srcInfo.Mode(), dstInfo.Mode())
-		assert.Equal(t, os.FileMode(0755), dstInfo.Mode())
-	})
+			srcInfo, _ := os.Stat(srcFile)
+			dstInfo, _ := os.Stat(dstFile)
+			assert.Equal(t, srcInfo.Mode(), dstInfo.Mode())
+		})
+	}
 }
 
 func TestPromptForScpOptions(t *testing.T) {
-	t.Run("promptForScpOptions reads port input", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "2222\n"
-		cmd.SetIn(strings.NewReader(input))
+	tests := []struct {
+		name         string
+		input        string
+		wantPort     int
+		wantIdentity string
+		wantPreserve bool
+		wantVerbose  bool
+		wantCompress bool
+	}{
+		{
+			name:         "reads port input",
+			input:        "2222\n",
+			wantPort:     2222,
+			wantIdentity: "",
+			wantPreserve: false,
+			wantVerbose:  false,
+			wantCompress: false,
+		},
+		{
+			name:         "reads identity file input",
+			input:        "\n/path/to/key\n\n\n\n\n",
+			wantPort:     0,
+			wantIdentity: "/path/to/key",
+			wantPreserve: false,
+			wantVerbose:  false,
+			wantCompress: false,
+		},
+		{
+			name:         "sets preserve on 'y'",
+			input:        "\n\ny\n\n\n",
+			wantPort:     0,
+			wantIdentity: "",
+			wantPreserve: true,
+			wantVerbose:  false,
+			wantCompress: false,
+		},
+		{
+			name:         "sets preserve on 'Y'",
+			input:        "\n\nY\n\n\n",
+			wantPort:     0,
+			wantIdentity: "",
+			wantPreserve: true,
+			wantVerbose:  false,
+			wantCompress: false,
+		},
+		{
+			name:         "does not set preserve on non-y input",
+			input:        "\n\nn\n\n\n",
+			wantPort:     0,
+			wantIdentity: "",
+			wantPreserve: false,
+			wantVerbose:  false,
+			wantCompress: false,
+		},
+		{
+			name:         "sets compression on 'y'",
+			input:        "\n\n\ny\n\n",
+			wantPort:     0,
+			wantIdentity: "",
+			wantPreserve: false,
+			wantVerbose:  false,
+			wantCompress: true,
+		},
+		{
+			name:         "sets verbose on 'y'",
+			input:        "\n\n\n\ny\n",
+			wantPort:     0,
+			wantIdentity: "",
+			wantPreserve: false,
+			wantVerbose:  true,
+			wantCompress: false,
+		},
+		{
+			name:         "handles empty input for port",
+			input:        "\n\n\n\n\n",
+			wantPort:     0,
+			wantIdentity: "",
+			wantPreserve: false,
+			wantVerbose:  false,
+			wantCompress: false,
+		},
+		{
+			name:         "handles invalid port input",
+			input:        "invalid\n\n\n\n\n",
+			wantPort:     0,
+			wantIdentity: "",
+			wantPreserve: false,
+			wantVerbose:  false,
+			wantCompress: false,
+		},
+	}
 
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := &cobra.Command{}
+			cmd.SetIn(strings.NewReader(tt.input))
 
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
 
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.Equal(t, 2222, port)
-	})
+			port := 0
+			identityFile := ""
+			recursive := false
+			preserve := false
+			verbose := false
+			compression := false
 
-	t.Run("promptForScpOptions reads identity file input", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "\n/path/to/key\n\n\n\n\n"
-		cmd.SetIn(strings.NewReader(input))
+			err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
+			require.NoError(t, err)
 
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.Equal(t, "/path/to/key", identityFile)
-	})
-
-	t.Run("promptForScpOptions sets preserve on 'y'", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "\n\ny\n\n\n"
-		cmd.SetIn(strings.NewReader(input))
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.True(t, preserve)
-	})
-
-	t.Run("promptForScpOptions sets preserve on 'Y'", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "\n\nY\n\n\n"
-		cmd.SetIn(strings.NewReader(input))
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.True(t, preserve)
-	})
-
-	t.Run("promptForScpOptions does not set preserve on non-y input", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "\n\nn\n\n\n"
-		cmd.SetIn(strings.NewReader(input))
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.False(t, preserve)
-	})
-
-	t.Run("promptForScpOptions sets compression on 'y'", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "\n\n\ny\n\n"
-		cmd.SetIn(strings.NewReader(input))
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.True(t, compression)
-	})
-
-	t.Run("promptForScpOptions sets verbose on 'y'", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "\n\n\n\ny\n"
-		cmd.SetIn(strings.NewReader(input))
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.True(t, verbose)
-	})
-
-	t.Run("promptForScpOptions handles empty input for port", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "\n\n\n\n\n"
-		cmd.SetIn(strings.NewReader(input))
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.Equal(t, 0, port)
-	})
-
-	t.Run("promptForScpOptions handles invalid port input", func(t *testing.T) {
-		cmd := &cobra.Command{}
-		input := "invalid\n\n\n\n\n"
-		cmd.SetIn(strings.NewReader(input))
-
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		port := 0
-		identityFile := ""
-		recursive := false
-		preserve := false
-		verbose := false
-		compression := false
-
-		err := promptForScpOptions(cmd, &port, &identityFile, &recursive, &preserve, &verbose, &compression)
-		require.NoError(t, err)
-		assert.Equal(t, 0, port)
-	})
+			assert.Equal(t, tt.wantPort, port)
+			assert.Equal(t, tt.wantIdentity, identityFile)
+			assert.Equal(t, tt.wantPreserve, preserve)
+			assert.Equal(t, tt.wantVerbose, verbose)
+			assert.Equal(t, tt.wantCompress, compression)
+		})
+	}
 }

@@ -36,6 +36,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -66,6 +67,8 @@ type GatewayFixture struct {
 	MCPGateway       *mcp.GatewayService
 	ActuatorPriv     ed25519.PrivateKey
 	ActuatorKeyID    string
+	DownstreamURL    string // URL of the downstream MCP/A2A server
+	A2ADownstreamURL string // URL used for A2A (same as DownstreamURL if not overridden)
 	Cleanup          func()
 }
 
@@ -73,8 +76,18 @@ type GatewayFixture struct {
 type GatewayFixtureOptions struct {
 	TestName          string
 	Posture           config.GatewayPosture
-	DownstreamURL     string // If empty, creates a mock server
+	DownstreamURL     string // MCP downstream; creates mock server if empty
+	A2ADownstreamURL  string // A2A downstream; if empty, reuses MCP downstream server
 	AllowTestPortZero bool
+}
+
+// repoTestResultsDir returns <repo>/test-results, computed from this source
+// file's location so it is independent of the test's working directory. This
+// file lives at <repo>/test/fixtures/gateway_fixture.go.
+func repoTestResultsDir() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
+	return filepath.Join(repoRoot, "test-results")
 }
 
 // NewGatewayFixture creates a fully configured gateway fixture for testing.
@@ -91,13 +104,22 @@ type GatewayFixtureOptions struct {
 func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture {
 	t.Helper()
 
-	// Create test paths without mutating global constants.Paths
+	// Create test paths without mutating global constants.Paths. The ephemeral
+	// scaffolding (secrets, runtime dir) lives under t.TempDir(); only the
+	// gateway data/vault is relocated to a persistent results directory below.
 	testPaths := testutil.NewTestPathsFromTemp(t)
 
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), opts.TestName)
-	dataDir := filepath.Join(testPaths.TestVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	// Integration runs leave their artifacts behind for inspection: each run
+	// writes a fresh, uniquely-named directory under <repo>/test-results/ and
+	// nothing is deleted between or within runs. os.MkdirTemp gives a unique
+	// suffix so concurrent fixtures in the same test/second never collide, and
+	// (unlike t.TempDir) the directory is NOT auto-removed when the test ends.
+	resultsRoot := repoTestResultsDir()
+	if err := os.MkdirAll(resultsRoot, 0755); err != nil {
+		t.Fatalf("gateway_fixture: create test-results root: %v", err)
+	}
+	dataDir, err := os.MkdirTemp(resultsRoot, fmt.Sprintf("%s-%s-", time.Now().Format("20060102-150405"), opts.TestName))
+	if err != nil {
 		t.Fatalf("gateway_fixture: create test run directory: %v", err)
 	}
 	t.Logf("Test vault created at: %s", dataDir)
@@ -182,6 +204,12 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamURL
 
+	a2aURL := opts.A2ADownstreamURL
+	if a2aURL == "" {
+		a2aURL = downstreamURL
+	}
+	cfg.Gateway.A2ADownstreamURL = a2aURL
+
 	ls, err := gateway.NewGatewayModeService(cfg, testutil.NewTestLogger())
 	require.NoError(t, err)
 
@@ -218,7 +246,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		TransactionAudit:   govDeps.TransactionAudit,
 		FieldReader:        govDeps.FieldReader,
 		SignerStore:        govDeps.SignerStore,
-		L3Notary:           gatewayRejectingL3Notary{},
+		L3Notary:           RejectingL3Notary{},
 		ActuatorSigningKey: ActuatorPriv,
 		ActuatorKeyID:      ActuatorKeyID,
 		MCPGateway:         mcpGateway,
@@ -257,8 +285,12 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		if downstreamServer != nil {
 			downstreamServer.Close()
 		}
-		// Clean up test data directory
-		os.RemoveAll(dataDir)
+		// Stop the gateway service to close all databases and release file locks.
+		// The data directory itself is intentionally left on disk: integration
+		// runs accumulate results under <repo>/test-results/ for later inspection.
+		if err := ls.Stop(context.Background()); err != nil {
+			t.Logf("gateway stop error: %v", err)
+		}
 	}
 
 	return &GatewayFixture{
@@ -271,6 +303,8 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		MCPGateway:       mcpGateway,
 		ActuatorPriv:     ActuatorPriv,
 		ActuatorKeyID:    ActuatorKeyID,
+		DownstreamURL:    downstreamURL,
+		A2ADownstreamURL: a2aURL,
 		Cleanup:          cleanup,
 	}
 }
@@ -296,10 +330,10 @@ func (f *GatewayFixture) SetPublicBaseURL(baseURL string) {
 	f.MCPGateway.SetPublicBaseURL(baseURL)
 }
 
-// gatewayRejectingL3Notary is a test implementation that always rejects L3 proofs.
-type gatewayRejectingL3Notary struct{}
+// RejectingL3Notary is a test implementation that always rejects L3 proofs.
+type RejectingL3Notary struct{}
 
-func (gatewayRejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
+func (RejectingL3Notary) VerifyL3Proof(_ context.Context, _ string, _ string, _ string, _ *commonv1.L3Proof) (bool, error) {
 	return false, nil
 }
 

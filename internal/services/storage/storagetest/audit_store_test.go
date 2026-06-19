@@ -24,4 +24,4 @@ package storagetest
 // - audit_store_e2e_test.go: End-to-end audit trail flows
 //
 // All test files use the //go:build integration tag (Tier 2 tests)
-// as they use SQLite in-memory databases and local PKI generation.
+// as they use real on-disk SQLite databases and local PKI generation.

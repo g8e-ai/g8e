@@ -9,39 +9,6 @@ import (
 	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
 )
 
-func TestExecID(t *testing.T) {
-	// Test that execID generates unique IDs with timestamp
-	id1 := execID("test")
-	id2 := execID("test")
-
-	if id1 == id2 {
-		t.Error("execID should generate unique IDs")
-	}
-
-	// Test that execID includes the tag
-	if !contains(id1, "test") {
-		t.Error("execID should include the tag")
-	}
-
-	// Test with different tags
-	id3 := execID("different")
-	if !contains(id3, "different") {
-		t.Error("execID should include the provided tag")
-	}
-}
-
-func TestExecIDUniqueness(t *testing.T) {
-	// Generate multiple IDs and verify they're all unique
-	ids := make(map[string]bool)
-	for i := 0; i < 100; i++ {
-		id := execID("test")
-		if ids[id] {
-			t.Errorf("execID should generate unique IDs, duplicate found: %q", id)
-		}
-		ids[id] = true
-	}
-}
-
 func TestApiKeyNote(t *testing.T) {
 	tests := []struct {
 		name     string

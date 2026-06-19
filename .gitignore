@@ -143,3 +143,6 @@ CLAUDE.md
 GEMINI.md
 .gemini/
 .gemini/*
+
+# --- Integration test results (persisted per run) ---
+test-results/

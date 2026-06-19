@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
@@ -226,32 +227,33 @@ func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, err
 
 // GetField extracts a single field value from a document using dot notation.
 // This is used for JIT field resolution with governed access controls.
-func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (interface{}, error) {
+func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.FieldValue, error) {
 	// Use json_quote(json_extract(...)) so SQLite re-encodes the extracted value as
 	// valid JSON regardless of its native type (TEXT, INTEGER, REAL, NULL).
 	// json_extract alone returns SQL TEXT without quotes for JSON strings, which is
 	// not valid JSON. json_quote wraps strings in quotes and leaves numbers/booleans as-is.
+	// json_quote(NULL) returns the text 'null' (not SQL NULL), so we get valid JSON.
 	query := "SELECT json_quote(json_extract(data, ?)) FROM documents WHERE collection = ? AND id = ?"
 	jsonPath := "$." + fieldPath
 
 	var encoded *string
 	err := s.db.QueryRowWithRetry(query, jsonPath, collection, id).Scan(&encoded)
 	if err == sql.ErrNoRows {
-		return nil, constants.ErrNotFound
+		return mcp.FieldValue{}, constants.ErrNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("DocumentStoreService: extract field %s: %w", fieldPath, err)
+		return mcp.FieldValue{}, fmt.Errorf("DocumentStoreService: extract field %s: %w", fieldPath, err)
 	}
 	if encoded == nil {
-		return nil, constants.ErrNotFound
+		return mcp.FieldValue{}, constants.ErrNotFound
 	}
 
 	var out interface{}
 	if err := json.Unmarshal([]byte(*encoded), &out); err != nil {
-		return nil, fmt.Errorf("DocumentStoreService: decode field %s: %w", fieldPath, err)
+		return mcp.FieldValue{}, fmt.Errorf("DocumentStoreService: decode field %s: %w", fieldPath, err)
 	}
 
-	return out, nil
+	return mcp.ConvertToFieldValue(out), nil
 }
 
 // DocQuery returns documents matching field conditions.

@@ -85,5 +85,6 @@
   "deploy_script_linux": "/g8e-operator.sh",
   "deploy_script_windows": "/g8e-operator.ps1",
   "health": "/api/v1/health",
+  "state": "/api/v1/state",
   "landing": "/"
 }

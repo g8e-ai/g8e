@@ -174,8 +174,13 @@ func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 
 // FetchRootCAFingerprint fetches the root CA fingerprint from the gateway.
 // This is used for OOB pinning verification during bootstrap.
-func FetchRootCAFingerprint(cfg *config.Config) (string, error) {
-	fingerprintURL := fmt.Sprintf("%s/.well-known/g8e/pki/fingerprint", cfg.OperatorDiscoveryURL())
+// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
+func FetchRootCAFingerprint(cfg *config.Config, baseURL string) (string, error) {
+	discoveryURL := cfg.OperatorDiscoveryURL()
+	if baseURL != "" {
+		discoveryURL = baseURL
+	}
+	fingerprintURL := fmt.Sprintf("%s/.well-known/g8e/pki/fingerprint", discoveryURL)
 	resp, err := http.Get(fingerprintURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch root CA fingerprint: %w", err)
@@ -224,7 +229,9 @@ func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	return nil
 }
 
-func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
+// BootstrapWithURL allows overriding the gateway URL for testing.
+// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
+func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string, baseURL string) (*RegistrationResponse, error) {
 	// Generate proper system fingerprint
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
@@ -248,7 +255,11 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint str
 	}
 
 	// Use bootstrap port (plain HTTP) for initial bootstrap
-	url := fmt.Sprintf("%s/api/v1/auth/bootstrap", cfg.OperatorDiscoveryURL())
+	discoveryURL := cfg.OperatorDiscoveryURL()
+	if baseURL != "" {
+		discoveryURL = baseURL
+	}
+	url := fmt.Sprintf("%s/api/v1/auth/bootstrap", discoveryURL)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -291,7 +302,8 @@ func Bootstrap(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint str
 // CLIEnroll performs CLI-only enrollment after bootstrap when local CLI credentials are missing.
 // This is used when the gateway is already bootstrapped but the CLI has lost its credentials.
 // It uses the plain HTTP bootstrap port since the CLI has no mTLS credentials.
-func CLIEnroll(cfg *config.Config, cliCSR string) (*RegistrationResponse, error) {
+// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
+func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*RegistrationResponse, error) {
 	// Generate proper system fingerprint
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
@@ -314,7 +326,11 @@ func CLIEnroll(cfg *config.Config, cliCSR string) (*RegistrationResponse, error)
 	}
 
 	// Use bootstrap port (plain HTTP) for CLI enrollment
-	url := fmt.Sprintf("%s/api/v1/auth/cli/enroll", cfg.OperatorDiscoveryURL())
+	discoveryURL := cfg.OperatorDiscoveryURL()
+	if baseURL != "" {
+		discoveryURL = baseURL
+	}
+	url := fmt.Sprintf("%s/api/v1/auth/cli/enroll", discoveryURL)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -349,7 +365,8 @@ func CLIEnroll(cfg *config.Config, cliCSR string) (*RegistrationResponse, error)
 
 // ReEnroll performs CSR-based re-enrollment using existing mTLS credentials.
 // This is used when the platform is already bootstrapped and the CLI has valid certificates.
-func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string) (*RegistrationResponse, error) {
+// If baseURL is empty, it uses cfg.OperatorDiscoveryURL() and cfg.OperatorPublicURL().
+func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint string, baseURL string) (*RegistrationResponse, error) {
 	// Generate proper system fingerprint
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
@@ -358,7 +375,11 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	}
 
 	// Fetch current trust bundle from Operator bootstrap endpoint to handle CA rotation
-	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", cfg.OperatorDiscoveryURL())
+	discoveryURL := cfg.OperatorDiscoveryURL()
+	if baseURL != "" {
+		discoveryURL = baseURL
+	}
+	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", discoveryURL)
 	trustBundleResp, err := http.Get(trustBundleURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch trust bundle from operator: %w", err)
@@ -432,7 +453,11 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/api/v1/pki/devices/enroll", cfg.OperatorPublicURL())
+	publicURL := cfg.OperatorPublicURL()
+	if baseURL != "" {
+		publicURL = baseURL
+	}
+	url := fmt.Sprintf("%s/api/v1/pki/devices/enroll", publicURL)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -954,10 +979,15 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	return nil
 }
 
-// CheckBootstrapStatus returns whether the platform has been bootstrapped
-func CheckBootstrapStatus(cfg *config.Config) (bool, error) {
+// CheckBootstrapStatus returns whether the platform has been bootstrapped.
+// If baseURL is empty, it uses cfg.OperatorDiscoveryURL().
+func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 	// Check remote bootstrap status via bootstrap port (plain HTTP)
-	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", cfg.OperatorDiscoveryURL())
+	discoveryURL := cfg.OperatorDiscoveryURL()
+	if baseURL != "" {
+		discoveryURL = baseURL
+	}
+	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", discoveryURL)
 	resp, err := http.Get(url)
 	if err != nil {
 		// If Operator is not reachable, we cannot confirm bootstrap status
@@ -1056,7 +1086,7 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 		return fmt.Errorf("failed to generate CLI CSR: %w", err)
 	}
 
-	regResp, err := ReEnroll(cfg, "", cliCSR, caFingerprint)
+	regResp, err := ReEnroll(cfg, "", cliCSR, caFingerprint, "")
 	if err != nil {
 		return fmt.Errorf("automatic re-enrollment failed: %w", err)
 	}

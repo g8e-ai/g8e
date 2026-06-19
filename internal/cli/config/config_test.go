@@ -312,15 +312,6 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 
-	t.Run("returns Operator HTTPS URL with test port override", func(t *testing.T) {
-		config := &Config{
-			Paths:            &PathsConfig{},
-			TestPortOverride: 9999,
-		}
-
-		result := config.OperatorHTTPURL()
-		assert.Equal(t, "https://localhost:9999", result)
-	})
 }
 
 func TestConfig_OperatorBootstrapURL(t *testing.T) {

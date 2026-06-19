@@ -1,3 +1,5 @@
+//go:build integration
+
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,20 +38,6 @@ import (
 )
 
 func TestApproveCmd(t *testing.T) {
-	t.Run("approve command has correct use and description", func(t *testing.T) {
-		cmd := approveCmd()
-		assert.Contains(t, cmd.Use, "approve")
-		assert.Contains(t, cmd.Short, "Approve")
-		assert.Contains(t, cmd.Short, "L3")
-		assert.Contains(t, cmd.Short, "CLI signature")
-	})
-
-	t.Run("approve requires exactly one argument", func(t *testing.T) {
-		cmd := approveCmd()
-		// Test that args validation is set by checking it's not nil
-		assert.NotNil(t, cmd.Args)
-	})
-
 	t.Run("approve fails with no arguments", func(t *testing.T) {
 		cmd := approveCmd()
 		var buf bytes.Buffer

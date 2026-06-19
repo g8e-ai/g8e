@@ -24,8 +24,22 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// fileOpener is an interface for opening files, enabling test mocking.
+type fileOpener interface {
+	Open(name string) (*os.File, error)
+}
+
+// osFileOpener implements fileOpener using os.Open.
+type osFileOpener struct{}
+
+func (o *osFileOpener) Open(name string) (*os.File, error) {
+	return os.Open(name)
+}
+
 // NetSocketAuditTool inspects active network sockets.
-type NetSocketAuditTool struct{}
+type NetSocketAuditTool struct {
+	fileOpener fileOpener
+}
 
 // Name returns the tool identifier.
 func (t *NetSocketAuditTool) Name() string {
@@ -54,7 +68,13 @@ func (t *NetSocketAuditTool) InputSchema() *InputSchema {
 func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req NetSocketAuditRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("net_socket_audit: unmarshal arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
+	}
+
+	// Use default file opener if not set
+	opener := t.fileOpener
+	if opener == nil {
+		opener = &osFileOpener{}
 	}
 
 	var sockets []SocketInfo
@@ -69,57 +89,22 @@ func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) 
 	}
 
 	for _, proto := range protocols {
-		path := fmt.Sprintf("/proc/net/%s", proto)
+		path := getProcNetPath(proto)
 		// proto is validated by validateProcNetPath to satisfy CodeQL uncontrolled-data-in-path-expression rule.
-		file, err := os.Open(path)
+		file, err := opener.Open(path)
 		if err != nil {
+			// Skip protocols that are not available on this system
 			continue
 		}
-		defer file.Close()
 
-		scanner := bufio.NewScanner(file)
-		scanner.Scan()
-
-		for scanner.Scan() {
-			if ctx.Err() != nil {
-				return CallToolResult{}, ctx.Err()
-			}
-
-			line := scanner.Text()
-			fields := strings.Fields(line)
-			if len(fields) < 10 {
-				continue
-			}
-
-			localAddr := fields[1]
-			remoteAddr := fields[2]
-			state := ""
-			if len(fields) > 3 {
-				state = fields[3]
-			}
-
-			localIP, localPort, err := parseSocketAddr(localAddr)
-			if err != nil {
-				continue
-			}
-			remoteIP, remotePort, err := parseSocketAddr(remoteAddr)
-			if err != nil {
-				continue
-			}
-
-			sockets = append(sockets, SocketInfo{
-				Protocol:   proto,
-				LocalAddr:  localIP,
-				LocalPort:  localPort,
-				RemoteAddr: remoteIP,
-				RemotePort: remotePort,
-				State:      state,
-			})
-		}
-
-		if err := scanner.Err(); err != nil {
+		protoSockets, err := parseProcNetFile(ctx, file, proto)
+		file.Close()
+		if err != nil {
+			// Log and continue with other protocols
 			continue
 		}
+
+		sockets = append(sockets, protoSockets...)
 	}
 
 	result := NetSocketAuditResult{
@@ -138,4 +123,87 @@ func (t *NetSocketAuditTool) Execute(ctx context.Context, args json.RawMessage) 
 			},
 		},
 	}, nil
+}
+
+// getProcNetPath returns the /proc/net path for a given protocol.
+func getProcNetPath(protocol string) string {
+	switch protocol {
+	case "tcp":
+		return constants.PathProcNetTCP
+	case "udp":
+		return constants.PathProcNetUDP
+	case "tcp6":
+		return constants.PathProcNetTCP6
+	case "udp6":
+		return constants.PathProcNetUDP6
+	case "raw":
+		return constants.PathProcNetRaw
+	default:
+		return fmt.Sprintf("%s/%s", constants.PathProcNet, protocol)
+	}
+}
+
+// parseProcNetFile parses a /proc/net protocol file and extracts socket information.
+// Minimum field count is 10: sl local_address rem_address st tx_queue rx_queue ...
+const minProcNetFields = 10
+
+func parseProcNetFile(ctx context.Context, file *os.File, protocol string) ([]SocketInfo, error) {
+	var sockets []SocketInfo
+	scanner := bufio.NewScanner(file)
+
+	// Skip header line
+	if !scanner.Scan() {
+		return sockets, nil
+	}
+
+	for scanner.Scan() {
+		if ctx.Err() != nil {
+			return sockets, ctx.Err()
+		}
+
+		line := scanner.Text()
+		fields := strings.Fields(line)
+		if len(fields) < minProcNetFields {
+			continue
+		}
+
+		localAddr := fields[1]
+		remoteAddr := fields[2]
+		state := ""
+		if len(fields) > 3 {
+			state = fields[3]
+		}
+
+		// /proc/net format uses colon to separate IP and port (e.g., 0100007F:1F90).
+		// Skip lines where either address field lacks the expected colon separator.
+		if !strings.Contains(localAddr, ":") || !strings.Contains(remoteAddr, ":") {
+			continue
+		}
+		localAddr = strings.ReplaceAll(localAddr, ":", "")
+		remoteAddr = strings.ReplaceAll(remoteAddr, ":", "")
+
+		localIP, localPort, err := parseSocketAddr(localAddr)
+		if err != nil {
+			continue
+		}
+		remoteIP, remotePort, err := parseSocketAddr(remoteAddr)
+		if err != nil {
+			continue
+		}
+
+		sockets = append(sockets, SocketInfo{
+			Protocol:   protocol,
+			LocalAddr:  localIP,
+			LocalPort:  localPort,
+			RemoteAddr: remoteIP,
+			RemotePort: remotePort,
+			State:      state,
+		})
+	}
+
+	if err := scanner.Err(); err != nil {
+		return sockets, fmt.Errorf("net_socket_audit: scan %s file: %w", protocol, err)
+	}
+
+	return sockets, nil
 }

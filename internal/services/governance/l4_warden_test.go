@@ -436,56 +436,6 @@ func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
 	}
 }
 
-// TestL4Warden_AppPolicyStore_L3Bypass_ReadOnly verifies that read-only
-// intents approved by AppPolicyStore bypass L3 human presence verification.
-/*
-func TestL4Warden_AppPolicyStore_L3Bypass_ReadOnly(t *testing.T) {
-	t.Parallel()
-
-	// Create an AppPolicyStore that auto-approves read-only actions
-	appPolicyStore := &SimpleAppPolicyStore{
-		Policies: map[string]*models.AppPolicy{
-			"spiffe://g8e.local/app/test-app-id": {
-				AppID: "spiffe://g8e.local/app/test-app-id",
-			},
-		},
-	}
-
-	// Test each read-only action type
-	readOnlyActions := []constants.ActionType{
-		constants.ActionTypeFsRead,
-		constants.ActionTypeFsList,
-		constants.ActionTypeFsGrep,
-		constants.ActionTypePortCheck,
-		constants.ActionTypeFetchLogs,
-		constants.ActionTypeFetchHistory,
-		constants.ActionTypeFetchFileHistory,
-		constants.ActionTypeFetchFileDiff,
-	}
-
-	for _, actionType := range readOnlyActions {
-		t.Run(string(actionType), func(t *testing.T) {
-			t.Parallel()
-			payload := typedPayload(t, actionType)
-			env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "spiffe://g8e.local/app/test-app-id")
-
-			// Read-only actions should bypass L3 even without L3 proof
-			verified, err := verifier.VerifyEnvelope(context.Background(), env)
-			if err != nil {
-				t.Fatalf("read-only action %s should bypass L3 via app policy, got error: %v", actionType, err)
-			}
-			if verified == nil {
-				t.Fatalf("verified transaction is nil for read-only action %s", actionType)
-				return
-			}
-			if !verified.L3Valid {
-				t.Errorf("expected L3Valid=true for read-only action %s with app policy bypass", actionType)
-			}
-		})
-	}
-}
-*/
-
 // TestL4Warden_AppPolicyStore_L3Required_Mutation verifies that mutating
 // intents NOT in AutoApproveIntents require L3 human presence verification.
 func TestL4Warden_AppPolicyStore_L3Required_Mutation(t *testing.T) {

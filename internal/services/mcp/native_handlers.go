@@ -21,7 +21,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // isValidIdentifier validates SQLite identifiers to prevent SQL injection.
@@ -44,14 +45,6 @@ func isValidIdentifier(name string) bool {
 	return true
 }
 
-const (
-	defaultLogFilterLimit   = 100
-	defaultProcessLimit     = 10
-	defaultDiskProfileDepth = 2
-	defaultNetworkTimeout   = 5 * time.Second
-	defaultHTTPTimeout      = 10 * time.Second
-)
-
 // NativeToolHandler executes native tools compiled into the Node binary.
 type NativeToolHandler struct {
 	registry *ToolRegistry
@@ -64,7 +57,7 @@ type NativeToolHandler struct {
 func NewNativeToolHandler(logger *slog.Logger) (*NativeToolHandler, error) {
 	registry := NewToolRegistry()
 	if err := RegisterNativeTools(registry); err != nil {
-		return nil, fmt.Errorf("native tool registration failed: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrMCPNativeToolRegistration, err)
 	}
 	return &NativeToolHandler{
 		registry: registry,
@@ -94,7 +87,7 @@ func (h *NativeToolHandler) HandleTool(ctx context.Context, toolName string, arg
 		for _, t := range availableTools {
 			toolNames = append(toolNames, t.Name())
 		}
-		return CallToolResult{}, fmt.Errorf("unknown native tool: %s (available tools: %s)", toolName, strings.Join(toolNames, ", "))
+		return CallToolResult{}, fmt.Errorf("%w: %s (available tools: %s)", constants.ErrMCPNativeToolUnknown, toolName, strings.Join(toolNames, ", "))
 	}
 	result, err := tool.Execute(ctx, arguments)
 	if h.logger != nil {
@@ -157,28 +150,22 @@ func parseSocketAddr(hexAddr string) (string, int, error) {
 
 	port, err := strconv.ParseInt(portHex, 16, 32)
 	if err != nil {
-		return "0.0.0.0", 0, fmt.Errorf("parse port: %w", err)
+		return "0.0.0.0", 0, fmt.Errorf("%w: %w", constants.ErrMCPParseSocketPort, err)
 	}
 
 	var ip string
 	if len(ipHex) == 8 {
-		p1, err := strconv.ParseInt(ipHex[6:8], 16, 32)
-		if err != nil {
-			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 1: %w", err)
+		octets := make([]int64, 4)
+		for i := 0; i < 4; i++ {
+			start := 6 - (i * 2)
+			end := start + 2
+			octet, err := strconv.ParseInt(ipHex[start:end], 16, 32)
+			if err != nil {
+				return "0.0.0.0", 0, fmt.Errorf("%w: %w", constants.ErrMCPParseSocketIPOctet, err)
+			}
+			octets[i] = octet
 		}
-		p2, err := strconv.ParseInt(ipHex[4:6], 16, 32)
-		if err != nil {
-			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 2: %w", err)
-		}
-		p3, err := strconv.ParseInt(ipHex[2:4], 16, 32)
-		if err != nil {
-			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 3: %w", err)
-		}
-		p4, err := strconv.ParseInt(ipHex[0:2], 16, 32)
-		if err != nil {
-			return "0.0.0.0", 0, fmt.Errorf("parse ip octet 4: %w", err)
-		}
-		ip = fmt.Sprintf("%d.%d.%d.%d", p1, p2, p3, p4)
+		ip = fmt.Sprintf("%d.%d.%d.%d", octets[0], octets[1], octets[2], octets[3])
 	} else {
 		ip = "unknown"
 	}

@@ -20,6 +20,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // NetHTTPProbeTool performs lightweight HTTP requests.
@@ -91,11 +93,11 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 		return CallToolResult{}, fmt.Errorf("net_http_probe: failed to create request: %w", err)
 	}
 
-	timeout := defaultHTTPTimeout
+	timeout := constants.DefaultHTTPTimeout
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout = time.Until(deadline)
 		if timeout <= 0 {
-			timeout = defaultHTTPTimeout
+			timeout = constants.DefaultHTTPTimeout
 		}
 	}
 
