@@ -416,17 +416,11 @@ test-integration:
 	@echo "Running Tier 2 (In-Process Integration) tests..."
 	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
-# Tier 3a: Docker E2E Tests - requires Docker
+# Tier 3: Docker E2E Tests - requires Docker
 .PHONY: test-docker
 test-docker:
 	@echo "Running Tier 3 (Docker E2E) tests..."
 	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
-
-# Tier 3b: Gov Demo E2E Tests - requires Docker
-.PHONY: test-gov
-test-gov:
-	@echo "Running Tier 3 (Gov Demo E2E) tests..."
-	@go test -tags=e2e -run TestDockerGateway_GovDemo $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
 
 # Gateway tests (subset of integration tests)

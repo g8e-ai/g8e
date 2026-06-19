@@ -41,7 +41,6 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ./g8e test unit        # Run Tier 1 (Unit) tests - no external dependencies
 ./g8e test integration # Run Tier 2 (In-Process Integration) tests - on-disk SQLite, local PKI
 ./g8e test e2e         # Run Tier 3 (Docker E2E) tests - requires Docker
-./g8e test scenario    # Run Tier 2 (Scenario) tests - requires running gateway
 ./g8e test coverage    # Run tests with coverage report
 ./g8e test lint        # Run linting and quality checks
 ./g8e emulator list    # List emulator scenarios
@@ -58,8 +57,6 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test e2e`** - Runs Docker-based E2E tests with the `e2e` build tag. These tests require Docker and use `docker-compose.yml` to spin up gateway and operator containers.
 
-- **`./g8e test scenario`** - Runs scenario-specific integration tests with the `integration` build tag. These tests exercise end-to-end governance workflows across doctrine, consensus, and notary modes. Requires running gateway and authenticated CLI session.
-
 - **`./g8e test coverage`** - Runs tests with coverage profiling and enforces a minimum coverage threshold (60%). Use PKG flag to test a specific package, VERBOSE for detailed output.
 
 - **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
@@ -73,24 +70,6 @@ The CLI test commands map directly to the 3-tier test architecture:
 - **`./g8e test summary`** - Views aggregated chaos test results from the test vault database. Queries the chaos_events table across all test runs in the test vault directory.
 
 Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
-
-### Scenario Tests
-
-```bash
-./g8e test scenario
-./g8e test scenario --run forge_signature
-```
-
-Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the g8e Gateway to be running and authenticated CLI session. These tests use the `integration` build tag.
-
-**Test Types**:
-- **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
-- **Golden snapshots** - Deterministic receipt comparison excluding volatile fields (signature, timestamp, signer key). Golden files auto-create on missing and auto-update on mismatch
-- **Property-based invariants** - Fuzz-style tests verifying core governance invariants (integrity + freshness + state + required-gates must all pass in order)
-- **Concurrency tests** - Double-submit replay detection using goroutines to verify TOCTOU resistance
-- **Negative controls** - Tests that intentionally flip expectations to prove the suite can detect failures
-- **Receipt verification** - Separate axis testing cryptographic receipt validation (signature verification, field tampering detection)
-- **Receipt persistence** - Database persistence verification for accepted transactions (receipts stored in `console_audit` collection), rejected transactions verify no persistence
 
 ### Docker E2E Tests
 

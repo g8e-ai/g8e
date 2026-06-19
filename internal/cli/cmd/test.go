@@ -34,15 +34,14 @@ import (
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, scenario, lint, emulator, chaos)",
-		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Emulator runs scenarios against a real Gateway/Operator. Chaos generates governance events for testing.`,
+		Short: "Run test suites (unit, integration, e2e, lint, emulator, chaos)",
+		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Emulator runs demos against a real Gateway/Operator. Chaos generates governance events for testing.`,
 	}
 
 	cmd.AddCommand(
 		testUnitCmd(),
 		testIntegrationCmd(),
 		testE2ECmd(),
-		testScenarioCmd(),
 		testCoverageCmd(),
 		testLintCmd(),
 		emulatorCmd(),
@@ -176,57 +175,6 @@ func testE2ECmd() *cobra.Command {
 			}
 
 			fmt.Println("E2E tests completed successfully.")
-			return nil
-		},
-	}
-
-	return cmd
-}
-
-func testScenarioCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "scenario",
-		Short: "Run Tier 3 (Scenario) tests",
-		Long:  `Run scenario-specific E2E tests with the 'e2e' build tag. These tests require a running g8e gateway and authenticated CLI session.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Running Tier 3 (Scenario) tests...")
-
-			// Check if gateway is running
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
-			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
-			}
-
-			running, _, err := pm.OperatorStatus()
-			if err != nil {
-				return fmt.Errorf("failed to check Operator status: %w", err)
-			}
-
-			if !running {
-				fmt.Println("Error: Gateway is not running.")
-				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
-				return fmt.Errorf("gateway not running")
-			}
-
-			testRace := ""
-			if runtime.GOOS != "windows" {
-				testRace = "-race"
-			}
-
-			testCmd := exec.Command("go", "test", "-tags=e2e", testRace, "-count=1", "-timeout", "180s", "./test/scenario/...")
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
-				return fmt.Errorf("scenario tests failed: %w", err)
-			}
-
-			fmt.Println("Scenario tests completed successfully.")
 			return nil
 		},
 	}

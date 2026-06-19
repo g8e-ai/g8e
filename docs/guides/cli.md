@@ -665,7 +665,6 @@ Available Commands:
   unit        Run Tier 1 (Unit) tests
   integration Run Tier 2 (In-Process Integration) tests
   e2e         Run Tier 3 (Live Platform E2E) tests
-  scenario    Run Tier 3 (Scenario) tests
   coverage    Run tests with coverage report
   lint        Run linting and quality checks
   emulator    Universal agent emulator for a real g8e Gateway/Operator
@@ -712,17 +711,6 @@ Flags:
   -h, --help   help for e2e
 ```
 
-
-### test scenario
-```
-Run Tier 3 (Scenario) tests. These tests require a running g8e gateway and authenticated CLI session.
-
-Usage:
-  g8e test scenario [flags]
-
-Flags:
-  -h, --help   help for scenario
-```
 
 ### test coverage
 ```
