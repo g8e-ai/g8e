@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/sliceutil"
+	"slices"
 )
 
 // GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host.
@@ -308,7 +308,7 @@ func (d *Detector) detectHostnames() ([]string, error) {
 	// Try hostname command as fallback
 	if hn, err := exec.Command("hostname").Output(); err == nil {
 		hostname := strings.TrimSpace(string(hn))
-		if hostname != "" && !sliceutil.Contains(hostnames, hostname) {
+		if hostname != "" && !slices.Contains(hostnames, hostname) {
 			hostnames = append(hostnames, hostname)
 		}
 	}
@@ -316,7 +316,7 @@ func (d *Detector) detectHostnames() ([]string, error) {
 	// Try hostname -f for FQDN
 	if fqdn, err := exec.Command("hostname", "-f").Output(); err == nil {
 		fqdnStr := strings.TrimSpace(string(fqdn))
-		if fqdnStr != "" && !sliceutil.Contains(hostnames, fqdnStr) {
+		if fqdnStr != "" && !slices.Contains(hostnames, fqdnStr) {
 			hostnames = append(hostnames, fqdnStr)
 		}
 	}
@@ -415,7 +415,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 				if strings.Contains(line, ".local") {
 					fields := strings.Fields(line)
 					for _, field := range fields {
-						if strings.HasSuffix(field, ".local") && !sliceutil.Contains(mdnsNames, field) {
+						if strings.HasSuffix(field, ".local") && !slices.Contains(mdnsNames, field) {
 							mdnsNames = append(mdnsNames, field)
 						}
 					}
@@ -437,7 +437,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 					if strings.Contains(line, ".local") {
 						fields := strings.Fields(line)
 						for _, field := range fields {
-							if strings.HasSuffix(field, ".local") && !sliceutil.Contains(mdnsNames, field) {
+							if strings.HasSuffix(field, ".local") && !slices.Contains(mdnsNames, field) {
 								mdnsNames = append(mdnsNames, field)
 							}
 						}
@@ -542,11 +542,11 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 			if strings.Contains(hostPattern, ",") {
 				parts := strings.Split(hostPattern, ",")
 				for _, part := range parts {
-					if !localIPSet[part] && !sliceutil.Contains(hostnames, part) {
+					if !localIPSet[part] && !slices.Contains(hostnames, part) {
 						hostnames = append(hostnames, part)
 					}
 				}
-			} else if !localIPSet[hostPattern] && !sliceutil.Contains(hostnames, hostPattern) {
+			} else if !localIPSet[hostPattern] && !slices.Contains(hostnames, hostPattern) {
 				hostnames = append(hostnames, hostPattern)
 			}
 		}
@@ -629,7 +629,15 @@ func (ni *NetworkIdentity) GetAllDNSNames() []string {
 	names = append(names, "localhost")
 
 	// Deduplicate
-	return sliceutil.Unique(names)
+	seen := make(map[string]bool)
+	var unique []string
+	for _, name := range names {
+		if !seen[name] {
+			seen[name] = true
+			unique = append(unique, name)
+		}
+	}
+	return unique
 }
 
 // GetAllIPs returns all IP addresses that should be included in the certificate.
