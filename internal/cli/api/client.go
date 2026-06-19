@@ -33,9 +33,16 @@ type Client struct {
 	httpClient *http.Client
 	cfg        *config.Config
 	creds      *auth.Credentials
+	baseURL    string // Optional override for testing
 }
 
 func NewClient(cfg *config.Config) (*Client, error) {
+	return NewClientWithURL(cfg, "")
+}
+
+// NewClientWithURL creates a client with an optional base URL override for testing.
+// If baseURL is empty, it uses cfg.OperatorHTTPURL().
+func NewClientWithURL(cfg *config.Config, baseURL string) (*Client, error) {
 	creds, err := auth.LoadCredentials(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
@@ -77,6 +84,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 		httpClient: httpClient,
 		cfg:        cfg,
 		creds:      creds,
+		baseURL:    baseURL,
 	}, nil
 }
 
@@ -90,7 +98,11 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
-	url := c.cfg.OperatorHTTPURL() + path
+	baseURL := c.baseURL
+	if baseURL == "" {
+		baseURL = c.cfg.OperatorHTTPURL()
+	}
+	url := baseURL + path
 	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

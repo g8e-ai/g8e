@@ -465,7 +465,9 @@ func TestFSDiskProfileTool_Execute_SymlinkSkip(t *testing.T) {
 
 	symlink := filepath.Join(tmpDir, "link.txt")
 	err = os.Symlink(file, symlink)
-	require.NoError(t, err)
+	if err != nil {
+		t.Skipf("symlink creation not supported on this platform: %v", err)
+	}
 
 	req := FSDiskProfileRequest{Path: tmpDir}
 	args, err := json.Marshal(req)

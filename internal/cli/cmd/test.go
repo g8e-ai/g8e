@@ -92,10 +92,10 @@ func testUnitCmd() *cobra.Command {
 func testIntegrationCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "integration",
-		Short: "Run Tier 2 (In-Memory Integration) tests",
-		Long:  `Run in-memory integration tests with the 'integration' build tag. These tests use SQLite in-memory databases, local PKI generation, and local pubsub.`,
+		Short: "Run Tier 2 (In-Process Integration) tests",
+		Long:  `Run in-process integration tests with the 'integration' build tag. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Running Tier 2 (In-Memory Integration) tests...")
+			fmt.Println("Running Tier 2 (In-Process Integration) tests...")
 
 			testRace := ""
 			if runtime.GOOS != "windows" {

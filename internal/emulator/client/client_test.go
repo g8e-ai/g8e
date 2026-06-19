@@ -249,8 +249,8 @@ func TestClient_StateRoot(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != constants.APIPaths.Health {
-					t.Errorf("expected path %s, got %s", constants.APIPaths.Health, r.URL.Path)
+				if r.URL.Path != constants.APIPaths.State {
+					t.Errorf("expected path %s, got %s", constants.APIPaths.State, r.URL.Path)
 				}
 				w.Header().Set("Content-Type", "application/json")
 				w.Write([]byte(tt.responseBody))

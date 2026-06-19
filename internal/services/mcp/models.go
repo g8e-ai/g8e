@@ -15,9 +15,11 @@ package mcp
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 // JSONRPCRequest is an alias for response.JSONRPCRequest
@@ -58,11 +60,11 @@ type ListResourcesRequest struct {
 
 // Resource represents an MCP resource.
 type Resource struct {
-	URI         string                 `json:"uri"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	MimeType    string                 `json:"mimeType,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	URI         string    `json:"uri"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	MimeType    string    `json:"mimeType,omitempty"`
+	Metadata    *Metadata `json:"metadata,omitempty"`
 }
 
 // ListResourcesResult is the result for the "resources/list" method.
@@ -89,10 +91,10 @@ type ListPromptsRequest struct {
 
 // Prompt represents an MCP prompt template.
 type Prompt struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Arguments   []PromptArgument       `json:"arguments,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Name        string           `json:"name"`
+	Description string           `json:"description,omitempty"`
+	Arguments   []PromptArgument `json:"arguments,omitempty"`
+	Metadata    *Metadata        `json:"metadata,omitempty"`
 }
 
 // PromptArgument represents an argument for a prompt template.
@@ -102,6 +104,11 @@ type PromptArgument struct {
 	Required    bool   `json:"required,omitempty"`
 }
 
+// Metadata represents typed metadata for MCP resources and prompts.
+type Metadata struct {
+	Custom map[string]string `json:"custom,omitempty"`
+}
+
 // ListPromptsResult is the result for the "prompts/list" method.
 type ListPromptsResult struct {
 	Prompts []Prompt `json:"prompts"`
@@ -109,8 +116,8 @@ type ListPromptsResult struct {
 
 // GetPromptRequest is the params for the "prompts/get" method.
 type GetPromptRequest struct {
-	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
+	Name      string            `json:"name"`
+	Arguments map[string]string `json:"arguments,omitempty"`
 }
 
 // GetPromptResult is the result for the "prompts/get" method.
@@ -132,9 +139,9 @@ type ToolsListResult struct {
 
 // Tool represents an MCP tool.
 type Tool struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	InputSchema map[string]interface{} `json:"inputSchema,omitempty"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	InputSchema *InputSchema `json:"inputSchema,omitempty"`
 }
 
 // ResourcesListResult is the result for the "resources/list" method.
@@ -158,8 +165,8 @@ type A2ASuspensionResponse struct {
 
 // A2ASuccessResponse is returned when an A2A call succeeds.
 type A2ASuccessResponse struct {
-	ID     string      `json:"id"`
-	Result interface{} `json:"result"`
+	ID     string                    `json:"id"`
+	Result *operatorv1.ActionReceipt `json:"result"`
 }
 
 // A2ADownstreamRequest is the request sent to a downstream A2A server.
@@ -179,7 +186,42 @@ type FieldReadRequest struct {
 
 // FieldReadResult is the result for the "read_field" tool.
 type FieldReadResult struct {
-	Value interface{} `json:"value"`
+	Value FieldValue `json:"value"`
+}
+
+// FieldValue represents a typed field value from document storage.
+type FieldValue struct {
+	Str     *string               `json:"string,omitempty"`
+	Int64   *int64                `json:"int64,omitempty"`
+	Float64 *float64              `json:"float64,omitempty"`
+	Bool    *bool                 `json:"bool,omitempty"`
+	Array   []FieldValue          `json:"array,omitempty"`
+	Object  map[string]FieldValue `json:"object,omitempty"`
+	Null    bool                  `json:"null"`
+}
+
+// String returns a human-readable representation of the field value,
+// suitable for display in MCP text content and audit log entries.
+// Implements fmt.Stringer interface.
+func (v FieldValue) String() string {
+	switch {
+	case v.Null:
+		return "null"
+	case v.Str != nil:
+		return *v.Str
+	case v.Int64 != nil:
+		return fmt.Sprintf("%d", *v.Int64)
+	case v.Float64 != nil:
+		return fmt.Sprintf("%g", *v.Float64)
+	case v.Bool != nil:
+		return fmt.Sprintf("%t", *v.Bool)
+	default:
+		b, err := json.Marshal(v)
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
 }
 
 // Native tool definitions compiled into the Node binary
@@ -217,8 +259,22 @@ type DBIsolatedReadRequest struct {
 
 // DBIsolatedReadResult is the result for the "db_isolated_read" tool.
 type DBIsolatedReadResult struct {
-	Rows    []map[string]interface{} `json:"rows"`
-	Columns []string                 `json:"columns"`
+	Rows    []DBRow  `json:"rows"`
+	Columns []string `json:"columns"`
+}
+
+// DBRow represents a single database row with typed values.
+type DBRow struct {
+	Values map[string]DBValue `json:"values"`
+}
+
+// DBValue represents a typed database value.
+type DBValue struct {
+	String  *string  `json:"string,omitempty"`
+	Int64   *int64   `json:"int64,omitempty"`
+	Float64 *float64 `json:"float64,omitempty"`
+	Bool    *bool    `json:"bool,omitempty"`
+	Null    bool     `json:"null"`
 }
 
 // DBIndexTriageRequest is the params for the "db_index_triage" tool.
@@ -398,11 +454,46 @@ type NetDNSResolveRequest struct {
 
 // NetDNSResolveResult is the result for the "net_dns_resolve" tool.
 type NetDNSResolveResult struct {
-	Hostname   string      `json:"hostname"`
-	RecordType string      `json:"record_type"`
-	Records    interface{} `json:"records"`
-	Count      int         `json:"count"`
-	Error      string      `json:"error,omitempty"`
+	Hostname   string     `json:"hostname"`
+	RecordType string     `json:"record_type"`
+	Records    DNSRecords `json:"records"`
+	Count      int        `json:"count"`
+	Error      string     `json:"error,omitempty"`
+}
+
+// DNSRecords represents typed DNS record data.
+type DNSRecords struct {
+	A     []DNSARecord    `json:"a,omitempty"`
+	AAAA  []DNSAAAARecord `json:"aaaa,omitempty"`
+	MX    []DNSMXRecord   `json:"mx,omitempty"`
+	TXT   []DNSTXTRecord  `json:"txt,omitempty"`
+	CNAME *DNSCNAMERecord `json:"cname,omitempty"`
+	NS    []DNSNSRecord   `json:"ns,omitempty"`
+}
+
+// DNSARecord represents an A record.
+type DNSARecord struct {
+	IP string `json:"ip"`
+}
+
+// DNSAAAARecord represents an AAAA record.
+type DNSAAAARecord struct {
+	IP string `json:"ip"`
+}
+
+// DNSCNAMERecord represents a CNAME record.
+type DNSCNAMERecord struct {
+	Target string `json:"target"`
+}
+
+// DNSNSRecord represents an NS record.
+type DNSNSRecord struct {
+	Host string `json:"host"`
+}
+
+// DNSTXTRecord represents a TXT record.
+type DNSTXTRecord struct {
+	Text string `json:"text"`
 }
 
 // DNSMXRecord represents an MX DNS record.
@@ -654,4 +745,22 @@ type OperatorDeploymentResult struct {
 	Message  string `json:"message"`
 	Error    string `json:"error,omitempty"`
 	Output   string `json:"output,omitempty"`
+}
+
+// SysServiceStatusRequest is the params for the "sys_service_status" tool.
+type SysServiceStatusRequest struct {
+	ServiceName string `json:"service_name"`
+}
+
+// SysServiceStatusResult is the result for the "sys_service_status" tool.
+type SysServiceStatusResult struct {
+	ServiceName string `json:"service_name"`
+	LoadState   string `json:"load_state"`
+	ActiveState string `json:"active_state"`
+	SubState    string `json:"sub_state"`
+	Enabled     bool   `json:"enabled"`
+	Description string `json:"description"`
+	MainPID     string `json:"main_pid"`
+	ExecStart   string `json:"exec_start"`
+	Error       string `json:"error,omitempty"`
 }

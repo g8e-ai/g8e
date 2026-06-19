@@ -51,6 +51,9 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 	err := os.WriteFile(logPath, []byte(logContent), 0644)
 	require.NoError(t, err)
 
+	logPathJSON, err := json.Marshal(logPath)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name          string
 		args          string
@@ -61,7 +64,7 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 	}{
 		{
 			name:          "Successful detection",
-			args:          `{"log_path": "` + logPath + `"}`,
+			args:          `{"log_path": ` + string(logPathJSON) + `}`,
 			ctx:           context.Background(),
 			expectedCount: 3,
 		},
@@ -69,17 +72,17 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 			name:          "Invalid log path (traversal)",
 			args:          `{"log_path": "../../../etc/passwd"}`,
 			ctx:           context.Background(),
-			expectedError: "invalid log path",
+			expectedError: "invalid path",
 		},
 		{
 			name:          "Invalid JSON arguments",
 			args:          `{invalid}`,
 			ctx:           context.Background(),
-			expectedError: "invalid arguments",
+			expectedError: "unmarshal arguments",
 		},
 		{
 			name: "Context cancellation",
-			args: `{"log_path": "` + logPath + `"}`,
+			args: `{"log_path": ` + string(logPathJSON) + `}`,
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
 				cancel()
@@ -104,7 +107,7 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 			assert.Len(t, result.Content, 1)
 			assert.Equal(t, "text", result.Content[0].Type)
 
-			var oomResult oomDetectResult
+			var oomResult SysOOMDetectResult
 			err = json.Unmarshal([]byte(result.Content[0].Text), &oomResult)
 			require.NoError(t, err)
 			assert.Len(t, oomResult.Events, tt.expectedCount)
@@ -136,9 +139,9 @@ func TestSysOOMDetectTool_Execute(t *testing.T) {
 }
 
 func TestSysOOMDetectTool_Execute_DefaultPath(t *testing.T) {
-	// Only run this test if /var/log/dmesg exists
+	// Only run this test if the default dmesg path exists
 	if _, err := os.Stat("/var/log/dmesg"); os.IsNotExist(err) {
-		t.Skip("/var/log/dmesg does not exist, skipping default path test")
+		t.Skip("dmesg does not exist, skipping default path test")
 	}
 
 	tool := &SysOOMDetectTool{}
@@ -146,7 +149,7 @@ func TestSysOOMDetectTool_Execute_DefaultPath(t *testing.T) {
 	// We don't check for success/failure since it depends on system permissions,
 	// but we ensure it doesn't panic and returns a valid response or error.
 	if err != nil {
-		assert.Contains(t, err.Error(), "failed to open log file")
+		assert.Contains(t, err.Error(), "open log file")
 	}
 }
 
@@ -156,12 +159,15 @@ func TestSysOOMDetectTool_Execute_NoEvents(t *testing.T) {
 	err := os.WriteFile(logPath, []byte("system boot successful\nno errors found"), 0644)
 	require.NoError(t, err)
 
+	logPathJSON, err := json.Marshal(logPath)
+	require.NoError(t, err)
+
 	tool := &SysOOMDetectTool{}
-	args := `{"log_path": "` + logPath + `"}`
+	args := `{"log_path": ` + string(logPathJSON) + `}`
 	result, err := tool.Execute(context.Background(), json.RawMessage(args))
 
 	require.NoError(t, err)
-	var oomResult oomDetectResult
+	var oomResult SysOOMDetectResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &oomResult)
 	require.NoError(t, err)
 	assert.Empty(t, oomResult.Events)

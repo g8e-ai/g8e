@@ -271,7 +271,7 @@ func gatewayStartCmd() *cobra.Command {
 				return fmt.Errorf("platform: failed to check Operator status after start: %w", err)
 			}
 
-			externalIP := config.GetExternalInterfaceIP()
+			externalIP := network.GetExternalInterfaceIP()
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n\n", pid)
 
@@ -402,7 +402,7 @@ func gatewayStatusCmd() *cobra.Command {
 				if err == nil {
 					cmd.Println("State: RUNNING (HTTP check)")
 					cmd.Printf("\nEndpoints:\n")
-					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
+					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
 					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 					return nil
@@ -423,7 +423,7 @@ func gatewayStatusCmd() *cobra.Command {
 			if running {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
-				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", config.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
+				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
 				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
 				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 			} else {

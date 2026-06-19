@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+
+	"github.com/g8e-ai/g8e/internal/pathutil"
 )
 
-// backupConfigFile creates a backup of the existing config file if it exists.
-func backupConfigFile(configPath string) error {
+// BackupConfigFile creates a backup of the existing config file if it exists.
+func BackupConfigFile(configPath string) error {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil
 	}
@@ -14,7 +16,8 @@ func backupConfigFile(configPath string) error {
 	backupPath := configPath + ".bak"
 	// If a backup already exists, we could either overwrite it or fail.
 	// Overwriting it is generally safer to ensure we always have the most recent pre-governance state.
-	fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", backupPath)
+	displayPath := pathutil.ToSlash(backupPath)
+	fmt.Fprintf(os.Stderr, "[g8e] Backing up existing config to %s\n", displayPath)
 
 	input, err := os.ReadFile(configPath)
 	if err != nil {

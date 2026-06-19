@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/spf13/cobra"
 )
@@ -85,14 +86,14 @@ func vaultInitCmd() *cobra.Command {
 				vaultDir = constants.Paths.Infra.VaultDir
 			}
 			if !filepath.IsAbs(vaultDir) {
-				vaultDir = filepath.Join(projectRoot, vaultDir)
+				vaultDir = pathutil.SafeJoin(projectRoot, vaultDir)
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
+				keyPath = pathutil.SafeJoin(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
-				keyPath = filepath.Join(projectRoot, keyPath)
+				keyPath = pathutil.SafeJoin(projectRoot, keyPath)
 			}
 
 			if vault.VaultHeaderExists(vaultDir) {
@@ -170,14 +171,14 @@ func vaultUnlockCmd() *cobra.Command {
 				vaultDir = constants.Paths.Infra.VaultDir
 			}
 			if !filepath.IsAbs(vaultDir) {
-				vaultDir = filepath.Join(projectRoot, vaultDir)
+				vaultDir = pathutil.SafeJoin(projectRoot, vaultDir)
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
+				keyPath = pathutil.SafeJoin(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
-				keyPath = filepath.Join(projectRoot, keyPath)
+				keyPath = pathutil.SafeJoin(projectRoot, keyPath)
 			}
 
 			if !vault.VaultHeaderExists(vaultDir) {
@@ -236,17 +237,20 @@ func vaultRekeyCmd() *cobra.Command {
 				vaultDir = constants.Paths.Infra.VaultDir
 			}
 			if !filepath.IsAbs(vaultDir) {
-				vaultDir = filepath.Join(projectRoot, vaultDir)
+				vaultDir = pathutil.SafeJoin(projectRoot, vaultDir)
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
+				keyPath = pathutil.SafeJoin(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
-				keyPath = filepath.Join(projectRoot, keyPath)
+				keyPath = pathutil.SafeJoin(projectRoot, keyPath)
 			}
 			if newKeyPath == "" {
-				newKeyPath = filepath.Join(vaultDir, constants.VaultNewKeyFilename)
+				newKeyPath = pathutil.SafeJoin(vaultDir, constants.VaultNewKeyFilename)
+			}
+			if !filepath.IsAbs(newKeyPath) {
+				newKeyPath = pathutil.SafeJoin(projectRoot, newKeyPath)
 			}
 
 			if !vault.VaultHeaderExists(vaultDir) {
@@ -320,7 +324,7 @@ func vaultStatusCmd() *cobra.Command {
 				vaultDir = constants.Paths.Infra.VaultDir
 			}
 			if !filepath.IsAbs(vaultDir) {
-				vaultDir = filepath.Join(projectRoot, vaultDir)
+				vaultDir = pathutil.SafeJoin(projectRoot, vaultDir)
 			}
 
 			v, err := vault.NewVault(&vault.VaultConfig{
@@ -377,7 +381,7 @@ func vaultResetCmd() *cobra.Command {
 				vaultDir = constants.Paths.Infra.VaultDir
 			}
 			if !filepath.IsAbs(vaultDir) {
-				vaultDir = filepath.Join(projectRoot, vaultDir)
+				vaultDir = pathutil.SafeJoin(projectRoot, vaultDir)
 			}
 
 			if !vault.VaultHeaderExists(vaultDir) {
@@ -440,14 +444,14 @@ func vaultExportCmd() *cobra.Command {
 
 			vaultDir := constants.Paths.Infra.VaultDir
 			if !filepath.IsAbs(vaultDir) {
-				vaultDir = filepath.Join(projectRoot, vaultDir)
+				vaultDir = pathutil.SafeJoin(projectRoot, vaultDir)
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
+				keyPath = pathutil.SafeJoin(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
-				keyPath = filepath.Join(projectRoot, keyPath)
+				keyPath = pathutil.SafeJoin(projectRoot, keyPath)
 			}
 
 			key, err := readKeyFile(keyPath)
@@ -486,14 +490,14 @@ func vaultImportCmd() *cobra.Command {
 
 			vaultDir := constants.Paths.Infra.VaultDir
 			if !filepath.IsAbs(vaultDir) {
-				vaultDir = filepath.Join(projectRoot, vaultDir)
+				vaultDir = pathutil.SafeJoin(projectRoot, vaultDir)
 			}
 
 			if keyPath == "" {
-				keyPath = filepath.Join(vaultDir, constants.VaultKeyFilename)
+				keyPath = pathutil.SafeJoin(vaultDir, constants.VaultKeyFilename)
 			}
 			if !filepath.IsAbs(keyPath) {
-				keyPath = filepath.Join(projectRoot, keyPath)
+				keyPath = pathutil.SafeJoin(projectRoot, keyPath)
 			}
 
 			var key []byte

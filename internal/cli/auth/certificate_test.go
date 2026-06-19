@@ -251,13 +251,12 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	// Create a valid certificate that is not expiring
@@ -292,13 +291,12 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	// Create a certificate that expires in 12 hours (within renewal threshold)
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	// This test would require generating a short-lived cert and actually calling ReEnroll
@@ -320,13 +318,12 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	// Create a valid certificate that's not expiring

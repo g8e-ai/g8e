@@ -137,7 +137,7 @@ help:
 	@echo "  test-pkg-<path>       Run tests for a specific package (e.g., make test-pkg-internal/services/auth)"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
-	@echo "  test-integration      Run Tier 2 (In-Memory Integration) tests - no external dependencies"
+	@echo "  test-integration      Run Tier 2 (In-Process Integration) tests - no external dependencies"
 	@echo "  test-docker           Run Tier 3 (Docker E2E) tests - requires Docker"
 	@echo "  test-gov              Run Tier 3 (Gov Demo E2E) tests - requires Docker"
 	@echo "  test-gateway          Run gateway-specific integration tests"
@@ -414,17 +414,17 @@ test: test-unit test-integration
 .PHONY: test-unit
 test-unit:
 	@echo "Running Tier 1 (Unit) tests..."
-	@go test $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
+	@go test -p=1 -tags=!integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 .PHONY: test-short
 test-short:
 	@echo "Running short unit tests (skips long-running tests)..."
 	@go test $(TEST_RACE) -short $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
-# Tier 2: In-Memory Integration Tests - no external dependencies
+# Tier 2: In-Process Integration Tests - no external dependencies
 .PHONY: test-integration
 test-integration:
-	@echo "Running Tier 2 (In-Memory Integration) tests..."
+	@echo "Running Tier 2 (In-Process Integration) tests..."
 	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
 # Tier 3a: Docker E2E Tests - requires Docker

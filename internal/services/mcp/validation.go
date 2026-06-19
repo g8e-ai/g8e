@@ -19,18 +19,27 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+)
+
+var (
+	semicolonPattern                 = regexp.MustCompile(`;\s*$`)
+	validRefPattern                  = regexp.MustCompile(`^[a-zA-Z0-9_\-./~]+$`)
+	k8sNamePattern                   = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	dangerousShellChars              = []string{";", "&", "|", "$", "`", "(", ")", "<", ">", "\n", "\r"}
+	dangerousShellCharsWithBackslash = []string{"$", "`", "\\", ";", "&", "|", "(", ")", "<", ">", "\n", "\r"}
 )
 
 func validateSQLQuery(query string) error {
 	query = strings.TrimSpace(query)
 
 	if query == "" {
-		return fmt.Errorf("mcp: validate SQL query: query cannot be empty")
+		return fmt.Errorf("mcp: validate SQL query: %w", constants.ErrMCPValidateSQLQueryEmpty)
 	}
 
-	semicolonPattern := regexp.MustCompile(`;\s*$`)
 	if semicolonPattern.MatchString(query) {
-		return fmt.Errorf("mcp: validate SQL query: query must not end with semicolon")
+		return fmt.Errorf("mcp: validate SQL query: %w", constants.ErrMCPValidateSQLQueryTrailingSemicolon)
 	}
 
 	return nil
@@ -43,22 +52,22 @@ func validateHTTPRequestURL(rawURL string) (*url.URL, error) {
 	}
 
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return nil, fmt.Errorf("mcp: validate HTTP request URL: only http and https schemes are allowed")
+		return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLInvalidScheme)
 	}
 
 	if parsedURL.Host == "" {
-		return nil, fmt.Errorf("mcp: validate HTTP request URL: URL must have a host")
+		return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLMissingHost)
 	}
 
 	host := strings.ToLower(parsedURL.Hostname())
 	if strings.Contains(host, "localhost") || host == "127.0.0.1" || host == "::1" {
-		return nil, fmt.Errorf("mcp: validate HTTP request URL: localhost and loopback addresses are not allowed")
+		return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLLoopbackAddress)
 	}
 
 	ip := net.ParseIP(host)
 	if ip != nil {
 		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
-			return nil, fmt.Errorf("mcp: validate HTTP request URL: private and loopback IP addresses are not allowed")
+			return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLPrivateAddress)
 		}
 	}
 
@@ -75,61 +84,45 @@ func validateProcNetPath(protocol string) error {
 	}
 
 	if !allowedProtocols[protocol] {
-		return fmt.Errorf("mcp: validate proc net path: invalid protocol: %s", protocol)
+		return fmt.Errorf("mcp: validate proc net path: %w: %s", constants.ErrMCPValidateProcNetInvalidProtocol, protocol)
 	}
 
 	return nil
 }
 
 func validateGitRepoPath(path string) error {
-	if path == "" {
-		return fmt.Errorf("mcp: validate git repo path: repository path cannot be empty")
+	if err := validatePath(path, "git repo path"); err != nil {
+		return err
 	}
-
-	cleanPath := strings.TrimSpace(path)
-	if cleanPath != path {
-		return fmt.Errorf("mcp: validate git repo path: repository path must not contain leading/trailing whitespace")
-	}
-
-	if strings.Contains(path, "..") {
-		return fmt.Errorf("mcp: validate git repo path: repository path must not contain parent directory references (..)")
-	}
-
-	if strings.ContainsAny(path, "\x00") {
-		return fmt.Errorf("mcp: validate git repo path: repository path must not contain null bytes")
-	}
-
 	return nil
 }
 
 func validateGitRef(ref string) error {
 	if ref == "" {
-		return fmt.Errorf("mcp: validate git ref: git reference cannot be empty")
+		return fmt.Errorf("mcp: validate git ref: %w", constants.ErrMCPValidateRefEmpty)
 	}
 
 	cleanRef := strings.TrimSpace(ref)
 	if cleanRef != ref {
-		return fmt.Errorf("mcp: validate git ref: git reference must not contain leading/trailing whitespace")
+		return fmt.Errorf("mcp: validate git ref: %w", constants.ErrMCPValidateRefWhitespace)
 	}
 
 	if strings.ContainsAny(ref, "\x00") {
-		return fmt.Errorf("mcp: validate git ref: git reference must not contain null bytes")
+		return fmt.Errorf("mcp: validate git ref: %w", constants.ErrMCPValidateRefNullBytes)
 	}
 
-	dangerousChars := []string{";", "&", "|", "$", "`", "(", ")", "<", ">", "\n", "\r"}
-	for _, char := range dangerousChars {
+	for _, char := range dangerousShellChars {
 		if strings.Contains(ref, char) {
-			return fmt.Errorf("mcp: validate git ref: git reference contains dangerous character: %q", char)
+			return fmt.Errorf("mcp: validate git ref: %w: %q", constants.ErrMCPValidateRefDangerousChar, char)
 		}
 	}
 
 	if strings.HasPrefix(ref, "/") || strings.HasPrefix(ref, "\\") {
-		return fmt.Errorf("mcp: validate git ref: git reference must not be an absolute path")
+		return fmt.Errorf("mcp: validate git ref: %w", constants.ErrMCPValidateRefAbsolutePath)
 	}
 
-	validRefPattern := regexp.MustCompile(`^[a-zA-Z0-9_\-./~]+$`)
 	if !validRefPattern.MatchString(ref) {
-		return fmt.Errorf("mcp: validate git ref: git reference contains invalid characters")
+		return fmt.Errorf("mcp: validate git ref: %w", constants.ErrMCPValidateRefInvalidChars)
 	}
 
 	return nil
@@ -137,25 +130,24 @@ func validateGitRef(ref string) error {
 
 func validateK8sResourceName(name string) error {
 	if name == "" {
-		return fmt.Errorf("mcp: validate K8s resource name: resource name cannot be empty")
+		return fmt.Errorf("mcp: validate K8s resource name: %w", constants.ErrMCPValidateK8sNameEmpty)
 	}
 
 	cleanName := strings.TrimSpace(name)
 	if cleanName != name {
-		return fmt.Errorf("mcp: validate K8s resource name: resource name must not contain leading/trailing whitespace")
+		return fmt.Errorf("mcp: validate K8s resource name: %w", constants.ErrMCPValidateK8sNameWhitespace)
 	}
 
 	if len(name) > 253 {
-		return fmt.Errorf("mcp: validate K8s resource name: resource name must not exceed 253 characters")
+		return fmt.Errorf("mcp: validate K8s resource name: %w", constants.ErrMCPValidateK8sNameTooLong)
 	}
 
-	allowedPattern := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-	if !allowedPattern.MatchString(name) {
-		return fmt.Errorf("mcp: validate K8s resource name: resource name must consist of lowercase alphanumeric characters, hyphens, or dots, and must start and end with an alphanumeric character")
+	if !k8sNamePattern.MatchString(name) {
+		return fmt.Errorf("mcp: validate K8s resource name: %w", constants.ErrMCPValidateK8sNameInvalidPattern)
 	}
 
 	if strings.ContainsAny(name, "\x00") {
-		return fmt.Errorf("mcp: validate K8s resource name: resource name must not contain null bytes")
+		return fmt.Errorf("mcp: validate K8s resource name: %w", constants.ErrMCPValidateK8sNameNullBytes)
 	}
 
 	return nil
@@ -163,25 +155,24 @@ func validateK8sResourceName(name string) error {
 
 func validateK8sNamespace(namespace string) error {
 	if namespace == "" {
-		return fmt.Errorf("mcp: validate K8s namespace: namespace cannot be empty")
+		return fmt.Errorf("mcp: validate K8s namespace: %w", constants.ErrMCPValidateK8sNamespaceEmpty)
 	}
 
 	cleanNamespace := strings.TrimSpace(namespace)
 	if cleanNamespace != namespace {
-		return fmt.Errorf("mcp: validate K8s namespace: namespace must not contain leading/trailing whitespace")
+		return fmt.Errorf("mcp: validate K8s namespace: %w", constants.ErrMCPValidateK8sNamespaceWhitespace)
 	}
 
 	if len(namespace) > 63 {
-		return fmt.Errorf("mcp: validate K8s namespace: namespace must not exceed 63 characters")
+		return fmt.Errorf("mcp: validate K8s namespace: %w", constants.ErrMCPValidateK8sNamespaceTooLong)
 	}
 
-	allowedPattern := regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-	if !allowedPattern.MatchString(namespace) {
-		return fmt.Errorf("mcp: validate K8s namespace: namespace must consist of lowercase alphanumeric characters or hyphens, and must start and end with an alphanumeric character")
+	if !k8sNamePattern.MatchString(namespace) {
+		return fmt.Errorf("mcp: validate K8s namespace: %w", constants.ErrMCPValidateK8sNamespaceInvalidPattern)
 	}
 
 	if strings.ContainsAny(namespace, "\x00") {
-		return fmt.Errorf("mcp: validate K8s namespace: namespace must not contain null bytes")
+		return fmt.Errorf("mcp: validate K8s namespace: %w", constants.ErrMCPValidateK8sNamespaceNullBytes)
 	}
 
 	return nil
@@ -198,70 +189,50 @@ func validateCloudMetadataOperation(operation string) error {
 	}
 
 	if !allowedOperations[operation] {
-		return fmt.Errorf("mcp: validate cloud metadata operation: invalid operation: %s", operation)
+		return fmt.Errorf("mcp: validate cloud metadata operation: %w: %s", constants.ErrMCPValidateCloudMetadataInvalidOperation, operation)
 	}
 
 	return nil
 }
 
 func validateFilePath(path string) error {
-	if path == "" {
-		return fmt.Errorf("mcp: validate file path: file path cannot be empty")
+	if err := validatePath(path, "file path"); err != nil {
+		return err
 	}
-
-	cleanPath := strings.TrimSpace(path)
-	if cleanPath != path {
-		return fmt.Errorf("mcp: validate file path: file path must not contain leading/trailing whitespace")
-	}
-
-	if strings.Contains(path, "..") {
-		return fmt.Errorf("mcp: validate file path: file path must not contain parent directory references (..)")
-	}
-
-	if strings.ContainsAny(path, "\x00") {
-		return fmt.Errorf("mcp: validate file path: file path must not contain null bytes")
-	}
-
 	return nil
 }
 
 func validateSSHConfigPath(path string) error {
 	if path == "" {
-		// Empty path is allowed - will use default
 		return nil
 	}
-
 	return validateFilePath(path)
 }
 
 func validateKnownHostsPath(path string) error {
 	if path == "" {
-		// Empty path is allowed - will use default
 		return nil
 	}
-
 	return validateFilePath(path)
 }
 
 func validateHostname(hostname string) error {
 	if hostname == "" {
-		return fmt.Errorf("mcp: validate hostname: hostname cannot be empty")
+		return fmt.Errorf("mcp: validate hostname: %w", constants.ErrMCPValidateHostnameEmpty)
 	}
 
 	cleanHostname := strings.TrimSpace(hostname)
 	if cleanHostname != hostname {
-		return fmt.Errorf("mcp: validate hostname: hostname must not contain leading/trailing whitespace")
+		return fmt.Errorf("mcp: validate hostname: %w", constants.ErrMCPValidateHostnameWhitespace)
 	}
 
 	if strings.ContainsAny(hostname, "\x00") {
-		return fmt.Errorf("mcp: validate hostname: hostname must not contain null bytes")
+		return fmt.Errorf("mcp: validate hostname: %w", constants.ErrMCPValidateHostnameNullBytes)
 	}
 
-	// Prevent shell injection
-	dangerousChars := []string{";", "&", "|", "$", "`", "(", ")", "<", ">", "\n", "\r"}
-	for _, char := range dangerousChars {
+	for _, char := range dangerousShellChars {
 		if strings.Contains(hostname, char) {
-			return fmt.Errorf("mcp: validate hostname: hostname contains dangerous character: %q", char)
+			return fmt.Errorf("mcp: validate hostname: %w: %q", constants.ErrMCPValidateHostnameDangerousChar, char)
 		}
 	}
 
@@ -270,7 +241,7 @@ func validateHostname(hostname string) error {
 
 func validateHostnames(hostnames []string) error {
 	if len(hostnames) == 0 {
-		return fmt.Errorf("mcp: validate hostnames: hostnames list cannot be empty")
+		return fmt.Errorf("mcp: validate hostnames: %w", constants.ErrMCPValidateHostnamesEmpty)
 	}
 
 	for _, hostname := range hostnames {
@@ -284,32 +255,47 @@ func validateHostnames(hostnames []string) error {
 
 func validateOperatorBinaryPath(path string) error {
 	if path == "" {
-		// Empty path is allowed - will use current executable
 		return nil
 	}
-
 	return validateFilePath(path)
 }
 
 func validateOperatorArgs(args []string) error {
-	// Args are optional, empty list is allowed
 	if args == nil {
 		return nil
 	}
 
-	// Validate each argument for shell injection
 	for _, arg := range args {
 		if strings.ContainsAny(arg, "\x00") {
-			return fmt.Errorf("mcp: validate operator args: argument must not contain null bytes")
+			return fmt.Errorf("mcp: validate operator args: %w", constants.ErrMCPValidateOperatorArgsNullBytes)
 		}
 
-		// Prevent shell injection
-		dangerousChars := []string{"$", "`", "\\", ";", "&", "|", "(", ")", "<", ">", "\n", "\r"}
-		for _, char := range dangerousChars {
+		for _, char := range dangerousShellCharsWithBackslash {
 			if strings.Contains(arg, char) {
-				return fmt.Errorf("mcp: validate operator args: argument contains dangerous character: %q", char)
+				return fmt.Errorf("mcp: validate operator args: %w: %q", constants.ErrMCPValidateOperatorArgsDangerousChar, char)
 			}
 		}
+	}
+
+	return nil
+}
+
+func validatePath(path, context string) error {
+	if path == "" {
+		return fmt.Errorf("mcp: validate %s: %w", context, constants.ErrMCPValidatePathEmpty)
+	}
+
+	cleanPath := strings.TrimSpace(path)
+	if cleanPath != path {
+		return fmt.Errorf("mcp: validate %s: %w", context, constants.ErrMCPValidatePathWhitespace)
+	}
+
+	if strings.Contains(path, "..") {
+		return fmt.Errorf("mcp: validate %s: %w", context, constants.ErrMCPValidatePathParentDirRef)
+	}
+
+	if strings.ContainsAny(path, "\x00") {
+		return fmt.Errorf("mcp: validate %s: %w", context, constants.ErrMCPValidatePathNullBytes)
 	}
 
 	return nil

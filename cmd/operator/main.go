@@ -69,7 +69,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
-	insecure_mcp "github.com/g8e-ai/g8e/internal/services/insecure_mcp"
+	local_http_stdio "github.com/g8e-ai/g8e/internal/services/local_http_stdio"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -1585,7 +1585,7 @@ func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 		os.Exit(constants.ExitConfigError)
 	}
 
-	cfg, err := config.LoadInsecureMcp(config.InsecureMcpOptions{
+	cfg, err := config.LoadLocalHttpStdio(config.LocalHttpStdioOptions{
 		GatewayURL:  gatewayURL,
 		Token:       token,
 		NodeID:      nodeID,
@@ -1600,7 +1600,7 @@ func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 
 	logger.Info("g8e - INSECURE MCP Gateway Mode", "version", version, "build", buildID)
 
-	svc, err := insecure_mcp.NewInsecureMcpNodeService(
+	svc, err := local_http_stdio.NewLocalHttpStdioNodeService(
 		cfg.GatewayURL,
 		cfg.Token,
 		cfg.NodeID,

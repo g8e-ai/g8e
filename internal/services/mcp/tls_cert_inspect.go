@@ -24,6 +24,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // certInspectResult represents the structured output of the TLS certificate inspection tool.
@@ -94,7 +96,7 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 		InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("tls_cert_inspect: invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	var cert *x509.Certificate
@@ -118,7 +120,7 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 			return CallToolResult{}, fmt.Errorf("tls_cert_inspect: failed to fetch certificate from host: %w", err)
 		}
 	} else {
-		return CallToolResult{}, fmt.Errorf("tls_cert_inspect: either cert_path or host must be specified")
+		return CallToolResult{}, fmt.Errorf("%w", constants.ErrMCPTLSCertInspectRequired)
 	}
 
 	result := inspectCertificate(cert)

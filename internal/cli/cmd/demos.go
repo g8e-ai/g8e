@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +27,60 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
+
+// DoctrineRule represents a single doctrine rule from the JSON file
+type DoctrineRule struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Category    string  `json:"category"`
+	Severity    string  `json:"severity"`
+	Pattern     string  `json:"pattern"`
+	MitreAttack string  `json:"mitre_attack"`
+	MitreTactic string  `json:"mitre_tactic"`
+	Confidence  float64 `json:"confidence"`
+	Enabled     bool    `json:"enabled"`
+}
+
+// DoctrineFile represents the structure of a doctrine JSON file
+type DoctrineFile struct {
+	Source      string         `json:"source"`
+	Version     string         `json:"version"`
+	LastUpdated string         `json:"last_updated"`
+	License     string         `json:"license"`
+	Doctrines   []DoctrineRule `json:"doctrines"`
+}
+
+// readDoctrineRule reads a doctrine file and returns a specific rule by ID
+func readDoctrineRule(demoDir, doctrineFile, ruleID string) (*DoctrineRule, error) {
+	doctrinePath := filepath.Join(demoDir, "doctrine", doctrineFile)
+	data, err := os.ReadFile(doctrinePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read doctrine file: %w", err)
+	}
+
+	var docFile DoctrineFile
+	if err := json.Unmarshal(data, &docFile); err != nil {
+		return nil, fmt.Errorf("failed to parse doctrine JSON: %w", err)
+	}
+
+	for _, rule := range docFile.Doctrines {
+		if rule.ID == ruleID {
+			return &rule, nil
+		}
+	}
+
+	return nil, fmt.Errorf("doctrine rule %q not found", ruleID)
+}
+
+// toDockerPath converts a filepath to a Docker-compatible path format.
+// On Windows, Docker expects forward slashes even though the OS uses backslashes.
+func toDockerPath(path string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.ToSlash(path)
+	}
+	return path
+}
 
 func demosCmd() *cobra.Command {
 	cmd := &cobra.Command{
@@ -125,7 +180,9 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 
 	// Start the demo environment
 	fmt.Printf("Starting demo environment: %s\n", org)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d")
+	dockerPath := toDockerPath(composePath)
+	fmt.Printf("Debug: composePath=%s, dockerPath=%s\n", composePath, dockerPath)
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", dockerPath, "up", "-d")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -202,7 +259,7 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 
 	// Stop the demo environment
 	fmt.Printf("Stopping demo environment: %s\n", org)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "down")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -247,7 +304,7 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	// Show status
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "ps")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "ps")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -291,7 +348,7 @@ func runDemosClean(cmd *cobra.Command, args []string) error {
 
 	// Clean the demo environment (remove containers, volumes, and networks)
 	fmt.Printf("Cleaning demo environment: %s\n", org)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "down", "-v")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down", "-v")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -406,7 +463,7 @@ func runDemosRun(cmd *cobra.Command, args []string) error {
 }
 
 func isDemoRunning(demoDir, composePath string) bool {
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", composePath, "ps", "-q")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "ps", "-q")
 	dockerComposeCmd.Dir = demoDir
 	output, err := dockerComposeCmd.Output()
 	if err != nil {
@@ -488,7 +545,7 @@ func printResultsTable(org string, results []scenarioResult) {
 }
 
 // demoStep prints a labeled command and runs it, streaming output inline.
-// If fatal is true, a non-zero exit returns an error; otherwise failures are printed and ignored.
+// Always returns error if command fails, but only stops execution if fatal is true.
 func demoStep(demoDir, label string, fatal bool, args ...string) error {
 	fmt.Printf("  $ %s\n", strings.Join(args, " "))
 	c := exec.Command(args[0], args[1:]...)
@@ -496,488 +553,15 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	err := c.Run()
-	if err != nil && fatal {
-		return fmt.Errorf("%s: %w", label, err)
-	}
 	fmt.Println()
+	if err != nil {
+		if fatal {
+			return fmt.Errorf("%s: %w", label, err)
+		}
+		// Return error but don't stop execution
+		return fmt.Errorf("%s failed (non-fatal): %w", label, err)
+	}
 	return nil
-}
-
-func runHealthcareScenario(demoDir, scenario string) error {
-	_, err := runHealthcareScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
-
-	switch scenario {
-	case "1":
-		result.number = "1"
-		result.name = "Authorized Agent Submits a FHIR PA Request"
-		result.status = "PASS"
-		result.metrics = "11 PHI/HIPAA rules evaluated, FHIR PA queued"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — Authorized Agent Submits a FHIR PA Request")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: An authorized agent on net_internal submits a FHIR")
-		fmt.Println("          ClaimResponse through the g8e gateway. Every request")
-		fmt.Println("          passes through the doctrine engine before reaching")
-		fmt.Println("          the PA API backend.")
-		fmt.Println()
-
-		fmt.Println("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
-		if err := demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8081/api/v1/health",
-		); err != nil {
-			fmt.Println("  (gateway health check failed — is the demo running?)")
-			fmt.Println()
-		}
-
-		fmt.Println("  ── Step 2: Submit FHIR PA request through the gateway ───────")
-		fmt.Println("  Request path: agent-runtime → gateway (10.22.0.10:8080) → PA API")
-		fmt.Println()
-		if err := demoStep(demoDir, "fhir request", true,
-			"docker", "compose", "exec", "-T", "agent-runtime",
-			"wget", "-qO-", "http://10.22.0.10:8080/fhir/ClaimResponse",
-			"--post-data={\"resourceType\":\"ClaimResponse\",\"status\":\"active\",\"use\":\"preauthorization\"}",
-			"--header=Content-Type: application/fhir+json",
-		); err != nil {
-			// Fallback: direct to PA API if gateway proxy isn't wired yet
-			fmt.Println("  (gateway proxy path unavailable, sending direct to PA API)")
-			fmt.Println()
-			if err2 := demoStep(demoDir, "fhir request direct", true,
-				"docker", "compose", "exec", "-T", "agent-runtime",
-				"wget", "-qO-", "http://10.22.0.30:8000/",
-				"--post-data={\"resourceType\":\"ClaimResponse\",\"status\":\"active\",\"use\":\"preauthorization\"}",
-				"--header=Content-Type: application/fhir+json",
-			); err2 != nil {
-				return scenarioResult{}, err2
-			}
-		}
-
-		fmt.Println("  ── Step 3: View g8e enforcement audit ───────────────────────")
-		fmt.Println("  Copy-paste to inspect doctrine decisions for this request:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
-		fmt.Println()
-		_ = demoStep(demoDir, "audit tail",
-			false,
-			"docker", "compose", "logs", "observability", "--tail", "10",
-		)
-
-		fmt.Println("  [PASS] Scenario 1 — FHIR PA request received and queued.")
-		fmt.Println("         Doctrine engine evaluated the payload against all 11 PHI/HIPAA rules.")
-
-	case "2":
-		result.number = "2"
-		result.name = "Gold Card Auto-Approval (HB 3134 §6)"
-		result.status = "PASS"
-		result.metrics = "Threshold: 90%, PA-2026-0043: 96% (auto-approved)"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 2 — Gold Card Auto-Approval (HB 3134 §6)")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Providers whose historic approval rate meets or exceeds")
-		fmt.Println("          the plan threshold (90%) are auto-approved without manual")
-		fmt.Println("          review. PA-2026-0043 (Dr. Priya Nair, 96%) is the proof case.")
-		fmt.Println()
-
-		fmt.Println("  ── Step 1: Read exemption engine threshold ───────────────────")
-		if err := demoStep(demoDir, "exemption config", true,
-			"docker", "compose", "exec", "-T", "provider-exemption-rules",
-			"sh", "-c", "env | grep EXEMPTION",
-		); err != nil {
-			return scenarioResult{}, err
-		}
-
-		fmt.Println("  ── Step 2: Inspect the AUTO_APPROVED seed record ────────────")
-		if err := demoStep(demoDir, "seed data",
-			false,
-			"docker", "compose", "exec", "-T", "pa-submission-service",
-			"sh", "-c",
-			`python3 -c "import json; data=json.load(open('/var/g8e/target/pa_requests.json')); [print(json.dumps(r, indent=2)) for r in data['requests'] if r.get('id')=='PA-2026-0043']"`,
-		); err != nil {
-			fmt.Println("  (seed data inspection skipped)")
-			fmt.Println()
-		}
-
-		fmt.Println("  ── Proof ─────────────────────────────────────────────────────")
-		fmt.Println("  Copy-paste to confirm AUTO_APPROVED in the audit log:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability | grep -i auto_approved")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
-		fmt.Println("         PA-2026-0043 qualifies (96%): zero-day decision, no manual review.")
-
-	case "3":
-		result.number = "3"
-		result.name = "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)"
-		result.status = "PASS"
-		result.metrics = "Alert: day 5, Breach: day 7, PA-2026-0044: 10 days"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 3 — SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: The PA worker tracks days-elapsed per request and flags")
-		fmt.Println("          breaches for mandatory DCBS/OHA annual reporting.")
-		fmt.Println("          PA-2026-0044 (Dr. James O'Brien, 10 days) is the proof case.")
-		fmt.Println()
-
-		fmt.Println("  ── Step 1: Read SLA enforcement configuration ────────────────")
-		if err := demoStep(demoDir, "sla config", true,
-			"docker", "compose", "exec", "-T", "pa-processing-worker",
-			"sh", "-c", "env | grep SLA",
-		); err != nil {
-			return scenarioResult{}, err
-		}
-
-		fmt.Println("  ── Step 2: Inspect the SLA_BREACHED seed record ─────────────")
-		if err := demoStep(demoDir, "seed data",
-			false,
-			"docker", "compose", "exec", "-T", "pa-submission-service",
-			"sh", "-c",
-			`python3 -c "import json; data=json.load(open('/var/g8e/target/pa_requests.json')); [print(json.dumps(r, indent=2)) for r in data['requests'] if r.get('id')=='PA-2026-0044']"`,
-		); err != nil {
-			fmt.Println("  (seed data inspection skipped)")
-			fmt.Println()
-		}
-
-		fmt.Println("  ── Step 3: Compliance dashboard ──────────────────────────────")
-		fmt.Println("  Open in browser:  http://localhost:3001")
-		fmt.Println("  Login:            admin@g8e.local / Metabase1!")
-		fmt.Println()
-		fmt.Println("  Pre-loaded DCBS/OHA queries (under Questions):")
-		fmt.Println("    · DCBS March 1 Filing - Denial Rates by Request Type")
-		fmt.Println("    · OHA March 31 Filing - Median Decision Time")
-		fmt.Println()
-		fmt.Println("  Copy-paste to query directly:")
-		fmt.Println()
-		fmt.Println("    psql -h localhost -p 5433 -U compliance_admin -d oregon_pa_metrics \\")
-		fmt.Println("      -c \"SELECT id, provider_name, days_elapsed, status, reportable_to_oha FROM pa_requests WHERE status='SLA_BREACHED';\"")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 3 — SLA enforcement active (alert: day 5, breach: day 7).")
-		fmt.Println("         PA-2026-0044 is SLA_BREACHED with reportable_to_oha=true.")
-
-	case "4":
-		result.number = "4"
-		result.name = "Bad Actor PHI Exfiltration Blocked"
-		result.status = "PASS"
-		result.metrics = "Layer 1: net isolation, Layer 2: doctrine (0.95 conf)"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 4 — Bad Actor PHI Exfiltration Blocked")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Two-layer defense.")
-		fmt.Println("    Layer 1 — Network isolation: bad-actor on net_untrusted has no")
-		fmt.Println("              route to net_internal or net_secure.")
-		fmt.Println("    Layer 2 — Doctrine enforcement: the g8e gateway blocks PHI")
-		fmt.Println("              exfiltration payloads at confidence ≥0.95 (phi_exfil_attempt).")
-		fmt.Println()
-
-		fmt.Println("  ── Layer 1: Network isolation ────────────────────────────────")
-		fmt.Println("  bad-actor (net_untrusted) → PA API (net_internal) — should timeout")
-		fmt.Println()
-		_ = demoStep(demoDir, "network isolation",
-			false,
-			"docker", "compose", "exec", "-T", "bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.22.0.30:8000/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'",
-		)
-
-		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
-		fmt.Println("  Confirming the gateway is live and doctrine is loaded:")
-		fmt.Println()
-		_ = demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8081/api/v1/health",
-		)
-
-		_ = demoStep(demoDir, "doctrine loaded",
-			false,
-			"docker", "compose", "exec", "-T", "gateway",
-			"sh", "-c", "ls /etc/g8e/doctrine/ && echo 'doctrine files mounted'",
-		)
-
-		fmt.Println("  Doctrine rule that would block a PHI exfiltration attempt:")
-		fmt.Println()
-		_ = demoStep(demoDir, "doctrine rule",
-			false,
-			"docker", "compose", "exec", "-T", "gateway",
-			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/phi_hipaa_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='phi_exfil_attempt'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
-		)
-
-		fmt.Println("  Copy-paste to send a PHI exfiltration payload through the gateway")
-		fmt.Println("  (the doctrine engine evaluates this before any backend sees it):")
-		fmt.Println()
-		fmt.Println("    curl -s -X POST http://localhost:8081/api/v1/mcp/tools/call \\")
-		fmt.Println("      -H 'Content-Type: application/json' \\")
-		fmt.Println(`      -d '{"name":"query","arguments":{"action":"exfiltrate patient medical records"}}'`)
-		fmt.Println()
-		fmt.Println("  Then inspect the enforcement audit:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")
-		fmt.Println("         Layer 1: network isolation (net_untrusted has no route to net_internal).")
-		fmt.Println("         Layer 2: doctrine phi_exfil_attempt loaded at confidence 0.95.")
-
-	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for healthcare: %q (valid: 1-4)", scenario)
-	}
-	return result, nil
-}
-
-func runGovScenario(demoDir, scenario string) error {
-	_, err := runGovScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runGovScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
-
-	switch scenario {
-	case "1":
-		result.number = "1"
-		result.name = "CUI Exfiltration Attempt Blocked"
-		result.status = "PASS"
-		result.metrics = "Network isolation: net_untrusted → net_secure blocked"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — CUI Exfiltration Attempt Blocked")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Network isolation prevents a bad-actor on net_untrusted")
-		fmt.Println("          from reaching classified documents on net_secure.")
-		fmt.Println()
-
-		fmt.Println("  ── Layer 1: Network isolation ────────────────────────────────")
-		_ = demoStep(demoDir, "network isolation",
-			false,
-			"docker", "compose", "exec", "-T", "gov-bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'",
-		)
-
-		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
-		fmt.Println("  Confirming the gateway is live:")
-		fmt.Println()
-		_ = demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8080/api/v1/health",
-		)
-
-		fmt.Println("  Copy-paste to inspect the enforcement audit:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 1 — CUI exfiltration blocked.")
-		fmt.Println("         Net_untrusted has no route to net_internal or net_secure.")
-
-	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for gov: %q (valid: 1)", scenario)
-	}
-	return result, nil
-}
-
-func runFinanceScenario(demoDir, scenario string) error {
-	_, err := runFinanceScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runFinanceScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
-
-	switch scenario {
-	case "1":
-		result.number = "1"
-		result.name = "Unauthorized Trade Blocked"
-		result.status = "PASS"
-		result.metrics = "Network isolation: net_untrusted → net_secure blocked"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — Unauthorized Trade Blocked")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Network isolation prevents a bad-actor on net_untrusted")
-		fmt.Println("          from reaching the trading ledger on net_secure.")
-		fmt.Println()
-
-		fmt.Println("  ── Layer 1: Network isolation ────────────────────────────────")
-		_ = demoStep(demoDir, "network isolation",
-			false,
-			"docker", "compose", "exec", "-T", "finance-bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'",
-		)
-
-		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
-		fmt.Println("  Confirming the gateway is live:")
-		fmt.Println()
-		_ = demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8082/api/v1/health",
-		)
-
-		fmt.Println("  Copy-paste to inspect the enforcement audit:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 1 — Unauthorized trade blocked.")
-		fmt.Println("         Net_untrusted has no route to net_internal or net_secure.")
-
-	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
-	}
-	return result, nil
-}
-
-func runSecureDataScenario(demoDir, scenario string) error {
-	_, err := runSecureDataScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
-
-	switch scenario {
-	case "1":
-		result.number = "1"
-		result.name = "Governed Migration with Chain-of-Custody Receipts"
-		result.status = "PASS"
-		result.metrics = "Two-Operator Topology: src-operator → dst-operator // Chain of Custody Proof"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — Governed Migration with Chain-of-Custody Receipts")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: A SharePoint migration moves data from source to destination")
-		fmt.Println("          only through the governed connector pipeline. Both operators")
-		fmt.Println("          emit signed receipts, forming a cryptographic chain of custody.")
-		fmt.Println()
-
-		fmt.Println("  ── Step 1: Confirm source and destination gateways are live ──────")
-		if err := demoStep(demoDir, "src-gateway health",
-			false,
-			"curl", "-s", "http://localhost:8083/api/v1/health",
-		); err != nil {
-			fmt.Println("  (src-gateway health check failed — is the demo running?)")
-			fmt.Println()
-		}
-		if err := demoStep(demoDir, "dst-gateway health",
-			false,
-			"curl", "-s", "http://localhost:8084/api/v1/health",
-		); err != nil {
-			fmt.Println("  (dst-gateway health check failed — is the demo running?)")
-			fmt.Println()
-		}
-
-		fmt.Println("  ── Step 2: Inspect the migration manifest ───────────────────────")
-		fmt.Println("  This manifest defines the scope and authorization for the migration:")
-		fmt.Println()
-		_ = demoStep(demoDir, "migration manifest",
-			false,
-			"docker", "compose", "exec", "-T", "source-storage",
-			"sh", "-c", "cat /var/g8e/target/transfer_manifest.json | head -40",
-		)
-
-		fmt.Println("  ── Step 3: Confirm the migration doctrines are loaded ───────────")
-		_ = demoStep(demoDir, "doctrine rule",
-			false,
-			"docker", "compose", "exec", "-T", "src-gateway",
-			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='migration_manifest_required'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  confidence: '+str(r['confidence'])); print('  pattern:    '+r['pattern'])"`,
-		)
-
-		fmt.Println("  Copy-paste to run the governed migration via the SharePoint connector")
-		fmt.Println("  (in notary posture this suspends for human L3 approval, then emits")
-		fmt.Println("  signed receipts from both domains):")
-		fmt.Println()
-		fmt.Println("    ./g8e migration connector sharepoint run \\")
-		fmt.Println("      --manifest ./demos/secure-data/target-data/transfer_manifest.json \\")
-		fmt.Println("      --posture notary")
-		fmt.Println()
-		fmt.Println("  Then verify the combined chain-of-custody report:")
-		fmt.Println()
-		fmt.Println("    ./g8e migration report --migration-id SPO-MIGRATION-2026-001")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 1 — Migration governed end to end.")
-		fmt.Println("         Source and destination receipts written to the hash-chained ledger.")
-
-	case "2":
-		result.number = "2"
-		result.name = "Connector Bypass Attempt Blocked"
-		result.status = "PASS"
-		result.metrics = "Doctrine: connector_bypass_attempt (0.93 conf) // Layer 1 Blocked"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 2 — Connector Bypass Attempt Blocked")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Direct invocation of transfer tools (rclone, scp, robocopy)")
-		fmt.Println("          is blocked by doctrine when not wrapped in a GovernanceEnvelope.")
-		fmt.Println()
-
-		fmt.Println("  ── Step 1: Attempt direct rclone copy (bypassing connector) ──────")
-		_ = demoStep(demoDir, "bypass attempt",
-			false,
-			"docker", "compose", "exec", "-T", "connector-rclone",
-			"sh", "-c", "rclone copy /var/data/secret.docx dest:intake/ 2>&1 || echo 'BLOCKED: Direct transfer attempt detected'",
-		)
-
-		fmt.Println("  ── Step 2: Confirm doctrine enforcement audit ───────────────────")
-		_ = demoStep(demoDir, "doctrine rule",
-			false,
-			"docker", "compose", "exec", "-T", "src-gateway",
-			"sh", "-c", `python3 -c "import json; d=json.load(open('/etc/g8e/doctrine/secure_data_transfer_doctrine.json')); r=[x for x in d['doctrines'] if x['id']=='connector_bypass_attempt'][0]; print('  id:         '+r['id']); print('  severity:   '+r['severity']); print('  pattern:    '+r['pattern'])"`,
-		)
-
-		fmt.Println("  [PASS] Scenario 2 — Bypass attempt blocked at Layer 1.")
-
-	case "3":
-		result.number = "3"
-		result.name = "Cross-Tenant Leak Doctrine Triggered"
-		result.status = "PASS"
-		result.metrics = "Doctrine: cross_tenant_data_leak (0.88 conf) // Intent Rejected"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 3 — Cross-Tenant Leak Doctrine Triggered")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Envelopes targeting destinations not in the signed manifest")
-		fmt.Println("          are rejected before execution.")
-		fmt.Println()
-
-		fmt.Println("  ── Step 1: Submit envelope targeting unauthorized tenant ─────────")
-		fmt.Println("    Target: rogue-tenant.sharepoint.com")
-		fmt.Println()
-		_ = demoStep(demoDir, "leak attempt",
-			false,
-			"curl", "-s", "-X", "POST", "http://localhost:8083/api/v1/mcp/tools/call",
-			"-H", "Content-Type: application/json",
-			"-d", `{"name":"migration_transfer","arguments":{"destination_path":"https://rogue-tenant.sharepoint.com/sites/Exfil","manifest_id":"SPO-MIGRATION-2026-001"}}`,
-		)
-
-		fmt.Println("  ── Step 2: Confirm enforcement in observability logs ─────────────")
-		_ = demoStep(demoDir, "audit tail",
-			false,
-			"docker", "compose", "logs", "observability", "--tail", "5",
-		)
-
-		fmt.Println("  [PASS] Scenario 3 — Cross-tenant leak attempt rejected.")
-
-	default:
-		return scenarioResult{}, fmt.Errorf("invalid scenario number for secure-data: %q (valid: 1-3)", scenario)
-	}
-	return result, nil
 }
 
 func demosAuditCmd() *cobra.Command {
@@ -1122,7 +706,7 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 }
 
 func runDockerComposeExec(demoDir, composePath, service string, args ...string) error {
-	fullArgs := []string{"compose", "-f", composePath, "exec", service}
+	fullArgs := []string{"compose", "-f", toDockerPath(composePath), "exec", service}
 	fullArgs = append(fullArgs, args...)
 
 	cmd := exec.Command("docker", fullArgs...)
@@ -1135,7 +719,7 @@ func runDockerComposeExec(demoDir, composePath, service string, args ...string) 
 }
 
 func runDockerComposeLogs(demoDir, composePath, service string) error {
-	cmd := exec.Command("docker", "compose", "-f", composePath, "logs", "-f", service)
+	cmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "logs", "-f", service)
 	cmd.Dir = demoDir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

@@ -19,17 +19,20 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // New creates a new Keystore instance with the keychain backend.
+// Production callers should pass constants.Paths.Infra.SecretsDir for secretsDir.
 func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
-	backend, err := newKeychainBackend()
-	if err != nil {
-		return nil, fmt.Errorf("initialize keychain backend: %w", err)
+	if err := os.MkdirAll(secretsDir, constants.PermDirPrivate); err != nil {
+		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
 	}
 
-	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return nil, fmt.Errorf("create secrets directory: %w", err)
+	backend, err := newKeychainBackend()
+	if err != nil {
+		return nil, fmt.Errorf("keystore: initialize keychain backend: %w", err)
 	}
 
 	return &Keystore{

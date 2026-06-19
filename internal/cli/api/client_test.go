@@ -22,7 +22,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
-	"fmt"
 	"math/big"
 	"net"
 	"net/http"
@@ -174,14 +173,7 @@ func setupTestCredentials(t *testing.T, cfg *config.Config) {
 func setupTLSClient(t *testing.T, cfg *config.Config, server *httptest.Server) *Client {
 	t.Helper()
 
-	_, portStr, err := net.SplitHostPort(server.Listener.Addr().String())
-	require.NoError(t, err)
-	var port int
-	_, err = fmt.Sscanf(portStr, "%d", &port)
-	require.NoError(t, err)
-	cfg.TestPortOverride = port
-
-	client, err := NewClient(cfg)
+	client, err := NewClientWithURL(cfg, server.URL)
 	require.NoError(t, err)
 
 	caCertPool := x509.NewCertPool()
@@ -210,6 +202,7 @@ func newLocalhostTLSServer(t *testing.T, handler http.HandlerFunc) *httptest.Ser
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		DNSNames:     []string{"localhost"},
+		IPAddresses:  []net.IP{net.ParseIP("127.0.0.1")},
 	}
 
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &privKey.PublicKey, privKey)

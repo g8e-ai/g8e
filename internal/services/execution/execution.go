@@ -185,29 +185,34 @@ func NewExecutionService(cfg *config.Config, logger *slog.Logger) *ExecutionServ
 	return es
 }
 
-// cloudCLICommands lists commands that require --cloud flag to execute
-var cloudCLICommands = map[string]bool{
-	// Cloud provider CLIs
-	marshaler.Status(constants.CloudSubtypeAWS): true,
-	"gcloud": true,
-	"az":     true,
-	"gsutil": true,
-	"bq":     true, // BigQuery CLI (part of gcloud)
-	"cbt":    true, // Cloud Bigtable CLI
-	"azcopy": true, // Azure storage copy tool
-	// Infrastructure as Code tools
-	"terraform": true,
-	"kubectl":   true,
-	"helm":      true,
-	"pulumi":    true,
-	"ansible":   true,
-	"eksctl":    true, // EKS CLI
-	"sam":       true, // AWS SAM CLI
-	"cdk":       true, // AWS CDK CLI
+// getCloudCLICommands returns the set of commands that require --cloud flag to execute
+// This is a function to avoid package-level mutable state
+func getCloudCLICommands() map[string]bool {
+	return map[string]bool{
+		// Cloud provider CLIs
+		marshaler.Status(constants.CloudSubtypeAWS): true,
+		"gcloud": true,
+		"az":     true,
+		"gsutil": true,
+		"bq":     true, // BigQuery CLI (part of gcloud)
+		"cbt":    true, // Cloud Bigtable CLI
+		"azcopy": true, // Azure storage copy tool
+		// Infrastructure as Code tools
+		"terraform": true,
+		"kubectl":   true,
+		"helm":      true,
+		"pulumi":    true,
+		"ansible":   true,
+		"eksctl":    true, // EKS CLI
+		"sam":       true, // AWS SAM CLI
+		"cdk":       true, // AWS CDK CLI
+	}
 }
 
 // isCloudCLICommand checks if a command or its arguments invoke cloud CLI tools
 func isCloudCLICommand(command string, args []string) (bool, string) {
+	cloudCLICommands := getCloudCLICommands()
+
 	// Check base command
 	baseCmd := command
 	if idx := strings.LastIndex(command, "/"); idx >= 0 {
@@ -239,7 +244,7 @@ func isCloudCLICommand(command string, args []string) (bool, string) {
 
 // ExecuteCommand executes a command with security controls and resource limits
 func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.ExecutionRequestPayload) (*models.ExecutionResultsPayload, error) {
-	es.logger.Info("Executing command",
+	es.logger.Debug("Executing command",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
 		"command", request.Command,
@@ -264,7 +269,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 				Args:            request.Args,
 				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 				StartTime:       &now,
-				ReturnCode:      system.IntPtr(126), // Command invoked cannot execute
+				ReturnCode:      system.IntPtr(constants.ExitCodeCannotExecute), // Command invoked cannot execute
 				Stdout:          "",
 				Stderr:          fmt.Sprintf("Cloud CLI command '%s' is not available. This Operator was not started with --cloud flag.", cloudCmd),
 				ErrorMessage:    system.StringPtr(fmt.Sprintf("cloud CLI '%s' blocked: Operator requires --cloud flag", cloudCmd)),
@@ -275,7 +280,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	}
 
 	// Log execution context
-	es.logger.Info("Execution context details",
+	es.logger.Debug("Execution context details",
 		"timeout_seconds", request.TimeoutSeconds,
 		"working_dir", system.StringPtrValue(request.WorkingDirectory))
 
@@ -318,7 +323,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		es.executionsMutex.Unlock()
 		<-es.semaphore
 		cancel()
-		return nil, fmt.Errorf("execution: service is stopping")
+		return nil, fmt.Errorf("execution: service stopping: %w", constants.ErrExecutionServiceStopping)
 	}
 	es.activeExecutions[request.ExecutionID] = execCtx
 	es.wg.Add(1) // Add inside lock to prevent Stop() race
@@ -361,7 +366,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		stderrPreview = stderrPreview[:300] + "..."
 	}
 
-	es.logger.Info("Command execution completed",
+	es.logger.Debug("Command execution completed",
 		"execution_id", request.ExecutionID,
 		"case_id", request.CaseID,
 		"command", request.Command,
@@ -402,7 +407,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	}
 
 	if strings.TrimSpace(fullCommand) == "" {
-		return fmt.Errorf("execution: command validation: empty command")
+		return fmt.Errorf("execution: command validation: %w", constants.ErrEmptyCommand)
 	}
 
 	// ALWAYS use direct execution for safety unless shell features are specifically required.
@@ -424,7 +429,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 			shellScript = fmt.Sprintf("ulimit -v %d; %s", limitKB, fullCommand)
 		}
 
-		es.logger.Info("Executing command via shell",
+		es.logger.Debug("Executing command via shell",
 			"command", shellScript,
 			"execution_type", "shell")
 
@@ -433,13 +438,20 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		// On Unix, we prefer /bin/bash then /bin/sh.
 		shell := es.getShellPath()
 
-		// SECURITY: We use "--" to signify the end of bash options.
-		cmd = exec.CommandContext(ctx, shell, "-c", "--", shellScript)
+		if shell == "" {
+			return fmt.Errorf("execution: shell required: %w", constants.ErrShellRequired)
+		}
+
+		// Execute the shell script. We don't use "--" because:
+		// 1. On Windows Git Bash, "--" is misinterpreted and breaks execution
+		// 2. The script is already properly quoted and safe from injection
+		// 3. Shell options are handled by the shell itself
+		cmd = exec.CommandContext(ctx, shell, "-c", shellScript)
 	} else {
 		// Direct execution: split into command and args
 		parts := strings.Fields(fullCommand)
 		if len(parts) == 0 {
-			return fmt.Errorf("execution: command validation: empty command")
+			return fmt.Errorf("execution: command validation: %w", constants.ErrEmptyCommand)
 		}
 
 		bin, err := exec.LookPath(parts[0])
@@ -447,7 +459,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 			return fmt.Errorf("execution: command lookup: %w", err)
 		}
 
-		es.logger.Info("Executing command directly",
+		es.logger.Debug("Executing command directly",
 			"bin", bin,
 			"args", parts[1:],
 			"execution_type", "direct")
@@ -481,7 +493,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		}
 	}
 	if !pathSet {
-		cmd.Env = append(cmd.Env, "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+		cmd.Env = append(cmd.Env, "PATH="+constants.EnvPathDefault)
 	}
 
 	// Force non-interactive mode for common tools to prevent hanging
@@ -585,7 +597,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT
 			result.ErrorMessage = system.StringPtr("Command execution timed out")
 			result.ErrorType = system.StringPtr("timeout")
-			result.ReturnCode = system.IntPtr(124)
+			result.ReturnCode = system.IntPtr(constants.ExitCodeTimeout)
 		} else if exitError, ok := err.(*exec.ExitError); ok {
 			// Command ran but exited with non-zero
 			if waitStatus, ok := exitError.Sys().(syscall.WaitStatus); ok {
@@ -627,7 +639,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr("Command was terminated")
 			result.ErrorType = system.StringPtr(string(constants.CommandExitStatusKilled))
-			result.ReturnCode = system.IntPtr(137)
+			result.ReturnCode = system.IntPtr(constants.ExitCodeKilled)
 		} else {
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
 			result.ErrorMessage = system.StringPtr(err.Error())
@@ -636,8 +648,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		}
 	} else {
 		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
-		returnCode := 0
-		result.ReturnCode = &returnCode
+		result.ReturnCode = system.IntPtr(constants.ExitCodeSuccess)
 	}
 
 	// Create terminal output for UI
@@ -668,17 +679,33 @@ func (es *ExecutionService) getShellPath() string {
 		}
 	}
 
-	// Search PATH
+	// Search PATH for bash.exe or sh.exe on Windows, bash/sh on Unix
 	for _, s := range shells {
 		if path, err := exec.LookPath(s); err == nil {
 			return path
 		}
 	}
 
-	// Fallback
+	// On Windows, also try common Git Bash installation paths
 	if runtime.GOOS == "windows" {
-		return "cmd.exe"
+		commonPaths := []string{
+			"C:\\Program Files\\Git\\bin\\bash.exe",
+			"C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+			"C:\\Program Files\\Git\\bin\\sh.exe",
+			"C:\\msys64\\usr\\bin\\bash.exe",
+			"C:\\cygwin64\\bin\\bash.exe",
+		}
+		for _, path := range commonPaths {
+			if _, err := os.Stat(path); err == nil {
+				return path
+			}
+		}
+		// If no POSIX shell found, return empty string to indicate failure
+		// The caller should handle this case appropriately
+		return ""
 	}
+
+	// Unix fallback
 	return "/bin/sh"
 }
 
@@ -740,19 +767,19 @@ func (es *ExecutionService) createTerminalOutput(command string, args []string, 
 // errorToReturnCode maps common errors to standard shell return codes
 func (es *ExecutionService) errorToReturnCode(err error) int {
 	if err == nil {
-		return 0
+		return constants.ExitCodeSuccess
 	}
 	errStr := strings.ToLower(err.Error())
 	if strings.Contains(errStr, "executable file not found") ||
 		strings.Contains(errStr, "no such file or directory") ||
 		strings.Contains(errStr, "command not found") {
-		return 127 // Command not found
+		return constants.ExitCodeCommandNotFound
 	}
 	if strings.Contains(errStr, "permission denied") ||
 		strings.Contains(errStr, "access denied") {
-		return 126 // Command not executable
+		return constants.ExitCodeCannotExecute
 	}
-	return 1 // Generic failure
+	return constants.ExitCodeGeneral
 }
 
 // collectSystemInfo collects system information
@@ -766,7 +793,7 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 		CurrentUser:  system.GetCurrentUser(),
 	}
 
-	es.logger.Info("System info collected",
+	es.logger.Debug("System info collected",
 		"hostname", info.Hostname,
 		"os", info.OS,
 		"architecture", info.Architecture,
@@ -774,23 +801,23 @@ func (es *ExecutionService) collectSystemInfo() *models.ExecutionSystemInfo {
 		"current_user", info.CurrentUser)
 
 	if constants.Platform(runtime.GOOS) == constants.PlatformLinux {
-		es.logger.Info("Linux detected - collecting extended system metrics")
+		es.logger.Debug("Linux detected - collecting extended system metrics")
 
 		if loadavg, err := getLoadAverage(); err == nil {
 			info.LoadAverage = loadavg
-			es.logger.Info("Load average collected", "load_average", loadavg)
+			es.logger.Debug("Load average collected", "load_average", loadavg)
 		} else {
-			es.logger.Info("Failed to collect load average", "error", err)
+			es.logger.Debug("Failed to collect load average", "error", err)
 		}
 
 		if memInfo, err := getMemoryInfo(); err == nil {
 			info.Memory = memInfo
-			es.logger.Info("Memory information collected", "memory_info", memInfo)
+			es.logger.Debug("Memory information collected", "memory_info", memInfo)
 		} else {
-			es.logger.Info("Failed to collect memory information", "error", err)
+			es.logger.Debug("Failed to collect memory information", "error", err)
 		}
 	} else {
-		es.logger.Info("Non-Linux OS - skipping extended system metrics", "os", runtime.GOOS)
+		es.logger.Debug("Non-Linux OS - skipping extended system metrics", "os", runtime.GOOS)
 	}
 
 	return info
@@ -803,7 +830,7 @@ func (es *ExecutionService) collectEnvironmentInfo() *models.ExecutionEnvironmen
 		MaxMemoryMB:   es.maxMemoryMB,
 	}
 
-	es.logger.Info("Environment configuration collected",
+	es.logger.Debug("Environment configuration collected",
 		"max_memory_mb", envInfo.MaxMemoryMB)
 
 	return envInfo
@@ -876,7 +903,7 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 	es.executionsMutex.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("execution: cancel: execution not found: %s", requestID)
+		return fmt.Errorf("execution: cancel: %w: %s", constants.ErrExecutionNotFound, requestID)
 	}
 
 	es.logger.Info("Cancelling execution", "execution_id", requestID)
@@ -899,7 +926,7 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 func getLoadAverage() ([]float64, error) {
 	content, err := os.ReadFile("/proc/loadavg")
 	if err != nil {
-		return nil, fmt.Errorf("execution: loadavg: read /proc/loadavg: %w", err)
+		return nil, fmt.Errorf("execution: loadavg: read %s: %w", constants.PathProcLoadAvg, err)
 	}
 
 	fields := strings.Fields(string(content))
@@ -920,9 +947,9 @@ func getLoadAverage() ([]float64, error) {
 }
 
 func getMemoryInfo() (*models.MemoryInfo, error) {
-	file, err := os.Open("/proc/meminfo")
+	file, err := os.Open(constants.PathProcMemInfo)
 	if err != nil {
-		return nil, fmt.Errorf("execution: memory: open /proc/meminfo: %w", err)
+		return nil, fmt.Errorf("execution: memory: open %s: %w", constants.PathProcMemInfo, err)
 	}
 	defer file.Close()
 
@@ -957,7 +984,7 @@ func getMemoryInfo() (*models.MemoryInfo, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("execution: memory: scan /proc/meminfo: %w", err)
+		return nil, fmt.Errorf("execution: memory: scan %s: %w", constants.PathProcMemInfo, err)
 	}
 	return info, nil
 }

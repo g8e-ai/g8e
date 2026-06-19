@@ -98,7 +98,8 @@ func TestNetDNSResolveTool_Execute_A(t *testing.T) {
 	require.Equal(t, "example.com", res.Hostname)
 	require.Equal(t, "A", res.RecordType)
 	require.Equal(t, 1, res.Count)
-	require.ElementsMatch(t, []string{"192.168.1.1"}, res.Records)
+	require.Len(t, res.Records.A, 1)
+	require.Equal(t, "192.168.1.1", res.Records.A[0].IP)
 }
 
 func TestNetDNSResolveTool_Execute_AAAA(t *testing.T) {
@@ -122,7 +123,8 @@ func TestNetDNSResolveTool_Execute_AAAA(t *testing.T) {
 
 	require.Equal(t, "AAAA", res.RecordType)
 	require.Equal(t, 1, res.Count)
-	require.ElementsMatch(t, []string{"2001:db8::1"}, res.Records)
+	require.Len(t, res.Records.AAAA, 1)
+	require.Equal(t, "2001:db8::1", res.Records.AAAA[0].IP)
 }
 
 func TestNetDNSResolveTool_Execute_MX(t *testing.T) {
@@ -146,11 +148,9 @@ func TestNetDNSResolveTool_Execute_MX(t *testing.T) {
 	require.Equal(t, "MX", res.RecordType)
 	require.Equal(t, 1, res.Count)
 
-	records := res.Records.([]interface{})
-	require.Len(t, records, 1)
-	mx := records[0].(map[string]interface{})
-	require.Equal(t, "mail.example.com.", mx["host"])
-	require.Equal(t, float64(10), mx["pref"])
+	require.Len(t, res.Records.MX, 1)
+	require.Equal(t, "mail.example.com.", res.Records.MX[0].Host)
+	require.Equal(t, uint16(10), res.Records.MX[0].Pref)
 }
 
 func TestNetDNSResolveTool_Execute_TXT(t *testing.T) {
@@ -170,7 +170,8 @@ func TestNetDNSResolveTool_Execute_TXT(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "TXT", res.RecordType)
-	require.ElementsMatch(t, []string{"v=spf1 include:_spf.google.com ~all"}, res.Records)
+	require.Len(t, res.Records.TXT, 1)
+	require.Equal(t, "v=spf1 include:_spf.google.com ~all", res.Records.TXT[0].Text)
 }
 
 func TestNetDNSResolveTool_Execute_CNAME(t *testing.T) {
@@ -190,7 +191,8 @@ func TestNetDNSResolveTool_Execute_CNAME(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "CNAME", res.RecordType)
-	require.ElementsMatch(t, []string{"target.example.com."}, res.Records)
+	require.NotNil(t, res.Records.CNAME)
+	require.Equal(t, "target.example.com.", res.Records.CNAME.Target)
 }
 
 func TestNetDNSResolveTool_Execute_NS(t *testing.T) {
@@ -212,7 +214,8 @@ func TestNetDNSResolveTool_Execute_NS(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "NS", res.RecordType)
-	require.ElementsMatch(t, []string{"ns1.example.com."}, res.Records)
+	require.Len(t, res.Records.NS, 1)
+	require.Equal(t, "ns1.example.com.", res.Records.NS[0].Host)
 }
 
 func TestNetDNSResolveTool_Execute_InvalidArgs(t *testing.T) {

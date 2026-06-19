@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package insecure_mcp
+package local_http_stdio
 
 import (
 	"bytes"
@@ -120,7 +120,7 @@ type systemWhichResult struct {
 }
 
 // ────────────────────────────────────────────────────────────────
-// InsecureMcpNodeService
+// LocalHttpStdioNodeService
 // ────────────────────────────────────────────────────────────────
 
 const (
@@ -129,11 +129,11 @@ const (
 	ocNodeClientID    = "g8e.operator"
 )
 
-// InsecureMcpNodeService connects the g8e Operator to an MCP gateway without governance.
+// LocalHttpStdioNodeService connects the g8e Operator to an MCP gateway without governance.
 // It advertises system.run and system.which, executes shell commands on request,
 // and streams results back - with no g8e infrastructure dependency (no agent ensemble,
 // no client, no pub/sub, no auth bootstrap, NO L1/L2/L3 VERIFICATION).
-type InsecureMcpNodeService struct {
+type LocalHttpStdioNodeService struct {
 	gatewayURL  string
 	token       string
 	nodeID      string
@@ -148,9 +148,9 @@ type InsecureMcpNodeService struct {
 	cancel context.CancelFunc
 }
 
-// NewInsecureMcpNodeService creates and validates the service. Call Start() to connect.
+// NewLocalHttpStdioNodeService creates and validates the service. Call Start() to connect.
 // pathEnv is the value of the PATH environment variable to advertise to the Gateway.
-func NewInsecureMcpNodeService(gatewayURL, token, nodeID, displayName, pathEnv string, logger *slog.Logger) (*InsecureMcpNodeService, error) {
+func NewLocalHttpStdioNodeService(gatewayURL, token, nodeID, displayName, pathEnv string, logger *slog.Logger) (*LocalHttpStdioNodeService, error) {
 	if gatewayURL == "" {
 		return nil, fmt.Errorf("gateway URL is required")
 	}
@@ -169,7 +169,7 @@ func NewInsecureMcpNodeService(gatewayURL, token, nodeID, displayName, pathEnv s
 		resolvedDisplayName = resolvedNodeID
 	}
 
-	return &InsecureMcpNodeService{
+	return &LocalHttpStdioNodeService{
 		gatewayURL:  gatewayURL,
 		token:       token,
 		nodeID:      resolvedNodeID,
@@ -181,7 +181,7 @@ func NewInsecureMcpNodeService(gatewayURL, token, nodeID, displayName, pathEnv s
 
 // Start connects to the MCP gateway and blocks until ctx is cancelled or
 // a fatal error occurs. It reconnects automatically on transient failures.
-func (s *InsecureMcpNodeService) Start(ctx context.Context) error {
+func (s *LocalHttpStdioNodeService) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	defer s.cancel()
 
@@ -221,7 +221,7 @@ func (s *InsecureMcpNodeService) Start(ctx context.Context) error {
 }
 
 // Stop gracefully shuts down the service.
-func (s *InsecureMcpNodeService) Stop() {
+func (s *LocalHttpStdioNodeService) Stop() {
 	if s.cancel != nil {
 		s.cancel()
 	}
@@ -229,7 +229,7 @@ func (s *InsecureMcpNodeService) Stop() {
 
 // runSession establishes one WS connection, runs the handshake, then pumps
 // incoming frames until disconnected or ctx cancelled.
-func (s *InsecureMcpNodeService) runSession(ctx context.Context) error {
+func (s *LocalHttpStdioNodeService) runSession(ctx context.Context) error {
 	conn, err := s.dial(ctx)
 	if err != nil {
 		return fmt.Errorf("dial: %w", err)
@@ -256,7 +256,7 @@ func (s *InsecureMcpNodeService) runSession(ctx context.Context) error {
 	return s.readLoop(ctx, conn)
 }
 
-func (s *InsecureMcpNodeService) dial(ctx context.Context) (*websocket.Conn, error) {
+func (s *LocalHttpStdioNodeService) dial(ctx context.Context) (*websocket.Conn, error) {
 	header := http.Header{}
 	header.Set(constants.HeaderUserAgent, fmt.Sprintf("%s/%s", ocNodeClientID, ocNodeVersion))
 
@@ -287,7 +287,7 @@ func (s *InsecureMcpNodeService) dial(ctx context.Context) (*websocket.Conn, err
 //  1. Wait for connect.challenge event
 //  2. Send connect request with role="node" + commands
 //  3. Wait for ok response
-func (s *InsecureMcpNodeService) handshake(ctx context.Context, conn *websocket.Conn) error {
+func (s *LocalHttpStdioNodeService) handshake(ctx context.Context, conn *websocket.Conn) error {
 	// Step 1: read challenge
 	_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
 	var challenge ocFrame
@@ -351,7 +351,7 @@ func (s *InsecureMcpNodeService) handshake(ctx context.Context, conn *websocket.
 	return nil
 }
 
-func (s *InsecureMcpNodeService) readLoop(ctx context.Context, conn *websocket.Conn) error {
+func (s *LocalHttpStdioNodeService) readLoop(ctx context.Context, conn *websocket.Conn) error {
 	go func() {
 		<-ctx.Done()
 		_ = conn.SetReadDeadline(time.Now().UTC())
@@ -373,7 +373,7 @@ func (s *InsecureMcpNodeService) readLoop(ctx context.Context, conn *websocket.C
 }
 
 // handleInvokeEvent is dispatched in a goroutine for each node.invoke.request.
-func (s *InsecureMcpNodeService) handleInvokeEvent(ctx context.Context, rawParams interface{}) {
+func (s *LocalHttpStdioNodeService) handleInvokeEvent(ctx context.Context, rawParams interface{}) {
 	data, err := json.Marshal(rawParams)
 	if err != nil {
 		s.logger.Warn("Failed to marshal invoke payload", string(constants.ConnectionStateError), err)
@@ -402,7 +402,7 @@ func (s *InsecureMcpNodeService) handleInvokeEvent(ctx context.Context, rawParam
 // Command handlers
 // ────────────────────────────────────────────────────────────────
 
-func (s *InsecureMcpNodeService) handleSystemRun(ctx context.Context, req ocNodeInvokeRequest) {
+func (s *LocalHttpStdioNodeService) handleSystemRun(ctx context.Context, req ocNodeInvokeRequest) {
 	if req.ParamsJSON == nil || *req.ParamsJSON == "" {
 		s.sendInvokeError(req, "INVALID_REQUEST", "paramsJSON required")
 		return
@@ -456,7 +456,7 @@ func (s *InsecureMcpNodeService) handleSystemRun(ctx context.Context, req ocNode
 	s.sendInvokeResult(req, payload)
 }
 
-func (s *InsecureMcpNodeService) handleSystemWhich(ctx context.Context, req ocNodeInvokeRequest) {
+func (s *LocalHttpStdioNodeService) handleSystemWhich(ctx context.Context, req ocNodeInvokeRequest) {
 	if req.ParamsJSON == nil || *req.ParamsJSON == "" {
 		s.sendInvokeError(req, "INVALID_REQUEST", "paramsJSON required")
 		return
@@ -486,7 +486,7 @@ func (s *InsecureMcpNodeService) handleSystemWhich(ctx context.Context, req ocNo
 // Result / error senders
 // ────────────────────────────────────────────────────────────────
 
-func (s *InsecureMcpNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload interface{}) {
+func (s *LocalHttpStdioNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload interface{}) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		s.logger.Error("Failed to marshal invoke result payload", string(constants.ConnectionStateError), err)
@@ -512,7 +512,7 @@ func (s *InsecureMcpNodeService) sendInvokeResult(req ocNodeInvokeRequest, paylo
 	}
 }
 
-func (s *InsecureMcpNodeService) sendInvokeError(req ocNodeInvokeRequest, code, message string) {
+func (s *LocalHttpStdioNodeService) sendInvokeError(req ocNodeInvokeRequest, code, message string) {
 	resultParams := ocNodeInvokeResultParams{
 		ID:     req.ID,
 		NodeID: s.nodeID,
@@ -534,7 +534,7 @@ func (s *InsecureMcpNodeService) sendInvokeError(req ocNodeInvokeRequest, code, 
 // Transport helpers
 // ────────────────────────────────────────────────────────────────
 
-func (s *InsecureMcpNodeService) sendFrame(frame ocFrame) error {
+func (s *LocalHttpStdioNodeService) sendFrame(frame ocFrame) error {
 	s.wsMu.Lock()
 	conn := s.ws
 	s.wsMu.Unlock()
@@ -544,7 +544,7 @@ func (s *InsecureMcpNodeService) sendFrame(frame ocFrame) error {
 	return s.sendFrameConn(conn, frame)
 }
 
-func (s *InsecureMcpNodeService) sendFrameConn(conn *websocket.Conn, frame ocFrame) error {
+func (s *LocalHttpStdioNodeService) sendFrameConn(conn *websocket.Conn, frame ocFrame) error {
 	data, err := json.Marshal(frame)
 	if err != nil {
 		return err
@@ -554,7 +554,7 @@ func (s *InsecureMcpNodeService) sendFrameConn(conn *websocket.Conn, frame ocFra
 	return conn.WriteMessage(websocket.TextMessage, data)
 }
 
-func (s *InsecureMcpNodeService) readFrameConn(conn *websocket.Conn, out *ocFrame) error {
+func (s *LocalHttpStdioNodeService) readFrameConn(conn *websocket.Conn, out *ocFrame) error {
 	_, raw, err := conn.ReadMessage()
 	if err != nil {
 		return err
@@ -562,7 +562,7 @@ func (s *InsecureMcpNodeService) readFrameConn(conn *websocket.Conn, out *ocFram
 	return json.Unmarshal(raw, out)
 }
 
-func (s *InsecureMcpNodeService) nextID(prefix string) string {
+func (s *LocalHttpStdioNodeService) nextID(prefix string) string {
 	n := s.seq.Add(1)
 	return fmt.Sprintf("%s_%d", prefix, n)
 }

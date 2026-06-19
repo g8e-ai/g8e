@@ -16,7 +16,6 @@
 package scenario
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -34,7 +33,8 @@ func TestConcurrencyReplayDetection(t *testing.T) {
 	ctx := setupTestContext(t)
 
 	// Fetch current state root to bind envelopes
-	stateRoot, err := ctx.Client.StateRoot(context.Background())
+	govDeps := ctx.Fixture.Service.GetGovernanceDeps()
+	stateRoot, err := govDeps.StateRootProvider.GetCurrentStateRoot()
 	if err != nil {
 		t.Fatalf("failed to fetch state root: %v", err)
 	}

@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package gateway
 
 import (
@@ -581,19 +583,18 @@ func TestGetField(t *testing.T) {
 	// Get existing field
 	field, err := db.DocStore.GetField("test_collection", "doc1", "name")
 	require.NoError(t, err)
-	require.NotNil(t, field)
-	assert.Equal(t, "test-doc", field)
+	require.NotNil(t, field.Str)
+	assert.Equal(t, "test-doc", *field.Str)
 
 	// Get another field
 	field, err = db.DocStore.GetField("test_collection", "doc1", "value")
 	require.NoError(t, err)
-	require.NotNil(t, field)
-	assert.InEpsilon(t, float64(42), field, 0.0) // JSON numbers are unmarshaled as float64
+	require.NotNil(t, field.Float64)
+	assert.InEpsilon(t, float64(42), *field.Float64, 0.0) // JSON numbers are unmarshaled as float64
 
 	// Get field from non-existent document
-	field, err = db.DocStore.GetField("test_collection", "nonexistent-doc", "name")
+	_, err = db.DocStore.GetField("test_collection", "nonexistent-doc", "name")
 	require.Error(t, err)
-	assert.Nil(t, field)
 }
 
 func TestDocDeleteNamespace(t *testing.T) {

@@ -15,6 +15,8 @@ package mcp
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestValidateHTTPRequestURL(t *testing.T) {
@@ -99,20 +101,12 @@ func TestValidateHTTPRequestURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			parsed, err := validateHTTPRequestURL(tt.url)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateHTTPRequestURL(%q) expected error, got nil", tt.url)
-				}
-				if parsed != nil {
-					t.Errorf("validateHTTPRequestURL(%q) expected nil parsed URL on error, got %v", tt.url, parsed)
-				}
+				assert.Error(t, err, tt.url)
+				assert.Nil(t, parsed, tt.url)
 				return
 			}
-			if err != nil {
-				t.Errorf("validateHTTPRequestURL(%q) unexpected error: %v", tt.url, err)
-			}
-			if parsed == nil {
-				t.Errorf("validateHTTPRequestURL(%q) expected non-nil parsed URL", tt.url)
-			}
+			assert.NoError(t, err, tt.url)
+			assert.NotNil(t, parsed, tt.url)
 		})
 	}
 }
@@ -219,13 +213,9 @@ func TestValidateSQLQuery(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateSQLQuery(tt.query)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateSQLQuery(%q) expected error, got nil", tt.query)
-				}
+				assert.Error(t, err, tt.query)
 			} else {
-				if err != nil {
-					t.Errorf("validateSQLQuery(%q) unexpected error: %v", tt.query, err)
-				}
+				assert.NoError(t, err, tt.query)
 			}
 		})
 	}
@@ -288,13 +278,9 @@ func TestValidateGitRepoPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateGitRepoPath(tt.path)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateGitRepoPath(%q) expected error, got nil", tt.path)
-				}
+				assert.Error(t, err, tt.path)
 			} else {
-				if err != nil {
-					t.Errorf("validateGitRepoPath(%q) unexpected error: %v", tt.path, err)
-				}
+				assert.NoError(t, err, tt.path)
 			}
 		})
 	}
@@ -437,13 +423,9 @@ func TestValidateGitRef(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateGitRef(tt.ref)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateGitRef(%q) expected error, got nil", tt.ref)
-				}
+				assert.Error(t, err, tt.ref)
 			} else {
-				if err != nil {
-					t.Errorf("validateGitRef(%q) unexpected error: %v", tt.ref, err)
-				}
+				assert.NoError(t, err, tt.ref)
 			}
 		})
 	}
@@ -536,13 +518,9 @@ func TestValidateK8sResourceName(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateK8sResourceName(tt.nameStr)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateK8sResourceName(%q) expected error, got nil", tt.nameStr)
-				}
+				assert.Error(t, err, tt.nameStr)
 			} else {
-				if err != nil {
-					t.Errorf("validateK8sResourceName(%q) unexpected error: %v", tt.nameStr, err)
-				}
+				assert.NoError(t, err, tt.nameStr)
 			}
 		})
 	}
@@ -635,13 +613,9 @@ func TestValidateK8sNamespace(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateK8sNamespace(tt.namespace)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateK8sNamespace(%q) expected error, got nil", tt.namespace)
-				}
+				assert.Error(t, err, tt.namespace)
 			} else {
-				if err != nil {
-					t.Errorf("validateK8sNamespace(%q) unexpected error: %v", tt.namespace, err)
-				}
+				assert.NoError(t, err, tt.namespace)
 			}
 		})
 	}
@@ -704,13 +678,9 @@ func TestValidateCloudMetadataOperation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateCloudMetadataOperation(tt.operation)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateCloudMetadataOperation(%q) expected error, got nil", tt.operation)
-				}
+				assert.Error(t, err, tt.operation)
 			} else {
-				if err != nil {
-					t.Errorf("validateCloudMetadataOperation(%q) unexpected error: %v", tt.operation, err)
-				}
+				assert.NoError(t, err, tt.operation)
 			}
 		})
 	}
@@ -773,13 +743,9 @@ func TestValidateProcNetPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateProcNetPath(tt.protocol)
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("validateProcNetPath(%q) expected error, got nil", tt.protocol)
-				}
+				assert.Error(t, err, tt.protocol)
 			} else {
-				if err != nil {
-					t.Errorf("validateProcNetPath(%q) unexpected error: %v", tt.protocol, err)
-				}
+				assert.NoError(t, err, tt.protocol)
 			}
 		})
 	}

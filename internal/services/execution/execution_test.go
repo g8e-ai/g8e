@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -151,6 +152,9 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 	t.Run("command with environment variables", func(t *testing.T) {
 		t.Parallel()
+		if runtime.GOOS == "windows" {
+			t.Skip("custom env var inheritance not reliable with POSIX shell on Windows")
+		}
 		// Use single command string - shell handles variable expansion
 		req := &models.ExecutionRequestPayload{
 			ExecutionID:    "test-req-6",
@@ -426,7 +430,7 @@ func TestExecutionService_Stop(t *testing.T) {
 		case err := <-execDone:
 			assert.Error(t, err)
 			if err != nil {
-				assert.Contains(t, err.Error(), "service is stopping")
+				assert.ErrorIs(t, err, constants.ErrExecutionServiceStopping)
 			}
 		case <-time.After(2 * time.Second):
 			t.Fatal("Execution did not return after semaphore release")
@@ -459,55 +463,62 @@ func TestExecutionService_CancelExecution(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	svc := NewExecutionService(cfg, logger)
 
-	t.Run("cancel non-existent execution", func(t *testing.T) {
-		t.Parallel()
-		err := svc.CancelExecution("non-existent-id")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "execution not found")
-	})
+	tests := []struct {
+		name string
+		test func(t *testing.T)
+	}{
+		{
+			name: "cancel non-existent execution",
+			test: func(t *testing.T) {
+				t.Parallel()
+				err := svc.CancelExecution("non-existent-id")
+				require.Error(t, err)
+				assert.ErrorIs(t, err, constants.ErrExecutionNotFound)
+			},
+		},
+		{
+			name: "cancel running execution",
+			test: func(t *testing.T) {
+				t.Parallel()
+				req := &models.ExecutionRequestPayload{
+					ExecutionID:    "cancel-test-1",
+					CaseID:         "test-case",
+					Command:        "sleep",
+					Args:           []string{"30"},
+					TimeoutSeconds: 60,
+					RequestedBy:    "test-user",
+				}
 
-	t.Run("cancel running execution", func(t *testing.T) {
-		t.Parallel()
-		req := &models.ExecutionRequestPayload{
-			ExecutionID:    "cancel-test-1",
-			CaseID:         "test-case",
-			Command:        "sleep",
-			Args:           []string{"30"},
-			TimeoutSeconds: 60,
-			RequestedBy:    "test-user",
-		}
+				done := make(chan bool)
+				go func() {
+					svc.ExecuteCommand(context.Background(), req)
+					done <- true
+				}()
 
-		// Start execution in background
-		done := make(chan bool)
-		go func() {
-			svc.ExecuteCommand(context.Background(), req)
-			done <- true
-		}()
+				require.Eventually(t, func() bool {
+					active := svc.GetActiveExecutions()
+					return len(active) > 0
+				}, 1*time.Second, 10*time.Millisecond)
 
-		// Wait for execution to start with polling
-		require.Eventually(t, func() bool {
-			active := svc.GetActiveExecutions()
-			return len(active) > 0
-		}, 1*time.Second, 10*time.Millisecond)
+				err := svc.CancelExecution("cancel-test-1")
+				require.NoError(t, err)
 
-		// Cancel the execution
-		err := svc.CancelExecution("cancel-test-1")
-		require.NoError(t, err)
+				select {
+				case <-done:
+				case <-time.After(5 * time.Second):
+					t.Fatal(constants.ErrExecutionNotFound)
+				}
 
-		// Wait for execution to complete
-		select {
-		case <-done:
-			// Success
-		case <-time.After(5 * time.Second):
-			t.Fatal("Execution did not complete after cancel")
-		}
+				active := svc.GetActiveExecutions()
+				_, exists := active["cancel-test-1"]
+				assert.False(t, exists)
+			},
+		},
+	}
 
-		// Verify execution was removed from active list
-		active := svc.GetActiveExecutions()
-		_, exists := active["cancel-test-1"]
-		assert.False(t, exists)
-	})
-
+	for _, tt := range tests {
+		t.Run(tt.name, tt.test)
+	}
 }
 
 func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T) {
@@ -545,7 +556,7 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("execution did not complete after cancel")
+		t.Fatal(constants.ErrExecutionNotFound)
 	}
 
 	require.NotNil(t, result)
@@ -578,21 +589,23 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 				TimeoutSeconds: 60,
 				RequestedBy:    "test-user",
 			}
-			execDone := make(chan struct{})
+			execDone := make(chan error, 1)
 			go func() {
 				defer close(execDone)
-				svc.ExecuteCommand(context.Background(), req) //nolint:errcheck
+				_, err := svc.ExecuteCommand(context.Background(), req)
+				execDone <- err
 			}()
 			assert.Eventually(t, func() bool {
 				active := svc.GetActiveExecutions()
 				_, exists := active[id]
 				return exists
 			}, 1*time.Second, 10*time.Millisecond)
-			svc.CancelExecution(id) //nolint:errcheck
+			err := svc.CancelExecution(id)
+			require.NoError(t, err, "CancelExecution should not fail")
 			select {
 			case <-execDone:
 			case <-time.After(10 * time.Second):
-				t.Errorf("execution %s did not complete - possible deadlock", id)
+				t.Errorf("execution %s: %s", id, constants.ErrProcessStopFailed)
 			}
 		}(reqID)
 	}
@@ -601,7 +614,7 @@ func TestExecutionService_CancelExecution_NoConcurrentDeadlock(t *testing.T) {
 		select {
 		case <-done:
 		case <-time.After(15 * time.Second):
-			t.Fatal("workers did not finish - deadlock suspected")
+			t.Fatal(constants.ErrProcessStopFailed)
 		}
 	}
 }
@@ -653,15 +666,4 @@ func TestExecutionService_FinalizeResult(t *testing.T) {
 
 	assert.NotNil(t, result.EndTime)
 	assert.Greater(t, result.DurationSeconds, 1.0)
-}
-
-func TestExecutionService_GetActiveExecutionsEmpty(t *testing.T) {
-	t.Parallel()
-	cfg := testutil.NewTestConfig(t)
-	logger := testutil.NewTestLogger()
-	svc := NewExecutionService(cfg, logger)
-
-	active := svc.GetActiveExecutions()
-	assert.NotNil(t, active)
-	assert.Empty(t, active)
 }

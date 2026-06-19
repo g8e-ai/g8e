@@ -18,10 +18,24 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// successScript returns a platform-appropriate script that exits 0 and prints "deployed".
+func successScript(t *testing.T, dir, name string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		p := filepath.Join(dir, name+".bat")
+		require.NoError(t, os.WriteFile(p, []byte("@echo off\necho deployed\n"), 0755))
+		return p
+	}
+	p := filepath.Join(dir, name)
+	require.NoError(t, os.WriteFile(p, []byte("#!/bin/sh\necho 'deployed'\nexit 0"), 0755))
+	return p
+}
 
 func TestOperatorDeployTool_Name(t *testing.T) {
 	tool := &OperatorDeployTool{}
@@ -118,12 +132,8 @@ func TestOperatorDeployTool_Execute_Localhost_Success(t *testing.T) {
 	tool := &OperatorDeployTool{}
 	ctx := context.Background()
 
-	// Create a dummy "operator" binary (a shell script that just exits 0)
 	tmpDir := t.TempDir()
-	dummyBinary := filepath.Join(tmpDir, "dummy-operator")
-	content := "#!/bin/sh\necho 'deployed'\nexit 0"
-	err := os.WriteFile(dummyBinary, []byte(content), 0755)
-	require.NoError(t, err)
+	dummyBinary := successScript(t, tmpDir, "dummy-operator")
 
 	req := OperatorDeployRequest{
 		Hostnames:      []string{"localhost"},
@@ -231,11 +241,8 @@ func TestOperatorDeployTool_Execute_MultiHost(t *testing.T) {
 	tool := &OperatorDeployTool{}
 	ctx := context.Background()
 
-	// Create a dummy operator binary
 	tmpDir := t.TempDir()
-	dummyBinary := filepath.Join(tmpDir, "dummy-multi-operator")
-	err := os.WriteFile(dummyBinary, []byte("#!/bin/sh\nexit 0"), 0755)
-	require.NoError(t, err)
+	dummyBinary := successScript(t, tmpDir, "dummy-multi-operator")
 
 	req := OperatorDeployRequest{
 		Hostnames:      []string{"localhost", "127.0.0.1"},

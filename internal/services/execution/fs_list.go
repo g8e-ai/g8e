@@ -18,6 +18,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -74,18 +75,18 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return s.failResult(result, "path_not_found", fmt.Sprintf("path does not exist: %s", path))
+			return s.failResult(result, constants.ErrPathNotFound, fmt.Sprintf("path does not exist: %s", path))
 		}
-		return s.failResult(result, "stat_error", fmt.Sprintf("failed to stat path: %v", err))
+		return s.failResult(result, constants.ErrStatFailed, fmt.Sprintf("failed to stat path: %v", err))
 	}
 	if !info.IsDir() {
-		return s.failResult(result, "not_a_directory", fmt.Sprintf("path is not a directory: %s", path))
+		return s.failResult(result, constants.ErrNotADirectory, fmt.Sprintf("path is not a directory: %s", path))
 	}
 
 	// Validate and resolve path (security check) - only after confirming it exists
 	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
-		return s.failResult(result, "validation_error", fmt.Sprintf("invalid path: %v", err))
+		return s.failResult(result, constants.ErrPathValidation, fmt.Sprintf("invalid path: %v", err))
 	}
 
 	result.Path = absPath
@@ -93,24 +94,24 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	// Apply limits
 	maxDepth := req.MaxDepth
 	if maxDepth < 0 {
-		maxDepth = 0
+		maxDepth = constants.FsListDefaultDepth
 	}
-	if maxDepth > 3 {
-		maxDepth = 3
+	if maxDepth > constants.FsListMaxDepth {
+		maxDepth = constants.FsListMaxDepth
 	}
 
 	maxEntries := req.MaxEntries
 	if maxEntries <= 0 {
-		maxEntries = 100
+		maxEntries = constants.FsListDefaultEntries
 	}
-	if maxEntries > 500 {
-		maxEntries = 500
+	if maxEntries > constants.FsListMaxEntries {
+		maxEntries = constants.FsListMaxEntries
 	}
 
 	// Perform directory listing with readdirplus
 	entries, truncated, err := s.listDirectory(ctx, absPath, maxDepth, maxEntries, 0)
 	if err != nil {
-		return s.failResult(result, "list_error", fmt.Sprintf("failed to list directory: %v", err))
+		return s.failResult(result, constants.ErrDirectoryList, fmt.Sprintf("failed to list directory: %v", err))
 	}
 
 	result.Entries = entries
@@ -151,12 +152,12 @@ func (s *FsListService) listDirectory(ctx context.Context, dirPath string, maxDe
 
 	// SECURITY: Use Readdir in chunks to prevent OOM on massive directories.
 	// Instead of Readdir(-1), we read up to maxEntries in smaller batches.
-	const batchSize = 100
+	const batchSize = constants.FsListBatchSize
 
 	for {
 		fileInfos, err := dir.Readdir(batchSize)
 		if err != nil {
-			if err.Error() == "EOF" || len(fileInfos) == 0 {
+			if err == io.EOF || len(fileInfos) == 0 {
 				break
 			}
 			return nil, false, fmt.Errorf("failed to read directory: %w", err)
@@ -176,7 +177,7 @@ func (s *FsListService) listDirectory(ctx context.Context, dirPath string, maxDe
 			if fi.IsDir() && currentDepth < maxDepth {
 				subEntries, subTruncated, err := s.listDirectory(ctx, entryPath, maxDepth, maxEntries-len(entries), currentDepth+1)
 				if err != nil {
-					s.logger.Warn("Failed to list subdirectory", string(constants.ConnectionStateError), err, "path", entryPath)
+					s.logger.Warn("Failed to list subdirectory", "error", err, "path", entryPath)
 					continue
 				}
 				entries = append(entries, subEntries...)
@@ -236,8 +237,9 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 }
 
 // failResult sets error state on result
-func (s *FsListService) failResult(result *models.FsListResult, errorType, errorMsg string) (*models.FsListResult, error) {
+func (s *FsListService) failResult(result *models.FsListResult, err error, errorMsg string) (*models.FsListResult, error) {
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
+	errorType := err.Error()
 	result.ErrorType = &errorType
 	result.ErrorMessage = &errorMsg
 	endTime := time.Now().UTC()

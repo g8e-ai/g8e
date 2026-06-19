@@ -22,4 +22,7 @@ const (
 	PubSubFieldPattern = "pattern"
 	PubSubFieldType    = "type"
 	PubSubFieldSender  = "sender"
+
+	// ReceiptSummaryMaxBytes is the maximum size for receipt summary text (4 KiB)
+	ReceiptSummaryMaxBytes = 4096
 )

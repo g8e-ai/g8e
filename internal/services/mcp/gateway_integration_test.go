@@ -672,24 +672,24 @@ type integrationTestDBService struct {
 	data map[string]map[string]interface{}
 }
 
-func (f *integrationTestDBService) GetField(collection, id, fieldPath string) (interface{}, error) {
+func (f *integrationTestDBService) GetField(collection, id, fieldPath string) (FieldValue, error) {
 	collectionData, ok := f.data[collection]
 	if !ok {
-		return nil, errors.New("collection not found")
+		return FieldValue{}, errors.New("collection not found")
 	}
 	doc, ok := collectionData[id]
 	if !ok {
-		return nil, errors.New("document not found")
+		return FieldValue{}, errors.New("document not found")
 	}
 	docMap, ok := doc.(map[string]interface{})
 	if !ok {
-		return nil, errors.New("document is not a map")
+		return FieldValue{}, errors.New("document is not a map")
 	}
 	value, ok := docMap[fieldPath]
 	if !ok {
-		return nil, errors.New("field not found")
+		return FieldValue{}, errors.New("field not found")
 	}
-	return value, nil
+	return convertToFieldValue(value), nil
 }
 
 // integrationTestSessionValidator is a mock session validator for integration tests
@@ -715,10 +715,10 @@ type auditLogEntry struct {
 	collection        string
 	documentID        string
 	fieldPath         string
-	value             interface{}
+	value             FieldValue
 }
 
-func (f *integrationTestAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value interface{}) error {
+func (f *integrationTestAuditLogger) LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value FieldValue) error {
 	f.logs = append(f.logs, auditLogEntry{
 		operatorSessionID: operatorSessionID,
 		collection:        collection,

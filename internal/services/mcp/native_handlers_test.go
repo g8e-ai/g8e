@@ -472,8 +472,13 @@ func TestHandleDBIsolatedRead(t *testing.T) {
 			t.Fatalf("HandleTool failed: %v", err)
 		}
 
-		if !result.IsError {
-			t.Error("expected error for non-SELECT query")
+		var readResult map[string]interface{}
+		if err := json.Unmarshal([]byte(result.Content[0].Text), &readResult); err != nil {
+			t.Fatalf("failed to unmarshal result: %v", err)
+		}
+
+		if readResult["error"] == nil {
+			t.Error("expected error field in result for non-SELECT query")
 		}
 	})
 }
@@ -564,7 +569,7 @@ func TestHandleLogStreamFilter(t *testing.T) {
 
 func TestHandleSysOOMDetect(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("skipping on Windows - /var/log/dmesg not available")
+		t.Skip("skipping on Windows - dmesg not available")
 	}
 
 	handler, err := NewNativeToolHandler(nil)
@@ -1683,7 +1688,7 @@ func TestHandleNetDNSResolve(t *testing.T) {
 			t.Fatalf("failed to unmarshal result: %v", err)
 		}
 
-		if resolve.Records == nil {
+		if resolve.Count == 0 {
 			t.Error("expected records in result")
 		}
 	})

@@ -17,7 +17,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+
+	"github.com/g8e-ai/g8e/internal/pathutil"
 )
+
+var pathsMutex sync.RWMutex
 
 // Paths defines canonical G8E filesystem paths.
 // All paths are relative to the current working directory by default.
@@ -144,34 +149,37 @@ func InitPaths() error {
 // InitPathsWithBase initializes paths relative to the specified base directory.
 // This allows tests and specific use cases to override the default cwd behavior.
 func InitPathsWithBase(baseDir string) error {
+	pathsMutex.Lock()
+	defer pathsMutex.Unlock()
+
 	// Resolve all paths relative to baseDir
-	Paths.Infra.RuntimeDir = filepath.Join(baseDir, ".g8e")
-	Paths.Infra.DataDir = filepath.Join(baseDir, ".g8e/data")
-	Paths.Infra.PkiDir = filepath.Join(baseDir, ".g8e/pki")
-	Paths.Infra.SecretsDir = filepath.Join(baseDir, ".g8e/secrets")
-	Paths.Infra.ProtocolDir = filepath.Join(baseDir, ".g8e/protocol")
-	Paths.Infra.VaultDir = filepath.Join(baseDir, ".g8e/vault")
-	Paths.Infra.VaultKeyPath = filepath.Join(Paths.Infra.VaultDir, "key")
+	Paths.Infra.RuntimeDir = pathutil.SafeJoin(baseDir, ".g8e")
+	Paths.Infra.DataDir = pathutil.SafeJoin(baseDir, ".g8e/data")
+	Paths.Infra.PkiDir = pathutil.SafeJoin(baseDir, ".g8e/pki")
+	Paths.Infra.SecretsDir = pathutil.SafeJoin(baseDir, ".g8e/secrets")
+	Paths.Infra.ProtocolDir = pathutil.SafeJoin(baseDir, ".g8e/protocol")
+	Paths.Infra.VaultDir = pathutil.SafeJoin(baseDir, ".g8e/vault")
+	Paths.Infra.VaultKeyPath = pathutil.SafeJoin(Paths.Infra.VaultDir, "key")
 
 	// Update derived paths
-	Paths.Infra.ProtocolConstantsDir = filepath.Join(Paths.Infra.ProtocolDir, "constants")
-	Paths.Infra.ProtocolModelsDir = filepath.Join(Paths.Infra.ProtocolDir, "models")
-	Paths.Infra.DbPath = filepath.Join(Paths.Infra.DataDir, "g8e.db")
-	Paths.Infra.LocalStateDBPath = filepath.Join(Paths.Infra.RuntimeDir, "local_state.db")
-	Paths.Infra.SuspendedTransactionsDBPath = filepath.Join(Paths.Infra.DataDir, "suspended_transactions.db")
-	Paths.Infra.AuditVaultDBPath = filepath.Join(Paths.Infra.DataDir, "audit_vault.db")
-	Paths.Infra.CaCertPath = filepath.Join(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
-	Paths.Infra.AppCertDir = filepath.Join(Paths.Infra.PkiDir, "issued/apps")
-	Paths.Infra.DocsDir = filepath.Join(baseDir, ".g8e/docs")
-	Paths.Infra.SshConfigPath = filepath.Join(baseDir, ".g8e/ssh_config")
-	Paths.Infra.TestVaultDir = filepath.Join(baseDir, ".g8e/test-vault")
-	Paths.Infra.RootCAPath = filepath.Join(Paths.Infra.PkiDir, "root/root_ca.crt")
-	Paths.Infra.HubCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/hub_ca.crt")
-	Paths.Infra.OperatorCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/operator_ca.crt")
-	Paths.Infra.GatewayPeerCAPath = filepath.Join(Paths.Infra.PkiDir, "authorities/gateway_peer_ca.crt")
-	Paths.Infra.GatewayChainPath = filepath.Join(Paths.Infra.PkiDir, "issued/hub/operator-gateway.chain.pem")
-	Paths.Infra.TrustDomainJSONPath = filepath.Join(Paths.Infra.PkiDir, "trust/trust-domain.json")
-	Paths.Infra.ServiceCertPath = filepath.Join(Paths.Infra.PkiDir, "issued/hub/operator-gateway.crt")
+	Paths.Infra.ProtocolConstantsDir = pathutil.SafeJoin(Paths.Infra.ProtocolDir, "constants")
+	Paths.Infra.ProtocolModelsDir = pathutil.SafeJoin(Paths.Infra.ProtocolDir, "models")
+	Paths.Infra.DbPath = pathutil.SafeJoin(Paths.Infra.DataDir, "g8e.db")
+	Paths.Infra.LocalStateDBPath = pathutil.SafeJoin(Paths.Infra.RuntimeDir, "local_state.db")
+	Paths.Infra.SuspendedTransactionsDBPath = pathutil.SafeJoin(Paths.Infra.DataDir, "suspended_transactions.db")
+	Paths.Infra.AuditVaultDBPath = pathutil.SafeJoin(Paths.Infra.DataDir, "audit_vault.db")
+	Paths.Infra.CaCertPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
+	Paths.Infra.AppCertDir = pathutil.SafeJoin(Paths.Infra.PkiDir, "issued/apps")
+	Paths.Infra.DocsDir = pathutil.SafeJoin(baseDir, ".g8e/docs")
+	Paths.Infra.SshConfigPath = pathutil.SafeJoin(baseDir, ".g8e/ssh_config")
+	Paths.Infra.TestVaultDir = pathutil.SafeJoin(baseDir, ".g8e/test-vault")
+	Paths.Infra.RootCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "root/root_ca.crt")
+	Paths.Infra.HubCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "authorities/hub_ca.crt")
+	Paths.Infra.OperatorCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "authorities/operator_ca.crt")
+	Paths.Infra.GatewayPeerCAPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "authorities/gateway_peer_ca.crt")
+	Paths.Infra.GatewayChainPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "issued/hub/operator-gateway.chain.pem")
+	Paths.Infra.TrustDomainJSONPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "trust/trust-domain.json")
+	Paths.Infra.ServiceCertPath = pathutil.SafeJoin(Paths.Infra.PkiDir, "issued/hub/operator-gateway.crt")
 	Paths.Infra.PkiRootDir = filepath.Join(Paths.Infra.PkiDir, "root")
 	Paths.Infra.PkiAuthoritiesDir = filepath.Join(Paths.Infra.PkiDir, "authorities")
 	Paths.Infra.PkiIssuedHubDir = filepath.Join(Paths.Infra.PkiDir, "issued/hub")
@@ -249,6 +257,8 @@ const (
 	PathVar                                                   = "/var"
 	PathTmp                                                   = "/tmp"
 	PathVarLib                                                = "/var/lib"
+	PathVarLog                                                = "/var/log"
+	PathVarLogDmesg                                           = "/var/log/dmesg"
 	PathVarWWW                                                = "/var/www"
 	PathOpt                                                   = "/opt"
 	PathHome                                                  = "/home"
@@ -258,7 +268,29 @@ const (
 	PathProcSysKernelRandomBootID                             = "/proc/sys/kernel/random/boot_id"
 	PathProcSelfCgroup                                        = "/proc/self/cgroup"
 	PathProcSelfMountinfo                                     = "/proc/self/mountinfo"
+	PathProcLoadAvg                                           = "/proc/loadavg"
+	PathProcMemInfo                                           = "/proc/meminfo"
+	PathProcNet                                               = "/proc/net"
+	PathProcNetTCP                                            = "/proc/net/tcp"
+	PathProcNetUDP                                            = "/proc/net/udp"
+	PathProcNetTCP6                                           = "/proc/net/tcp6"
+	PathProcNetUDP6                                           = "/proc/net/udp6"
+	PathProcNetRaw                                            = "/proc/net/raw"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
+
+	// SSH paths
+	PathEtcSshKnownHosts      = "/etc/ssh/known_hosts"
+	PathEtcSshSshKnownHosts   = "/etc/ssh/ssh_known_hosts"
+	PathHomeSshKnownHosts     = "$HOME/.ssh/known_hosts"
+	PathWindowsSshKnownHosts  = "$USERPROFILE\\.ssh\\known_hosts"
+	PathWindowsProgramDataSsh = "C:\\ProgramData\\ssh\\known_hosts"
+	PathWindowsSystemRoot     = "SystemRoot"
+	PathWindowsHostsFile      = "System32\\drivers\\etc\\hosts"
+)
+
+// Environment variable constants
+const (
+	EnvPathDefault = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 )
 
 // PKI filesystem constants for subdirectories and filenames.
@@ -271,6 +303,12 @@ const (
 	PkiSubdirRevocation  = "revocation"
 	PkiSubdirBinaries    = "binaries"
 	PkiSubdirClient      = "client"
+
+	// File extensions
+	FileExtCert = ".crt"
+	FileExtKey  = ".key"
+	FileExtPEM  = ".pem"
+	FileExtJSON = ".json"
 
 	PkiFileRootCA          = "root_ca.crt"
 	PkiFileRootCAKey       = "root_ca.key"
@@ -327,8 +365,9 @@ const (
 	LogDirname = "logs"
 
 	// CLI certificate and key filenames
-	CliCertFilename = "cli.crt"
-	CliKeyFilename  = "cli.key"
+	CliCertFilename     = "cli.crt"
+	CliKeyFilename      = "cli.key"
+	CredentialsFilename = "credentials"
 
 	// Gateway-specific filenames
 	GatewayIDFilename       = "gateway-id"
@@ -368,13 +407,16 @@ const (
 	ProjectRootFromCurrentDir = "."
 
 	// Directory names (single path segment, no separators)
-	RuntimeDirname    = ".g8e"
-	DataDirname       = "data"
-	VaultDirname      = "vault"
-	SecretsDirname    = "secrets"
-	LedgerDirname     = "ledger"
-	SshConfigFilename = "ssh_config"
-	PidDirname        = "pids"
+	RuntimeDirname        = ".g8e"
+	DataDirname           = "data"
+	VaultDirname          = "vault"
+	SecretsDirname        = "secrets"
+	LedgerDirname         = "ledger"
+	SshConfigFilename     = "ssh_config"
+	SshDirname            = ".ssh"
+	SshConfigBasename     = "config"
+	SshKnownHostsBasename = "known_hosts"
+	PidDirname            = "pids"
 
 	// Ledger-specific directory and file names
 	FilesDirname      = "files"
@@ -439,4 +481,16 @@ const (
 	TestDBSubdirName           = "db"
 	TestLedgerDirname          = "ledger"
 	TestGitDirname             = ".git"
+	TestFileTxtFilename        = "test.txt"
+	TestNonexistentTxtFilename = "nonexistent.txt"
+
+	// File system listing limits
+	FsListMaxDepth       = 3
+	FsListDefaultDepth   = 0
+	FsListMaxEntries     = 500
+	FsListDefaultEntries = 100
+	FsListBatchSize      = 100
+
+	// Temporary file suffix for atomic writes
+	TmpFileSuffix = ".tmp"
 )

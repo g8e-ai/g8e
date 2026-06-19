@@ -23,35 +23,28 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 // VaultWriter owns consolidated vault persistence for command executions and file diffs.
 // All data is encrypted at rest in the consolidated execution vault.
-// Customer read path: decrypt → return full data
-// AI read path: decrypt → Sensitive data scrub → return redacted data
 // Both writes are best-effort - failures are logged but never propagate to callers.
 type VaultWriter struct {
 	config         *config.Config
 	logger         *slog.Logger
-	scrubbing      *scrubbing.ScrubbingService
 	executionVault interfaces.ExecutionVault
 }
 
-// NewVaultWriter creates a VaultWriter. All service dependencies are optional - a nil
-// service is treated as disabled, matching the IsEnabled() pattern used elsewhere.
-// Note: ExecutionVault requires a vault for encryption at rest.
+// NewVaultWriter creates a VaultWriter. The ExecutionVault is optional - a nil
+// vault is treated as disabled, matching the IsEnabled() pattern used elsewhere.
 func NewVaultWriter(
 	cfg *config.Config,
 	logger *slog.Logger,
-	s *scrubbing.ScrubbingService,
 	executionVault interfaces.ExecutionVault,
 ) *VaultWriter {
 	return &VaultWriter{
 		config:         cfg,
 		logger:         logger,
-		scrubbing:      s,
 		executionVault: executionVault,
 	}
 }
@@ -74,7 +67,7 @@ type executionWriteParams struct {
 }
 
 // WriteExecution persists a command execution result to the consolidated vault.
-// All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
+// All data is encrypted at rest.
 func (vw *VaultWriter) WriteExecution(ctx context.Context, p executionWriteParams) {
 	if vw.executionVault != nil {
 		execRecord := &models.ExecutionRecord{
@@ -93,7 +86,7 @@ func (vw *VaultWriter) WriteExecution(ctx context.Context, p executionWriteParam
 			OperatorID:       vw.config.OperatorID,
 		}
 		if err := vw.executionVault.StoreExecution(ctx, execRecord); err != nil {
-			vw.logger.Warn("Failed to store execution in consolidated vault", string(constants.ConnectionStateError), err)
+			vw.logger.Warn("vault_writer: failed to store execution in consolidated vault", "error", fmt.Errorf("store execution: %w", err))
 		} else {
 			vw.logger.Info("Execution stored in consolidated vault (encrypted at rest)",
 				"execution_id", p.id,
@@ -118,7 +111,7 @@ type fileDiffWriteParams struct {
 }
 
 // WriteFileDiff persists a file diff to the consolidated vault.
-// All data is encrypted at rest. Sentinel scrubbing is applied for AI access.
+// All data is encrypted at rest.
 func (vw *VaultWriter) WriteFileDiff(ctx context.Context, p fileDiffWriteParams) {
 	if vw.executionVault != nil {
 		diffRecord := &models.FileDiffRecord{
@@ -136,7 +129,7 @@ func (vw *VaultWriter) WriteFileDiff(ctx context.Context, p fileDiffWriteParams)
 			OperatorID:        vw.config.OperatorID,
 		}
 		if err := vw.executionVault.StoreFileDiff(ctx, diffRecord); err != nil {
-			vw.logger.Warn("Failed to store file diff in consolidated vault", string(constants.ConnectionStateError), err)
+			vw.logger.Warn("vault_writer: failed to store file diff in consolidated vault", "error", fmt.Errorf("store file diff: %w", err))
 		} else {
 			vw.logger.Info("File diff stored in consolidated vault (encrypted at rest)",
 				"diff_id", p.diffID,

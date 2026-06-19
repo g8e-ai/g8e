@@ -13,14 +13,18 @@
 
 package mcp
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+)
 
 // RegisterNativeTools explicitly registers all native tools into the provided
 // registry. This function replaces the previous init()-based auto-registration
 // to comply with the prohibition on init() functions in service packages.
 func RegisterNativeTools(registry *ToolRegistry) error {
 	if registry == nil {
-		return fmt.Errorf("registry: cannot register to nil registry")
+		return fmt.Errorf("native_tool_registry: register: %w", constants.ErrMCPRegistryNil)
 	}
 	tools := []NativeTool{
 		&DBDiscoverTopologyTool{},
@@ -57,7 +61,7 @@ func RegisterNativeTools(registry *ToolRegistry) error {
 
 	for _, tool := range tools {
 		if err := registry.Register(tool); err != nil {
-			return fmt.Errorf("register native tool %q: %w", tool.Name(), err)
+			return fmt.Errorf("native_tool_registry: register tool %q: %w", tool.Name(), err)
 		}
 	}
 

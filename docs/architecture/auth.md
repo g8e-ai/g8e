@@ -36,7 +36,7 @@ There are three distinct CLI enrollment paths depending on gateway and credentia
 
 | Path | Trigger | Transport | Function |
 | :--- | :--- | :--- | :--- |
-| **First-time bootstrap** | Gateway never bootstrapped | Plain HTTP (discovery port) | `Bootstrap()` |
+| **First-time bootstrap** | Gateway never bootstrapped | Plain HTTP (discovery port) | `BootstrapWithURL()` |
 | **New CLI, existing gateway** | Gateway bootstrapped, no local credentials | Plain HTTP (discovery port) | `CLIEnroll()` |
 | **Re-enrollment** | Credentials present, certificate rotation | mTLS (HTTPS port) | `ReEnroll()` or `CLIEnroll()` |
 

@@ -27,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
@@ -149,7 +150,7 @@ func NewSQLAuditStore(config *AuditStoreConfig, logger *slog.Logger) (*SQLAuditS
 	encryptionEnabled := ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked()
 	ass.logger.Info("Audit store initialized",
 		"data_dir", config.DataDir,
-		"db_path", filepath.Join(config.DataDir, config.DBPath),
+		"db_path", pathutil.ResolveDBPath(config.DataDir, config.DBPath),
 		"encryption_enabled", encryptionEnabled)
 
 	return ass, nil
@@ -211,7 +212,7 @@ func (ass *SQLAuditStore) verifyWritePermissions() error {
 
 // initDatabase creates the database and schema
 func (ass *SQLAuditStore) initDatabase() error {
-	dbPath := filepath.Join(ass.config.DataDir, ass.config.DBPath)
+	dbPath := pathutil.ResolveDBPath(ass.config.DataDir, ass.config.DBPath)
 
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, ass.logger)

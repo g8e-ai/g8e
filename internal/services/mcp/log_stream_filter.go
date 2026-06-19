@@ -21,6 +21,7 @@ import (
 	"os"
 	"regexp"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/security"
 )
 
@@ -95,7 +96,7 @@ func (t *LogStreamFilterTool) Execute(ctx context.Context, args json.RawMessage)
 	var lines []string
 	limit := req.Limit
 	if limit <= 0 {
-		limit = defaultLogFilterLimit
+		limit = constants.DefaultLogFilterLimit
 	}
 
 	scanner := bufio.NewScanner(file)

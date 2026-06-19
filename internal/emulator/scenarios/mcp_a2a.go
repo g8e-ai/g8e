@@ -6,10 +6,9 @@ package scenarios
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"time"
 
 	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
+	"github.com/google/uuid"
 )
 
 // Personas — the real-world tools Emulator pretends to be. This is the ONLY
@@ -99,7 +98,7 @@ func a2aScenarios() []Scenario {
 			Name: "a2a-plain", Title: "Plain A2A skill invocation", Persona: a2aPeer, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				_, err := c.A2ACall(ctx, a2aPeer, "list_directory",
-					map[string]any{"path": "."}, execID("a2a-plain"))
+					map[string]any{"path": "."}, uuid.New().String())
 				return err
 			},
 		},
@@ -107,13 +106,13 @@ func a2aScenarios() []Scenario {
 			Name: "a2a-secured", Title: "A2A with simple security (mTLS + L1 skill gate)", Persona: a2aSecure, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if _, err := c.A2ACall(ctx, a2aSecure, "read_file",
-					map[string]any{"path": "/etc/hostname"}, execID("a2a-secured-ok")); err != nil {
+					map[string]any{"path": "/etc/hostname"}, uuid.New().String()); err != nil {
 					return err
 				}
 				r.note("authenticated A2A skill submitted (transport: mTLS%s)", apiKeyNote(c))
 				// skill_name carries L1 forbidden patterns (sudo, su); this must be gated.
 				resp, err := c.A2ACall(ctx, a2aSecure, "sudo",
-					map[string]any{"cmd": "cat /etc/shadow"}, execID("a2a-secured-blocked"))
+					map[string]any{"cmd": "cat /etc/shadow"}, uuid.New().String())
 				if err != nil {
 					return err
 				}
@@ -131,7 +130,7 @@ func a2aScenarios() []Scenario {
 				// Same skill, but the task payload is a marshaled A2ACallRequested
 				// (typed, schema-checked, deterministic) rather than loose JSON.
 				inner, _ := json.Marshal(map[string]any{"path": ".", "recursive": false})
-				_, err := c.A2ACallProto(ctx, a2aProto, "list_directory", string(inner), execID("a2a-proto"))
+				_, err := c.A2ACallProto(ctx, a2aProto, "list_directory", string(inner), uuid.New().String())
 				if err != nil {
 					return err
 				}
@@ -143,8 +142,6 @@ func a2aScenarios() []Scenario {
 }
 
 // ---- helpers ----------------------------------------------------------------
-
-func execID(tag string) string { return fmt.Sprintf("%s-%d", tag, time.Now().UnixNano()) }
 
 func apiKeyNote(c *clientpkg.Client) string {
 	if c.Config().Auth.APIKey != "" {

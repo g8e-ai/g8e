@@ -17,12 +17,10 @@ import (
 	"crypto/x509"
 	"fmt"
 	"net"
-	"path/filepath"
 	"runtime"
 	"strconv"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,18 +28,9 @@ import (
 
 func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 	t.Parallel()
-	tmpDir := t.TempDir()
-	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // Use non-existent port to ensure gateway is not reachable
-	}
 
-	err := CheckOperatorRunning(cfg)
+	// Test with a non-existent port to ensure error
+	err := CheckOperatorRunningAtURL("http://localhost:99999")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "g8e Gateway is not running or not responding")
 }

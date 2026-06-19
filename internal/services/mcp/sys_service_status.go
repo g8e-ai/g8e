@@ -17,12 +17,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
 // SysServiceStatusTool checks systemd service status.
-type SysServiceStatusTool struct{}
+type SysServiceStatusTool struct {
+	executor commandExecutor
+}
 
 // Name returns the tool identifier.
 func (t *SysServiceStatusTool) Name() string {
@@ -50,25 +51,32 @@ func (t *SysServiceStatusTool) InputSchema() *InputSchema {
 
 // Execute implements the tool logic.
 func (t *SysServiceStatusTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
-	var req struct {
-		ServiceName string `json:"service_name"`
-	}
+	var req SysServiceStatusRequest
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_service_status: unmarshal arguments: %w", err)
 	}
 
 	if req.ServiceName == "" {
-		return CallToolResult{}, fmt.Errorf("service_name required")
+		return CallToolResult{}, fmt.Errorf("sys_service_status: service_name required")
 	}
 
-	result, err := getServiceStatus(req.ServiceName)
+	if ctx.Err() != nil {
+		return CallToolResult{}, ctx.Err()
+	}
+
+	executor := t.executor
+	if executor == nil {
+		executor = &realCommandExecutor{}
+	}
+
+	result, err := getServiceStatus(ctx, req.ServiceName, executor)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to get service status: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_service_status: get service status: %w", err)
 	}
 
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("sys_service_status: marshal result: %w", err)
 	}
 
 	return CallToolResult{
@@ -81,13 +89,18 @@ func (t *SysServiceStatusTool) Execute(ctx context.Context, args json.RawMessage
 	}, nil
 }
 
-func getServiceStatus(serviceName string) (map[string]interface{}, error) {
-	cmd := exec.Command("systemctl", "show", serviceName, "--no-pager")
-	output, err := cmd.CombinedOutput()
+func getServiceStatus(ctx context.Context, serviceName string, executor commandExecutor) (SysServiceStatusResult, error) {
+	if ctx.Err() != nil {
+		return SysServiceStatusResult{}, ctx.Err()
+	}
+
+	// serviceName is passed as a separate argument to executor.CombinedOutput to satisfy CodeQL command-injection rule.
+	// This prevents shell injection by avoiding shell interpretation.
+	output, err := executor.CombinedOutput("systemctl", "show", serviceName, "--no-pager")
 	if err != nil {
-		return map[string]interface{}{
-			"service_name": serviceName,
-			"error":        string(output),
+		return SysServiceStatusResult{
+			ServiceName: serviceName,
+			Error:       string(output),
 		}, nil
 	}
 
@@ -103,15 +116,15 @@ func getServiceStatus(serviceName string) (map[string]interface{}, error) {
 		}
 	}
 
-	result := map[string]interface{}{
-		"service_name": serviceName,
-		"load_state":   getProp(properties, "LoadState"),
-		"active_state": getProp(properties, "ActiveState"),
-		"sub_state":    getProp(properties, "SubState"),
-		"enabled":      getProp(properties, "UnitFileState") == "enabled",
-		"description":  getProp(properties, "Description"),
-		"main_pid":     getProp(properties, "MainPID"),
-		"exec_start":   getProp(properties, "ExecMainStartTimestamp"),
+	result := SysServiceStatusResult{
+		ServiceName: serviceName,
+		LoadState:   getProp(properties, "LoadState"),
+		ActiveState: getProp(properties, "ActiveState"),
+		SubState:    getProp(properties, "SubState"),
+		Enabled:     getProp(properties, "UnitFileState") == "enabled",
+		Description: getProp(properties, "Description"),
+		MainPID:     getProp(properties, "MainPID"),
+		ExecStart:   getProp(properties, "ExecMainStartTimestamp"),
 	}
 
 	return result, nil

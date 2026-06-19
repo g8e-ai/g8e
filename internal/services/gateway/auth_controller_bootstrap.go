@@ -421,7 +421,7 @@ func (c *AuthController) handleCLIPasskeyAuthenticateVerify(w http.ResponseWrite
 	})
 }
 
-func (c *AuthController) handleLocalBootstrap(w http.ResponseWriter, r *http.Request) {
+func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return

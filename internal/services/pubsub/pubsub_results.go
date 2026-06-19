@@ -47,28 +47,18 @@ func NewPubSubResultsService(cfg *config.Config, logger *slog.Logger, client Pub
 // PublishExecutionResult publishes command execution result via Operator pub/sub
 // Stdout/stderr have already been sentinel.Sentinel-scrubbed by pubsub_commands.go before this is called.
 func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
-	// Determine event type based on status field via reflection
-	eventType := constants.Event.Operator.Command.Completed
-
-	reflectMsg := result.ProtoReflect()
-	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
-	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).Enum()
-		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) || status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT) {
-			eventType = constants.Event.Operator.Command.Failed
-		}
-	}
+	eventType := rr.determineEventStatus(result, constants.Event.Operator.Command.Completed, constants.Event.Operator.Command.Failed)
 
 	caseID := originalMsg.CaseID
 	taskID := originalMsg.TaskID
 	investigationID := originalMsg.InvestigationID
 
-	rr.logger.Info("Publishing result via Universal", "original_message_id", originalMsg.ID)
+	rr.logger.Info("Publishing execution result", "original_message_id", originalMsg.ID)
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, caseID, taskID, investigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish Universal result: %w", err)
+		return fmt.Errorf("failed to publish execution result: %w", err)
 	}
 
-	rr.logger.Info("Result transmitted to g8e (Universal)",
+	rr.logger.Info("Execution result transmitted to g8e",
 		"operator_session_id", rr.config.OperatorSessionId,
 		"event_type", eventType)
 	return nil
@@ -79,74 +69,47 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 	eventType := constants.Event.Operator.Command.Cancelled
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish Universal cancellation result: %w", err)
+		return fmt.Errorf("failed to publish cancellation result: %w", err)
 	}
 
-	rr.logger.Info("Cancellation result transmitted to g8e (Universal)",
+	rr.logger.Info("Cancellation result transmitted to g8e",
 		"operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
 // PublishFileEditResult publishes file edit result via Operator pub/sub.
 func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
-	eventType := constants.Event.Operator.FileEdit.Completed
-
-	reflectMsg := result.ProtoReflect()
-	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
-	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).Enum()
-		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
-			eventType = constants.Event.Operator.FileEdit.Failed
-		}
-	}
+	eventType := rr.determineEventStatus(result, constants.Event.Operator.FileEdit.Completed, constants.Event.Operator.FileEdit.Failed)
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish Universal file edit result: %w", err)
+		return fmt.Errorf("failed to publish file edit result: %w", err)
 	}
 
-	rr.logger.Info("File operation result transmitted (Universal)", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("File operation result transmitted to g8e", "operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
 // PublishFsListResult publishes file system list result via Operator pub/sub.
 func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
-	eventType := constants.Event.Operator.FsList.Completed
-
-	reflectMsg := result.ProtoReflect()
-	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
-	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).Enum()
-		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
-			eventType = constants.Event.Operator.FsList.Failed
-		}
-	}
+	eventType := rr.determineEventStatus(result, constants.Event.Operator.FsList.Completed, constants.Event.Operator.FsList.Failed)
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish Universal fs list result: %w", err)
+		return fmt.Errorf("failed to publish fs list result: %w", err)
 	}
 
-	rr.logger.Info("FS list result transmitted (Universal)", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("FS list result transmitted to g8e", "operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
 // PublishFsGrepResult publishes file system grep result via Operator pub/sub.
 func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result proto.Message, originalMsg *PubSubCommandMessage) error {
-	eventType := constants.Event.Operator.FsGrep.Completed
-
-	reflectMsg := result.ProtoReflect()
-	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
-	if statusFd != nil {
-		status := reflectMsg.Get(statusFd).Enum()
-		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) {
-			eventType = constants.Event.Operator.FsGrep.Failed
-		}
-	}
+	eventType := rr.determineEventStatus(result, constants.Event.Operator.FsGrep.Completed, constants.Event.Operator.FsGrep.Failed)
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish Universal fs grep result: %w", err)
+		return fmt.Errorf("failed to publish fs grep result: %w", err)
 	}
 
-	rr.logger.Info("FS grep result transmitted (Universal)", "operator_session_id", rr.config.OperatorSessionId)
+	rr.logger.Info("FS grep result transmitted to g8e", "operator_session_id", rr.config.OperatorSessionId)
 	return nil
 }
 
@@ -198,19 +161,19 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 // PublishHeartbeat publishes heartbeat to dedicated Operator pub/sub heartbeat channel.
 // It wraps the heartbeat in a GovernanceEnvelope for consistency with other results.
 func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat proto.Message) error {
-	rr.logger.Info("[HEARTBEAT] Publishing heartbeat to Operator pub/sub")
+	rr.logger.Info("Publishing heartbeat to Operator pub/sub")
 
 	// Build the GovernanceEnvelope
 	operatorSessionID := rr.config.OperatorSessionId
 
-	env, err := BuildUniversalResultEnvelope(rr.config, "HEARTBEAT_RESULT", heartbeat, "", rr.config.OperatorID, "", "", nil, "", "")
+	env, err := BuildUniversalResultEnvelope(rr.config, constants.Event.Operator.Heartbeat, heartbeat, "", rr.config.OperatorID, "", "", nil, "", "")
 	if err != nil {
-		return fmt.Errorf("failed to build Universal heartbeat envelope: %w", err)
+		return fmt.Errorf("failed to build heartbeat envelope: %w", err)
 	}
 
 	data, err := protojson.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Universal heartbeat envelope: %w", err)
+		return fmt.Errorf("failed to marshal heartbeat envelope: %w", err)
 	}
 
 	channelName := constants.HeartbeatChannel(rr.config.OperatorID, operatorSessionID)
@@ -231,11 +194,25 @@ func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commo
 		operatorID = rr.config.OperatorID
 	}
 	channel := constants.ResultsChannel(operatorID, operatorSessionID)
-	rr.logger.Info("Publishing result (Universal)",
+	rr.logger.Info("Publishing result",
 		"channel", channel,
 		"event_type", env.EventType,
 		"id", env.Id)
 	return rr.client.Publish(ctx, channel, data)
+}
+
+// determineEventStatus determines the event type based on the status field of a proto message via reflection.
+// Returns failedEventType if the status is FAILED or TIMEOUT, otherwise returns completedEventType.
+func (rr *PubSubResultsService) determineEventStatus(result proto.Message, completedEventType, failedEventType constants.EventType) constants.EventType {
+	reflectMsg := result.ProtoReflect()
+	statusFd := reflectMsg.Descriptor().Fields().ByName("status")
+	if statusFd != nil {
+		status := reflectMsg.Get(statusFd).Enum()
+		if status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED) || status == protoreflect.EnumNumber(operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT) {
+			return failedEventType
+		}
+	}
+	return completedEventType
 }
 
 // publishResultEnvelopeUniversal builds a GovernanceEnvelope for result publishing.

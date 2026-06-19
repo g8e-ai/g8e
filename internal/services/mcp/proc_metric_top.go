@@ -25,6 +25,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+const (
+	procPageSizeBytes = 4096
+)
+
 // ProcMetricTopTool parses /proc to extract top resource-consuming processes.
 type ProcMetricTopTool struct{}
 
@@ -60,16 +64,15 @@ func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (
 
 	limit := req.Limit
 	if limit <= 0 {
-		limit = defaultProcessLimit
+		limit = constants.DefaultProcessLimit
 	}
 
-	procDir := "/proc"
-	entries, err := os.ReadDir(procDir)
+	entries, err := os.ReadDir(constants.PathProc)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("proc_metric_top: failed to read /proc: %w", err)
+		return CallToolResult{}, fmt.Errorf("proc_metric_top: failed to read %s: %w", constants.PathProc, err)
 	}
 
-	var processes []ProcessInfo
+	processes := make([]ProcessInfo, 0, limit)
 
 	for _, entry := range entries {
 		if ctx.Err() != nil {
@@ -85,7 +88,7 @@ func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (
 			continue
 		}
 
-		statPath := filepath.Join(procDir, entry.Name(), "stat")
+		statPath := filepath.Join(constants.PathProc, entry.Name(), "stat")
 		statBytes, err := os.ReadFile(statPath)
 		if err != nil {
 			continue
@@ -115,7 +118,7 @@ func (t *ProcMetricTopTool) Execute(ctx context.Context, args json.RawMessage) (
 		if err != nil {
 			continue
 		}
-		memoryMB := float64(rss) * 4096 / (1024 * 1024)
+		memoryMB := float64(rss) * float64(procPageSizeBytes) / (1024 * 1024)
 
 		processes = append(processes, ProcessInfo{
 			PID:        pid,

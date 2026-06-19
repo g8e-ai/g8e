@@ -184,20 +184,20 @@ func attachBody(j *json.RawMessage, raw *string, b []byte) {
 
 // ---- Gateway surfaces -------------------------------------------------------
 
-// StateRoot fetches the current state_merkle_root from /health on the public surface.
+// StateRoot fetches the current state_merkle_root from /state on the public surface.
 // Maximal envelopes must bind to this exact root or the Operator drops them (TOCTOU gap).
 func (c *Client) StateRoot(ctx context.Context) (string, error) {
 	return c.stateRoot(ctx, c.cfg.PublicBaseURL)
 }
 
-// StateRootFromMTLS fetches the current state_merkle_root from /health on the mTLS surface.
+// StateRootFromMTLS fetches the current state_merkle_root from /state on the mTLS surface.
 // Use this when the gateway is running in full cert mode where all ports require mTLS.
 func (c *Client) StateRootFromMTLS(ctx context.Context) (string, error) {
 	return c.stateRoot(ctx, c.cfg.MTLSBaseURL)
 }
 
 func (c *Client) stateRoot(ctx context.Context, baseURL string) (string, error) {
-	_, body, err := c.do(ctx, Persona{ID: "emulator"}, http.MethodGet, baseURL+constants.APIPaths.Health, nil)
+	_, body, err := c.do(ctx, Persona{ID: "emulator"}, http.MethodGet, baseURL+constants.APIPaths.State, nil)
 	if err != nil {
 		return "", err
 	}

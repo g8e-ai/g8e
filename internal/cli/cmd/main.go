@@ -23,7 +23,7 @@ import (
 func NewRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "g8e",
-		Version: "1.1.1",
+		Version: "1.1.3",
 		Short:   "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
 		Long: `g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,

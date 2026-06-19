@@ -146,67 +146,65 @@ func TestParseFieldPath(t *testing.T) {
 		}
 	}`)
 
+	strVal := func(s string) FieldValue { return FieldValue{Str: &s} }
+	ip1, ip2 := "192.168.1.42", "10.0.0.5"
+
 	tests := []struct {
 		name      string
 		document  json.RawMessage
 		fieldPath string
-		want      interface{}
+		want      FieldValue
 		wantErr   bool
 	}{
 		{
 			name:      "simple field",
 			document:  doc,
 			fieldPath: "status",
-			want:      "open",
+			want:      strVal("open"),
 			wantErr:   false,
 		},
 		{
 			name:      "array field",
 			document:  doc,
 			fieldPath: "suspect_ip_addresses",
-			want:      []interface{}{"192.168.1.42", "10.0.0.5"},
+			want:      FieldValue{Array: []FieldValue{{Str: &ip1}, {Str: &ip2}}},
 			wantErr:   false,
 		},
 		{
 			name:      "nested field",
 			document:  doc,
 			fieldPath: "metadata.tags.priority",
-			want:      "high",
+			want:      strVal("high"),
 			wantErr:   false,
 		},
 		{
 			name:      "field not found",
 			document:  doc,
 			fieldPath: "unknown_field",
-			want:      nil,
 			wantErr:   true,
 		},
 		{
 			name:      "nested field not found",
 			document:  doc,
 			fieldPath: "metadata.unknown",
-			want:      nil,
 			wantErr:   true,
 		},
 		{
 			name:      "empty field path",
 			document:  doc,
 			fieldPath: "",
-			want:      nil,
 			wantErr:   true,
 		},
 		{
 			name:      "nil document",
 			document:  nil,
 			fieldPath: "status",
-			want:      nil,
 			wantErr:   true,
 		},
 		{
 			name:      "invalid JSON",
 			document:  json.RawMessage(`invalid json`),
 			fieldPath: "status",
-			want:      nil,
 			wantErr:   true,
 		},
 	}

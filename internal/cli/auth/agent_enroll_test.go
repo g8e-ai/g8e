@@ -182,8 +182,8 @@ func startTLSEnrollServer(t *testing.T, cfg *config.Config, handler http.Handler
 	caPath := filepath.Join(cfg.CredentialsDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, caPEM, 0600))
 	cfg.Paths.Infra.CACertPath = caPath // absolute — TrustBundlePath() returns it directly
+	cfg.Paths.Host = server.URL         // full URL — OperatorHTTPURL() returns it directly
 
-	cfg.TestPortOverride = extractPortFromURL(server.URL)
 	return server
 }
 
@@ -482,13 +482,12 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
-		ProjectRoot:      tmpDir,
-		RuntimeDir:       filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:           filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:       filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-		CredentialsDir:   tmpDir,
-		Paths:            &config.PathsConfig{},
-		TestPortOverride: 59999, // non-existent port
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
 	}
 
 	agentName := "test-agent"

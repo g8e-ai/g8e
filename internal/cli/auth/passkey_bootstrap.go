@@ -35,6 +35,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
 // PasskeyBootstrapServer handles the localhost HTTP server for passkey registration
@@ -362,7 +363,7 @@ func openBrowser(url string) error {
 func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string) error {
 	// Use external interface IP for gateway URL to support port forwarding scenarios
 	// Use HTTPS (port 8443) for WebAuthn compatibility - WebAuthn requires HTTPS or localhost
-	externalIP := config.GetExternalInterfaceIP()
+	externalIP := network.GetExternalInterfaceIP()
 	gatewayURL := fmt.Sprintf("https://%s:%d", externalIP, constants.Ports.OperatorHttps)
 
 	// Get current username for passkey registration

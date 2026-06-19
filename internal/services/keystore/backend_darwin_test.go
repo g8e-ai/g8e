@@ -19,9 +19,11 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestNewKeychainBackend(t *testing.T) {

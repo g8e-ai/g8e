@@ -51,8 +51,9 @@ import (
 // with in-process gateway via GatewayFixture.
 func TestUniversalGateway_MCPFlow(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "universal-mcp",
-		Posture:  config.PostureNotary,
+		TestName:          "universal-mcp",
+		Posture:           config.PostureNotary,
+		AllowTestPortZero: true,
 	})
 	defer f.Cleanup()
 
@@ -158,8 +159,9 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 // with in-process gateway via GatewayFixture.
 func TestUniversalGateway_A2AFlow(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "universal-a2a",
-		Posture:  config.PostureNotary,
+		TestName:          "universal-a2a",
+		Posture:           config.PostureNotary,
+		AllowTestPortZero: true,
 	})
 	defer f.Cleanup()
 
@@ -204,8 +206,9 @@ func TestUniversalGateway_A2AFlow(t *testing.T) {
 // universal HTTP endpoint auto-detects MCP and A2A payloads.
 func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "universal-autodetect",
-		Posture:  config.PostureNotary,
+		TestName:          "universal-autodetect",
+		Posture:           config.PostureNotary,
+		AllowTestPortZero: true,
 	})
 	defer f.Cleanup()
 
@@ -260,8 +263,9 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 // all requests pass through the L1/L2/L3 governance gates.
 func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "universal-governance",
-		Posture:  config.PostureNotary,
+		TestName:          "universal-governance",
+		Posture:           config.PostureNotary,
+		AllowTestPortZero: true,
 	})
 	defer f.Cleanup()
 
@@ -366,8 +370,9 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 // suspension and approval flow.
 func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "universal-suspension",
-		Posture:  config.PostureNotary,
+		TestName:          "universal-suspension",
+		Posture:           config.PostureNotary,
+		AllowTestPortZero: true,
 	})
 	defer f.Cleanup()
 
@@ -420,8 +425,9 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 // with the downstream MCP server configured in the gateway.
 func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "universal-downstream",
-		Posture:  config.PostureNotary,
+		TestName:          "universal-downstream",
+		Posture:           config.PostureNotary,
+		AllowTestPortZero: true,
 	})
 	defer f.Cleanup()
 
@@ -473,8 +479,9 @@ func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
 // uses canonical JSON (protojson) for all wire formats.
 func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "universal-canonical",
-		Posture:  config.PostureNotary,
+		TestName:          "universal-canonical",
+		Posture:           config.PostureNotary,
+		AllowTestPortZero: true,
 	})
 	defer f.Cleanup()
 

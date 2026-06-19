@@ -16,17 +16,10 @@ package mcp
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sync"
-)
 
-const (
-	ErrSchemaNil               = "registry: schema cannot be nil"
-	ErrSchemaMissingType       = "registry: schema missing required 'type' field"
-	ErrSchemaInvalidType       = "registry: schema 'type' must be 'object'"
-	ErrSchemaInvalidProperties = "registry: schema 'properties' must be an object"
-	ErrSchemaInvalidRequired   = "registry: schema 'required' must be an array"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // PropertySchema represents a JSON Schema property definition.
@@ -44,6 +37,7 @@ type InputSchema struct {
 }
 
 // ToMap converts InputSchema to map[string]interface{} for JSON serialization.
+// This is required for MCP protocol compatibility with the JSON Schema specification.
 func (s *InputSchema) ToMap() map[string]interface{} {
 	if s == nil {
 		return nil
@@ -54,13 +48,14 @@ func (s *InputSchema) ToMap() map[string]interface{} {
 	if s.Properties != nil {
 		props := make(map[string]interface{})
 		for k, v := range s.Properties {
-			props[k] = map[string]interface{}{
+			propMap := map[string]interface{}{
 				"type":        v.Type,
 				"description": v.Description,
 			}
 			if v.Enum != nil {
-				props[k].(map[string]interface{})["enum"] = v.Enum
+				propMap["enum"] = v.Enum
 			}
+			props[k] = propMap
 		}
 		result["properties"] = props
 	}
@@ -102,22 +97,22 @@ func NewToolRegistry() *ToolRegistry {
 // Returns an error if a tool with the same name is already registered.
 func (r *ToolRegistry) Register(tool NativeTool) error {
 	if tool == nil {
-		return fmt.Errorf("registry: cannot register nil tool")
+		return constants.ErrMCPToolNil
 	}
 
 	name := tool.Name()
 	if name == "" {
-		return fmt.Errorf("registry: tool name cannot be empty")
+		return constants.ErrMCPToolNameEmpty
 	}
 
 	// Validate tool name format (must be valid identifier)
 	if !isValidToolName(name) {
-		return fmt.Errorf("registry: invalid tool name '%s': must contain only lowercase letters, digits, and underscores", name)
+		return fmt.Errorf("mcp: register: invalid tool name '%s': %w", name, constants.ErrMCPToolNameInvalid)
 	}
 
 	// Validate input schema
 	if err := validateInputSchema(tool.InputSchema()); err != nil {
-		return fmt.Errorf("registry: invalid input schema for tool '%s': %w", name, err)
+		return fmt.Errorf("mcp: register: validate schema for tool '%s': %w", name, err)
 	}
 
 	r.mu.Lock()
@@ -125,7 +120,7 @@ func (r *ToolRegistry) Register(tool NativeTool) error {
 
 	// Check for duplicate tool name
 	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("registry: tool '%s' is already registered", name)
+		return fmt.Errorf("mcp: register: tool '%s': %w", name, constants.ErrMCPToolAlreadyRegistered)
 	}
 
 	r.tools[name] = tool
@@ -188,17 +183,17 @@ func isValidToolName(name string) bool {
 // validateInputSchema performs basic validation of a tool's input schema.
 func validateInputSchema(schema *InputSchema) error {
 	if schema == nil {
-		return errors.New(ErrSchemaNil)
+		return constants.ErrMCPSchemaNil
 	}
 
 	// Check for required "type" field
 	if schema.Type == "" {
-		return errors.New(ErrSchemaMissingType)
+		return constants.ErrMCPSchemaMissingType
 	}
 
 	// Check that type is "object"
 	if schema.Type != "object" {
-		return errors.New(ErrSchemaInvalidType)
+		return constants.ErrMCPSchemaInvalidType
 	}
 
 	return nil

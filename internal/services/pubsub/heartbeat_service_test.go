@@ -319,14 +319,14 @@ func TestHeartbeatService_buildProtoHeartbeat(t *testing.T) {
 		protoHeartbeat := svc.buildProtoHeartbeat(heartbeat)
 
 		require.NotNil(t, protoHeartbeat.PerformanceMetrics)
-		assert.InEpsilon(t, heartbeat.PerformanceMetrics.CPUPercent, protoHeartbeat.PerformanceMetrics.CpuPercent, 0.01)
-		assert.InEpsilon(t, heartbeat.PerformanceMetrics.MemoryPercent, protoHeartbeat.PerformanceMetrics.MemoryPercent, 0.01)
-		assert.InEpsilon(t, heartbeat.PerformanceMetrics.DiskPercent, protoHeartbeat.PerformanceMetrics.DiskPercent, 0.01)
-		assert.InEpsilon(t, heartbeat.PerformanceMetrics.NetworkLatency, protoHeartbeat.PerformanceMetrics.NetworkLatency, 0.01)
+		assert.InDelta(t, heartbeat.PerformanceMetrics.CPUPercent, protoHeartbeat.PerformanceMetrics.CpuPercent, 0.001)
+		assert.InDelta(t, heartbeat.PerformanceMetrics.MemoryPercent, protoHeartbeat.PerformanceMetrics.MemoryPercent, 0.001)
+		assert.InDelta(t, heartbeat.PerformanceMetrics.DiskPercent, protoHeartbeat.PerformanceMetrics.DiskPercent, 0.001)
+		assert.InDelta(t, heartbeat.PerformanceMetrics.NetworkLatency, protoHeartbeat.PerformanceMetrics.NetworkLatency, 0.001)
 		assert.Equal(t, int32(heartbeat.PerformanceMetrics.MemoryUsedMB), protoHeartbeat.PerformanceMetrics.MemoryUsedMb)
 		assert.Equal(t, int32(heartbeat.PerformanceMetrics.MemoryTotalMB), protoHeartbeat.PerformanceMetrics.MemoryTotalMb)
-		assert.InEpsilon(t, heartbeat.PerformanceMetrics.DiskUsedGB, protoHeartbeat.PerformanceMetrics.DiskUsedGb, 0.01)
-		assert.InEpsilon(t, heartbeat.PerformanceMetrics.DiskTotalGB, protoHeartbeat.PerformanceMetrics.DiskTotalGb, 0.01)
+		assert.InDelta(t, heartbeat.PerformanceMetrics.DiskUsedGB, protoHeartbeat.PerformanceMetrics.DiskUsedGb, 0.001)
+		assert.InDelta(t, heartbeat.PerformanceMetrics.DiskTotalGB, protoHeartbeat.PerformanceMetrics.DiskTotalGb, 0.001)
 	})
 
 	t.Run("converts capability flags", func(t *testing.T) {

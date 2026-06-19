@@ -22,6 +22,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -31,6 +32,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -121,12 +123,12 @@ func TestTLSCertInspectTool_Execute_Validation(t *testing.T) {
 	// Empty arguments
 	_, err := tool.Execute(ctx, json.RawMessage(`{}`))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "either cert_path or host must be specified")
+	assert.True(t, errors.Is(err, constants.ErrMCPTLSCertInspectRequired))
 
 	// Invalid JSON
 	_, err = tool.Execute(ctx, json.RawMessage(`{invalid`))
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid arguments")
+	assert.True(t, errors.Is(err, constants.ErrMCPUnmarshalArguments))
 
 	// Invalid path
 	_, err = tool.Execute(ctx, json.RawMessage(`{"cert_path": "/etc/shadow"}`))

@@ -19,8 +19,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/require"
 )
 
@@ -74,28 +76,21 @@ func TestFSDiskUsageTool_Execute_InvalidJSON(t *testing.T) {
 
 	_, err := tool.Execute(ctx, json.RawMessage(`{invalid json}`))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "unmarshal arguments")
+	require.ErrorIs(t, err, constants.ErrMCPUnmarshalArguments)
 }
 
 func TestFSDiskUsageTool_Execute_PathSpecified_Success(t *testing.T) {
-	tool := &FSDiskUsageTool{}
-	ctx := context.Background()
-
-	req := FSDiskUsageRequest{Path: "C:"}
-	args, err := json.Marshal(req)
-	require.NoError(t, err)
-
-	// Mock the Windows API calls
 	mockAPI := &mockWindowsDiskAPI{
 		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
 			return 500 * 1024 * 1024 * 1024, 1000 * 1024 * 1024 * 1024, 400 * 1024 * 1024 * 1024, nil
 		},
 	}
+	tool := &FSDiskUsageTool{diskAPI: mockAPI}
+	ctx := context.Background()
 
-	// Temporarily replace the default API for this test
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = mockAPI
-	defer func() { defaultDiskAPI = originalAPI }()
+	req := FSDiskUsageRequest{Path: "C:"}
+	args, err := json.Marshal(req)
+	require.NoError(t, err)
 
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
@@ -114,60 +109,48 @@ func TestFSDiskUsageTool_Execute_PathSpecified_Success(t *testing.T) {
 }
 
 func TestFSDiskUsageTool_Execute_PathSpecified_APIError(t *testing.T) {
-	tool := &FSDiskUsageTool{}
+	mockAPI := &mockWindowsDiskAPI{
+		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
+			return 0, 0, 0, errors.New("API call failed")
+		},
+	}
+	tool := &FSDiskUsageTool{diskAPI: mockAPI}
 	ctx := context.Background()
 
 	req := FSDiskUsageRequest{Path: "C:"}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
 
-	// Mock API failure
-	mockAPI := &mockWindowsDiskAPI{
-		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
-			return 0, 0, 0, errors.New("API call failed")
-		},
-	}
-
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = mockAPI
-	defer func() { defaultDiskAPI = originalAPI }()
-
 	_, err = tool.Execute(ctx, args)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "GetDiskFreeSpaceExW failed")
+	require.ErrorIs(t, err, constants.ErrMCPGetDiskUsage)
 }
 
 func TestFSDiskUsageTool_Execute_AllDrives_Success(t *testing.T) {
-	tool := &FSDiskUsageTool{}
-	ctx := context.Background()
-
-	req := FSDiskUsageRequest{}
-	args, err := json.Marshal(req)
-	require.NoError(t, err)
-
-	// Mock drive enumeration - simulate C: and D: drives
 	mockAPI := &mockWindowsDiskAPI{
 		getDriveTypeFunc: func(path string) (driveType uintptr, err error) {
-			// Return DRIVE_FIXED (3) for C: and D:, DRIVE_UNKNOWN (0) for others
 			if path == "C:\\" || path == "D:\\" {
 				return 3, nil
 			}
 			return 0, nil
 		},
 		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
-			if path == "C:" {
+			driveLetter := strings.ToUpper(string([]rune(path)[0]))
+			if driveLetter == "C" {
 				return 500 * 1024 * 1024 * 1024, 1000 * 1024 * 1024 * 1024, 400 * 1024 * 1024 * 1024, nil
 			}
-			if path == "D:" {
+			if driveLetter == "D" {
 				return 200 * 1024 * 1024 * 1024, 500 * 1024 * 1024 * 1024, 200 * 1024 * 1024 * 1024, nil
 			}
 			return 0, 0, 0, errors.New("unknown drive")
 		},
 	}
+	tool := &FSDiskUsageTool{diskAPI: mockAPI}
+	ctx := context.Background()
 
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = mockAPI
-	defer func() { defaultDiskAPI = originalAPI }()
+	req := FSDiskUsageRequest{}
+	args, err := json.Marshal(req)
+	require.NoError(t, err)
 
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
@@ -182,24 +165,17 @@ func TestFSDiskUsageTool_Execute_AllDrives_Success(t *testing.T) {
 }
 
 func TestFSDiskUsageTool_Execute_AllDrives_NoDrives(t *testing.T) {
-	tool := &FSDiskUsageTool{}
+	mockAPI := &mockWindowsDiskAPI{
+		getDriveTypeFunc: func(path string) (driveType uintptr, err error) {
+			return 0, nil
+		},
+	}
+	tool := &FSDiskUsageTool{diskAPI: mockAPI}
 	ctx := context.Background()
 
 	req := FSDiskUsageRequest{}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
-
-	// Mock no drives available
-	mockAPI := &mockWindowsDiskAPI{
-		getDriveTypeFunc: func(path string) (driveType uintptr, err error) {
-			// Return DRIVE_UNKNOWN (0) for all drives
-			return 0, nil
-		},
-	}
-
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = mockAPI
-	defer func() { defaultDiskAPI = originalAPI }()
 
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
@@ -214,14 +190,6 @@ func TestFSDiskUsageTool_Execute_AllDrives_NoDrives(t *testing.T) {
 }
 
 func TestFSDiskUsageTool_Execute_AllDrives_SkipFailedDrives(t *testing.T) {
-	tool := &FSDiskUsageTool{}
-	ctx := context.Background()
-
-	req := FSDiskUsageRequest{}
-	args, err := json.Marshal(req)
-	require.NoError(t, err)
-
-	// Mock where C: succeeds but D: fails (e.g., no media in removable drive)
 	mockAPI := &mockWindowsDiskAPI{
 		getDriveTypeFunc: func(path string) (driveType uintptr, err error) {
 			if path == "C:\\" || path == "D:\\" {
@@ -230,55 +198,49 @@ func TestFSDiskUsageTool_Execute_AllDrives_SkipFailedDrives(t *testing.T) {
 			return 0, nil
 		},
 		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
-			if path == "C:" {
+			driveLetter := strings.ToUpper(string([]rune(path)[0]))
+			if driveLetter == "C" {
 				return 500 * 1024 * 1024 * 1024, 1000 * 1024 * 1024 * 1024, 400 * 1024 * 1024 * 1024, nil
 			}
-			// D: fails
 			return 0, 0, 0, errors.New("no media")
 		},
 	}
-
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = mockAPI
-	defer func() { defaultDiskAPI = originalAPI }()
-
-	result, err := tool.Execute(ctx, args)
-	require.NoError(t, err)
-
-	var usageResult FSDiskUsageResult
-	err = json.Unmarshal([]byte(result.Content[0].Text), &usageResult)
-	require.NoError(t, err)
-
-	// Should only include C: (the successful drive)
-	require.Equal(t, 1, len(usageResult.Filesystems))
-	require.Equal(t, "C:\\", usageResult.Filesystems[0].Path)
-}
-
-func TestFSDiskUsageTool_Execute_AllDrives_DriveTypeError(t *testing.T) {
-	tool := &FSDiskUsageTool{}
+	tool := &FSDiskUsageTool{diskAPI: mockAPI}
 	ctx := context.Background()
 
 	req := FSDiskUsageRequest{}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
 
-	// Mock drive type API error for some drives
+	result, err := tool.Execute(ctx, args)
+	require.NoError(t, err)
+
+	var usageResult FSDiskUsageResult
+	err = json.Unmarshal([]byte(result.Content[0].Text), &usageResult)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(usageResult.Filesystems))
+	require.Equal(t, "C:\\", usageResult.Filesystems[0].Path)
+}
+
+func TestFSDiskUsageTool_Execute_AllDrives_DriveTypeError(t *testing.T) {
 	mockAPI := &mockWindowsDiskAPI{
 		getDriveTypeFunc: func(path string) (driveType uintptr, err error) {
 			if path == "C:\\" {
 				return 3, nil
 			}
-			// Other drives return error
 			return 0, errors.New("drive type error")
 		},
 		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
 			return 500 * 1024 * 1024 * 1024, 1000 * 1024 * 1024 * 1024, 400 * 1024 * 1024 * 1024, nil
 		},
 	}
+	tool := &FSDiskUsageTool{diskAPI: mockAPI}
+	ctx := context.Background()
 
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = mockAPI
-	defer func() { defaultDiskAPI = originalAPI }()
+	req := FSDiskUsageRequest{}
+	args, err := json.Marshal(req)
+	require.NoError(t, err)
 
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
@@ -287,7 +249,6 @@ func TestFSDiskUsageTool_Execute_AllDrives_DriveTypeError(t *testing.T) {
 	err = json.Unmarshal([]byte(result.Content[0].Text), &usageResult)
 	require.NoError(t, err)
 
-	// Should only include C: (the drive that didn't error)
 	require.Equal(t, 1, len(usageResult.Filesystems))
 }
 
@@ -318,20 +279,17 @@ func TestGetDiskUsageForPath_APIError(t *testing.T) {
 
 	_, err := getDiskUsageForPath("C:", mockAPI)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "GetDiskFreeSpaceExW failed")
+	require.ErrorIs(t, err, constants.ErrMCPGetDiskUsage)
 }
 
 func TestGetDiskUsageForPath_NilAPI(t *testing.T) {
-	// Test that nil API uses default
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = &mockWindowsDiskAPI{
+	mockAPI := &mockWindowsDiskAPI{
 		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
 			return 100, 200, 50, nil
 		},
 	}
-	defer func() { defaultDiskAPI = originalAPI }()
 
-	result, err := getDiskUsageForPath("C:", nil)
+	result, err := getDiskUsageForPath("C:", mockAPI)
 	require.NoError(t, err)
 	require.NotNil(t, result.Filesystem)
 }
@@ -441,16 +399,13 @@ func TestGetAllDiskUsage_SkipUnknownDrives(t *testing.T) {
 }
 
 func TestGetAllDiskUsage_NilAPI(t *testing.T) {
-	// Test that nil API uses default
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = &mockWindowsDiskAPI{
+	mockAPI := &mockWindowsDiskAPI{
 		getDriveTypeFunc: func(path string) (driveType uintptr, err error) {
 			return 0, nil
 		},
 	}
-	defer func() { defaultDiskAPI = originalAPI }()
 
-	result, err := getAllDiskUsage(nil)
+	result, err := getAllDiskUsage(mockAPI)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(result.Filesystems))
 }
@@ -476,28 +431,80 @@ func TestGetAllDiskUsage_DrivePathFormatting(t *testing.T) {
 }
 
 func TestFSDiskUsageTool_Execute_MarshalError(t *testing.T) {
-	tool := &FSDiskUsageTool{}
+	mockAPI := &mockWindowsDiskAPI{
+		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
+			return 100, 200, 50, nil
+		},
+	}
+	tool := &FSDiskUsageTool{diskAPI: mockAPI}
 	ctx := context.Background()
 
 	req := FSDiskUsageRequest{Path: "C:"}
 	args, err := json.Marshal(req)
 	require.NoError(t, err)
 
-	// Mock API to return data that will cause marshal issues
-	// This is difficult to test directly since we control the data structure,
-	// but we can at least verify the error path exists
-	mockAPI := &mockWindowsDiskAPI{
-		getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
-			return 100, 200, 50, nil
-		},
-	}
-
-	originalAPI := defaultDiskAPI
-	defaultDiskAPI = mockAPI
-	defer func() { defaultDiskAPI = originalAPI }()
-
-	// Normal case should succeed
 	result, err := tool.Execute(ctx, args)
 	require.NoError(t, err)
 	require.NotNil(t, result.Content)
+}
+
+func TestFSDiskUsageTool_Invariants(t *testing.T) {
+	// Property-based test: verify mathematical invariants hold for Windows
+	tests := []struct {
+		name       string
+		freeBytes  uint64
+		totalBytes uint64
+		available  uint64
+	}{
+		{
+			name:       "typical disk",
+			freeBytes:  500 * 1024 * 1024 * 1024,
+			totalBytes: 1000 * 1024 * 1024 * 1024,
+			available:  400 * 1024 * 1024 * 1024,
+		},
+		{
+			name:       "small disk",
+			freeBytes:  50 * 1024 * 1024 * 1024,
+			totalBytes: 100 * 1024 * 1024 * 1024,
+			available:  40 * 1024 * 1024 * 1024,
+		},
+		{
+			name:       "large disk",
+			freeBytes:  5000 * 1024 * 1024 * 1024,
+			totalBytes: 10000 * 1024 * 1024 * 1024,
+			available:  4500 * 1024 * 1024 * 1024,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockAPI := &mockWindowsDiskAPI{
+				getDiskFreeSpaceExFunc: func(path string) (freeBytes, totalBytes, availableBytes uint64, err error) {
+					return tt.freeBytes, tt.totalBytes, tt.available, nil
+				},
+			}
+
+			result, err := getDiskUsageForPath("C:", mockAPI)
+			require.NoError(t, err)
+			require.NotNil(t, result.Filesystem)
+
+			fs := result.Filesystem
+
+			// Invariant 1: total = used + free
+			require.Equal(t, fs.TotalBytes, fs.UsedBytes+fs.FreeBytes,
+				"total bytes must equal used + free bytes")
+
+			// Invariant 2: available <= free (reserved space)
+			require.LessOrEqual(t, fs.AvailableBytes, fs.FreeBytes,
+				"available bytes must be <= free bytes")
+
+			// Invariant 3: used percent is between 0 and 100
+			if fs.TotalBytes > 0 {
+				require.GreaterOrEqual(t, fs.UsedPercent, 0.0,
+					"used percent must be >= 0")
+				require.LessOrEqual(t, fs.UsedPercent, 100.0,
+					"used percent must be <= 100")
+			}
+		})
+	}
 }

@@ -28,6 +28,7 @@ import (
 
 	sshlib "golang.org/x/crypto/ssh"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 )
 
@@ -82,7 +83,7 @@ func (t *RunShellCommandTool) Execute(ctx context.Context, args json.RawMessage)
 	}
 
 	if req.Command == "" {
-		return CallToolResult{}, fmt.Errorf("run_shell_command: command is required")
+		return CallToolResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandRequired)
 	}
 
 	// Validate against denylist
@@ -92,11 +93,11 @@ func (t *RunShellCommandTool) Execute(ctx context.Context, args json.RawMessage)
 			Stdout:   "",
 			Stderr:   err.Error(),
 			TimedOut: false,
-			Error:    "command rejected by safety policy",
+			Error:    constants.ErrMCPRunShellCommandSafetyRejected.Error(),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("run_shell_command: marshal result: %w", err)
+			return CallToolResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandMarshalResult)
 		}
 		return CallToolResult{
 			Content: []TextContent{
@@ -111,14 +112,14 @@ func (t *RunShellCommandTool) Execute(ctx context.Context, args json.RawMessage)
 	// Determine target hostnames (default to localhost if not provided)
 	hostnames := req.Hostnames
 	if len(hostnames) == 0 {
-		hostnames = []string{"localhost"}
+		hostnames = []string{constants.LocalhostHostname}
 	}
 
 	// Set timeout limits
-	timeout := 30 * time.Second
+	timeout := time.Duration(constants.DefaultShellCommandTimeout) * time.Second
 	if req.Timeout > 0 {
-		if req.Timeout > 300 {
-			return CallToolResult{}, fmt.Errorf("run_shell_command: timeout cannot exceed 300 seconds")
+		if req.Timeout > constants.MaxShellCommandTimeout {
+			return CallToolResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandTimeoutExceeded)
 		}
 		timeout = time.Duration(req.Timeout) * time.Second
 	}
@@ -151,7 +152,7 @@ func (t *RunShellCommandTool) Execute(ctx context.Context, args json.RawMessage)
 		resultJSON, err = json.Marshal(results)
 	}
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("run_shell_command: marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandMarshalResult)
 	}
 
 	return CallToolResult{
@@ -166,65 +167,6 @@ func (t *RunShellCommandTool) Execute(ctx context.Context, args json.RawMessage)
 
 // validateCommandSafety checks if a command is safe to execute based on denylist.
 func validateCommandSafety(command string, args []string, workingDir string) error {
-	dangerousCommands := []string{
-		"rm",
-		"dd",
-		"mkfs",
-		"fdisk",
-		"format",
-		"del",
-		"erase",
-		"shred",
-		"wipe",
-		"killall",
-		"pkill",
-		"reboot",
-		"shutdown",
-		"halt",
-		"poweroff",
-		"init",
-		"systemctl",
-		"service",
-		"iptables",
-		"ip6tables",
-		"nft",
-		"ufw",
-		"firewall-cmd",
-		"route",
-		"ifconfig",
-		"ip",
-		"brctl",
-		"tc",
-		"modprobe",
-		"insmod",
-		"rmmod",
-		"depmod",
-		"mount",
-		"umount",
-		"swapon",
-		"swapoff",
-		"mkswap",
-		"lvcreate",
-		"lvremove",
-		"lvchange",
-		"vgcreate",
-		"vgremove",
-		"pvcreate",
-		"pvremove",
-		"cryptsetup",
-		"passwd",
-		"chpasswd",
-		"usermod",
-		"userdel",
-		"groupmod",
-		"crontab",
-		"at",
-		"batch",
-		"sudo",
-		"su",
-		"doas",
-		"runuser",
-	}
 
 	// Check base command
 	cmdBase := command
@@ -232,9 +174,9 @@ func validateCommandSafety(command string, args []string, workingDir string) err
 		cmdBase = command[:idx]
 	}
 
-	for _, dangerous := range dangerousCommands {
+	for _, dangerous := range constants.DangerousCommands {
 		if cmdBase == dangerous {
-			return fmt.Errorf("command '%s' is blocked by safety policy", dangerous)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandBlocked, dangerous)
 		}
 	}
 
@@ -244,47 +186,30 @@ func validateCommandSafety(command string, args []string, workingDir string) err
 		fullCommand = strings.Join(append([]string{command}, args...), " ")
 	}
 
-	dangerousPatterns := []string{
-		"rm -rf /",
-		"rm -rf /*",
-		":(){:|:&};:",
-		"dd if=/dev/zero",
-		"mkfs",
-		"> /dev/sda",
-		"> /dev/vda",
-		"chmod 777 /",
-		"chown -R",
-		"wget",
-		"curl",
-		"nc -l",
-		"ncat -l",
-		"ssh",
-		"scp",
-		"rsync",
-	}
-
 	lowerCmd := strings.ToLower(fullCommand)
-	for _, pattern := range dangerousPatterns {
+	for _, pattern := range constants.DangerousPatterns {
 		if strings.Contains(lowerCmd, pattern) {
-			return fmt.Errorf("command contains dangerous pattern: %s", pattern)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandDangerousPattern, pattern)
 		}
 	}
 
 	// Check for shell injection attempts
-	if strings.Contains(lowerCmd, "$(") || strings.Contains(lowerCmd, "`") || strings.Contains(lowerCmd, "|") {
-		return fmt.Errorf("command contains shell injection pattern")
+	for _, pattern := range constants.ShellInjectionPatterns {
+		if strings.Contains(lowerCmd, pattern) {
+			return fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandShellInjection)
+		}
 	}
 
 	// Validate working directory if specified
 	if workingDir != "" {
 		// Check for path traversal attempts BEFORE cleaning
 		if strings.Contains(workingDir, "..") {
-			return fmt.Errorf("working directory contains path traversal: %s", workingDir)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandPathTraversal, workingDir)
 		}
 
 		// Ensure the path is absolute
 		if !filepath.IsAbs(workingDir) {
-			return fmt.Errorf("working directory must be an absolute path: %s", workingDir)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandAbsolutePathRequired, workingDir)
 		}
 
 		// Clean the path to resolve any redundant components
@@ -293,12 +218,12 @@ func validateCommandSafety(command string, args []string, workingDir string) err
 		// Verify the directory exists and is accessible
 		info, err := os.Stat(cleanDir)
 		if err != nil {
-			return fmt.Errorf("working directory does not exist or is not accessible: %s", workingDir)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandDirNotAccessible, workingDir)
 		}
 
 		// Ensure it's actually a directory
 		if !info.IsDir() {
-			return fmt.Errorf("working directory is not a directory: %s", workingDir)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandNotDirectory, workingDir)
 		}
 	}
 
@@ -329,33 +254,32 @@ func shellQuoteCommand(command string, args []string) string {
 func validateForSSHExecution(command string, args []string, workingDir string) error {
 	// Additional SSH-specific validation: ensure no shell metacharacters
 	// can slip through even with quoting - check this FIRST before other validation
-	shellMetacharacters := []string{"$", "`", "\\", ";", "&", "|", ">", "<", "\n", "\r"}
 
 	// Check command for shell metacharacters
-	for _, meta := range shellMetacharacters {
+	for _, meta := range constants.ShellMetacharacters {
 		if strings.Contains(command, meta) {
-			return fmt.Errorf("command contains shell metacharacter '%s' which is not allowed for SSH execution", meta)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandShellMetacharacter, meta)
 		}
 	}
 
 	// Check args for shell metacharacters
 	for _, arg := range args {
-		for _, meta := range shellMetacharacters {
+		for _, meta := range constants.ShellMetacharacters {
 			if strings.Contains(arg, meta) {
-				return fmt.Errorf("argument contains shell metacharacter '%s' which is not allowed for SSH execution", meta)
+				return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandArgMetacharacter, meta)
 			}
 		}
 	}
 
 	// Check working directory for shell metacharacters
 	if workingDir != "" {
-		for _, meta := range shellMetacharacters {
+		for _, meta := range constants.ShellMetacharacters {
 			// On Windows, backslash is a legitimate path separator
 			if meta == "\\" && runtime.GOOS == "windows" {
 				continue
 			}
 			if strings.Contains(workingDir, meta) {
-				return fmt.Errorf("working directory contains shell metacharacter '%s' which is not allowed for SSH execution", meta)
+				return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandDirMetacharacter, meta)
 			}
 		}
 	}
@@ -373,12 +297,12 @@ func validateForSSHExecution(command string, args []string, workingDir string) e
 
 		// Check for path traversal attempts
 		if strings.Contains(cleanDir, "..") {
-			return fmt.Errorf("working directory contains path traversal: %s", workingDir)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandPathTraversal, workingDir)
 		}
 
 		// Ensure the path is absolute
 		if !filepath.IsAbs(cleanDir) {
-			return fmt.Errorf("working directory must be an absolute path: %s", workingDir)
+			return fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandAbsolutePathRequired, workingDir)
 		}
 	}
 
@@ -388,7 +312,7 @@ func validateForSSHExecution(command string, args []string, workingDir string) e
 // runShellCommandOnHost executes a command on a specific host (localhost or remote via SSH).
 func runShellCommandOnHost(ctx context.Context, hostname, command string, args []string, workingDir string, timeout time.Duration) (RunShellCommandResult, error) {
 	// Local execution
-	if hostname == "localhost" || hostname == "127.0.0.1" {
+	if hostname == constants.LocalhostHostname || hostname == constants.LocalhostIP {
 		return runShellCommandLocally(ctx, command, args, workingDir, timeout)
 	}
 
@@ -437,7 +361,7 @@ func runShellCommandLocally(ctx context.Context, command string, args []string, 
 	}
 
 	if timedOut {
-		result.Error = "command timed out"
+		result.Error = constants.ErrMCPRunShellCommandTimedOut.Error()
 	} else if err != nil {
 		result.Error = err.Error()
 	}
@@ -456,25 +380,25 @@ func runShellCommandViaSSH(ctx context.Context, hostname, command string, args [
 	// Resolve SSH connection parameters
 	r, err := ssh.ResolveHost(hostname, "", "", "", "")
 	if err != nil {
-		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: resolve host: %w", err)
+		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandResolveHost)
 	}
 	if r.Hostname == "" {
-		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: failed to resolve hostname: %s", hostname)
+		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandHostnameResolveFailed, hostname)
 	}
 
 	// Build auth methods
 	authMethods, err := ssh.BuildAuthMethods(r, "", "")
 	if err != nil {
-		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: build auth methods: %w", err)
+		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandBuildAuth)
 	}
 	if len(authMethods) == 0 {
-		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: no SSH auth methods available for %s", hostname)
+		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: %w: %s", constants.ErrMCPRunShellCommandNoAuth, hostname)
 	}
 
 	// Build host key callback
 	hostKeyCallback, err := ssh.BuildHostKeyCallback("")
 	if err != nil {
-		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: host key verification failed: %w", err)
+		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandHostKeyVerification)
 	}
 
 	// Create SSH client config
@@ -489,14 +413,14 @@ func runShellCommandViaSSH(ctx context.Context, hostname, command string, args [
 	addr := net.JoinHostPort(r.Hostname, r.Port)
 	client, err := sshlib.Dial("tcp", addr, clientConfig)
 	if err != nil {
-		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: SSH dial failed: %w", err)
+		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandSSHDial)
 	}
 	defer client.Close()
 
 	// Create session
 	session, err := client.NewSession()
 	if err != nil {
-		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: SSH session creation failed: %w", err)
+		return RunShellCommandResult{}, fmt.Errorf("run_shell_command: %w", constants.ErrMCPRunShellCommandSSHSession)
 	}
 	defer session.Close()
 
@@ -534,7 +458,7 @@ func runShellCommandViaSSH(ctx context.Context, hostname, command string, args [
 	}
 
 	if timedOut {
-		result.Error = "command timed out"
+		result.Error = constants.ErrMCPRunShellCommandTimedOut.Error()
 	} else if err != nil {
 		result.Error = err.Error()
 	}

@@ -51,6 +51,31 @@ const (
 	ExitCertTrustFailure = 7
 )
 
+// Unix shell exit codes for command execution
+// These follow standard Unix conventions (see sysexits.h)
+const (
+	// ExitCodeSuccess indicates successful execution
+	ExitCodeSuccess = 0
+
+	// ExitCodeGeneral is the default error code for unspecified errors
+	ExitCodeGeneral = 1
+
+	// ExitCodeUsage indicates command line usage error (typically 2)
+	ExitCodeUsage = 2
+
+	// ExitCodeTimeout indicates command timed out (typically 124)
+	ExitCodeTimeout = 124
+
+	// ExitCodeCannotExecute indicates command invoked cannot execute (typically 126)
+	ExitCodeCannotExecute = 126
+
+	// ExitCodeCommandNotFound indicates command not found (typically 127)
+	ExitCodeCommandNotFound = 127
+
+	// ExitCodeKilled indicates process was killed (typically 137, 128+9)
+	ExitCodeKilled = 137
+)
+
 // ExitCodeFromError analyzes an error and returns the appropriate exit code
 func ExitCodeFromError(err error) int {
 	if err == nil {

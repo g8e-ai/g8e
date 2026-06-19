@@ -14,10 +14,8 @@
 package config
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,44 +23,15 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// defaultPathsJSON contains embedded default path configuration. This is the sole source of truth
-// for path configuration in the g8e Node. All paths are relative and resolved from the current
-// working directory. The binary is fully self-sovereign and requires no external configuration files.
-//
-//go:embed paths_default.json
-var defaultPathsJSON []byte
-
 const (
-	DefaultRuntimeDir     = constants.RuntimeDirname
-	DefaultPKIDir         = constants.DefaultPKIDir
-	DefaultSecretsDir     = constants.DefaultSecretsDir
-	DefaultCredentialsDir = constants.RuntimeDirname
+	DefaultRuntimeDir     = ".g8e"
+	DefaultPKIDir         = ".g8e/pki"
+	DefaultSecretsDir     = ".g8e/secrets"
+	DefaultCredentialsDir = ".g8e"
 )
 
-// expandPath expands tilde (~) to the user's home directory and expands environment variables
-func expandPath(path string) (string, error) {
-	if path == "" {
-		return path, nil
-	}
-
-	// Expand tilde to home directory
-	if strings.HasPrefix(path, "~/") || path == "~" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("failed to get home directory: %w", err)
-		}
-		if path == "~" {
-			return homeDir, nil
-		}
-		path = filepath.Join(homeDir, path[2:])
-	}
-
-	// Expand environment variables
-	path = os.ExpandEnv(path)
-
-	return path, nil
-}
-
+// PathsConfig holds path configuration for test support.
+// Production code should use constants.Paths directly.
 type PathsConfig struct {
 	Host  string `json:"host"`
 	Infra struct {
@@ -81,45 +50,97 @@ type PathsConfig struct {
 	} `json:"infra"`
 }
 
+// Config holds CLI configuration resolved from constants.Paths.
+// All paths are sourced from internal/constants/paths.go (SSOT).
 type Config struct {
-	ProjectRoot      string
-	RuntimeDir       string
-	PKIDir           string
-	SecretsDir       string
-	CredentialsDir   string
-	Paths            *PathsConfig
-	TestPortOverride int // Test-only field to override default port
+	ProjectRoot    string
+	RuntimeDir     string
+	PKIDir         string
+	SecretsDir     string
+	CredentialsDir string
+	Paths          *PathsConfig
 }
 
+// expandPath expands ~ to the user home directory and environment variables in a path.
+func expandPath(path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	path = os.ExpandEnv(path)
+	if !strings.HasPrefix(path, "~") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("config: expandPath: %w", err)
+	}
+	if path == "~" {
+		return home, nil
+	}
+	return filepath.Join(home, path[2:]), nil
+}
+
+// Load initializes CLI configuration from the current working directory.
+// All paths are resolved using constants.InitPathsWithBase.
 func Load(projectRoot string) (*Config, error) {
 	if projectRoot == "" {
 		var err error
 		projectRoot, err = os.Getwd()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get working directory: %w", err)
+			return nil, fmt.Errorf("cli config: failed to get working directory: %w", err)
 		}
 	}
 
-	// Initialize paths relative to projectRoot
 	if err := constants.InitPathsWithBase(projectRoot); err != nil {
 		return nil, fmt.Errorf("cli config: failed to initialize paths: %w", err)
 	}
 
-	// Use centralized path constants
-	runtimeDir := constants.Paths.Infra.RuntimeDir
-	pkiDir := constants.Paths.Infra.PkiDir
-	secretsDir := constants.Paths.Infra.SecretsDir
-	credentialsDir := filepath.Join(projectRoot, DefaultCredentialsDir)
+	paths := &PathsConfig{Host: "localhost"}
+	paths.Infra.ProtocolDir = filepath.Join(projectRoot, ".g8e/protocol")
+	paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, ".g8e/protocol/constants")
+	paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, ".g8e/protocol/models")
+	paths.Infra.DBPath = filepath.Join(projectRoot, ".g8e/data/g8e.db")
+	paths.Infra.PKIDir = filepath.Join(projectRoot, ".g8e/pki")
+	paths.Infra.CACertPath = filepath.Join(projectRoot, ".g8e/pki/trust/g8eg-ca-bundle.pem")
+	paths.Infra.SecretsDir = filepath.Join(projectRoot, ".g8e/secrets")
+	paths.Infra.AppCertDir = filepath.Join(projectRoot, ".g8e/pki/issued/apps")
+	paths.Infra.DocsDir = filepath.Join(projectRoot, ".g8e/docs")
+	paths.Infra.SSHConfigPath = filepath.Join(projectRoot, ".g8e/ssh_config")
+	paths.Infra.VaultDir = filepath.Join(projectRoot, ".g8e/vault")
+	paths.Infra.VaultKeyPath = filepath.Join(projectRoot, ".g8e/vault/key")
 
-	// Always use embedded default paths configuration
-	pathsData := defaultPathsJSON
+	return &Config{
+		ProjectRoot:    projectRoot,
+		RuntimeDir:     filepath.Join(projectRoot, DefaultRuntimeDir),
+		PKIDir:         filepath.Join(projectRoot, DefaultPKIDir),
+		SecretsDir:     filepath.Join(projectRoot, DefaultSecretsDir),
+		CredentialsDir: filepath.Join(projectRoot, DefaultCredentialsDir),
+		Paths:          paths,
+	}, nil
+}
+
+// LoadWithPaths loads config with custom paths configuration for testing.
+// This allows hermetic test environments without relying on disk paths.
+// Production code should use Load() instead.
+func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
+	if projectRoot == "" {
+		var err error
+		projectRoot, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("cli config: failed to get working directory: %w", err)
+		}
+	}
+
+	runtimeDir := filepath.Join(projectRoot, constants.RuntimeDirname)
+	pkiDir := filepath.Join(projectRoot, constants.DefaultPKIDir)
+	secretsDir := filepath.Join(projectRoot, constants.DefaultSecretsDir)
+	credentialsDir := filepath.Join(projectRoot, constants.RuntimeDirname)
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToParsePaths, err)
 	}
 
-	// Resolve all relative paths in infra section relative to projectRoot
 	resolveInfraPaths(&paths, projectRoot)
 
 	return &Config{
@@ -132,7 +153,8 @@ func Load(projectRoot string) (*Config, error) {
 	}, nil
 }
 
-// resolveInfraPaths resolves all relative paths in the infra section relative to projectRoot
+// resolveInfraPaths resolves all relative paths in the infra section relative to projectRoot.
+// This is test-only helper for LoadWithPaths.
 func resolveInfraPaths(paths *PathsConfig, projectRoot string) {
 	if paths.Infra.AppCertDir != "" && !filepath.IsAbs(paths.Infra.AppCertDir) {
 		paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
@@ -164,52 +186,29 @@ func resolveInfraPaths(paths *PathsConfig, projectRoot string) {
 	if paths.Infra.SSHConfigPath != "" && !filepath.IsAbs(paths.Infra.SSHConfigPath) {
 		paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
 	}
-}
-
-// LoadWithPaths loads config with custom paths configuration for testing.
-// This allows hermetic test environments without relying on disk paths.
-func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
-	if projectRoot == "" {
-		var err error
-		projectRoot, err = os.Getwd()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get working directory: %w", err)
-		}
+	if paths.Infra.VaultDir != "" && !filepath.IsAbs(paths.Infra.VaultDir) {
+		paths.Infra.VaultDir = filepath.Join(projectRoot, paths.Infra.VaultDir)
 	}
-
-	runtimeDir := filepath.Join(projectRoot, DefaultRuntimeDir)
-	pkiDir := filepath.Join(projectRoot, DefaultPKIDir)
-	secretsDir := filepath.Join(projectRoot, DefaultSecretsDir)
-
-	credentialsDir := filepath.Join(projectRoot, DefaultCredentialsDir)
-
-	var paths PathsConfig
-	if err := json.Unmarshal(pathsData, &paths); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToParsePaths, err)
+	if paths.Infra.VaultKeyPath != "" && !filepath.IsAbs(paths.Infra.VaultKeyPath) {
+		paths.Infra.VaultKeyPath = filepath.Join(projectRoot, paths.Infra.VaultKeyPath)
 	}
-
-	// Resolve all relative paths in infra section relative to projectRoot
-	resolveInfraPaths(&paths, projectRoot)
-
-	return &Config{
-		ProjectRoot:    projectRoot,
-		RuntimeDir:     runtimeDir,
-		PKIDir:         pkiDir,
-		SecretsDir:     secretsDir,
-		CredentialsDir: credentialsDir,
-		Paths:          &paths,
-	}, nil
 }
 
 func (c *Config) TrustBundlePath() string {
-	if c.Paths.Infra.CACertPath != "" && !filepath.IsAbs(c.Paths.Infra.CACertPath) {
-		return filepath.Join(c.ProjectRoot, c.Paths.Infra.CACertPath)
+	if c.Paths == nil {
+		return constants.Paths.Infra.CaCertPath
 	}
-	return c.Paths.Infra.CACertPath
+	if c.Paths.Infra.CACertPath == "" {
+		return ""
+	}
+	if filepath.IsAbs(c.Paths.Infra.CACertPath) {
+		return c.Paths.Infra.CACertPath
+	}
+	return filepath.Join(c.ProjectRoot, c.Paths.Infra.CACertPath)
 }
 
 func (c *Config) CredentialsFile() string {
-	return filepath.Join(c.CredentialsDir, "credentials")
+	return filepath.Join(c.CredentialsDir, constants.CredentialsFilename)
 }
 
 func (c *Config) CLICertFile() string {
@@ -221,11 +220,11 @@ func (c *Config) CLIKeyFile() string {
 }
 
 func (c *Config) AppCertFile(name string) string {
-	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+".crt")
+	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+constants.FileExtCert)
 }
 
 func (c *Config) AppKeyFile(name string) string {
-	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+".key")
+	return filepath.Join(c.CredentialsDir, constants.PkiSubdirApps, name+constants.FileExtKey)
 }
 
 func (c *Config) OperatorCertFile() string {
@@ -244,60 +243,27 @@ func (c *Config) OperatorHTTPSPort() int {
 	return constants.Ports.OperatorHttps
 }
 
+// OperatorHTTPURL returns the HTTPS URL for the operator API.
+// When cfg.Paths.Host is a full URL (contains "://"), it is returned directly.
+// This allows tests to override the URL by setting cfg.Paths.Host to the test server URL.
 func (c *Config) OperatorHTTPURL() string {
-	if c.TestPortOverride != 0 {
-		return constants.LocalhostHTTPSURL(c.TestPortOverride)
+	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
+		return c.Paths.Host
 	}
 	return constants.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
-// OperatorPublicURL returns the HTTPS port (constants.Ports.OperatorHttps) for mTLS API and public surface
+// OperatorPublicURL returns the HTTPS port for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
-	if c.TestPortOverride != 0 {
-		return constants.LocalhostHTTPSURL(c.TestPortOverride)
-	}
 	return constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 }
 
-// OperatorDiscoveryURL returns the HTTP port (constants.Ports.OperatorHttp) for CA download and bootstrap routes
+// OperatorDiscoveryURL returns the HTTP port for CA download and bootstrap routes
 func (c *Config) OperatorDiscoveryURL() string {
-	if c.TestPortOverride != 0 {
-		return constants.LocalhostHTTPURL(c.TestPortOverride)
-	}
 	return constants.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 }
 
 // OperatorBootstrapURL is deprecated; use OperatorPublicURL for CSR-based enrollment
 func (c *Config) OperatorBootstrapURL() string {
 	return c.OperatorPublicURL()
-}
-
-// GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host
-// This is used for the Operator Bootstrap endpoint which remote operators rely on
-func GetExternalInterfaceIP() string {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return "localhost"
-	}
-
-	for _, iface := range ifaces {
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			var ip net.IP
-			switch v := addr.(type) {
-			case *net.IPNet:
-				ip = v.IP
-			case *net.IPAddr:
-				ip = v.IP
-			}
-			if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
-				return ip.String()
-			}
-		}
-	}
-
-	return "localhost"
 }

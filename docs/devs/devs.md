@@ -145,7 +145,7 @@ The platform is built via the Makefile. Run `make help` for available targets.
 
 **Run tests via CLI:**
 - `./g8e test unit` - Run Tier 1 (Unit) tests
-- `./g8e test integration` - Run Tier 2 (In-Memory Integration) tests
+- `./g8e test integration` - Run Tier 2 (In-Process Integration) tests
 - `./g8e test e2e` - Run Tier 3 (Live Platform E2E) tests
 - `./g8e test scenario` - Run scenario-specific E2E tests
 - `./g8e test lint` - Run linting and quality checks

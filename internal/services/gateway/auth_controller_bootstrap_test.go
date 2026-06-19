@@ -11,6 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package gateway
 
 import (
@@ -31,7 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func TestHandleBootstrap(t *testing.T) {
+func TestHandleBootstrapWithURL(t *testing.T) {
 	t.Run("Success - Bootstrap with CSR over loopback", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
@@ -49,7 +51,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleLocalBootstrap(rr, req)
+		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
@@ -82,7 +84,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "192.168.1.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleLocalBootstrap(rr, req)
+		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.JSONEq(t, `{"error":"CSR auto-issue only available over loopback"}`, rr.Body.String())
@@ -109,7 +111,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleLocalBootstrap(rr, req)
+		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusCreated, rr.Code)
 		var resp map[string]interface{}
@@ -139,7 +141,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
-		c.handleLocalBootstrap(rr, req)
+		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
 		assert.JSONEq(t, `{"error":"bootstrap user is disabled, cannot rotate"}`, rr.Body.String())
@@ -158,7 +160,7 @@ func TestHandleBootstrap(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
 		rr := httptest.NewRecorder()
 
-		c.handleLocalBootstrap(rr, req)
+		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 		assert.JSONEq(t, `{"error":"bootstrap only available for initial setup"}`, rr.Body.String())
