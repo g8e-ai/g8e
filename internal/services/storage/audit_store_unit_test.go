@@ -159,40 +159,40 @@ func TestTruncateOutputHeadTail(t *testing.T) {
 // TestTruncateOutputWithDifferentSizes tests truncation with various size configurations
 func TestTruncateOutputWithDifferentSizes(t *testing.T) {
 	tests := []struct {
-		name                   string
-		threshold              int
-		headTailSize           int
-		input                  string
-		expectedTruncated      bool
-		expectedHeadPreserved  bool
-		expectedTailPreserved  bool
+		name                  string
+		threshold             int
+		headTailSize          int
+		input                 string
+		expectedTruncated     bool
+		expectedHeadPreserved bool
+		expectedTailPreserved bool
 	}{
 		{
-			name:                   "small threshold, small head/tail",
-			threshold:              25,
-			headTailSize:           5,
-			input:                  "0123456789" + "MIDDLE" + "abcdefghij",
-			expectedTruncated:      true,
-			expectedHeadPreserved:  true,
-			expectedTailPreserved:  true,
+			name:                  "small threshold, small head/tail",
+			threshold:             25,
+			headTailSize:          5,
+			input:                 "0123456789" + "MIDDLE" + "abcdefghij",
+			expectedTruncated:     true,
+			expectedHeadPreserved: true,
+			expectedTailPreserved: true,
 		},
 		{
-			name:                   "large threshold, no truncation",
-			threshold:              1000,
-			headTailSize:           10,
-			input:                  "short",
-			expectedTruncated:      false,
-			expectedHeadPreserved:  false,
-			expectedTailPreserved:  false,
+			name:                  "large threshold, no truncation",
+			threshold:             1000,
+			headTailSize:          10,
+			input:                 "short",
+			expectedTruncated:     false,
+			expectedHeadPreserved: false,
+			expectedTailPreserved: false,
 		},
 		{
-			name:                   "threshold exactly at input length",
-			threshold:              30,
-			headTailSize:           10,
-			input:                  string(make([]byte, 30)),
-			expectedTruncated:      false,
-			expectedHeadPreserved:  false,
-			expectedTailPreserved:  false,
+			name:                  "threshold exactly at input length",
+			threshold:             30,
+			headTailSize:          10,
+			input:                 string(make([]byte, 30)),
+			expectedTruncated:     false,
+			expectedHeadPreserved: false,
+			expectedTailPreserved: false,
 		},
 	}
 
@@ -248,9 +248,9 @@ func TestFileMutationOperationConstants(t *testing.T) {
 // TestErrorConstants verifies error constants
 func TestErrorConstants(t *testing.T) {
 	tests := []struct {
-		name  string
-		err   error
-		want  string
+		name string
+		err  error
+		want string
 	}{
 		{"ErrAuditEventNil", ErrAuditEventNil, "AUDIT_EVENT_INVALID"},
 		{"ErrAuditSessionMissing", ErrAuditSessionMissing, "AUDIT_SESSION_MISSING"},

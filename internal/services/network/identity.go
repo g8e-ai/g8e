@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"slices"
 )
 
 // GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host.
@@ -295,30 +294,36 @@ func (d *Detector) detectIPs() ([]string, error) {
 
 // detectHostnames detects hostnames from /etc/hostname and hostname command.
 func (d *Detector) detectHostnames() ([]string, error) {
-	hostnames := make([]string, 0)
+	hostnameSet := make(map[string]bool)
 
 	// Try /etc/hostname first
 	if hostname, err := os.ReadFile(constants.PathEtcHostname); err == nil {
 		hn := strings.TrimSpace(string(hostname))
 		if hn != "" {
-			hostnames = append(hostnames, hn)
+			hostnameSet[hn] = true
 		}
 	}
 
 	// Try hostname command as fallback
 	if hn, err := exec.Command("hostname").Output(); err == nil {
 		hostname := strings.TrimSpace(string(hn))
-		if hostname != "" && !slices.Contains(hostnames, hostname) {
-			hostnames = append(hostnames, hostname)
+		if hostname != "" {
+			hostnameSet[hostname] = true
 		}
 	}
 
 	// Try hostname -f for FQDN
 	if fqdn, err := exec.Command("hostname", "-f").Output(); err == nil {
 		fqdnStr := strings.TrimSpace(string(fqdn))
-		if fqdnStr != "" && !slices.Contains(hostnames, fqdnStr) {
-			hostnames = append(hostnames, fqdnStr)
+		if fqdnStr != "" {
+			hostnameSet[fqdnStr] = true
 		}
+	}
+
+	// Convert set to slice
+	hostnames := make([]string, 0, len(hostnameSet))
+	for hn := range hostnameSet {
+		hostnames = append(hostnames, hn)
 	}
 
 	return hostnames, nil
@@ -387,7 +392,7 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 
 // detectMDNS detects mDNS/Bonjour *.local names.
 func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
-	mdnsNames := make([]string, 0)
+	mdnsSet := make(map[string]bool)
 
 	// Get hostname and append .local
 	hostnames, err := d.detectHostnames()
@@ -398,7 +403,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 	for _, hn := range hostnames {
 		// Skip if already has .local
 		if !strings.HasSuffix(hn, ".local") {
-			mdnsNames = append(mdnsNames, hn+".local")
+			mdnsSet[hn+".local"] = true
 		}
 	}
 
@@ -415,8 +420,8 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 				if strings.Contains(line, ".local") {
 					fields := strings.Fields(line)
 					for _, field := range fields {
-						if strings.HasSuffix(field, ".local") && !slices.Contains(mdnsNames, field) {
-							mdnsNames = append(mdnsNames, field)
+						if strings.HasSuffix(field, ".local") {
+							mdnsSet[field] = true
 						}
 					}
 				}
@@ -437,14 +442,20 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 					if strings.Contains(line, ".local") {
 						fields := strings.Fields(line)
 						for _, field := range fields {
-							if strings.HasSuffix(field, ".local") && !slices.Contains(mdnsNames, field) {
-								mdnsNames = append(mdnsNames, field)
+							if strings.HasSuffix(field, ".local") {
+								mdnsSet[field] = true
 							}
 						}
 					}
 				}
 			}
 		}
+	}
+
+	// Convert set to slice
+	mdnsNames := make([]string, 0, len(mdnsSet))
+	for name := range mdnsSet {
+		mdnsNames = append(mdnsNames, name)
 	}
 
 	return mdnsNames, nil
@@ -482,7 +493,7 @@ func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) ([]DNSPTRRec
 
 // detectSSHKnownHosts checks SSH known_hosts for hostnames pointing to this machine.
 func (d *Detector) detectSSHKnownHosts() ([]string, error) {
-	hostnames := make([]string, 0)
+	hostnameSet := make(map[string]bool)
 
 	// Get local IPs
 	localIPs, err := d.detectIPs()
@@ -542,12 +553,12 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 			if strings.Contains(hostPattern, ",") {
 				parts := strings.Split(hostPattern, ",")
 				for _, part := range parts {
-					if !localIPSet[part] && !slices.Contains(hostnames, part) {
-						hostnames = append(hostnames, part)
+					if !localIPSet[part] {
+						hostnameSet[part] = true
 					}
 				}
-			} else if !localIPSet[hostPattern] && !slices.Contains(hostnames, hostPattern) {
-				hostnames = append(hostnames, hostPattern)
+			} else if !localIPSet[hostPattern] {
+				hostnameSet[hostPattern] = true
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -556,6 +567,12 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 			continue
 		}
 		file.Close()
+	}
+
+	// Convert set to slice
+	hostnames := make([]string, 0, len(hostnameSet))
+	for hn := range hostnameSet {
+		hostnames = append(hostnames, hn)
 	}
 
 	// Return empty slice if no hostnames found (not an error - files may not exist)

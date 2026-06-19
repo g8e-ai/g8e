@@ -27,14 +27,14 @@ import (
 
 // mockAuditStore is a mock implementation of auditStoreInterface for unit testing
 type mockAuditStore struct {
-	getOperatorSessionFunc func(sessionID string) (*OperatorSession, error)
-	getEventsFunc          func(sessionID string, limit, offset int) ([]*Event, error)
-	getFileMutationsFunc   func(eventID int64) ([]*FileMutationLog, error)
+	getOperatorSessionFunc   func(sessionID string) (*OperatorSession, error)
+	getEventsFunc            func(sessionID string, limit, offset int) ([]*Event, error)
+	getFileMutationsFunc     func(eventID int64) ([]*FileMutationLog, error)
 	getOperatorSessionCalled int
-	getEventsCalled         int
-	getFileMutationsCalled  int
-	lastSessionID           string
-	lastEventID             int64
+	getEventsCalled          int
+	getFileMutationsCalled   int
+	lastSessionID            string
+	lastEventID              int64
 }
 
 func (m *mockAuditStore) GetOperatorSession(sessionID string) (*OperatorSession, error) {
@@ -72,9 +72,9 @@ type mockLedger struct {
 	mirrorFileCreateFunc       func(operatorSessionID, filePath string) (*LedgerResult, error)
 	completeMirrorCreateFunc   func(result *LedgerResult, operatorSessionID string) error
 	ledgerFileWriteFunc        func(operatorSessionID, filePath string) (*LedgerResult, error)
-	completeMirrorWriteFunc     func(result *LedgerResult, operatorSessionID string) error
-	getFileHistoryCalled        int
-	restoreFileCalled           int
+	completeMirrorWriteFunc    func(result *LedgerResult, operatorSessionID string) error
+	getFileHistoryCalled       int
+	restoreFileCalled          int
 	getFileAtCommitCalled      int
 	mirrorFileCreateCalled     int
 	completeMirrorCreateCalled int
@@ -157,10 +157,10 @@ func (m *mockLedger) CompleteMirrorWrite(result *LedgerResult, operatorSessionID
 
 // mockLogger is a mock implementation of loggerInterface for unit testing
 type mockLogger struct {
-	infoCalled  int
-	warnCalled  int
-	lastMsg     string
-	lastArgs    []interface{}
+	infoCalled int
+	warnCalled int
+	lastMsg    string
+	lastArgs   []interface{}
 }
 
 func (m *mockLogger) Info(msg string, args ...interface{}) {
@@ -178,39 +178,39 @@ func (m *mockLogger) Warn(msg string, args ...interface{}) {
 // TestNewHistoryHandler verifies constructor behavior
 func TestNewHistoryHandler(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		auditStore *mockAuditStore
-		ledger    *mockLedger
-		logger    *mockLogger
-		wantNil   bool
+		ledger     *mockLedger
+		logger     *mockLogger
+		wantNil    bool
 	}{
 		{
-			name:      "valid dependencies",
+			name:       "valid dependencies",
 			auditStore: &mockAuditStore{},
-			ledger:    &mockLedger{},
-			logger:    &mockLogger{},
-			wantNil:   false,
+			ledger:     &mockLedger{},
+			logger:     &mockLogger{},
+			wantNil:    false,
 		},
 		{
-			name:      "nil audit store",
+			name:       "nil audit store",
 			auditStore: nil,
-			ledger:    &mockLedger{},
-			logger:    &mockLogger{},
-			wantNil:   false,
+			ledger:     &mockLedger{},
+			logger:     &mockLogger{},
+			wantNil:    false,
 		},
 		{
-			name:      "nil ledger",
+			name:       "nil ledger",
 			auditStore: &mockAuditStore{},
-			ledger:    nil,
-			logger:    &mockLogger{},
-			wantNil:   false,
+			ledger:     nil,
+			logger:     &mockLogger{},
+			wantNil:    false,
 		},
 		{
-			name:      "nil logger",
+			name:       "nil logger",
 			auditStore: &mockAuditStore{},
-			ledger:    &mockLedger{},
-			logger:    nil,
-			wantNil:   false,
+			ledger:     &mockLedger{},
+			logger:     nil,
+			wantNil:    false,
 		},
 	}
 
