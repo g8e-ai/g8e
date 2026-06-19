@@ -126,10 +126,10 @@ type GatewayConfig struct {
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
 }
 
-// InsecureMcpConfig holds configuration for --insecure mode.
+// LocalHttpStdioConfig holds configuration for --local-http-stdio mode.
 // In this mode the Operator connects to an MCP gateway without governance.
 // This mode bypasses all L1/L2/L3 verification and is DANGEROUS.
-type InsecureMcpConfig struct {
+type LocalHttpStdioConfig struct {
 	GatewayURL  string // ws:// or wss:// URL of the MCP gateway
 	Token       string // Shared-secret token for Gateway auth (optional)
 	NodeID      string // Stable identifier for this node (defaults to hostname)
@@ -138,8 +138,8 @@ type InsecureMcpConfig struct {
 	LogLevel    string
 }
 
-// InsecureMcpOptions contains configuration values for LoadInsecureMcp.
-type InsecureMcpOptions struct {
+// LocalHttpStdioOptions contains configuration values for LoadLocalHttpStdio.
+type LocalHttpStdioOptions struct {
 	GatewayURL  string
 	Token       string
 	NodeID      string
@@ -148,8 +148,8 @@ type InsecureMcpOptions struct {
 	LogLevel    string
 }
 
-// LoadInsecureMcp creates configuration for --insecure mode.
-func LoadInsecureMcp(opts InsecureMcpOptions) (*InsecureMcpConfig, error) {
+// LoadLocalHttpStdio creates configuration for --local-http-stdio mode.
+func LoadLocalHttpStdio(opts LocalHttpStdioOptions) (*LocalHttpStdioConfig, error) {
 	if opts.GatewayURL == "" {
 		return nil, fmt.Errorf("gateway URL is required (--insecure-url)")
 	}
@@ -157,7 +157,7 @@ func LoadInsecureMcp(opts InsecureMcpOptions) (*InsecureMcpConfig, error) {
 	if logLevel == "" {
 		logLevel = "info"
 	}
-	return &InsecureMcpConfig{
+	return &LocalHttpStdioConfig{
 		GatewayURL:  opts.GatewayURL,
 		Token:       opts.Token,
 		NodeID:      opts.NodeID,

@@ -171,17 +171,17 @@ func newTestLogger() *slog.Logger {
 // Constructor
 // ────────────────────────────────────────────────────────────────
 
-func TestNewInsecureMcpNodeService_RequiresURL(t *testing.T) {
+func TestNewLocalHttpStdioNodeService_RequiresURL(t *testing.T) {
 	t.Parallel()
-	_, err := NewInsecureMcpNodeService("", "", "", "", "", newTestLogger())
+	_, err := NewLocalHttpStdioNodeService("", "", "", "", "", newTestLogger())
 	if err == nil {
 		t.Fatal("expected error for missing gateway URL")
 	}
 }
 
-func TestNewInsecureMcpNodeService_DefaultsNodeID(t *testing.T) {
+func TestNewLocalHttpStdioNodeService_DefaultsNodeID(t *testing.T) {
 	t.Parallel()
-	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.LocalHttpStdioGateway), "", "", "", "", newTestLogger())
+	svc, err := NewLocalHttpStdioNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.LocalHttpStdioGateway), "", "", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -190,9 +190,9 @@ func TestNewInsecureMcpNodeService_DefaultsNodeID(t *testing.T) {
 	}
 }
 
-func TestNewInsecureMcpNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
+func TestNewLocalHttpStdioNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
 	t.Parallel()
-	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "my-node", "", "", newTestLogger())
+	svc, err := NewLocalHttpStdioNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.LocalHttpStdioGateway), "", "my-node", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -201,9 +201,9 @@ func TestNewInsecureMcpNodeService_DisplayNameFallsBackToNodeID(t *testing.T) {
 	}
 }
 
-func TestNewInsecureMcpNodeService_ExplicitDisplayName(t *testing.T) {
+func TestNewLocalHttpStdioNodeService_ExplicitDisplayName(t *testing.T) {
 	t.Parallel()
-	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "my-node", "My Server", "", newTestLogger())
+	svc, err := NewLocalHttpStdioNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.LocalHttpStdioGateway), "", "my-node", "My Server", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -219,9 +219,9 @@ func TestNewInsecureMcpNodeService_ExplicitDisplayName(t *testing.T) {
 func TestHandshake_SendsCorrectConnectFrame(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, err := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "Test Node", "", newTestLogger())
+	svc, err := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "Test Node", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewInsecureMcpNodeService: %v", err)
+		t.Fatalf("NewLocalHttpStdioNodeService: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -279,7 +279,7 @@ func TestHandshake_SendsCorrectConnectFrame(t *testing.T) {
 func TestHandshake_WithToken(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "secret-token", "node-1", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "secret-token", "node-1", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -315,7 +315,7 @@ func TestSystemWhich_FindsExistingNodeBinary(t *testing.T) {
 		binName = "cmd.exe"
 	}
 	mg.queueInvoke("wh-1", "test-node", "system.which", fmt.Sprintf(`{"bins":["%s","nonexistent_xyz_abc"]}`, binName))
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -347,7 +347,7 @@ func TestSystemWhich_EmptyBins(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("wh-2", "test-node", "system.which", `{"bins":[]}`)
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -379,7 +379,7 @@ func TestSystemRun_NonZeroExit(t *testing.T) {
 	cmd := getShellCommand("exit 42")
 	cmdJSON, _ := json.Marshal(cmd)
 	mg.queueInvoke("sr-2", "test-node", "command", fmt.Sprintf(`{"command":%s}`, string(cmdJSON)))
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -410,7 +410,7 @@ func TestSystemRun_StderrCaptured(t *testing.T) {
 	cmd := getShellCommand("echo err_msg >&2")
 	cmdJSON, _ := json.Marshal(cmd)
 	mg.queueInvoke("sr-3", "test-node", "command", fmt.Sprintf(`{"command":%s}`, string(cmdJSON)))
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -443,7 +443,7 @@ func TestSystemRun_WithCwd(t *testing.T) {
 	cmd := getShellCommand(pwdCmd)
 	cmdJSON, _ := json.Marshal(cmd)
 	mg.queueInvoke("sr-5", "test-node", "command", fmt.Sprintf(`{"command":%s,"cwd":%q}`, string(cmdJSON), tmpDir))
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -475,7 +475,7 @@ func TestSystemRun_WithEnvVar(t *testing.T) {
 	cmd := getShellCommand(echoCmd)
 	cmdJSON, _ := json.Marshal(cmd)
 	mg.queueInvoke("sr-6", "test-node", "command", fmt.Sprintf(`{"command":%s,"env":{"MY_OCT_VAR":"from_test"}}`, string(cmdJSON)))
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -501,7 +501,7 @@ func TestSystemRun_EmptyCommandArray(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("sr-7", "test-node", "command", `{"command":[]}`)
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -532,7 +532,7 @@ func TestUnknownCommand_ReturnsUnavailable(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
 	mg.queueInvoke("unk-1", "test-node", "system.nope", `{}`)
-	svc, _ := NewInsecureMcpNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
+	svc, _ := NewLocalHttpStdioNodeService(mg.wsURL(), "", "test-node", "", "", newTestLogger())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -684,9 +684,9 @@ func TestTruncateOutput_ExactSize(t *testing.T) {
 
 func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
 	t.Parallel()
-	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "node-stop", "", "", newTestLogger())
+	svc, err := NewLocalHttpStdioNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.LocalHttpStdioGateway), "", "node-stop", "", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewInsecureMcpNodeService: %v", err)
+		t.Fatalf("NewLocalHttpStdioNodeService: %v", err)
 	}
 	// Stop before Start - cancel is nil, must not panic
 	assert.NotPanics(t, func() { svc.Stop() })
@@ -695,9 +695,9 @@ func TestStop_BeforeStart_DoesNotPanic(t *testing.T) {
 func TestStop_CancelsRunningService(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, err := NewInsecureMcpNodeService(mg.wsURL(), "", "node-stop-2", "", "", newTestLogger())
+	svc, err := NewLocalHttpStdioNodeService(mg.wsURL(), "", "node-stop-2", "", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewInsecureMcpNodeService: %v", err)
+		t.Fatalf("NewLocalHttpStdioNodeService: %v", err)
 	}
 
 	ctx := context.Background()
@@ -721,9 +721,9 @@ func TestStop_CancelsRunningService(t *testing.T) {
 func TestStop_IdempotentDoubleStop(t *testing.T) {
 	t.Parallel()
 	mg := newMockGateway(t)
-	svc, err := NewInsecureMcpNodeService(mg.wsURL(), "", "node-stop-3", "", "", newTestLogger())
+	svc, err := NewLocalHttpStdioNodeService(mg.wsURL(), "", "node-stop-3", "", "", newTestLogger())
 	if err != nil {
-		t.Fatalf("NewInsecureMcpNodeService: %v", err)
+		t.Fatalf("NewLocalHttpStdioNodeService: %v", err)
 	}
 
 	ctx := context.Background()

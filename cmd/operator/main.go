@@ -1585,7 +1585,7 @@ func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 		os.Exit(constants.ExitConfigError)
 	}
 
-	cfg, err := config.LoadInsecureMcp(config.InsecureMcpOptions{
+	cfg, err := config.LoadLocalHttpStdio(config.LocalHttpStdioOptions{
 		GatewayURL:  gatewayURL,
 		Token:       token,
 		NodeID:      nodeID,
@@ -1600,7 +1600,7 @@ func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 
 	logger.Info("g8e - INSECURE MCP Gateway Mode", "version", version, "build", buildID)
 
-	svc, err := local_http_stdio.NewInsecureMcpNodeService(
+	svc, err := local_http_stdio.NewLocalHttpStdioNodeService(
 		cfg.GatewayURL,
 		cfg.Token,
 		cfg.NodeID,

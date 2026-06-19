@@ -298,12 +298,12 @@ func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LoadInsecureMcp
+// LoadLocalHttpStdio
 // ---------------------------------------------------------------------------
 
-func TestLoadInsecureMcp_Valid(t *testing.T) {
+func TestLoadLocalHttpStdio_Valid(t *testing.T) {
 	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Ports.LocalHttpStdioGateway)
-	cfg, err := LoadInsecureMcp(InsecureMcpOptions{
+	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{
 		GatewayURL:  gatewayURL,
 		Token:       "token123",
 		NodeID:      "node-1",
@@ -320,14 +320,14 @@ func TestLoadInsecureMcp_Valid(t *testing.T) {
 	assert.Equal(t, "debug", cfg.LogLevel)
 }
 
-func TestLoadInsecureMcp_LogLevelDefaultsToInfo(t *testing.T) {
-	cfg, err := LoadInsecureMcp(InsecureMcpOptions{GatewayURL: "wss://gateway.example.com"})
+func TestLoadLocalHttpStdio_LogLevelDefaultsToInfo(t *testing.T) {
+	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{GatewayURL: "wss://gateway.example.com"})
 	require.NoError(t, err)
 	assert.Equal(t, "info", cfg.LogLevel)
 }
 
-func TestLoadInsecureMcp_MissingGatewayURL(t *testing.T) {
-	cfg, err := LoadInsecureMcp(InsecureMcpOptions{
+func TestLoadLocalHttpStdio_MissingGatewayURL(t *testing.T) {
+	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{
 		Token:       "tok",
 		NodeID:      "node",
 		DisplayName: "label",
@@ -338,9 +338,9 @@ func TestLoadInsecureMcp_MissingGatewayURL(t *testing.T) {
 	assert.Contains(t, err.Error(), "--insecure-url")
 }
 
-func TestLoadInsecureMcp_OptionalFieldsEmpty(t *testing.T) {
+func TestLoadLocalHttpStdio_OptionalFieldsEmpty(t *testing.T) {
 	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Ports.LocalHttpStdioGateway)
-	cfg, err := LoadInsecureMcp(InsecureMcpOptions{GatewayURL: gatewayURL})
+	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{GatewayURL: gatewayURL})
 	require.NoError(t, err)
 
 	assert.Empty(t, cfg.Token)

@@ -35,7 +35,7 @@ cat VERSION
 Update the VERSION file with the new version:
 
 ```bash
-echo "v1.1.2" > VERSION
+echo "v1.1.4" > VERSION
 ```
 
 The VERSION file must contain only the version string with a newline (no trailing spaces).
@@ -45,7 +45,7 @@ The VERSION file must contain only the version string with a newline (no trailin
 Add a new section at the top of CHANGELOG.md following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
 
 ```markdown
-## [1.1.2] - YYYY-MM-DD
+## [1.1.4] - YYYY-MM-DD
 
 ### Overview
 
@@ -88,7 +88,7 @@ Add a new section at the top of CHANGELOG.md following the [Keep a Changelog](ht
 Create a new release notes file in `docs/release_notes/`:
 
 ```bash
-touch docs/release_notes/v1.1.2.md
+touch docs/release_notes/v1.1.4.md
 ```
 
 The release notes file should mirror the CHANGELOG entry but can be more detailed. Include:
@@ -101,11 +101,11 @@ The release notes file should mirror the CHANGELOG entry but can be more detaile
 
 **Example structure:**
 ```markdown
-## [1.1.2] - YYYY-MM-DD
+## [1.1.4] - YYYY-MM-DD
 
 ### Overview
 
-v1.1.2 introduces [major feature], adds [another feature], and fixes [critical bug]. This release focuses on [theme].
+v1.1.4 introduces [major feature], adds [another feature], and fixes [critical bug]. This release focuses on [theme].
 
 ### Breaking Changes
 
@@ -181,7 +181,7 @@ Check that the build includes the correct version:
 
 ### 7. Commit Changes
 
-**Note:** Commit all release-related changes (VERSION, CHANGELOG.md, docs/release_notes/v1.1.2.md) using your standard git workflow.
+**Note:** Commit all release-related changes (VERSION, CHANGELOG.md, docs/release_notes/v1.1.4.md) using your standard git workflow.
 
 **Commit message guidelines:**
 - Use the version number as the commit message
@@ -200,7 +200,7 @@ cat VERSION
 head -n 50 CHANGELOG.md
 
 # Verify release notes file exists
-ls docs/release_notes/v1.1.2.md
+ls docs/release_notes/v1.1.4.md
 
 # Verify no uncommitted changes (using your git workflow)
 # Verify the commit is on main branch (using your git workflow)
@@ -227,17 +227,17 @@ Create a GitHub release via the web interface or GitHub CLI:
 
 **Via GitHub CLI:**
 ```bash
-gh release create v1.1.2 \
-  --title "Release v1.1.2" \
-  --notes-file docs/release_notes/v1.1.2.md
+gh release create v1.1.4 \
+  --title "Release v1.1.4" \
+  --notes-file docs/release_notes/v1.1.4.md
 ```
 
 **Via Web Interface:**
 1. Go to GitHub repository → Releases
 2. Click "Draft a new release"
-3. Tag: Select `v1.1.2`
-4. Title: `Release v1.1.2`
-5. Description: Copy contents from `docs/release_notes/v1.1.2.md`
+3. Tag: Select `v1.1.4`
+4. Title: `Release v1.1.4`
+5. Description: Copy contents from `docs/release_notes/v1.1.4.md`
 6. Attach binaries if distributing via GitHub Releases (optional)
 7. Click "Publish release"
 
@@ -284,10 +284,10 @@ After workflows complete, verify both packages:
 
 ```bash
 # Go verification
-go get github.com/g8e-ai/g8e/protocol@v1.1.2
+go get github.com/g8e-ai/g8e/protocol@v1.1.4
 
 # Python verification
-pip install g8e-protocol==1.1.2
+pip install g8e-protocol==1.1.4
 ```
 
 ### 4. Update Documentation
@@ -310,10 +310,10 @@ After the release is published:
 3. **Test Installation**: Verify users can install the new version
   ```bash
   # Test Go protocol installation
-  go get github.com/g8e-ai/g8e/protocol@v1.1.2
+  go get github.com/g8e-ai/g8e/protocol@v1.1.4
 
   # Test Python protocol installation
-  pip install g8e-protocol==1.1.2
+  pip install g8e-protocol==1.1.4
   ```
 4. **Monitor Issues**: Watch for any post-release issues or regressions
 
@@ -338,7 +338,7 @@ For critical security issues or production bugs, follow this expedited process:
 
 ## Version Compatibility
 
-- **Platform Version**: Tracked in `VERSION` file (e.g., `v1.1.2`)
+- **Platform Version**: Tracked in `VERSION` file (e.g., `v1.1.4`)
 - **Go Protocol Version**: Managed via git tags (module: `github.com/g8e-ai/g8e/protocol`)
 - **Python Protocol Version**: Tracked in `protocol/python/pyproject.toml` (package: `g8e-protocol`)
 
