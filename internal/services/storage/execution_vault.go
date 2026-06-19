@@ -22,11 +22,48 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
+
+// ExecutionVault defines the interface for execution log and file diff storage.
+// This service stores command execution results and file diffs with optional encryption.
+//
+// All methods that return errors must wrap errors with context using
+// fmt.Errorf("execution_vault: action: %w", err) to provide clear error attribution.
+type ExecutionVault interface {
+	// StoreExecution stores a command execution result locally.
+	// Content is encrypted at rest if an encryption vault is configured.
+	// Returns an error if storage fails, wrapping the underlying error with context.
+	StoreExecution(ctx context.Context, record *models.ExecutionRecord) error
+
+	// GetExecution retrieves a stored execution by ID.
+	// Returns (nil, nil) if not found.
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	GetExecution(ctx context.Context, executionID string) (*models.ExecutionRecord, error)
+
+	// StoreFileDiff stores a file diff in the execution vault.
+	// Content is encrypted at rest if an encryption vault is configured.
+	// Returns an error if storage fails, wrapping the underlying error with context.
+	StoreFileDiff(ctx context.Context, record *models.FileDiffRecord) error
+
+	// GetFileDiff retrieves a file diff by ID.
+	// Returns (nil, nil) if not found.
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	GetFileDiff(ctx context.Context, diffID string) (*models.FileDiffRecord, error)
+
+	// GetFileDiffsBySession retrieves all file diffs for a session.
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	GetFileDiffsBySession(ctx context.Context, operatorSessionID string, limit int) ([]*models.FileDiffRecord, error)
+
+	// Close shuts down the execution vault service.
+	// Returns an error if shutdown fails, wrapping the underlying error with context.
+	Close() error
+
+	// Wait blocks until all background workers and writes have finished.
+	Wait()
+}
 
 // ExecutionVaultConfig holds configuration for the execution vault service.
 type ExecutionVaultConfig struct {
@@ -58,8 +95,8 @@ type ExecutionVaultService struct {
 	wg sync.WaitGroup
 }
 
-// Ensure ExecutionVaultService implements interfaces.ExecutionVault.
-var _ interfaces.ExecutionVault = (*ExecutionVaultService)(nil)
+// Ensure ExecutionVaultService implements ExecutionVault.
+var _ ExecutionVault = (*ExecutionVaultService)(nil)
 
 // NewExecutionVaultService creates a new execution vault service.
 func NewExecutionVaultService(config *ExecutionVaultConfig, logger *slog.Logger, v *vault.Vault) (*ExecutionVaultService, error) {

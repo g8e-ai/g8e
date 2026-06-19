@@ -21,7 +21,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/interfaces"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -40,12 +40,12 @@ type L3Notary interface {
 // a CLI command (e.g., `g8e approve <tx_hash>`). This notary verifies cryptographic
 // signatures over the transaction hash to prove human presence.
 type outboundL3Notary struct {
-	suspendedStore interfaces.SuspendedTransactionStore
+	suspendedStore storage.SuspendedTransactionStore
 	logger         *slog.Logger
 }
 
 // NewOutboundL3Notary creates a new CLI L3 notary for outbound mode.
-func NewOutboundL3Notary(suspendedStore interfaces.SuspendedTransactionStore, logger *slog.Logger) L3Notary {
+func NewOutboundL3Notary(suspendedStore storage.SuspendedTransactionStore, logger *slog.Logger) L3Notary {
 	return &outboundL3Notary{
 		suspendedStore: suspendedStore,
 		logger:         logger,

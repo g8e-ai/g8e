@@ -21,7 +21,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 )
@@ -32,7 +31,7 @@ import (
 type VaultWriter struct {
 	config         *config.Config
 	logger         *slog.Logger
-	executionVault interfaces.ExecutionVault
+	executionVault storage.ExecutionVault
 }
 
 // NewVaultWriter creates a VaultWriter. The ExecutionVault is optional - a nil
@@ -40,7 +39,7 @@ type VaultWriter struct {
 func NewVaultWriter(
 	cfg *config.Config,
 	logger *slog.Logger,
-	executionVault interfaces.ExecutionVault,
+	executionVault storage.ExecutionVault,
 ) *VaultWriter {
 	return &VaultWriter{
 		config:         cfg,

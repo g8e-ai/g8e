@@ -22,10 +22,17 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
+
+// TokenStore defines the interface for token persistence used by Sentinel.
+// This shared interface prevents drift between storage and sentinel packages.
+type TokenStore interface {
+	KVSet(ctx context.Context, key, value string, ttlSeconds int) error
+	KVGet(ctx context.Context, key string) (string, error)
+	KVScanPrefix(ctx context.Context, prefix string) (map[string]string, error)
+}
 
 // TokenStoreConfig holds configuration for the token store service.
 type TokenStoreConfig struct {
@@ -57,8 +64,8 @@ type TokenStoreService struct {
 	wg sync.WaitGroup
 }
 
-// Ensure TokenStoreService implements interfaces.TokenStore.
-var _ interfaces.TokenStore = (*TokenStoreService)(nil)
+// Ensure TokenStoreService implements TokenStore.
+var _ TokenStore = (*TokenStoreService)(nil)
 
 // NewTokenStoreService creates a new token store service.
 func NewTokenStoreService(config *TokenStoreConfig, logger *slog.Logger, v *vault.Vault) (*TokenStoreService, error) {

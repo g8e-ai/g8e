@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 // Config holds configuration for the Sovereign Execution Boundary
@@ -136,11 +136,11 @@ type ScrubbingService struct {
 	tokenSequence int
 
 	// Persistent storage for token maps
-	tokenStore interfaces.TokenStore
+	tokenStore storage.TokenStore
 }
 
 // NewScrubbingService creates a new data scrubbing service
-func NewScrubbingService(config *Config, logger *slog.Logger, tokenStore interfaces.TokenStore) *ScrubbingService {
+func NewScrubbingService(config *Config, logger *slog.Logger, tokenStore storage.TokenStore) *ScrubbingService {
 	if config == nil {
 		config = DefaultConfig()
 	}

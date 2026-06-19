@@ -21,8 +21,8 @@ import (
 	"os"
 
 	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/response"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
 
@@ -64,13 +64,13 @@ type AuthController struct {
 	webSessionSvc      *WebSessionService
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
-	suspendedStore     interfaces.SuspendedTransactionStore
+	suspendedStore     storage.SuspendedTransactionStore
 	mcp                *mcp.GatewayService
 	responder          *response.Writer
 	actuatorKeyReader  actuatorKeyReader
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, suspendedStore interfaces.SuspendedTransactionStore, mcp *mcp.GatewayService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, suspendedStore storage.SuspendedTransactionStore, mcp *mcp.GatewayService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
 	return &AuthController{
 		cfg:                cfg,
 		logger:             logger,

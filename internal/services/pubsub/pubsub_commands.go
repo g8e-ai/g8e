@@ -25,13 +25,12 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -99,7 +98,7 @@ type CommandServiceConfig struct {
 	FileEdit          *execution.FileEditService
 	PubSubClient      PubSubClient
 	ResultsService    ResultsPublisher
-	ExecutionVault    interfaces.ExecutionVault
+	ExecutionVault    storage.ExecutionVault
 	AuditStore        *storage.SQLAuditStore
 	Ledger            *storage.GitLedgerService
 	HistoryHandler    *storage.HistoryHandler
