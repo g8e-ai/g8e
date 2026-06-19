@@ -157,15 +157,15 @@ Test-only code is separated from production code to avoid import cycles and main
 
 **`internal/services/storage/storagetest/`** - Test-only audit storage implementations
 - `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
-- Used only in test code (e.g., chaos tester at `internal/test/chaos/chaos.go`)
+- Used only in test code (e.g., chaos tester at `test/chaos/chaos.go`)
 - Implements `TransactionAuditStore` interface with a no-op `DocSet` (the test audit store has no document store; console audit records are irrelevant in chaos tests)
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore` so L5 console audit records go to the canonical document store
 - Production outbound mode uses an `auditStoreTransactionStore` adapter in `g8eo.go` to write receipts via `SQLAuditStore.RecordActionReceipt`
 
-**`internal/test/chaos/`** - Chaos engineering test infrastructure
+**`test/chaos/`** - Chaos engineering test infrastructure
 - Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
 - This is intentional test infrastructure, not production code
-- Located in `internal/test/` to clearly indicate test-only status
+- Located in `test/` to clearly indicate test-only status
 
 ## Documentation
 

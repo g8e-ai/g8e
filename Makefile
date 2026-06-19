@@ -61,7 +61,6 @@ COVERAGE_THRESHOLD := 70
 EXCLUDE_PKGS := \
 	mocks \
 	/cmd/ \
-	/internal/test \
 	/test/ \
 	/internal/protocol/proto \
 	/internal/contracts \
