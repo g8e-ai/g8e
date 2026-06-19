@@ -7,7 +7,7 @@ import (
 	"context"
 	"encoding/json"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/agentic_tool_emulator/client"
+	clientpkg "github.com/g8e-ai/g8e/test/agentic_tool_emulator/client"
 	"github.com/google/uuid"
 )
 

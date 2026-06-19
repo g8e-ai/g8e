@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/agentic_tool_emulator/client"
-	"github.com/g8e-ai/g8e/internal/agentic_tool_emulator/scenarios"
+	clientpkg "github.com/g8e-ai/g8e/test/agentic_tool_emulator/client"
+	"github.com/g8e-ai/g8e/test/agentic_tool_emulator/scenarios"
 )
 
 type Report struct {
