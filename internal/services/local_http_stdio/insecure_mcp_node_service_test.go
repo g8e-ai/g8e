@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package insecure_mcp
+package local_http_stdio
 
 import (
 	"context"
@@ -181,7 +181,7 @@ func TestNewInsecureMcpNodeService_RequiresURL(t *testing.T) {
 
 func TestNewInsecureMcpNodeService_DefaultsNodeID(t *testing.T) {
 	t.Parallel()
-	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.InsecureMcpGateway), "", "", "", "", newTestLogger())
+	svc, err := NewInsecureMcpNodeService(fmt.Sprintf("ws://%s:%d", constants.DefaultEndpoint, constants.Ports.LocalHttpStdioGateway), "", "", "", "", newTestLogger())
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

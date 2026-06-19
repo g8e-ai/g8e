@@ -18,16 +18,16 @@ package constants
 var Ports = struct {
 	OperatorHttp       int `json:"OperatorHttp"`
 	OperatorHttps      int `json:"OperatorHttps"`
-	InsecureMcpGateway int `json:"InsecureMcpGateway"`
+	LocalHttpStdioGateway int `json:"LocalHttpStdioGateway"`
 	// Snake_case variants for protocol compatibility
-	InsecureMcpGatewaySnake int `json:"insecure_mcp_gateway"`
+	LocalHttpStdioGatewaySnake int `json:"local_http_stdio_gateway"`
 	OperatorHttpSnake       int `json:"operator_http"`
 	OperatorHttpsSnake      int `json:"operator_https"`
 }{
 	OperatorHttp:            8080,
 	OperatorHttps:           8443,
-	InsecureMcpGateway:      18789,
-	InsecureMcpGatewaySnake: 18789,
+	LocalHttpStdioGateway:      18789,
+	LocalHttpStdioGatewaySnake: 18789,
 	OperatorHttpSnake:       8080,
 	OperatorHttpsSnake:      8443,
 }

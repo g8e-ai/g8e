@@ -302,7 +302,7 @@ func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestLoadInsecureMcp_Valid(t *testing.T) {
-	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Ports.InsecureMcpGateway)
+	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Ports.LocalHttpStdioGateway)
 	cfg, err := LoadInsecureMcp(InsecureMcpOptions{
 		GatewayURL:  gatewayURL,
 		Token:       "token123",
@@ -339,7 +339,7 @@ func TestLoadInsecureMcp_MissingGatewayURL(t *testing.T) {
 }
 
 func TestLoadInsecureMcp_OptionalFieldsEmpty(t *testing.T) {
-	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Ports.InsecureMcpGateway)
+	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Ports.LocalHttpStdioGateway)
 	cfg, err := LoadInsecureMcp(InsecureMcpOptions{GatewayURL: gatewayURL})
 	require.NoError(t, err)
 

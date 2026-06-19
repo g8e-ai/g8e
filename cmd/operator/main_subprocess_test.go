@@ -413,7 +413,7 @@ func TestRunGatewayMode_BadLogLevel_Subprocess(t *testing.T) {
 
 func TestRunInsecureMode_BadLogLevel_Subprocess(t *testing.T) {
 	if os.Getenv("G8E_TEST_INSECURE_BAD_LOG") == "1" {
-		runInsecureMode(fmt.Sprintf("ws://localhost:%d", constants.Ports.InsecureMcpGateway), "", "", "", "", "notavalidlevel")
+		runInsecureMode(fmt.Sprintf("ws://localhost:%d", constants.Ports.LocalHttpStdioGateway), "", "", "", "", "notavalidlevel")
 		return
 	}
 

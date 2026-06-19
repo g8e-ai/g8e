@@ -181,12 +181,7 @@ Check that the build includes the correct version:
 
 ### 7. Commit Changes
 
-Commit all release-related changes:
-
-```bash
-git add VERSION CHANGELOG.md docs/release_notes/v1.1.2.md
-git commit -m "Release v1.1.2"
-```
+**Note:** Commit all release-related changes (VERSION, CHANGELOG.md, docs/release_notes/v1.1.2.md) using your standard git workflow.
 
 **Commit message guidelines:**
 - Use the version number as the commit message
@@ -207,11 +202,8 @@ head -n 50 CHANGELOG.md
 # Verify release notes file exists
 ls docs/release_notes/v1.1.2.md
 
-# Verify no uncommitted changes
-git status
-
-# Verify the commit is on main branch
-git branch --show-current
+# Verify no uncommitted changes (using your git workflow)
+# Verify the commit is on main branch (using your git workflow)
 ```
 
 Ensure all pre-release changes are committed and the working directory is clean before proceeding to the release execution phase.
@@ -222,16 +214,7 @@ Once all pre-release preparation is complete and committed, execute the followin
 
 ### 1. Create Git Tag
 
-Create and push an annotated tag for the release:
-
-```bash
-# Create annotated tag
-git tag -a v1.1.2 -m "Release v1.1.2"
-
-# Push the commit and tag
-git push origin main
-git push origin v1.1.2
-```
+**Note:** Create and push an annotated tag for the release using your standard git workflow.
 
 **Tag guidelines:**
 - Use annotated tags (not lightweight tags)
@@ -277,14 +260,7 @@ The Go and Python packages must use the same version number. Update the Python v
 
 #### Tag and Push
 
-```bash
-# Update Python version first
-# protocol/python/pyproject.toml: version = "X.Y.Z"
-
-# Tag the protocol release
-git tag -a protocol/v1.1.2 -m "Protocol v1.1.2"
-git push origin protocol/v1.1.2
-```
+**Note:** Update Python version in protocol/python/pyproject.toml first, then tag and push the protocol release using your standard git workflow.
 
 The tag format `protocol/vX.Y.Z` triggers both release workflows.
 
@@ -354,22 +330,11 @@ Announce the release through appropriate channels:
 
 For critical security issues or production bugs, follow this expedited process:
 
-1. Create a release branch from the previous release tag:
-   ```bash
-   git checkout -b release/v1.1.3 v1.1.2
-   ```
+1. Apply the minimal fix necessary to the appropriate branch
 
-2. Apply the minimal fix necessary
+2. Update VERSION, CHANGELOG, and create release notes
 
-3. Update VERSION, CHANGELOG, and create release notes
-
-4. Commit, tag, and release as usual
-
-5. Merge the hotfix back to main:
-   ```bash
-   git checkout main
-   git merge release/v1.1.3
-   ```
+3. Proceed with the standard release process
 
 ## Version Compatibility
 

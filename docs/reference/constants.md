@@ -134,7 +134,7 @@ GovernanceEnvelope action types:
 ### Additional Constant Files
 
 - `paths.go`: Filesystem paths for Operator data, certificates, ledger, and system paths.
-- `ports.go`: Network ports `OperatorHttp` (8080), `OperatorHttps` (8443), and `InsecureMcpGateway` (18789).
+- `ports.go`: Network ports `OperatorHttp` (8080), `OperatorHttps` (8443), and `LocalHttpStdioGateway` (18789).
 - `exit_codes.go`: Process exit codes `ExitSuccess` (0), `ExitGeneralError` (1), `ExitAuthFailure` (2), `ExitPermissionDenied` (3).
 - `errors.go`: Platform errors `ErrForbidden`, `ErrInternal`, `ErrNotFound`, `ErrAlreadyExists`, `ErrExpired`.
 - `env_vars.go`: Typed environment variable names (currently empty).
