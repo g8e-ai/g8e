@@ -542,7 +542,7 @@ func TestFSDiskUsageTool_UsedPercentCalculation(t *testing.T) {
 			mockStat := &mockStatFS{
 				stat: syscall.Statfs_t{
 					Blocks: tt.blocks,
-					Bsize:  tt.bsize,
+					Bsize:  int64(tt.bsize),
 					Bfree:  tt.bfree,
 					Bavail: tt.bfree,
 				},
@@ -592,7 +592,7 @@ func TestFSDiskUsageTool_Invariants(t *testing.T) {
 			mockStat := &mockStatFS{
 				stat: syscall.Statfs_t{
 					Blocks: tt.blocks,
-					Bsize:  tt.bsize,
+					Bsize:  int64(tt.bsize),
 					Bfree:  tt.bfree,
 					Bavail: tt.bavail,
 				},
@@ -656,7 +656,7 @@ func TestFSDiskUsageTool_BavailVsBfree(t *testing.T) {
 			mockStat := &mockStatFS{
 				stat: syscall.Statfs_t{
 					Blocks: tt.blocks,
-					Bsize:  tt.bsize,
+					Bsize:  int64(tt.bsize),
 					Bfree:  tt.bfree,
 					Bavail: tt.bavail,
 				},

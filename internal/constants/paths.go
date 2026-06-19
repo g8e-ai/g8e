@@ -17,9 +17,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/g8e-ai/g8e/internal/pathutil"
 )
+
+var pathsMutex sync.RWMutex
 
 // Paths defines canonical G8E filesystem paths.
 // All paths are relative to the current working directory by default.
@@ -146,6 +149,9 @@ func InitPaths() error {
 // InitPathsWithBase initializes paths relative to the specified base directory.
 // This allows tests and specific use cases to override the default cwd behavior.
 func InitPathsWithBase(baseDir string) error {
+	pathsMutex.Lock()
+	defer pathsMutex.Unlock()
+
 	// Resolve all paths relative to baseDir
 	Paths.Infra.RuntimeDir = pathutil.SafeJoin(baseDir, ".g8e")
 	Paths.Infra.DataDir = pathutil.SafeJoin(baseDir, ".g8e/data")

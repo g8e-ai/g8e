@@ -139,7 +139,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 	})
 }
 
-func TestSubprocessMCPProxy(t *testing.T) {
+func TestSubprocessMCPProxyIntegration(t *testing.T) {
 	t.Run("subprocessMCPProxy stop closes stdin and kills process", func(t *testing.T) {
 		proxy := &subprocessMCPProxy{
 			command: "sleep",

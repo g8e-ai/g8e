@@ -109,7 +109,6 @@ func TestReadKeyFile(t *testing.T) {
 }
 
 func TestVaultInitCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("successful init", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
@@ -169,7 +168,6 @@ func TestVaultInitCmd(t *testing.T) {
 }
 
 func TestVaultUnlockCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("successful unlock", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
@@ -213,7 +211,6 @@ func TestVaultUnlockCmd(t *testing.T) {
 }
 
 func TestVaultRekeyCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("successful rekey", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
@@ -242,7 +239,6 @@ func TestVaultRekeyCmd(t *testing.T) {
 }
 
 func TestVaultStatusCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("not initialized", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
@@ -279,7 +275,6 @@ func TestVaultStatusCmd(t *testing.T) {
 }
 
 func TestVaultResetCmd(t *testing.T) {
-	t.Parallel()
 
 	t.Run("successful reset with confirm flag", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
@@ -327,7 +322,6 @@ func TestVaultResetCmd(t *testing.T) {
 }
 
 func TestVaultExportImport(t *testing.T) {
-	t.Parallel()
 
 	t.Run("export success", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)

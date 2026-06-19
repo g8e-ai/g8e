@@ -94,7 +94,13 @@ func TestNetSocketAuditTool_Execute_InvalidProtocol(t *testing.T) {
 func TestNetSocketAuditTool_Execute_ProtocolCaseInsensitivity(t *testing.T) {
 	t.Parallel()
 
-	tool := &NetSocketAuditTool{}
+	tool := &NetSocketAuditTool{
+		fileOpener: &mockFileOpener{
+			openFunc: func(name string) (*os.File, error) {
+				return nil, os.ErrNotExist
+			},
+		},
+	}
 	ctx := context.Background()
 
 	// Uppercase protocol should be converted to lowercase and validated
@@ -107,7 +113,7 @@ func TestNetSocketAuditTool_Execute_ProtocolCaseInsensitivity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
 
-	// Since /proc/net/tcp doesn't exist on Windows, expect empty result
+	// Mock fileOpener returns os.ErrNotExist, expect empty result
 	var resultData NetSocketAuditResult
 	err = json.Unmarshal([]byte(result.Content[0].Text), &resultData)
 	assert.NoError(t, err)

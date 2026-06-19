@@ -110,7 +110,18 @@ func TestBootstrap_HTTPError(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", "")
+	// Use httptest.Server to simulate connection error by closing immediately
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Close connection immediately to simulate network error
+		hijacker, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hijacker.Hijack()
+			conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL+"/api/v1/auth/bootstrap")
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to bootstrap")
@@ -376,7 +387,18 @@ func TestCLIEnroll_HTTPError(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	resp, err := CLIEnroll(cfg, cliCSR, "")
+	// Use httptest.Server to simulate connection error by closing immediately
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Close connection immediately to simulate network error
+		hijacker, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hijacker.Hijack()
+			conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	resp, err := CLIEnroll(cfg, cliCSR, server.URL+"/api/v1/auth/cli/enroll")
 	require.Error(t, err)
 	assert.Nil(t, resp)
 	assert.Contains(t, err.Error(), "failed to enroll CLI")
@@ -663,7 +685,18 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 	cliCSR, _, err := GenerateCSR("test-cli")
 	require.NoError(t, err)
 
-	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", "")
+	// Use httptest.Server to simulate connection error by closing immediately
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Close connection immediately to simulate network error
+		hijacker, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hijacker.Hijack()
+			conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to fetch trust bundle")
 }

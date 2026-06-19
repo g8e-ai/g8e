@@ -130,9 +130,18 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 		Paths:          &config.PathsConfig{},
 	}
 
-	// Test with a URL that will fail
-	// This tests the error path when HTTP request fails
-	_, err := FetchRootCAFingerprint(cfg, "")
+	// Use httptest.Server to simulate connection error by closing immediately
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Close connection immediately to simulate network error
+		hijacker, ok := w.(http.Hijacker)
+		if ok {
+			conn, _, _ := hijacker.Hijack()
+			conn.Close()
+		}
+	}))
+	defer server.Close()
+
+	_, err := FetchRootCAFingerprint(cfg, server.URL+"/.well-known/g8e/pki/fingerprint")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to fetch root CA fingerprint")
 }

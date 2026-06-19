@@ -16,6 +16,7 @@ Available Commands:
   mcp         MCP protocol operations (stdio transport)
   operator    Manage Operator instances
   vault       Manage the encryption vault
+  migration   Manage governed data migrations
   test        Run test suites (unit, integration, e2e, scenario, emulator, chaos)
   demos       Manage g8e demo environments
   audit       Run audit reports for compliance
@@ -27,6 +28,209 @@ Flags:
   -v, --version   version for g8e
 
 Use "g8e [command] --help" for more information about a command.
+```
+
+
+## migration
+```
+Manage governed data migrations with cryptographic chain of custody. Supports bulk data transfers via rclone and SharePoint connectors with manifest signing and audit trails.
+
+Usage:
+  g8e migration [command]
+
+Available Commands:
+  manifest    Manage migration manifests
+  connector   Manage migration connectors
+  report      Generate chain-of-custody reports
+
+Flags:
+  -h, --help   help for migration
+
+Use "g8e migration [command] --help" for more information about a command.
+```
+
+### migration manifest
+```
+Manage migration manifests for governed bulk data transfers.
+
+Usage:
+  g8e migration manifest [command]
+
+Available Commands:
+  sign        Sign a migration manifest
+
+Flags:
+  -h, --help   help for manifest
+
+Use "g8e migration manifest [command] --help" for more information about a command.
+```
+
+#### migration manifest sign
+```
+Sign a migration manifest with cryptographic signature. The manifest is signed by the accountable party and includes the migration authorization details.
+
+Usage:
+  g8e migration manifest sign --manifest <path> [flags]
+
+Flags:
+      --manifest string   Path to the manifest JSON file (required)
+      --out string        Output path for the signed manifest
+  -h, --help             help for sign
+```
+
+### migration connector
+```
+Manage migration connectors for bulk data transfer tools.
+
+Usage:
+  g8e migration connector [command]
+
+Available Commands:
+  rclone      rclone connector (S3, Azure, Google Cloud, SMB, SFTP)
+  sharepoint  SharePoint connector (On-Prem to Online, S3, Azure)
+
+Flags:
+  -h, --help   help for connector
+
+Use "g8e migration connector [command] --help" for more information about a command.
+```
+
+#### migration connector rclone
+```
+rclone connector for cloud storage migrations. Supports S3, Azure, Google Cloud, SMB, and SFTP protocols.
+
+Usage:
+  g8e migration connector rclone [command]
+
+Available Commands:
+  configure   Configure rclone connector remotes
+  plan        Enumerate source tree and build migration manifest
+  run         Execute governed migration from manifest
+
+Flags:
+  -h, --help   help for rclone
+```
+
+##### migration connector rclone configure
+```
+Configure rclone connector remotes for source and destination.
+
+Usage:
+  g8e migration connector rclone configure [flags]
+
+Flags:
+      --destination string   Destination remote
+      --name string          Connector configuration name
+      --source string        Source remote
+  -h, --help                help for configure
+```
+
+##### migration connector rclone plan
+```
+Enumerate source tree and build migration manifest for rclone connector.
+
+Usage:
+  g8e migration connector rclone plan [flags]
+
+Flags:
+      --name string          Connector configuration name
+      --out string           Output manifest path (default "migration-manifest.json")
+  -h, --help                help for plan
+```
+
+##### migration connector rclone run
+```
+Execute governed migration from manifest using rclone connector.
+
+Usage:
+  g8e migration connector rclone run [flags]
+
+Flags:
+      --manifest string   Path to signed manifest
+  -h, --help             help for run
+```
+
+#### migration connector sharepoint
+```
+SharePoint connector for On-Prem to Online, S3, and Azure migrations.
+
+Usage:
+  g8e migration connector sharepoint [command]
+
+Available Commands:
+  configure   Configure SharePoint connector remotes
+  plan        Enumerate SharePoint library and build migration manifest
+  run         Execute governed SharePoint migration
+  enroll      Enroll SharePoint connector with a Gateway
+
+Flags:
+  -h, --help   help for sharepoint
+```
+
+##### migration connector sharepoint configure
+```
+Configure SharePoint connector remotes for source and destination.
+
+Usage:
+  g8e migration connector sharepoint configure [flags]
+
+Flags:
+      --destination string   Destination SharePoint site
+      --name string          Connector configuration name
+      --source string        Source SharePoint site
+      --tenant string        SharePoint Online tenant
+  -h, --help                help for configure
+```
+
+##### migration connector sharepoint plan
+```
+Enumerate SharePoint library and build migration manifest.
+
+Usage:
+  g8e migration connector sharepoint plan [flags]
+
+Flags:
+      --name string          Connector configuration name
+      --out string           Output manifest path (default "migration-manifest.json")
+  -h, --help                help for plan
+```
+
+##### migration connector sharepoint run
+```
+Execute governed SharePoint migration from manifest.
+
+Usage:
+  g8e migration connector sharepoint run [flags]
+
+Flags:
+      --manifest string   Path to signed manifest
+      --posture string   Enforcement posture (default "notary")
+  -h, --help             help for run
+```
+
+##### migration connector sharepoint enroll
+```
+Enroll SharePoint connector with a Gateway for governed operations.
+
+Usage:
+  g8e migration connector sharepoint enroll [flags]
+
+Flags:
+      --gateway string   Gateway endpoint URL
+  -h, --help             help for enroll
+```
+
+### migration report
+```
+Generate a combined chain-of-custody report for migration audits.
+
+Usage:
+  g8e migration report [flags]
+
+Flags:
+      --migration-id string   Migration ID
+      --out string            Output directory (default "./migration-report/")
+  -h, --help                 help for report
 ```
 
 

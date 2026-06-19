@@ -583,8 +583,8 @@ func TestGetField(t *testing.T) {
 	// Get existing field
 	field, err := db.DocStore.GetField("test_collection", "doc1", "name")
 	require.NoError(t, err)
-	require.NotNil(t, field.String)
-	assert.Equal(t, "test-doc", *field.String)
+	require.NotNil(t, field.Str)
+	assert.Equal(t, "test-doc", *field.Str)
 
 	// Get another field
 	field, err = db.DocStore.GetField("test_collection", "doc1", "value")

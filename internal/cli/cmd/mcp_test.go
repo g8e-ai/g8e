@@ -1251,27 +1251,7 @@ func TestProxySessionToGateway(t *testing.T) {
 	})
 }
 
-func TestSubprocessMCPProxy(t *testing.T) {
-	t.Run("subprocessMCPProxy forward marshals request", func(t *testing.T) {
-		proxy := &subprocessMCPProxy{
-			command: "echo",
-			args:    []string{"test"},
-			logger:  slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		}
-
-		req := JSONRPCRequest{
-			JSONRPC: "2.0",
-			ID:      1,
-			Method:  "tools/list",
-		}
-
-		reqBytes, err := json.Marshal(req)
-		require.NoError(t, err)
-		assert.Contains(t, string(reqBytes), "tools/list")
-		_ = reqBytes
-		_ = proxy
-	})
-
+func TestSubprocessMCPProxyStop(t *testing.T) {
 	t.Run("subprocessMCPProxy stop is safe on nil fields", func(t *testing.T) {
 		proxy := &subprocessMCPProxy{
 			command: "echo",

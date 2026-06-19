@@ -487,8 +487,8 @@ func TestGetField_Success(t *testing.T) {
 	// Get string field
 	field, err := svc.GetField("users", "u18", "name")
 	require.NoError(t, err)
-	require.NotNil(t, field.String)
-	assert.Equal(t, "olivia", *field.String)
+	require.NotNil(t, field.Str)
+	assert.Equal(t, "olivia", *field.Str)
 
 	// Get number field
 	field, err = svc.GetField("users", "u18", "age")
