@@ -97,7 +97,7 @@ state. They intentionally remove runtime data under `.g8e/`.
 The test suite uses a tiered structure with different infrastructure requirements:
 
 - **Tier 1 (Unit tests)**: Run immediately without external dependencies via `make test-unit`
-- **Tier 2 (In-Memory Integration)**: No external dependencies via `make test-integration`
+- **Tier 2 (In-Process Integration)**: No external dependencies via `make test-integration`
 - **Tier 3 (Docker E2E)**: Requires Docker via `make test-docker` or `make test-gov`
 
 For integration tests that require a running gateway, start the gateway and authenticate first:

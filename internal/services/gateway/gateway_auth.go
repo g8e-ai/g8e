@@ -53,6 +53,9 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// Health check (always public)
 	r.addExact(constants.APIPaths.Health)
 
+	// State endpoint (always public for envelope binding)
+	r.addExact(constants.APIPaths.State)
+
 	// PKI bootstrap routes (public material only)
 	r.addPrefix("/.well-known/g8e/pki/")
 	r.addPrefix("/.well-known/g8e/bin/")

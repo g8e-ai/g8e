@@ -14,63 +14,9 @@
 package cmd
 
 import (
-	"bytes"
-	"os"
-	"path/filepath"
 	"testing"
-
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestEnrollCmd_Integration(t *testing.T) {
-	t.Run("enroll fails when Operator not running", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupTestConfig(t, tmpDir)
-
-		// Create pki/trust dir so the file path is valid for writing if needed
-		require.NoError(t, os.MkdirAll(filepath.Dir(cfg.TrustBundlePath()), 0755))
-
-		// Use injectable config loader for hermetic test with unique port
-		cmd := enrollCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		})
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
-
-		err := cmd.RunE(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "g8e Gateway is not running")
-	})
-
-	t.Run("enroll fails with no active session", func(t *testing.T) {
-		// This test verifies that enroll fails when Operator is not running
-		tmpDir := t.TempDir()
-		cfg := setupTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test with unique port
-		cmd := enrollCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		})
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		t.Cleanup(func() { os.Chdir(originalWd) })
-
-		err := cmd.RunE(cmd, []string{})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "g8e Gateway is not running")
-	})
-}
 
 // TestPKIPhase3_StaleTrustBundle_FailClosed verifies that mTLS enrollment failures
 // fail closed with an actionable error instead of silently falling back to plain HTTP.

@@ -103,6 +103,11 @@ type HealthResponse struct {
 	StateMerkleRoot string                `json:"state_merkle_root,omitempty"`
 }
 
+// StateResponse is the typed response for GET /state.
+type StateResponse struct {
+	StateMerkleRoot string `json:"state_merkle_root"`
+}
+
 // StatusResponse is the typed response for simple ok/error replies.
 type StatusResponse struct {
 	Status constants.GatewayMode `json:"status"`

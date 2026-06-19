@@ -64,12 +64,16 @@ type TestContext struct {
 func setupTestContext(t *testing.T) *TestContext {
 	t.Helper()
 
-	// Create in-process gateway
+	// Create in-process gateway. Cleanup is registered with t.Cleanup so it
+	// runs at the END of the test (after the body), not when this helper
+	// returns. Using defer here would tear the gateway down before the test
+	// ever used it, closing every database out from under the test body.
 	f := fixtures.NewGatewayFixture(t, fixtures.GatewayFixtureOptions{
-		TestName: "scenario-test",
-		Posture:  config.PostureDoctrine,
+		TestName:          "scenario-test",
+		Posture:           config.PostureDoctrine,
+		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
+	t.Cleanup(f.Cleanup)
 
 	// Enroll a client identity for mTLS authentication
 	identity := fixtures.EnrollClientIdentity(t, f, "scenario-user", "scenario-org", "scenario-fingerprint", "scenario-host")
@@ -79,7 +83,6 @@ func setupTestContext(t *testing.T) *TestContext {
 	if err != nil {
 		t.Fatalf("failed to create temp cert file: %v", err)
 	}
-	defer os.Remove(certFile.Name())
 	if _, err := certFile.Write(identity.Certificate); err != nil {
 		t.Fatalf("failed to write cert file: %v", err)
 	}
@@ -89,7 +92,6 @@ func setupTestContext(t *testing.T) *TestContext {
 	if err != nil {
 		t.Fatalf("failed to create temp key file: %v", err)
 	}
-	defer os.Remove(keyFile.Name())
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: identity.PrivateKey})
 	if _, err := keyFile.Write(keyPEM); err != nil {
 		t.Fatalf("failed to write key file: %v", err)
@@ -138,13 +140,15 @@ func setupTestContext(t *testing.T) *TestContext {
 }
 
 func TestScenarios(t *testing.T) {
-	// Setup test infrastructure
+	// Setup test infrastructure. Teardown is registered inside setupTestContext
+	// via t.Cleanup; do not also defer Cleanup here or it runs twice and the
+	// second <-serverErr blocks forever.
 	ctx := setupTestContext(t)
-	defer ctx.Fixture.Cleanup()
 
-	// Fetch the current state root via the public health API so the envelope
+	// Fetch the current state root via the in-process StateRootProvider so the envelope
 	// binds to the same state the gateway will verify against.
-	stateRoot, err := ctx.Client.StateRoot(context.Background())
+	govDeps := ctx.Fixture.Service.GetGovernanceDeps()
+	stateRoot, err := govDeps.StateRootProvider.GetCurrentStateRoot()
 	if err != nil {
 		t.Fatalf("failed to fetch state root: %v", err)
 	}
@@ -201,7 +205,6 @@ func TestScenarios(t *testing.T) {
 // malformed envelopes are correctly rejected.
 func TestNegativeControls(t *testing.T) {
 	ctx := setupTestContext(t)
-	defer ctx.Fixture.Cleanup()
 
 	t.Run("bad_id_rejection", func(t *testing.T) {
 		intentBytes, err := New().

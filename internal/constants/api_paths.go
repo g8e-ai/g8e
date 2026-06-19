@@ -122,6 +122,8 @@ var APIPaths = struct {
 	DeployScriptWindows string `json:"deploy_script_windows"`
 	// Health
 	Health string `json:"health"`
+	// State
+	State string `json:"state"`
 	// Landing
 	Landing string `json:"landing"`
 }{
@@ -237,6 +239,8 @@ var APIPaths = struct {
 	DeployScriptWindows: "/g8e-operator.ps1",
 	// Health
 	Health: "/api/v1/health",
+	// State
+	State: "/api/v1/state",
 	// Landing
 	Landing: "/",
 }

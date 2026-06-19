@@ -36,6 +36,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -80,6 +81,15 @@ type GatewayFixtureOptions struct {
 	AllowTestPortZero bool
 }
 
+// repoTestResultsDir returns <repo>/test-results, computed from this source
+// file's location so it is independent of the test's working directory. This
+// file lives at <repo>/test/fixtures/gateway_fixture.go.
+func repoTestResultsDir() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
+	return filepath.Join(repoRoot, "test-results")
+}
+
 // NewGatewayFixture creates a fully configured gateway fixture for testing.
 // It handles:
 // - Path initialization and test data directory creation
@@ -94,13 +104,22 @@ type GatewayFixtureOptions struct {
 func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture {
 	t.Helper()
 
-	// Create test paths without mutating global constants.Paths
+	// Create test paths without mutating global constants.Paths. The ephemeral
+	// scaffolding (secrets, runtime dir) lives under t.TempDir(); only the
+	// gateway data/vault is relocated to a persistent results directory below.
 	testPaths := testutil.NewTestPathsFromTemp(t)
 
-	// Create unique subdirectory for this test run
-	testRunID := fmt.Sprintf("%s-%s", time.Now().Format("20060102-150405"), opts.TestName)
-	dataDir := filepath.Join(testPaths.TestVaultDir, testRunID)
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	// Integration runs leave their artifacts behind for inspection: each run
+	// writes a fresh, uniquely-named directory under <repo>/test-results/ and
+	// nothing is deleted between or within runs. os.MkdirTemp gives a unique
+	// suffix so concurrent fixtures in the same test/second never collide, and
+	// (unlike t.TempDir) the directory is NOT auto-removed when the test ends.
+	resultsRoot := repoTestResultsDir()
+	if err := os.MkdirAll(resultsRoot, 0755); err != nil {
+		t.Fatalf("gateway_fixture: create test-results root: %v", err)
+	}
+	dataDir, err := os.MkdirTemp(resultsRoot, fmt.Sprintf("%s-%s-", time.Now().Format("20060102-150405"), opts.TestName))
+	if err != nil {
 		t.Fatalf("gateway_fixture: create test run directory: %v", err)
 	}
 	t.Logf("Test vault created at: %s", dataDir)
@@ -266,12 +285,12 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		if downstreamServer != nil {
 			downstreamServer.Close()
 		}
-		// Stop the gateway service to close all databases and release file locks
+		// Stop the gateway service to close all databases and release file locks.
+		// The data directory itself is intentionally left on disk: integration
+		// runs accumulate results under <repo>/test-results/ for later inspection.
 		if err := ls.Stop(context.Background()); err != nil {
 			t.Logf("gateway stop error: %v", err)
 		}
-		// Clean up test data directory
-		os.RemoveAll(dataDir)
 	}
 
 	return &GatewayFixture{

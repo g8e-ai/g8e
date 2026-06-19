@@ -662,7 +662,7 @@ Usage:
 
 Available Commands:
   unit        Run Tier 1 (Unit) tests
-  integration Run Tier 2 (In-Memory Integration) tests
+  integration Run Tier 2 (In-Process Integration) tests
   e2e         Run Tier 3 (Live Platform E2E) tests
   scenario    Run Tier 3 (Scenario) tests
   coverage    Run tests with coverage report
@@ -690,7 +690,7 @@ Flags:
 
 ### test integration
 ```
-Run Tier 2 (In-Memory Integration) tests. These tests use SQLite in-memory databases, local PKI generation, and local pubsub.
+Run Tier 2 (In-Process Integration) tests. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub.
 
 Usage:
   g8e test integration [flags]

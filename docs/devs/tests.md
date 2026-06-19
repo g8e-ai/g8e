@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-15
+Last Updated: 2026-06-19
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -28,7 +28,7 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 | Tier | Name | Target Directory | Build Tag | External Deps | Execution Time |
 | --- | --- | --- | --- | --- | --- |
 | **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* (Runs by default) | None (mock/stub-only, no files/network/DB) | < 10ms per test |
-| **Tier 2** | **In-Memory Integration** | `internal/...` & `test/` | `//go:build integration` | SQLite in-memory, local PKI generation, local pubsub | < 2s per suite |
+| **Tier 2** | **In-Process Integration** | `internal/...` & `test/` | `//go:build integration` | On-disk SQLite, local PKI generation, local pubsub (gateway runs in-process) | < 2s per suite |
 | **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Docker containers (gateway + operator) | < 30s per suite |
 
 ---
@@ -39,7 +39,7 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 
 ```bash
 ./g8e test unit        # Run Tier 1 (Unit) tests - no external dependencies
-./g8e test integration # Run Tier 2 (In-Memory Integration) tests - SQLite in-memory, local PKI
+./g8e test integration # Run Tier 2 (In-Process Integration) tests - on-disk SQLite, local PKI
 ./g8e test e2e         # Run Tier 3 (Docker E2E) tests - requires Docker
 ./g8e test scenario    # Run Tier 2 (Scenario) tests - requires running gateway
 ./g8e test coverage    # Run tests with coverage report
@@ -54,7 +54,7 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test unit`** - Runs unit tests without build tags. These tests use mocks/stubs and have no external dependencies (no files, network, or DB). Fast feedback loop for local development.
 
-- **`./g8e test integration`** - Runs in-memory integration tests with the `integration` build tag. These tests use SQLite in-memory databases, local PKI generation, and local pubsub. No running gateway required.
+- **`./g8e test integration`** - Runs in-process integration tests with the `integration` build tag. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub. No separately running gateway required.
 
 - **`./g8e test e2e`** - Runs Docker-based E2E tests with the `e2e` build tag. These tests require Docker and use `docker-compose.yml` to spin up gateway and operator containers.
 
@@ -251,7 +251,8 @@ Reusable test infrastructure for integration and E2E tests:
 - `WaitForReady` - Polls HTTP health endpoint until server accepts connections
 - `SetPublicBaseURL` - Sets public base URL for MCP gateway (used for approval links)
 - Supports configurable posture (notary, consensus, doctrine), custom downstream URLs, and test port zero allowance
-- Handles path initialization, mock downstream MCP server, actuator key setup, and automatic cleanup
+- Handles path initialization, mock downstream MCP server, and actuator key setup
+- `Cleanup` stops the gateway to release database locks but **does not delete the data directory** — integration runs leave their artifacts behind (see [Fixture Lifecycle and Results](#fixture-lifecycle-and-results))
 
 **Docker Operator Fixture** (`test/fixtures/docker_operator_fixture.go`):
 - `DockerOperatorFixture` - Manages Docker-based operator containers for true multi-operator testing scenarios
@@ -262,6 +263,20 @@ Reusable test infrastructure for integration and E2E tests:
 - `WaitForReady` - Waits for operator to be ready by checking logs for a readiness marker
 - Supports auto-remove containers, custom Docker networks, and automatic image building from `Dockerfile.operator`
 - Includes cleanup function for graceful container shutdown and removal
+
+#### Fixture Lifecycle and Results
+
+Integration fixtures (`GatewayFixture`) follow a deliberate lifecycle so that runs stay isolated and reproducible while leaving inspectable artifacts behind.
+
+**Results are persisted, never cleaned up between or within runs.** `NewGatewayFixture` writes each run's data/vault/PKI to a fresh, uniquely-named directory under `<repo>/test-results/` (created via `os.MkdirTemp`, so concurrent fixtures in the same test and second never collide). This directory is **not** placed under `t.TempDir()` and is **not** deleted, so results accumulate across runs for later inspection. `test-results/` is gitignored. `Cleanup` stops the gateway — cancelling its context, joining the `Start` goroutine, and calling `Stop` to release database locks — but it intentionally leaves the data directory on disk.
+
+**Own the teardown at the test scope, exactly once.** Register cleanup with `t.Cleanup(f.Cleanup)` (preferred) or `defer f.Cleanup()` in the test body. Follow these rules:
+
+- **Never `defer f.Cleanup()` inside a setup helper.** A deferred cleanup fires when the *helper returns*, which is before the test body runs — tearing the gateway down and closing every database out from under the test. The symptom is `sql: database is closed` on the first gateway call. If a helper creates the fixture, it must register teardown with `t.Cleanup` (which runs at the end of the test), not `defer`.
+- **Never clean up twice.** If a setup helper already registered `t.Cleanup(f.Cleanup)`, the caller must not also `defer f.Cleanup()`. `Cleanup` joins the gateway's `Start` goroutine over a buffered (size 1) error channel; a second call blocks forever on that already-drained channel and the test hangs until the timeout panic.
+- **Hold temp credential files for the whole test.** Cert/key temp files handed to the mTLS client must outlive the test body. Register their removal with `t.Cleanup`, not `defer`, in any setup helper for the same reason as above.
+
+**Tests run sequentially.** Integration tests do not call `t.Parallel()`. Each test gets its own isolated data directory and a random port (`AllowTestPortZero: true`), so they neither share state nor contend for ports. Do not add `t.Parallel()` to these suites.
 
 ### Unit Tests
 
@@ -508,7 +523,7 @@ MCP gateway and native tool integration tests:
 # 1. Run unit tests (no gateway required)
 ./g8e test unit
 
-# 2. Run in-memory integration tests (no gateway required)
+# 2. Run in-process integration tests (no separately running gateway required)
 ./g8e test integration
 
 # 3. For Docker E2E tests, ensure Docker is running
@@ -615,9 +630,9 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 
 ### Makefile Test Targets
 
-- **`make test`** - Runs Tier 1 (Unit) and Tier 2 (In-Memory Integration) tests.
+- **`make test`** - Runs Tier 1 (Unit) and Tier 2 (In-Process Integration) tests.
 - **`make test-unit`** - Runs Tier 1 (Unit) tests without build tags. No external dependencies.
-- **`make test-integration`** - Runs Tier 2 (In-Memory Integration) tests with `integration` build tag. Uses SQLite in-memory, local PKI, local pubsub.
+- **`make test-integration`** - Runs Tier 2 (In-Process Integration) tests with `integration` build tag. Uses on-disk SQLite, local PKI, local pubsub.
 - **`make test-docker`** - Runs Tier 3 (Docker E2E) tests with `e2e` build tag. Requires Docker.
 - **`make test-gov`** - Runs Tier 3 (Gov Demo E2E) tests with `e2e` build tag. Requires Docker.
 - **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
@@ -662,6 +677,6 @@ GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 - **`lint`** - Runs golangci-lint with build tags for integration tests.
 - **`vulncheck`** - Scans Go dependencies for known vulnerabilities using govulncheck.
 - **`test-unit`** - Runs Tier 1 (Unit) tests without build tags.
-- **`test-integration`** - Runs Tier 2 (In-Memory Integration) tests with the `integration` build tag.
+- **`test-integration`** - Runs Tier 2 (In-Process Integration) tests with the `integration` build tag.
 
 The CI workflow does not run Tier 3 (Docker E2E) tests. Docker E2E tests require manual execution with Docker installed.

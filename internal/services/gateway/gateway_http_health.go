@@ -155,3 +155,28 @@ func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Reque
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 	})
 }
+
+// @Summary		State root
+// @Description	Returns the current state merkle root for envelope binding
+// @Tags			state
+// @Accept			json
+// @Produce		json
+// @Success		200	{object}	models.StateResponse
+// @Router			/state [get]
+func (h *HTTPHandler) handleState(w http.ResponseWriter, r *http.Request) {
+	if h.isReady != nil && !h.isReady() {
+		h.responder.Error(w, http.StatusServiceUnavailable, "service initializing")
+		return
+	}
+
+	root, err := h.db.StateRootSvc.GetCurrentStateRoot()
+	if err != nil {
+		h.logger.Error("State endpoint failed to calculate state root", string(constants.ConnectionStateError), err)
+		h.responder.Error(w, http.StatusServiceUnavailable, "state root calculation failed")
+		return
+	}
+
+	h.responder.JSON(w, http.StatusOK, models.StateResponse{
+		StateMerkleRoot: root,
+	})
+}

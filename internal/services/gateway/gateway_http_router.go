@@ -26,6 +26,9 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	// Health endpoint (available on mTLS surface for state root queries)
 	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
 
+	// State endpoint (for envelope state root binding)
+	mux.HandleFunc(constants.APIPaths.State, h.handleState)
+
 	// MCP Ingress routes with rate limiting
 	mcpMux := http.NewServeMux()
 	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
@@ -128,6 +131,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// Health endpoint
 	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+
+	// State endpoint (for envelope state root binding)
+	mux.HandleFunc(constants.APIPaths.State, h.handleState)
 
 	// Swagger UI documentation
 	mux.Handle("/swagger/*", httpSwagger.Handler(
@@ -242,6 +248,9 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 
 	// Health check - available on HTTP port for initialization monitoring
 	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+
+	// State endpoint (for envelope state root binding)
+	mux.HandleFunc(constants.APIPaths.State, h.handleState)
 
 	// Bootstrap routes - plain HTTP for initial CA discovery and bootstrap
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrapWithURL)
