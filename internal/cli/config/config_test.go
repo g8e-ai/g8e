@@ -14,7 +14,7 @@
 package config
 
 import (
-	"fmt"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -367,28 +367,29 @@ func TestDefaultConstants(t *testing.T) {
 }
 
 func TestLoadWithPaths(t *testing.T) {
-	t.Run("loads config with custom paths from JSON", func(t *testing.T) {
+	t.Run("loads config with custom paths from struct", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		pathsJSON := `{
-			"host": "test-host",
-			"infra": {
-				"app_cert_dir": "custom/app/certs",
-				"ca_cert_path": "custom/ca.pem",
-				"db_path": "custom/data.db",
-				"docs_dir": "custom/docs",
-				"pki_dir": "custom/pki",
-				"protocol_constants_dir": "custom/protocol/constants",
-				"protocol_dir": "custom/protocol",
-				"protocol_models_dir": "custom/protocol/models",
-				"secrets_dir": "custom/secrets",
-				"ssh_config_path": "custom/ssh_config",
-				"vault_dir": "custom/vault",
-				"vault_key_path": "custom/vault/key"
-			}
-		}`
+		customPaths := DefaultInfraPaths()
+		customPaths.Host = "test-host"
+		customPaths.Infra.AppCertDir = "custom/app/certs"
+		customPaths.Infra.CACertPath = "custom/ca.pem"
+		customPaths.Infra.DBPath = "custom/data.db"
+		customPaths.Infra.DocsDir = "custom/docs"
+		customPaths.Infra.PKIDir = "custom/pki"
+		customPaths.Infra.ProtocolConstantsDir = "custom/protocol/constants"
+		customPaths.Infra.ProtocolDir = "custom/protocol"
+		customPaths.Infra.ProtocolModelsDir = "custom/protocol/models"
+		customPaths.Infra.SecretsDir = "custom/secrets"
+		customPaths.Infra.SSHConfigPath = "custom/ssh_config"
+		customPaths.Infra.VaultDir = "custom/vault"
+		customPaths.Infra.VaultKeyPath = "custom/vault/key"
 
-		config, err := LoadWithPaths(tempDir, []byte(pathsJSON))
+		// Convert to JSON for LoadWithPaths
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
+
+		config, err := LoadWithPaths(tempDir, pathsData)
 		require.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Equal(t, tempDir, config.ProjectRoot)
@@ -408,9 +409,11 @@ func TestLoadWithPaths(t *testing.T) {
 		err = os.Chdir(tempDir)
 		require.NoError(t, err)
 
-		pathsJSON := `{"host": "localhost"}`
+		customPaths := DefaultPathsConfig()
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
 
-		config, err := LoadWithPaths("", []byte(pathsJSON))
+		config, err := LoadWithPaths("", pathsData)
 		require.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Equal(t, tempDir, config.ProjectRoot)
@@ -431,14 +434,12 @@ func TestLoadWithPaths(t *testing.T) {
 		tempDir := t.TempDir()
 		absPath := "/absolute/path/to/cert.pem"
 
-		pathsJSON := fmt.Sprintf(`{
-			"host": "localhost",
-			"infra": {
-				"ca_cert_path": "%s"
-			}
-		}`, absPath)
+		customPaths := DefaultInfraPaths()
+		customPaths.Infra.CACertPath = absPath
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
 
-		config, err := LoadWithPaths(tempDir, []byte(pathsJSON))
+		config, err := LoadWithPaths(tempDir, pathsData)
 		require.NoError(t, err)
 		assert.Equal(t, absPath, config.Paths.Infra.CACertPath)
 	})
@@ -446,14 +447,12 @@ func TestLoadWithPaths(t *testing.T) {
 	t.Run("resolves relative paths relative to project root", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		pathsJSON := `{
-			"host": "localhost",
-			"infra": {
-				"ca_cert_path": "relative/ca.pem"
-			}
-		}`
+		customPaths := DefaultInfraPaths()
+		customPaths.Infra.CACertPath = "relative/ca.pem"
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
 
-		config, err := LoadWithPaths(tempDir, []byte(pathsJSON))
+		config, err := LoadWithPaths(tempDir, pathsData)
 		require.NoError(t, err)
 		assert.Equal(t, filepath.Join(tempDir, "relative/ca.pem"), config.Paths.Infra.CACertPath)
 	})
@@ -461,16 +460,14 @@ func TestLoadWithPaths(t *testing.T) {
 	t.Run("handles empty infra fields gracefully", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		pathsJSON := `{
-			"host": "localhost",
-			"infra": {
-				"app_cert_dir": "",
-				"ca_cert_path": "",
-				"db_path": ""
-			}
-		}`
+		customPaths := DefaultInfraPaths()
+		customPaths.Infra.AppCertDir = ""
+		customPaths.Infra.CACertPath = ""
+		customPaths.Infra.DBPath = ""
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
 
-		config, err := LoadWithPaths(tempDir, []byte(pathsJSON))
+		config, err := LoadWithPaths(tempDir, pathsData)
 		require.NoError(t, err)
 		assert.NotNil(t, config)
 		assert.Empty(t, config.Paths.Infra.AppCertDir)

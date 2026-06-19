@@ -50,6 +50,32 @@ type PathsConfig struct {
 	} `json:"infra"`
 }
 
+// DefaultPathsConfig returns the default path configuration.
+// All paths are relative and resolved from the current working directory.
+func DefaultPathsConfig() PathsConfig {
+	return PathsConfig{
+		Host: "localhost",
+	}
+}
+
+// DefaultInfraPaths returns the default infra path configuration.
+func DefaultInfraPaths() PathsConfig {
+	paths := DefaultPathsConfig()
+	paths.Infra.AppCertDir = ".g8e/pki/issued/apps"
+	paths.Infra.CACertPath = ".g8e/pki/trust/g8eg-ca-bundle.pem"
+	paths.Infra.DBPath = ".g8e/data/g8e.db"
+	paths.Infra.DocsDir = ".g8e/docs"
+	paths.Infra.PKIDir = ".g8e/pki"
+	paths.Infra.ProtocolConstantsDir = ".g8e/protocol/constants"
+	paths.Infra.ProtocolDir = ".g8e/protocol"
+	paths.Infra.ProtocolModelsDir = ".g8e/protocol/models"
+	paths.Infra.SecretsDir = ".g8e/secrets"
+	paths.Infra.SSHConfigPath = ".g8e/ssh_config"
+	paths.Infra.VaultDir = ".g8e/vault"
+	paths.Infra.VaultKeyPath = ".g8e/vault/key"
+	return paths
+}
+
 // Config holds CLI configuration resolved from constants.Paths.
 // All paths are sourced from internal/constants/paths.go (SSOT).
 type Config struct {
@@ -95,19 +121,19 @@ func Load(projectRoot string) (*Config, error) {
 		return nil, fmt.Errorf("cli config: failed to initialize paths: %w", err)
 	}
 
-	paths := &PathsConfig{Host: "localhost"}
-	paths.Infra.ProtocolDir = filepath.Join(projectRoot, ".g8e/protocol")
-	paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, ".g8e/protocol/constants")
-	paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, ".g8e/protocol/models")
-	paths.Infra.DBPath = filepath.Join(projectRoot, ".g8e/data/g8e.db")
-	paths.Infra.PKIDir = filepath.Join(projectRoot, ".g8e/pki")
-	paths.Infra.CACertPath = filepath.Join(projectRoot, ".g8e/pki/trust/g8eg-ca-bundle.pem")
-	paths.Infra.SecretsDir = filepath.Join(projectRoot, ".g8e/secrets")
-	paths.Infra.AppCertDir = filepath.Join(projectRoot, ".g8e/pki/issued/apps")
-	paths.Infra.DocsDir = filepath.Join(projectRoot, ".g8e/docs")
-	paths.Infra.SSHConfigPath = filepath.Join(projectRoot, ".g8e/ssh_config")
-	paths.Infra.VaultDir = filepath.Join(projectRoot, ".g8e/vault")
-	paths.Infra.VaultKeyPath = filepath.Join(projectRoot, ".g8e/vault/key")
+	paths := DefaultInfraPaths()
+	paths.Infra.ProtocolDir = filepath.Join(projectRoot, paths.Infra.ProtocolDir)
+	paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, paths.Infra.ProtocolConstantsDir)
+	paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, paths.Infra.ProtocolModelsDir)
+	paths.Infra.DBPath = filepath.Join(projectRoot, paths.Infra.DBPath)
+	paths.Infra.PKIDir = filepath.Join(projectRoot, paths.Infra.PKIDir)
+	paths.Infra.CACertPath = filepath.Join(projectRoot, paths.Infra.CACertPath)
+	paths.Infra.SecretsDir = filepath.Join(projectRoot, paths.Infra.SecretsDir)
+	paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
+	paths.Infra.DocsDir = filepath.Join(projectRoot, paths.Infra.DocsDir)
+	paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
+	paths.Infra.VaultDir = filepath.Join(projectRoot, paths.Infra.VaultDir)
+	paths.Infra.VaultKeyPath = filepath.Join(projectRoot, paths.Infra.VaultKeyPath)
 
 	return &Config{
 		ProjectRoot:    projectRoot,
@@ -115,7 +141,7 @@ func Load(projectRoot string) (*Config, error) {
 		PKIDir:         filepath.Join(projectRoot, DefaultPKIDir),
 		SecretsDir:     filepath.Join(projectRoot, DefaultSecretsDir),
 		CredentialsDir: filepath.Join(projectRoot, DefaultCredentialsDir),
-		Paths:          paths,
+		Paths:          &paths,
 	}, nil
 }
 
