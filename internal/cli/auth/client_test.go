@@ -92,12 +92,14 @@ func TestGenerateCSR(t *testing.T) {
 
 				if privKey == nil {
 					t.Error("GenerateCSR() returned nil private key")
+					return
 				}
 
 				// Verify CSR PEM format
 				block, _ := pem.Decode([]byte(csrPEM))
 				if block == nil {
 					t.Error("Generated CSR is not valid PEM")
+					return
 				}
 				if block.Type != "CERTIFICATE REQUEST" {
 					t.Errorf("CSR PEM block type is %s, want CERTIFICATE REQUEST", block.Type)
@@ -143,44 +145,44 @@ func TestVerifyCAFingerprint(t *testing.T) {
 	fingerprint := computeSHA256Fingerprint(certDER)
 
 	tests := []struct {
-		name               string
-		caPEM              []byte
+		name                string
+		caPEM               []byte
 		expectedFingerprint string
-		wantErr            bool
-		errMsg             string
+		wantErr             bool
+		errMsg              string
 	}{
 		{
-			name:               "valid fingerprint match",
-			caPEM:              certPEM,
+			name:                "valid fingerprint match",
+			caPEM:               certPEM,
 			expectedFingerprint: fingerprint,
-			wantErr:            false,
+			wantErr:             false,
 		},
 		{
-			name:               "empty fingerprint (skip verification)",
-			caPEM:              certPEM,
+			name:                "empty fingerprint (skip verification)",
+			caPEM:               certPEM,
 			expectedFingerprint: "",
-			wantErr:            false,
+			wantErr:             false,
 		},
 		{
-			name:               "fingerprint mismatch",
-			caPEM:              certPEM,
+			name:                "fingerprint mismatch",
+			caPEM:               certPEM,
 			expectedFingerprint: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			wantErr:            true,
-			errMsg:             "CA fingerprint mismatch",
+			wantErr:             true,
+			errMsg:              "CA fingerprint mismatch",
 		},
 		{
-			name:               "invalid PEM",
-			caPEM:              []byte("not valid PEM"),
+			name:                "invalid PEM",
+			caPEM:               []byte("not valid PEM"),
 			expectedFingerprint: fingerprint,
-			wantErr:            true,
-			errMsg:             "failed to decode CA PEM",
+			wantErr:             true,
+			errMsg:              "failed to decode CA PEM",
 		},
 		{
-			name:               "wrong PEM block type",
-			caPEM:              pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: certDER}),
+			name:                "wrong PEM block type",
+			caPEM:               pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: certDER}),
 			expectedFingerprint: fingerprint,
-			wantErr:            true,
-			errMsg:             "PEM block is not a certificate",
+			wantErr:             true,
+			errMsg:              "PEM block is not a certificate",
 		},
 	}
 
@@ -437,6 +439,7 @@ func TestSaveCertAndKey(t *testing.T) {
 		block, _ := pem.Decode(keyData)
 		if block == nil {
 			t.Error("Key file is not valid PEM")
+			return
 		}
 		if block.Type != "EC PRIVATE KEY" {
 			t.Errorf("Key PEM block type is %s, want EC PRIVATE KEY", block.Type)
@@ -588,9 +591,9 @@ func TestParseCertPEM(t *testing.T) {
 
 func TestIsCertExpiringSoon(t *testing.T) {
 	tests := []struct {
-		name          string
-		notAfter      time.Time
-		wantExpiring  bool
+		name         string
+		notAfter     time.Time
+		wantExpiring bool
 	}{
 		{
 			name:         "cert expiring in 1 hour",
