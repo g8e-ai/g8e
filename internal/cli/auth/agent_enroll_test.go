@@ -505,3 +505,266 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to POST delegated credential request")
 }
+
+// TestEnrollAgentApp_NoCLICredentials tests error handling when CLI credentials are missing.
+func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	agentName := "test-agent"
+
+	// Write CLI cert and CA bundle but no credentials
+	writeTestCLICert(t, cfg)
+	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	cfg.Paths.Infra.CACertPath = caPath
+
+	_, _, _, err := EnrollAgentApp(cfg, agentName)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no CLI session found")
+}
+
+// TestEnrollAgentApp_MissingCLICert tests error handling when CLI cert is missing.
+func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	agentName := "test-agent"
+
+	// Write credentials and CA bundle but no CLI cert
+	writeTestCredentials(t, cfg)
+	dummyCert, _ := generateTestCertificateWithSPIFFE(t, "dummy", time.Now().Add(24*time.Hour))
+	caPath := filepath.Join(tmpDir, "test-ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
+	cfg.Paths.Infra.CACertPath = caPath
+
+	_, _, _, err := EnrollAgentApp(cfg, agentName)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load CLI certificate")
+}
+
+// TestEnrollAgentApp_MissingCABundle tests error handling when CA bundle is missing.
+func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	agentName := "test-agent"
+
+	// Write CLI cert and credentials but no CA bundle
+	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
+
+	_, _, _, err := EnrollAgentApp(cfg, agentName)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read CA bundle")
+}
+
+// TestEnrollAgentApp_WrongSPIFFEID tests re-enrollment when cert has wrong SPIFFE ID.
+func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	cfg := &config.Config{
+		ProjectRoot:    tmpDir,
+		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		CredentialsDir: tmpDir,
+		Paths:          &config.PathsConfig{},
+	}
+
+	agentName := "test-agent"
+	certFile := cfg.AppCertFile(agentName)
+	keyFile := cfg.AppKeyFile(agentName)
+
+	// Create a cert with a different SPIFFE ID
+	certPEM, keyPEM := generateTestCertificateWithSPIFFE(t, "different-agent", time.Now().Add(30*24*time.Hour))
+	require.NoError(t, os.MkdirAll(filepath.Dir(certFile), 0700))
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+	require.NoError(t, os.WriteFile(keyFile, []byte(keyPEM), 0600))
+
+	startTLSEnrollServer(t, cfg, func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, constants.APIPaths.PKIAppsDelegated, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		w.Write(enrollResponse(t, agentName))
+	})
+	writeTestCLICert(t, cfg)
+	writeTestCredentials(t, cfg)
+
+	appID, returnedCertFile, returnedKeyFile, err := EnrollAgentApp(cfg, agentName)
+
+	require.NoError(t, err)
+	assert.Equal(t, "spiffe://g8e.local/app/"+agentName, appID)
+	assert.Equal(t, certFile, returnedCertFile)
+	assert.Equal(t, keyFile, returnedKeyFile)
+}
+
+// TestCheckExistingAppCert_NoFile tests checkExistingAppCert when cert file doesn't exist.
+func TestCheckExistingAppCert_NoFile(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "nonexistent-cert.pem")
+
+	appID, ok := checkExistingAppCert(certFile, "test-agent")
+
+	assert.Empty(t, appID)
+	assert.False(t, ok)
+}
+
+// TestCheckExistingAppCert_InvalidPEM tests checkExistingAppCert with invalid PEM data.
+func TestCheckExistingAppCert_InvalidPEM(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "invalid-cert.pem")
+	require.NoError(t, os.WriteFile(certFile, []byte("not-valid-pem"), 0600))
+
+	appID, ok := checkExistingAppCert(certFile, "test-agent")
+
+	assert.Empty(t, appID)
+	assert.False(t, ok)
+}
+
+// TestCheckExistingAppCert_InvalidCertificate tests checkExistingAppCert with unparseable certificate.
+func TestCheckExistingAppCert_InvalidCertificate(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "invalid-cert.pem")
+	// Write a PEM block that's not a valid certificate
+	invalidPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: []byte("not-a-valid-certificate"),
+	})
+	require.NoError(t, os.WriteFile(certFile, invalidPEM, 0600))
+
+	appID, ok := checkExistingAppCert(certFile, "test-agent")
+
+	assert.Empty(t, appID)
+	assert.False(t, ok)
+}
+
+// TestCheckExistingAppCert_ExpiringSoon tests checkExistingAppCert with cert expiring soon.
+func TestCheckExistingAppCert_ExpiringSoon(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "expiring-cert.pem")
+	agentName := "test-agent"
+
+	// Create cert expiring in 3 days (< 7 day threshold)
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(3*24*time.Hour))
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	appID, ok := checkExistingAppCert(certFile, agentName)
+
+	assert.Empty(t, appID)
+	assert.False(t, ok)
+}
+
+// TestCheckExistingAppCert_ValidWithCorrectSPIFFE tests checkExistingAppCert with valid cert and correct SPIFFE ID.
+func TestCheckExistingAppCert_ValidWithCorrectSPIFFE(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "valid-cert.pem")
+	agentName := "test-agent"
+
+	// Create valid cert with >7 days remaining and correct SPIFFE ID
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(30*24*time.Hour))
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	appID, ok := checkExistingAppCert(certFile, agentName)
+
+	expectedID := "spiffe://g8e.local/app/" + agentName
+	assert.Equal(t, expectedID, appID)
+	assert.True(t, ok)
+}
+
+// TestCheckExistingAppCert_ValidWithWrongSPIFFE tests checkExistingAppCert with valid cert but wrong SPIFFE ID.
+func TestCheckExistingAppCert_ValidWithWrongSPIFFE(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "valid-cert.pem")
+	agentName := "test-agent"
+
+	// Create valid cert with >7 days remaining but different SPIFFE ID
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, "different-agent", time.Now().Add(30*24*time.Hour))
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	appID, ok := checkExistingAppCert(certFile, agentName)
+
+	assert.Empty(t, appID)
+	assert.False(t, ok)
+}
+
+// TestCheckExistingAppCert_ExactlyAtThreshold tests checkExistingAppCert with cert at exactly 7 days.
+func TestCheckExistingAppCert_ExactlyAtThreshold(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "threshold-cert.pem")
+	agentName := "test-agent"
+
+	// Create cert expiring exactly at 7 days (should be rejected)
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(7*24*time.Hour))
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	appID, ok := checkExistingAppCert(certFile, agentName)
+
+	assert.Empty(t, appID)
+	assert.False(t, ok)
+}
+
+// TestCheckExistingAppCert_JustAboveThreshold tests checkExistingAppCert with cert just above 7 days.
+func TestCheckExistingAppCert_JustAboveThreshold(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	certFile := filepath.Join(tmpDir, "valid-cert.pem")
+	agentName := "test-agent"
+
+	// Create cert expiring in 7 days + 1 second (should be accepted)
+	certPEM, _ := generateTestCertificateWithSPIFFE(t, agentName, time.Now().Add(7*24*time.Hour+time.Second))
+	require.NoError(t, os.WriteFile(certFile, []byte(certPEM), 0600))
+
+	appID, ok := checkExistingAppCert(certFile, agentName)
+
+	expectedID := "spiffe://g8e.local/app/" + agentName
+	assert.Equal(t, expectedID, appID)
+	assert.True(t, ok)
+}
