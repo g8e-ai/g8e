@@ -217,6 +217,7 @@ Usage:
 
 Flags:
       --gateway string   Gateway endpoint URL
+      --name string      Connector name used as SPIFFE workload identity (default "sharepoint-connector")
   -h, --help             help for enroll
 ```
 
