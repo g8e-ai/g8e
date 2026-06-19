@@ -293,4 +293,21 @@ var (
 	ErrMCPNativeToolUnknown      = errors.New("unknown native tool")
 	ErrMCPParseSocketPort        = errors.New("parse socket port")
 	ErrMCPParseSocketIPOctet     = errors.New("parse socket IP octet")
+
+	// SQLite validation errors
+	ErrSQLiteValidateEmptyIdentifier = errors.New("empty identifier")
+	ErrSQLiteValidateInvalidPattern  = errors.New("invalid identifier pattern")
+
+	// SQLite utility errors
+	ErrSQLitePruneFailed = errors.New("prune function failed")
+
+	// SQLite compression errors
+	ErrSQLiteCompressGzipWrite    = errors.New("gzip write failed")
+	ErrSQLiteCompressGzipClose   = errors.New("gzip close failed")
+	ErrSQLiteDecompressGzipInit  = errors.New("gzip reader init failed")
+	ErrSQLiteDecompressGzipRead  = errors.New("gzip read failed")
+
+	// Timestamp errors
+	ErrTimestampParseEmpty       = errors.New("timestamp: parse: empty string")
+	ErrTimestampParseInvalidFormat = errors.New("timestamp: parse: unrecognized format")
 )

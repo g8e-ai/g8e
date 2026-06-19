@@ -16,6 +16,8 @@ package sqliteutil
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // validIdentifierRe guards against SQL injection when field names must be
@@ -24,10 +26,10 @@ var validIdentifierRe = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 func ValidateIdentifier(name string) error {
 	if name == "" {
-		return fmt.Errorf("validate: empty identifier")
+		return fmt.Errorf("sqliteutil: validate identifier: %w", constants.ErrSQLiteValidateEmptyIdentifier)
 	}
 	if !validIdentifierRe.MatchString(name) {
-		return fmt.Errorf("validate: invalid identifier %q: must match [a-zA-Z_][a-zA-Z0-9_]*", name)
+		return fmt.Errorf("sqliteutil: validate identifier %q: %w", name, constants.ErrSQLiteValidateInvalidPattern)
 	}
 	return nil
 }

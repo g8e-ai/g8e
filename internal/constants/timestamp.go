@@ -17,8 +17,14 @@
 // This file is manually maintained to match the JSON SSOT.
 package constants
 
+import "time"
+
 // FormatRFC3339 is the canonical timestamp format string for RFC3339 with timezone offset.
 // Used throughout the platform for consistent timestamp representation.
 //
 // Source: protocol/constants/timestamp.json
 const FormatRFC3339 = "2006-01-02T15:04:05Z07:00"
+
+// TimestampFormat is the canonical timestamp format for RFC3339 with nanosecond precision.
+// Used throughout the platform for consistent timestamp representation.
+const TimestampFormat = time.RFC3339Nano

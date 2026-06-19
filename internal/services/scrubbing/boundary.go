@@ -616,7 +616,27 @@ func (s *ScrubbingService) determineStatus(exitCode int) constants.CommandExitSt
 		return constants.CommandExitStatusTerminated
 	default:
 		if exitCode > 128 {
-			return constants.CommandExitStatus(fmt.Sprintf("signal_%d", exitCode-128))
+			signalNum := exitCode - 128
+			switch signalNum {
+			case 1:
+				return constants.CommandExitStatusSignal1
+			case 2:
+				return constants.CommandExitStatusSignal2
+			case 3:
+				return constants.CommandExitStatusSignal3
+			case 6:
+				return constants.CommandExitStatusSignal6
+			case 9:
+				return constants.CommandExitStatusSignal9
+			case 11:
+				return constants.CommandExitStatusSignal11
+			case 13:
+				return constants.CommandExitStatusSignal13
+			case 15:
+				return constants.CommandExitStatusSignal15
+			default:
+				return constants.CommandExitStatusError
+			}
 		}
 		return constants.CommandExitStatusError
 	}
@@ -635,7 +655,7 @@ func (s *ScrubbingService) categorizeError(stderr string, exitCode int) string {
 	case strings.Contains(stderrLower, "permission denied"):
 		return "permission_denied"
 	case strings.Contains(stderrLower, "not found") || strings.Contains(stderrLower, "no such file"):
-		return string(constants.CommandExitStatusNotFound)
+		return "not_found"
 	case strings.Contains(stderrLower, "timeout") || strings.Contains(stderrLower, "timed out"):
 		return "timeout"
 	case strings.Contains(stderrLower, "connection refused"):
