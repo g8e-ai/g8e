@@ -28,14 +28,14 @@ import (
 )
 
 // Canonical GovernanceEnvelope action types. SCREAMING_SNAKE per protocol/constants. Pinned
-// here so Emulator has no internal/ import; verify against MapEventTypeToActionType.
+// here so Agentic Tool Emulator has no internal/ import; verify against MapEventTypeToActionType.
 const (
 	ActionMcpCall   = "MCP_CALL"
 	ActionA2aCall   = "A2A_CALL"
 	ProtocolVersion = "1.0"
 )
 
-// Ensemble is Emulator's mock L2 consensus tribunal: N agents that each "vote"
+// Ensemble is Agentic Tool Emulator's mock L2 consensus tribunal: N agents that each "vote"
 // on a transaction hash. The envelope carries a single aggregate Ed25519
 // signature from the registered consensus key over "<hash>|<decision>", plus
 // one AgentID per voter — exactly what L4Warden.verifyL2Signature checks.
@@ -138,7 +138,7 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 	call := &operatorv1.McpCallRequested{
 		ToolName:      m.ToolName,
 		ArgumentsJson: m.ArgumentsJSON,
-		ExecutionId:   fmt.Sprintf("emulator-%d", time.Now().UnixNano()),
+		ExecutionId:   fmt.Sprintf("agentic-tool-emulator-%d", time.Now().UnixNano()),
 	}
 	payloadBytes, err := proto.Marshal(call)
 	if err != nil {

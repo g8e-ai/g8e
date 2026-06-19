@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0.
 
-// Package scenarios is the heart of Emulator: an ordered, flexible registry of
+// Package scenarios is the heart of Agentic Tool Emulator: an ordered, flexible registry of
 // impersonations. Each scenario wears a persona (some real-world AI tool) and
 // exercises one slice of the protocol surface against a REAL Gateway+Operator.
 package scenarios
@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
+	clientpkg "github.com/g8e-ai/g8e/internal/agentic_tool_emulator/client"
 )
 
 // Posture is the Gateway enforcement mode a scenario needs.

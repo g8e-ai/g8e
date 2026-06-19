@@ -6,7 +6,7 @@ package scenarios
 import (
 	"testing"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
+	clientpkg "github.com/g8e-ai/g8e/internal/agentic_tool_emulator/client"
 )
 
 func TestApiKeyNote(t *testing.T) {

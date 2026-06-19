@@ -18,21 +18,21 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/emulator/config"
+	"github.com/g8e-ai/g8e/internal/agentic_tool_emulator/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestAuditorCmd(t *testing.T) {
-	t.Run("auditor command has correct use and description", func(t *testing.T) {
-		cmd := emulatorCmd()
-		assert.Equal(t, "emulator", cmd.Use)
-		assert.Contains(t, cmd.Short, "Universal agent emulator")
+func TestAgenticToolEmulatorCmd(t *testing.T) {
+	t.Run("agentic-tool-emulator command has correct use and description", func(t *testing.T) {
+		cmd := agenticToolEmulatorCmd()
+		assert.Equal(t, "agentic-tool-emulator", cmd.Use)
+		assert.Contains(t, cmd.Short, "Universal agentic tool emulator")
 		assert.Contains(t, cmd.Long, "impersonates arbitrary AI tools")
 	})
 
-	t.Run("auditor has expected subcommands", func(t *testing.T) {
-		cmd := emulatorCmd()
+	t.Run("agentic-tool-emulator has expected subcommands", func(t *testing.T) {
+		cmd := agenticToolEmulatorCmd()
 		require.NotNil(t, cmd)
 
 		expectedSubcommands := []string{"list", "run", "audit"}
@@ -45,40 +45,40 @@ func TestAuditorCmd(t *testing.T) {
 					break
 				}
 			}
-			assert.True(t, found, "emulator command should have %s subcommand", subcmd)
+			assert.True(t, found, "agentic-tool-emulator command should have %s subcommand", subcmd)
 		}
 	})
 }
 
-func TestAuditorListCmd(t *testing.T) {
-	t.Run("auditor list command has correct use", func(t *testing.T) {
-		cmd := emulatorListCmd()
+func TestAgenticToolEmulatorListCmd(t *testing.T) {
+	t.Run("agentic-tool-emulator list command has correct use", func(t *testing.T) {
+		cmd := agenticToolEmulatorListCmd()
 		assert.Equal(t, "list", cmd.Use)
 		assert.Contains(t, cmd.Short, "List available scenarios")
 	})
 }
 
-func TestAuditorRunCmd(t *testing.T) {
-	t.Run("auditor run command has correct use", func(t *testing.T) {
-		cmd := emulatorRunCmd()
+func TestAgenticToolEmulatorRunCmd(t *testing.T) {
+	t.Run("agentic-tool-emulator run command has correct use", func(t *testing.T) {
+		cmd := agenticToolEmulatorRunCmd()
 		assert.Contains(t, cmd.Use, "run")
 		assert.Contains(t, cmd.Short, "Run scenarios")
 	})
 
-	t.Run("auditor run has required flags", func(t *testing.T) {
-		cmd := emulatorRunCmd()
+	t.Run("agentic-tool-emulator run has required flags", func(t *testing.T) {
+		cmd := agenticToolEmulatorRunCmd()
 		require.NotNil(t, cmd)
 
 		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "insecure", "out", "l3-mode", "ensemble", "verbose", "phase"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
-			assert.NotNil(t, flag, "auditor run should have --%s flag", flagName)
+			assert.NotNil(t, flag, "agentic-tool-emulator run should have --%s flag", flagName)
 		}
 	})
 
-	t.Run("auditor run ensemble flag has default value", func(t *testing.T) {
-		cmd := emulatorRunCmd()
+	t.Run("agentic-tool-emulator run ensemble flag has default value", func(t *testing.T) {
+		cmd := agenticToolEmulatorRunCmd()
 		require.NotNil(t, cmd)
 
 		flag := cmd.Flags().Lookup("ensemble")
@@ -86,8 +86,8 @@ func TestAuditorRunCmd(t *testing.T) {
 		assert.Equal(t, "3", flag.DefValue)
 	})
 
-	t.Run("auditor run phase flag has default value", func(t *testing.T) {
-		cmd := emulatorRunCmd()
+	t.Run("agentic-tool-emulator run phase flag has default value", func(t *testing.T) {
+		cmd := agenticToolEmulatorRunCmd()
 		require.NotNil(t, cmd)
 
 		flag := cmd.Flags().Lookup("phase")
@@ -96,120 +96,120 @@ func TestAuditorRunCmd(t *testing.T) {
 	})
 }
 
-func TestAuditorAuditCmd(t *testing.T) {
-	t.Run("auditor audit command has correct use", func(t *testing.T) {
-		cmd := emulatorAuditCmd()
+func TestAgenticToolEmulatorAuditCmd(t *testing.T) {
+	t.Run("agentic-tool-emulator audit command has correct use", func(t *testing.T) {
+		cmd := agenticToolEmulatorAuditCmd()
 		assert.Contains(t, cmd.Use, "audit")
 		assert.Contains(t, cmd.Short, "Audit signed receipts")
 	})
 
-	t.Run("auditor audit has required flags", func(t *testing.T) {
-		cmd := emulatorAuditCmd()
+	t.Run("agentic-tool-emulator audit has required flags", func(t *testing.T) {
+		cmd := agenticToolEmulatorAuditCmd()
 		require.NotNil(t, cmd)
 
 		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "insecure", "out"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
-			assert.NotNil(t, flag, "auditor audit should have --%s flag", flagName)
+			assert.NotNil(t, flag, "agentic-tool-emulator audit should have --%s flag", flagName)
 		}
 	})
 }
 
-func TestApplyAuditorFlags(t *testing.T) {
-	t.Run("applyAuditorFlags sets MTLS URL", func(t *testing.T) {
+func TestApplyAgenticToolEmulatorFlags(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets MTLS URL", func(t *testing.T) {
 		emulatorMTLSURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttp)
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttp), cfg.MTLSBaseURL)
 		emulatorMTLSURL = ""
 	})
 
-	t.Run("applyAuditorFlags sets public URL", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets public URL", func(t *testing.T) {
 		emulatorPublicURL = "https://example.com:" + strconv.Itoa(constants.Ports.OperatorHttps)
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "https://example.com:"+strconv.Itoa(constants.Ports.OperatorHttps), cfg.PublicBaseURL)
 		emulatorPublicURL = ""
 	})
 
-	t.Run("applyAuditorFlags sets cert", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets cert", func(t *testing.T) {
 		emulatorCert = "/path/to/cert.pem"
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "/path/to/cert.pem", cfg.Auth.ClientCert)
 		emulatorCert = ""
 	})
 
-	t.Run("applyAuditorFlags sets key", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets key", func(t *testing.T) {
 		emulatorKey = "/path/to/key.pem"
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "/path/to/key.pem", cfg.Auth.ClientKey)
 		emulatorKey = ""
 	})
 
-	t.Run("applyAuditorFlags sets CA bundle", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets CA bundle", func(t *testing.T) {
 		emulatorCA = "/path/to/ca.pem"
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "/path/to/ca.pem", cfg.Auth.CABundle)
 		emulatorCA = ""
 	})
 
-	t.Run("applyAuditorFlags sets API key", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets API key", func(t *testing.T) {
 		emulatorAPIKey = "test-api-key"
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "test-api-key", cfg.Auth.APIKey)
 		emulatorAPIKey = ""
 	})
 
-	t.Run("applyAuditorFlags sets insecure flag", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets insecure flag", func(t *testing.T) {
 		emulatorInsecure = true
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.True(t, cfg.Auth.Insecure)
 		emulatorInsecure = false
 	})
 
-	t.Run("applyAuditorFlags sets operator session ID", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets operator session ID", func(t *testing.T) {
 		emulatorSessionID = "session-123"
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "session-123", cfg.OperatorSessionID)
 		emulatorSessionID = ""
 	})
 
-	t.Run("applyAuditorFlags sets out directory", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets out directory", func(t *testing.T) {
 		testOutDir := t.TempDir()
 		emulatorOutDir = testOutDir
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, testOutDir, cfg.OutDir)
 		emulatorOutDir = ""
 	})
 
-	t.Run("applyAuditorFlags sets L3 mode", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets L3 mode", func(t *testing.T) {
 		emulatorL3Mode = "mock"
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, "mock", cfg.L3Mode)
 		emulatorL3Mode = ""
 	})
 
-	t.Run("applyAuditorFlags sets ensemble size", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets ensemble size", func(t *testing.T) {
 		emulatorEnsemble = 5
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.Equal(t, 5, cfg.EnsembleSize)
 		emulatorEnsemble = 0
 	})
 
-	t.Run("applyAuditorFlags sets verbose flag", func(t *testing.T) {
+	t.Run("applyAgenticToolEmulatorFlags sets verbose flag", func(t *testing.T) {
 		emulatorVerbose = true
 		cfg := config.Default()
-		applyEmulatorFlags(&cfg)
+		applyAgenticToolEmulatorFlags(&cfg)
 		assert.True(t, cfg.Verbose)
 		emulatorVerbose = false
 	})

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
+	clientpkg "github.com/g8e-ai/g8e/internal/agentic_tool_emulator/client"
 )
 
 func TestRegistry(t *testing.T) {

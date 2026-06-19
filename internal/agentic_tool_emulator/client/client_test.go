@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/emulator/config"
+	"github.com/g8e-ai/g8e/internal/agentic_tool_emulator/config"
 )
 
 func TestNew(t *testing.T) {

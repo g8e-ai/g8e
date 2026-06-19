@@ -17,7 +17,7 @@ Available Commands:
   operator    Manage Operator instances
   vault       Manage the encryption vault
   migration   Manage governed data migrations
-  test        Run test suites (unit, integration, e2e, scenario, emulator, chaos)
+  test        Run test suites (unit, integration, e2e, scenario, agentic-tool-emulator, chaos)
   demos       Manage g8e demo environments
   audit       Run audit reports for compliance
   swagger     Manage Swagger/OpenAPI documentation
@@ -656,7 +656,7 @@ Flags:
 
 ## test
 ```
-Run test suites (unit, integration, e2e, scenario, coverage, lint, emulator, chaos, summary)
+Run test suites (unit, integration, e2e, scenario, coverage, lint, agentic-tool-emulator, chaos, summary)
 
 Usage:
   g8e test [command]
@@ -667,7 +667,7 @@ Available Commands:
   e2e         Run Tier 3 (Live Platform E2E) tests
   coverage    Run tests with coverage report
   lint        Run linting and quality checks
-  emulator    Universal agent emulator for a real g8e Gateway/Operator
+  agentic-tool-emulator    Universal agentic tool emulator for a real g8e Gateway/Operator
   chaos       Generate realistic governance events against the local g8e audit stack
   summary     View chaos test summary from test vault
 
@@ -736,14 +736,14 @@ Flags:
   -h, --help   help for lint
 ```
 
-### test emulator
+### test agentic-tool-emulator
 ```
-Universal agent emulator for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
+Universal agentic tool emulator for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
 
-The emulator is a protocol compliance verifier that records every HTTP exchange with detailed metadata (request/response bodies, latency, status codes) and cross-references against the Operator's signed receipts. The ONLY fiction is the client identity, the Gateway and Operator are real infrastructure.
+The agentic tool emulator is a protocol compliance verifier that records every HTTP exchange with detailed metadata (request/response bodies, latency, status codes) and cross-references against the Operator's signed receipts. The ONLY fiction is the client identity, the Gateway and Operator are real infrastructure.
 
 Usage:
-  g8e test emulator [command]
+  g8e test agentic-tool-emulator [command]
 
 Available Commands:
   list        List available scenarios
@@ -751,28 +751,28 @@ Available Commands:
   audit       Audit signed receipts from the Operator
 
 Flags:
-  -h, --help   help for emulator
+  -h, --help   help for agentic-tool-emulator
 
-Use "g8e test emulator [command] --help" for more information about a command.
+Use "g8e test agentic-tool-emulator [command] --help" for more information about a command.
 ```
 
-#### test emulator list
+#### test agentic-tool-emulator list
 ```
 List available scenarios
 
 Usage:
-  g8e test emulator list [flags]
+  g8e test agentic-tool-emulator list [flags]
 
 Flags:
   -h, --help   help for list
 ```
 
-#### test emulator run
+#### test agentic-tool-emulator run
 ```
 Run scenarios against a real Gateway/Operator
 
 Usage:
-  g8e test emulator run [flags] [scenario ...]
+  g8e test agentic-tool-emulator run [flags] [scenario ...]
 
 Flags:
       --config string            JSON config overlay
@@ -792,12 +792,12 @@ Flags:
   -h, --help                     help for run
 ```
 
-#### test emulator audit
+#### test agentic-tool-emulator audit
 ```
 Audit signed receipts from the Operator
 
 Usage:
-  g8e test emulator audit [flags]
+  g8e test agentic-tool-emulator audit [flags]
 
 Flags:
       --config string            JSON config overlay

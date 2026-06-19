@@ -24,9 +24,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
-	"github.com/g8e-ai/g8e/internal/emulator/config"
-	"github.com/g8e-ai/g8e/internal/emulator/scenarios"
+	clientpkg "github.com/g8e-ai/g8e/internal/agentic_tool_emulator/client"
+	"github.com/g8e-ai/g8e/internal/agentic_tool_emulator/config"
+	"github.com/g8e-ai/g8e/internal/agentic_tool_emulator/scenarios"
 )
 
 var (
@@ -46,24 +46,24 @@ var (
 	emulatorPhase      string
 )
 
-func emulatorCmd() *cobra.Command {
+func agenticToolEmulatorCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "emulator",
-		Short: "Universal agent emulator for a real g8e Gateway/Operator",
-		Long: `emulator impersonates arbitrary AI tools and agents against a REAL g8e
+		Use:   "agentic-tool-emulator",
+		Short: "Universal agentic tool emulator for a real g8e Gateway/Operator",
+		Long: `agentic-tool-emulator impersonates arbitrary AI tools and agents against a REAL g8e
 Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A
 protobuf, and official governance envelopes with mock consensus + principal
 signing), then audits every result against the Operator's signed receipts.`,
 	}
 
-	cmd.AddCommand(emulatorListCmd())
-	cmd.AddCommand(emulatorRunCmd())
-	cmd.AddCommand(emulatorAuditCmd())
+	cmd.AddCommand(agenticToolEmulatorListCmd())
+	cmd.AddCommand(agenticToolEmulatorRunCmd())
+	cmd.AddCommand(agenticToolEmulatorAuditCmd())
 
 	return cmd
 }
 
-func emulatorListCmd() *cobra.Command {
+func agenticToolEmulatorListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List available scenarios",
@@ -76,11 +76,11 @@ func emulatorListCmd() *cobra.Command {
 	}
 }
 
-func emulatorRunCmd() *cobra.Command {
+func agenticToolEmulatorRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [flags] [scenario ...]",
 		Short: "Run scenarios against a real Gateway/Operator",
-		Run:   runEmulatorRun,
+		Run:   runAgenticToolEmulator,
 	}
 
 	cmd.Flags().StringVar(&emulatorConfigPath, "config", "", "JSON config overlay")
@@ -101,11 +101,11 @@ func emulatorRunCmd() *cobra.Command {
 	return cmd
 }
 
-func emulatorAuditCmd() *cobra.Command {
+func agenticToolEmulatorAuditCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit [flags]",
 		Short: "Audit signed receipts from the Operator",
-		Run:   runEmulatorAudit,
+		Run:   runAgenticToolEmulatorAudit,
 	}
 
 	cmd.Flags().StringVar(&emulatorConfigPath, "config", "", "JSON config overlay")
@@ -122,9 +122,9 @@ func emulatorAuditCmd() *cobra.Command {
 	return cmd
 }
 
-func runEmulatorRun(cmd *cobra.Command, args []string) {
+func runAgenticToolEmulator(cmd *cobra.Command, args []string) {
 	cfg := config.Default()
-	applyEmulatorFlags(&cfg)
+	applyAgenticToolEmulatorFlags(&cfg)
 
 	if emulatorConfigPath != "" {
 		if err := cfg.LoadFile(emulatorConfigPath); err != nil {
@@ -142,7 +142,7 @@ func runEmulatorRun(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	selected := selectEmulatorScenarios(emulatorPhase, names)
+	selected := selectAgenticToolEmulatorScenarios(emulatorPhase, names)
 	if len(selected) == 0 {
 		fmt.Fprintln(os.Stderr, "no scenarios selected")
 		os.Exit(1)
@@ -169,14 +169,14 @@ func runEmulatorRun(cmd *cobra.Command, args []string) {
 		_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsExportFilename), export, 0o644)
 	}
 
-	// report and summary printing would go here if we had internal/emulator/report
+	// report and summary printing would go here if we had internal/agentic_tool_emulator/report
 	// but for now we just print summary to satisfy the compiler and user
-	printEmulatorSummary(results, "", "")
+	printAgenticToolEmulatorSummary(results, "", "")
 }
 
-func runEmulatorAudit(cmd *cobra.Command, args []string) {
+func runAgenticToolEmulatorAudit(cmd *cobra.Command, args []string) {
 	cfg := config.Default()
-	applyEmulatorFlags(&cfg)
+	applyAgenticToolEmulatorFlags(&cfg)
 
 	if emulatorConfigPath != "" {
 		if err := cfg.LoadFile(emulatorConfigPath); err != nil {
@@ -210,7 +210,7 @@ func runEmulatorAudit(cmd *cobra.Command, args []string) {
 	}
 }
 
-func applyEmulatorFlags(cfg *config.Config) {
+func applyAgenticToolEmulatorFlags(cfg *config.Config) {
 	if emulatorMTLSURL != "" {
 		cfg.MTLSBaseURL = emulatorMTLSURL
 	}
@@ -249,7 +249,7 @@ func applyEmulatorFlags(cfg *config.Config) {
 	}
 }
 
-func selectEmulatorScenarios(phase string, names []string) []scenarios.Scenario {
+func selectAgenticToolEmulatorScenarios(phase string, names []string) []scenarios.Scenario {
 	all := scenarios.Registry()
 	if len(names) > 0 {
 		var out []scenarios.Scenario
@@ -319,7 +319,7 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	return nil
 }
 
-func printEmulatorSummary(results []scenarios.Result, jsonPath, mdPath string) {
+func printAgenticToolEmulatorSummary(results []scenarios.Result, jsonPath, mdPath string) {
 	fmt.Println("\n── summary ──")
 	ok := 0
 	for _, r := range results {

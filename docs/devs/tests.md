@@ -43,8 +43,8 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ./g8e test e2e         # Run Tier 3 (Docker E2E) tests - requires Docker
 ./g8e test coverage    # Run tests with coverage report
 ./g8e test lint        # Run linting and quality checks
-./g8e emulator list    # List emulator scenarios
-./g8e emulator run     # Run emulator scenarios against real Gateway/Operator
+./g8e agentic-tool-emulator list    # List agentic tool emulator scenarios
+./g8e agentic-tool-emulator run     # Run agentic tool emulator scenarios against real Gateway/Operator
 ./g8e test chaos       # Generate realistic governance events for testing
 ./g8e test summary     # View chaos test summary from test vault
 ```
@@ -61,9 +61,9 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
 
-- **`./g8e emulator list`** - Lists available emulator scenarios with their posture requirements and personas.
+- **`./g8e agentic-tool-emulator list`** - Lists available agentic tool emulator scenarios with their posture requirements and personas.
 
-- **`./g8e emulator run`** - Runs emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+- **`./g8e agentic-tool-emulator run`** - Runs agentic tool emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
 
 - **`./g8e test chaos`** - Generates realistic governance events for testing. Creates a test vault with distributed event categories (70% Good Actor, 20% Prompt Injection, 10% MitM) to test governance pipeline behavior under various conditions.
 
@@ -90,17 +90,17 @@ Docker-based E2E tests that spin up gateway and operator containers using docker
 - Tests the gov demo compose configuration
 - Same health checks as above but using gov demo compose file
 
-### Emulator
+### Agentic Tool Emulator
 
 ```bash
-./g8e emulator list
-./g8e emulator run [scenario ...]
-./g8e emulator audit
+./g8e agentic-tool-emulator list
+./g8e agentic-tool-emulator run [scenario ...]
+./g8e agentic-tool-emulator audit
 ```
 
-The emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
+The agentic tool emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
 
-**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The emulator merely wears different "personas" to test how the system behaves when various AI tools interact with it.
+**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The agentic tool emulator merely wears different "personas" to test how the system behaves when various AI tools interact with it.
 
 **Architecture**:
 - **client/** - Thin, faithful HTTP client with mTLS support and exchange recording
@@ -126,18 +126,18 @@ Scenarios run under different enforcement modes:
 - Mock principal (L3 human notary)
 
 **Governance Testing**:
-For consensus/notary scenarios, the emulator uses mock cryptographic actors:
+For consensus/notary scenarios, the agentic tool emulator uses mock cryptographic actors:
 - **Ensemble**: Mock consensus agents that co-sign L2 envelopes
 - **Principal**: Mock human notary for L3 signing (or drives real OOB approve flow)
 
 This allows testing maximal governance envelopes without requiring actual distributed consensus infrastructure.
 
-**Emulator Commands**:
-- **`./g8e emulator list`** - Lists available scenarios with their posture requirements and personas
-- **`./g8e emulator run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
-- **`./g8e emulator audit`** - Audits signed receipts from the Operator for a specific session
+**Agentic Tool Emulator Commands**:
+- **`./g8e agentic-tool-emulator list`** - Lists available scenarios with their posture requirements and personas
+- **`./g8e agentic-tool-emulator run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
+- **`./g8e agentic-tool-emulator audit`** - Audits signed receipts from the Operator for a specific session
 
-**Emulator Configuration**:
+**Agentic Tool Emulator Configuration**:
 - Supports JSON config overlay for complex scenarios
 - Configurable mTLS surface, public surface, client certificates, and CA bundle
 - Operator API key authentication for MCP/A2A surface
@@ -385,7 +385,7 @@ CLI command and configuration tests:
 - `cmd/chaos_test.go` - Chaos command tests
 - `cmd/cmd_test.go` - General command tests
 - `cmd/data_test.go` - Data command tests
-- `cmd/emulator_test.go` - Emulator command tests
+- `cmd/emulator_test.go` - Agentic tool emulator command tests
 - `cmd/goose_test.go` - Goose command tests
 - `cmd/main_test.go` - Main command tests
 - `cmd/mcp_backup_test.go` - MCP backup command tests

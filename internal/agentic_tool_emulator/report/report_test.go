@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/emulator/client"
-	"github.com/g8e-ai/g8e/internal/emulator/scenarios"
+	clientpkg "github.com/g8e-ai/g8e/internal/agentic_tool_emulator/client"
+	"github.com/g8e-ai/g8e/internal/agentic_tool_emulator/scenarios"
 )
 
 func TestWrite(t *testing.T) {
@@ -145,7 +145,7 @@ func TestMarkdown(t *testing.T) {
 
 	// Check for expected sections
 	expectedStrings := []string{
-		"# Emulator run report",
+		"# Agentic Tool Emulator run report",
 		"Generated:",
 		"Gateway:",
 		"Operator session:",
