@@ -14,11 +14,14 @@
 package sqliteutil
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestValidateIdentifier(t *testing.T) {
@@ -62,63 +65,63 @@ func TestValidateIdentifier(t *testing.T) {
 		input           string
 		wantErrContains string
 	}{
-		{"empty", "", "empty identifier"},
-		{"leading digit", "1column", "invalid identifier"},
-		{"hyphen", "col-name", "invalid identifier"},
-		{"space", "col name", "invalid identifier"},
-		{"dot", "table.column", "invalid identifier"},
-		{"semicolon", "col;DROP TABLE", "invalid identifier"},
-		{"single quote", "col'", "invalid identifier"},
-		{"double quote", `col"`, "invalid identifier"},
-		{"parenthesis", "col(", "invalid identifier"},
-		{"asterisk", "col*", "invalid identifier"},
-		{"equals", "col=val", "invalid identifier"},
-		{"newline", "col\n", "invalid identifier"},
-		{"tab", "col\t", "invalid identifier"},
-		{"carriage return", "col\r", "invalid identifier"},
-		{"backtick", "col`", "invalid identifier"},
-		{"backslash", "col\\", "invalid identifier"},
-		{"forward slash", "col/", "invalid identifier"},
-		{"at sign", "col@", "invalid identifier"},
-		{"hash", "col#", "invalid identifier"},
-		{"dollar", "col$", "invalid identifier"},
-		{"percent", "col%", "invalid identifier"},
-		{"ampersand", "col&", "invalid identifier"},
-		{"pipe", "col|", "invalid identifier"},
-		{"tilde", "col~", "invalid identifier"},
-		{"backtick SQL injection", "`users`", "invalid identifier"},
-		{"comment start", "col--", "invalid identifier"},
-		{"comment block", "col/*", "invalid identifier"},
-		{"union SQL injection", "col UNION", "invalid identifier"},
-		{"or SQL injection", "col OR", "invalid identifier"},
-		{"and SQL injection", "col AND", "invalid identifier"},
-		{"where SQL injection", "col WHERE", "invalid identifier"},
-		{"select SQL injection", "col SELECT", "invalid identifier"},
-		{"insert SQL injection", "col INSERT", "invalid identifier"},
-		{"update SQL injection", "col UPDATE", "invalid identifier"},
-		{"delete SQL injection", "col DELETE", "invalid identifier"},
-		{"drop SQL injection", "col DROP", "invalid identifier"},
-		{"null byte", "col\x00", "invalid identifier"},
-		{"unicode", "colé", "invalid identifier"},
-		{"emoji", "col😀", "invalid identifier"},
-		{"bracket open", "col[", "invalid identifier"},
-		{"bracket close", "col]", "invalid identifier"},
-		{"brace open", "col{", "invalid identifier"},
-		{"brace close", "col}", "invalid identifier"},
-		{"angle bracket open", "col<", "invalid identifier"},
-		{"angle bracket close", "col>", "invalid identifier"},
-		{"comma", "col,", "invalid identifier"},
-		{"colon", "col:", "invalid identifier"},
-		{"question", "col?", "invalid identifier"},
-		{"exclamation", "col!", "invalid identifier"},
-		{"plus", "col+", "invalid identifier"},
-		{"minus", "col-", "invalid identifier"},
-		{"only digits", "12345", "invalid identifier"},
-		{"starts with digit", "9field", "invalid identifier"},
-		{"contains space in middle", "col umn", "invalid identifier"},
-		{"multiple spaces", "col   name", "invalid identifier"},
-		{"leading space", " column", "invalid identifier"},
-		{"trailing space", "column ", "invalid identifier"},
+		{"empty", "", constants.ErrSQLiteValidateEmptyIdentifier.Error()},
+		{"leading digit", "1column", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"hyphen", "col-name", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"space", "col name", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"dot", "table.column", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"semicolon", "col;DROP TABLE", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"single quote", "col'", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"double quote", `col"`, constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"parenthesis", "col(", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"asterisk", "col*", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"equals", "col=val", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"newline", "col\n", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"tab", "col\t", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"carriage return", "col\r", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"backtick", "col`", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"backslash", "col\\", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"forward slash", "col/", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"at sign", "col@", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"hash", "col#", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"dollar", "col$", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"percent", "col%", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"ampersand", "col&", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"pipe", "col|", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"tilde", "col~", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"backtick SQL injection", "`users`", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"comment start", "col--", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"comment block", "col/*", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"union SQL injection", "col UNION", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"or SQL injection", "col OR", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"and SQL injection", "col AND", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"where SQL injection", "col WHERE", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"select SQL injection", "col SELECT", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"insert SQL injection", "col INSERT", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"update SQL injection", "col UPDATE", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"delete SQL injection", "col DELETE", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"drop SQL injection", "col DROP", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"null byte", "col\x00", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"unicode", "colé", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"emoji", "col😀", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"bracket open", "col[", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"bracket close", "col]", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"brace open", "col{", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"brace close", "col}", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"angle bracket open", "col<", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"angle bracket close", "col>", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"comma", "col,", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"colon", "col:", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"question", "col?", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"exclamation", "col!", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"plus", "col+", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"minus", "col-", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"only digits", "12345", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"starts with digit", "9field", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"contains space in middle", "col umn", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"multiple spaces", "col   name", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"leading space", " column", constants.ErrSQLiteValidateInvalidPattern.Error()},
+		{"trailing space", "column ", constants.ErrSQLiteValidateInvalidPattern.Error()},
 	}
 
 	for _, tc := range invalid {
@@ -165,7 +168,7 @@ func TestValidateIdentifier_SecurityEdgeCases(t *testing.T) {
 			t.Parallel()
 			err := ValidateIdentifier(pattern)
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "invalid identifier")
+			assert.Contains(t, err.Error(), constants.ErrSQLiteValidateInvalidPattern.Error())
 		})
 	}
 }
@@ -260,7 +263,7 @@ func TestValidateIdentifier_ErrorMessages(t *testing.T) {
 		{
 			name:           "empty string exact error",
 			input:          "",
-			wantExactError: "validate: empty identifier",
+			wantExactError: fmt.Sprintf("sqliteutil: validate identifier: %s", constants.ErrSQLiteValidateEmptyIdentifier.Error()),
 		},
 	}
 
