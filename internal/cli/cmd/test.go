@@ -241,7 +241,7 @@ func testCoverageCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "coverage",
 		Short: "Run tests with coverage report",
-		Long:  `Run tests with coverage profiling and enforce a minimum coverage threshold (60%). Use PKG flag to test a specific package, VERBOSE for detailed output.`,
+		Long:  `Run tests with coverage profiling and enforce a minimum coverage threshold (70%). Use PKG flag to test a specific package, VERBOSE for detailed output.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running tests with coverage...")
 

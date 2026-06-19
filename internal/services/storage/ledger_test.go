@@ -810,3 +810,23 @@ func TestLedgerService_NodeBinaryFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, binaryContent, mirrorContent)
 }
+
+func TestLedgerService_GetStateMerkleRoot_NilReceiver(t *testing.T) {
+	t.Parallel()
+	var lms *GitLedgerService
+
+	assert.NotPanics(t, func() {
+		root, err := lms.GetStateMerkleRoot()
+		require.NoError(t, err)
+		assert.Empty(t, root)
+	})
+}
+
+func TestLedgerService_GetStateMerkleRoot_DisabledVault(t *testing.T) {
+	t.Parallel()
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+
+	root, err := lms.GetStateMerkleRoot()
+	require.NoError(t, err)
+	assert.Empty(t, root)
+}
