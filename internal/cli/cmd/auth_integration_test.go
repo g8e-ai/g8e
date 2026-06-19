@@ -17,7 +17,6 @@ import (
 	"testing"
 )
 
-
 // TestPKIPhase3_StaleTrustBundle_FailClosed verifies that mTLS enrollment failures
 // fail closed with an actionable error instead of silently falling back to plain HTTP.
 // This is the fix for C4 (silent security downgrade) in the PKI cleanup plan.

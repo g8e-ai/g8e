@@ -182,7 +182,7 @@ func startTLSEnrollServer(t *testing.T, cfg *config.Config, handler http.Handler
 	caPath := filepath.Join(cfg.CredentialsDir, "test-ca.pem")
 	require.NoError(t, os.WriteFile(caPath, caPEM, 0600))
 	cfg.Paths.Infra.CACertPath = caPath // absolute — TrustBundlePath() returns it directly
-	cfg.Paths.Host = server.URL        // full URL — OperatorHTTPURL() returns it directly
+	cfg.Paths.Host = server.URL         // full URL — OperatorHTTPURL() returns it directly
 
 	return server
 }

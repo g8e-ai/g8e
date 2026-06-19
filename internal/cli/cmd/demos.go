@@ -73,7 +73,6 @@ func readDoctrineRule(demoDir, doctrineFile, ruleID string) (*DoctrineRule, erro
 	return nil, fmt.Errorf("doctrine rule %q not found", ruleID)
 }
 
-
 // toDockerPath converts a filepath to a Docker-compatible path format.
 // On Windows, Docker expects forward slashes even though the OS uses backslashes.
 func toDockerPath(path string) string {
@@ -564,7 +563,6 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 	}
 	return nil
 }
-
 
 func demosAuditCmd() *cobra.Command {
 	cmd := &cobra.Command{

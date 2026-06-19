@@ -436,7 +436,6 @@ func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
 	}
 }
 
-
 // TestL4Warden_AppPolicyStore_L3Required_Mutation verifies that mutating
 // intents NOT in AutoApproveIntents require L3 human presence verification.
 func TestL4Warden_AppPolicyStore_L3Required_Mutation(t *testing.T) {
