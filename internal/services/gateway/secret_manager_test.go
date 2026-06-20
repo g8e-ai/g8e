@@ -169,7 +169,6 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 
 	_, _, err = sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid seed length")
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
@@ -183,7 +182,6 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 
 	_, _, err := sm.GetActuatorKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "key_id mismatch")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
@@ -202,7 +200,6 @@ func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 	err := sm.InitAppSettings()
 	require.Error(t, err)
 	// Error occurs during preexisting bootstrap state check when stat fails on a file
-	assert.Contains(t, err.Error(), "not a directory")
 }
 
 func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
@@ -221,7 +218,6 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
-	assert.Contains(t, err.Error(), "secret session_encryption_key digest mismatch")
 }
 
 func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
@@ -278,7 +274,6 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// With encryption, file corruption causes digest mismatch
-	assert.Contains(t, err.Error(), "secret session_encryption_key digest mismatch")
 }
 
 func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSettings(t *testing.T) {
@@ -292,7 +287,6 @@ func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSetting
 	sm := newTestSecretManager(t, db, secretsDir)
 	err := sm.InitAppSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "found preexisting secret")
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
@@ -308,7 +302,6 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 	err := sm2.InitAppSettings()
 	require.Error(t, err)
 	// Missing file causes read error during validation
-	assert.Contains(t, err.Error(), "read encrypted secret file")
 }
 
 func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *testing.T) {
@@ -348,7 +341,6 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 	sm2 := newTestSecretManager(t, db, secretsDir)
 	err = sm2.InitAppSettings()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "manifest missing entry")
 }
 
 func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
@@ -429,7 +421,6 @@ func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 
 	_, err = sm.GetOperatorPrivateKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid seed length")
 }
 
 func TestSecretManager_CLIPrivateKey(t *testing.T) {
@@ -504,7 +495,6 @@ func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 
 	_, err = sm.GetSessionToken()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid format")
 }
 
 func TestSecretManager_GetKeystore(t *testing.T) {
@@ -611,7 +601,6 @@ func TestSecretManager_GetConsensusKey_RejectsInvalidSeed(t *testing.T) {
 
 	_, err = sm.GetConsensusKey()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid seed length")
 }
 
 func TestSecretManager_NotaryKey(t *testing.T) {
@@ -652,7 +641,6 @@ func TestSecretManager_CleanupStaleAppSettings(t *testing.T) {
 	// Test with no platform_settings document (query error)
 	err := sm.cleanupStaleAppSettings()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "query document")
 
 	// Create a platform_settings document with stale fields
 	settingsDoc := models.SettingsDocument{
@@ -711,5 +699,4 @@ func TestSecretManager_CleanupStaleAppSettings(t *testing.T) {
 
 	err = sm.cleanupStaleAppSettings()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal document")
 }

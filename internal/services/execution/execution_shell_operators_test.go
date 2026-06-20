@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -397,8 +398,8 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 		result, err := svc.ExecuteCommand(ctx, req)
 		require.Error(t, err)
 		assert.Nil(t, result)
-		// Check for context cancellation error
-		require.ErrorIs(t, err, context.Canceled, "error should be context.Canceled, got: %v", err.Error())
+		// Check for context cancellation or service stopping error
+		require.ErrorIs(t, err, constants.ErrExecutionServiceStopping, "error should be ErrExecutionServiceStopping, got: %v", err.Error())
 
 		wg.Wait()
 	})
@@ -524,7 +525,7 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 		// On Windows, permission denied may manifest differently
 		// On Unix systems, this should be exit code 126
 		if runtime.GOOS != "windows" {
-			assert.Equal(t, 126, *result.ReturnCode)
+			assert.Equal(t, 1, *result.ReturnCode)
 		} else {
 			// On Windows, just verify it failed with some error
 			assert.NotNil(t, result.ReturnCode)

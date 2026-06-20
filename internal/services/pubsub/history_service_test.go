@@ -45,6 +45,33 @@ func TestNewHistoryService(t *testing.T) {
 	})
 }
 
+func TestHistoryService_SetAuditStore(t *testing.T) {
+	t.Run("sets audit store for observed-state content evidence", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		// Create a mock audit store
+		mockAuditStore := &mockAuditEventRecorder{}
+		svc.SetAuditStore(mockAuditStore)
+
+		assert.Equal(t, mockAuditStore, svc.auditStore)
+	})
+
+	t.Run("sets nil audit store", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		svc.SetAuditStore(nil)
+		assert.Nil(t, svc.auditStore)
+	})
+}
+
 func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 	t.Run("rejects invalid protobuf payload", func(t *testing.T) {
 		t.Parallel()

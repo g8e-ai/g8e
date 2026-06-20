@@ -100,7 +100,7 @@ func publishLFAATypedResponseTo(
 		return
 	}
 
-	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
+	channelName := ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
 		logger.Error("Failed to publish LFAA typed response Universal", string(constants.ConnectionStateError), err)
 		return
@@ -145,7 +145,7 @@ func publishLFAAErrorTo(
 		return
 	}
 
-	channelName := constants.ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
+	channelName := ResultsChannel(cfg.OperatorID, msg.OperatorSessionID)
 	if err := client.Publish(ctx, channelName, data); err != nil {
 		logger.Error("Failed to publish LFAA error Universal", string(constants.ConnectionStateError), err)
 	}

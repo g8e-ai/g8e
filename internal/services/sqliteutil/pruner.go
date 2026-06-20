@@ -15,6 +15,7 @@ package sqliteutil
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -77,7 +78,8 @@ func (p *Pruner) Start() {
 				return
 			case <-ticker.C:
 				if err := p.fn(p.ctx, p.db, p.logger); err != nil {
-					p.logger.Error("pruner: prune function failed", "error", err)
+					wrappedErr := fmt.Errorf("pruner: prune function failed: %w", err)
+					p.logger.Error("pruner: prune function failed", "error", wrappedErr)
 				}
 			}
 		}

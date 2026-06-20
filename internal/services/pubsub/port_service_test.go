@@ -183,3 +183,30 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		assert.NotEmpty(t, published.Data)
 	})
 }
+
+func TestPortService_SetAuditStore(t *testing.T) {
+	t.Run("sets audit store for observed-state content evidence", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		svc := NewPortService(cfg, logger, client)
+
+		// Create a mock audit store
+		mockAuditStore := &mockAuditEventRecorder{}
+		svc.SetAuditStore(mockAuditStore)
+
+		assert.Equal(t, mockAuditStore, svc.auditStore)
+	})
+
+	t.Run("sets nil audit store", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		svc := NewPortService(cfg, logger, client)
+
+		svc.SetAuditStore(nil)
+		assert.Nil(t, svc.auditStore)
+	})
+}

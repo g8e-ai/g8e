@@ -16,7 +16,6 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -69,18 +68,18 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if doc == nil {
-			c.responder.Error(w, http.StatusNotFound, "settings not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
 	case http.MethodPut, http.MethodPatch:
 		body, err := c.readBody(r)
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		if !json.Valid(body) {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		var err2 error
@@ -95,7 +94,7 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 	default:
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 	}
 }
 
@@ -103,7 +102,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.DataPrefix)
 	parts := strings.SplitN(path, "/", 2)
 	if len(parts) == 0 || parts[0] == "" {
-		c.responder.Error(w, http.StatusBadRequest, "collection required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrGatewayCollectionRequired.Error())
 		return
 	}
 
@@ -124,7 +123,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if id == "" {
-		c.responder.Error(w, http.StatusBadRequest, "document id required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrGatewayDocumentIDRequired.Error())
 		return
 	}
 
@@ -136,7 +135,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if doc == nil {
-			c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("document %s/%s not found", collection, id))
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
@@ -148,16 +147,16 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 		}
 		body, err := c.readBody(r)
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		if !json.Valid(body) {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		if err := c.db.DocStore.DocSet(collection, id, json.RawMessage(body)); err != nil {
 			if errors.Is(err, constants.ErrDatabaseLocked) {
-				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
+				c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrDatabaseLocked.Error())
 			} else {
 				c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			}
@@ -172,11 +171,11 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 		}
 		body, err := c.readBody(r)
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		if !json.Valid(body) {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		doc, err := c.db.DocStore.DocUpdate(collection, id, json.RawMessage(body))
@@ -184,9 +183,9 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, constants.ErrNotFound) {
 				c.responder.Error(w, http.StatusNotFound, err.Error())
 			} else if errors.Is(err, constants.ErrConstraintViolation) {
-				c.responder.Error(w, http.StatusConflict, "database constraint violation")
+				c.responder.Error(w, http.StatusConflict, constants.ErrConstraintViolation.Error())
 			} else if errors.Is(err, constants.ErrDatabaseLocked) {
-				c.responder.Error(w, http.StatusServiceUnavailable, "database is locked")
+				c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrDatabaseLocked.Error())
 			} else {
 				c.responder.Error(w, http.StatusInternalServerError, err.Error())
 			}
@@ -205,27 +204,27 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !deleted {
-			c.responder.Error(w, http.StatusNotFound, "document not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 	}
 }
 
 func (c *DBController) handleDBQuery(w http.ResponseWriter, r *http.Request, collection string) {
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
 	var req models.DocQueryRequest
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 	}
@@ -263,12 +262,12 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 
-	c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+	c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 }
 
 func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -280,7 +279,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		if receipt == nil {
-			c.responder.Error(w, http.StatusNotFound, "receipt not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, receipt)
@@ -318,7 +317,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 
 func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -360,7 +359,7 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 
 func (c *DBController) handleAuditEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -398,7 +397,7 @@ const maxAuditQueryLimit = 10000
 
 func (c *DBController) handleAuditSummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -441,7 +440,7 @@ func (c *DBController) handleAuditSummary(w http.ResponseWriter, r *http.Request
 
 func (c *DBController) handleAuditReport(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -494,16 +493,16 @@ func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Re
 	case http.MethodPost:
 		body, err := c.readBody(r)
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerBodyReadFailed.Error())
 			return
 		}
 		var signer models.TrustedSigner
 		if err := json.Unmarshal(body, &signer); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		if signer.ID == "" || signer.PublicKey == "" {
-			c.responder.Error(w, http.StatusBadRequest, "id and public_key_hex required")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 			return
 		}
 		if err := c.db.SignerStore.AddTrustedSigner(signer); err != nil {
@@ -513,14 +512,14 @@ func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Re
 		c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 	}
 }
 
 func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, constants.APIPaths.GovernanceSignersPrefix)
 	if id == "" || strings.Contains(id, "/") {
-		c.responder.Error(w, http.StatusBadRequest, "invalid signer id")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerInvalidSignerID.Error())
 		return
 	}
 
@@ -532,7 +531,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 			return
 		}
 		if pubKey == nil {
-			c.responder.Error(w, http.StatusNotFound, "signer not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		doc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
@@ -541,7 +540,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 			return
 		}
 		if doc == nil {
-			c.responder.Error(w, http.StatusNotFound, "signer not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, doc.ForWire())
@@ -553,20 +552,20 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 			return
 		}
 		if !deleted {
-			c.responder.Error(w, http.StatusNotFound, "signer not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 	}
 }
 
 func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.KVPrefix)
 	if path == "" {
-		c.responder.Error(w, http.StatusBadRequest, "key required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerKeyRequired.Error())
 		return
 	}
 
@@ -593,21 +592,21 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 		key := strings.TrimSuffix(path, "/_expire")
 		body, err := c.readBody(r)
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		var req models.KVExpireRequest
 		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		if req.TTL <= 0 {
-			c.responder.Error(w, http.StatusBadRequest, "ttl required and must be > 0")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerTTLRequired.Error())
 			return
 		}
 		ok := c.db.KVStore.KVExpire(key, req.TTL)
 		if !ok {
-			c.responder.Error(w, http.StatusNotFound, "key not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
@@ -620,7 +619,7 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		value, ok := c.db.KVStore.KVGet(key)
 		if !ok {
-			c.responder.Error(w, http.StatusNotFound, "key not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.KVGetResponse{Value: value})
@@ -628,12 +627,12 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		body, err := c.readBody(r)
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		var req models.KVSetRequest
 		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 		if err := c.db.KVStore.KVSet(key, req.Value, req.TTL); err != nil {
@@ -650,20 +649,20 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 	}
 }
 
 func (c *DBController) handleKVKeys(w http.ResponseWriter, r *http.Request) {
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 	var req models.KVPatternRequest
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 	}
@@ -684,13 +683,13 @@ func (c *DBController) handleKVKeys(w http.ResponseWriter, r *http.Request) {
 func (c *DBController) handleKVScan(w http.ResponseWriter, r *http.Request) {
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 	var req models.KVPatternRequest
 	if len(body) > 0 {
 		if err := json.Unmarshal(body, &req); err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
 		}
 	}
@@ -714,16 +713,16 @@ func (c *DBController) handleKVScan(w http.ResponseWriter, r *http.Request) {
 func (c *DBController) handleKVDeletePattern(w http.ResponseWriter, r *http.Request) {
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 	var req models.KVPatternRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 	if req.Pattern == "" {
-		c.responder.Error(w, http.StatusBadRequest, "pattern required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerPatternRequired.Error())
 		return
 	}
 	count, err := c.db.KVStore.KVDeletePattern(req.Pattern)
@@ -788,7 +787,7 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 
 	// If no identity is present, reject
 	if userID == "" && appID == "" && operatorSessionID == "" && cliSessionID == "" {
-		return fmt.Errorf("unauthorized: no identity present")
+		return constants.ErrUnauthorizedNoIdentity
 	}
 
 	// Allowlisted namespaces are accessible by any authenticated identity
@@ -801,7 +800,7 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 		// Apps can only write to their own namespace (app/<app_id>)
 		expectedNamespace := "app/" + appID
 		if namespace != expectedNamespace {
-			return fmt.Errorf("unauthorized: app can only write to its own namespace (expected %s, got %s)", expectedNamespace, namespace)
+			return constants.ErrUnauthorizedAppNamespace
 		}
 		return nil
 	}
@@ -809,12 +808,12 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 	// For operator/CLI identities, check if the namespace is user-scoped
 	if operatorSessionID != "" || cliSessionID != "" {
 		if userID == "" {
-			return fmt.Errorf("unauthorized: operator/CLI identity without user_id")
+			return constants.ErrUnauthorizedOperatorNoUserID
 		}
 		// Operators/CLI can only write to user-scoped namespaces
 		expectedNamespace := "user/" + userID
 		if namespace != expectedNamespace {
-			return fmt.Errorf("unauthorized: user can only write to their own namespace (expected %s, got %s)", expectedNamespace, namespace)
+			return constants.ErrUnauthorizedUserNamespace
 		}
 		return nil
 	}
@@ -823,12 +822,12 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 	if userID != "" {
 		expectedNamespace := "user/" + userID
 		if namespace != expectedNamespace {
-			return fmt.Errorf("unauthorized: user can only write to their own namespace (expected %s, got %s)", expectedNamespace, namespace)
+			return constants.ErrUnauthorizedUserNamespace
 		}
 		return nil
 	}
 
-	return fmt.Errorf("unauthorized: unknown identity type")
+	return constants.ErrUnauthorizedUnknownIdentity
 }
 
 // @Summary		Get blob
@@ -840,20 +839,20 @@ func (c *DBController) verifyBlobOwnership(r *http.Request, namespace string) er
 func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.DataBlobsPrefix)
 	if path == "" {
-		c.responder.Error(w, http.StatusBadRequest, "namespace required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerNamespaceRequired.Error())
 		return
 	}
 
 	parts := strings.SplitN(path, "/", 3)
 	namespace := parts[0]
 	if !blobSegmentValid(namespace) {
-		c.responder.Error(w, http.StatusBadRequest, "invalid namespace")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerInvalidNamespace.Error())
 		return
 	}
 
 	if len(parts) == 1 {
 		if r.Method != http.MethodDelete {
-			c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+			c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 			return
 		}
 		// Check if namespace is allowlisted for direct mutations
@@ -879,22 +878,22 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 	blobID := parts[1]
 	if !blobSegmentValid(blobID) {
-		c.responder.Error(w, http.StatusBadRequest, "invalid blob id")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerInvalidBlobID.Error())
 		return
 	}
 
 	if len(parts) == 3 {
 		if parts[2] != "meta" {
-			c.responder.Error(w, http.StatusBadRequest, "invalid path")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerInvalidPath.Error())
 			return
 		}
 		if r.Method != http.MethodGet {
-			c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+			c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 			return
 		}
 		rec, ok := c.db.BlobStore.BlobMeta(namespace, blobID)
 		if !ok {
-			c.responder.Error(w, http.StatusNotFound, "blob not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.BlobMetaResponse{
@@ -924,7 +923,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 		contentType := r.Header.Get("Content-Type")
 		if contentType == "" {
-			c.responder.Error(w, http.StatusBadRequest, "Content-Type header required")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerContentTypeRequired.Error())
 			return
 		}
 
@@ -932,7 +931,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		if v := r.Header.Get("X-Blob-TTL"); v != "" {
 			n, err := strconv.Atoi(v)
 			if err != nil || n < 0 {
-				c.responder.Error(w, http.StatusBadRequest, "X-Blob-TTL must be a non-negative integer")
+				c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerInvalidTTL.Error())
 				return
 			}
 			ttl = n
@@ -940,15 +939,15 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, maxBlobBodySize+1))
 		if err != nil {
-			c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerBodyReadFailed.Error())
 			return
 		}
 		if int64(len(body)) > maxBlobBodySize {
-			c.responder.Error(w, http.StatusRequestEntityTooLarge, "blob exceeds maximum size")
+			c.responder.Error(w, http.StatusRequestEntityTooLarge, constants.ErrDBControllerBlobTooLarge.Error())
 			return
 		}
 		if len(body) == 0 {
-			c.responder.Error(w, http.StatusBadRequest, "body must not be empty")
+			c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerBodyEmpty.Error())
 			return
 		}
 
@@ -962,7 +961,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		data, contentType, ok := c.db.BlobStore.BlobGet(namespace, blobID)
 		if !ok {
-			c.responder.Error(w, http.StatusNotFound, "blob not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 
@@ -1011,35 +1010,35 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !deleted {
-			c.responder.Error(w, http.StatusNotFound, "blob not found")
+			c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 			return
 		}
 		c.logger.Info("Blob deleted", "namespace", namespace, "blob_id", blobID)
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	default:
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 	}
 }
 
 func (c *DBController) handlePubSubPublish(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 	var req models.PubSubPublishRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 	if req.Channel == "" {
-		c.responder.Error(w, http.StatusBadRequest, "channel required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrDBControllerChannelRequired.Error())
 		return
 	}
 	if !isMutationPubSubChannelAllowed(req.Channel) {

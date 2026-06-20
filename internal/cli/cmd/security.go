@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 )
 
@@ -50,10 +51,10 @@ func securityValidateCmd() *cobra.Command {
 		Short: "Run security validation checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if pkiDir == "" {
-				pkiDir = constants.Paths.Infra.PkiDir
+				pkiDir = paths.Infra.PkiDir
 			}
 			if secretsDir == "" {
-				secretsDir = constants.Paths.Infra.SecretsDir
+				secretsDir = paths.Infra.SecretsDir
 			}
 
 			cmd.Println("Running platform security validation...")
@@ -147,8 +148,8 @@ func securityValidateCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: "+constants.Paths.Infra.PkiDir+")")
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: "+constants.Paths.Infra.SecretsDir+")")
+	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", "PKI directory (default: "+paths.Infra.PkiDir+")")
+	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", "Secrets directory (default: "+paths.Infra.SecretsDir+")")
 
 	return cmd
 }
@@ -188,15 +189,15 @@ func securityPKIEnrollCmd() *cobra.Command {
 			// Use outputDir if specified, otherwise use project root
 			var pkiDir string
 			if outputDir != "" {
-				pkiDir = filepath.Join(outputDir, constants.Paths.Infra.PkiDir)
+				pkiDir = filepath.Join(outputDir, paths.Infra.PkiDir)
 			} else {
-				pkiDir = constants.Paths.Infra.PkiDir
+				pkiDir = paths.Infra.PkiDir
 			}
 
 			cmd.Println("Generating CSR for enrollment...")
 			hostname, err := os.Hostname()
 			if err != nil {
-				return fmt.Errorf("security: failed to get hostname: %w", err)
+				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err))
 			}
 			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 			if err != nil {
@@ -216,7 +217,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			if err := os.MkdirAll(pkiDir, constants.PermDirPrivate); err != nil {
-				return fmt.Errorf("security: failed to create PKI directory: %w", err)
+				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err))
 			}
 
 			certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
@@ -228,17 +229,17 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
-				return fmt.Errorf("security: failed to save certificate chain: %w", err)
+				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrChainSaveFailed, err))
 			}
 
 			if regResp.HubTrustBundle != "" {
 				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
 				if err := os.MkdirAll(trustDir, constants.PermDirPrivate); err != nil {
-					return fmt.Errorf("security: failed to create trust directory: %w", err)
+					return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err))
 				}
 				bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
 				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-					return fmt.Errorf("security: failed to save trust bundle: %w", err)
+					return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err))
 				}
 			}
 

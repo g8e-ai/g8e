@@ -152,7 +152,7 @@ type LocalHttpStdioNodeService struct {
 // pathEnv is the value of the PATH environment variable to advertise to the Gateway.
 func NewLocalHttpStdioNodeService(gatewayURL, token, nodeID, displayName, pathEnv string, logger *slog.Logger) (*LocalHttpStdioNodeService, error) {
 	if gatewayURL == "" {
-		return nil, fmt.Errorf("gateway URL is required")
+		return nil, constants.ErrGatewayURLRequired
 	}
 
 	resolvedNodeID := nodeID
@@ -232,7 +232,7 @@ func (s *LocalHttpStdioNodeService) Stop() {
 func (s *LocalHttpStdioNodeService) runSession(ctx context.Context) error {
 	conn, err := s.dial(ctx)
 	if err != nil {
-		return fmt.Errorf("dial: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrLocalHTTPStdioDial, err)
 	}
 	defer conn.Close()
 
@@ -247,7 +247,7 @@ func (s *LocalHttpStdioNodeService) runSession(ctx context.Context) error {
 	}()
 
 	if err := s.handshake(ctx, conn); err != nil {
-		return fmt.Errorf("handshake: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrLocalHTTPStdioHandshake, err)
 	}
 
 	s.logger.Info("Connected to MCP gateway as node host",
@@ -292,10 +292,10 @@ func (s *LocalHttpStdioNodeService) handshake(ctx context.Context, conn *websock
 	_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
 	var challenge ocFrame
 	if err := s.readFrameConn(conn, &challenge); err != nil {
-		return fmt.Errorf("read challenge: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrLocalHTTPStdioReadChallenge, err)
 	}
 	if challenge.Type != "event" || challenge.Event != "connect.challenge" {
-		return fmt.Errorf("expected connect.challenge, got type=%q event=%q", challenge.Type, challenge.Event)
+		return fmt.Errorf("%w: type=%q event=%q", constants.ErrLocalHTTPStdioUnexpectedChallenge, challenge.Type, challenge.Event)
 	}
 	_ = conn.SetReadDeadline(time.Time{})
 
@@ -329,23 +329,23 @@ func (s *LocalHttpStdioNodeService) handshake(ctx context.Context, conn *websock
 		},
 	}
 	if err := s.sendFrameConn(conn, connectFrame); err != nil {
-		return fmt.Errorf("send connect: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrLocalHTTPStdioSendConnect, err)
 	}
 
 	// Step 3: read response
 	_ = conn.SetReadDeadline(time.Now().Add(15 * time.Second))
 	var resp ocFrame
 	if err := s.readFrameConn(conn, &resp); err != nil {
-		return fmt.Errorf("read connect response: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrLocalHTTPStdioReadConnectResponse, err)
 	}
 	_ = conn.SetReadDeadline(time.Time{})
 
 	if resp.Type != "res" || resp.ID != reqID {
-		return fmt.Errorf("unexpected connect response: type=%q id=%q", resp.Type, resp.ID)
+		return fmt.Errorf("%w: type=%q id=%q", constants.ErrLocalHTTPStdioUnexpectedConnectResponse, resp.Type, resp.ID)
 	}
 	if resp.OK == nil || !*resp.OK {
 		raw, _ := json.Marshal(resp.Params)
-		return fmt.Errorf("connect rejected by gateway: %s", string(raw))
+		return fmt.Errorf("%w: %s", constants.ErrLocalHTTPStdioConnectRejected, string(raw))
 	}
 
 	return nil
@@ -539,7 +539,7 @@ func (s *LocalHttpStdioNodeService) sendFrame(frame ocFrame) error {
 	conn := s.ws
 	s.wsMu.Unlock()
 	if conn == nil {
-		return fmt.Errorf("not connected")
+		return constants.ErrLocalHTTPStdioNotConnected
 	}
 	return s.sendFrameConn(conn, frame)
 }

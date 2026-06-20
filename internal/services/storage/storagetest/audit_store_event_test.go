@@ -131,7 +131,7 @@ func TestSQLAuditStore_RecordEvent_RejectsUnknownSession(t *testing.T) {
 	}
 
 	eventID, err := avs.RecordEvent(event)
-	require.ErrorIs(t, err, storage.ErrAuditSessionUnknown)
+	require.ErrorIs(t, err, constants.ErrAuditSessionUnknown)
 	assert.Equal(t, int64(0), eventID)
 
 	session, err := avs.GetOperatorSession(operatorSessionID)
@@ -171,7 +171,7 @@ func TestSQLAuditStore_RecordEvent_RejectsMissingSession(t *testing.T) {
 		ContentText: "missing session",
 		CommandRaw:  "uptime",
 	})
-	require.ErrorIs(t, err, storage.ErrAuditSessionMissing)
+	require.ErrorIs(t, err, constants.ErrAuditSessionMissing)
 	assert.Equal(t, int64(0), eventID)
 }
 
@@ -221,7 +221,7 @@ func TestSQLAuditStore_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 			CommandRaw:        "id",
 		},
 	})
-	require.ErrorIs(t, err, storage.ErrAuditSessionUnknown)
+	require.ErrorIs(t, err, constants.ErrAuditSessionUnknown)
 
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)

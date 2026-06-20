@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 var (
@@ -51,13 +49,8 @@ func NewFieldPathRegistry(logger *slog.Logger) (*FieldPathRegistry, error) {
 		registry: make(map[string]CollectionFieldPaths),
 	}
 
-	// Load from constants (canonical source, no filesystem dependency)
-	fieldPaths := constants.GetFieldPaths()
-	for collection, config := range fieldPaths {
-		registry.registry[collection] = CollectionFieldPaths{
-			AllowedPaths:   config.AllowedPaths,
-			ForbiddenPaths: config.ForbiddenPaths,
-		}
+	for collection, config := range getFieldPaths() {
+		registry.registry[collection] = config
 	}
 
 	logger.Info("loaded field path registry from constants", "collections", len(registry.registry))

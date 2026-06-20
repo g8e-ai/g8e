@@ -96,7 +96,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 
 	db, err := sqliteutil.OpenDB(cfg, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open gateway database: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDatabaseLocked, err)
 	}
 
 	vaultConfig := &vault.VaultConfig{
@@ -106,7 +106,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	encryptionVault, err := vault.NewVault(vaultConfig)
 	if err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to initialize vault: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrVaultCreateFailed, err)
 	}
 
 	// Unlock vault before initializing storage services
@@ -124,7 +124,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 		if err != nil {
 			if vaultRequireUnlock {
 				db.Close()
-				return nil, fmt.Errorf("failed to read vault key: %w", err)
+				return nil, fmt.Errorf("%w: %w", constants.ErrVaultKeyReadFailed, err)
 			}
 			logger.Info("Vault key not found, vault will remain locked", "path", vaultKeyPath, "error", err)
 		} else {
@@ -134,12 +134,12 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 				if vaultRequireUnlock {
 					db.Close()
 					if errors.Is(err, vault.ErrVaultNotInit) {
-						return nil, fmt.Errorf("vault not initialized at %s. Run 'g8e vault init' first", vaultDir)
+						return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
 					}
 					if errors.Is(err, vault.ErrInvalidPrivateKey) {
-						return nil, fmt.Errorf("invalid vault key at %s. Verify the key file is correct", vaultKeyPath)
+						return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
 					}
-					return nil, fmt.Errorf("failed to unlock vault: %w", err)
+					return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
 				}
 				logger.Info("Failed to unlock vault, vault will remain locked", "error", err)
 			} else {
@@ -157,7 +157,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	auditStore, err := storage.NewSQLAuditStore(auditStoreConfig, logger)
 	if err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to initialize audit store: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -184,19 +184,19 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	if testMode {
 		if err := svc.initTestSchema(secretsDir, testKeystore); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
 	} else {
 		if err := svc.initSchema(secretsDir); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
 	}
 
 	// Initialize state root if missing
 	if err := svc.initStateRoot(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("failed to initialize state root: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Start background maintenance

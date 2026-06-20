@@ -44,7 +44,7 @@ func GenerateSystemFingerprint(logger *slog.Logger) (*SystemFingerprint, error) 
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return nil, fmt.Errorf("auth: failed to get hostname: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFingerprintGetHostname, err)
 	}
 
 	machineID, err := getMachineID(logger)
@@ -95,7 +95,7 @@ func getMachineID(logger *slog.Logger) (string, error) {
 	case constants.PlatformWindows:
 		return getWindowsMachineID(logger)
 	default:
-		return "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
+		return "", fmt.Errorf("%w: %s", constants.ErrFingerprintUnsupportedOS, runtime.GOOS)
 	}
 }
 
@@ -121,7 +121,7 @@ func getLinuxMachineID(logger *slog.Logger) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("could not read machine ID from any known path")
+	return "", constants.ErrFingerprintMachineIDRead
 }
 
 // getDarwinMachineID uses the system preferences plist as a stable machine identifier on macOS
@@ -130,7 +130,7 @@ func getDarwinMachineID() (string, error) {
 	if err != nil {
 		hostname, err := os.Hostname()
 		if err != nil {
-			return "", fmt.Errorf("auth: failed to get hostname for darwin fallback: %w", err)
+			return "", fmt.Errorf("%w: %w", constants.ErrFingerprintGetHostname, err)
 		}
 		return fmt.Sprintf("darwin-%s", hostname), nil
 	}

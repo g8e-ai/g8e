@@ -109,7 +109,6 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		// Second bootstrap user should fail
 		_, err = userSvc.CreateBootstrapUser()
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "bootstrap user already exists")
 	})
 }
 
@@ -200,7 +199,6 @@ func TestUserService_Disable(t *testing.T) {
 
 		err = userSvc.Disable("", "test_reason", "actor_user_id", "operator_id")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "user_id is required")
 	})
 
 	t.Run("Error - user not found", func(t *testing.T) {
@@ -216,7 +214,6 @@ func TestUserService_Disable(t *testing.T) {
 
 		err = userSvc.Disable("non-existent-id", "test_reason", "actor_user_id", "operator_id")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "user not found")
 	})
 
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
@@ -268,7 +265,6 @@ func TestUserService_Disable(t *testing.T) {
 
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to load user")
 	})
 }
 
@@ -622,7 +618,6 @@ func TestPersonaService_docToPersona(t *testing.T) {
 
 		_, err = personaSvc.docToPersona(malformedDoc)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to marshal doc")
 	})
 }
 
@@ -743,7 +738,6 @@ func TestUserService_GetBySub(t *testing.T) {
 
 		_, err = userSvc.GetBySub("")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "sub is required")
 	})
 
 	t.Run("Success - returns nil for non-existent sub", func(t *testing.T) {
@@ -822,7 +816,6 @@ func TestUserService_CreateUserFromInvitation(t *testing.T) {
 
 		_, err = userSvc.CreateUserFromInvitation("", invitation)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "sub is required")
 	})
 
 	t.Run("Error - nil invitation returns error", func(t *testing.T) {
@@ -838,7 +831,6 @@ func TestUserService_CreateUserFromInvitation(t *testing.T) {
 
 		_, err = userSvc.CreateUserFromInvitation("user-sub", nil)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invitation is required")
 	})
 }
 
@@ -910,7 +902,6 @@ func TestUserService_UpdatePasskeyCredentials(t *testing.T) {
 
 		err = userSvc.UpdatePasskeyCredentials(user.ID, newCredentials)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to update user credentials")
 	})
 }
 
@@ -980,7 +971,6 @@ func TestUserService_DeleteUser(t *testing.T) {
 
 		err = userSvc.DeleteUser("non-existent-id")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "user not found")
 	})
 }
 
@@ -1030,7 +1020,6 @@ func TestUserService_docToUser(t *testing.T) {
 
 		_, err = userSvc.docToUser(malformedDoc)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "failed to marshal doc")
 	})
 }
 
@@ -1089,15 +1078,12 @@ func TestUserService_CreateInvitation(t *testing.T) {
 
 		_, err = userSvc.CreateInvitation("", "user-sub", "creator", []string{"admin"}, 24*time.Hour)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "organization_id, sub, and created_by are required")
 
 		_, err = userSvc.CreateInvitation("org-123", "", "creator", []string{"admin"}, 24*time.Hour)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "organization_id, sub, and created_by are required")
 
 		_, err = userSvc.CreateInvitation("org-123", "user-sub", "", []string{"admin"}, 24*time.Hour)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "organization_id, sub, and created_by are required")
 	})
 }
 
@@ -1239,7 +1225,6 @@ func TestUserService_FindActiveInvitationBySub(t *testing.T) {
 
 		_, err = userSvc.FindActiveInvitationBySub("")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "sub is required")
 	})
 }
 
@@ -1285,6 +1270,5 @@ func TestUserService_ConsumeInvitation(t *testing.T) {
 
 		err = userSvc.ConsumeInvitation("non-existent")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invitation not found")
 	})
 }

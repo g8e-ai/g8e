@@ -17,7 +17,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -32,34 +31,6 @@ import (
 	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
-)
-
-var (
-	ErrInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode GovernanceEnvelope JSON GovernanceEnvelope")
-	ErrUnknownActionType       = errors.New("TX_UNKNOWN_ACTION: action type not recognized")
-	ErrPayloadDecodeFailed     = errors.New("TX_PAYLOAD_DECODE: failed to decode typed payload")
-	ErrTransactionHashMismatch = errors.New("TX_HASH_MISMATCH: transaction_hash does not match computed hash")
-	ErrTransactionIDMismatch   = errors.New("TX_ID_MISMATCH: id does not match computed hash")
-	ErrTransactionExpired      = errors.New("TX_EXPIRED: transaction has expired")
-	ErrTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
-	ErrStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
-	ErrStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
-	ErrL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing")
-	ErrL2SignatureInvalid      = errors.New("TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification")
-	ErrL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Consensus (L2Consensus) signer key not configured")
-	ErrL3ProofMissing          = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
-	ErrL3ProofInvalid          = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
-	ErrL3NotaryNotConfigured   = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
-	ErrTransactionHashMissing  = errors.New("TX_HASH_MISSING: transaction_hash required")
-	ErrTransactionIDMissing    = errors.New("TX_ID_MISSING: id required")
-	ErrExpiresAtMissing        = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
-	ErrNonceMissing            = errors.New("TX_NONCE_MISSING: nonce required")
-	ErrReplayStoreMissing      = errors.New("TX_REPLAY_STORE_MISSING: replay store required")
-	ErrStateRootRequired       = errors.New("TX_STATE_REQUIRED: state_merkle_root required")
-	ErrPayloadMissing          = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
-	ErrPayloadActionMismatch   = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
-	ErrL1ValidationFailed      = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
-	ErrTxInFlight              = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
 )
 
 //go:generate mockery --name ReplayStore --output ./mocks --dir .
@@ -89,83 +60,6 @@ type ReplayStore interface {
 // StateRootProvider defines the interface for obtaining the current state root.
 type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
-}
-
-//go:generate mockery --name GovernancePosture --output ./mocks --dir .
-
-// GovernancePosture defines the interface for posture-aware governance checks.
-// Different postures (doctrine, consensus, notary) have different requirements
-// for L2 and L3 proofs. This interface allows adding new postures without
-// modifying the core verification logic (Open-Closed Principle).
-type GovernancePosture interface {
-	// Name returns the posture name (e.g., "doctrine", "consensus", "notary").
-	Name() string
-
-	// Description returns a human-readable description of the posture.
-	Description() string
-
-	// RequiresL2Signature returns true if this posture requires L2 signatures.
-	RequiresL2Signature() bool
-
-	// RequiresL3Proof returns true if this posture requires L3 proofs for mutations.
-	RequiresL3Proof() bool
-}
-
-// DoctrinePosture implements the doctrine governance posture.
-// Doctrine is the minimal posture requiring only L1 (Doctrine) validation.
-type DoctrinePosture struct{}
-
-func (p *DoctrinePosture) Name() string              { return "doctrine" }
-func (p *DoctrinePosture) Description() string       { return "doctrine (L1 enforced, L2/L3 audited)" }
-func (p *DoctrinePosture) RequiresL2Signature() bool { return false }
-func (p *DoctrinePosture) RequiresL3Proof() bool     { return false }
-
-// ConsensusPosture implements the consensus governance posture.
-// Consensus requires L1 (Doctrine) and L2 (Consensus) validation.
-type ConsensusPosture struct{}
-
-func (p *ConsensusPosture) Name() string              { return "consensus" }
-func (p *ConsensusPosture) Description() string       { return "consensus (L1/L2 enforced, L3 audited)" }
-func (p *ConsensusPosture) RequiresL2Signature() bool { return true }
-func (p *ConsensusPosture) RequiresL3Proof() bool     { return false }
-
-// NotaryPosture implements the notary governance posture.
-// Notary requires L1 (Doctrine), L2 (Consensus), and L3 (Notary) validation.
-type NotaryPosture struct{}
-
-func (p *NotaryPosture) Name() string              { return "notary" }
-func (p *NotaryPosture) Description() string       { return "notary (L1/L2/L3 strictly enforced)" }
-func (p *NotaryPosture) RequiresL2Signature() bool { return true }
-func (p *NotaryPosture) RequiresL3Proof() bool     { return true }
-
-// NewGovernancePosture creates a GovernancePosture from a string name.
-// Panics on invalid posture to fail-closed at startup rather than silently defaulting.
-func NewGovernancePosture(posture string) GovernancePosture {
-	switch posture {
-	case "doctrine":
-		return &DoctrinePosture{}
-	case "consensus":
-		return &ConsensusPosture{}
-	case "notary":
-		return &NotaryPosture{}
-	default:
-		panic(fmt.Sprintf("invalid governance posture: %s (must be one of: doctrine, consensus, notary)", posture))
-	}
-}
-
-// ParseGovernancePosture creates a GovernancePosture from a string name.
-// Returns an error on invalid posture instead of panicking, for CLI edge validation.
-func ParseGovernancePosture(posture string) (GovernancePosture, error) {
-	switch posture {
-	case "doctrine":
-		return &DoctrinePosture{}, nil
-	case "consensus":
-		return &ConsensusPosture{}, nil
-	case "notary":
-		return &NotaryPosture{}, nil
-	default:
-		return nil, fmt.Errorf("invalid governance posture: %s (must be one of: doctrine, consensus, notary)", posture)
-	}
 }
 
 // SignerStore defines the interface for loading trusted L2Consensus signers.
@@ -308,7 +202,7 @@ type SimpleStateRootProvider struct {
 
 func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
 	if s.Root == "" {
-		return "", errors.New("PROVIDER_MISCONFIGURED: state root is empty")
+		return "", constants.ErrTxProviderMisconfigured
 	}
 	return s.Root, nil
 }
@@ -392,7 +286,7 @@ func NewL4Warden(
 // 3. Posture: Governance posture-aware checks (L2 Consensus and L3 Notary proofs).
 func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *governance.GovernanceEnvelope) (*VerifiedTransaction, error) {
 	if envelope == nil {
-		return nil, ErrInvalidEnvelope
+		return nil, constants.ErrTxInvalidEnvelope
 	}
 
 	// 0. Early trackInFlight check to save expensive DB/cryptography operations.
@@ -406,11 +300,11 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *governance.Gov
 	// The nonce is reserved early and finalized after successful execution.
 	if tv.replayStore == nil {
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, ErrReplayStoreMissing
+		return nil, constants.ErrTxReplayStoreMissing
 	}
 	if envelope.ExpiresAt == nil {
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, ErrExpiresAtMissing
+		return nil, constants.ErrTxExpiresAtMissing
 	}
 	expiresAt := envelope.ExpiresAt.AsTime()
 	if tv.clock.Now().After(expiresAt) {
@@ -419,12 +313,12 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *governance.Gov
 			"expires_at", expiresAt,
 			"now", tv.clock.Now())
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, ErrTransactionExpired
+		return nil, constants.ErrTxTransactionExpired
 	}
 	if envelope.Nonce == "" {
 		tv.logger.Error("Transaction rejected: NONCE_MISSING")
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, ErrNonceMissing
+		return nil, constants.ErrTxNonceMissing
 	}
 	replayed, err := tv.replayStore.ReserveNonce(envelope.Nonce, expiresAt)
 	if err != nil {
@@ -437,7 +331,7 @@ func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *governance.Gov
 	if replayed {
 		tv.logger.Error("Transaction rejected: REPLAY_DETECTED", "nonce", envelope.Nonce)
 		tv.releaseInFlight(envelope.Nonce)
-		return nil, ErrTransactionReplay
+		return nil, constants.ErrTxTransactionReplay
 	}
 
 	// Nonce is now durably reserved in SQLite, safe to release in-flight lock
@@ -502,7 +396,7 @@ func (tv *L4Warden) trackInFlight(nonce string) error {
 	_, loaded := tv.inFlight.LoadOrStore(nonce, true)
 	if loaded {
 		tv.logger.Warn("Transaction with same nonce already in-flight", "nonce", nonce)
-		return ErrTxInFlight
+		return constants.ErrTxInFlight
 	}
 	return nil
 }
@@ -516,38 +410,38 @@ func (tv *L4Warden) releaseInFlight(nonce string) {
 // Mutation classification is defined in protocol/constants/status.json via the _mutation field.
 // Actions marked as mutations require L3 Notary (human-presence) verification.
 func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
-	return constants.IsMutation(actionType)
+	return actionType.IsMutation()
 }
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
 func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (proto.Message, string, error) {
 	if envelope.Id == "" {
-		return nil, "", ErrTransactionIDMissing
+		return nil, "", constants.ErrTxTransactionIDMissing
 	}
 
 	actionType := constants.ActionType(envelope.ActionType)
 	if _, ok := tv.knownActionTypes[actionType]; !ok {
 		tv.logger.Error("Unknown action type", "action_type", envelope.ActionType)
-		return nil, "", ErrUnknownActionType
+		return nil, "", constants.ErrTxUnknownActionType
 	}
 
 	// ActionTypeHeartbeat uses HeartbeatRequested{} which has no fields and marshals
 	// to zero bytes — this is a valid empty proto, not a missing payload.
 	if len(envelope.Payload) == 0 && actionType != constants.ActionTypeHeartbeat {
-		return nil, "", ErrPayloadMissing
+		return nil, "", constants.ErrTxPayloadMissing
 	}
 
 	decodedPayload, err := tv.decodePayloadForAction(actionType, envelope.Payload)
 	if err != nil {
 		tv.logger.Error("Failed to decode typed payload", "action_type", envelope.ActionType, string(constants.ConnectionStateError), err)
-		return nil, "", ErrPayloadDecodeFailed
+		return nil, "", constants.ErrTxPayloadDecodeFailed
 	}
 
 	// INVESTIGATION_CREATE has no typed payload (returns nil), skip L1 validation
 	if decodedPayload != nil {
 		if violations := tv.doctrine.ValidatePayload(decodedPayload); len(violations) > 0 {
 			tv.logger.Error("Doctrine (L1Doctrine) validation failed", "action_type", envelope.ActionType, "violations", violations)
-			return nil, "", fmt.Errorf("%w: %s", ErrL1ValidationFailed, strings.Join(violations, ", "))
+			return nil, "", fmt.Errorf("%w: %s", constants.ErrTxL1ValidationFailed, strings.Join(violations, ", "))
 		}
 	}
 
@@ -557,21 +451,21 @@ func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (pr
 	}
 
 	if envelope.TransactionHash == "" {
-		return nil, "", ErrTransactionHashMissing
+		return nil, "", constants.ErrTxTransactionHashMissing
 	}
 
 	if envelope.TransactionHash != computedHash {
 		tv.logger.Error("Transaction hash mismatch",
 			"provided", envelope.TransactionHash,
 			"computed", computedHash)
-		return nil, "", ErrTransactionHashMismatch
+		return nil, "", constants.ErrTxTransactionHashMismatch
 	}
 
 	if envelope.Id != computedHash {
 		tv.logger.Error("Transaction id mismatch",
 			"provided", envelope.Id,
 			"computed", computedHash)
-		return nil, "", ErrTransactionIDMismatch
+		return nil, "", constants.ErrTxTransactionIDMismatch
 	}
 
 	return decodedPayload, computedHash, nil
@@ -580,12 +474,12 @@ func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (pr
 // verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
 func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (time.Time, error) {
 	if envelope.StateMerkleRoot == "" {
-		return time.Time{}, ErrStateRootRequired
+		return time.Time{}, constants.ErrTxStateRootRequired
 	}
 
 	if tv.stateRootProvider == nil {
 		tv.logger.Error("State root verification required but provider not configured")
-		return time.Time{}, ErrStateRootMissing
+		return time.Time{}, constants.ErrTxStateRootMissing
 	}
 
 	currentRoot, err := tv.stateRootProvider.GetCurrentStateRoot()
@@ -595,14 +489,14 @@ func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (tim
 	}
 
 	if currentRoot == "" {
-		return time.Time{}, ErrStateRootMissing
+		return time.Time{}, constants.ErrTxStateRootMissing
 	}
 
 	if currentRoot != envelope.StateMerkleRoot {
 		tv.logger.Error("State root mismatch",
 			"envelope_root", envelope.StateMerkleRoot,
 			"current_root", currentRoot)
-		return time.Time{}, ErrStateRootMismatch
+		return time.Time{}, constants.ErrTxStateRootMismatch
 	}
 
 	return time.Time{}, nil
@@ -627,7 +521,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	if envelope.Governance == nil || envelope.Governance.L2 == nil || envelope.Governance.L2.ConsensusSignature == "" {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("L2 signature missing but required by posture", "posture", tv.posture.Name())
-			return false, ErrL2SignatureMissing
+			return false, constants.ErrTxL2SignatureMissing
 		}
 		return false, nil
 	}
@@ -636,7 +530,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	if l2.KeyId == "" {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("L2 key ID missing but required by posture", "posture", tv.posture.Name())
-			return false, ErrL2KeyNotConfigured
+			return false, constants.ErrTxL2KeyNotConfigured
 		}
 		return false, nil
 	}
@@ -644,7 +538,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	if tv.signerStore == nil {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
-			return false, ErrL2KeyNotConfigured
+			return false, constants.ErrTxL2KeyNotConfigured
 		}
 		return false, nil
 	}
@@ -653,7 +547,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	if err != nil {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("Failed to load trusted signer", "key_id", l2.KeyId, string(constants.ConnectionStateError), err)
-			return false, ErrL2KeyNotConfigured
+			return false, constants.ErrTxL2KeyNotConfigured
 		}
 		return false, nil
 	}
@@ -661,7 +555,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	if pubKey == nil {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("Consensus (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
-			return false, ErrL2KeyNotConfigured
+			return false, constants.ErrTxL2KeyNotConfigured
 		}
 		return false, nil
 	}
@@ -669,7 +563,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	valid := tv.verifyL2Signature(pubKey, l2.ConsensusSignature, computedHash, true)
 	if !valid && tv.posture.RequiresL2Signature() {
 		tv.logger.Error("L2 signature verification failed but required by posture", "posture", tv.posture.Name())
-		return false, ErrL2SignatureInvalid
+		return false, constants.ErrTxL2SignatureInvalid
 	}
 
 	return valid, nil
@@ -691,7 +585,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.Go
 	if !hasProof {
 		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
 			tv.logger.Error("L3 proof missing but required by posture", "posture", tv.posture.Name())
-			return false, ErrL3ProofMissing
+			return false, constants.ErrTxL3ProofMissing
 		}
 		return false, nil
 	}
@@ -699,7 +593,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.Go
 	if tv.l3Notary == nil {
 		if tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
 			tv.logger.Error("L3 notary not configured but required by posture", "posture", tv.posture.Name())
-			return false, ErrL3NotaryNotConfigured
+			return false, constants.ErrTxL3NotaryNotConfigured
 		}
 		return false, nil
 	}
@@ -714,7 +608,7 @@ func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.Go
 
 	if (err != nil || !ok) && tv.isMutation(actionType) && tv.posture.RequiresL3Proof() {
 		tv.logger.Error("Notary (L3Notary) verification failed but required by posture", string(constants.ConnectionStateError), err)
-		return false, ErrL3ProofInvalid
+		return false, constants.ErrTxL3ProofInvalid
 	}
 
 	return ok && err == nil, nil
@@ -777,7 +671,7 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		return nil, nil
 
 	default:
-		return nil, ErrUnknownActionType
+		return nil, constants.ErrTxUnknownActionType
 	}
 	if err := proto.Unmarshal(payload, msg); err != nil {
 		return nil, err

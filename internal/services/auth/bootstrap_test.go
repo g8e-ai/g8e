@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/httpclient"
 	system "github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -355,7 +356,7 @@ func TestApplyBootstrapConfig_InvalidCertIsFatal(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cert trust failure",
 		"error message must contain 'cert trust failure' so ExitCodeFromError maps it to ExitCertTrustFailure")
-	assert.Equal(t, constants.ExitCertTrustFailure, constants.ExitCodeFromError(err))
+	assert.Equal(t, constants.ExitCertTrustFailure, exitcode.FromError(err))
 }
 
 func TestAuthServicesResponse_JSONParsing(t *testing.T) {

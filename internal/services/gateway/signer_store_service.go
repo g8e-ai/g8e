@@ -48,7 +48,7 @@ func NewSignerStoreService(db *sqliteutil.DB, logger *slog.Logger) *SignerStoreS
 func (s *SignerStoreService) GetTrustedSigner(keyID string) (ed25519.PublicKey, error) {
 	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), keyID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get trusted signer %s: %w", keyID, err)
+		return nil, fmt.Errorf("%w: %s", constants.ErrDocumentStoreUnmarshalData, keyID)
 	}
 	if doc == nil {
 		return nil, nil
@@ -56,12 +56,12 @@ func (s *SignerStoreService) GetTrustedSigner(keyID string) (ed25519.PublicKey, 
 
 	data, err := json.Marshal(doc.Data)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	var signer models.TrustedSigner
 	if err := json.Unmarshal(data, &signer); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal trusted signer: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalData, err)
 	}
 
 	if !signer.Enabled {
@@ -70,11 +70,11 @@ func (s *SignerStoreService) GetTrustedSigner(keyID string) (ed25519.PublicKey, 
 
 	pubBytes, err := hex.DecodeString(signer.PublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode public key hex: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrValidationFailed, err)
 	}
 
 	if len(pubBytes) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("invalid public key size: %d", len(pubBytes))
+		return nil, fmt.Errorf("%w: invalid public key size: %d", constants.ErrValidationFailed, len(pubBytes))
 	}
 
 	return ed25519.PublicKey(pubBytes), nil
@@ -83,10 +83,10 @@ func (s *SignerStoreService) GetTrustedSigner(keyID string) (ed25519.PublicKey, 
 // AddTrustedSigner adds or updates a trusted L2 signer in the database.
 func (s *SignerStoreService) AddTrustedSigner(signer models.TrustedSigner) error {
 	if signer.ID == "" {
-		return fmt.Errorf("signer ID is required")
+		return fmt.Errorf("%w: signer ID", constants.ErrMissingRequiredField)
 	}
 	if signer.PublicKey == "" {
-		return fmt.Errorf("signer public key is required")
+		return fmt.Errorf("%w: signer public key", constants.ErrMissingRequiredField)
 	}
 
 	if signer.AddedAt.IsZero() {
@@ -95,7 +95,7 @@ func (s *SignerStoreService) AddTrustedSigner(signer models.TrustedSigner) error
 
 	data, err := json.Marshal(signer)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	return s.docSvc.DocSet(marshaler.CollectionName(constants.CollectionTrustedSigners), signer.ID, data)
@@ -105,17 +105,19 @@ func (s *SignerStoreService) AddTrustedSigner(signer models.TrustedSigner) error
 func (s *SignerStoreService) ListTrustedSigners() ([]models.TrustedSigner, error) {
 	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), nil, "id", 0)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalData, err)
 	}
 
 	results := make([]models.TrustedSigner, 0, len(docs))
 	for _, doc := range docs {
 		data, err := json.Marshal(doc.Data)
 		if err != nil {
+			s.logger.Warn("failed to marshal signer document", "error", err)
 			continue
 		}
 		var signer models.TrustedSigner
 		if err := json.Unmarshal(data, &signer); err != nil {
+			s.logger.Warn("failed to unmarshal signer document", "error", err)
 			continue
 		}
 		// id is not in the data map usually, so we set it from doc.ID
@@ -137,7 +139,7 @@ func (s *SignerStoreService) HasTrustedSigners() (bool, error) {
 	}
 	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionTrustedSigners), filters, "", 1)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalData, err)
 	}
 	return len(docs) > 0, nil
 }

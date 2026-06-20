@@ -17,6 +17,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Config represents the top-level MCP client configuration structure.
@@ -73,19 +75,19 @@ func NewGatewayConfig(gatewayURL, clientCertPath, clientKeyPath, caCertPath stri
 // NewGatewayConfigWithHostname creates a gateway MCP configuration with a custom hostname for verification.
 func NewGatewayConfigWithHostname(gatewayURL, clientCertPath, clientKeyPath, caCertPath, verifyHostname string) (*Config, error) {
 	if err := validateGatewayURL(gatewayURL); err != nil {
-		return nil, fmt.Errorf("mcp: validate gateway URL: %w", err)
+		return nil, fmt.Errorf("validate gateway URL: %w", err)
 	}
 	if err := validateCertPath(clientCertPath, "client certificate"); err != nil {
-		return nil, fmt.Errorf("mcp: validate client certificate path: %w", err)
+		return nil, fmt.Errorf("validate client certificate path: %w", err)
 	}
 	if err := validateCertPath(clientKeyPath, "client key"); err != nil {
-		return nil, fmt.Errorf("mcp: validate client key path: %w", err)
+		return nil, fmt.Errorf("validate client key path: %w", err)
 	}
 	if err := validateCertPath(caCertPath, "CA certificate"); err != nil {
-		return nil, fmt.Errorf("mcp: validate CA certificate path: %w", err)
+		return nil, fmt.Errorf("validate CA certificate path: %w", err)
 	}
 	if verifyHostname == "" {
-		return nil, fmt.Errorf("mcp: verify hostname cannot be empty")
+		return nil, constants.ErrMCPConfigVerifyHostnameEmpty
 	}
 
 	return &Config{
@@ -119,7 +121,7 @@ func NewGatewayConfigWithHostname(gatewayURL, clientCertPath, clientKeyPath, caC
 // validateGatewayURL validates that the gateway URL is a valid HTTPS URL.
 func validateGatewayURL(gatewayURL string) error {
 	if gatewayURL == "" {
-		return fmt.Errorf("gateway URL cannot be empty")
+		return constants.ErrGatewayURLRequired
 	}
 
 	parsedURL, err := url.Parse(gatewayURL)
@@ -128,11 +130,11 @@ func validateGatewayURL(gatewayURL string) error {
 	}
 
 	if parsedURL.Scheme != "https" {
-		return fmt.Errorf("URL scheme must be https, got %s", parsedURL.Scheme)
+		return constants.ErrMCPConfigGatewayURLInvalidScheme
 	}
 
 	if parsedURL.Host == "" {
-		return fmt.Errorf("URL host cannot be empty")
+		return constants.ErrMCPConfigGatewayURLHostEmpty
 	}
 
 	return nil
@@ -141,10 +143,10 @@ func validateGatewayURL(gatewayURL string) error {
 // NewStdioConfig creates a stdio transport MCP configuration for local native tools.
 func NewStdioConfig(g8eBinaryPath string) (*Config, error) {
 	if g8eBinaryPath == "" {
-		return nil, fmt.Errorf("g8e binary path cannot be empty")
+		return nil, constants.ErrMCPConfigBinaryPathEmpty
 	}
 	if strings.TrimSpace(g8eBinaryPath) == "" {
-		return nil, fmt.Errorf("g8e binary path cannot be whitespace only")
+		return nil, constants.ErrMCPConfigBinaryPathWhitespace
 	}
 
 	return &Config{
@@ -189,10 +191,10 @@ type SimpleConfig struct {
 // This format is compatible with Cursor/Devin MCP clients.
 func NewStdioConfigSimple(g8eBinaryPath string) (*SimpleConfig, error) {
 	if g8eBinaryPath == "" {
-		return nil, fmt.Errorf("g8e binary path cannot be empty")
+		return nil, constants.ErrMCPConfigBinaryPathEmpty
 	}
 	if strings.TrimSpace(g8eBinaryPath) == "" {
-		return nil, fmt.Errorf("g8e binary path cannot be whitespace only")
+		return nil, constants.ErrMCPConfigBinaryPathWhitespace
 	}
 
 	return &SimpleConfig{
@@ -209,10 +211,10 @@ func NewStdioConfigSimple(g8eBinaryPath string) (*SimpleConfig, error) {
 // validateCertPath validates that a certificate path is non-empty.
 func validateCertPath(path, certType string) error {
 	if path == "" {
-		return fmt.Errorf("%s path cannot be empty", certType)
+		return constants.ErrMCPConfigCertPathEmpty
 	}
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("%s path cannot be whitespace only", certType)
+		return constants.ErrMCPConfigCertPathWhitespace
 	}
 	return nil
 }

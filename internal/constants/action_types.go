@@ -55,41 +55,40 @@ const (
 	ActionTypeShutdown            ActionType = "SHUTDOWN"
 )
 
-// AllActionTypes returns a slice of all valid action types.
-func AllActionTypes() []ActionType {
-	return []ActionType{
-		ActionTypeA2aCall,
-		ActionTypeCancel,
-		ActionTypeEvalAnswer,
-		ActionTypeExecuteBash,
-		ActionTypeFetchFileDiff,
-		ActionTypeFetchFileHistory,
-		ActionTypeFetchHistory,
-		ActionTypeFetchLogs,
-		ActionTypeFileEdit,
-		ActionTypeFsGrep,
-		ActionTypeFsList,
-		ActionTypeFsRead,
-		ActionTypeGrantIntent,
-		ActionTypeHeartbeat,
-		ActionTypeInvestigationCreate,
-		ActionTypeMcpCall,
-		ActionTypeMcpPromptGet,
-		ActionTypeMcpPromptList,
-		ActionTypeMcpResourceList,
-		ActionTypeMcpResourceRead,
-		ActionTypeMigrationTransfer,
-		ActionTypePortCheck,
-		ActionTypeRestoreFile,
-		ActionTypeRevokeIntent,
-		ActionTypeShutdown,
-	}
+// AllActionTypes is the canonical slice of all valid action types.
+// Verified by contract tests against protocol/constants/status.json.
+var AllActionTypes = []ActionType{
+	ActionTypeA2aCall,
+	ActionTypeCancel,
+	ActionTypeEvalAnswer,
+	ActionTypeExecuteBash,
+	ActionTypeFetchFileDiff,
+	ActionTypeFetchFileHistory,
+	ActionTypeFetchHistory,
+	ActionTypeFetchLogs,
+	ActionTypeFileEdit,
+	ActionTypeFsGrep,
+	ActionTypeFsList,
+	ActionTypeFsRead,
+	ActionTypeGrantIntent,
+	ActionTypeHeartbeat,
+	ActionTypeInvestigationCreate,
+	ActionTypeMcpCall,
+	ActionTypeMcpPromptGet,
+	ActionTypeMcpPromptList,
+	ActionTypeMcpResourceList,
+	ActionTypeMcpResourceRead,
+	ActionTypeMigrationTransfer,
+	ActionTypePortCheck,
+	ActionTypeRestoreFile,
+	ActionTypeRevokeIntent,
+	ActionTypeShutdown,
 }
 
-// IsMutation returns true if the action type is a mutation (modifies system state).
-// This must match the "_mutation": true flag in protocol/constants/status.json.
-func IsMutation(actionType ActionType) bool {
-	switch actionType {
+// IsMutation returns true if the action type modifies system state.
+// Must match the "_mutation": true flag in protocol/constants/status.json.
+func (a ActionType) IsMutation() bool {
+	switch a {
 	case ActionTypeA2aCall,
 		ActionTypeCancel,
 		ActionTypeExecuteBash,

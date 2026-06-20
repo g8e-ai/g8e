@@ -45,7 +45,7 @@ func NewAppPolicyStoreService(db *sqliteutil.DB, logger *slog.Logger) *AppPolicy
 func (s *AppPolicyStoreService) GetAppPolicy(appID string) (*models.AppPolicy, error) {
 	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get app policy %s: %w", appID, err)
+		return nil, fmt.Errorf("%w: %s", constants.ErrAppPolicyStoreGetFailed, appID)
 	}
 	if doc == nil {
 		return nil, nil
@@ -53,12 +53,12 @@ func (s *AppPolicyStoreService) GetAppPolicy(appID string) (*models.AppPolicy, e
 
 	data, err := json.Marshal(doc.Data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal app policy data: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAppPolicyStoreMarshalFailed, err)
 	}
 
 	var policy models.AppPolicy
 	if err := json.Unmarshal(data, &policy); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal app policy: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAppPolicyStoreUnmarshalFailed, err)
 	}
 
 	return &policy, nil

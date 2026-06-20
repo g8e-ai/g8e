@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
@@ -439,7 +440,7 @@ func TestRunOpenClawMode_InvalidLogLevel_ConfigError(t *testing.T) {
 // so we can assert its validation without invoking runOpenClawMode (which calls os.Exit).
 func loadOpenClawConfig(gatewayURL, token, nodeID, displayName, pathEnv, logLevel string) (interface{}, error) {
 	if gatewayURL == "" {
-		return nil, fmt.Errorf("gateway URL is required (--openclaw-url)")
+		return nil, fmt.Errorf("%w: (--openclaw-url)", constants.ErrGatewayURLRequired)
 	}
 	return struct{}{}, nil
 }

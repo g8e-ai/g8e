@@ -17,11 +17,12 @@ package e2e
 
 import (
 	"encoding/json"
-	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -135,7 +136,7 @@ func (f *DockerE2EFixture) GetCABundle(t *testing.T) string {
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	bundle, err := os.ReadFile(resp.Body)
+	bundle, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return string(bundle)
 }
@@ -159,15 +160,22 @@ func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	require.Contains(t, logs, "connected", "Operator logs do not contain connection success marker")
 }
 
-// resolveRepoRoot finds the repository root using go list.
+// resolveRepoRoot finds the repository root using runtime.Caller.
 func resolveRepoRoot(t *testing.T) string {
 	t.Helper()
-	cmd := exec.Command("go", "list", "-m", "-f", "{{.Dir}}")
-	output, err := cmd.Output()
-	require.NoError(t, err, "failed to run go list -m to find repository root")
+	// Get the directory of this file using runtime.Caller
+	_, filename, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(filename)
 
-	repoRoot := strings.TrimSpace(string(output))
-	require.NotEmpty(t, repoRoot, "go list -m returned empty directory")
+	// Navigate to repository root (test/e2e -> repository root)
+	repoRoot := filepath.Join(testDir, "..", "..")
+	repoRoot = filepath.Clean(repoRoot)
+
+	// Verify go.mod exists at repoRoot
+	goModPath := filepath.Join(repoRoot, "go.mod")
+	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
+		t.Fatalf("go.mod not found at %s", goModPath)
+	}
 
 	return repoRoot
 }

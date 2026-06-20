@@ -16,14 +16,12 @@ package sqliteutil
 import (
 	"fmt"
 	"time"
-)
 
-const (
-	TimestampFormat = time.RFC3339Nano
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func FormatTimestamp(t time.Time) string {
-	return t.UTC().Format(TimestampFormat)
+	return t.UTC().Format(constants.TimestampFormat)
 }
 
 func NowTimestamp() string {
@@ -32,12 +30,12 @@ func NowTimestamp() string {
 
 func ParseTimestamp(s string) (time.Time, error) {
 	if s == "" {
-		return time.Time{}, fmt.Errorf("timestamp: parse: empty string")
+		return time.Time{}, constants.ErrTimestampParseEmpty
 	}
 
-	t, err := time.Parse(TimestampFormat, s)
+	t, err := time.Parse(constants.TimestampFormat, s)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("timestamp: parse: unrecognized format %q (expected %s)", s, TimestampFormat)
+		return time.Time{}, fmt.Errorf("%w: %q (expected %s)", constants.ErrTimestampParseInvalidFormat, s, constants.TimestampFormat)
 	}
 
 	return t.UTC(), nil

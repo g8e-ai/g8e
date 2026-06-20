@@ -67,11 +67,6 @@ type Resource struct {
 	Metadata    *Metadata `json:"metadata,omitempty"`
 }
 
-// ListResourcesResult is the result for the "resources/list" method.
-type ListResourcesResult struct {
-	Resources []Resource `json:"resources"`
-}
-
 // ReadResourceRequest is the params for the "resources/read" method.
 type ReadResourceRequest struct {
 	URI string `json:"uri"`
@@ -107,11 +102,6 @@ type PromptArgument struct {
 // Metadata represents typed metadata for MCP resources and prompts.
 type Metadata struct {
 	Custom map[string]string `json:"custom,omitempty"`
-}
-
-// ListPromptsResult is the result for the "prompts/list" method.
-type ListPromptsResult struct {
-	Prompts []Prompt `json:"prompts"`
 }
 
 // GetPromptRequest is the params for the "prompts/get" method.

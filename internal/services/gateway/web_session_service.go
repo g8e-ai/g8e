@@ -55,11 +55,11 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 
 	data, err := json.Marshal(webSession)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal web session: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
 		s.logger.Error("Failed to create web session", string(constants.ConnectionStateError), err, "userID", userID)
-		return nil, fmt.Errorf("failed to create web session: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrInternal, err)
 	}
 
 	s.logger.Info("Web session created", "userID", userID, "webSessionID", webSessionID[:8])
@@ -70,25 +70,25 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.WebSession, error) {
 	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("web session validation failed: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrInternal, err)
 	}
 	if doc == nil {
-		return nil, fmt.Errorf("web session not found")
+		return nil, constants.ErrNotFound
 	}
 
 	dataBytes, err := json.Marshal(doc.Data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal web session data: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 	var webSession models.WebSession
 	if err := json.Unmarshal(dataBytes, &webSession); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal web session: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
 
 	webSession.ID = webSessionID
 
 	if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
-		return nil, fmt.Errorf("web session expired")
+		return nil, constants.ErrExpired
 	}
 
 	return &webSession, nil

@@ -24,6 +24,8 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 	"golang.org/x/crypto/ssh/knownhosts"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // ConfigBlock holds parsed values for a single Host block from SSH config.
@@ -60,7 +62,7 @@ func ParseConfig(path string) (map[string]*ConfigBlock, error) {
 		if os.IsNotExist(err) {
 			return blocks, nil
 		}
-		return blocks, fmt.Errorf("ssh: open config file %s: %w", path, err)
+		return blocks, fmt.Errorf("%w: %s", constants.ErrSSHOpenConfigFile, path)
 	}
 	defer f.Close()
 
@@ -106,7 +108,7 @@ func ParseConfig(path string) (map[string]*ConfigBlock, error) {
 			if current != nil {
 				expanded, err := ExpandTilde(val)
 				if err != nil {
-					return blocks, fmt.Errorf("ssh: expand tilde for identity file %s: %w", val, err)
+					return blocks, fmt.Errorf("%w: %s", constants.ErrSSHExpandTilde, val)
 				}
 				current.IdentityFiles = append(current.IdentityFiles, expanded)
 			}
@@ -117,7 +119,7 @@ func ParseConfig(path string) (map[string]*ConfigBlock, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return blocks, fmt.Errorf("ssh: scan config file %s: %w", path, err)
+		return blocks, fmt.Errorf("%w: %s", constants.ErrSSHScanConfigFile, path)
 	}
 	return blocks, nil
 }
@@ -208,14 +210,14 @@ func ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 	if configPath == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return r, fmt.Errorf("ssh: resolve home directory for config: %w", err)
+			return r, fmt.Errorf("%w", constants.ErrSSHResolveHomeDir)
 		}
 		configPath = filepath.Join(home, ".ssh", "config")
 	}
 
 	blocks, err := ParseConfig(configPath)
 	if err != nil {
-		return r, fmt.Errorf("ssh: parse config: %w", err)
+		return r, fmt.Errorf("%w", constants.ErrSSHParseConfig)
 	}
 	if block := MatchBlock(blocks, r.Hostname); block != nil {
 		if r.User == "" && block.User != "" {
@@ -255,7 +257,7 @@ func ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 	if len(r.KeyFiles) == 0 {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return r, fmt.Errorf("ssh: resolve home directory for default keys: %w", err)
+			return r, fmt.Errorf("%w", constants.ErrSSHResolveHomeDir)
 		}
 		candidates := []string{
 			filepath.Join(home, ".ssh", "id_ed25519"),
@@ -282,13 +284,13 @@ func BuildAuthMethods(r HostConfig, sshAuthSock, passphrase string) ([]ssh.AuthM
 	if sshAuthSock != "" {
 		conn, err := net.Dial("unix", sshAuthSock)
 		if err != nil {
-			return nil, fmt.Errorf("ssh: dial agent socket %s: %w", sshAuthSock, err)
+			return nil, fmt.Errorf("%w: %s", constants.ErrSSHDialAgentSocket, sshAuthSock)
 		}
 		defer conn.Close()
 		agentClient := agent.NewClient(conn)
 		_, err = agentClient.Signers()
 		if err != nil {
-			return nil, fmt.Errorf("ssh: get agent signers: %w", err)
+			return nil, fmt.Errorf("%w", constants.ErrSSHGetAgentSigners)
 		}
 		methods = append(methods, ssh.PublicKeysCallback(agentClient.Signers))
 	}
@@ -297,7 +299,7 @@ func BuildAuthMethods(r HostConfig, sshAuthSock, passphrase string) ([]ssh.AuthM
 	for _, keyPath := range r.KeyFiles {
 		data, err := os.ReadFile(keyPath)
 		if err != nil {
-			return nil, fmt.Errorf("ssh: read key file %s: %w", keyPath, err)
+			return nil, fmt.Errorf("%w: %s", constants.ErrSSHReadKeyFile, keyPath)
 		}
 		var signer ssh.Signer
 		if passphrase != "" {
@@ -307,14 +309,14 @@ func BuildAuthMethods(r HostConfig, sshAuthSock, passphrase string) ([]ssh.AuthM
 				// Fall back to no passphrase if passphrase provided but wrong
 				signer, err = ssh.ParsePrivateKey(data)
 				if err != nil {
-					return nil, fmt.Errorf("ssh: parse private key %s with passphrase: %w", keyPath, err)
+					return nil, fmt.Errorf("%w: %s", constants.ErrSSHParsePrivateKey, keyPath)
 				}
 			}
 		} else {
 			// No passphrase provided, try without
 			signer, err = ssh.ParsePrivateKey(data)
 			if err != nil {
-				return nil, fmt.Errorf("ssh: parse private key %s: %w", keyPath, err)
+				return nil, fmt.Errorf("%w: %s", constants.ErrSSHParsePrivateKey, keyPath)
 			}
 		}
 		methods = append(methods, ssh.PublicKeys(signer))
@@ -336,21 +338,16 @@ func BuildHostKeyCallback(khPath string) (ssh.HostKeyCallback, error) {
 	if khPath == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {
-			return nil, fmt.Errorf("ssh: resolve home directory for known_hosts: %w", err)
+			return nil, fmt.Errorf("%w", constants.ErrSSHResolveHomeDir)
 		}
 		khPath = filepath.Join(home, ".ssh", "known_hosts")
 	}
 	if _, err := os.Stat(khPath); err != nil {
-		return nil, fmt.Errorf(
-			"ssh: known_hosts not found at %s: strict host-key checking requires every target "+
-				"to be pre-trusted; populate it (e.g. ssh-keyscan) before connecting: %w",
-			khPath,
-			err,
-		)
+		return nil, fmt.Errorf("%w: %s", constants.ErrSSHKnownHostsNotFound, khPath)
 	}
 	cb, err := knownhosts.New(khPath)
 	if err != nil {
-		return nil, fmt.Errorf("ssh: parse known_hosts at %s: %w", khPath, err)
+		return nil, fmt.Errorf("%w: %s", constants.ErrSSHParseKnownHosts, khPath)
 	}
 	return cb, nil
 }
@@ -362,7 +359,7 @@ func ExpandTilde(path string) (string, error) {
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("ssh: resolve home directory for tilde expansion: %w", err)
+		return "", fmt.Errorf("%w", constants.ErrSSHResolveHomeDir)
 	}
 	return filepath.Join(home, path[1:]), nil
 }

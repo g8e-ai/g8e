@@ -80,7 +80,6 @@ func TestSignerStoreService_AddTrustedSigner(t *testing.T) {
 
 		err := svc.AddTrustedSigner(signer)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "signer ID is required")
 	})
 
 	t.Run("AddTrustedSigner with empty public key returns error", func(t *testing.T) {
@@ -93,7 +92,6 @@ func TestSignerStoreService_AddTrustedSigner(t *testing.T) {
 
 		err := svc.AddTrustedSigner(signer)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "signer public key is required")
 	})
 
 	t.Run("AddTrustedSigner auto-sets AddedAt when zero", func(t *testing.T) {

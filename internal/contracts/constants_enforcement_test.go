@@ -44,7 +44,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 var g8eoRoot string
@@ -73,7 +73,7 @@ func init() {
 		}
 		current = parent
 	}
-	if err := constants.InitPathsWithBase(g8eoRoot); err != nil {
+	if err := paths.InitWithBase(g8eoRoot); err != nil {
 		panic(fmt.Errorf("constants_enforcement: init paths: %w", err))
 	}
 }

@@ -41,11 +41,10 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ./g8e test unit        # Run Tier 1 (Unit) tests - no external dependencies
 ./g8e test integration # Run Tier 2 (In-Process Integration) tests - on-disk SQLite, local PKI
 ./g8e test e2e         # Run Tier 3 (Docker E2E) tests - requires Docker
-./g8e test scenario    # Run Tier 2 (Scenario) tests - requires running gateway
 ./g8e test coverage    # Run tests with coverage report
 ./g8e test lint        # Run linting and quality checks
-./g8e emulator list    # List emulator scenarios
-./g8e emulator run     # Run emulator scenarios against real Gateway/Operator
+./g8e agentic-tool-emulator list    # List agentic tool emulator scenarios
+./g8e agentic-tool-emulator run     # Run agentic tool emulator scenarios against real Gateway/Operator
 ./g8e test chaos       # Generate realistic governance events for testing
 ./g8e test summary     # View chaos test summary from test vault
 ```
@@ -58,39 +57,19 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test e2e`** - Runs Docker-based E2E tests with the `e2e` build tag. These tests require Docker and use `docker-compose.yml` to spin up gateway and operator containers.
 
-- **`./g8e test scenario`** - Runs scenario-specific integration tests with the `integration` build tag. These tests exercise end-to-end governance workflows across doctrine, consensus, and notary modes. Requires running gateway and authenticated CLI session.
-
 - **`./g8e test coverage`** - Runs tests with coverage profiling and enforces a minimum coverage threshold (60%). Use PKG flag to test a specific package, VERBOSE for detailed output.
 
 - **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
 
-- **`./g8e emulator list`** - Lists available emulator scenarios with their posture requirements and personas.
+- **`./g8e agentic-tool-emulator list`** - Lists available agentic tool emulator scenarios with their posture requirements and personas.
 
-- **`./g8e emulator run`** - Runs emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+- **`./g8e agentic-tool-emulator run`** - Runs agentic tool emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
 
 - **`./g8e test chaos`** - Generates realistic governance events for testing. Creates a test vault with distributed event categories (70% Good Actor, 20% Prompt Injection, 10% MitM) to test governance pipeline behavior under various conditions.
 
 - **`./g8e test summary`** - Views aggregated chaos test results from the test vault database. Queries the chaos_events table across all test runs in the test vault directory.
 
 Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer governance, Audit Vault). Tests cover pub/sub command dispatch, L1/L2/L3/L4/L5 verification, transaction replay protection, state root validation, and audit vault integrity.
-
-### Scenario Tests
-
-```bash
-./g8e test scenario
-./g8e test scenario --run forge_signature
-```
-
-Integration tests exercising end-to-end governance workflows across doctrine, consensus, and notary modes. Tests cover the 5-layer verification sequence (L1-L5), transaction replay protection, state root validation, and receipt verification. Requires the g8e Gateway to be running and authenticated CLI session. These tests use the `integration` build tag.
-
-**Test Types**:
-- **Table-driven scenarios** - JSON fixtures in `test/scenario/fixtures/` covering security gates (bad integrity, hash mismatch, replay, stale state root, L2/L3 validation) and finance workflows
-- **Golden snapshots** - Deterministic receipt comparison excluding volatile fields (signature, timestamp, signer key). Golden files auto-create on missing and auto-update on mismatch
-- **Property-based invariants** - Fuzz-style tests verifying core governance invariants (integrity + freshness + state + required-gates must all pass in order)
-- **Concurrency tests** - Double-submit replay detection using goroutines to verify TOCTOU resistance
-- **Negative controls** - Tests that intentionally flip expectations to prove the suite can detect failures
-- **Receipt verification** - Separate axis testing cryptographic receipt validation (signature verification, field tampering detection)
-- **Receipt persistence** - Database persistence verification for accepted transactions (receipts stored in `console_audit` collection), rejected transactions verify no persistence
 
 ### Docker E2E Tests
 
@@ -111,17 +90,17 @@ Docker-based E2E tests that spin up gateway and operator containers using docker
 - Tests the gov demo compose configuration
 - Same health checks as above but using gov demo compose file
 
-### Emulator
+### Agentic Tool Emulator
 
 ```bash
-./g8e emulator list
-./g8e emulator run [scenario ...]
-./g8e emulator audit
+./g8e agentic-tool-emulator list
+./g8e agentic-tool-emulator run [scenario ...]
+./g8e agentic-tool-emulator audit
 ```
 
-The emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
+The agentic tool emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
 
-**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The emulator merely wears different "personas" to test how the system behaves when various AI tools interact with it.
+**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The agentic tool emulator merely wears different "personas" to test how the system behaves when various AI tools interact with it.
 
 **Architecture**:
 - **client/** - Thin, faithful HTTP client with mTLS support and exchange recording
@@ -147,18 +126,18 @@ Scenarios run under different enforcement modes:
 - Mock principal (L3 human notary)
 
 **Governance Testing**:
-For consensus/notary scenarios, the emulator uses mock cryptographic actors:
+For consensus/notary scenarios, the agentic tool emulator uses mock cryptographic actors:
 - **Ensemble**: Mock consensus agents that co-sign L2 envelopes
 - **Principal**: Mock human notary for L3 signing (or drives real OOB approve flow)
 
 This allows testing maximal governance envelopes without requiring actual distributed consensus infrastructure.
 
-**Emulator Commands**:
-- **`./g8e emulator list`** - Lists available scenarios with their posture requirements and personas
-- **`./g8e emulator run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
-- **`./g8e emulator audit`** - Audits signed receipts from the Operator for a specific session
+**Agentic Tool Emulator Commands**:
+- **`./g8e agentic-tool-emulator list`** - Lists available scenarios with their posture requirements and personas
+- **`./g8e agentic-tool-emulator run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
+- **`./g8e agentic-tool-emulator audit`** - Audits signed receipts from the Operator for a specific session
 
-**Emulator Configuration**:
+**Agentic Tool Emulator Configuration**:
 - Supports JSON config overlay for complex scenarios
 - Configurable mTLS surface, public surface, client certificates, and CA bundle
 - Operator API key authentication for MCP/A2A surface
@@ -406,7 +385,7 @@ CLI command and configuration tests:
 - `cmd/chaos_test.go` - Chaos command tests
 - `cmd/cmd_test.go` - General command tests
 - `cmd/data_test.go` - Data command tests
-- `cmd/emulator_test.go` - Emulator command tests
+- `cmd/emulator_test.go` - Agentic tool emulator command tests
 - `cmd/goose_test.go` - Goose command tests
 - `cmd/main_test.go` - Main command tests
 - `cmd/mcp_backup_test.go` - MCP backup command tests
@@ -635,16 +614,9 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-integration`** - Runs Tier 2 (In-Process Integration) tests with `integration` build tag. Uses on-disk SQLite, local PKI, local pubsub.
 - **`make test-docker`** - Runs Tier 3 (Docker E2E) tests with `e2e` build tag. Requires Docker.
 - **`make test-gov`** - Runs Tier 3 (Gov Demo E2E) tests with `e2e` build tag. Requires Docker.
-- **`make test-short`** - Runs short unit tests with race detection and 60s timeout.
-- **`make test-coverage`** - Runs tests with coverage (enforces 65% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
+- **`make test-coverage`** - Runs tests with coverage (enforces 70% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
 - **`make test-shuffle`** - Runs all tests with randomized order.
 - **`make test-gateway`** - Runs gateway-specific integration tests (A2A gateway, MCP gateway, MCP stdio).
-- **`make test-mcp`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-a2a`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-universal-gateway`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-byo`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-native`** - Legacy target. Redirects to `make test-integration`.
-- **`make test-scenario`** - Legacy target. Redirects to `make test-integration`.
 
 ### Lints
 

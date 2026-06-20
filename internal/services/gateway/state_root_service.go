@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
@@ -67,7 +68,7 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 	// Version changed or cache is empty, recalculate
 	root, err := s.calculateStateRoot()
 	if err != nil {
-		return "", fmt.Errorf("state_root_service: calculate state root: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootCalculate, err)
 	}
 
 	// Update cache
@@ -95,7 +96,7 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 		s.logger.Warn("Failed to check state_version after persistence", "error", err)
 	}
 	if err != nil {
-		return "", fmt.Errorf("state_root_service: persist state root: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootPersist, err)
 	}
 	return root, nil
 }
@@ -120,7 +121,7 @@ func (s *StateRootService) CalculateStateRoot() (string, error) {
 func (s *StateRootService) calculateStateRootUncached() (string, error) {
 	root, err := s.calculateStateRoot()
 	if err != nil {
-		return "", fmt.Errorf("state_root_service: calculate state root uncached: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootCalculate, err)
 	}
 	_, err = s.db.ExecWithRetry(
 		`INSERT INTO state_root (id, root, updated_at)
@@ -130,7 +131,7 @@ func (s *StateRootService) calculateStateRootUncached() (string, error) {
 		sqliteutil.FormatTimestamp(time.Now().UTC()),
 	)
 	if err != nil {
-		return "", fmt.Errorf("state_root_service: persist state root uncached: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootPersist, err)
 	}
 	return root, nil
 }
@@ -145,12 +146,12 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	if err := s.hashTableToStream(h, "SELECT collection, id, data FROM documents ORDER BY collection, id", nil, func(r *sql.Rows) error {
 		var collection, id, data string
 		if err := r.Scan(&collection, &id, &data); err != nil {
-			return fmt.Errorf("state_root_service: scan documents row: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrStateRootScanDocuments, err)
 		}
 		return writeRowToHash(h, "documents", collection, id, data)
 	}); err != nil {
 		s.logger.Error("Failed to query documents for state root calculation", "error", err)
-		return "", fmt.Errorf("state_root_service: hash documents table: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootHashDocuments, err)
 	}
 
 	now := sqliteutil.NowTimestamp()
@@ -162,12 +163,12 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
-			return fmt.Errorf("state_root_service: scan kv_store row: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrStateRootScanKVStore, err)
 		}
 		return writeRowToHash(h, "kv_store", key, value, expiresAt)
 	}); err != nil {
 		s.logger.Error("Failed to query kv_store for state root calculation", "error", err)
-		return "", fmt.Errorf("state_root_service: hash kv_store table: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootHashKVStore, err)
 	}
 
 	// 3. Blobs (Authoritative)
@@ -177,12 +178,12 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
 		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
-			return fmt.Errorf("state_root_service: scan blobs row: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrStateRootScanBlobs, err)
 		}
 		return writeRowToHash(h, "blobs", namespace, id, size, contentType, dataHex, expiresAt)
 	}); err != nil {
 		s.logger.Error("Failed to query blobs for state root calculation", "error", err)
-		return "", fmt.Errorf("state_root_service: hash blobs table: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootHashBlobs, err)
 	}
 
 	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
@@ -196,7 +197,7 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 func (s *StateRootService) hashTableToStream(h hash.Hash, query string, args []interface{}, scan func(*sql.Rows) error) error {
 	rows, err := s.db.QueryWithRetry(query, args...)
 	if err != nil {
-		return fmt.Errorf("state_root_service: query table: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrStateRootQueryTable, err)
 	}
 	defer rows.Close()
 
@@ -206,7 +207,7 @@ func (s *StateRootService) hashTableToStream(h hash.Hash, query string, args []i
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return fmt.Errorf("state_root_service: iterate rows: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrStateRootIterateRows, err)
 	}
 	return nil
 }
@@ -233,7 +234,7 @@ func writeRowToHash(h hash.Hash, table string, values ...interface{}) error {
 		case int64:
 			fmt.Fprintf(h, "%d", val)
 		default:
-			return fmt.Errorf("unsupported type %T for state root hashing", v)
+			return fmt.Errorf("%w: %T", constants.ErrStateRootUnsupportedType, v)
 		}
 	}
 

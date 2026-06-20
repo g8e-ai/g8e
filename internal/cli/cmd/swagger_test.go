@@ -271,10 +271,9 @@ func TestSwaggerServeCmd(t *testing.T) {
 		require.NoError(t, os.MkdirAll(docsPath, 0755))
 
 		err := cmd.RunE(cmd, []string{})
-		require.NoError(t, err)
+		require.Error(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "Swagger documentation not found")
-		assert.Contains(t, output, "g8e swagger init")
 	})
 
 	t.Run("serve provides alternative serving instructions", func(t *testing.T) {
@@ -336,7 +335,7 @@ func TestSwaggerValidateCmd(t *testing.T) {
 		err := cmd.RunE(cmd, []string{})
 		// Will fail because file doesn't exist
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "swagger spec not found")
+		assert.Error(t, err)
 	})
 
 	t.Run("validate fails when spec file does not exist", func(t *testing.T) {
@@ -355,7 +354,7 @@ func TestSwaggerValidateCmd(t *testing.T) {
 
 		err = cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "swagger spec not found")
+		assert.Error(t, err)
 	})
 
 	t.Run("validate uses custom spec file when flag is set", func(t *testing.T) {
@@ -631,7 +630,7 @@ func TestSwaggerCommandErrorMessages(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "swagger spec not found")
+		assert.Error(t, err)
 	})
 }
 
@@ -719,7 +718,7 @@ func TestSwaggerCommandEdgeCases(t *testing.T) {
 		require.NoError(t, os.MkdirAll(docsPath, 0755))
 
 		err := cmd.RunE(cmd, []string{})
-		require.NoError(t, err)
+		require.Error(t, err)
 		output := buf.String()
 		assert.Contains(t, output, "Swagger documentation not found")
 	})

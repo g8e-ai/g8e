@@ -15,6 +15,7 @@ package network
 
 import (
 	"context"
+	"net"
 	"runtime"
 	"strings"
 	"sync"
@@ -581,4 +582,261 @@ func TestNetworkIdentity_GetAllIPs_EmptyIdentity(t *testing.T) {
 
 	ips := identity.GetAllIPs()
 	assert.Empty(t, ips)
+}
+
+func TestGetExternalInterfaceIP_WithMockInterfaces(t *testing.T) {
+	t.Parallel()
+
+	// Test with mock interfaces that have a non-loopback IPv4 address
+	mockInterfaces := []net.Interface{
+		{
+			Name: "eth0",
+		},
+	}
+
+	// Mock the Addrs() call by using a custom implementation
+	// We'll test the function directly with a mock that returns specific interfaces
+	getInterfaces := func() ([]net.Interface, error) {
+		return mockInterfaces, nil
+	}
+
+	// Since we can't easily mock Addrs() without more complex refactoring,
+	// we'll test the error path and fallback behavior
+	result := getExternalInterfaceIPWithFunc(getInterfaces)
+	// With empty interfaces (no Addrs), should return localhost
+	assert.Equal(t, "localhost", result)
+}
+
+func TestGetExternalInterfaceIP_ErrorOnInterfaces(t *testing.T) {
+	t.Parallel()
+
+	// Test error handling when net.Interfaces() fails
+	getInterfaces := func() ([]net.Interface, error) {
+		return nil, assert.AnError
+	}
+
+	result := getExternalInterfaceIPWithFunc(getInterfaces)
+	// Should return localhost on error
+	assert.Equal(t, "localhost", result)
+}
+
+func TestGetExternalInterfaceIP_NoNonLoopbackInterfaces(t *testing.T) {
+	t.Parallel()
+
+	// Test with only loopback interfaces
+	getInterfaces := func() ([]net.Interface, error) {
+		return []net.Interface{}, nil
+	}
+
+	result := getExternalInterfaceIPWithFunc(getInterfaces)
+	// Should return localhost when no non-loopback interfaces found
+	assert.Equal(t, "localhost", result)
+}
+
+func TestDetector_DetectWindowsIdentity_WithMockExecutor(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// Mock successful hostname and systeminfo commands
+	executor := func(name string, args ...string) ([]byte, error) {
+		switch name {
+		case "hostname":
+			return []byte("TESTHOST"), nil
+		case "systeminfo":
+			return []byte("Domain: example.com\n"), nil
+		default:
+			return nil, assert.AnError
+		}
+	}
+
+	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	require.NoError(t, err)
+	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
+	assert.Equal(t, "TESTHOST.example.com", winID.ADFQDN)
+}
+
+func TestDetector_DetectWindowsIdentity_HostnameError(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// Mock hostname command failure
+	executor := func(name string, args ...string) ([]byte, error) {
+		return nil, assert.AnError
+	}
+
+	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	require.Error(t, err)
+	assert.Empty(t, winID.NetBIOSName)
+}
+
+func TestDetector_DetectWindowsIdentity_SysteminfoError(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// Mock successful hostname but failed systeminfo
+	executor := func(name string, args ...string) ([]byte, error) {
+		switch name {
+		case "hostname":
+			return []byte("TESTHOST"), nil
+		case "systeminfo":
+			return nil, assert.AnError
+		default:
+			return nil, assert.AnError
+		}
+	}
+
+	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	require.Error(t, err)
+	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
+	assert.Empty(t, winID.ADFQDN)
+}
+
+func TestDetector_DetectWindowsIdentity_WorkgroupDomain(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// Mock WORKGROUP domain (should not set ADFQDN)
+	executor := func(name string, args ...string) ([]byte, error) {
+		switch name {
+		case "hostname":
+			return []byte("TESTHOST"), nil
+		case "systeminfo":
+			return []byte("Domain: WORKGROUP\n"), nil
+		default:
+			return nil, assert.AnError
+		}
+	}
+
+	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	require.NoError(t, err)
+	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
+	assert.Empty(t, winID.ADFQDN)
+}
+
+func TestDetector_DetectWindowsIdentity_NoDomainLine(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// Mock systeminfo without Domain line
+	executor := func(name string, args ...string) ([]byte, error) {
+		switch name {
+		case "hostname":
+			return []byte("TESTHOST"), nil
+		case "systeminfo":
+			return []byte("OS Name: Windows\n"), nil
+		default:
+			return nil, assert.AnError
+		}
+	}
+
+	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	require.NoError(t, err)
+	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
+	assert.Empty(t, winID.ADFQDN)
+}
+
+func TestDetector_DetectWindowsIdentity_EmptyHostname(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// Mock empty hostname
+	executor := func(name string, args ...string) ([]byte, error) {
+		switch name {
+		case "hostname":
+			return []byte(""), nil
+		case "systeminfo":
+			return []byte("Domain: example.com\n"), nil
+		default:
+			return nil, assert.AnError
+		}
+	}
+
+	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	require.NoError(t, err)
+	assert.Empty(t, winID.NetBIOSName)
+	assert.Empty(t, winID.ADFQDN)
+}
+
+func TestDetector_DetectWindowsIdentity_WhitespaceHostname(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// Mock hostname with whitespace
+	executor := func(name string, args ...string) ([]byte, error) {
+		switch name {
+		case "hostname":
+			return []byte("  TESTHOST  "), nil
+		case "systeminfo":
+			return []byte("Domain: example.com\n"), nil
+		default:
+			return nil, assert.AnError
+		}
+	}
+
+	winID, err := detector.detectWindowsIdentityWithExecutor(executor)
+	require.NoError(t, err)
+	assert.Equal(t, "TESTHOST", winID.NetBIOSName)
+	assert.Equal(t, "TESTHOST.example.com", winID.ADFQDN)
+}
+
+func TestGetExternalInterfaceIP_PublicWrapper(t *testing.T) {
+	t.Parallel()
+	// Test the public wrapper function - it should return a valid result
+	// This test verifies the wrapper calls the implementation correctly
+	result := GetExternalInterfaceIP()
+	// Should return either an IP or "localhost"
+	assert.NotEmpty(t, result)
+}
+
+func TestDefaultNetInterfaces(t *testing.T) {
+	t.Parallel()
+	// Test the default implementation - it should return interfaces or error
+	ifaces, err := defaultNetInterfaces()
+	// Either success or error is acceptable
+	if err == nil {
+		assert.NotNil(t, ifaces)
+	}
+}
+
+func TestDefaultCommandExecutor(t *testing.T) {
+	t.Parallel()
+	// Test the default implementation with a simple command
+	// Use 'echo' which should be available on all systems
+	output, err := defaultCommandExecutor("echo", "test")
+	if err == nil {
+		assert.NotNil(t, output)
+	}
+}
+
+func TestDetector_DetectWindowsIdentity_PublicWrapper(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+	detector := NewDetector(logger)
+
+	// This test exercises the public wrapper by temporarily swapping the executor
+	// We can't easily mock the executor for the public wrapper without more refactoring,
+	// so we'll test that the function exists and has the correct signature
+	// The actual logic is tested via detectWindowsIdentityWithExecutor
+
+	// On non-Windows systems, the public wrapper would fail with real commands
+	// We verify the function signature and that it's callable
+	if runtime.GOOS == "windows" {
+		// On Windows, test the real implementation
+		winID, err := detector.detectWindowsIdentity()
+		// May fail if commands aren't available, but should not panic
+		if err == nil {
+			assert.NotNil(t, winID)
+		}
+	} else {
+		// On non-Windows, we can't test the real implementation
+		// but we've thoroughly tested the logic via detectWindowsIdentityWithExecutor
+		t.Skip("Public wrapper requires Windows environment")
+	}
 }

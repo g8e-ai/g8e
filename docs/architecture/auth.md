@@ -201,4 +201,4 @@ Vault operations are managed via CLI commands:
 Vault paths can be configured via:
 - CLI flags: `--vault-dir`, `--vault-key`
 - Environment variables: `G8E_VAULT_DIR`, `G8E_VAULT_KEY`
-- Configuration file: `paths_default.json`
+- Default configuration: embedded in binary via `config.DefaultInfraPaths()`

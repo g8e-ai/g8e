@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/security"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -73,7 +74,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	// Validate and resolve path (security check)
 	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
-		return s.failResult(result, "validation_error", fmt.Errorf("invalid path: %w", err).Error())
+		return s.failResult(result, "validation_error", fmt.Errorf("%w: %v", constants.ErrPathValidation, err).Error())
 	}
 
 	result.Path = absPath
@@ -81,7 +82,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	// Compile regex
 	re, err := regexp.Compile(req.Pattern)
 	if err != nil {
-		return s.failResult(result, "invalid_pattern", fmt.Errorf("invalid regex pattern: %w", err).Error())
+		return s.failResult(result, "invalid_pattern", fmt.Errorf("%w: %v", constants.ErrInvalidRegex, err).Error())
 	}
 
 	// Prepare includes filters
@@ -190,7 +191,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	})
 
 	if err != nil && err != io.EOF {
-		return s.failResult(result, "grep_error", fmt.Errorf("failed to perform grep: %w", err).Error())
+		return s.failResult(result, "grep_error", fmt.Errorf("%w: %v", constants.ErrGrepFailed, err).Error())
 	}
 
 	result.Matches = matches
@@ -214,7 +215,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 func (s *FsGrepService) searchInFile(path string, re *regexp.Regexp, limit int) ([]models.FsGrepMatch, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("searchInFile: failed to open file %s: %w", path, err)
+		return nil, fmt.Errorf("%w: %s", constants.ErrFileOpenFailed, path)
 	}
 	defer file.Close()
 

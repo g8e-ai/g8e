@@ -17,6 +17,7 @@ import (
 	"net/http"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -141,7 +142,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		httpSwagger.DocExpansion("none"),
 	))
 	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, constants.SwaggerFilePath)
+		http.ServeFile(w, r, paths.SwaggerFilePath)
 	})
 
 	// Bootstrap routes (CA discovery, trust scripts) - now on public HTTPS

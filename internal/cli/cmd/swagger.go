@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/spf13/cobra"
 )
 
@@ -60,11 +61,11 @@ func swaggerInitCmd() *cobra.Command {
 			// Ensure paths are absolute
 			absSearchDir, err := filepath.Abs(searchDir)
 			if err != nil {
-				return fmt.Errorf("failed to resolve search directory: %w", err)
+				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}
 			absOutputDir, err := filepath.Abs(outputDir)
 			if err != nil {
-				return fmt.Errorf("failed to resolve output directory: %w", err)
+				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}
 
 			// Check if swag is available
@@ -80,7 +81,7 @@ func swaggerInitCmd() *cobra.Command {
 				swagCmd.Stdout = cmd.OutOrStdout()
 				swagCmd.Stderr = cmd.ErrOrStderr()
 				if err := swagCmd.Run(); err != nil {
-					return fmt.Errorf("failed to run swag via go run: %w", err)
+					return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
 				}
 			} else {
 				// Use installed swag binary
@@ -93,7 +94,7 @@ func swaggerInitCmd() *cobra.Command {
 				swagCmd.Stdout = cmd.OutOrStdout()
 				swagCmd.Stderr = cmd.ErrOrStderr()
 				if err := swagCmd.Run(); err != nil {
-					return fmt.Errorf("failed to run swag: %w", err)
+					return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
 				}
 			}
 
@@ -136,7 +137,7 @@ func swaggerServeCmd() *cobra.Command {
 			docsPath := "internal/services/gateway/docs"
 			absDocsPath, err := filepath.Abs(docsPath)
 			if err != nil {
-				return fmt.Errorf("failed to resolve docs path: %w", err)
+				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}
 
 			// Check if swagger.json exists
@@ -144,7 +145,7 @@ func swaggerServeCmd() *cobra.Command {
 			if _, err := os.Stat(swaggerJSON); os.IsNotExist(err) {
 				cmd.Printf("Swagger documentation not found at %s\n", swaggerJSON)
 				cmd.Println("Run 'g8e swagger init' to generate documentation first.")
-				return nil
+				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, swaggerJSON)
 			}
 
 			// Use http-swagger to serve the UI
@@ -158,7 +159,7 @@ func swaggerServeCmd() *cobra.Command {
 
 			// Since http-swagger requires embedding in a Go server, we'll provide instructions
 			cmd.Println("\nNote: To serve Swagger UI, start the g8e Gateway and access:")
-			cmd.Printf("  %s/swagger/index.html\n", constants.LocalhostHTTPSURL(8443))
+			cmd.Printf("  %s/swagger/index.html\n", netutil.LocalhostHTTPSURL(8443))
 			cmd.Println("\nOr use a standalone tool like:")
 			cmd.Printf("  npx @apidevtools/swagger-cli serve %s -p %d\n", swaggerJSON, port)
 			cmd.Printf("  docker run -p %d:8080 -e SWAGGER_JSON=/swagger/swagger.json -v %s:/swagger swaggerapi/swagger-ui\n", port, absDocsPath)
@@ -188,12 +189,12 @@ func swaggerValidateCmd() *cobra.Command {
 
 			absSpecFile, err := filepath.Abs(specFile)
 			if err != nil {
-				return fmt.Errorf("failed to resolve spec file: %w", err)
+				return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 			}
 
 			// Check if file exists
 			if _, err := os.Stat(absSpecFile); os.IsNotExist(err) {
-				return fmt.Errorf("swagger spec not found at %s", absSpecFile)
+				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, absSpecFile)
 			}
 
 			// Try to use swagger-cli if available
@@ -202,7 +203,7 @@ func swaggerValidateCmd() *cobra.Command {
 				validateCmd.Stdout = cmd.OutOrStdout()
 				validateCmd.Stderr = cmd.ErrOrStderr()
 				if err := validateCmd.Run(); err != nil {
-					return fmt.Errorf("swagger validation failed: %w", err)
+					return fmt.Errorf("%w: %v", constants.ErrValidationFailed, err)
 				}
 				cmd.Println("Swagger specification is valid!")
 				return nil

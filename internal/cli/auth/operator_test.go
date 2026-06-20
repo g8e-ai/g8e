@@ -32,7 +32,7 @@ func TestCheckOperatorRunning_NotRunning(t *testing.T) {
 	// Test with a non-existent port to ensure error
 	err := CheckOperatorRunningAtURL("http://localhost:99999")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "g8e Gateway is not running or not responding")
+	assert.ErrorIs(t, err, constants.ErrServiceUnavailable)
 }
 
 func TestCheckOperatorRunning_HealthCheckFailed(t *testing.T) {
@@ -41,7 +41,7 @@ func TestCheckOperatorRunning_HealthCheckFailed(t *testing.T) {
 	// Test with a non-existent port
 	err := CheckOperatorRunningAtURL("https://localhost:99999")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not running or not responding")
+	assert.ErrorIs(t, err, constants.ErrServiceUnavailable)
 }
 
 func TestCheckOperatorRunning_Success(t *testing.T) {
@@ -65,7 +65,7 @@ func TestCheckOperatorRunning_InvalidURL(t *testing.T) {
 
 	err := CheckOperatorRunningAtURL("invalid-url")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid Operator URL")
+	assert.ErrorIs(t, err, constants.ErrGatewayURLRequired)
 }
 
 func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
@@ -73,7 +73,7 @@ func TestCheckOperatorRunning_URLWithoutProtocol(t *testing.T) {
 
 	err := CheckOperatorRunningAtURL("localhost:" + strconv.Itoa(constants.Ports.OperatorHttp))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid Operator URL")
+	assert.ErrorIs(t, err, constants.ErrGatewayURLRequired)
 }
 
 func TestIsCertificateVerificationError_UnknownAuthorityError(t *testing.T) {

@@ -15,7 +15,6 @@ package storage
 
 import (
 	"fmt"
-	"log/slog"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -24,13 +23,40 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type HistoryHandler struct {
-	auditStore *SQLAuditStore
-	ledger     *GitLedgerService
-	logger     *slog.Logger
+// auditStoreInterface defines the methods HistoryHandler needs from the audit store.
+// This allows for dependency injection and unit testing with mocks.
+type auditStoreInterface interface {
+	GetOperatorSession(sessionID string) (*OperatorSession, error)
+	GetEvents(sessionID string, limit, offset int) ([]*Event, error)
+	GetFileMutations(eventID int64) ([]*FileMutationLog, error)
 }
 
-func NewHistoryHandler(auditStore *SQLAuditStore, ledger *GitLedgerService, logger *slog.Logger) *HistoryHandler {
+// ledgerInterface defines the methods HistoryHandler needs from the ledger service.
+// This allows for dependency injection and unit testing with mocks.
+// It also includes two-phase commit methods needed for integration test setup.
+type ledgerInterface interface {
+	GetFileHistory(filePath string, limit int, sessionID string) ([]FileHistoryEntry, error)
+	RestoreFileFromCommit(filePath, commitHash, sessionID string) error
+	GetFileAtCommit(filePath, commitHash, sessionID string) (string, error)
+	MirrorFileCreate(operatorSessionID, filePath string) (*LedgerResult, error)
+	CompleteMirrorCreate(result *LedgerResult, operatorSessionID string) error
+	LedgerFileWrite(operatorSessionID, filePath string) (*LedgerResult, error)
+	CompleteMirrorWrite(result *LedgerResult, operatorSessionID string) error
+}
+
+// loggerInterface defines the logging methods used by HistoryHandler.
+type loggerInterface interface {
+	Info(msg string, args ...interface{})
+	Warn(msg string, args ...interface{})
+}
+
+type HistoryHandler struct {
+	auditStore auditStoreInterface
+	ledger     ledgerInterface
+	logger     loggerInterface
+}
+
+func NewHistoryHandler(auditStore auditStoreInterface, ledger ledgerInterface, logger loggerInterface) *HistoryHandler {
 	return &HistoryHandler{
 		auditStore: auditStore,
 		ledger:     ledger,

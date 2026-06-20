@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/mapping"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
@@ -78,10 +79,10 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	defer w.wg.Done()
 
 	if w.ExecutionHandler == nil {
-		return nil, fmt.Errorf("L5Actuator: ExecutionHandler not set")
+		return nil, constants.ErrL5ActuatorExecutionHandlerNotSet
 	}
 	if len(w.SigningKey) == 0 {
-		return nil, fmt.Errorf("L5Actuator: signing key missing - cannot execute mutations")
+		return nil, constants.ErrL5ActuatorSigningKeyMissing
 	}
 
 	stateBefore := ""
@@ -94,7 +95,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	}
 
 	// Map action type to event type for handler lookup
-	eventType := constants.MapActionTypeToEventType(vt.ActionType)
+	eventType := mapping.MapActionTypeToEventType(vt.ActionType)
 
 	w.Logger.Info("L5Actuator preparing to execute transaction",
 		"message_id", vt.Envelope.Id,
@@ -145,14 +146,14 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	sig, signErr := w.signReceipt(receipt)
 	if signErr != nil {
 		w.Logger.Error("Fail-closed: Failed to sign initial action receipt", string(constants.ConnectionStateError), signErr, "message_id", vt.Envelope.Id)
-		return nil, fmt.Errorf("failed to sign initial action receipt: %w", signErr)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, signErr)
 	}
 	receipt.Signature = sig
 
 	// 3. Log intent to execute (Audit before execution)
 	if err := w.LogReceipt(vt.Envelope, receipt); err != nil {
 		w.Logger.Error("Fail-closed: Failed to log initial action receipt", string(constants.ConnectionStateError), err, "message_id", vt.Envelope.Id)
-		return nil, fmt.Errorf("failed to log initial action receipt: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, err)
 	}
 
 	// 3.5. Rehydrate payload if Scrubbing is available
@@ -206,7 +207,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		w.Logger.Error("Failed to sign final action receipt - returning EXECUTING receipt as evidence", string(constants.ConnectionStateError), signErr, "message_id", vt.Envelope.Id)
 		// Return the EXECUTING receipt with signature from step 2 as evidence
 		// The mutation already executed, so we must preserve evidence of execution attempt
-		return receipt, fmt.Errorf("execution completed but final receipt signing failed: %w", signErr)
+		return receipt, fmt.Errorf("%w: %w", constants.ErrL5ActuatorSignReceipt, signErr)
 	}
 	receipt.Signature = finalSig
 
@@ -214,7 +215,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	if logErr := w.LogReceipt(vt.Envelope, receipt); logErr != nil {
 		w.Logger.Error("Failed to log final action receipt - mutation already executed", string(constants.ConnectionStateError), logErr, "message_id", vt.Envelope.Id)
 		// Return receipt anyway - mutation already happened, evidence must be preserved
-		return receipt, fmt.Errorf("execution completed but final audit logging failed: %w", logErr)
+		return receipt, fmt.Errorf("%w: %w", constants.ErrL5ActuatorLogReceipt, logErr)
 	}
 
 	return receipt, err
@@ -257,20 +258,20 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	}
 	payload, err := json.Marshal(canonical)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal receipt for canonicalization: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorMarshalReceipt, err)
 	}
 	return payload, nil
 }
 
 func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 	if len(w.SigningKey) == 0 {
-		return "", fmt.Errorf("L5Actuator: signing key missing")
+		return "", constants.ErrL5ActuatorSigningKeyMissing
 	}
 
 	// Use canonical serialization for signing - shared with verification
 	payload, err := CanonicalizeActionReceipt(r)
 	if err != nil {
-		return "", fmt.Errorf("failed to canonicalize receipt for signing: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrL5ActuatorCanonicalizeReceipt, err)
 	}
 
 	sig := ed25519.Sign(w.SigningKey, payload)
@@ -310,9 +311,9 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 			w.Logger.Error("Failed to record ActionReceipt in audit store", string(constants.ConnectionStateError), err)
 		}
 		if docErr != nil {
-			return fmt.Errorf("audit store error: %v, doc store error: %v", err, docErr)
+			return fmt.Errorf("%w: %v, doc store error: %v", constants.ErrL5ActuatorAuditStore, err, docErr)
 		}
-		return err
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorAuditStore, err)
 	}
 
 	return docErr
@@ -348,7 +349,7 @@ func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *o
 		if w.Logger != nil {
 			w.Logger.Error("Failed to marshal action receipt record", string(constants.ConnectionStateError), err, "message_id", r.TransactionId)
 		}
-		return err
+		return fmt.Errorf("%w: %w", constants.ErrL5ActuatorMarshalReceipt, err)
 	}
 
 	if err := w.ConsoleAuditStore.DocSet(marshaler.CollectionName(constants.CollectionConsoleAudit), r.TransactionId, body); err != nil {

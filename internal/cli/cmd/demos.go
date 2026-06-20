@@ -56,12 +56,12 @@ func readDoctrineRule(demoDir, doctrineFile, ruleID string) (*DoctrineRule, erro
 	doctrinePath := filepath.Join(demoDir, "doctrine", doctrineFile)
 	data, err := os.ReadFile(doctrinePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read doctrine file: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
 	var docFile DoctrineFile
 	if err := json.Unmarshal(data, &docFile); err != nil {
-		return nil, fmt.Errorf("failed to parse doctrine JSON: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
 	for _, rule := range docFile.Doctrines {
@@ -70,7 +70,7 @@ func readDoctrineRule(demoDir, doctrineFile, ruleID string) (*DoctrineRule, erro
 		}
 	}
 
-	return nil, fmt.Errorf("doctrine rule %q not found", ruleID)
+	return nil, fmt.Errorf("%w: doctrine rule %q", constants.ErrNotFound, ruleID)
 }
 
 // toDockerPath converts a filepath to a Docker-compatible path format.
@@ -117,12 +117,12 @@ func demosListCmd() *cobra.Command {
 func runDemosList(cmd *cobra.Command, args []string) error {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("demos: failed to get working directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 	demosDir := filepath.Join(cwd, constants.DemosDirname)
 	entries, err := os.ReadDir(demosDir)
 	if err != nil {
-		return fmt.Errorf("failed to read demos directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
 	}
 
 	fmt.Println("Available demo environments:")
@@ -153,19 +153,19 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	org := args[0]
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("demos: failed to get working directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
+		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
 	}
 
 	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
+		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
 	// Check if g8e binary exists in demos/bin
@@ -188,7 +188,7 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	dockerComposeCmd.Stderr = os.Stderr
 
 	if err := dockerComposeCmd.Run(); err != nil {
-		return fmt.Errorf("failed to start demo environment: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
 	fmt.Printf("\nDemo environment '%s' started successfully.\n", org)
@@ -242,19 +242,19 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 	org := args[0]
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("demos: failed to get working directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
+		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
 	}
 
 	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
+		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
 	// Stop the demo environment
@@ -265,7 +265,7 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 	dockerComposeCmd.Stderr = os.Stderr
 
 	if err := dockerComposeCmd.Run(); err != nil {
-		return fmt.Errorf("failed to stop demo environment: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 	}
 
 	fmt.Printf("\nDemo environment '%s' stopped successfully.\n", org)
@@ -288,19 +288,19 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	org := args[0]
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("demos: failed to get working directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
+		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
 	}
 
 	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
+		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
 	// Show status
@@ -310,7 +310,7 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	dockerComposeCmd.Stderr = os.Stderr
 
 	if err := dockerComposeCmd.Run(); err != nil {
-		return fmt.Errorf("failed to get demo environment status: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	return nil
@@ -331,19 +331,19 @@ func runDemosClean(cmd *cobra.Command, args []string) error {
 	org := args[0]
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("demos: failed to get working directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
+		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
 	}
 
 	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
+		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
 	// Clean the demo environment (remove containers, volumes, and networks)
@@ -354,7 +354,7 @@ func runDemosClean(cmd *cobra.Command, args []string) error {
 	dockerComposeCmd.Stderr = os.Stderr
 
 	if err := dockerComposeCmd.Run(); err != nil {
-		return fmt.Errorf("failed to clean demo environment: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 	}
 
 	fmt.Printf("\nDemo environment '%s' cleaned successfully.\n", org)
@@ -376,12 +376,12 @@ func demosResetCmd() *cobra.Command {
 func runDemosReset(cmd *cobra.Command, args []string) error {
 	// First clean the environment
 	if err := runDemosClean(cmd, args); err != nil {
-		return fmt.Errorf("failed to clean during reset: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 	}
 
 	// Then start it again
 	if err := runDemosStart(cmd, args); err != nil {
-		return fmt.Errorf("failed to start during reset: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
 	return nil
@@ -425,33 +425,33 @@ Available scenarios:
 
 func runDemosRun(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("demos: requires demo environment name")
+		return fmt.Errorf("%w: demo environment name", constants.ErrMissingRequiredField)
 	}
 	if len(args) > 2 {
-		return fmt.Errorf("demos: accepts at most 2 arguments (demo environment and optional scenario name)")
+		return fmt.Errorf("%w: accepts at most 2 arguments (demo environment and optional scenario name)", constants.ErrValidationFailed)
 	}
 
 	org := args[0]
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("demos: failed to get working directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
+		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
 	}
 
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
+		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
 	// Check if demo is running, start if not
 	if !isDemoRunning(demoDir, composePath) {
 		fmt.Printf("Demo environment '%s' is not running. Starting it now...\n", org)
 		if err := runDemosStart(cmd, args); err != nil {
-			return fmt.Errorf("failed to start demo environment: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 		}
 	}
 
@@ -475,7 +475,7 @@ func isDemoRunning(demoDir, composePath string) bool {
 func runAllScenarios(org, demoDir string) error {
 	count, ok := scenarioCounts[org]
 	if !ok {
-		return fmt.Errorf("no scenarios defined for demo environment '%s'", org)
+		return fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
 
 	fmt.Printf("\n%s\n  Running all %s demo scenarios\n%s\n",
@@ -522,7 +522,7 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 	case "secure-data":
 		return runSecureDataScenarioWithResult(demoDir, scenario)
 	default:
-		return scenarioResult{}, fmt.Errorf("no scenarios defined for demo environment '%s'", org)
+		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
 }
 
@@ -591,24 +591,24 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 	org := args[0]
 	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("demos: failed to get working directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
 	// Verify demo directory exists
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("demo environment '%s' not found. Run 'g8e demos list' to see available demos", org)
+		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
 	}
 
 	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("compose.yml not found in demo directory '%s'", org)
+		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
 	// Check if demo is running
 	if !isDemoRunning(demoDir, composePath) {
-		return fmt.Errorf("demo environment '%s' is not running. Run 'g8e demos start %s' first", org, org)
+		return fmt.Errorf("%w: demo environment '%s' is not running. Run 'g8e demos start %s' first", constants.ErrServiceUnavailable, org, org)
 	}
 
 	// Determine service names based on org
@@ -690,18 +690,18 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git ls-files")
 	case "ledger-history":
 		if len(args) < 3 {
-			return fmt.Errorf("ledger-history requires a file path")
+			return fmt.Errorf("%w: ledger-history requires a file path", constants.ErrMissingRequiredField)
 		}
 		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git log --follow -- \"$1\"", "--", args[2])
 	case "ledger-show":
 		if len(args) < 3 {
-			return fmt.Errorf("ledger-show requires a commit hash")
+			return fmt.Errorf("%w: ledger-show requires a commit hash", constants.ErrMissingRequiredField)
 		}
 		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git show \"$1\"", "--", args[2])
 	case "vault":
 		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", "/root/.g8e/execution_vault.db")
 	default:
-		return fmt.Errorf("unknown audit action: %s", action)
+		return fmt.Errorf("%w: unknown audit action: %s", constants.ErrValidationFailed, action)
 	}
 }
 

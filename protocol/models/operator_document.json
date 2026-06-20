@@ -215,7 +215,6 @@
         "local_storage_enabled":{ "type": "boolean", "description": "True when local SQLite storage is enabled (--local-storage flag)" },
         "no_git":               { "type": "boolean", "description": "True when ledger is disabled (--no-git flag)" },
         "log_level":            { "type": "string",  "description": "Active log level (info, debug, error)" },
-        "wss_port":             { "type": "integer", "description": "WSS port dialled on Operator for pub/sub" },
         "http_port":            { "type": "integer", "description": "HTTPS port dialled on Operator for auth/bootstrap" }
       }
     },

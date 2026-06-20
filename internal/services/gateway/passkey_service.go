@@ -102,7 +102,7 @@ func (s *PasskeyService) GenerateRegistrationChallenge(userID, userName string) 
 		return nil, err
 	}
 	if user == nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, constants.ErrUserNotFound
 	}
 
 	options, session, err := s.webauthn.BeginRegistration(user)
@@ -135,7 +135,7 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 		return nil, err
 	}
 	if user == nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, constants.ErrUserNotFound
 	}
 
 	session, err := s.getWebAuthnSession(userID)
@@ -179,7 +179,7 @@ func (s *PasskeyService) GenerateAuthenticationChallenge(userID string) (*protoc
 		return nil, err
 	}
 	if user == nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, constants.ErrUserNotFound
 	}
 
 	if len(user.PasskeyCredentials) == 0 {
@@ -206,7 +206,7 @@ func (s *PasskeyService) GenerateApprovalChallenge(userID, transactionHash strin
 		return nil, err
 	}
 	if user == nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, constants.ErrUserNotFound
 	}
 
 	// We don't use BeginLogin here because we want to force the challenge to be the transaction hash.
@@ -250,7 +250,7 @@ func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte
 		return nil, err
 	}
 	if user == nil {
-		return nil, fmt.Errorf("user not found")
+		return nil, constants.ErrUserNotFound
 	}
 
 	session, err := s.getWebAuthnSession(userID)
@@ -322,7 +322,7 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	}
 
 	if err := s.setCredentials(userID, newCreds); err != nil {
-		s.logger.Error("Failed to revoke credential", string(constants.ConnectionStateError), err, "userID", userID)
+		s.logger.Error("Failed to revoke credential", "error", err, "userID", userID)
 		return false, 0, err
 	}
 
@@ -340,25 +340,25 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 // for interface compatibility with CLI mTLS-based L3 verification.
 func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
-		return false, fmt.Errorf("user_id is required for L3 WebAuthn verification")
+		return false, constants.ErrUserIDRequired
 	}
 	if transactionHash == "" {
-		return false, fmt.Errorf("transaction_hash is required for L3 WebAuthn verification")
+		return false, constants.ErrCLIL3TransactionHashRequired
 	}
 	if proof == nil {
-		return false, fmt.Errorf("L3 WebAuthn proof is required")
+		return false, constants.ErrGatewayL3ProofRequired
 	}
 	if proof.CredentialId == "" {
-		return false, fmt.Errorf("L3 WebAuthn credential_id is required")
+		return false, constants.ErrMissingRequiredField
 	}
 	if proof.ClientDataJson == "" {
-		return false, fmt.Errorf("L3 WebAuthn client_data_json is required")
+		return false, constants.ErrMissingRequiredField
 	}
 	if proof.AuthenticatorData == "" {
-		return false, fmt.Errorf("L3 WebAuthn authenticator_data is required")
+		return false, constants.ErrMissingRequiredField
 	}
 	if proof.Signature == "" {
-		return false, fmt.Errorf("L3 WebAuthn signature is required")
+		return false, constants.ErrMissingRequiredField
 	}
 
 	user, err := s.getUser(userID)
@@ -366,10 +366,10 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 		return false, err
 	}
 	if user == nil {
-		return false, fmt.Errorf("user not found")
+		return false, constants.ErrUserNotFound
 	}
 	if len(user.PasskeyCredentials) == 0 {
-		return false, fmt.Errorf("user has no registered passkey credentials")
+		return false, constants.ErrNoPasskeysRegistered
 	}
 
 	allowedCredentialIDs := make([][]byte, 0, len(user.PasskeyCredentials))
@@ -445,7 +445,7 @@ func (s *PasskeyService) addCredential(userID string, cred models.PasskeyCredent
 		return err
 	}
 	if user == nil {
-		return fmt.Errorf("user not found")
+		return constants.ErrUserNotFound
 	}
 
 	user.PasskeyCredentials = append(user.PasskeyCredentials, cred)
@@ -459,7 +459,7 @@ func (s *PasskeyService) setCredentials(userID string, creds []models.PasskeyCre
 		return err
 	}
 	if user == nil {
-		return fmt.Errorf("user not found")
+		return constants.ErrUserNotFound
 	}
 
 	user.PasskeyCredentials = creds
@@ -489,7 +489,7 @@ func (s *PasskeyService) getWebAuthnSession(userID string) (*webauthn.SessionDat
 		return nil, err
 	}
 	if doc == nil {
-		return nil, fmt.Errorf("webauthn session not found")
+		return nil, constants.ErrExpired
 	}
 
 	var session webauthn.SessionData

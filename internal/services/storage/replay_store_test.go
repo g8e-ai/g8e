@@ -271,3 +271,104 @@ func TestReplayStore_FullWorkflow(t *testing.T) {
 	err = rs.FinalizeNonce(nonce)
 	require.Error(t, err)
 }
+
+func TestReplayStore_CleanupStaleReserved_Success(t *testing.T) {
+	t.Parallel()
+
+	rs := setupTestReplayStore(t)
+	nonce := "test-nonce-stale"
+	expiresAt := time.Now().UTC().Add(time.Hour)
+
+	// Reserve the nonce
+	_, err := rs.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+
+	// Cleanup with a very short duration (should remove the reserved nonce)
+	err = rs.CleanupStaleReserved(1 * time.Nanosecond)
+	require.NoError(t, err)
+
+	// The nonce should now be available for reservation again
+	isReplay, err := rs.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+	assert.False(t, isReplay, "nonce should be available after stale cleanup")
+}
+
+func TestReplayStore_CleanupStaleReserved_NoStaleNonces(t *testing.T) {
+	t.Parallel()
+
+	rs := setupTestReplayStore(t)
+	nonce := "test-nonce-fresh"
+	expiresAt := time.Now().UTC().Add(time.Hour)
+
+	// Reserve the nonce
+	_, err := rs.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+
+	// Cleanup with a long duration (should not remove the fresh nonce)
+	err = rs.CleanupStaleReserved(24 * time.Hour)
+	require.NoError(t, err)
+
+	// The nonce should still be detected as replay
+	isReplay, err := rs.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+	assert.True(t, isReplay, "nonce should still be a replay after cleanup with long duration")
+}
+
+func TestReplayStore_CleanupStaleReserved_NilStore(t *testing.T) {
+	t.Parallel()
+
+	var rs *SQLReplayStore
+
+	// CleanupStaleReserved on nil store will panic - this is expected behavior
+	assert.Panics(t, func() {
+		rs.CleanupStaleReserved(1 * time.Hour)
+	})
+}
+
+func TestReplayStore_CleanupStaleReserved_MultipleNonces(t *testing.T) {
+	t.Parallel()
+
+	rs := setupTestReplayStore(t)
+	expiresAt := time.Now().UTC().Add(time.Hour)
+
+	// Reserve multiple nonces
+	nonces := []string{"stale-1", "stale-2", "stale-3"}
+	for _, nonce := range nonces {
+		_, err := rs.ReserveNonce(nonce, expiresAt)
+		require.NoError(t, err)
+	}
+
+	// Cleanup all as stale
+	err := rs.CleanupStaleReserved(1 * time.Nanosecond)
+	require.NoError(t, err)
+
+	// All nonces should be available again
+	for _, nonce := range nonces {
+		isReplay, err := rs.ReserveNonce(nonce, expiresAt)
+		require.NoError(t, err)
+		assert.False(t, isReplay, "nonce %s should be available after stale cleanup", nonce)
+	}
+}
+
+func TestReplayStore_CleanupStaleReserved_FinalizedNonces(t *testing.T) {
+	t.Parallel()
+
+	rs := setupTestReplayStore(t)
+	nonce := "test-nonce-finalized-stale"
+	expiresAt := time.Now().UTC().Add(time.Hour)
+
+	// Reserve and finalize the nonce
+	_, err := rs.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+	err = rs.FinalizeNonce(nonce)
+	require.NoError(t, err)
+
+	// Cleanup should not affect finalized nonces (they have different status)
+	err = rs.CleanupStaleReserved(1 * time.Nanosecond)
+	require.NoError(t, err)
+
+	// The nonce should still be a replay (finalized, not reserved)
+	isReplay, err := rs.ReserveNonce(nonce, expiresAt)
+	require.NoError(t, err)
+	assert.True(t, isReplay, "finalized nonce should still be a replay after stale cleanup")
+}

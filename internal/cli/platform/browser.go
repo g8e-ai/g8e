@@ -20,7 +20,28 @@ import (
 	"runtime"
 )
 
+// browserCommandExecutor is an interface for executing commands, allowing dependency injection for testing.
+type browserCommandExecutor interface {
+	start(name string, args ...string) error
+}
+
+// realBrowserCommandExecutor is the production implementation that uses os/exec.
+type realBrowserCommandExecutor struct{}
+
+func (e *realBrowserCommandExecutor) start(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	return cmd.Start()
+}
+
+var defaultBrowserExecutor browserCommandExecutor = &realBrowserCommandExecutor{}
+
+// OpenBrowser opens the default web browser to the specified URL.
 func OpenBrowser(urlStr string) error {
+	return openBrowserWithExecutor(urlStr, defaultBrowserExecutor)
+}
+
+// openBrowserWithExecutor opens the browser using the provided command executor.
+func openBrowserWithExecutor(urlStr string, executor browserCommandExecutor) error {
 	if urlStr == "" {
 		return fmt.Errorf("failed to open browser: URL cannot be empty")
 	}
@@ -30,18 +51,22 @@ func OpenBrowser(urlStr string) error {
 		return fmt.Errorf("failed to open browser: invalid URL: %w", err)
 	}
 
-	var cmd *exec.Cmd
+	var cmdName string
+	var cmdArgs []string
 
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr)
+		cmdName = "rundll32"
+		cmdArgs = []string{"url.dll,FileProtocolHandler", urlStr}
 	case "darwin":
-		cmd = exec.Command("open", urlStr)
+		cmdName = "open"
+		cmdArgs = []string{urlStr}
 	default: // linux, bsd, etc.
-		cmd = exec.Command("xdg-open", urlStr)
+		cmdName = "xdg-open"
+		cmdArgs = []string{urlStr}
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := executor.start(cmdName, cmdArgs...); err != nil {
 		return fmt.Errorf("failed to open browser: %w", err)
 	}
 

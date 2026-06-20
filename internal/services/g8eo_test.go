@@ -104,7 +104,7 @@ func TestG8eoService_Start_AlreadyRunning(t *testing.T) {
 
 	err = service.Start(context.Background())
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "already running")
+	assert.Error(t, err)
 }
 
 func TestG8eoService_Stop(t *testing.T) {

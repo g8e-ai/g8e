@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
@@ -34,18 +35,17 @@ import (
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, scenario, lint, emulator, chaos)",
-		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Emulator runs scenarios against a real Gateway/Operator. Chaos generates governance events for testing.`,
+		Short: "Run test suites (unit, integration, e2e, lint, agentic-tool-emulator, chaos)",
+		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Agentic-tool-emulator runs demos against a real Gateway/Operator. Chaos generates governance events for testing.`,
 	}
 
 	cmd.AddCommand(
 		testUnitCmd(),
 		testIntegrationCmd(),
 		testE2ECmd(),
-		testScenarioCmd(),
 		testCoverageCmd(),
 		testLintCmd(),
-		emulatorCmd(),
+		agenticToolEmulatorCmd(),
 		chaosCmd(),
 		testSummaryCmd(),
 	)
@@ -78,7 +78,7 @@ func testUnitCmd() *cobra.Command {
 			testCmd.Stderr = os.Stderr
 
 			if err := testCmd.Run(); err != nil {
-				return fmt.Errorf("unit tests failed: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrUnitTestsFailed, err)
 			}
 
 			fmt.Println("Unit tests completed successfully.")
@@ -107,7 +107,7 @@ func testIntegrationCmd() *cobra.Command {
 			testCmd.Stderr = os.Stderr
 
 			if err := testCmd.Run(); err != nil {
-				return fmt.Errorf("integration tests failed: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrIntegrationTestsFailed, err)
 			}
 
 			fmt.Println("Integration tests completed successfully.")
@@ -128,7 +128,7 @@ func testE2ECmd() *cobra.Command {
 
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			// Try HTTP check first (works for Docker/foreground/background modes)
@@ -146,12 +146,12 @@ func testE2ECmd() *cobra.Command {
 			if !isRunning {
 				pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 				if err != nil {
-					return fmt.Errorf("failed to create process manager: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 				}
 
 				running, _, err := pm.OperatorStatus()
 				if err != nil {
-					return fmt.Errorf("failed to check Operator status: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 				}
 				isRunning = running
 			}
@@ -159,7 +159,7 @@ func testE2ECmd() *cobra.Command {
 			if !isRunning {
 				fmt.Println("Error: Gateway is not running.")
 				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
-				return fmt.Errorf("gateway not running")
+				return constants.ErrGatewayNotRunning
 			}
 
 			testRace := ""
@@ -172,61 +172,10 @@ func testE2ECmd() *cobra.Command {
 			testCmd.Stderr = os.Stderr
 
 			if err := testCmd.Run(); err != nil {
-				return fmt.Errorf("e2e tests failed: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrE2ETestsFailed, err)
 			}
 
 			fmt.Println("E2E tests completed successfully.")
-			return nil
-		},
-	}
-
-	return cmd
-}
-
-func testScenarioCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "scenario",
-		Short: "Run Tier 3 (Scenario) tests",
-		Long:  `Run scenario-specific E2E tests with the 'e2e' build tag. These tests require a running g8e gateway and authenticated CLI session.`,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Running Tier 3 (Scenario) tests...")
-
-			// Check if gateway is running
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
-
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
-			if err != nil {
-				return fmt.Errorf("failed to create process manager: %w", err)
-			}
-
-			running, _, err := pm.OperatorStatus()
-			if err != nil {
-				return fmt.Errorf("failed to check Operator status: %w", err)
-			}
-
-			if !running {
-				fmt.Println("Error: Gateway is not running.")
-				fmt.Println("Run './g8e gw start' first (it automatically bootstraps authentication).")
-				return fmt.Errorf("gateway not running")
-			}
-
-			testRace := ""
-			if runtime.GOOS != "windows" {
-				testRace = "-race"
-			}
-
-			testCmd := exec.Command("go", "test", "-tags=e2e", testRace, "-count=1", "-timeout", "180s", "./test/scenario/...")
-			testCmd.Stdout = os.Stdout
-			testCmd.Stderr = os.Stderr
-
-			if err := testCmd.Run(); err != nil {
-				return fmt.Errorf("scenario tests failed: %w", err)
-			}
-
-			fmt.Println("Scenario tests completed successfully.")
 			return nil
 		},
 	}
@@ -241,7 +190,7 @@ func testCoverageCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "coverage",
 		Short: "Run tests with coverage report",
-		Long:  `Run tests with coverage profiling and enforce a minimum coverage threshold (60%). Use PKG flag to test a specific package, VERBOSE for detailed output.`,
+		Long:  `Run tests with coverage profiling and enforce a minimum coverage threshold (70%). Use PKG flag to test a specific package, VERBOSE for detailed output.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running tests with coverage...")
 
@@ -270,14 +219,14 @@ func testCoverageCmd() *cobra.Command {
 			testCmd.Stderr = os.Stderr
 
 			if err := testCmd.Run(); err != nil {
-				return fmt.Errorf("coverage tests failed: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrCoverageTestsFailed, err)
 			}
 
 			// Calculate coverage
 			coverageCmd := exec.Command("go", "tool", "cover", "-func=coverage.out")
 			output, err := coverageCmd.Output()
 			if err != nil {
-				return fmt.Errorf("failed to calculate coverage: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			// Parse coverage percentage from last line
@@ -319,7 +268,7 @@ func testLintCmd() *cobra.Command {
 				installCmd.Stdout = os.Stdout
 				installCmd.Stderr = os.Stderr
 				if err := installCmd.Run(); err != nil {
-					return fmt.Errorf("failed to install golangci-lint: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 				}
 			}
 
@@ -329,7 +278,7 @@ func testLintCmd() *cobra.Command {
 			lintCmd.Stderr = os.Stderr
 
 			if err := lintCmd.Run(); err != nil {
-				return fmt.Errorf("linting failed: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrLintingFailed, err)
 			}
 
 			fmt.Println("Linting completed successfully.")
@@ -347,11 +296,11 @@ func testSummaryCmd() *cobra.Command {
 		Long:  `View aggregated chaos test results from the test vault database. This queries the chaos_events table across all test runs in the test vault directory.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths to get test vault directory
-			if err := constants.InitPaths(); err != nil {
-				return fmt.Errorf("failed to initialize paths: %w", err)
+			if err := paths.Init(); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
-			testVaultDir := constants.Paths.Infra.TestVaultDir
+			testVaultDir := paths.Infra.TestVaultDir
 			if _, err := os.Stat(testVaultDir); os.IsNotExist(err) {
 				cmd.Printf("Test vault directory not found at %s\n", testVaultDir)
 				cmd.Println("Run './g8e test chaos' first to generate test data.")
@@ -361,7 +310,7 @@ func testSummaryCmd() *cobra.Command {
 			// Find all test run directories
 			entries, err := os.ReadDir(testVaultDir)
 			if err != nil {
-				return fmt.Errorf("failed to read test vault directory: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
 			}
 
 			var testRuns []string
@@ -383,20 +332,20 @@ func testSummaryCmd() *cobra.Command {
 			dbPath := filepath.Join(latestRun, constants.DbFilename)
 
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-				return fmt.Errorf("chaos test database not found at %s", dbPath)
+				return fmt.Errorf("%w: %s", constants.ErrChaosTestDatabaseNotFound, dbPath)
 			}
 
 			// Query chaos_events table
 			query := "SELECT category, outcome, COUNT(*) FROM chaos_events GROUP BY category, outcome"
 			db, err := sql.Open("sqlite", dbPath)
 			if err != nil {
-				return fmt.Errorf("failed to open database: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 			defer db.Close()
 
 			rows, err := db.Query(query)
 			if err != nil {
-				return fmt.Errorf("failed to query chaos events: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrAuditQueryFailed, err)
 			}
 			defer rows.Close()
 
@@ -412,7 +361,7 @@ func testSummaryCmd() *cobra.Command {
 				var category, outcome string
 				var count int
 				if err := rows.Scan(&category, &outcome, &count); err != nil {
-					return fmt.Errorf("failed to scan row: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrAuditScanFailed, err)
 				}
 				results = append(results, Result{Category: category, Outcome: outcome, Count: count})
 				total += count

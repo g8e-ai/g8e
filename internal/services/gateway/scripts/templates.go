@@ -15,12 +15,13 @@ package scripts
 
 import (
 	_ "embed"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 //go:embed g8e-operator.sh
@@ -51,13 +52,13 @@ func Init(logger *slog.Logger) error {
 		var err error
 		linuxTemplate, err = template.New("deploy_linux").Parse(deployScriptLinux)
 		if err != nil {
-			initErr = fmt.Errorf("failed to parse Linux deploy script template: %w", err)
+			initErr = fmt.Errorf("%w: %v", constants.ErrScriptTemplateParseFailed, err)
 			return
 		}
 
 		windowsTemplate, err = template.New("deploy_windows").Parse(deployScriptWindows)
 		if err != nil {
-			initErr = fmt.Errorf("failed to parse Windows deploy script template: %w", err)
+			initErr = fmt.Errorf("%w: %v", constants.ErrScriptTemplateParseFailed, err)
 			return
 		}
 
@@ -69,12 +70,12 @@ func Init(logger *slog.Logger) error {
 // RenderLinuxDeployScript renders the Linux deploy script with the given data.
 func RenderLinuxDeployScript(data TemplateData) (string, error) {
 	if linuxTemplate == nil {
-		return "", errors.New("linux template not initialized - call Init() first")
+		return "", constants.ErrScriptTemplateNotInitialized
 	}
 
 	var buf strings.Builder
 	if err := linuxTemplate.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to render Linux deploy script: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrScriptTemplateRenderFailed, err)
 	}
 
 	return buf.String(), nil
@@ -83,12 +84,12 @@ func RenderLinuxDeployScript(data TemplateData) (string, error) {
 // RenderWindowsDeployScript renders the Windows deploy script with the given data.
 func RenderWindowsDeployScript(data TemplateData) (string, error) {
 	if windowsTemplate == nil {
-		return "", errors.New("windows template not initialized - call Init() first")
+		return "", constants.ErrScriptTemplateNotInitialized
 	}
 
 	var buf strings.Builder
 	if err := windowsTemplate.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to render Windows deploy script: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrScriptTemplateRenderFailed, err)
 	}
 
 	return buf.String(), nil

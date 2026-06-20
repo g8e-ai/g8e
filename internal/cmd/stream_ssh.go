@@ -71,15 +71,15 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 	}
 	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
 	if err != nil {
-		return fmt.Errorf("preFlightCheck: build auth methods: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandBuildAuth, err)
 	}
 	if len(authMethods) == 0 {
-		return fmt.Errorf("preFlightCheck: no SSH auth methods available")
+		return constants.ErrMCPRunShellCommandNoAuth
 	}
 
 	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(knownHostsPath)
 	if cbErr != nil {
-		return fmt.Errorf("preFlightCheck: build host key callback: %w", cbErr)
+		return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandHostKeyVerification, cbErr)
 	}
 
 	clientConfig := &sshlib.ClientConfig{
@@ -111,7 +111,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("preFlightCheck: proxy command stdin pipe: %w", err)}
+				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
 				return
 			}
 			stdout, err := cmd.StdoutPipe()
@@ -119,14 +119,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("preFlightCheck: proxy command stdout pipe: %w", err)}
+				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
 				return
 			}
 			if err := cmd.Start(); err != nil {
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("preFlightCheck: proxy command start: %w", err)}
+				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
 				return
 			}
 
@@ -179,14 +179,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 		// Run a simple command to verify the session works
 		session, err := result.client.NewSession()
 		if err != nil {
-			return fmt.Errorf("preFlightCheck: new session: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandSSHSession, err)
 		}
 		defer session.Close()
 
 		// Run 'true' command - minimal check that remote shell works
 		err = session.Run("true")
 		if err != nil {
-			return fmt.Errorf("preFlightCheck: remote command failed: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandSSHDial, err)
 		}
 		return nil
 	}
@@ -233,31 +233,31 @@ func streamToHost(
 	var err error
 	r, err = ssh.ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser)
 	if err != nil {
-		emit(constants.StreamStatusFailed, fmt.Sprintf("resolve host: %v", err))
+		emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandResolveHost, err))
 		return
 	}
 
 	// Pre-flight check if enabled
 	if enablePreFlightCheck {
 		if err := preFlightCheck(ctx, r, sshAuthSock, sshPassphrase, sshKnownHostsPath, dialTimeout); err != nil {
-			emit(constants.StreamStatusFailed, fmt.Sprintf("pre-flight check failed: %v", err))
+			emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandSSHDial, err))
 			return
 		}
 	}
 
 	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
 	if err != nil {
-		emit(constants.StreamStatusFailed, fmt.Sprintf("build auth methods: %v", err))
+		emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandBuildAuth, err))
 		return
 	}
 	if len(authMethods) == 0 {
-		emit(constants.StreamStatusFailed, "no SSH auth methods available (no keys found, no agent)")
+		emit(constants.StreamStatusFailed, constants.ErrMCPRunShellCommandNoAuth.Error())
 		return
 	}
 
 	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(sshKnownHostsPath)
 	if cbErr != nil {
-		emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: build host key callback: %v", cbErr))
+		emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandHostKeyVerification, cbErr))
 		return
 	}
 
@@ -309,7 +309,7 @@ func streamToHost(
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("streamToHost: proxy command stdin pipe: %w", err)}
+					}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
 					return
 				}
 				stdout, err := cmd.StdoutPipe()
@@ -317,14 +317,14 @@ func streamToHost(
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("streamToHost: proxy command stdout pipe: %w", err)}
+					}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
 					return
 				}
 				if err := cmd.Start(); err != nil {
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("streamToHost: proxy command start: %w", err)}
+					}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
 					return
 				}
 
@@ -380,7 +380,7 @@ func streamToHost(
 				if retryCount < maxRetries && isTransientError(result.err) {
 					continue // Retry transient errors
 				}
-				emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: dial %s: %v (after %d retries)", addr, result.err, retryCount))
+				emit(constants.StreamStatusFailed, fmt.Sprintf("%s %s: %v (after %d retries)", constants.ErrMCPRunShellCommandSSHDial, addr, result.err, retryCount))
 				return
 			}
 			client = result.client
@@ -419,7 +419,7 @@ func streamToHost(
 			if retryCount < maxRetries && isTransientError(err) {
 				continue // Retry transient errors
 			}
-			emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: new session: %v (after %d retries)", err, retryCount))
+			emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v (after %d retries)", constants.ErrMCPRunShellCommandSSHSession, err, retryCount))
 			return
 		}
 		defer func() {
@@ -526,11 +526,11 @@ wait "$PID"`,
 			if retryCount < maxRetries && isTransientError(err) {
 				continue // Retry transient errors
 			}
-			msg := fmt.Sprintf("run: %v", err)
+			msg := fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandSSHDial, err)
 			if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
 				msg = fmt.Sprintf("%s: %s", msg, tail)
 			}
-			emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: %s", msg))
+			emit(constants.StreamStatusFailed, msg)
 			return
 		}
 
@@ -539,7 +539,7 @@ wait "$PID"`,
 	}
 
 	// If we exhausted retries
-	emit(constants.StreamStatusFailed, fmt.Sprintf("streamToHost: failed after %d retries, last error: %v", maxRetries, lastErr))
+	emit(constants.StreamStatusFailed, fmt.Sprintf("%s: failed after %d retries, last error: %v", constants.ErrMCPRunShellCommandSSHDial, maxRetries, lastErr))
 }
 
 // isSSHExitError checks whether err is an *ssh.ExitError and sets target.

@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
@@ -68,7 +69,7 @@ func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 func (s *ReplayStoreService) FinalizeNonce(nonce string) error {
 	_, err := s.db.ExecWithRetry("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
-		return fmt.Errorf("failed to finalize nonce: %w", err)
+		return fmt.Errorf("finalize nonce: %w", constants.ErrSQLQueryFailed)
 	}
 	return nil
 }
@@ -77,7 +78,7 @@ func (s *ReplayStoreService) FinalizeNonce(nonce string) error {
 func (s *ReplayStoreService) ReleaseNonce(nonce string) error {
 	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
-		return fmt.Errorf("failed to release nonce: %w", err)
+		return fmt.Errorf("release nonce: %w", constants.ErrSQLQueryFailed)
 	}
 	return nil
 }
@@ -92,7 +93,7 @@ func (s *ReplayStoreService) CleanupExpiredNonces() error {
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE expires_at < ?", now)
 	if err != nil {
-		return fmt.Errorf("failed to cleanup expired nonces: %w", err)
+		return fmt.Errorf("cleanup expired nonces: %w", constants.ErrSQLQueryFailed)
 	}
 	return nil
 }

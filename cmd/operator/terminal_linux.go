@@ -17,7 +17,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 
@@ -50,7 +49,7 @@ func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 
 		if char == 3 {
 			fmt.Fprintln(w)
-			return "", errors.New(string(constants.CommandExitStatusInterrupted))
+			return "", constants.ErrProcessInterrupted
 		}
 
 		if char == 127 || char == 8 {

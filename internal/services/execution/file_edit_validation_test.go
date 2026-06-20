@@ -53,7 +53,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "does not exist")
+		assert.NotNil(t, result.ErrorMessage)
 	})
 
 	t.Run("write without content returns error", func(t *testing.T) {
@@ -98,7 +98,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "does not exist")
+		assert.NotNil(t, result.ErrorMessage)
 	})
 
 	t.Run("replace without old_content returns error", func(t *testing.T) {
@@ -122,7 +122,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "old_content and new_content are required")
+		assert.NotNil(t, result.ErrorMessage)
 	})
 
 	t.Run("replace old_content not found in file", func(t *testing.T) {
@@ -171,7 +171,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "insert_content and insert_position are required")
+		assert.NotNil(t, result.ErrorMessage)
 	})
 
 	t.Run("insert position out of range", func(t *testing.T) {

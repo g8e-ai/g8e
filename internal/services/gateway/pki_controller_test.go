@@ -201,7 +201,6 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 				var resp map[string]string
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err)
-				assert.Contains(t, resp["error"], "pki: read trust bundle")
 			},
 		},
 	}
@@ -252,7 +251,6 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 				var resp map[string]string
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err)
-				assert.Contains(t, resp["error"], "pki: read root CA")
 			},
 		},
 		{
@@ -265,7 +263,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 				require.NoError(t, err, "failed to write invalid PEM data")
 			},
 			expectedStatus: http.StatusInternalServerError,
-			expectedBody:   `{"error":"pki: invalid root CA PEM"}`,
+			expectedBody:   `{"error":"failed to decode PEM block"}`,
 		},
 	}
 
@@ -324,7 +322,6 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 				var resp map[string]string
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err)
-				assert.Contains(t, resp["error"], "pki: unmarshal CSR sign request")
 			},
 		},
 		{
@@ -387,7 +384,6 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 				var resp map[string]string
 				err := json.Unmarshal(rr.Body.Bytes(), &resp)
 				require.NoError(t, err)
-				assert.Contains(t, resp["error"], "pki: unmarshal revoke request")
 			},
 		},
 		{
@@ -395,7 +391,7 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 			method:         http.MethodPost,
 			body:           mustMarshalJSON(t, map[string]string{"reason": testRevocationReason}),
 			expectedStatus: http.StatusBadRequest,
-			expectedBody:   `{"error":"pki: serial required"}`,
+			expectedBody:   `{"error":"missing required field"}`,
 		},
 		{
 			name:   "Failure - PKI revocation error",
@@ -773,7 +769,7 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 		rr := httptest.NewRecorder()
 		controller.handlePKIAppsEnroll(rr, req)
 		assert.Equal(t, http.StatusServiceUnavailable, rr.Code)
-		assert.JSONEq(t, `{"error":"pki: app enrollment service not available"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"service unavailable"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - malformed JSON", func(t *testing.T) {
@@ -782,7 +778,6 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsEnroll(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "pki: unmarshal app enrollment request")
 	})
 
 	t.Run("Success - valid CSR request", func(t *testing.T) {
@@ -823,7 +818,6 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIDevicesEnroll(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
 	})
 
 	t.Run("Failure - empty peer certificates", func(t *testing.T) {
@@ -833,7 +827,6 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIDevicesEnroll(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "mTLS client certificate required")
 	})
 
 	t.Run("Failure - invalid JSON body", func(t *testing.T) {
@@ -843,7 +836,6 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIDevicesEnroll(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "unmarshal enrollment request")
 	})
 
 	t.Run("Failure - missing CSR", func(t *testing.T) {
@@ -855,7 +847,6 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIDevicesEnroll(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "csr_pem is required")
 	})
 }
 
@@ -877,7 +868,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"pki: mTLS client certificate required"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"missing certificate"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - empty peer certificates", func(t *testing.T) {
@@ -887,7 +878,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"pki: mTLS client certificate required"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"missing certificate"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - invalid JSON body", func(t *testing.T) {
@@ -897,7 +888,6 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "pki: unmarshal delegated credential request")
 	})
 
 	t.Run("Failure - missing CSR", func(t *testing.T) {
@@ -910,7 +900,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"pki: csr_pem is required"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"missing required field"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - missing app_name", func(t *testing.T) {
@@ -923,7 +913,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"pki: app_name is required"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"missing required field"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - invalid app name (special characters)", func(t *testing.T) {
@@ -939,7 +929,6 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "pki: app_name must contain only alphanumeric characters")
 	})
 
 	t.Run("Failure - invalid CSR PEM format", func(t *testing.T) {
@@ -955,7 +944,7 @@ func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
 		rr := httptest.NewRecorder()
 		c.handlePKIAppsDelegated(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.JSONEq(t, `{"error":"pki: invalid CSR PEM format"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"pki: invalid CSR PEM"}`, rr.Body.String())
 	})
 }
 

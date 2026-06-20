@@ -69,7 +69,7 @@ func (s *PasskeyBootstrapServer) Start() (string, error) {
 	// Find an available port on 0.0.0.0 to allow remote access via port forwarding
 	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
-		return "", fmt.Errorf("failed to find available port: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrPortUnavailable, err)
 	}
 
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -369,7 +369,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	// Get current username for passkey registration
 	currentUser, err := user.Current()
 	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrGetCurrentUser, err)
 	}
 	userName := currentUser.Username
 
@@ -378,7 +378,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 
 	url, err := server.Start()
 	if err != nil {
-		return fmt.Errorf("failed to start passkey bootstrap server: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPasskeyBootstrapServerStart, err)
 	}
 	defer server.Stop()
 
@@ -429,14 +429,14 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	// Wait for registration to complete (5 minute timeout for local registration to allow for slow user interaction)
 	success, timedOut := server.Wait(5 * time.Minute)
 	if timedOut {
-		return fmt.Errorf("passkey registration timed out")
+		return constants.ErrPasskeyRegistrationTimedOut
 	}
 
 	if !success {
 		if server.errMessage != "" {
-			return fmt.Errorf("passkey registration failed: %s", server.errMessage)
+			return fmt.Errorf("%w: %s", constants.ErrPasskeyRegistrationFailed, server.errMessage)
 		}
-		return fmt.Errorf("passkey registration failed")
+		return constants.ErrPasskeyRegistrationFailed
 	}
 
 	fmt.Printf("\n✓ Passkey registered successfully!\n")
@@ -452,13 +452,13 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 	// Load CLI mTLS certificate for authentication
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return false, fmt.Errorf("failed to load CLI certificate: %w", err)
+		return false, fmt.Errorf("%w: %v", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Load CA bundle for server verification
 	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
 	if err != nil {
-		return false, fmt.Errorf("failed to read CA bundle: %w", err)
+		return false, fmt.Errorf("%w: %v", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
 	caPool.AppendCertsFromPEM(caBundleBytes)
@@ -477,7 +477,7 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		return false, fmt.Errorf("failed to check passkey status: %w", err)
+		return false, fmt.Errorf("%w: %v", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -487,7 +487,7 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("failed to read response: %w", err)
+		return false, fmt.Errorf("%w: %v", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	var result struct {
@@ -498,7 +498,7 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
-		return false, fmt.Errorf("failed to parse response: %w", err)
+		return false, fmt.Errorf("%w: %v", constants.ErrInvalidJSONResponse, err)
 	}
 
 	return len(result.Credentials) > 0, nil
@@ -519,7 +519,7 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	// Get current username for passkey registration
 	currentUser, err := user.Current()
 	if err != nil {
-		return fmt.Errorf("failed to get current user: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrGetCurrentUser, err)
 	}
 	userName := currentUser.Username
 
@@ -531,18 +531,18 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	}
 	challengeBody, err := json.Marshal(challengeReq)
 	if err != nil {
-		return fmt.Errorf("failed to marshal challenge request: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	resp, err := http.Post(challengeURL, "application/json", bytes.NewReader(challengeBody))
 	if err != nil {
-		return fmt.Errorf("failed to get challenge: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("challenge request failed with status %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(body))
 	}
 
 	var challengeResp struct {
@@ -560,15 +560,15 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&challengeResp); err != nil {
-		return fmt.Errorf("failed to decode challenge response: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrInvalidJSONResponse, err)
 	}
 
 	if !challengeResp.Success {
-		return fmt.Errorf("challenge request was not successful")
+		return constants.ErrInternal
 	}
 
 	// Note: This is a placeholder for direct registration
 	// In practice, WebAuthn requires browser interaction for security
 	// This function is mainly for testing infrastructure
-	return fmt.Errorf("direct passkey registration requires browser interaction; use RegisterPasskeyViaLocalhost instead")
+	return constants.ErrPasskeyRequiresBrowser
 }

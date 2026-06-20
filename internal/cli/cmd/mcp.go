@@ -283,11 +283,11 @@ func buildGatewayConn(cfg *config.Config) (*gatewayConn, error) {
 
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 	caBundleBytes, err := os.ReadFile(caFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CA bundle: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
 	caPool.AppendCertsFromPEM(caBundleBytes)
@@ -340,7 +340,7 @@ func envOr(key, fallback string) string {
 func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load("")
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -349,7 +349,7 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 	// URI SANs — no session object or headers. All proxy calls reuse this connection.
 	conn, err := buildGatewayConn(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to establish gateway connection: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
 
 	logger.Info("g8e MCP governance proxy starting",
@@ -432,7 +432,7 @@ func proxySessionToGateway(session *gatewayConn, req JSONRPCRequest) (JSONRPCRes
 
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
-		return JSONRPCResponse{}, fmt.Errorf("gateway returned HTTP %d: %s", httpResp.StatusCode, string(body))
+		return JSONRPCResponse{}, fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, httpResp.StatusCode, string(body))
 	}
 
 	var resp JSONRPCResponse
@@ -507,12 +507,12 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gateway
 func createMCPClient(cfg *config.Config) (*http.Client, error) {
 	cert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	caCert, err := os.ReadFile(cfg.TrustBundlePath())
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CA bundle: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	caCertPool := x509.NewCertPool()
@@ -548,7 +548,7 @@ func proxyToGateway(client *http.Client, gatewayURL string, req JSONRPCRequest) 
 
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
-		return JSONRPCResponse{}, fmt.Errorf("gateway returned HTTP %d: %s", httpResp.StatusCode, string(body))
+		return JSONRPCResponse{}, fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, httpResp.StatusCode, string(body))
 	}
 
 	var resp JSONRPCResponse
@@ -608,7 +608,7 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 func printMCPConfigLocal(cmd *cobra.Command) error {
 	cfg, err := config.Load("")
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 
 	externalIP := network.GetExternalInterfaceIP()
@@ -623,12 +623,12 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 
 	mcpConfig, err := mcp.NewGatewayConfig(gatewayURL, actualCertPath, actualKeyPath, actualCAPath)
 	if err != nil {
-		return fmt.Errorf("failed to create MCP config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrGatewayURLRequired, err)
 	}
 
 	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal MCP config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	cmd.Println(string(configJSON))
@@ -638,7 +638,7 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 func printMCPConfigIP(cmd *cobra.Command) error {
 	cfg, err := config.Load("")
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 
 	externalIP := network.GetExternalInterfaceIP()
@@ -652,12 +652,12 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 	// The certificate has constants.GatewayInternalHostname in its SAN, so verification will succeed
 	mcpConfig, err := mcp.NewGatewayConfigWithHostname(gatewayURL, actualCertPath, actualKeyPath, actualCAPath, constants.GatewayInternalHostname)
 	if err != nil {
-		return fmt.Errorf("failed to create MCP config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrGatewayURLRequired, err)
 	}
 
 	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal MCP config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	cmd.Println(string(configJSON))
@@ -667,17 +667,17 @@ func printMCPConfigIP(cmd *cobra.Command) error {
 func printMCPConfigStdio(cmd *cobra.Command) error {
 	binaryPath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("failed to get binary path: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
 	mcpConfig, err := mcp.NewStdioConfigSimple(binaryPath)
 	if err != nil {
-		return fmt.Errorf("failed to create MCP stdio config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrGatewayURLRequired, err)
 	}
 
 	configJSON, err := json.MarshalIndent(mcpConfig, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal MCP config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	cmd.Println(string(configJSON))
@@ -893,13 +893,13 @@ func (d *subprocessMCPProxy) start() error {
 
 	stdin, err := d.cmd.StdinPipe()
 	if err != nil {
-		return fmt.Errorf("stdin pipe: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 	d.stdin = stdin
 
 	stdout, err := d.cmd.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("stdout pipe: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
@@ -907,7 +907,7 @@ func (d *subprocessMCPProxy) start() error {
 	d.cmd.Stderr = os.Stderr
 
 	if err := d.cmd.Start(); err != nil {
-		return fmt.Errorf("start subprocess: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 	d.logger.Info("Downstream MCP subprocess started", "command", d.command, "pid", d.cmd.Process.Pid)
 	return nil
@@ -929,21 +929,21 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 
 	reqBytes, err := json.Marshal(req)
 	if err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("marshal request: %w", err)
+		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 	if _, err := fmt.Fprintf(d.stdin, "%s\n", reqBytes); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("write to subprocess: %w", err)
+		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 
 	if !d.scanner.Scan() {
 		if err := d.scanner.Err(); err != nil {
-			return JSONRPCResponse{}, fmt.Errorf("read from subprocess: %w", err)
+			return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 		}
-		return JSONRPCResponse{}, fmt.Errorf("subprocess closed")
+		return JSONRPCResponse{}, fmt.Errorf("%w: subprocess closed", constants.ErrProcessInterrupted)
 	}
 	var resp JSONRPCResponse
 	if err := json.Unmarshal(d.scanner.Bytes(), &resp); err != nil {
-		return JSONRPCResponse{}, fmt.Errorf("decode subprocess response: %w", err)
+		return JSONRPCResponse{}, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 	return resp, nil
 }
@@ -955,17 +955,17 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 func ensureGatewayRunning() error {
 	cfg, err := config.Load("")
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 
 	pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 	if err != nil {
-		return fmt.Errorf("create process manager: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
 	running, pid, err := pm.OperatorStatus()
 	if err != nil {
-		return fmt.Errorf("check gateway status: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
 	if running {
@@ -990,7 +990,7 @@ func ensureGatewayRunning() error {
 			CertIdentityMode:   "localhost",
 			IdentityData:       nil,
 		}); err != nil {
-			return fmt.Errorf("start gateway: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 		}
 
 		// Poll plain HTTP health until the gateway is ready.
@@ -1011,8 +1011,8 @@ func ensureGatewayRunning() error {
 				}
 			}
 			if i == maxAttempts-1 {
-				return fmt.Errorf("gateway did not become healthy after %v",
-					time.Duration(maxAttempts)*pollInterval)
+				return fmt.Errorf("%w: gateway did not become healthy after %v",
+					constants.ErrGatewayNotReady, time.Duration(maxAttempts)*pollInterval)
 			}
 			time.Sleep(pollInterval)
 		}
@@ -1054,7 +1054,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 	}
 	configJSON, err := json.Marshal(config)
 	if err != nil {
-		return "", nil, fmt.Errorf("build MCP config: %w", err)
+		return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	// Get home directory with cross-platform fallback
@@ -1063,7 +1063,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		var err error
 		homeDir, err = os.UserHomeDir()
 		if err != nil {
-			return "", nil, fmt.Errorf("get home directory: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrMCPGetHomeDirectory, err)
 		}
 	}
 
@@ -1073,7 +1073,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirCursor)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create cursor config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
 		if err := BackupConfigFile(configPath); err != nil {
@@ -1082,7 +1082,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write cursor mcp.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1091,7 +1091,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirDevin)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create devin config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileMCPDevin)
 		if err := BackupConfigFile(configPath); err != nil {
@@ -1100,7 +1100,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write devin mcp_config.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1116,7 +1116,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		configYAML := fmt.Sprintf("mcp-server:\n  - name: g8e\n    command: %s\n    args:\n      - mcp\n      - stdio\n", binaryPath)
 		if err := os.WriteFile(configPath, []byte(configYAML), 0644); err != nil {
-			return "", nil, fmt.Errorf("write aider .aider.conf.yml: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1125,7 +1125,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// We need to add g8e MCP server and exclude native tools to force governance
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirGemini)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create gemini config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileSettings)
 
@@ -1133,7 +1133,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		var settings geminiSettings
 		if existingData, err := os.ReadFile(configPath); err == nil {
 			if err := json.Unmarshal(existingData, &settings); err != nil {
-				return "", nil, fmt.Errorf("parse existing gemini settings: %w", err)
+				return "", nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 		}
 
@@ -1152,13 +1152,13 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 
 		configJSON, err := json.MarshalIndent(settings, "", "  ")
 		if err != nil {
-			return "", nil, fmt.Errorf("marshal gemini settings: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 		}
 
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s with native tools disabled\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write gemini settings.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1167,7 +1167,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirGoose)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create goose config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileSettings)
 		if err := BackupConfigFile(configPath); err != nil {
@@ -1176,7 +1176,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write goose config.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1185,7 +1185,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirVSCode)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create vscode config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
 		if err := BackupConfigFile(configPath); err != nil {
@@ -1194,7 +1194,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write vscode mcp.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1203,7 +1203,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirCodeium)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create codeium config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
 		if err := BackupConfigFile(configPath); err != nil {
@@ -1212,7 +1212,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write codeium mcp.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1221,7 +1221,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirTabby)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create tabby config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileMCP)
 		if err := BackupConfigFile(configPath); err != nil {
@@ -1230,7 +1230,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write tabby mcp.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1239,7 +1239,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server
 		configDir := filepath.Join(homeDir, constants.AgentConfigDirContinue)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return "", nil, fmt.Errorf("create continue config dir: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		configPath := filepath.Join(configDir, constants.AgentConfigFileSettings)
 		if err := BackupConfigFile(configPath); err != nil {
@@ -1248,7 +1248,7 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		displayPath := pathutil.ToSlash(configPath)
 		fmt.Fprintf(os.Stderr, "[g8e] Writing MCP config to %s (g8e as only MCP server for governance)\n", displayPath)
 		if err := os.WriteFile(configPath, configJSON, 0644); err != nil {
-			return "", nil, fmt.Errorf("write continue config.json: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		return configPath, nil, nil
 
@@ -1258,11 +1258,11 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// Governance enforced by making g8e the only MCP server in the reference config
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-ollama-*.json")
 		if err != nil {
-			return "", nil, fmt.Errorf("create temp MCP config for ollama: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		if _, err := tmpFile.Write(configJSON); err != nil {
 			tmpFile.Close()
-			return "", nil, fmt.Errorf("write MCP config for ollama: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		tmpFile.Close()
 		tmpPath := tmpFile.Name()
@@ -1278,11 +1278,11 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 		// For agents that use CLI flags or temp files
 		tmpFile, err := os.CreateTemp("", "g8e-mcp-*.json")
 		if err != nil {
-			return "", nil, fmt.Errorf("create temp MCP config: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		if _, err := tmpFile.Write(configJSON); err != nil {
 			tmpFile.Close()
-			return "", nil, fmt.Errorf("write MCP config: %w", err)
+			return "", nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		tmpFile.Close()
 		tmpPath := tmpFile.Name()
@@ -1300,12 +1300,12 @@ func WriteAgentConfig(agentID, binaryPath string) (string, func(), error) {
 // environment variables so it never needs to re-read credentials from disk.
 func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	if err := ensureGatewayRunning(); err != nil {
-		return fmt.Errorf("ensure gateway: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
 
 	cfg, err := config.Load("")
 	if err != nil {
-		return fmt.Errorf("load config after gateway start: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 
 	// Ensure CLI credentials exist, auto-enroll if needed
@@ -1313,30 +1313,30 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	if err != nil || creds == nil {
 		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
 		if err := auth.EnrollCLI(cfg); err != nil {
-			return fmt.Errorf("auto-enroll CLI: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 		}
 		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")
 		creds, err = auth.LoadCredentials(cfg)
 		if err != nil || creds == nil {
-			return fmt.Errorf("load credentials after enrollment: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 		}
 	}
 
 	// Enroll the agent as an external app for audit trail attribution
 	appID, appCert, appKey, err := auth.EnrollAgentApp(cfg, strings.ToLower(agentID))
 	if err != nil {
-		return fmt.Errorf("enroll agent app identity: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
 	// Require an authenticated human with passkey registration; auto-register if missing
 	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID)
 	if err != nil {
-		return fmt.Errorf("verify passkey registration: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
 	}
 	if !hasPasskey {
 		fmt.Fprintf(os.Stderr, "[g8e] No passkey registered, starting passkey enrollment...\n")
 		if err := auth.RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
-			return fmt.Errorf("passkey registration: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 	}
 
@@ -1348,7 +1348,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 
 	binaryPath, err := os.Executable()
 	if err != nil {
-		return fmt.Errorf("resolve g8e binary path: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
 	configPath, cleanup, err := WriteAgentConfig(agentID, binaryPath)
@@ -1487,7 +1487,7 @@ func runMCPAgentRun(args []string, downstreamURL string) error {
 			logger:  logger,
 		}
 		if err := proc.start(); err != nil {
-			return fmt.Errorf("start downstream MCP server: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 		}
 		ds = proc
 	}

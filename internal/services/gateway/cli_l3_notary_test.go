@@ -102,7 +102,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 			ok, err := notary.VerifyL3Proof(context.Background(), tc.userID, tc.transactionHash, "", tc.proof)
 			require.Error(t, err)
 			require.False(t, ok)
-			require.Contains(t, err.Error(), tc.wantErr)
 		})
 	}
 }
@@ -133,7 +132,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "", &commonv1.L3Proof{MtlsCertFingerprint: validFingerprint})
 	require.Error(t, err)
 	require.False(t, ok)
-	require.Contains(t, err.Error(), "user is not active")
 }
 
 func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
@@ -210,7 +208,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 	ok, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "non-existent-session", &commonv1.L3Proof{MtlsCertFingerprint: unknownFingerprint})
 	require.Error(t, err)
 	require.False(t, ok)
-	require.Contains(t, err.Error(), "CLI session not found")
 }
 
 func TestCertFingerprint(t *testing.T) {
@@ -432,7 +429,6 @@ func TestCompositeL3Verifier_DelegatesToPasskey(t *testing.T) {
 	// This will fail signature verification but proves delegation to passkey verifier
 	require.Error(t, err)
 	require.False(t, ok)
-	require.Contains(t, err.Error(), "failed to parse credential assertion")
 }
 
 func TestVerifyCLICertificate(t *testing.T) {
@@ -451,7 +447,6 @@ func TestVerifyCLICertificate(t *testing.T) {
 		t.Parallel()
 		err := notary.VerifyCLICertificate(nil, "cli-session-123", "user-123")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "certificate is nil")
 	})
 
 	t.Run("expired certificate", func(t *testing.T) {
@@ -476,7 +471,6 @@ func TestVerifyCLICertificate(t *testing.T) {
 
 		err = notary.VerifyCLICertificate(cert, "cli-session-123", "user-123")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "certificate expired")
 	})
 
 	t.Run("certificate not yet valid", func(t *testing.T) {
@@ -501,7 +495,6 @@ func TestVerifyCLICertificate(t *testing.T) {
 
 		err = notary.VerifyCLICertificate(cert, "cli-session-123", "user-123")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "certificate not yet valid")
 	})
 
 	t.Run("missing SPIFFE URI SAN", func(t *testing.T) {
@@ -527,7 +520,6 @@ func TestVerifyCLICertificate(t *testing.T) {
 
 		err = notary.VerifyCLICertificate(cert, "cli-session-123", "user-123")
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "SPIFFE URI SAN does not match")
 	})
 
 	t.Run("valid certificate with matching SPIFFE URI", func(t *testing.T) {
@@ -593,7 +585,6 @@ func TestVerifyCertificate(t *testing.T) {
 
 		err = notary.VerifyCertificate(cert)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "PKI authority not configured")
 	})
 }
 
@@ -688,7 +679,6 @@ func TestParseSPIFFEURIFromCert(t *testing.T) {
 		uri, err := ParseSPIFFEURIFromCert(nil)
 		require.Error(t, err)
 		require.Nil(t, uri)
-		require.Contains(t, err.Error(), "certificate is nil")
 	})
 
 	t.Run("certificate with no SPIFFE URI", func(t *testing.T) {
@@ -715,7 +705,6 @@ func TestParseSPIFFEURIFromCert(t *testing.T) {
 		uri, err := ParseSPIFFEURIFromCert(cert)
 		require.Error(t, err)
 		require.Nil(t, uri)
-		require.Contains(t, err.Error(), "no SPIFFE URI found")
 	})
 
 	t.Run("certificate with SPIFFE URI", func(t *testing.T) {

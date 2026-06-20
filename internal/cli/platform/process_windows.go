@@ -25,6 +25,36 @@ import (
 	"time"
 )
 
+// realWindowsProcessChecker implements the interface using actual Windows syscalls
+type realWindowsProcessChecker struct{}
+
+func (r realWindowsProcessChecker) OpenProcess(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error) {
+	return syscall.OpenProcess(desiredAccess, inheritHandle, processID)
+}
+
+func (r realWindowsProcessChecker) CloseHandle(handle syscall.Handle) error {
+	return syscall.CloseHandle(handle)
+}
+
+func (r realWindowsProcessChecker) GetExitCodeProcess(handle syscall.Handle, exitCode *uint32) error {
+	return syscall.GetExitCodeProcess(handle, exitCode)
+}
+
+// realCommandExecutor implements the interface using actual exec package
+type realCommandExecutor struct{}
+
+func (r realCommandExecutor) Command(name string, args ...string) *exec.Cmd {
+	return exec.Command(name, args...)
+}
+
+func (r realCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
+	return cmd.Output()
+}
+
+func (r realCommandExecutor) Run(cmd *exec.Cmd) error {
+	return cmd.Run()
+}
+
 // setProcessGroup is a no-op on Windows
 func setProcessGroup(cmd *exec.Cmd) {
 	// Windows doesn't have process groups in the Unix sense
@@ -38,16 +68,21 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 		return false
 	}
 
+	checker := pm.windowsProcessChecker
+	if checker == nil {
+		checker = realWindowsProcessChecker{}
+	}
+
 	// On Windows, we can check if the process is running by calling
 	// GetExitCodeProcess. If the process is still running, it returns STILL_ACTIVE (259).
-	handle, err := syscall.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
+	handle, err := checker.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
 	if err != nil {
 		return false
 	}
-	defer syscall.CloseHandle(handle)
+	defer checker.CloseHandle(handle)
 
 	var exitCode uint32
-	err = syscall.GetExitCodeProcess(handle, &exitCode)
+	err = checker.GetExitCodeProcess(handle, &exitCode)
 	if err != nil {
 		return false
 	}
@@ -63,8 +98,13 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 
 // isG8eProcess verifies that the given PID belongs to a g8e.exe process.
 func (pm *ProcessManager) isG8eProcess(pid int) bool {
-	cmd := exec.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV", "/NH")
-	output, err := cmd.Output()
+	executor := pm.commandExecutor
+	if executor == nil {
+		executor = realCommandExecutor{}
+	}
+
+	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV", "/NH")
+	output, err := executor.Output(cmd)
 	if err != nil {
 		return false
 	}
@@ -80,8 +120,13 @@ func (pm *ProcessManager) isG8eProcess(pid int) bool {
 // findProcessOnPort finds the PID of the process listening on the given port on Windows.
 // It uses netstat to find the process ID.
 func (pm *ProcessManager) findProcessOnPort(port int) int {
-	cmd := exec.Command("netstat", "-ano")
-	output, err := cmd.Output()
+	executor := pm.commandExecutor
+	if executor == nil {
+		executor = realCommandExecutor{}
+	}
+
+	cmd := executor.Command("netstat", "-ano")
+	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0
 	}
@@ -110,9 +155,14 @@ func (pm *ProcessManager) findProcessOnPort(port int) int {
 // This is used as a fallback when the PID file is missing or stale.
 // It excludes the current process's own PID to avoid detecting the CLI itself.
 func (pm *ProcessManager) findOperatorProcess() int {
+	executor := pm.commandExecutor
+	if executor == nil {
+		executor = realCommandExecutor{}
+	}
+
 	ownPID := os.Getpid()
-	cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV")
-	output, err := cmd.Output()
+	cmd := executor.Command("tasklist", "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV")
+	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0
 	}
@@ -150,9 +200,14 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 		return nil
 	}
 
+	executor := pm.commandExecutor
+	if executor == nil {
+		executor = realCommandExecutor{}
+	}
+
 	// Try graceful shutdown first
-	cmd := exec.Command("taskkill", "/PID", fmt.Sprintf("%d", pid), "/T")
-	if err := cmd.Run(); err == nil {
+	cmd := executor.Command("taskkill", "/PID", fmt.Sprintf("%d", pid), "/T")
+	if err := executor.Run(cmd); err == nil {
 		// Wait a bit to see if it exits gracefully
 		time.Sleep(500 * time.Millisecond)
 		if !pm.isProcessRunning(pid) {
@@ -161,8 +216,8 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 	}
 
 	// Force kill if graceful shutdown failed
-	cmd = exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", pid), "/T")
-	if err := cmd.Run(); err != nil {
+	cmd = executor.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", pid), "/T")
+	if err := executor.Run(cmd); err != nil {
 		return fmt.Errorf("failed to force kill process: %w", err)
 	}
 

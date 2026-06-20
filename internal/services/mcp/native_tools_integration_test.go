@@ -41,6 +41,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/paths"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -55,7 +57,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	// Check if Operator is reachable
@@ -202,7 +204,7 @@ func TestNativeToolsIntegration_LogTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -266,7 +268,7 @@ func TestNativeToolsIntegration_ProcessTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -350,7 +352,7 @@ func TestNativeToolsIntegration_ProcTree(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -396,7 +398,7 @@ func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -494,7 +496,7 @@ func TestNativeToolsIntegration_Concurrency(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -578,7 +580,7 @@ func TestNativeToolsIntegration_PropertyBasedTests(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -714,7 +716,7 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 
 	operatorURL := os.Getenv("OPERATOR_URL")
 	if operatorURL == "" {
-		operatorURL = constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
 	insecureClient := &http.Client{
@@ -781,7 +783,7 @@ func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, er
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
 
-	pkiDir := filepath.Join(repoRoot, constants.Paths.Infra.PkiDir)
+	pkiDir := filepath.Join(repoRoot, paths.Infra.PkiDir)
 
 	// Load client certificate and key
 	certPath := filepath.Join(pkiDir, "client", "client.pem")
@@ -896,7 +898,7 @@ func verifyAuditVaultPersistence(t *testing.T, transactionID, sessionID string) 
 	require.NoError(t, err)
 	repoRoot := filepath.Dir(filepath.Dir(filepath.Dir(cwd)))
 
-	vaultPath := filepath.Join(repoRoot, constants.Paths.Infra.AuditVaultDBPath)
+	vaultPath := filepath.Join(repoRoot, paths.Infra.AuditVaultDBPath)
 
 	db, err := sql.Open("sqlite", vaultPath)
 	require.NoError(t, err)

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 func TestExportActuatorPublicKey(t *testing.T) {
@@ -29,11 +30,11 @@ func TestExportActuatorPublicKey(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Initialize paths for the test environment
-	if err := constants.InitPathsWithBase(tmpDir); err != nil {
+	if err := paths.InitWithBase(tmpDir); err != nil {
 		t.Fatalf("Failed to initialize paths: %v", err)
 	}
 
-	pkiDir := constants.Paths.Infra.PkiDir
+	pkiDir := paths.Infra.PkiDir
 
 	// Generate a test Ed25519 key pair
 	pubKey, _, err := ed25519.GenerateKey(nil)

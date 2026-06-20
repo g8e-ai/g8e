@@ -63,7 +63,7 @@ func enrollCmdWithConfig(configLoader func(string) (*config.Config, error)) *cob
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			if err := auth.CheckOperatorRunning(cfg); err != nil {
@@ -90,7 +90,7 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	// Check if platform is already bootstrapped
 	bootstrapped, err := auth.CheckBootstrapStatus(cfg, "")
 	if err != nil {
-		return fmt.Errorf("failed to check bootstrap status: %w", err)
+		return err
 	}
 
 	// Check if operator credentials exist
@@ -110,7 +110,7 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 		hostname, _ := os.Hostname()
 		csr, privKey, err := auth.GenerateWindowsCSR(fmt.Sprintf("g8e-cli-%s", hostname), false)
 		if err != nil {
-			return fmt.Errorf("failed to generate Windows CSR: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 		}
 
 		var regResp *auth.RegistrationResponse
@@ -118,18 +118,18 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 			cmd.Println("Submitting CSR to Gateway for CLI enrollment...")
 			regResp, err = auth.BootstrapWithURL(cfg, "", csr, "", "")
 			if err != nil {
-				return fmt.Errorf("failed to submit CSR: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 			}
 		} else {
 			cmd.Println("Platform already bootstrapped. Attempting CLI re-enrollment...")
 			regResp, err = auth.CLIEnroll(cfg, csr, "")
 			if err != nil {
-				return fmt.Errorf("failed to re-enroll CLI: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 			}
 		}
 
 		if regResp.CLICert == "" {
-			return fmt.Errorf("unexpected response: missing CLI certificate")
+			return constants.ErrMissingCertificate
 		}
 
 		cmd.Println("Importing signed certificate to Windows Certificate Store...")
@@ -139,12 +139,12 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 		}
 
 		if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, privKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
-			return fmt.Errorf("failed to save certificate locally: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 
 		if regResp.HubTrustBundle != "" {
 			if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
-				return fmt.Errorf("failed to save hub trust bundle: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 			}
 
 			// Trust the Root CA in Windows store for local HTTPS server
@@ -160,7 +160,7 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 		}
 
 		if err := auth.SaveCredentials(cfg, creds); err != nil {
-			return fmt.Errorf("failed to save credentials: %w", err)
+			return err
 		}
 
 		cmd.Printf("\nWindows enrollment complete\n")
@@ -171,7 +171,7 @@ func performWindowsEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	// Attempt native Windows Hello authentication
 	cmd.Println("\nAttempting native Windows Hello authentication...")
 	if err := auth.PerformNativeWindowsAuth(cfg); err != nil {
-		return fmt.Errorf("native Windows Hello authentication failed: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrWindowsHelloAuthentication, err)
 	}
 
 	cmd.Println("✓ Native authentication successful!")
@@ -199,7 +199,7 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 		}
 		creds, err := auth.LoadCredentials(cfg)
 		if err != nil || creds == nil {
-			return fmt.Errorf("failed to load credentials after enrollment: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 		}
 		cmd.Printf("\nClient enrollment complete\n")
 		cmd.Printf("User ID: %s\n", creds.UserID)
@@ -208,7 +208,7 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 		// Register passkey for the newly enrolled user
 		cmd.Println("\nRegistering passkey for secure authentication...")
 		if err := auth.RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
-			return fmt.Errorf("passkey registration failed: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 		return nil
 	}
@@ -225,14 +225,14 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	// Check if certificates are expiring soon and auto-renew if needed
 	cmd.Println("Checking certificate expiry...")
 	if err := auth.AutoRenewCertificate(cfg, "cli", ""); err != nil {
-		return fmt.Errorf("CLI certificate auto-renewal failed: %w", err)
+		return err
 	}
 
 	cmd.Println("Generating keys and CSRs...")
 	hostname, _ := os.Hostname()
 	cliCSR, cliKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	var regResp *auth.RegistrationResponse
@@ -243,7 +243,7 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 		if err != nil {
 			// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 			if errors.Is(err, constants.ErrTrustBundleStale) {
-				return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth enroll. Original error: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrTrustBundleStale, err)
 			}
 			return err
 		}
@@ -257,16 +257,16 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	}
 
 	if regResp.CLISessionID == "" || regResp.CLICert == "" {
-		return fmt.Errorf("unexpected registration response (missing required fields)")
+		return constants.ErrMissingRequiredField
 	}
 
 	if err := auth.SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
-		return fmt.Errorf("failed to save CLI credentials: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	if regResp.HubTrustBundle != "" {
 		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
-			return fmt.Errorf("failed to save hub trust bundle: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
 
@@ -278,7 +278,7 @@ func performStandardEnroll(cmd *cobra.Command, cfg *config.Config) error {
 	}
 
 	if err := auth.SaveCredentials(cfg, creds); err != nil {
-		return fmt.Errorf("failed to save credentials: %w", err)
+		return err
 	}
 
 	cmd.Printf("\nClient re-enrollment complete\n")
@@ -295,7 +295,7 @@ func logoutCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			creds, err := auth.LoadCredentials(cfg)
@@ -309,7 +309,7 @@ func logoutCmd() *cobra.Command {
 			}
 
 			if err := auth.DeleteCredentials(cfg); err != nil {
-				return fmt.Errorf("failed to delete credentials: %w", err)
+				return err
 			}
 
 			cmd.Println("Logged out successfully")
@@ -331,7 +331,7 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			if err := auth.CheckOperatorRunning(cfg); err != nil {
@@ -341,14 +341,14 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 			// Check if platform is already bootstrapped
 			bootstrapped, err := auth.CheckBootstrapStatus(cfg, "")
 			if err != nil {
-				return fmt.Errorf("failed to check bootstrap status: %w", err)
+				return err
 			}
 
 			cmd.Println("Generating ECDSA P-256 keypair in Windows Certificate Store...")
 			hostname, _ := os.Hostname()
 			csr, privKey, err := auth.GenerateWindowsCSR(fmt.Sprintf("g8e-windows-%s", hostname), useTPM)
 			if err != nil {
-				return fmt.Errorf("failed to generate Windows CSR: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 			}
 
 			var regResp *auth.RegistrationResponse
@@ -356,7 +356,7 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 				cmd.Println("Submitting CSR to Gateway for bootstrap...")
 				regResp, err = auth.BootstrapWithURL(cfg, csr, "", "", "")
 				if err != nil {
-					return fmt.Errorf("failed to submit CSR: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 				}
 			} else {
 				cmd.Println("Platform already bootstrapped. Attempting re-enrollment via CSR with mTLS...")
@@ -364,14 +364,14 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 				if err != nil {
 					// Check if this is a TLS verification error (stale trust bundle after gateway PKI regeneration)
 					if errors.Is(err, constants.ErrTrustBundleStale) {
-						return fmt.Errorf("mTLS re-enrollment failed: trust bundle is stale (gateway PKI was regenerated). To recover, run: ./g8e auth logout && ./g8e auth enroll-windows. Original error: %w", err)
+						return fmt.Errorf("%w: %w", constants.ErrTrustBundleStale, err)
 					}
-					return fmt.Errorf("failed to re-enroll: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 				}
 			}
 
 			if regResp.OperatorCert == "" {
-				return fmt.Errorf("unexpected response: missing certificate")
+				return constants.ErrMissingCertificate
 			}
 
 			cmd.Println("Importing signed certificate to Windows Certificate Store...")
@@ -381,12 +381,12 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 			}
 
 			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, privKey, cfg.OperatorCertFile(), cfg.OperatorKeyFile()); err != nil {
-				return fmt.Errorf("failed to save certificate locally: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 			}
 
 			if regResp.HubTrustBundle != "" {
 				if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
-					return fmt.Errorf("failed to save hub trust bundle: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 				}
 			}
 
@@ -398,7 +398,7 @@ NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This 
 			}
 
 			if err := auth.SaveCredentials(cfg, creds); err != nil {
-				return fmt.Errorf("failed to save credentials: %w", err)
+				return err
 			}
 
 			cmd.Printf("\nWindows enrollment complete\n")

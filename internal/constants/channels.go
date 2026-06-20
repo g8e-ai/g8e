@@ -13,30 +13,14 @@
 
 package constants
 
-import "fmt"
-
-// Channel naming convention (shared across client, agent, g8eo):
-// Channel prefixes are defined here in Go (SSOT). Reference values are also
-// available in protocol/constants/channels.json for external consumers.
+// Channel naming convention:
 //
-//	cmd:{operator_id}:{operator_session_id}       Agent -> Operator
+//	cmd:{operator_id}:{operator_session_id}        Agent -> Operator
 //	results:{operator_id}:{operator_session_id}    Operator -> Agent
 //	heartbeat:{operator_id}:{operator_session_id}  Operator -> Agent
-
-// CmdChannel returns the command channel for an g8e.
-func CmdChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("cmd:%s:%s", operatorID, operatorSessionID)
-}
-
-// ResultsChannel returns the results channel for an g8e.
-func ResultsChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("results:%s:%s", operatorID, operatorSessionID)
-}
-
-// HeartbeatChannel returns the heartbeat channel for an g8e.
-func HeartbeatChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("heartbeat:%s:%s", operatorID, operatorSessionID)
-}
+//
+// Constructors live in internal/services/pubsub.
+// Reference values in protocol/constants/channels.json for external consumers.
 
 // PubSub wire protocol action strings (used in PubSubMessage.Action).
 const (
@@ -63,38 +47,3 @@ const (
 	ChannelOperatorDevice  = "operator_device"
 	ChannelSseEvent        = "sse_event"
 )
-
-// StorageDocumentChannel returns the document storage channel for an operator.
-func StorageDocumentChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", ChannelStorageDocument, operatorID, operatorSessionID)
-}
-
-// StorageKvChannel returns the KV storage channel for an operator.
-func StorageKvChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", ChannelStorageKv, operatorID, operatorSessionID)
-}
-
-// StorageBlobChannel returns the blob storage channel for an operator.
-func StorageBlobChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", ChannelStorageBlob, operatorID, operatorSessionID)
-}
-
-// GovernanceChannel returns the governance channel for envelope submission.
-func GovernanceChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", ChannelGovernance, operatorID, operatorSessionID)
-}
-
-// OperatorIntentChannel returns the intent management channel for an operator.
-func OperatorIntentChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", ChannelOperatorIntent, operatorID, operatorSessionID)
-}
-
-// OperatorDeviceChannel returns the device management channel for an operator.
-func OperatorDeviceChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", ChannelOperatorDevice, operatorID, operatorSessionID)
-}
-
-// SseEventChannel returns the SSE event push channel.
-func SseEventChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("%s:%s:%s", ChannelSseEvent, operatorID, operatorSessionID)
-}

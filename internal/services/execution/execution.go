@@ -288,7 +288,7 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	select {
 	case es.semaphore <- struct{}{}:
 	case <-ctx.Done():
-		return nil, fmt.Errorf("execution: wait for semaphore: %w", ctx.Err())
+		return nil, fmt.Errorf("execution: wait for semaphore: %w", constants.ErrExecutionServiceStopping)
 	}
 
 	// Create timeout context - use exactly what was requested
@@ -456,7 +456,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 
 		bin, err := exec.LookPath(parts[0])
 		if err != nil {
-			return fmt.Errorf("execution: command lookup: %w", err)
+			return fmt.Errorf("execution: command lookup: %w", constants.ErrCommandLookup)
 		}
 
 		es.logger.Debug("Executing command directly",
@@ -926,19 +926,19 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 func getLoadAverage() ([]float64, error) {
 	content, err := os.ReadFile("/proc/loadavg")
 	if err != nil {
-		return nil, fmt.Errorf("execution: loadavg: read %s: %w", constants.PathProcLoadAvg, err)
+		return nil, fmt.Errorf("execution: loadavg: read %s: %w", constants.PathProcLoadAvg, constants.ErrPathNotFound)
 	}
 
 	fields := strings.Fields(string(content))
 	if len(fields) < 3 {
-		return nil, fmt.Errorf("execution: loadavg: invalid format")
+		return nil, fmt.Errorf("execution: loadavg: invalid format: %w", constants.ErrInternal)
 	}
 
 	var loads []float64
 	for i := 0; i < 3; i++ {
 		var load float64
 		if _, err := fmt.Sscanf(fields[i], "%f", &load); err != nil {
-			return nil, fmt.Errorf("execution: loadavg: parse field %d: %w", i, err)
+			return nil, fmt.Errorf("execution: loadavg: parse field %d: %w", i, constants.ErrInternal)
 		}
 		loads = append(loads, load)
 	}
@@ -949,7 +949,7 @@ func getLoadAverage() ([]float64, error) {
 func getMemoryInfo() (*models.MemoryInfo, error) {
 	file, err := os.Open(constants.PathProcMemInfo)
 	if err != nil {
-		return nil, fmt.Errorf("execution: memory: open %s: %w", constants.PathProcMemInfo, err)
+		return nil, fmt.Errorf("execution: memory: open %s: %w", constants.PathProcMemInfo, constants.ErrPathNotFound)
 	}
 	defer file.Close()
 
@@ -984,7 +984,7 @@ func getMemoryInfo() (*models.MemoryInfo, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("execution: memory: scan %s: %w", constants.PathProcMemInfo, err)
+		return nil, fmt.Errorf("execution: memory: scan %s: %w", constants.PathProcMemInfo, constants.ErrInternal)
 	}
 	return info, nil
 }

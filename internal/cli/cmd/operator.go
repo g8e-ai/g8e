@@ -56,7 +56,7 @@ func operatorListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -71,7 +71,7 @@ func operatorListCmd() *cobra.Command {
 
 			var operators []Operator
 			if err := json.Unmarshal(resp, &operators); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			if len(operators) == 0 {
@@ -104,16 +104,16 @@ func operatorCpCmd() *cobra.Command {
 
 			sourceBinary, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("failed to get running binary path: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
 			}
 
 			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("operator binary not found at %s", sourceBinary)
+				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
 			}
 
 			targetInfo, err := os.Stat(target)
 			if err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("failed to stat target: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
 			}
 
 			var destPath string
@@ -125,7 +125,7 @@ func operatorCpCmd() *cobra.Command {
 			}
 
 			if err := copyFile(sourceBinary, destPath); err != nil {
-				return fmt.Errorf("failed to copy binary: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 			}
 
 			cmd.Printf("Copied operator binary to %s\n", destPath)
@@ -154,11 +154,11 @@ func operatorScpCmd() *cobra.Command {
 
 			sourceBinary, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("failed to get running binary path: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
 			}
 
 			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("operator binary not found at %s", sourceBinary)
+				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
 			}
 
 			if prompt {
@@ -180,7 +180,7 @@ func operatorScpCmd() *cobra.Command {
 			scpCmd.Stdin = cmd.InOrStdin()
 
 			if err := scpCmd.Run(); err != nil {
-				return fmt.Errorf("scp failed: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandSSHDial, err)
 			}
 
 			cmd.Printf("Successfully copied operator binary to %s\n", target)
@@ -319,16 +319,16 @@ func operatorDeployCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			creds, err := auth.LoadCredentials(cfg)
 			if err != nil || creds == nil {
-				return fmt.Errorf("not authenticated. Please run './g8e auth enroll' first")
+				return fmt.Errorf("%w: Please run './g8e auth enroll' first", constants.ErrNotAuthenticated)
 			}
 
 			if hosts == "" {
-				return fmt.Errorf("--hosts flag is required (comma-separated list of hosts)")
+				return fmt.Errorf("%w: --hosts flag is required (comma-separated list of hosts)", constants.ErrMissingRequiredField)
 			}
 
 			hostList := strings.Split(hosts, ",")
@@ -338,11 +338,11 @@ func operatorDeployCmd() *cobra.Command {
 
 			sourceBinary, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("failed to get running binary path: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
 			}
 
 			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("operator binary not found at %s", sourceBinary)
+				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
 			}
 
 			cmd.Printf("Deploying operator to %d hosts: %s\n", len(hostList), strings.Join(hostList, ", "))
@@ -445,16 +445,16 @@ func operatorStreamCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			creds, err := auth.LoadCredentials(cfg)
 			if err != nil || creds == nil {
-				return fmt.Errorf("not authenticated. Please run './g8e auth enroll' first")
+				return fmt.Errorf("%w: Please run './g8e auth enroll' first", constants.ErrNotAuthenticated)
 			}
 
 			if hosts == "" {
-				return fmt.Errorf("--hosts flag is required (comma-separated list of hosts)")
+				return fmt.Errorf("%w: --hosts flag is required (comma-separated list of hosts)", constants.ErrMissingRequiredField)
 			}
 
 			hostList := strings.Split(hosts, ",")
@@ -464,18 +464,18 @@ func operatorStreamCmd() *cobra.Command {
 
 			sourceBinary, err := os.Executable()
 			if err != nil {
-				return fmt.Errorf("failed to get running binary path: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
 			}
 
 			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("operator binary not found at %s", sourceBinary)
+				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
 			}
 
 			cmd.Printf("Streaming operator to %d hosts: %s\n", len(hostList), strings.Join(hostList, ", "))
 
 			binaryData, err := os.ReadFile(sourceBinary)
 			if err != nil {
-				return fmt.Errorf("failed to read binary: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
 			}
 
 			for _, host := range hostList {
@@ -493,7 +493,7 @@ func operatorStreamCmd() *cobra.Command {
 				sshCmd := exec.Command("ssh", sshArgs...)
 				stdin, err := sshCmd.StdinPipe()
 				if err != nil {
-					return fmt.Errorf("failed to create stdin pipe: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 				}
 
 				sshCmd.Stdout = cmd.OutOrStdout()

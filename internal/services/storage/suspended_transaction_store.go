@@ -22,10 +22,50 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
+
+//go:generate mockery --name SuspendedTransactionStore --output ./mocks --dir .
+
+// SuspendedTransactionStore defines the interface for L3 approval workflow storage.
+// This service stores transactions awaiting human approval.
+//
+// All methods that return errors must wrap errors with context using
+// fmt.Errorf("suspended_transaction_store: action: %w", err) to provide clear error attribution.
+type SuspendedTransactionStore interface {
+	// StoreSuspendedTransaction stores a transaction awaiting L3 approval.
+	// Returns an error if storage fails, wrapping the underlying error with context.
+	StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error
+
+	// GetSuspendedTransaction retrieves a suspended transaction by hash.
+	// Returns (nil, false) if not found or expired.
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error)
+
+	// ListSuspendedTransactions retrieves all non-expired suspended transactions.
+	// Optionally filters by user_id if provided.
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	ListSuspendedTransactions(ctx context.Context, userID string) ([]*models.SuspendedTransaction, error)
+
+	// ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
+	// Returns an error if approval fails, wrapping the underlying error with context.
+	ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error
+
+	// DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
+	// Returns an error if deletion fails, wrapping the underlying error with context.
+	DeleteSuspendedTransaction(ctx context.Context, txHash string) error
+
+	// CleanupExpiredSuspendedTransactions removes expired suspended transactions.
+	// Returns the count of deleted transactions.
+	// Returns an error if cleanup fails, wrapping the underlying error with context.
+	CleanupExpiredSuspendedTransactions(ctx context.Context) (int64, error)
+
+	// GetExpiredSuspendedTransactions retrieves expired suspended transactions for audit.
+	// Returns the list of expired transactions with their full details.
+	// Returns an error if retrieval fails, wrapping the underlying error with context.
+	GetExpiredSuspendedTransactions(ctx context.Context) ([]*models.SuspendedTransaction, error)
+}
 
 // SuspendedTransactionConfig holds configuration for the suspended transaction store service.
 type SuspendedTransactionConfig struct {
@@ -56,8 +96,8 @@ type SuspendedTransactionService struct {
 	wg sync.WaitGroup
 }
 
-// Ensure SuspendedTransactionService implements interfaces.SuspendedTransactionStore.
-var _ interfaces.SuspendedTransactionStore = (*SuspendedTransactionService)(nil)
+// Ensure SuspendedTransactionService implements SuspendedTransactionStore.
+var _ SuspendedTransactionStore = (*SuspendedTransactionService)(nil)
 
 // NewSuspendedTransactionService creates a new suspended transaction store service.
 func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *slog.Logger) (*SuspendedTransactionService, error) {

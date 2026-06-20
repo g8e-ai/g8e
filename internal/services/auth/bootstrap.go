@@ -98,7 +98,7 @@ func NewBootstrapService(cfg *config.Config, logger *slog.Logger, tlsConfig *cer
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap: failed to configure TLS: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapTLSConfig, err)
 	}
 
 	return &BootstrapService{
@@ -131,7 +131,7 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 
 	fingerprint, err := GenerateSystemFingerprint(bs.logger)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap: failed to generate system fingerprint: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapFingerprint, err)
 	}
 
 	bs.config.SystemFingerprint = fingerprint.Fingerprint
@@ -142,7 +142,7 @@ func (bs *BootstrapService) RequestBootstrapConfig(ctx context.Context) (*Bootst
 
 	bootstrapConfig, err := bs.requestHTTPAuth(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap: failed to authenticate: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapAuth, err)
 	}
 
 	bs.logger.Info("Authentication successful")
@@ -173,7 +173,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("bootstrap: failed to marshal auth request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapRequestMarshal, err)
 	}
 
 	// Use g8e.local for the hostname when endpoint is an IP address to match TLS ServerName
@@ -206,7 +206,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 		req, err := http.NewRequestWithContext(ctx, "POST", authURL, bytes.NewReader(bodyBytes))
 		if err != nil {
-			return nil, fmt.Errorf("bootstrap: failed to build auth request: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapRequestBuild, err)
 		}
 		req.Header.Set(constants.HeaderContentType, "application/json")
 		req.Header.Set(constants.HeaderXRequestTimestamp, sqliteutil.NowTimestamp())
@@ -215,18 +215,18 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 
 		resp, err := bs.httpClient.Do(req)
 		if err != nil {
-			lastErr = fmt.Errorf("bootstrap: authentication request failed: %w", err)
+			lastErr = fmt.Errorf("%w: %w", constants.ErrBootstrapRequestExecute, err)
 			continue
 		}
 
 		respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
 		closeErr := resp.Body.Close()
 		if err != nil {
-			lastErr = fmt.Errorf("bootstrap: failed to read auth response: %w", err)
+			lastErr = fmt.Errorf("%w: %w", constants.ErrBootstrapResponseRead, err)
 			continue
 		}
 		if closeErr != nil {
-			lastErr = fmt.Errorf("bootstrap: failed to close response body: %w", closeErr)
+			lastErr = fmt.Errorf("%w: %w", constants.ErrBootstrapResponseClose, closeErr)
 			continue
 		}
 
@@ -245,33 +245,33 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 			if msg != "" {
 				// If it's a 4xx error (client error), don't retry unless it's a 429
 				if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != http.StatusTooManyRequests {
-					return nil, fmt.Errorf("bootstrap: authentication failed (status %d): %s", resp.StatusCode, msg)
+					return nil, fmt.Errorf("%w (status %d): %s", constants.ErrBootstrapResponseStatus, resp.StatusCode, msg)
 				}
-				lastErr = fmt.Errorf("bootstrap: authentication failed (status %d): %s", resp.StatusCode, msg)
+				lastErr = fmt.Errorf("%w (status %d): %s", constants.ErrBootstrapResponseStatus, resp.StatusCode, msg)
 			} else {
-				lastErr = fmt.Errorf("bootstrap: authentication failed with status %d", resp.StatusCode)
+				lastErr = fmt.Errorf("%w: %d", constants.ErrBootstrapResponseStatus, resp.StatusCode)
 			}
 			continue
 		}
 
 		var authResp AuthServicesResponse
 		if err := json.Unmarshal(respBody, &authResp); err != nil {
-			lastErr = fmt.Errorf("bootstrap: failed to decode auth response: %w", err)
+			lastErr = fmt.Errorf("%w: %w", constants.ErrBootstrapResponseDecode, err)
 			continue
 		}
 
 		if !authResp.Success {
 			// Success=false in the JSON body is a logical failure, usually shouldn't be retried
 			// unless it's a transient server issue.
-			return nil, fmt.Errorf("bootstrap: authentication failed: %s", httpclient.ExtractErrorMessage(authResp.Error))
+			return nil, fmt.Errorf("%w: %s", constants.ErrBootstrapAuthFailed, httpclient.ExtractErrorMessage(authResp.Error))
 		}
 
 		if authResp.Config == nil {
-			return nil, fmt.Errorf("bootstrap: no configuration returned from Auth Services")
+			return nil, constants.ErrBootstrapNoConfig
 		}
 
 		if authResp.OperatorSessionId == "" {
-			return nil, fmt.Errorf("bootstrap: no operator_session_id returned from Auth Services")
+			return nil, constants.ErrBootstrapNoSessionID
 		}
 
 		authResp.Config.OperatorSessionId = authResp.OperatorSessionId
@@ -281,7 +281,7 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		return authResp.Config, nil
 	}
 
-	return nil, fmt.Errorf("bootstrap: authentication failed after %d attempts: %w", bootstrapMaxAttempts, lastErr)
+	return nil, fmt.Errorf("%w after %d attempts: %w", constants.ErrBootstrapAuth, bootstrapMaxAttempts, lastErr)
 }
 
 func (bs *BootstrapService) SetHTTPClient(client *http.Client) {
@@ -320,7 +320,7 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 			// failure so ExitCodeFromError maps it to ExitCertTrustFailure (7).
 			bs.logger.Error("Per-operator mTLS certificate is invalid; aborting startup",
 				string(constants.ConnectionStateError), err)
-			return fmt.Errorf("bootstrap: cert trust failure: per-operator mTLS cert invalid: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrBootstrapCertTrust, err)
 		}
 		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate (in-memory)")
 	}
@@ -333,19 +333,19 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 func (bs *BootstrapService) rebuildTransportWithOperatorCert(certPEM, keyPEM string) error {
 	operatorCert, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
 	if err != nil {
-		return fmt.Errorf("bootstrap: failed to parse per-operator cert+key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrBootstrapCertParse, err)
 	}
 
 	var baseTLSConfig *tls.Config
 	if bs.tlsConfig != nil {
 		baseTLSConfig, err = bs.tlsConfig.GetTLSConfig()
 		if err != nil {
-			return fmt.Errorf("bootstrap: failed to get base TLS config from DI: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrBootstrapTLSConfigDI, err)
 		}
 	} else {
 		baseTLSConfig, err = certs.GetTLSConfig()
 		if err != nil {
-			return fmt.Errorf("bootstrap: failed to get base TLS config: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrBootstrapTLSConfigLegacy, err)
 		}
 	}
 

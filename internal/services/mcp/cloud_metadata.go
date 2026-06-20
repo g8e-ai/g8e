@@ -22,6 +22,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // CloudMetadataTool provides cloud provider metadata detection and information for AWS, Azure, and GCP.
@@ -57,7 +59,7 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 		Operation string `json:"operation"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	if req.Operation == "" {
@@ -107,7 +109,7 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 	case "all":
 		result, err = getAllMetadata(provider)
 	default:
-		return CallToolResult{}, fmt.Errorf("unsupported operation: %s", req.Operation)
+		return CallToolResult{}, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataInvalidOperation, req.Operation)
 	}
 
 	if err != nil {
@@ -120,7 +122,7 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 
 	resultJSON, marshalErr := json.Marshal(result)
 	if marshalErr != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", marshalErr)
+		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPMarshalResult, marshalErr)
 	}
 
 	return CallToolResult{
@@ -198,7 +200,7 @@ func httpGetWithTimeout(url string, headers map[string]string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
+		return "", fmt.Errorf("%w: %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -218,7 +220,7 @@ func getInstanceMetadata(provider string) (map[string]interface{}, error) {
 	case "gcp":
 		return getGCPInstanceMetadata()
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
+		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 
@@ -320,7 +322,7 @@ func getRegion(provider string) (map[string]interface{}, error) {
 			"region":   region,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
+		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 
@@ -370,7 +372,7 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 			"availability_zone": zone,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
+		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 
@@ -420,7 +422,7 @@ func getInstanceType(provider string) (map[string]interface{}, error) {
 			"instance_type": machineType,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
+		return nil, fmt.Errorf("%w: %s", constants.ErrMCPValidateCloudMetadataUnsupportedProvider, provider)
 	}
 }
 

@@ -28,13 +28,26 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/sliceutil"
 )
+
+// netInterfacesFunc is a function type for getting network interfaces.
+// This allows dependency injection for testing.
+type netInterfacesFunc func() ([]net.Interface, error)
+
+// defaultNetInterfaces is the default implementation using net.Interfaces.
+func defaultNetInterfaces() ([]net.Interface, error) {
+	return net.Interfaces()
+}
 
 // GetExternalInterfaceIP returns the first non-loopback IPv4 address found on the host.
 // This is used for the Operator Bootstrap endpoint which remote operators rely on.
 func GetExternalInterfaceIP() string {
-	ifaces, err := net.Interfaces()
+	return getExternalInterfaceIPWithFunc(defaultNetInterfaces)
+}
+
+// getExternalInterfaceIPWithFunc is the testable implementation that accepts a netInterfaces function.
+func getExternalInterfaceIPWithFunc(getInterfaces netInterfacesFunc) string {
+	ifaces, err := getInterfaces()
 	if err != nil {
 		return "localhost"
 	}
@@ -295,30 +308,36 @@ func (d *Detector) detectIPs() ([]string, error) {
 
 // detectHostnames detects hostnames from /etc/hostname and hostname command.
 func (d *Detector) detectHostnames() ([]string, error) {
-	hostnames := make([]string, 0)
+	hostnameSet := make(map[string]bool)
 
 	// Try /etc/hostname first
 	if hostname, err := os.ReadFile(constants.PathEtcHostname); err == nil {
 		hn := strings.TrimSpace(string(hostname))
 		if hn != "" {
-			hostnames = append(hostnames, hn)
+			hostnameSet[hn] = true
 		}
 	}
 
 	// Try hostname command as fallback
 	if hn, err := exec.Command("hostname").Output(); err == nil {
 		hostname := strings.TrimSpace(string(hn))
-		if hostname != "" && !sliceutil.Contains(hostnames, hostname) {
-			hostnames = append(hostnames, hostname)
+		if hostname != "" {
+			hostnameSet[hostname] = true
 		}
 	}
 
 	// Try hostname -f for FQDN
 	if fqdn, err := exec.Command("hostname", "-f").Output(); err == nil {
 		fqdnStr := strings.TrimSpace(string(fqdn))
-		if fqdnStr != "" && !sliceutil.Contains(hostnames, fqdnStr) {
-			hostnames = append(hostnames, fqdnStr)
+		if fqdnStr != "" {
+			hostnameSet[fqdnStr] = true
 		}
+	}
+
+	// Convert set to slice
+	hostnames := make([]string, 0, len(hostnameSet))
+	for hn := range hostnameSet {
+		hostnames = append(hostnames, hn)
 	}
 
 	return hostnames, nil
@@ -387,7 +406,7 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 
 // detectMDNS detects mDNS/Bonjour *.local names.
 func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
-	mdnsNames := make([]string, 0)
+	mdnsSet := make(map[string]bool)
 
 	// Get hostname and append .local
 	hostnames, err := d.detectHostnames()
@@ -398,7 +417,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 	for _, hn := range hostnames {
 		// Skip if already has .local
 		if !strings.HasSuffix(hn, ".local") {
-			mdnsNames = append(mdnsNames, hn+".local")
+			mdnsSet[hn+".local"] = true
 		}
 	}
 
@@ -415,8 +434,8 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 				if strings.Contains(line, ".local") {
 					fields := strings.Fields(line)
 					for _, field := range fields {
-						if strings.HasSuffix(field, ".local") && !sliceutil.Contains(mdnsNames, field) {
-							mdnsNames = append(mdnsNames, field)
+						if strings.HasSuffix(field, ".local") {
+							mdnsSet[field] = true
 						}
 					}
 				}
@@ -437,14 +456,20 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 					if strings.Contains(line, ".local") {
 						fields := strings.Fields(line)
 						for _, field := range fields {
-							if strings.HasSuffix(field, ".local") && !sliceutil.Contains(mdnsNames, field) {
-								mdnsNames = append(mdnsNames, field)
+							if strings.HasSuffix(field, ".local") {
+								mdnsSet[field] = true
 							}
 						}
 					}
 				}
 			}
 		}
+	}
+
+	// Convert set to slice
+	mdnsNames := make([]string, 0, len(mdnsSet))
+	for name := range mdnsSet {
+		mdnsNames = append(mdnsNames, name)
 	}
 
 	return mdnsNames, nil
@@ -482,7 +507,7 @@ func (d *Detector) detectDNSPTRs(ctx context.Context, ips []string) ([]DNSPTRRec
 
 // detectSSHKnownHosts checks SSH known_hosts for hostnames pointing to this machine.
 func (d *Detector) detectSSHKnownHosts() ([]string, error) {
-	hostnames := make([]string, 0)
+	hostnameSet := make(map[string]bool)
 
 	// Get local IPs
 	localIPs, err := d.detectIPs()
@@ -542,12 +567,12 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 			if strings.Contains(hostPattern, ",") {
 				parts := strings.Split(hostPattern, ",")
 				for _, part := range parts {
-					if !localIPSet[part] && !sliceutil.Contains(hostnames, part) {
-						hostnames = append(hostnames, part)
+					if !localIPSet[part] {
+						hostnameSet[part] = true
 					}
 				}
-			} else if !localIPSet[hostPattern] && !sliceutil.Contains(hostnames, hostPattern) {
-				hostnames = append(hostnames, hostPattern)
+			} else if !localIPSet[hostPattern] {
+				hostnameSet[hostPattern] = true
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -558,23 +583,43 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 		file.Close()
 	}
 
+	// Convert set to slice
+	hostnames := make([]string, 0, len(hostnameSet))
+	for hn := range hostnameSet {
+		hostnames = append(hostnames, hn)
+	}
+
 	// Return empty slice if no hostnames found (not an error - files may not exist)
 	return hostnames, nil
 }
 
+// commandExecutor is a function type for executing commands.
+// This allows dependency injection for testing.
+type commandExecutor func(name string, args ...string) ([]byte, error)
+
+// defaultCommandExecutor is the default implementation using exec.Command.
+func defaultCommandExecutor(name string, args ...string) ([]byte, error) {
+	return exec.Command(name, args...).Output()
+}
+
 // detectWindowsIdentity detects Windows-specific network identities.
 func (d *Detector) detectWindowsIdentity() (WindowsIdentity, error) {
+	return d.detectWindowsIdentityWithExecutor(defaultCommandExecutor)
+}
+
+// detectWindowsIdentityWithExecutor is the testable implementation that accepts a command executor.
+func (d *Detector) detectWindowsIdentityWithExecutor(executor commandExecutor) (WindowsIdentity, error) {
 	var winID WindowsIdentity
 
 	// Try to get NetBIOS name using hostname command
-	hn, err := exec.Command("hostname").Output()
+	hn, err := executor("hostname")
 	if err != nil {
 		return winID, fmt.Errorf("network: %s: %w", constants.ErrNetworkGetHostname, err)
 	}
 	winID.NetBIOSName = strings.TrimSpace(string(hn))
 
 	// Try to get AD FQDN using systeminfo
-	info, err := exec.Command("systeminfo").Output()
+	info, err := executor("systeminfo")
 	if err != nil {
 		return winID, fmt.Errorf("network: %s: %w", constants.ErrNetworkGetSysteminfo, err)
 	}
@@ -629,7 +674,15 @@ func (ni *NetworkIdentity) GetAllDNSNames() []string {
 	names = append(names, "localhost")
 
 	// Deduplicate
-	return sliceutil.Unique(names)
+	seen := make(map[string]bool)
+	var unique []string
+	for _, name := range names {
+		if !seen[name] {
+			seen[name] = true
+			unique = append(unique, name)
+		}
+	}
+	return unique
 }
 
 // GetAllIPs returns all IP addresses that should be included in the certificate.

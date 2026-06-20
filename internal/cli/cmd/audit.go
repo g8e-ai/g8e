@@ -59,22 +59,22 @@ func auditReceiptsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
 				creds, err := auth.LoadCredentials(cfg)
 				if err != nil {
-					return fmt.Errorf("failed to load credentials: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
+					return constants.ErrNotAuthenticated
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -93,7 +93,7 @@ func auditReceiptsCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			if jsonOutput {
@@ -103,7 +103,7 @@ func auditReceiptsCmd() *cobra.Command {
 
 			var receiptsResp models.AuditReceiptsResponse
 			if err := json.Unmarshal(resp, &receiptsResp); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			if len(receiptsResp.Receipts) == 0 {
@@ -172,22 +172,22 @@ func auditExportCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
 				creds, err := auth.LoadCredentials(cfg)
 				if err != nil {
-					return fmt.Errorf("failed to load credentials: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
+					return constants.ErrNotAuthenticated
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -200,15 +200,15 @@ func auditExportCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			// Write to file
 			if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-				return fmt.Errorf("failed to create output directory: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 			if err := os.WriteFile(outPath, resp, 0644); err != nil {
-				return fmt.Errorf("failed to write export file: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 			}
 
 			cmd.Printf("Receipts export written to: %s (%d bytes)\n", outPath, len(resp))
@@ -232,22 +232,22 @@ func auditReportCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
 				creds, err := auth.LoadCredentials(cfg)
 				if err != nil {
-					return fmt.Errorf("failed to load credentials: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
+					return constants.ErrNotAuthenticated
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -260,7 +260,7 @@ func auditReportCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			var reportResp struct {
@@ -276,17 +276,17 @@ func auditReportCmd() *cobra.Command {
 				} `json:"report"`
 			}
 			if err := json.Unmarshal(resp, &reportResp); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			// Write report to file
 			if err := os.MkdirAll(outDir, 0755); err != nil {
-				return fmt.Errorf("failed to create output directory: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 
 			jsonPath := filepath.Join(outDir, constants.ComplianceReportFilename)
 			if err := os.WriteFile(jsonPath, resp, 0644); err != nil {
-				return fmt.Errorf("failed to write JSON report: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 			}
 
 			cmd.Println("Compliance report written:")
@@ -316,29 +316,29 @@ func auditEventsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
 				creds, err := auth.LoadCredentials(cfg)
 				if err != nil {
-					return fmt.Errorf("failed to load credentials: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
+					return constants.ErrNotAuthenticated
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
 
 			// Validate limit
 			if limit < 1 || limit > 10000 {
-				return fmt.Errorf("limit must be between 1 and 10000")
+				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
 			// Build query path
@@ -351,7 +351,7 @@ func auditEventsCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			if jsonOutput {
@@ -372,7 +372,7 @@ func auditEventsCmd() *cobra.Command {
 				Count int `json:"count"`
 			}
 			if err := json.Unmarshal(resp, &eventsResp); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			if len(eventsResp.Events) == 0 {
@@ -432,22 +432,22 @@ func auditSummaryCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
 			if operatorSessionID == "" {
 				creds, err := auth.LoadCredentials(cfg)
 				if err != nil {
-					return fmt.Errorf("failed to load credentials: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 				}
 				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth enroll' first")
+					return constants.ErrNotAuthenticated
 				}
 				operatorSessionID = creds.OperatorSessionID
 			}
@@ -460,7 +460,7 @@ func auditSummaryCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			var summaryResp struct {
@@ -472,7 +472,7 @@ func auditSummaryCmd() *cobra.Command {
 				TotalRecords    int            `json:"total_records"`
 			}
 			if err := json.Unmarshal(resp, &summaryResp); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			if summaryResp.TotalRecords == 0 {

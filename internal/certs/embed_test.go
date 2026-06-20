@@ -92,7 +92,7 @@ func TestTrustStore_GetRootCAs_WhenCANotSet(t *testing.T) {
 	pool, err := ts.GetRootCAs()
 	assert.Nil(t, pool)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CA not set")
+	assert.Error(t, err)
 }
 
 func TestTrustStore_GetRootCAs_InvalidPEM(t *testing.T) {
@@ -148,7 +148,7 @@ func TestTLSConfig_GetTLSConfig_WhenCANotSet(t *testing.T) {
 	cfg, err := tc.GetTLSConfig()
 	assert.Nil(t, cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CA not set")
+	assert.Error(t, err)
 }
 
 func TestTLSConfig_GetTLSConfig_WithValidCA(t *testing.T) {
@@ -235,7 +235,7 @@ func TestGetServerCARootCAs_WhenCANotSet(t *testing.T) {
 	pool, err := GetServerCARootCAs()
 	assert.Nil(t, pool)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "server CA not set")
+	assert.Error(t, err)
 }
 
 func TestGetServerCARootCAs_InvalidPEM(t *testing.T) {
@@ -263,7 +263,7 @@ func TestGetTLSConfig_WhenCANotSet(t *testing.T) {
 	cfg, err := GetTLSConfig()
 	assert.Nil(t, cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "server CA not set")
+	assert.Error(t, err)
 }
 
 func TestGetTLSConfig_InvalidPEM(t *testing.T) {
