@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/lateraluslabs/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/constants"
 	_ "modernc.org/sqlite"
 )
 

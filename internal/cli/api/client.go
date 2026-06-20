@@ -91,7 +91,7 @@ func NewClientWithURL(cfg *config.Config, baseURL string) (*Client, error) {
 func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
-	bodyBytes, err := json.Marshal(body)
+		bodyBytes, err := json.Marshal(body)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 		}

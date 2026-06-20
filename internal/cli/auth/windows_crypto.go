@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Windows WebAuthn API constants - Using API Version 4 (stable, modern version)

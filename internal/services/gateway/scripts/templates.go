@@ -21,7 +21,7 @@ import (
 	"sync"
 	"text/template"
 
-	"g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 //go:embed g8e-operator.sh

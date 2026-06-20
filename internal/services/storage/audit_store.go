@@ -60,7 +60,6 @@ func DefaultAuditStoreConfig() *AuditStoreConfig {
 	}
 }
 
-
 // FileMutationOperation represents the type of file operation
 type FileMutationOperation string
 

@@ -14,7 +14,6 @@
 package mcp
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"

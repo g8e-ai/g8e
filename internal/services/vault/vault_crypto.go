@@ -42,7 +42,6 @@ const (
 	aesKWDefaultIVLow  = 0xA6A6A6A6
 )
 
-
 // DeriveKEK derives a Key Encryption Key from private key bytes using HKDF-SHA256.
 func DeriveKEK(privateKey []byte) ([]byte, error) {
 	if len(privateKey) == 0 {
