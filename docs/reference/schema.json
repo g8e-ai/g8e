@@ -400,39 +400,6 @@
       "required": ["resourceTemplates"],
       "type": "object"
     },
-    "ToolsListResult": {
-      "description": "The result of a tools/list request.",
-      "properties": {
-        "tools": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/Tool" }
-        }
-      },
-      "required": ["tools"],
-      "type": "object"
-    },
-    "ResourcesListResult": {
-      "description": "The result of a resources/list request.",
-      "properties": {
-        "resources": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/Resource" }
-        }
-      },
-      "required": ["resources"],
-      "type": "object"
-    },
-    "PromptsListResult": {
-      "description": "The result of a prompts/list request.",
-      "properties": {
-        "prompts": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/Prompt" }
-        }
-      },
-      "required": ["prompts"],
-      "type": "object"
-    },
     "A2ACallRequest": {
       "description": "Arguments for an a2a/call request (g8e extension).",
       "properties": {

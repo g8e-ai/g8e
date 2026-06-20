@@ -113,7 +113,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var mcpResp struct {
-			Result mcp.ListResourcesResult `json:"result"`
+			Result mcp.ResourcesListResult `json:"result"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
@@ -129,7 +129,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		defer resp.Body.Close()
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		var mcpResp struct {
-			Result mcp.ListPromptsResult `json:"result"`
+			Result mcp.PromptsListResult `json:"result"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)

@@ -75,8 +75,8 @@ func TestResourceModelsJSON(t *testing.T) {
 		assert.Contains(t, string(data), `"metadata":{"custom":{"key":"value"}}`)
 	})
 
-	t.Run("ListResourcesResult marshalling", func(t *testing.T) {
-		res := ListResourcesResult{
+	t.Run("ResourcesListResult marshalling", func(t *testing.T) {
+		res := ResourcesListResult{
 			Resources: []Resource{
 				{URI: "uri1", Name: "name1"},
 				{URI: "uri2", Name: "name2"},
@@ -84,7 +84,7 @@ func TestResourceModelsJSON(t *testing.T) {
 		}
 		data, err := json.Marshal(res)
 		require.NoError(t, err)
-		var decoded ListResourcesResult
+		var decoded ResourcesListResult
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 		assert.Len(t, decoded.Resources, 2)

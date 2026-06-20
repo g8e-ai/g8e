@@ -166,7 +166,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 				resp := mcp.JSONRPCResponse{
 					JSONRPC: "2.0",
 					ID:      1,
-					Result:  mustMarshal(mcp.ListResourcesResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
+					Result:  mustMarshal(mcp.ResourcesListResult{Resources: []mcp.Resource{{URI: "file:///test.txt", Name: "test.txt"}}}),
 				}
 				if err := json.NewEncoder(w).Encode(resp); err != nil {
 					t.Logf("Failed to encode response: %v", err)
@@ -175,7 +175,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 				resp := mcp.JSONRPCResponse{
 					JSONRPC: "2.0",
 					ID:      1,
-					Result:  mustMarshal(mcp.ListPromptsResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
+					Result:  mustMarshal(mcp.PromptsListResult{Prompts: []mcp.Prompt{{Name: "test-prompt", Description: "A test prompt"}}}),
 				}
 				if err := json.NewEncoder(w).Encode(resp); err != nil {
 					t.Logf("Failed to encode response: %v", err)

@@ -103,7 +103,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 		defer resp.Body.Close()
 
 		var mcpResp struct {
-			Result mcp.ListResourcesResult `json:"result"`
+			Result mcp.ResourcesListResult `json:"result"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
 		t.Logf("Resources listed: %d resources", len(mcpResp.Result.Resources))
@@ -119,7 +119,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 		defer resp.Body.Close()
 
 		var mcpResp struct {
-			Result mcp.ListPromptsResult `json:"result"`
+			Result mcp.PromptsListResult `json:"result"`
 		}
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&mcpResp))
 		t.Logf("Prompts listed: %d prompts", len(mcpResp.Result.Prompts))
