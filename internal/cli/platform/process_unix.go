@@ -69,13 +69,6 @@ func (c realCommandExecutor) Run(cmd *exec.Cmd) error {
 	return cmd.Run()
 }
 
-// osCommandFactory is a legacy wrapper, we should eventually move to CommandExecutor directly
-type osCommandFactory struct{}
-
-func (f osCommandFactory) Command(name string, args ...string) CommandExecutor {
-	return realCommandExecutor{}
-}
-
 // sleeper is an interface for sleep operations (for testing)
 type sleeper interface {
 	Sleep(d time.Duration)
