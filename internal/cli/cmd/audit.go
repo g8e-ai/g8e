@@ -64,7 +64,7 @@ func auditReceiptsCmd() *cobra.Command {
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -93,7 +93,7 @@ func auditReceiptsCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			if jsonOutput {
@@ -177,7 +177,7 @@ func auditExportCmd() *cobra.Command {
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -200,7 +200,7 @@ func auditExportCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			// Write to file
@@ -208,7 +208,7 @@ func auditExportCmd() *cobra.Command {
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 			if err := os.WriteFile(outPath, resp, 0644); err != nil {
-				return fmt.Errorf("%w: failed to write export file: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 			}
 
 			cmd.Printf("Receipts export written to: %s (%d bytes)\n", outPath, len(resp))
@@ -237,7 +237,7 @@ func auditReportCmd() *cobra.Command {
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -260,7 +260,7 @@ func auditReportCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			var reportResp struct {
@@ -286,7 +286,7 @@ func auditReportCmd() *cobra.Command {
 
 			jsonPath := filepath.Join(outDir, constants.ComplianceReportFilename)
 			if err := os.WriteFile(jsonPath, resp, 0644); err != nil {
-				return fmt.Errorf("%w: failed to write JSON report: %w", constants.ErrInternal, err)
+				return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 			}
 
 			cmd.Println("Compliance report written:")
@@ -321,7 +321,7 @@ func auditEventsCmd() *cobra.Command {
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -351,7 +351,7 @@ func auditEventsCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			if jsonOutput {
@@ -437,7 +437,7 @@ func auditSummaryCmd() *cobra.Command {
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to create API client", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -460,7 +460,7 @@ func auditSummaryCmd() *cobra.Command {
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: failed to fetch audit data", err)
 			}
 
 			var summaryResp struct {

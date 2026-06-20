@@ -370,9 +370,14 @@ func dataAuditSummaryCmd() *cobra.Command {
 func sqlDBQuery(dbPath, query string, args ...interface{}) (*sql.Rows, error) {
 	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", constants.ErrSQLDatabaseOpenFailed, err)
 	}
 	defer db.Close()
 
-	return db.Query(query, args...)
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrSQLQueryFailed, err)
+	}
+
+	return rows, nil
 }

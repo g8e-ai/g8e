@@ -61,10 +61,32 @@ var (
 	ErrInvalidLogLevel      = errors.New("invalid log level")
 
 	// Keystore errors
-	ErrKeyStoreKeyNotFound = errors.New("master key not found in OS key store")
-	ErrKeyStoreLocked      = errors.New("OS key store is locked/unavailable")
-	ErrInvalidCiphertext   = errors.New("invalid ciphertext or authentication failed")
-	ErrOSNotSupported      = errors.New("OS not supported for OS-native key store")
+	ErrKeyStoreKeyNotFound       = errors.New("master key not found in OS key store")
+	ErrKeyStoreLocked            = errors.New("OS key store is locked/unavailable")
+	ErrInvalidCiphertext         = errors.New("invalid ciphertext or authentication failed")
+	ErrOSNotSupported            = errors.New("OS not supported for OS-native key store")
+	ErrKeyStoreSecurityNotFound  = errors.New("keychain: security command not found")
+	ErrKeyStoreRetrieveFailed    = errors.New("keychain: retrieve master key failed")
+	ErrKeyStoreDecodeFailed      = errors.New("keychain: decode base64 key failed")
+	ErrKeyStoreStoreFailed       = errors.New("keychain: store master key failed")
+	ErrKeyStoreDeleteFailed      = errors.New("keychain: delete master key failed")
+	ErrKeyStoreInvalidKeyLength  = errors.New("master key has invalid length")
+	ErrKeyStoreGenerateFailed    = errors.New("failed to generate master key")
+	ErrKeyStoreCipherCreate      = errors.New("failed to create AES cipher")
+	ErrKeyStoreGCMCreate         = errors.New("failed to create GCM mode")
+	ErrKeyStoreNonceGenerate     = errors.New("failed to generate nonce")
+	ErrKeyStoreUnsupportedVersion = errors.New("unsupported secret version")
+	ErrKeyStoreMarshalFailed     = errors.New("failed to marshal encrypted secret")
+	ErrKeyStoreWriteFailed       = errors.New("failed to write encrypted secret")
+	ErrKeyStoreRenameFailed      = errors.New("failed to atomic rename")
+	ErrKeyStoreReadFailed        = errors.New("failed to read encrypted secret")
+	ErrKeyStoreUnmarshalFailed   = errors.New("failed to unmarshal encrypted secret")
+	ErrKeyStoreDecodeBase64      = errors.New("failed to decode base64 ciphertext")
+	ErrKeyStoreDeleteSecret      = errors.New("failed to delete secret")
+	ErrKeyStoreReadDir           = errors.New("failed to read secrets directory")
+	ErrKeyStoreDeleteFile        = errors.New("failed to delete secret file")
+	ErrKeyStoreChmodDir          = errors.New("failed to chmod secrets directory")
+	ErrKeyStoreChmodFile         = errors.New("failed to chmod secret file")
 
 	// Ledger errors
 	ErrLedgerDisabled       = errors.New("ledger is disabled")
@@ -141,6 +163,8 @@ var (
 	ErrMCPHostPortRequired   = errors.New("host and port required")
 	ErrMCPGetAbsolutePath    = errors.New("get absolute path")
 	ErrMCPGetDiskFreeSpaceEx = errors.New("GetDiskFreeSpaceExW failed")
+	ErrMCPDatabasePathRequired = errors.New("database_path and query required")
+	ErrMCPGetColumnsFailed   = errors.New("failed to get columns")
 
 	// MCP registry errors
 	ErrMCPSchemaNil               = errors.New("schema cannot be nil")
@@ -183,6 +207,7 @@ var (
 	ErrMCPValidateK8sNamespaceInvalidPattern    = errors.New("namespace must consist of lowercase alphanumeric characters or hyphens, and must start and end with an alphanumeric character")
 	ErrMCPValidateK8sNamespaceNullBytes         = errors.New("namespace must not contain null bytes")
 	ErrMCPValidateCloudMetadataInvalidOperation = errors.New("invalid operation")
+	ErrMCPValidateCloudMetadataUnsupportedProvider = errors.New("unsupported provider")
 	ErrMCPValidateHostnameEmpty                 = errors.New("hostname cannot be empty")
 	ErrMCPValidateHostnameWhitespace            = errors.New("hostname must not contain leading/trailing whitespace")
 	ErrMCPValidateHostnameNullBytes             = errors.New("hostname must not contain null bytes")
@@ -354,6 +379,8 @@ var (
 	ErrAuditVaultDatabaseNotFound = errors.New("audit vault database not found")
 	ErrAuditQueryFailed         = errors.New("failed to query audit events")
 	ErrAuditScanFailed          = errors.New("failed to scan audit row")
+	ErrSQLDatabaseOpenFailed    = errors.New("failed to open SQL database")
+	ErrSQLQueryFailed           = errors.New("failed to execute SQL query")
 
 	// Test command errors
 	ErrGatewayNotRunning        = errors.New("gateway not running")
@@ -441,6 +468,8 @@ var (
 	ErrCLIL3NoUserIDInCert         = errors.New("no user ID found in certificate SPIFFE URI SANs")
 	ErrCLIL3PKINotConfigured       = errors.New("PKI authority not configured")
 	ErrCLIL3NoSPIFFEURI            = errors.New("no SPIFFE URI found in certificate")
+	ErrCLIL3GetSuspendedTransactionFailed = errors.New("failed to get suspended transaction")
+	ErrCLIL3SignatureEncodingFailed = errors.New("invalid signature encoding")
 
 	// File edit service errors
 	ErrFileEditUnsupportedOperation = errors.New("unsupported file operation")
@@ -503,6 +532,15 @@ var (
 	ErrAppPolicyStoreMarshalFailed = errors.New("failed to marshal app policy data")
 	ErrAppPolicyStoreUnmarshalFailed = errors.New("failed to unmarshal app policy")
 
+	// MCP config errors
+	ErrMCPConfigGatewayURLInvalidScheme = errors.New("gateway URL scheme must be https")
+	ErrMCPConfigGatewayURLHostEmpty     = errors.New("gateway URL host cannot be empty")
+	ErrMCPConfigVerifyHostnameEmpty      = errors.New("verify hostname cannot be empty")
+	ErrMCPConfigBinaryPathEmpty         = errors.New("binary path cannot be empty")
+	ErrMCPConfigBinaryPathWhitespace    = errors.New("binary path cannot be whitespace only")
+	ErrMCPConfigCertPathEmpty           = errors.New("certificate path cannot be empty")
+	ErrMCPConfigCertPathWhitespace      = errors.New("certificate path cannot be whitespace only")
+
 	// Fingerprint errors
 	ErrFingerprintGetHostname      = errors.New("fingerprint: failed to get hostname")
 	ErrFingerprintUnsupportedOS    = errors.New("fingerprint: unsupported operating system")
@@ -525,6 +563,15 @@ var (
 	ErrPKISignCSR                    = errors.New("pki: failed to sign CSR")
 	ErrPKIInvalidCSR                 = errors.New("pki: invalid CSR PEM")
 	ErrPKIParseCSR                   = errors.New("pki: failed to parse CSR")
+
+	// L5 Actuator errors
+	ErrL5ActuatorExecutionHandlerNotSet = errors.New("L5Actuator: ExecutionHandler not set")
+	ErrL5ActuatorSigningKeyMissing      = errors.New("L5Actuator: signing key missing")
+	ErrL5ActuatorSignReceipt            = errors.New("failed to sign action receipt")
+	ErrL5ActuatorLogReceipt             = errors.New("failed to log action receipt")
+	ErrL5ActuatorMarshalReceipt         = errors.New("failed to marshal receipt for canonicalization")
+	ErrL5ActuatorCanonicalizeReceipt    = errors.New("failed to canonicalize receipt for signing")
+	ErrL5ActuatorAuditStore             = errors.New("audit store error")
 	ErrPKICSRSignatureCheck          = errors.New("pki: CSR signature check failed")
 	ErrPKIInvalidCurve               = errors.New("pki: CSR public key must use P-256 curve")
 	ErrPKIGenerateSerial             = errors.New("pki: failed to generate serial")
@@ -624,4 +671,48 @@ var (
 	ErrFederationHealthCheckFailed  = errors.New("federation: health check: request failed")
 	ErrFederationHealthCheckStatus  = errors.New("federation: health check: unexpected status code")
 	ErrFederationGenerateGatewayID  = errors.New("federation: failed to generate gateway ID")
+
+	// Script template errors
+	ErrScriptTemplateNotInitialized = errors.New("script template not initialized - call Init() first")
+	ErrScriptTemplateParseFailed     = errors.New("failed to parse script template")
+	ErrScriptTemplateRenderFailed    = errors.New("failed to render script template")
+
+	// Governance/Transaction errors
+	ErrTxInvalidEnvelope         = errors.New("TX_INVALID_ENVELOPE: failed to decode GovernanceEnvelope JSON")
+	ErrTxUnknownActionType       = errors.New("TX_UNKNOWN_ACTION: action type not recognized")
+	ErrTxPayloadDecodeFailed     = errors.New("TX_PAYLOAD_DECODE: failed to decode typed payload")
+	ErrTxTransactionHashMismatch = errors.New("TX_HASH_MISMATCH: transaction_hash does not match computed hash")
+	ErrTxTransactionIDMismatch   = errors.New("TX_ID_MISMATCH: id does not match computed hash")
+	ErrTxTransactionExpired      = errors.New("TX_EXPIRED: transaction has expired")
+	ErrTxTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
+	ErrTxStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
+	ErrTxStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
+	ErrTxL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing")
+
+	// Local HTTP stdio node service errors
+	ErrLocalHTTPStdioDial                 = errors.New("local http stdio: dial failed")
+	ErrLocalHTTPStdioHandshake            = errors.New("local http stdio: handshake failed")
+	ErrLocalHTTPStdioReadChallenge        = errors.New("local http stdio: read challenge failed")
+	ErrLocalHTTPStdioUnexpectedChallenge  = errors.New("local http stdio: unexpected challenge frame")
+	ErrLocalHTTPStdioSendConnect          = errors.New("local http stdio: send connect failed")
+	ErrLocalHTTPStdioReadConnectResponse  = errors.New("local http stdio: read connect response failed")
+	ErrLocalHTTPStdioUnexpectedConnectResponse = errors.New("local http stdio: unexpected connect response")
+	ErrLocalHTTPStdioConnectRejected      = errors.New("local http stdio: connect rejected by gateway")
+	ErrLocalHTTPStdioNotConnected         = errors.New("local http stdio: not connected")
+	ErrTxL2SignatureInvalid      = errors.New("TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification")
+	ErrTxL2KeyNotConfigured      = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Consensus (L2Consensus) signer key not configured")
+	ErrTxL3ProofMissing          = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
+	ErrTxL3ProofInvalid          = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
+	ErrTxL3NotaryNotConfigured   = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
+	ErrTxTransactionHashMissing  = errors.New("TX_HASH_MISSING: transaction_hash required")
+	ErrTxTransactionIDMissing    = errors.New("TX_ID_MISSING: id required")
+	ErrTxExpiresAtMissing        = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
+	ErrTxNonceMissing            = errors.New("TX_NONCE_MISSING: nonce required")
+	ErrTxReplayStoreMissing      = errors.New("TX_REPLAY_STORE_MISSING: replay store required")
+	ErrTxStateRootRequired       = errors.New("TX_STATE_REQUIRED: state_merkle_root required")
+	ErrTxPayloadMissing          = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
+	ErrTxPayloadActionMismatch   = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
+	ErrTxL1ValidationFailed      = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
+	ErrTxInFlight                = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
+	ErrTxProviderMisconfigured    = errors.New("PROVIDER_MISCONFIGURED: state root is empty")
 )

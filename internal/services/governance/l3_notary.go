@@ -76,7 +76,7 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 	tx, ok, err := v.suspendedStore.GetSuspendedTransaction(ctx, transactionHash)
 	if err != nil {
 		v.logger.Warn("CLI L3 verification failed: error getting suspended transaction", "transaction_hash", transactionHash, "error", err)
-		return false, fmt.Errorf("failed to get suspended transaction: %w", err)
+		return false, fmt.Errorf("%w: %w", constants.ErrCLIL3GetSuspendedTransactionFailed, err)
 	}
 	if !ok {
 		v.logger.Warn("CLI L3 verification failed: transaction not found in suspended store", "transaction_hash", transactionHash)
@@ -114,7 +114,7 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 	sigBytes, err := hex.DecodeString(proof.CliSignature)
 	if err != nil {
 		v.logger.Warn("CLI L3 verification failed: invalid signature encoding", "transaction_hash", transactionHash, "error", err)
-		return false, fmt.Errorf("invalid signature encoding: %w", err)
+		return false, fmt.Errorf("%w: %w", constants.ErrCLIL3SignatureEncodingFailed, err)
 	}
 	if len(sigBytes) != ed25519.SignatureSize {
 		v.logger.Warn("CLI L3 verification failed: invalid signature length", "transaction_hash", transactionHash, "length", len(sigBytes))

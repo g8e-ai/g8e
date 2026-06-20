@@ -32,7 +32,7 @@ type keychainBackend struct{}
 func newKeychainBackend() (Backend, error) {
 	// Check if security command is available
 	if _, err := exec.LookPath("security"); err != nil {
-		return nil, fmt.Errorf("keychain: security command not found: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrKeyStoreSecurityNotFound, err)
 	}
 	return &keychainBackend{}, nil
 }
@@ -61,13 +61,13 @@ func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
 				return nil, constants.ErrKeyNotFound
 			}
 		}
-		return nil, fmt.Errorf("keychain: retrieve master key: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrKeyStoreRetrieveFailed, err)
 	}
 
 	// Keychain returns base64-encoded value
 	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(output)))
 	if err != nil {
-		return nil, fmt.Errorf("keychain: decode base64 key: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrKeyStoreDecodeFailed, err)
 	}
 
 	if len(key) == 0 {
@@ -91,7 +91,7 @@ func (b *keychainBackend) StoreMasterKey(key []byte) error {
 
 	cmd := exec.Command("security", args...)
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("keychain: store master key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyStoreStoreFailed, err)
 	}
 
 	return nil
@@ -118,7 +118,7 @@ func (b *keychainBackend) DeleteMasterKey() error {
 				return nil
 			}
 		}
-		return fmt.Errorf("keychain: delete master key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyStoreDeleteFailed, err)
 	}
 
 	return nil
