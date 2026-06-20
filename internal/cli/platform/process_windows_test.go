@@ -30,11 +30,11 @@ import (
 
 // mockWindowsProcessChecker is a mock implementation for testing
 type mockWindowsProcessChecker struct {
-	openProcessFunc  func(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error)
-	closeHandleFunc  func(handle syscall.Handle) error
-	getExitCodeFunc  func(handle syscall.Handle, exitCode *uint32) error
+	openProcessFunc  func(desiredAccess uint32, inheritHandle bool, processID uint32) (uintptr, error)
+	closeHandleFunc  func(handle uintptr) error
+	getExitCodeFunc  func(handle uintptr, exitCode *uint32) error
 	openProcessCalls []openProcessCall
-	closeHandleCalls []syscall.Handle
+	closeHandleCalls []uintptr
 	getExitCodeCalls []getExitCodeCall
 }
 
@@ -45,11 +45,11 @@ type openProcessCall struct {
 }
 
 type getExitCodeCall struct {
-	handle   syscall.Handle
+	handle   uintptr
 	exitCode uint32
 }
 
-func (m *mockWindowsProcessChecker) OpenProcess(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error) {
+func (m *mockWindowsProcessChecker) OpenProcess(desiredAccess uint32, inheritHandle bool, processID uint32) (uintptr, error) {
 	m.openProcessCalls = append(m.openProcessCalls, openProcessCall{
 		desiredAccess: desiredAccess,
 		inheritHandle: inheritHandle,
@@ -58,10 +58,10 @@ func (m *mockWindowsProcessChecker) OpenProcess(desiredAccess uint32, inheritHan
 	if m.openProcessFunc != nil {
 		return m.openProcessFunc(desiredAccess, inheritHandle, processID)
 	}
-	return syscall.Handle(1), nil
+	return uintptr(1), nil
 }
 
-func (m *mockWindowsProcessChecker) CloseHandle(handle syscall.Handle) error {
+func (m *mockWindowsProcessChecker) CloseHandle(handle uintptr) error {
 	m.closeHandleCalls = append(m.closeHandleCalls, handle)
 	if m.closeHandleFunc != nil {
 		return m.closeHandleFunc(handle)
@@ -69,7 +69,7 @@ func (m *mockWindowsProcessChecker) CloseHandle(handle syscall.Handle) error {
 	return nil
 }
 
-func (m *mockWindowsProcessChecker) GetExitCodeProcess(handle syscall.Handle, exitCode *uint32) error {
+func (m *mockWindowsProcessChecker) GetExitCodeProcess(handle uintptr, exitCode *uint32) error {
 	m.getExitCodeCalls = append(m.getExitCodeCalls, getExitCodeCall{
 		handle:   handle,
 		exitCode: *exitCode,
@@ -141,8 +141,8 @@ func TestIsProcessRunning_ZeroPID(t *testing.T) {
 
 func TestIsProcessRunning_OpenProcessFails(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		openProcessFunc: func(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error) {
-			return syscall.Handle(0), errors.New("access denied")
+		openProcessFunc: func(desiredAccess uint32, inheritHandle bool, processID uint32) (uintptr, error) {
+			return uintptr(0), errors.New("access denied")
 		},
 	}
 	pm := &ProcessManager{
@@ -157,7 +157,7 @@ func TestIsProcessRunning_OpenProcessFails(t *testing.T) {
 
 func TestIsProcessRunning_GetExitCodeFails(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			return errors.New("get exit code failed")
 		},
 	}
@@ -172,7 +172,7 @@ func TestIsProcessRunning_GetExitCodeFails(t *testing.T) {
 
 func TestIsProcessRunning_ProcessNotActive(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 0 // Process exited
 			return nil
 		},
@@ -187,7 +187,7 @@ func TestIsProcessRunning_ProcessNotActive(t *testing.T) {
 
 func TestIsProcessRunning_ProcessActiveButNotG8e(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -210,7 +210,7 @@ func TestIsProcessRunning_ProcessActiveButNotG8e(t *testing.T) {
 
 func TestIsProcessRunning_ProcessActiveAndIsG8e(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -233,7 +233,7 @@ func TestIsProcessRunning_ProcessActiveAndIsG8e(t *testing.T) {
 
 func TestIsProcessRunning_TasklistFails(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -254,7 +254,7 @@ func TestIsProcessRunning_TasklistFails(t *testing.T) {
 
 func TestIsProcessRunning_HandleClosed(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -271,7 +271,7 @@ func TestIsProcessRunning_HandleClosed(t *testing.T) {
 
 	pm.isProcessRunning(1234)
 	assert.Len(t, mockChecker.closeHandleCalls, 1, "CloseHandle should be called once")
-	assert.Equal(t, syscall.Handle(1), mockChecker.closeHandleCalls[0])
+	assert.Equal(t, uintptr(1), mockChecker.closeHandleCalls[0])
 }
 
 func TestIsG8eProcess_TasklistFails(t *testing.T) {
@@ -600,8 +600,8 @@ func TestStopProcess_ZeroPID(t *testing.T) {
 
 func TestStopProcess_ProcessNotRunning(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		openProcessFunc: func(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error) {
-			return syscall.Handle(0), errors.New("process not found")
+		openProcessFunc: func(desiredAccess uint32, inheritHandle bool, processID uint32) (uintptr, error) {
+			return uintptr(0), errors.New("process not found")
 		},
 	}
 	pm := &ProcessManager{
@@ -614,7 +614,7 @@ func TestStopProcess_ProcessNotRunning(t *testing.T) {
 
 func TestStopProcess_GracefulShutdownSucceeds(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE initially
 			return nil
 		},
@@ -649,7 +649,7 @@ func TestStopProcess_GracefulShutdownSucceeds(t *testing.T) {
 
 func TestStopProcess_GracefulShutdownFailsForceKillSucceeds(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -688,7 +688,7 @@ func TestStopProcess_GracefulShutdownFailsForceKillSucceeds(t *testing.T) {
 
 func TestStopProcess_ForceKillFails(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -717,7 +717,7 @@ func TestStopProcess_ForceKillFails(t *testing.T) {
 
 func TestStopProcess_WaitForExit(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -747,7 +747,7 @@ func TestStopProcess_WaitForExit(t *testing.T) {
 
 func TestStopProcess_CommandArguments(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle syscall.Handle, exitCode *uint32) error {
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = 259 // STILL_ACTIVE
 			return nil
 		},
@@ -790,8 +790,8 @@ func TestStopProcess_CommandArguments(t *testing.T) {
 
 func TestRealWindowsProcessChecker(t *testing.T) {
 	// Test that real implementations satisfy the interfaces
-	var _ windowsProcessChecker = realWindowsProcessChecker{}
-	var _ commandExecutor = realCommandExecutor{}
+	var _ WindowsProcessChecker = realWindowsProcessChecker{}
+	var _ CommandExecutor = realCommandExecutor{}
 }
 
 func TestProcessManager_NilDependencies(t *testing.T) {

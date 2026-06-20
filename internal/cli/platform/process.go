@@ -37,6 +37,22 @@ const (
 	MaxPortAttempts     = 100
 )
 
+// CommandExecutor defines an interface for executing external commands.
+// It uses *exec.Cmd which is cross-platform.
+type CommandExecutor interface {
+	Command(name string, args ...string) *exec.Cmd
+	Output(cmd *exec.Cmd) ([]byte, error)
+	Run(cmd *exec.Cmd) error
+}
+
+// WindowsProcessChecker defines an interface for Windows-specific process checks.
+// It uses uintptr for handles to remain cross-platform compatible.
+type WindowsProcessChecker interface {
+	OpenProcess(desiredAccess uint32, inheritHandle bool, processID uint32) (uintptr, error)
+	CloseHandle(handle uintptr) error
+	GetExitCodeProcess(handle uintptr, exitCode *uint32) error
+}
+
 // OperatorStartOptions holds configuration for starting the operator process.
 // This replaces the 17 positional parameters previously used by StartOperator.
 type OperatorStartOptions struct {
@@ -68,6 +84,10 @@ type ProcessManager struct {
 	pidDir      string
 	// findOperatorProcessFn allows mocking for tests
 	findOperatorProcessFn func() int
+	// windowsProcessChecker allows mocking Windows process checks for tests
+	windowsProcessChecker WindowsProcessChecker
+	// commandExecutor allows mocking command execution for tests
+	commandExecutor CommandExecutor
 }
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
