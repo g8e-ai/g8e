@@ -65,12 +65,18 @@ func setProcessGroup(cmd *exec.Cmd) {
 // isProcessRunning checks if a process with the given PID is running on Windows.
 // It uses the Windows API to check if the process still exists and is active.
 func (pm *ProcessManager) isProcessRunning(pid int) bool {
+	if pm.isProcessRunningFn != nil {
+		return pm.isProcessRunningFn(pid)
+	}
+
 	if pid == 0 {
 		return false
 	}
 
-	checker := pm.windowsProcessChecker
-	if checker == nil {
+	var checker WindowsProcessChecker
+	if pm.windowsProcessChecker != nil {
+		checker = pm.windowsProcessChecker
+	} else {
 		checker = realWindowsProcessChecker{}
 	}
 
@@ -99,8 +105,10 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 
 // isG8eProcess verifies that the given PID belongs to a g8e.exe process.
 func (pm *ProcessManager) isG8eProcess(pid int) bool {
-	executor := pm.commandExecutor
-	if executor == nil {
+	var executor CommandExecutor
+	if pm.commandExecutor != nil {
+		executor = pm.commandExecutor
+	} else {
 		executor = realCommandExecutor{}
 	}
 
@@ -121,8 +129,10 @@ func (pm *ProcessManager) isG8eProcess(pid int) bool {
 // findProcessOnPort finds the PID of the process listening on the given port on Windows.
 // It uses netstat to find the process ID.
 func (pm *ProcessManager) findProcessOnPort(port int) int {
-	executor := pm.commandExecutor
-	if executor == nil {
+	var executor CommandExecutor
+	if pm.commandExecutor != nil {
+		executor = pm.commandExecutor
+	} else {
 		executor = realCommandExecutor{}
 	}
 
@@ -156,8 +166,10 @@ func (pm *ProcessManager) findProcessOnPort(port int) int {
 // This is used as a fallback when the PID file is missing or stale.
 // It excludes the current process's own PID to avoid detecting the CLI itself.
 func (pm *ProcessManager) findOperatorProcess() int {
-	executor := pm.commandExecutor
-	if executor == nil {
+	var executor CommandExecutor
+	if pm.commandExecutor != nil {
+		executor = pm.commandExecutor
+	} else {
 		executor = realCommandExecutor{}
 	}
 
@@ -201,8 +213,10 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 		return nil
 	}
 
-	executor := pm.commandExecutor
-	if executor == nil {
+	var executor CommandExecutor
+	if pm.commandExecutor != nil {
+		executor = pm.commandExecutor
+	} else {
 		executor = realCommandExecutor{}
 	}
 

@@ -84,6 +84,11 @@ type ProcessManager struct {
 	pidDir      string
 	// findOperatorProcessFn allows mocking for tests
 	findOperatorProcessFn func() int
+	// Windows-specific dependencies for testing
+	windowsProcessChecker WindowsProcessChecker
+	commandExecutor       CommandExecutor
+	// isProcessRunningFn allows mocking for tests
+	isProcessRunningFn func(pid int) bool
 }
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
