@@ -28,16 +28,17 @@ import (
 // realWindowsProcessChecker implements the interface using actual Windows syscalls
 type realWindowsProcessChecker struct{}
 
-func (r realWindowsProcessChecker) OpenProcess(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error) {
-	return syscall.OpenProcess(desiredAccess, inheritHandle, processID)
+func (r realWindowsProcessChecker) OpenProcess(desiredAccess uint32, inheritHandle bool, processID uint32) (uintptr, error) {
+	h, err := syscall.OpenProcess(desiredAccess, inheritHandle, processID)
+	return uintptr(h), err
 }
 
-func (r realWindowsProcessChecker) CloseHandle(handle syscall.Handle) error {
-	return syscall.CloseHandle(handle)
+func (r realWindowsProcessChecker) CloseHandle(handle uintptr) error {
+	return syscall.CloseHandle(syscall.Handle(handle))
 }
 
-func (r realWindowsProcessChecker) GetExitCodeProcess(handle syscall.Handle, exitCode *uint32) error {
-	return syscall.GetExitCodeProcess(handle, exitCode)
+func (r realWindowsProcessChecker) GetExitCodeProcess(handle uintptr, exitCode *uint32) error {
+	return syscall.GetExitCodeProcess(syscall.Handle(handle), exitCode)
 }
 
 // realCommandExecutor implements the interface using actual exec package

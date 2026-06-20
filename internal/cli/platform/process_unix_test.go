@@ -18,6 +18,7 @@ package platform
 
 import (
 	"errors"
+	"os/exec"
 	"syscall"
 	"testing"
 	"time"
@@ -47,28 +48,33 @@ func (m *mockProcessFinder) FindProcess(pid int) (process, error) {
 	return &mockProcess{}, nil
 }
 
-// mockCommandExecutor is a mock implementation of the commandExecutor interface
+// mockCommandExecutor is a mock implementation of the CommandExecutor interface
 type mockCommandExecutor struct {
-	outputFunc func() ([]byte, error)
+	commandFunc func(name string, args ...string) *exec.Cmd
+	outputFunc  func(cmd *exec.Cmd) ([]byte, error)
+	runFunc     func(cmd *exec.Cmd) error
 }
 
-func (m *mockCommandExecutor) Output() ([]byte, error) {
+func (m *mockCommandExecutor) Command(name string, args ...string) *exec.Cmd {
+	if m.commandFunc != nil {
+		return m.commandFunc(name, args...)
+	}
+	// Return a dummy command so we don't return nil
+	return exec.Command("echo")
+}
+
+func (m *mockCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
 	if m.outputFunc != nil {
-		return m.outputFunc()
+		return m.outputFunc(cmd)
 	}
 	return []byte{}, nil
 }
 
-// mockCommandFactory is a mock implementation of the commandFactory interface
-type mockCommandFactory struct {
-	commandFunc func(name string, args ...string) commandExecutor
-}
-
-func (m *mockCommandFactory) Command(name string, args ...string) commandExecutor {
-	if m.commandFunc != nil {
-		return m.commandFunc(name, args...)
+func (m *mockCommandExecutor) Run(cmd *exec.Cmd) error {
+	if m.runFunc != nil {
+		return m.runFunc(cmd)
 	}
-	return &mockCommandExecutor{}
+	return nil
 }
 
 // mockSleeper is a mock implementation of the sleeper interface
@@ -197,48 +203,36 @@ func TestFindProcessOnPortWithFactory(t *testing.T) {
 	}
 
 	t.Run("returns 0 when command fails", func(t *testing.T) {
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return nil, errors.New("lsof failed")
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return nil, errors.New("lsof failed")
 			},
 		}
-		result := pm.findProcessOnPortWithFactory(8080, factory)
+		result := pm.findProcessOnPortWithFactory(8080, executor)
 		if result != 0 {
 			t.Errorf("expected 0 when command fails, got %d", result)
 		}
 	})
 
 	t.Run("returns 0 when output is malformed", func(t *testing.T) {
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte("not-a-number"), nil
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte("not-a-number"), nil
 			},
 		}
-		result := pm.findProcessOnPortWithFactory(8080, factory)
+		result := pm.findProcessOnPortWithFactory(8080, executor)
 		if result != 0 {
 			t.Errorf("expected 0 for malformed output, got %d", result)
 		}
 	})
 
 	t.Run("returns 0 when output is empty", func(t *testing.T) {
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte(""), nil
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte(""), nil
 			},
 		}
-		result := pm.findProcessOnPortWithFactory(8080, factory)
+		result := pm.findProcessOnPortWithFactory(8080, executor)
 		if result != 0 {
 			t.Errorf("expected 0 for empty output, got %d", result)
 		}
@@ -246,16 +240,12 @@ func TestFindProcessOnPortWithFactory(t *testing.T) {
 
 	t.Run("returns valid PID when output is valid", func(t *testing.T) {
 		expectedPID := 12345
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte("12345"), nil
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte("12345"), nil
 			},
 		}
-		result := pm.findProcessOnPortWithFactory(8080, factory)
+		result := pm.findProcessOnPortWithFactory(8080, executor)
 		if result != expectedPID {
 			t.Errorf("expected %d, got %d", expectedPID, result)
 		}
@@ -263,16 +253,12 @@ func TestFindProcessOnPortWithFactory(t *testing.T) {
 
 	t.Run("returns valid PID with whitespace", func(t *testing.T) {
 		expectedPID := 67890
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte("  67890  "), nil
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte("  67890  "), nil
 			},
 		}
-		result := pm.findProcessOnPortWithFactory(8080, factory)
+		result := pm.findProcessOnPortWithFactory(8080, executor)
 		if result != expectedPID {
 			t.Errorf("expected %d, got %d", expectedPID, result)
 		}
@@ -280,26 +266,25 @@ func TestFindProcessOnPortWithFactory(t *testing.T) {
 
 	t.Run("passes correct port to command", func(t *testing.T) {
 		testPort := 9090
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
+		executor := &mockCommandExecutor{
+			commandFunc: func(name string, args ...string) *exec.Cmd {
 				if name != "lsof" {
 					t.Errorf("expected command 'lsof', got '%s'", name)
 				}
 				if len(args) != 2 || args[0] != "-ti" || args[1] != ":9090" {
 					t.Errorf("expected args ['-ti', ':9090'], got %v", args)
 				}
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte("12345"), nil
-					},
-				}
+				return exec.Command(name, args...)
+			},
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte("12345"), nil
 			},
 		}
-		pm.findProcessOnPortWithFactory(testPort, factory)
+		pm.findProcessOnPortWithFactory(testPort, executor)
 	})
 }
 
-func TestFindOperatorProcessWithFactory(t *testing.T) {
+func TestFindOperatorProcessWithExecutor(t *testing.T) {
 	tmpDir := t.TempDir()
 	pm, err := NewProcessManager(tmpDir)
 	if err != nil {
@@ -307,32 +292,24 @@ func TestFindOperatorProcessWithFactory(t *testing.T) {
 	}
 
 	t.Run("returns 0 when command fails", func(t *testing.T) {
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return nil, errors.New("pgrep failed")
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return nil, errors.New("pgrep failed")
 			},
 		}
-		result := pm.findOperatorProcessWithFactory(factory)
+		result := pm.findOperatorProcessWithExecutor(executor)
 		if result != 0 {
 			t.Errorf("expected 0 when command fails, got %d", result)
 		}
 	})
 
 	t.Run("returns 0 when output is malformed", func(t *testing.T) {
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte("invalid"), nil
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte("invalid"), nil
 			},
 		}
-		result := pm.findOperatorProcessWithFactory(factory)
+		result := pm.findOperatorProcessWithExecutor(executor)
 		if result != 0 {
 			t.Errorf("expected 0 for malformed output, got %d", result)
 		}
@@ -340,38 +317,33 @@ func TestFindOperatorProcessWithFactory(t *testing.T) {
 
 	t.Run("returns valid PID when output is valid", func(t *testing.T) {
 		expectedPID := 54321
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte("54321"), nil
-					},
-				}
+		executor := &mockCommandExecutor{
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte("54321"), nil
 			},
 		}
-		result := pm.findOperatorProcessWithFactory(factory)
+		result := pm.findOperatorProcessWithExecutor(executor)
 		if result != expectedPID {
 			t.Errorf("expected %d, got %d", expectedPID, result)
 		}
 	})
 
 	t.Run("passes correct arguments to command", func(t *testing.T) {
-		factory := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
+		executor := &mockCommandExecutor{
+			commandFunc: func(name string, args ...string) *exec.Cmd {
 				if name != "pgrep" {
 					t.Errorf("expected command 'pgrep', got '%s'", name)
 				}
 				if len(args) != 2 || args[0] != "-f" || args[1] != "g8e --doctrine" {
 					t.Errorf("expected args ['-f', 'g8e --doctrine'], got %v", args)
 				}
-				return &mockCommandExecutor{
-					outputFunc: func() ([]byte, error) {
-						return []byte("12345"), nil
-					},
-				}
+				return exec.Command(name, args...)
+			},
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
+				return []byte("12345"), nil
 			},
 		}
-		pm.findOperatorProcessWithFactory(factory)
+		pm.findOperatorProcessWithExecutor(executor)
 	})
 }
 
@@ -656,7 +628,7 @@ func TestMockProcessFinder(t *testing.T) {
 func TestMockCommandExecutor(t *testing.T) {
 	t.Run("mockCommandExecutor Output returns empty by default", func(t *testing.T) {
 		e := &mockCommandExecutor{}
-		output, err := e.Output()
+		output, err := e.Output(nil)
 		if err != nil {
 			t.Errorf("expected nil, got %v", err)
 		}
@@ -669,42 +641,16 @@ func TestMockCommandExecutor(t *testing.T) {
 		expectedOutput := []byte("test output")
 		expectedErr := errors.New("custom error")
 		e := &mockCommandExecutor{
-			outputFunc: func() ([]byte, error) {
+			outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
 				return expectedOutput, expectedErr
 			},
 		}
-		output, err := e.Output()
+		output, err := e.Output(nil)
 		if err != expectedErr {
 			t.Errorf("expected %v, got %v", expectedErr, err)
 		}
 		if string(output) != string(expectedOutput) {
 			t.Errorf("expected %v, got %v", expectedOutput, output)
-		}
-	})
-}
-
-func TestMockCommandFactory(t *testing.T) {
-	t.Run("mockCommandFactory Command returns mock by default", func(t *testing.T) {
-		f := &mockCommandFactory{}
-		e := f.Command("test", "arg1")
-		if e == nil {
-			t.Error("expected non-nil executor")
-		}
-	})
-
-	t.Run("mockCommandFactory Command uses custom function", func(t *testing.T) {
-		expectedExecutor := &mockCommandExecutor{}
-		f := &mockCommandFactory{
-			commandFunc: func(name string, args ...string) commandExecutor {
-				if name != "test" {
-					t.Errorf("expected 'test', got '%s'", name)
-				}
-				return expectedExecutor
-			},
-		}
-		e := f.Command("test", "arg1")
-		if e != expectedExecutor {
-			t.Error("expected custom executor")
 		}
 	})
 }
