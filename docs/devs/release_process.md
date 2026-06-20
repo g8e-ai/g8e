@@ -157,7 +157,7 @@ Build the g8e Node and verify it works:
 
 ```bash
 # Build the g8e Operator
-make build
+make build-all
 
 # Verify the g8e Operator
 ./g8e --help

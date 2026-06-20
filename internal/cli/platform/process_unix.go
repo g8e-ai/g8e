@@ -24,11 +24,6 @@ import (
 	"time"
 )
 
-// commandExecutor is an interface for executing external commands
-type commandExecutor interface {
-	Output() ([]byte, error)
-}
-
 // processFinder is an interface for finding processes
 type processFinder interface {
 	FindProcess(pid int) (process, error)
@@ -59,25 +54,19 @@ func (f osProcessFinder) FindProcess(pid int) (process, error) {
 	return &osProcess{p}, nil
 }
 
-// commandWrapper wraps exec.Command to implement commandExecutor
-type commandWrapper struct {
-	*exec.Cmd
+// realCommandExecutor implements CommandExecutor using actual exec package
+type realCommandExecutor struct{}
+
+func (c realCommandExecutor) Command(name string, args ...string) *exec.Cmd {
+	return exec.Command(name, args...)
 }
 
-func (c *commandWrapper) Output() ([]byte, error) {
-	return c.Cmd.Output()
+func (c realCommandExecutor) Output(cmd *exec.Cmd) ([]byte, error) {
+	return cmd.Output()
 }
 
-// commandFactory is an interface for creating commands
-type commandFactory interface {
-	Command(name string, args ...string) commandExecutor
-}
-
-// osCommandFactory wraps exec.Command to implement commandFactory
-type osCommandFactory struct{}
-
-func (f osCommandFactory) Command(name string, args ...string) commandExecutor {
-	return &commandWrapper{exec.Command(name, args...)}
+func (c realCommandExecutor) Run(cmd *exec.Cmd) error {
+	return cmd.Run()
 }
 
 // sleeper is an interface for sleep operations (for testing)
@@ -150,13 +139,16 @@ func (pm *ProcessManager) isProcessRunningWithFinder(pid int, finder processFind
 // findProcessOnPort finds the PID of the process listening on the given port on Unix systems.
 // It uses lsof to find the process ID.
 func (pm *ProcessManager) findProcessOnPort(port int) int {
-	return pm.findProcessOnPortWithFactory(port, osCommandFactory{})
+	return pm.findProcessOnPortWithFactory(port, realCommandExecutor{})
 }
 
 // findProcessOnPortWithFactory finds the PID using a provided commandFactory (for testing)
-func (pm *ProcessManager) findProcessOnPortWithFactory(port int, factory commandFactory) int {
-	cmd := factory.Command("lsof", "-ti", fmt.Sprintf(":%d", port))
-	output, err := cmd.Output()
+func (pm *ProcessManager) findProcessOnPortWithFactory(port int, executor CommandExecutor) int {
+	if executor == nil {
+		executor = realCommandExecutor{}
+	}
+	cmd := executor.Command("lsof", "-ti", fmt.Sprintf(":%d", port))
+	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0
 	}
@@ -172,13 +164,13 @@ func (pm *ProcessManager) findProcessOnPortWithFactory(port int, factory command
 // findOperatorProcess finds the PID of the running g8e operator process using pgrep.
 // This is used as a fallback when the PID file is missing or stale.
 func (pm *ProcessManager) findOperatorProcess() int {
-	return pm.findOperatorProcessWithFactory(osCommandFactory{})
+	return pm.findOperatorProcessWithExecutor(realCommandExecutor{})
 }
 
-// findOperatorProcessWithFactory finds the PID using a provided commandFactory (for testing)
-func (pm *ProcessManager) findOperatorProcessWithFactory(factory commandFactory) int {
-	cmd := factory.Command("pgrep", "-f", "g8e --doctrine")
-	output, err := cmd.Output()
+// findOperatorProcessWithExecutor finds the PID using a provided CommandExecutor (for testing)
+func (pm *ProcessManager) findOperatorProcessWithExecutor(executor CommandExecutor) int {
+	cmd := executor.Command("pgrep", "-f", "g8e --doctrine")
+	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0
 	}
