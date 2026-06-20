@@ -73,4 +73,3 @@ const (
 	// ExitCodeKilled indicates process was killed (typically 137, 128+9)
 	ExitCodeKilled = 137
 )
-

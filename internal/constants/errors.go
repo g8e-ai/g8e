@@ -302,12 +302,12 @@ var (
 	ErrSQLitePruneFailed = errors.New("prune function failed")
 
 	// SQLite compression errors
-	ErrSQLiteCompressGzipWrite    = errors.New("gzip write failed")
-	ErrSQLiteCompressGzipClose   = errors.New("gzip close failed")
-	ErrSQLiteDecompressGzipInit  = errors.New("gzip reader init failed")
-	ErrSQLiteDecompressGzipRead  = errors.New("gzip read failed")
+	ErrSQLiteCompressGzipWrite  = errors.New("gzip write failed")
+	ErrSQLiteCompressGzipClose  = errors.New("gzip close failed")
+	ErrSQLiteDecompressGzipInit = errors.New("gzip reader init failed")
+	ErrSQLiteDecompressGzipRead = errors.New("gzip read failed")
 
 	// Timestamp errors
-	ErrTimestampParseEmpty       = errors.New("timestamp: parse: empty string")
+	ErrTimestampParseEmpty         = errors.New("timestamp: parse: empty string")
 	ErrTimestampParseInvalidFormat = errors.New("timestamp: parse: unrecognized format")
 )

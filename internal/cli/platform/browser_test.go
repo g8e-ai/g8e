@@ -25,8 +25,8 @@ import (
 
 // mockBrowserCommandExecutor is a mock implementation of browserCommandExecutor for testing.
 type mockBrowserCommandExecutor struct {
-	startFunc   func(name string, args ...string) error
-	calledWith  struct {
+	startFunc  func(name string, args ...string) error
+	calledWith struct {
 		name string
 		args []string
 	}

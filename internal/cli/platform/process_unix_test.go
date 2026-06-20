@@ -84,7 +84,7 @@ func (m *mockSleeper) Sleep(d time.Duration) {
 
 // mockTicker is a mock implementation of the ticker interface
 type mockTicker struct {
-	c      chan time.Time
+	c        chan time.Time
 	stopFunc func()
 }
 

@@ -28,6 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -543,7 +544,7 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 	t.Run("Publish valid", func(t *testing.T) {
 		t.Parallel()
 		pubReq := models.PubSubPublishRequest{
-			Channel: ResultsChannel("op-1", "session-1"),
+			Channel: pubsub.ResultsChannel("op-1", "session-1"),
 			Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),
 		}
 		body := mustMarshalJSON(t, pubReq)
@@ -572,7 +573,7 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 
 	t.Run("Reject mutation channels", func(t *testing.T) {
 		t.Parallel()
-		for _, channel := range []string{CmdChannel("op-1", "session-1"), "auditor:op-1:sessions-1"} {
+		for _, channel := range []string{pubsub.CmdChannel("op-1", "session-1"), "auditor:op-1:sessions-1"} {
 			pubReq := models.PubSubPublishRequest{
 				Channel: channel,
 				Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),

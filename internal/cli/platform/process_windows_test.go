@@ -30,12 +30,12 @@ import (
 
 // mockWindowsProcessChecker is a mock implementation for testing
 type mockWindowsProcessChecker struct {
-	openProcessFunc    func(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error)
-	closeHandleFunc    func(handle syscall.Handle) error
-	getExitCodeFunc    func(handle syscall.Handle, exitCode *uint32) error
-	openProcessCalls   []openProcessCall
-	closeHandleCalls   []syscall.Handle
-	getExitCodeCalls   []getExitCodeCall
+	openProcessFunc  func(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error)
+	closeHandleFunc  func(handle syscall.Handle) error
+	getExitCodeFunc  func(handle syscall.Handle, exitCode *uint32) error
+	openProcessCalls []openProcessCall
+	closeHandleCalls []syscall.Handle
+	getExitCodeCalls []getExitCodeCall
 }
 
 type openProcessCall struct {
@@ -45,8 +45,8 @@ type openProcessCall struct {
 }
 
 type getExitCodeCall struct {
-	handle    syscall.Handle
-	exitCode  uint32
+	handle   syscall.Handle
+	exitCode uint32
 }
 
 func (m *mockWindowsProcessChecker) OpenProcess(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error) {
@@ -83,9 +83,9 @@ func (m *mockWindowsProcessChecker) GetExitCodeProcess(handle syscall.Handle, ex
 
 // mockCommandExecutor is a mock implementation for testing
 type mockCommandExecutor struct {
-	commandFunc func(name string, args ...string) *exec.Cmd
-	outputFunc  func(cmd *exec.Cmd) ([]byte, error)
-	runFunc     func(cmd *exec.Cmd) error
+	commandFunc  func(name string, args ...string) *exec.Cmd
+	outputFunc   func(cmd *exec.Cmd) ([]byte, error)
+	runFunc      func(cmd *exec.Cmd) error
 	commandCalls []commandCall
 	outputCalls  []*exec.Cmd
 	runCalls     []*exec.Cmd
@@ -142,7 +142,7 @@ func TestIsProcessRunning_ZeroPID(t *testing.T) {
 func TestIsProcessRunning_OpenProcessFails(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		openProcessFunc: func(desiredAccess uint32, inheritHandle bool, processID uint32) (syscall.Handle, error) {
-		return syscall.Handle(0), errors.New("access denied")
+			return syscall.Handle(0), errors.New("access denied")
 		},
 	}
 	pm := &ProcessManager{
@@ -772,7 +772,7 @@ func TestStopProcess_CommandArguments(t *testing.T) {
 	pm.stopProcess(1234, "test")
 
 	require.Len(t, mockExecutor.commandCalls, 2, "Command should be called twice")
-	
+
 	// First call - graceful shutdown
 	call1 := mockExecutor.commandCalls[0]
 	assert.Equal(t, "taskkill", call1.name)

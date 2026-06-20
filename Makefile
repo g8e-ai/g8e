@@ -253,6 +253,7 @@ protoc-install:
 .PHONY: build
 build:
 	@echo "Building g8e Operator for current platform..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
@@ -278,6 +279,7 @@ build:
 .PHONY: build-all
 build-all:
 	@echo "Building g8e Operator for all platforms..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
@@ -299,6 +301,7 @@ build-all:
 .PHONY: build-darwin
 build-darwin:
 	@echo "Building g8e for Darwin..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(DARWIN_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
@@ -311,6 +314,7 @@ build-darwin:
 .PHONY: build-linux
 build-linux:
 	@echo "Building g8e for Linux..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(LINUX_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
@@ -323,6 +327,7 @@ build-linux:
 .PHONY: build-windows
 build-windows:
 	@echo "Building g8e for Windows..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
@@ -335,6 +340,7 @@ build-windows:
 .PHONY: build-docker
 build-docker:
 	@echo "Building g8e binary in Docker (linux/amd64)..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@docker run --rm -e GOOS=linux -e GOARCH=amd64 -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-linux-amd64"
@@ -344,6 +350,7 @@ build-docker:
 .PHONY: build-linux-docker
 build-linux-docker:
 	@echo "Building g8e for Linux in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(LINUX_ARCHS); do \
@@ -356,6 +363,7 @@ build-linux-docker:
 .PHONY: build-windows-docker
 build-windows-docker:
 	@echo "Building g8e for Windows in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(WINDOWS_ARCHS); do \
@@ -368,6 +376,7 @@ build-windows-docker:
 .PHONY: build-darwin-docker
 build-darwin-docker:
 	@echo "Building g8e for Darwin in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(DARWIN_ARCHS); do \
@@ -380,6 +389,7 @@ build-darwin-docker:
 .PHONY: build-all-docker
 build-all-docker:
 	@echo "Building g8e for all platforms in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for platform in $(PLATFORMS); do \

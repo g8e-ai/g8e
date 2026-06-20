@@ -24,4 +24,3 @@ const FieldPathMemories = "memories"
 
 // FieldPathCases defines allowed and forbidden field paths for the cases collection
 const FieldPathCases = "cases"
-

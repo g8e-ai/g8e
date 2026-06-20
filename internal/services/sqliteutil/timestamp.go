@@ -20,7 +20,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-
 func FormatTimestamp(t time.Time) string {
 	return t.UTC().Format(constants.TimestampFormat)
 }

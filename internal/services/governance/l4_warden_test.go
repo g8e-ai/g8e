@@ -49,7 +49,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
 		nil, // AppPolicyStore not used in tests
 		l3Notary,
-		nil,                        // doctrine defaults to L1Doctrine
+		nil,                      // doctrine defaults to L1Doctrine
 		constants.AllActionTypes, // Use SSOT for action types
 		posture,
 		nil, // Clock defaults to RealClock

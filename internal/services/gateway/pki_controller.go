@@ -32,8 +32,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 )

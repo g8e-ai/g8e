@@ -22,9 +22,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )

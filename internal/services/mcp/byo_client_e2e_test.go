@@ -30,8 +30,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"

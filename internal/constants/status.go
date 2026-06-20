@@ -159,14 +159,14 @@ const (
 	CommandExitStatusNotFound      CommandExitStatus = "not_found"
 	CommandExitStatusSuccess       CommandExitStatus = "success"
 	CommandExitStatusTerminated    CommandExitStatus = "terminated"
-	CommandExitStatusSignal1       CommandExitStatus = "signal_1"   // SIGHUP
-	CommandExitStatusSignal2       CommandExitStatus = "signal_2"   // SIGINT
-	CommandExitStatusSignal3       CommandExitStatus = "signal_3"   // SIGQUIT
-	CommandExitStatusSignal6       CommandExitStatus = "signal_6"   // SIGABRT
-	CommandExitStatusSignal9       CommandExitStatus = "signal_9"   // SIGKILL
-	CommandExitStatusSignal11      CommandExitStatus = "signal_11"  // SIGSEGV
-	CommandExitStatusSignal13      CommandExitStatus = "signal_13"  // SIGPIPE
-	CommandExitStatusSignal15      CommandExitStatus = "signal_15"  // SIGTERM
+	CommandExitStatusSignal1       CommandExitStatus = "signal_1"  // SIGHUP
+	CommandExitStatusSignal2       CommandExitStatus = "signal_2"  // SIGINT
+	CommandExitStatusSignal3       CommandExitStatus = "signal_3"  // SIGQUIT
+	CommandExitStatusSignal6       CommandExitStatus = "signal_6"  // SIGABRT
+	CommandExitStatusSignal9       CommandExitStatus = "signal_9"  // SIGKILL
+	CommandExitStatusSignal11      CommandExitStatus = "signal_11" // SIGSEGV
+	CommandExitStatusSignal13      CommandExitStatus = "signal_13" // SIGPIPE
+	CommandExitStatusSignal15      CommandExitStatus = "signal_15" // SIGTERM
 )
 
 // VaultMode is a typed string for vault mode.

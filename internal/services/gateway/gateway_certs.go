@@ -33,8 +33,8 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/marshaler"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/protocol"
 )
 

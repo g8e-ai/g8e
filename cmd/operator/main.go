@@ -531,20 +531,20 @@ func main() {
 
 	// Check for CLI subcommands
 	cliSubcommands := map[string]bool{
-		"gw":                  true,
-		"gateway":             true,
+		"gw":                    true,
+		"gateway":               true,
 		"agentic-tool-emulator": true,
-		"chaos":               true,
-		"mcp":                 true,
-		"operator":            true,
-		"agent":               true,
-		"claude":              true,
-		"vault":               true,
-		"test":                true,
-		"setup":               true,
-		"auth":                true,
-		"audit":               true,
-		"swagger":             true,
+		"chaos":                 true,
+		"mcp":                   true,
+		"operator":              true,
+		"agent":                 true,
+		"claude":                true,
+		"vault":                 true,
+		"test":                  true,
+		"setup":                 true,
+		"auth":                  true,
+		"audit":                 true,
+		"swagger":               true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
