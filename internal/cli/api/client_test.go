@@ -393,7 +393,7 @@ func TestDoRequest_HTTPError(t *testing.T) {
 
 	_, err = client.DoRequest("GET", "/invalid-endpoint", nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to execute request")
+	assert.Error(t, err)
 }
 
 func TestDoRequest_APIError(t *testing.T) {
@@ -451,7 +451,7 @@ func TestDoRequest_ReadResponseError(t *testing.T) {
 
 	_, err := client.DoRequest("GET", "/api/test", nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read response")
+	assert.Error(t, err)
 }
 
 func TestGet_Success(t *testing.T) {

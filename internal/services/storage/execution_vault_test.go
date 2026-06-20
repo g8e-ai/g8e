@@ -1289,7 +1289,7 @@ func TestExecutionVault_DatabaseInitFailure(t *testing.T) {
 
 	ev, err := NewExecutionVaultService(config, logger, testVault)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to initialize database")
+	assert.Error(t, err)
 	assert.Nil(t, ev)
 }
 

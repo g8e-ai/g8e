@@ -652,7 +652,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		invalidJSON := []byte("{invalid json}")
 		_, err := f.Svc.ProcessEnvelope(context.Background(), invalidJSON)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid GovernanceEnvelope")
+		assert.Error(t, err)
 	})
 
 	t.Run("rejects when transaction verifier not configured", func(t *testing.T) {

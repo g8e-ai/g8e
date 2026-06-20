@@ -126,7 +126,7 @@ func TestBootstrap_HTTPError(t *testing.T) {
 	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL+"/api/v1/auth/bootstrap")
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
 }
 
 func TestBootstrap_ErrorResponse(t *testing.T) {

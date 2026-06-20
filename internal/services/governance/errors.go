@@ -39,4 +39,5 @@ var (
 	ErrL3ProofMissing          = constants.ErrTxL3ProofMissing
 	ErrL3ProofInvalid          = constants.ErrTxL3ProofInvalid
 	ErrL3NotaryNotConfigured   = constants.ErrTxL3NotaryNotConfigured
+	ErrTxInFlight              = constants.ErrTxInFlight
 )

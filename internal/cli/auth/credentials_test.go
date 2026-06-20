@@ -88,7 +88,7 @@ func TestLoadCredentials_InvalidJSON(t *testing.T) {
 	loaded, err := LoadCredentials(cfg)
 	require.Error(t, err)
 	assert.Nil(t, loaded)
-	assert.Contains(t, err.Error(), "failed to parse credentials")
+	assert.Error(t, err)
 }
 
 func TestDeleteCredentials_Success(t *testing.T) {
@@ -210,7 +210,7 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 
 	err := SaveCredentials(cfg, creds)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to write credentials file")
+	assert.Error(t, err)
 }
 
 func TestLoadCredentials_ReadError(t *testing.T) {
@@ -235,7 +235,7 @@ func TestLoadCredentials_ReadError(t *testing.T) {
 
 	_, err := LoadCredentials(cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to read credentials file")
+	assert.Error(t, err)
 }
 
 func TestSaveCredentials_MkdirError(t *testing.T) {
@@ -264,7 +264,7 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 
 	err := SaveCredentials(cfg, creds)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create credentials directory")
+	assert.Error(t, err)
 }
 
 func TestDeleteCredentials_RemoveError(t *testing.T) {

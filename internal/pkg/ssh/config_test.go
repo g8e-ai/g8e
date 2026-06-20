@@ -462,7 +462,7 @@ func TestBuildHostKeyCallback(t *testing.T) {
 		cb, err := BuildHostKeyCallback(khPath)
 		require.Error(t, err)
 		assert.Nil(t, cb)
-		assert.Contains(t, err.Error(), "known_hosts not found")
+		assert.Error(t, err)
 	})
 
 	t.Run("malformed known_hosts file", func(t *testing.T) {

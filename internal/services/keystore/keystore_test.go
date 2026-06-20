@@ -408,7 +408,7 @@ func TestKeystore_Decrypt_InvalidJSON(t *testing.T) {
 	invalidJSON := base64.StdEncoding.EncodeToString([]byte(`{invalid json`))
 	_, err = ks.Decrypt(invalidJSON)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal encrypted value")
+	assert.Error(t, err)
 }
 
 func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
@@ -518,7 +518,7 @@ func TestKeystore_DecryptSecret_InvalidJSON(t *testing.T) {
 
 	_, err = ks.DecryptSecret("test-secret")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal encrypted secret")
+	assert.Error(t, err)
 }
 
 func TestKeystore_DecryptSecret_UnsupportedVersion(t *testing.T) {

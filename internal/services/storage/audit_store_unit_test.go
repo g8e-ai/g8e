@@ -253,9 +253,9 @@ func TestErrorConstants(t *testing.T) {
 		err  error
 		want string
 	}{
-		{"ErrAuditEventNil", ErrAuditEventNil, "AUDIT_EVENT_INVALID"},
-		{"ErrAuditSessionMissing", ErrAuditSessionMissing, "AUDIT_SESSION_MISSING"},
-		{"ErrAuditSessionUnknown", ErrAuditSessionUnknown, "AUDIT_SESSION_UNKNOWN"},
+		{"ErrAuditEventNil", constants.ErrAuditEventNil, "AUDIT_EVENT_INVALID"},
+		{"ErrAuditSessionMissing", constants.ErrAuditSessionMissing, "AUDIT_SESSION_MISSING"},
+		{"ErrAuditSessionUnknown", constants.ErrAuditSessionUnknown, "AUDIT_SESSION_UNKNOWN"},
 	}
 
 	for _, tt := range tests {

@@ -869,8 +869,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		// Persona Mapping: map JWT roles to binding persona
 		bindingPersona, err := s.personaSvc.MapRolesToPersona(jwt.Roles)
 		if err != nil {
-			s.logger.Warn("auth: map roles to persona failed, using default", string(constants.ConnectionStateError),
-				"auth: map roles to persona: %w", constants.ErrInternal)
+			s.logger.Warn("auth: map roles to persona failed, using default", "state", string(constants.ConnectionStateError), "error", err)
 			bindingPersona = "default"
 		}
 

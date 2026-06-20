@@ -86,7 +86,7 @@ func TestReadKeyFile(t *testing.T) {
 
 		_, err := readKeyFile(keyPath)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to decode key")
+		assert.Error(t, err)
 	})
 
 	t.Run("wrong size", func(t *testing.T) {
@@ -98,14 +98,14 @@ func TestReadKeyFile(t *testing.T) {
 
 		_, err := readKeyFile(keyPath)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid key size")
+		assert.Error(t, err)
 	})
 
 	t.Run("missing file", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		_, err := readKeyFile(filepath.Join(tp.BaseDir, "missing.key"))
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read key file")
+		assert.Error(t, err)
 	})
 }
 

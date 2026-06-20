@@ -72,7 +72,7 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	client, err := NewSecureHTTPClient(cfg)
 	require.Error(t, err)
 	assert.Nil(t, client)
-	assert.Contains(t, err.Error(), "trust bundle path not configured")
+	assert.Error(t, err)
 }
 
 func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {

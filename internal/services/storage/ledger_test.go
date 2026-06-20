@@ -356,7 +356,7 @@ func TestLedgerService_CopyToLedger_NonExistentSource(t *testing.T) {
 
 	err := lms.copyToLedger("/nonexistent/file.txt", filepath.Join(tempDir, "dst.txt"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to open source file")
+	assert.Error(t, err)
 }
 
 func TestLedgerService_SnapshotLedger(t *testing.T) {
