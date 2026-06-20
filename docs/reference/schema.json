@@ -45,6 +45,16 @@
       "required": ["protocolVersion", "capabilities", "clientInfo"],
       "type": "object"
     },
+    "InitializeParams": {
+      "description": "The subset of initialize params negotiated by the g8e gateway.",
+      "properties": {
+        "protocolVersion": {
+          "type": "string",
+          "description": "The version of the MCP protocol the client wants to use."
+        }
+      },
+      "type": "object"
+    },
     "InitializeResult": {
       "description": "The server's response to an initialize request.",
       "properties": {
@@ -85,6 +95,21 @@
       },
       "type": "object"
     },
+    "ToolsCapability": {
+      "description": "Tools capability configuration.",
+      "properties": {
+        "listChanged": { "type": "boolean" }
+      },
+      "type": "object"
+    },
+    "ResourcesCapability": {
+      "description": "Resources capability configuration.",
+      "type": "object"
+    },
+    "PromptsCapability": {
+      "description": "Prompts capability configuration.",
+      "type": "object"
+    },
     "ClientCapabilities": {
       "description": "Capabilities supported by the MCP client.",
       "type": "object"
@@ -106,11 +131,41 @@
         "name": { "type": "string", "description": "The unique name of the tool." },
         "description": { "type": "string", "description": "A human-readable description of the tool." },
         "inputSchema": {
-          "type": "object",
-          "description": "JSON Schema defining the arguments accepted by the tool."
+          "$ref": "#/$defs/InputSchema"
         }
       },
       "required": ["name"],
+      "type": "object"
+    },
+    "InputSchema": {
+      "description": "JSON Schema for tool input validation.",
+      "properties": {
+        "type": { "type": "string", "description": "Must be 'object' for tool inputs." },
+        "properties": {
+          "type": "object",
+          "description": "Map of property names to their schema definitions.",
+          "additionalProperties": { "$ref": "#/$defs/PropertySchema" }
+        },
+        "required": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of required property names."
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "PropertySchema": {
+      "description": "JSON Schema property definition.",
+      "properties": {
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "enum": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["type"],
       "type": "object"
     },
     "CallToolRequest": {
@@ -167,9 +222,42 @@
         "name": { "type": "string", "description": "The name of the resource." },
         "description": { "type": "string" },
         "mimeType": { "type": "string" },
-        "metadata": { "type": "object" }
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        }
       },
       "required": ["uri", "name"],
+      "type": "object"
+    },
+    "Metadata": {
+      "description": "Typed metadata for MCP resources and prompts.",
+      "properties": {
+        "custom": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "type": "object"
+    },
+    "ListResourcesRequest": {
+      "description": "Parameters for the resources/list method.",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "Optional cursor for pagination."
+        }
+      },
+      "type": "object"
+    },
+    "ReadResourceRequest": {
+      "description": "Parameters for the resources/read method.",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "description": "The URI of the resource to read."
+        }
+      },
+      "required": ["uri"],
       "type": "object"
     },
     "ReadResourceResult": {
@@ -204,7 +292,35 @@
           "type": "array",
           "items": { "$ref": "#/$defs/PromptArgument" }
         },
-        "metadata": { "type": "object" }
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        }
+      },
+      "required": ["name"],
+      "type": "object"
+    },
+    "ListPromptsRequest": {
+      "description": "Parameters for the prompts/list method.",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "Optional cursor for pagination."
+        }
+      },
+      "type": "object"
+    },
+    "GetPromptRequest": {
+      "description": "Parameters for the prompts/get method.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the prompt to get."
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Arguments to fill in the prompt template."
+        }
       },
       "required": ["name"],
       "type": "object"
@@ -249,6 +365,22 @@
       "required": ["code", "message"],
       "type": "object"
     },
+    "JSONRPCResponse": {
+      "description": "A JSON-RPC 2.0 response object.",
+      "properties": {
+        "jsonrpc": { "const": "2.0", "type": "string" },
+        "result": { "type": "object" },
+        "error": { "$ref": "#/$defs/JSONRPCError" },
+        "id": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "integer" }
+          ]
+        }
+      },
+      "required": ["jsonrpc", "id"],
+      "type": "object"
+    },
     "PingRequest": {
       "description": "A ping request to check server liveness.",
       "type": "object"
@@ -266,6 +398,39 @@
         }
       },
       "required": ["resourceTemplates"],
+      "type": "object"
+    },
+    "ToolsListResult": {
+      "description": "The result of a tools/list request.",
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Tool" }
+        }
+      },
+      "required": ["tools"],
+      "type": "object"
+    },
+    "ResourcesListResult": {
+      "description": "The result of a resources/list request.",
+      "properties": {
+        "resources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Resource" }
+        }
+      },
+      "required": ["resources"],
+      "type": "object"
+    },
+    "PromptsListResult": {
+      "description": "The result of a prompts/list request.",
+      "properties": {
+        "prompts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Prompt" }
+        }
+      },
+      "required": ["prompts"],
       "type": "object"
     },
     "A2ACallRequest": {
@@ -292,9 +457,22 @@
       "description": "Successful A2A skill execution response.",
       "properties": {
         "id": { "type": "string" },
-        "result": { "type": "object" }
+        "result": {
+          "description": "The action receipt from the operator (protobuf type).",
+          "type": "object"
+        }
       },
       "required": ["id", "result"],
+      "type": "object"
+    },
+    "A2ADownstreamRequest": {
+      "description": "Request sent to a downstream A2A server.",
+      "properties": {
+        "skill_name": { "type": "string" },
+        "payload": { "type": "object" },
+        "execution_id": { "type": "string" }
+      },
+      "required": ["skill_name", "payload"],
       "type": "object"
     },
     "A2ASuspensionResponse": {

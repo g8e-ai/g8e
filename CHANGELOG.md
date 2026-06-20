@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-06-20
+
+### Overview
+
+v1.1.5 is a code quality and test coverage release that focuses on error typing improvements, comprehensive test coverage expansion, and codebase cleanup. This release dissolves unnecessary abstractions, centralizes posture definitions, and significantly improves test coverage across CLI, pubsub, network, storage, and history handler components.
+
+### Changed
+
+* **Error Typing Improvements** — Systematically improved error typing across governance and storage services for better error handling and consistency.
+* **Test Coverage Expansion** — Significantly improved test coverage for CLI auth, pubsub, network operations, storage services, and history handler.
+* **Emulator Reorganization** — Moved agentic tool emulator to test directory for better code organization.
+* **Scenario Test Dissolution** — Dissolved scenario tests into standard integration tests for improved maintainability.
+* **Codebase Cleanup** — Removed unnecessary utilities (slices, sliceutil), unused mocks, and dissolved unnecessary interfaces.
+* **Posture Definitions Centralization** — Centralized posture definitions and removed duplicate code.
+* **Signal Definitions Improvements** — Improved signal definitions for better clarity and consistency.
+* **Constants Cleanup** — Cleaned up constants and removed deprecated entries.
+* **HTTP Client Directory Cleanup** — Reorganized HTTP client directory structure.
+
+### Fixed
+
+* **Test Errors** — Fixed various test errors and improved test reliability across multiple test suites.
+* **Lint Issues** — Addressed linting issues identified by static analysis tools.
+* **Code Formatting** — Applied gofmt and standardized code formatting.
+
 ## [1.1.4] - 2026-06-19
 
 ### Overview
