@@ -412,7 +412,7 @@ var (
 	ErrWindowsHelloRegistration   = errors.New("windows Hello registration is only available on Windows")
 	ErrWindowsCertStoreTrust      = errors.New("windows cert store trust is only available on Windows")
 	ErrWindowsWebAuthnDLLNotFound = errors.New("webauthn.dll not found")
-	ErrWindowsWebAuthnAPIVersion  = errors.New("Windows Hello API version too old")
+	ErrWindowsWebAuthnAPIVersion  = errors.New("the Windows Hello API version is too old")
 	ErrWindowsTempDirCreate       = errors.New("failed to create Windows temp directory")
 	ErrWindowsCertWriteFailed     = errors.New("failed to write certificate to temp file")
 	ErrWindowsPowerShellImport    = errors.New("failed to import certificate via PowerShell")
