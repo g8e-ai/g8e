@@ -91,7 +91,7 @@ var (
 func parseCertPEM(certFile string) (*x509.Certificate, error) {
 	certPEM, err := os.ReadFile(certFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrCertReadFailed, err)
 	}
 
 	block, _ := pem.Decode(certPEM)
@@ -105,7 +105,7 @@ func parseCertPEM(certFile string) (*x509.Certificate, error) {
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
 	}
 
 	return cert, nil
@@ -123,7 +123,7 @@ func isCertExpiringSoon(cert *x509.Certificate) bool {
 func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate ECDSA key: %w", err)
+		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	template := x509.CertificateRequest{
@@ -135,7 +135,7 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create CSR: %w", err)
+		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	csrPEM := pem.EncodeToMemory(&pem.Block{
@@ -153,7 +153,7 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	pkiDir := filepath.Join(workDir, paths.Infra.PkiDir)
 	trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
 	if err := os.MkdirAll(trustDir, 0700); err != nil {
-		return fmt.Errorf("failed to create PKI directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Remove any stale certs so enrollment always issues fresh ones tied to
@@ -168,36 +168,36 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	logger.Info("Fetching trust bundle from Gateway", "url", trustURL)
 	trustBundle, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
 	if err != nil {
-		return fmt.Errorf("failed to fetch trust bundle: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	// Save trust bundle
 	trustBundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
 	if err := os.WriteFile(trustBundlePath, trustBundle, 0644); err != nil {
-		return fmt.Errorf("failed to save trust bundle: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 	logger.Info("Trust bundle saved", "path", trustBundlePath)
 
 	// Generate system fingerprint for enrollment
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return fmt.Errorf("failed to generate system fingerprint: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
 	}
 
 	// Generate CSR for enrollment
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("failed to get hostname: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
 	opCSR, opKey, err := generateCSR(hostname)
 	if err != nil {
-		return fmt.Errorf("failed to generate Operator CSR: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Generate CLI CSR (required by device enrollment endpoint even for operator-only deployment)
 	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Enroll with Gateway
@@ -219,25 +219,25 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("failed to marshal enrollment request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
 	httpReq, err := http.NewRequest("POST", enrollURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("failed to create enrollment request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("failed to send enrollment request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read enrollment response: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
@@ -255,7 +255,7 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 		Error             string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(respBody, &enrollResp); err != nil {
-		return fmt.Errorf("failed to parse enrollment response: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
 	}
 
 	if enrollResp.Error != "" {
@@ -269,7 +269,7 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	// Save operator private key
 	keyBytes, err := x509.MarshalECPrivateKey(opKey)
 	if err != nil {
-		return fmt.Errorf("failed to marshal private key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "EC PRIVATE KEY",
@@ -278,7 +278,7 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	keyPath := filepath.Join(pkiDir, constants.PkiFileOperatorKey)
 	logger.Info("Saving operator private key", "path", keyPath)
 	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
-		return fmt.Errorf("failed to save private key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
 	logger.Info("Operator private key saved successfully")
 
@@ -290,14 +290,14 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	}
 	logger.Info("Saving operator certificate", "path", certPath)
 	if err := os.WriteFile(certPath, []byte(certContent), 0600); err != nil {
-		return fmt.Errorf("failed to save operator certificate: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	logger.Info("Operator certificate saved successfully")
 
 	// Update trust bundle if Gateway returned a new one
 	if enrollResp.HubTrustBundle != "" {
 		if err := os.WriteFile(trustBundlePath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
-			return fmt.Errorf("failed to save updated trust bundle: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 		logger.Info("Updated trust bundle from Gateway")
 	}
@@ -306,11 +306,11 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	if enrollResp.ActuatorKeyID != "" && enrollResp.ActuatorPubKey != "" {
 		trustedSignersDir := filepath.Join(pkiDir, constants.PkiSubdirTrustedSigners)
 		if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
-			return fmt.Errorf("failed to create trusted_signers directory: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
 		signerPath := filepath.Join(trustedSignersDir, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
 		if err := os.WriteFile(signerPath, []byte(enrollResp.ActuatorPubKey), 0600); err != nil {
-			return fmt.Errorf("failed to save actuator public key: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		logger.Info("Actuator public key saved", "path", signerPath)
 	}
@@ -334,7 +334,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 		return isCertExpiringSoon(cert), nil
 	}()
 	if err != nil {
-		return fmt.Errorf("failed to check certificate expiry: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
 	}
 
 	if !expiringSoon {
@@ -343,30 +343,30 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("failed to get hostname: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
 
 	opCSR, opKey, err := generateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("failed to generate Operator CSR: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Load existing CLI certificate for mTLS
 	cliCert, err := tls.LoadX509KeyPair(clientCertFile, clientKeyFile)
 	if err != nil {
-		return fmt.Errorf("failed to load CLI certificate: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Fetch current trust bundle from operator
 	trustBundleURL := fmt.Sprintf("%s%s", cfg.Endpoint, constants.WellKnownPKICABundle)
 	trustBundleResp, err := http.Get(trustBundleURL)
 	if err != nil {
-		return fmt.Errorf("failed to fetch trust bundle: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 	defer trustBundleResp.Body.Close()
 
@@ -376,7 +376,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 
 	currentTrustBundle, err := io.ReadAll(trustBundleResp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read trust bundle: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if len(currentTrustBundle) == 0 {
@@ -386,7 +386,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	// Update local trust bundle
 	trustBundlePath := filepath.Join(filepath.Dir(clientCertFile), constants.PkiFileGatewayBundle)
 	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
-		return fmt.Errorf("failed to write trust bundle: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 
 	// Create mTLS client
@@ -416,26 +416,26 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
 	enrollURL := fmt.Sprintf("%s%s", cfg.Endpoint, constants.APIPathPKIDevicesEnroll)
 	httpReq, err := http.NewRequest("POST", enrollURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("failed to re-enroll: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read response: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
@@ -451,7 +451,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 		Error             string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return fmt.Errorf("failed to parse response: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
 	}
 
 	if regResp.Error != "" {
@@ -465,7 +465,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	// Save renewed certificates
 	keyBytes, err := x509.MarshalECPrivateKey(opKey)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Operator private key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
 	}
 
 	keyPEM := pem.EncodeToMemory(&pem.Block{
@@ -474,7 +474,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	})
 
 	if err := os.WriteFile(clientKeyFile, keyPEM, 0600); err != nil {
-		return fmt.Errorf("failed to write Operator key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
 
 	certContent := regResp.OperatorCert
@@ -483,13 +483,13 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	}
 
 	if err := os.WriteFile(clientCertFile, []byte(certContent), 0600); err != nil {
-		return fmt.Errorf("failed to write Operator cert: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	// Update the client certificate via DI
 	newCert, err := tls.X509KeyPair([]byte(certContent), keyPEM)
 	if err != nil {
-		return fmt.Errorf("failed to load renewed certificate: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	clientIdentity.SetCertificate(newCert)
@@ -610,7 +610,7 @@ func main() {
 	flag.StringVar(&clientCert, "client-cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+paths.Infra.CaCertPath+" or fetch from "+constants.WellKnownPKICABundle+")")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: from paths.Infra.CaCertPath or fetch from WellKnownPKICABundle endpoint)")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory Operator was launched from)")
 	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
@@ -630,11 +630,11 @@ func main() {
 	flag.BoolVar(&notaryMode, "notary", false, "Gateway mode: L1/L2/L3 strictly enforced")
 	flag.IntVar(&gatewayHTTPPort, "http-port", constants.Ports.OperatorHttp, "HTTP port for bootstrap and MCP routes (default: from paths.json)")
 	flag.IntVar(&gatewayHTTPSPort, "https-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API and public surface (default: from paths.json)")
-	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: "+paths.Infra.DataDir+" in working directory)")
-	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: "+paths.Infra.PkiDir+")")
-	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: "+paths.Infra.SecretsDir+")")
-	flag.StringVar(&gatewayVaultDir, "vault-dir", "", "Directory for vault data (default: "+constants.DefaultVaultDirDesc+")")
-	flag.StringVar(&gatewayVaultKeyPath, "vault-key", "", "Path to vault private key (default: "+constants.DefaultVaultKeyDesc+")")
+	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: from paths.Infra.DataDir in working directory)")
+	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: from paths.Infra.PkiDir)")
+	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: from paths.Infra.SecretsDir)")
+	flag.StringVar(&gatewayVaultDir, "vault-dir", "", "Directory for vault data (default: from constants.DefaultVaultDirDesc)")
+	flag.StringVar(&gatewayVaultKeyPath, "vault-key", "", "Path to vault private key (default: from constants.DefaultVaultKeyDesc)")
 	flag.BoolVar(&gatewayVaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	flag.StringVar(&gatewayPasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	flag.StringVar(&gatewayPasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
@@ -787,8 +787,8 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory ("+paths.Infra.CaCertPath+")
-	// 3. Fetch from Operator "+constants.WellKnownPKICABundle+" endpoint
+	// 2. Local PKI directory (from paths.Infra.CaCertPath)
+	// 3. Fetch from Operator WellKnownPKICABundle endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir, trustStore)
 	if !trustLoaded {
 		if endpointURL != "" {
@@ -812,7 +812,7 @@ func main() {
 	logger.Info("Trust bundle loaded")
 
 	// Resolve default client certificate paths if not explicitly provided
-	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*
+	// Priority: 1. Explicit flags, 2. Project-local operator certificates, 3. Project-local client certificates
 	if privateKey == "" {
 		// Try project-local Operator key (created by enrollment)
 		projectOperatorKey := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorKey)
@@ -1095,7 +1095,7 @@ func probeGatewayTLS(logger *slog.Logger, endpoint string, trustStore *certs.Tru
 
 // loadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
-// 2. Working directory PKI path ("+paths.Infra.CaCertPath+")
+// 2. Working directory PKI path (from paths.Infra.CaCertPath)
 // Returns true on the first valid PEM found, which is installed via
 // trustStore.SetCA. Returns false if no valid trust bundle is found.
 func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trustStore *certs.TrustStore) bool {
@@ -1664,10 +1664,10 @@ func handleResetVault(vault *vault.Vault, logger *slog.Logger) {
 // in the PKI directory for receipt verification by the evals harness.
 func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
 	if pkiDir == "" {
-		return fmt.Errorf("pkiDir cannot be empty")
+		return constants.ErrPKIDirRequired
 	}
 	if err := os.MkdirAll(pkiDir, 0700); err != nil {
-		return fmt.Errorf("create PKI directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Write PEM format
@@ -1677,7 +1677,7 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 		Bytes: pubKey,
 	})
 	if err := os.WriteFile(pemPath, pemData, 0600); err != nil {
-		return fmt.Errorf("write Actuator_pub.pem: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if logger != nil {
 		logger.Info("Actuator public key exported", "path", pemPath, "format", "PEM")
@@ -1692,14 +1692,14 @@ func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID stri
 	}
 	jsonBytes, err := json.MarshalIndent(jsonData, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal Actuator_pub.json: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 	// Ensure the directory for the JSON file exists
 	if err := os.MkdirAll(filepath.Dir(jsonPath), 0700); err != nil {
-		return fmt.Errorf("create JSON directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 	if err := os.WriteFile(jsonPath, jsonBytes, 0600); err != nil {
-		return fmt.Errorf("write Actuator_pub.json: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if logger != nil {
 		logger.Info("Actuator public key exported", "path", jsonPath, "format", "JSON")

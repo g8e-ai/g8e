@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -124,7 +126,7 @@ func TestBootstrap_HTTPError(t *testing.T) {
 	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL+"/api/v1/auth/bootstrap")
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "failed to bootstrap")
+	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
 }
 
 func TestBootstrap_ErrorResponse(t *testing.T) {
@@ -158,7 +160,7 @@ func TestBootstrap_ErrorResponse(t *testing.T) {
 	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "bootstrap failed")
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
 }
 
 func TestBootstrap_InvalidJSONResponse(t *testing.T) {
@@ -187,7 +189,7 @@ func TestBootstrap_InvalidJSONResponse(t *testing.T) {
 	resp, err := BootstrapWithURL(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "failed to parse response")
+	assert.True(t, errors.Is(err, constants.ErrInvalidJSONResponse))
 }
 
 func TestBootstrap_FingerprintVerification(t *testing.T) {
@@ -235,7 +237,7 @@ func TestBootstrap_FingerprintVerification(t *testing.T) {
 	resp, err = BootstrapWithURL(cfg, operatorCSR, cliCSR, "deadbeef", server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "CA fingerprint verification failed")
+	assert.True(t, errors.Is(err, constants.ErrValidationFailed))
 }
 
 func TestEnrollWithGateway_Success(t *testing.T) {
@@ -324,7 +326,7 @@ func TestEnrollWithGateway_NonSuccessResponse(t *testing.T) {
 	resp, err := EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "enrollment failed")
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
 }
 
 func TestCLIEnroll_Success(t *testing.T) {
@@ -401,7 +403,7 @@ func TestCLIEnroll_HTTPError(t *testing.T) {
 	resp, err := CLIEnroll(cfg, cliCSR, server.URL+"/api/v1/auth/cli/enroll")
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "failed to enroll CLI")
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
 }
 
 func TestCLIEnroll_ErrorResponse(t *testing.T) {
@@ -433,7 +435,7 @@ func TestCLIEnroll_ErrorResponse(t *testing.T) {
 	resp, err := CLIEnroll(cfg, cliCSR, server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "CLI enrollment failed")
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
 }
 
 func TestCLIEnroll_InvalidJSONResponse(t *testing.T) {
@@ -460,7 +462,7 @@ func TestCLIEnroll_InvalidJSONResponse(t *testing.T) {
 	resp, err := CLIEnroll(cfg, cliCSR, server.URL)
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "failed to parse response")
+	assert.True(t, errors.Is(err, constants.ErrInvalidJSONResponse))
 }
 
 func TestEnrollWithGateway_HTTPError(t *testing.T) {
@@ -485,7 +487,7 @@ func TestEnrollWithGateway_HTTPError(t *testing.T) {
 	resp, err := EnrollWithGateway(cfg, "localhost:59999", operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "failed to send request")
+	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
 }
 
 func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
@@ -517,7 +519,7 @@ func TestEnrollWithGateway_BadStatusCode(t *testing.T) {
 	resp, err := EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "")
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "enrollment failed with status")
+	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
 
 func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
@@ -567,7 +569,7 @@ func TestEnrollWithGateway_FingerprintVerification(t *testing.T) {
 	resp, err = EnrollWithGateway(cfg, serverURL, operatorCSR, cliCSR, "deadbeef")
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "CA fingerprint verification failed")
+	assert.True(t, errors.Is(err, constants.ErrValidationFailed))
 }
 
 func TestCheckBootstrapStatus_Success(t *testing.T) {
@@ -663,7 +665,7 @@ func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {
 	bootstrapped, err := CheckBootstrapStatus(cfg, server.URL)
 	require.Error(t, err)
 	assert.False(t, bootstrapped)
-	assert.Contains(t, err.Error(), "failed to parse response")
+	assert.True(t, errors.Is(err, constants.ErrInvalidJSONResponse))
 }
 
 func TestReEnroll_TrustBundleFetchError(t *testing.T) {
@@ -698,7 +700,7 @@ func TestReEnroll_TrustBundleFetchError(t *testing.T) {
 
 	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to fetch trust bundle")
+	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
 }
 
 func TestReEnroll_TrustBundleEmpty(t *testing.T) {
@@ -728,7 +730,7 @@ func TestReEnroll_TrustBundleEmpty(t *testing.T) {
 
 	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "fetched trust bundle is empty")
+	assert.True(t, errors.Is(err, constants.ErrEmptyTrustBundle))
 }
 
 func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
@@ -758,7 +760,7 @@ func TestReEnroll_TrustBundleBadStatus(t *testing.T) {
 
 	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "trust bundle fetch returned HTTP")
+	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
 
 func TestReEnroll_CLICertLoadError(t *testing.T) {
@@ -793,7 +795,7 @@ func TestReEnroll_CLICertLoadError(t *testing.T) {
 	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	// The error should be related to missing CLI certificate
-	assert.Contains(t, err.Error(), "failed to load")
+	assert.True(t, errors.Is(err, constants.ErrFailedToLoadClientCertificate))
 }
 
 func TestReEnroll_InvalidCAPEM(t *testing.T) {
@@ -837,5 +839,5 @@ func TestReEnroll_InvalidCAPEM(t *testing.T) {
 	_, err = ReEnroll(cfg, operatorCSR, cliCSR, "", server.URL)
 	require.Error(t, err)
 	// The error should be related to the invalid CA bundle
-	assert.Contains(t, err.Error(), "failed to parse")
+	assert.True(t, errors.Is(err, constants.ErrCAParseFailed))
 }

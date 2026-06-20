@@ -18,32 +18,33 @@ package auth
 
 import (
 	"crypto/ecdsa"
-	"fmt"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // GenerateWindowsCSR is a stub for non-Windows platforms.
 func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateKey, error) {
-	return "", nil, fmt.Errorf("windows-specific enrollment is only available on Windows")
+	return "", nil, constants.ErrWindowsSpecificEnrollment
 }
 
 // ImportCertificateToWindowsStore is a stub for non-Windows platforms.
 func ImportCertificateToWindowsStore(certPEM string) error {
-	return fmt.Errorf("windows cert store import is only available on Windows")
+	return constants.ErrWindowsCertStoreImport
 }
 
 // SignWithWindowsHello is a stub for non-Windows platforms.
 func SignWithWindowsHello(transactionHash []byte) ([]byte, error) {
-	return nil, fmt.Errorf("windows Hello signing is only available on Windows")
+	return nil, constants.ErrWindowsHelloSigning
 }
 
 // AuthenticateWithWindowsHello is a stub for non-Windows platforms.
 func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAssertionResponse, error) {
-	return nil, fmt.Errorf("windows Hello authentication is only available on Windows")
+	return nil, constants.ErrWindowsHelloAuthentication
 }
 
 // RegisterWithWindowsHello is a stub for non-Windows platforms.
 func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
-	return nil, fmt.Errorf("windows Hello registration is only available on Windows")
+	return nil, constants.ErrWindowsHelloRegistration
 }
 
 // WebAuthnAttestationResponse is a stub for non-Windows platforms.
@@ -65,5 +66,5 @@ type WebAuthnAssertionResponse struct {
 
 // TrustRootCAInWindowsStore is a stub for non-Windows platforms.
 func TrustRootCAInWindowsStore(caBundlePEM string) error {
-	return fmt.Errorf("windows cert store trust is only available on Windows")
+	return constants.ErrWindowsCertStoreTrust
 }

@@ -73,7 +73,7 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 		return nil, fmt.Errorf("web session validation failed: %w", err)
 	}
 	if doc == nil {
-		return nil, fmt.Errorf("web session not found")
+		return nil, constants.ErrNotFound
 	}
 
 	dataBytes, err := json.Marshal(doc.Data)
@@ -88,7 +88,7 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 	webSession.ID = webSessionID
 
 	if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
-		return nil, fmt.Errorf("web session expired")
+		return nil, constants.ErrExpired
 	}
 
 	return &webSession, nil

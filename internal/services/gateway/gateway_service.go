@@ -600,7 +600,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 	ls.mu.Lock()
 	if ls.running {
 		ls.mu.Unlock()
-		return fmt.Errorf("gateway service already running")
+		return constants.ErrGatewayAlreadyRunning
 	}
 	ls.running = true
 	ls.mu.Unlock()
@@ -733,14 +733,14 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	if err := ls.server.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {
 			ls.logger.Error("HTTP server shutdown timeout - forcing exit to prevent zombie process")
-			return fmt.Errorf("shutdown timeout exceeded")
+			return constants.ErrGatewayShutdownTimeout
 		}
 		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
 	}
 	if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {
 			ls.logger.Error("HTTPS server shutdown timeout - forcing exit to prevent zombie process")
-			return fmt.Errorf("shutdown timeout exceeded")
+			return constants.ErrGatewayShutdownTimeout
 		}
 		ls.logger.Error("HTTPS server shutdown error", string(constants.ConnectionStateError), err)
 	}

@@ -30,6 +30,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"unsafe"
+
+	"g8e/internal/constants"
 )
 
 // Windows WebAuthn API constants - Using API Version 4 (stable, modern version)
@@ -204,7 +206,7 @@ func generateSoftwareBackedCSR(commonName string) (string, *ecdsa.PrivateKey, er
 	// For software-backed keys, we use standard Go crypto but import to Windows cert store
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate ECDSA P-256 key: %w", err)
+		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
 	}
 
 	template := x509.CertificateRequest{
@@ -225,7 +227,7 @@ func generateSoftwareBackedCSR(commonName string) (string, *ecdsa.PrivateKey, er
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create CSR: %w", err)
+		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
 	}
 
 	csrPEM := pem.EncodeToMemory(&pem.Block{
@@ -244,7 +246,7 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 	// Full implementation requires syscall access to CNG APIs
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate ECDSA P-256 key: %w", err)
+		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
 	}
 
 	template := x509.CertificateRequest{
@@ -265,7 +267,7 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create CSR: %w", err)
+		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
 	}
 
 	csrPEM := pem.EncodeToMemory(&pem.Block{
@@ -281,13 +283,13 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 	// Create a temporary file for the certificate
 	tmpDir, err := os.MkdirTemp("", "g8e-cert-import-*")
 	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrWindowsTempDirCreate, err)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	certFile := filepath.Join(tmpDir, "certificate.pem")
 	if err := os.WriteFile(certFile, []byte(certPEM), 0600); err != nil {
-		return fmt.Errorf("failed to write certificate to temp file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrWindowsCertWriteFailed, err)
 	}
 
 	// Use PowerShell with .NET X509Store to import the certificate
@@ -314,7 +316,7 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 	psCmd := exec.Command("powershell", "-Command", psScript)
 	output, err := psCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to import certificate via PowerShell: %w, output: %s", err, string(output))
+		return fmt.Errorf("%w: %v, output: %s", constants.ErrWindowsPowerShellImport, err, string(output))
 	}
 
 	return nil
@@ -325,19 +327,19 @@ func TrustRootCAInWindowsStore(caBundlePEM string) error {
 	// Extract the first certificate from the bundle (the Root CA)
 	block, _ := pem.Decode([]byte(caBundlePEM))
 	if block == nil || block.Type != "CERTIFICATE" {
-		return fmt.Errorf("failed to decode Root CA PEM")
+		return constants.ErrPEMDecodeFailed
 	}
 
 	// Create a temporary file for the certificate
 	tmpDir, err := os.MkdirTemp("", "g8e-ca-trust-*")
 	if err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrWindowsTempDirCreate, err)
 	}
 	defer os.RemoveAll(tmpDir)
 
 	caFile := filepath.Join(tmpDir, "root_ca.crt")
 	if err := os.WriteFile(caFile, pem.EncodeToMemory(block), 0600); err != nil {
-		return fmt.Errorf("failed to write Root CA to temp file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrWindowsCertWriteFailed, err)
 	}
 
 	// Use PowerShell to import to Trusted Root store
@@ -369,7 +371,7 @@ func TrustRootCAInWindowsStore(caBundlePEM string) error {
 	psCmd := exec.Command("powershell", "-Command", psScript)
 	output, err := psCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to trust Root CA via PowerShell: %w, output: %s", err, string(output))
+		return fmt.Errorf("%w: %v, output: %s", constants.ErrWindowsPowerShellTrust, err, string(output))
 	}
 
 	return nil
@@ -397,13 +399,13 @@ type WebAuthnAttestationResponse struct {
 func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
 	// 1. Check if webauthn.dll is available
 	if err := modWebAuthN.Load(); err != nil {
-		return nil, fmt.Errorf("webauthn.dll not found: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrWindowsWebAuthnDLLNotFound, err)
 	}
 
 	// 2. Get API version to ensure compatibility
 	apiVersion, _, _ := procWebAuthNGetApiVersionNumber.Call()
 	if apiVersion < WEBAUTHN_API_VERSION_4 {
-		return nil, fmt.Errorf("Windows Hello API version %d is too old, minimum required is 4", apiVersion)
+		return nil, fmt.Errorf("%w: version %d, minimum required is 4", constants.ErrWindowsWebAuthnAPIVersion, apiVersion)
 	}
 
 	// 3. Prepare RP info
@@ -471,7 +473,7 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 	)
 
 	if int32(ret) != 0 {
-		return nil, fmt.Errorf("Windows Hello registration failed (HRESULT: 0x%x)", uint32(ret))
+		return nil, fmt.Errorf("%w: HRESULT 0x%x", constants.ErrWindowsHelloRegistration, uint32(ret))
 	}
 	defer procWebAuthNFreeCredentialAttestation.Call(uintptr(unsafe.Pointer(pAttestation)))
 
@@ -495,19 +497,19 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAssertionResponse, error) {
 	// 1. Check if webauthn.dll is available
 	if err := modWebAuthN.Load(); err != nil {
-		return nil, fmt.Errorf("webauthn.dll not found: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrWindowsWebAuthnDLLNotFound, err)
 	}
 
 	// 2. Get API version to ensure compatibility
 	apiVersion, _, _ := procWebAuthNGetApiVersionNumber.Call()
 	if apiVersion < WEBAUTHN_API_VERSION_4 {
-		return nil, fmt.Errorf("Windows Hello API version %d is too old, minimum required is 4", apiVersion)
+		return nil, fmt.Errorf("%w: version %d, minimum required is 4", constants.ErrWindowsWebAuthnAPIVersion, apiVersion)
 	}
 
 	// 3. Prepare RP ID
 	rpIDPtr, err := syscall.UTF16PtrFromString(rpID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid RP ID: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrValidationFailed, err)
 	}
 
 	// 4. Prepare Client Data
@@ -539,7 +541,7 @@ func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAsser
 
 	// HRESULT success is 0 (S_OK)
 	if int32(ret) != 0 {
-		return nil, fmt.Errorf("Windows Hello authentication failed (HRESULT: 0x%x)", uint32(ret))
+		return nil, fmt.Errorf("%w: HRESULT 0x%x", constants.ErrWindowsHelloAuthentication, uint32(ret))
 	}
 	defer procWebAuthNFreeAssertion.Call(uintptr(unsafe.Pointer(pAssertion)))
 

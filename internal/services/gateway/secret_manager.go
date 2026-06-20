@@ -90,7 +90,7 @@ func (m *SecretManager) InitAppSettings() error {
 	}
 
 	if err := m.cleanupStaleAppSettings(); err != nil {
-		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", string(constants.ConnectionStateError), err)
+		m.logger.Warn("[SecretManager] Failed to cleanup stale platform settings", "error", err)
 	}
 
 	return m.validateAppSettings()
@@ -161,7 +161,7 @@ func (m *SecretManager) recreateAppSettings() error {
 		filePath := filepath.Join(m.secretsDir, name)
 		if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
 			m.logger.Warn("[SecretManager] Failed to delete secret file during recreation",
-				"path", filePath, string(constants.ConnectionStateError), err)
+				"path", filePath, "error", err)
 		}
 	}
 
@@ -169,7 +169,7 @@ func (m *SecretManager) recreateAppSettings() error {
 	manifestPath := filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)
 	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
 		m.logger.Warn("[SecretManager] Failed to delete digest manifest during recreation",
-			"path", manifestPath, string(constants.ConnectionStateError), err)
+			"path", manifestPath, "error", err)
 	}
 
 	// Recreate from scratch
@@ -181,7 +181,7 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 		return fmt.Errorf("secret_manager: create app settings: reject preexisting state: %w", err)
 	}
 	if err := os.MkdirAll(m.secretsDir, 0700); err != nil {
-		return fmt.Errorf("secret_manager: create app settings: create directory %s: %w", m.secretsDir, err)
+		return fmt.Errorf("secret_manager: create app settings: %w: %s", constants.ErrDirCreateFailed, m.secretsDir)
 	}
 
 	// Generate Actuator signing key and compute its KeyID once
@@ -261,7 +261,7 @@ func (m *SecretManager) validateAppSettings() error {
 	if info, err := os.Stat(m.secretsDir); err != nil {
 		return fmt.Errorf("secret_manager: validate app settings: secrets directory required: %w", err)
 	} else if !info.IsDir() {
-		return fmt.Errorf("secret_manager: validate app settings: secrets path is not a directory")
+		return fmt.Errorf("secret_manager: validate app settings: %w", constants.ErrNotADirectory)
 	}
 
 	manifest, err := m.readDigestManifest()
@@ -280,7 +280,7 @@ func (m *SecretManager) validateAppSettings() error {
 		// Verify encrypted file digest matches manifest (what g8e-compatible agentic ensembles will check)
 		entry, ok := manifest.Secrets[name]
 		if !ok || entry.SHA256 == "" {
-			return fmt.Errorf("secret_manager: validate app settings: manifest missing entry %s", name)
+			return fmt.Errorf("secret_manager: validate app settings: %w: %s", constants.ErrNotFound, name)
 		}
 		filePath := filepath.Join(m.secretsDir, name)
 		encryptedData, err := os.ReadFile(filePath)
@@ -289,7 +289,7 @@ func (m *SecretManager) validateAppSettings() error {
 		}
 		encryptedDigest := sha256.Sum256(encryptedData)
 		if actual := hex.EncodeToString(encryptedDigest[:]); actual != entry.SHA256 {
-			return fmt.Errorf("secret_manager: validate app settings: secret %s digest mismatch", name)
+			return fmt.Errorf("secret_manager: validate app settings: %w: secret %s digest mismatch", constants.ErrValidationFailed, name)
 		}
 	}
 
@@ -343,13 +343,13 @@ func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) err
 	tmpPath := finalPath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		m.logger.Error("[SecretManager] Failed to write bootstrap digest manifest",
-			"path", tmpPath, string(constants.ConnectionStateError), err)
+			"path", tmpPath, "error", err)
 		return fmt.Errorf("secret_manager: write digest manifest: write file %s: %w", tmpPath, err)
 	}
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		_ = os.Remove(tmpPath)
 		m.logger.Error("[SecretManager] Failed to rename bootstrap digest manifest",
-			"from", tmpPath, "to", finalPath, string(constants.ConnectionStateError), err)
+			"from", tmpPath, "to", finalPath, "error", err)
 		return fmt.Errorf("secret_manager: write digest manifest: rename to %s: %w", finalPath, err)
 	}
 	m.logger.Info("[SecretManager] Bootstrap digest manifest written from encrypted files",
@@ -362,7 +362,7 @@ func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("secret_manager: read digest manifest: bootstrap digest manifest file %s is required but does not exist: %w", manifestPath, err)
+			return nil, fmt.Errorf("secret_manager: read digest manifest: %w: %s", constants.ErrNotFound, manifestPath)
 		}
 		return nil, fmt.Errorf("secret_manager: read digest manifest: read file %s: %w", manifestPath, err)
 	}
@@ -372,10 +372,10 @@ func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
 		return nil, fmt.Errorf("secret_manager: read digest manifest: unmarshal %s: %w", manifestPath, err)
 	}
 	if manifest.Version != 1 {
-		return nil, fmt.Errorf("secret_manager: read digest manifest: unsupported version %d", manifest.Version)
+		return nil, fmt.Errorf("secret_manager: read digest manifest: %w: version %d", constants.ErrValidationFailed, manifest.Version)
 	}
 	if manifest.Secrets == nil {
-		return nil, fmt.Errorf("secret_manager: read digest manifest: missing secrets map")
+		return nil, fmt.Errorf("secret_manager: read digest manifest: %w", constants.ErrMissingRequiredField)
 	}
 	return &manifest, nil
 }
@@ -383,13 +383,13 @@ func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
 func (m *SecretManager) rejectPreexistingBootstrapState() error {
 	for _, name := range requiredBootstrapSecrets {
 		if _, err := os.Stat(filepath.Join(m.secretsDir, name)); err == nil {
-			return fmt.Errorf("secret_manager: reject preexisting bootstrap state: found preexisting secret %s", name)
+			return fmt.Errorf("secret_manager: reject preexisting bootstrap state: %w: secret %s", constants.ErrAlreadyExists, name)
 		} else if !os.IsNotExist(err) {
 			return fmt.Errorf("secret_manager: reject preexisting bootstrap state: inspect secret %s: %w", name, err)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)); err == nil {
-		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: found preexisting digest manifest")
+		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: %w: digest manifest", constants.ErrAlreadyExists)
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("secret_manager: reject preexisting bootstrap state: inspect digest manifest: %w", err)
 	}
@@ -406,7 +406,7 @@ func (m *SecretManager) warmAppSettingsCache(dataJSON string, now time.Time) {
 		cacheKey, dataJSON, nowStr, sqliteutil.FormatTimestamp(now.Add(time.Duration(cacheTTL)*time.Second)),
 	)
 	if err != nil {
-		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", string(constants.ConnectionStateError), err)
+		m.logger.Warn("[SecretManager] Failed to warm cache for platform_settings", "error", err)
 	} else {
 		m.logger.Info("[SecretManager] platform_settings cache warmed", "key", cacheKey, "ttl", cacheTTL)
 	}
@@ -422,11 +422,11 @@ func (m *SecretManager) generateSecureToken(bytes int) (string, error) {
 
 func (m *SecretManager) generateSecureTokenBytes(bytes int) ([]byte, error) {
 	if bytes <= 0 {
-		return nil, fmt.Errorf("secure token byte length must be positive")
+		return nil, fmt.Errorf("%w: secure token byte length must be positive", constants.ErrValidationFailed)
 	}
 	tokenBytes := make([]byte, bytes)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		return nil, fmt.Errorf("generate secure random token: %w", err)
+		return nil, fmt.Errorf("secret_manager: generate secure random token: %w", err)
 	}
 	return tokenBytes, nil
 }
@@ -444,7 +444,7 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 		return nil, "", fmt.Errorf("secret_manager: get actuator key: decode seed: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, "", fmt.Errorf("secret_manager: get actuator key: invalid seed length %d; expected %d", len(seed), ed25519.SeedSize)
+		return nil, "", fmt.Errorf("secret_manager: get actuator key: %w", constants.ErrValidationFailed)
 	}
 
 	priv := ed25519.NewKeyFromSeed(seed)
@@ -461,17 +461,17 @@ func (m *SecretManager) GetActuatorKey() (ed25519.PrivateKey, string, error) {
 		return nil, "", fmt.Errorf("secret_manager: get actuator key: unmarshal platform_settings: %w", err)
 	}
 	if settings.Settings == nil {
-		return nil, "", fmt.Errorf("secret_manager: get actuator key: platform_settings missing settings; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("secret_manager: get actuator key: %w", constants.ErrMissingRequiredField)
 	}
 
 	keyID := strings.TrimSpace(settings.Settings.ActuatorKeyID)
 	if keyID == "" {
-		return nil, "", fmt.Errorf("secret_manager: get actuator key: platform_settings missing actuator_key_id; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("secret_manager: get actuator key: %w", constants.ErrMissingRequiredField)
 	}
 
 	expectedKeyID := hex.EncodeToString(priv.Public().(ed25519.PublicKey))
 	if keyID != expectedKeyID {
-		return nil, "", fmt.Errorf("secret_manager: get actuator key: key_id mismatch; delete and recreate runtime state")
+		return nil, "", fmt.Errorf("secret_manager: get actuator key: %w", constants.ErrValidationFailed)
 	}
 
 	return priv, keyID, nil
@@ -523,7 +523,7 @@ func (m *SecretManager) GetConsensusKey() (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("secret_manager: get consensus key: decode seed: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("secret_manager: get consensus key: invalid seed length %d; expected %d", len(seed), ed25519.SeedSize)
+		return nil, fmt.Errorf("secret_manager: get consensus key: %w", constants.ErrValidationFailed)
 	}
 
 	return ed25519.NewKeyFromSeed(seed), nil
@@ -602,7 +602,7 @@ func (m *SecretManager) GetOperatorPrivateKey() (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("secret_manager: get operator private key: decode seed: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("secret_manager: get operator private key: invalid seed length %d; expected %d", len(seed), ed25519.SeedSize)
+		return nil, fmt.Errorf("secret_manager: get operator private key: %w", constants.ErrValidationFailed)
 	}
 	return ed25519.NewKeyFromSeed(seed), nil
 }
@@ -625,7 +625,7 @@ func (m *SecretManager) GetCLIPrivateKey() (ed25519.PrivateKey, error) {
 		return nil, fmt.Errorf("secret_manager: get CLI private key: decode seed: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("secret_manager: get CLI private key: invalid seed length %d; expected %d", len(seed), ed25519.SeedSize)
+		return nil, fmt.Errorf("secret_manager: get CLI private key: %w", constants.ErrValidationFailed)
 	}
 	return ed25519.NewKeyFromSeed(seed), nil
 }
@@ -648,7 +648,7 @@ func (m *SecretManager) GetSessionToken() (string, error) {
 
 	parts := strings.Split(tokenData, "|")
 	if len(parts) != 2 {
-		return "", fmt.Errorf("secret_manager: get session token: invalid format")
+		return "", fmt.Errorf("secret_manager: get session token: %w", constants.ErrValidationFailed)
 	}
 
 	token := parts[0]

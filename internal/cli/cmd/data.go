@@ -83,7 +83,7 @@ func dataUsersCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -98,7 +98,7 @@ func dataUsersCmd() *cobra.Command {
 
 			var users []User
 			if err := json.Unmarshal(resp, &users); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			cmd.Printf("Users (%d total)\n", len(users))
@@ -120,7 +120,7 @@ func dataOperatorsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -135,7 +135,7 @@ func dataOperatorsCmd() *cobra.Command {
 
 			var operators []Operator
 			if err := json.Unmarshal(resp, &operators); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			cmd.Printf("Operators (%d total)\n", len(operators))
@@ -157,7 +157,7 @@ func dataSettingsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -172,7 +172,7 @@ func dataSettingsCmd() *cobra.Command {
 
 			var settings SettingsResponse
 			if err := json.Unmarshal(resp, &settings); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
 
 			cmd.Println("Platform Settings")
@@ -198,7 +198,7 @@ func dataStoreCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -207,7 +207,7 @@ func dataStoreCmd() *cobra.Command {
 			}
 
 			if collection == "" {
-				return fmt.Errorf("--collection is required")
+				return constants.ErrCollectionRequired
 			}
 
 			if documentID == "" {
@@ -267,7 +267,7 @@ func dataAuditListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -276,7 +276,7 @@ func dataAuditListCmd() *cobra.Command {
 			}
 
 			if operatorSessionID == "" {
-				return fmt.Errorf("--operator-session-id is required")
+				return constants.ErrOperatorSessionIDRequired
 			}
 
 			query := QueryRequestWithLimit{
@@ -313,7 +313,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dbPath := paths.Infra.DbPath
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-				return fmt.Errorf("audit vault database not found at %s", dbPath)
+				return fmt.Errorf("%w: %s", constants.ErrAuditVaultDatabaseNotFound, dbPath)
 			}
 
 			query := "SELECT type, COUNT(*) as count FROM events"
@@ -330,7 +330,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 				rows, err = sqlDBQuery(dbPath, query)
 			}
 			if err != nil {
-				return fmt.Errorf("failed to query audit events: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrAuditQueryFailed, err)
 			}
 			defer rows.Close()
 
@@ -340,7 +340,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 				var eventType string
 				var count int
 				if err := rows.Scan(&eventType, &count); err != nil {
-					return fmt.Errorf("failed to scan row: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrAuditScanFailed, err)
 				}
 				summary[eventType] = count
 				total += count

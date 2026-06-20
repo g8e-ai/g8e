@@ -41,7 +41,7 @@ func EnrollCLI(cfg *config.Config) error {
 	hostname, _ := os.Hostname()
 	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("generate CSR: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	var regResp *RegistrationResponse
@@ -54,15 +54,15 @@ func EnrollCLI(cfg *config.Config) error {
 		return err
 	}
 	if regResp.CLISessionID == "" || regResp.CLICert == "" {
-		return fmt.Errorf("unexpected enrollment response (missing required fields)")
+		return constants.ErrMissingRequiredField
 	}
 
 	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
-		return fmt.Errorf("save cert: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	if regResp.HubTrustBundle != "" {
 		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
-			return fmt.Errorf("save trust bundle: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
 	return SaveCredentials(cfg, &Credentials{
@@ -86,7 +86,7 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 
 	csr, key, err := GenerateCSR(agentName)
 	if err != nil {
-		return "", "", "", fmt.Errorf("generate CSR: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	req := struct {
@@ -100,27 +100,27 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 	}
 	reqBody, err := json.Marshal(req)
 	if err != nil {
-		return "", "", "", fmt.Errorf("marshal enrollment request: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return "", "", "", fmt.Errorf("load CLI certificate: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
 	if err != nil {
-		return "", "", "", fmt.Errorf("read CA bundle: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
 	caPool.AppendCertsFromPEM(caBundleBytes)
 
 	creds, err := LoadCredentials(cfg)
 	if err != nil {
-		return "", "", "", fmt.Errorf("load credentials: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
 	if creds == nil || creds.CLISessionID == "" {
-		return "", "", "", fmt.Errorf("no CLI session found; run 'g8e auth enroll' first")
+		return "", "", "", constants.ErrNotAuthenticated
 	}
 
 	httpClient := &http.Client{
@@ -136,18 +136,18 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 	enrollURL := cfg.OperatorHTTPURL() + constants.APIPaths.PKIAppsDelegated
 	httpReq, err := http.NewRequest("POST", enrollURL, strings.NewReader(string(reqBody)))
 	if err != nil {
-		return "", "", "", fmt.Errorf("create request: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrHTTPStatusError, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set(constants.HeaderCLISessionID, creds.CLISessionID)
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to POST delegated credential request: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrHTTPStatusError, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		return "", "", "", fmt.Errorf("delegated credential enrollment failed with status %d", resp.StatusCode)
+		return "", "", "", fmt.Errorf("%w: status %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	var enrollResp struct {
@@ -159,15 +159,15 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		Error       string `json:"error,omitempty"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&enrollResp); err != nil {
-		return "", "", "", fmt.Errorf("decode enrollment response: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
 	}
 
 	if !enrollResp.Success {
-		return "", "", "", fmt.Errorf("delegated credential enrollment failed: %s", enrollResp.Error)
+		return "", "", "", fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
 	}
 
 	if err := SaveCertAndKey(enrollResp.AppCert, enrollResp.CertChain, key, certFile, keyFile); err != nil {
-		return "", "", "", fmt.Errorf("save cert and key: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	return enrollResp.AppID, certFile, keyFile, nil

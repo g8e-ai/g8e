@@ -75,7 +75,7 @@ func (c *PKIController) readBody(r *http.Request) ([]byte, error) {
 // @Router			/.well-known/g8e/pki/ca-bundle [get]
 func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -85,7 +85,7 @@ func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request
 	pemData, err := c.pki.GatewayTrustBundle()
 	if err != nil {
 		c.logger.Error("Failed to read gateway trust bundle", "error", err, "path", bundlePath)
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: read trust bundle: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrTrustBundleStale, err).Error())
 		return
 	}
 
@@ -105,7 +105,7 @@ func (c *PKIController) handlePKICABundle(w http.ResponseWriter, r *http.Request
 // @Router			/.well-known/g8e/pki/fingerprint [get]
 func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -113,14 +113,14 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 	pemData, err := os.ReadFile(rootCAPath)
 	if err != nil {
 		c.logger.Error("Failed to read root CA", "error", err, "path", rootCAPath)
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: read root CA: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrPKILoadRootCA, err).Error())
 		return
 	}
 
 	block, rest := pem.Decode(pemData)
 	if block == nil {
 		c.logger.Error("Invalid root CA PEM", "path", rootCAPath)
-		c.responder.Error(w, http.StatusInternalServerError, "pki: invalid root CA PEM")
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrPEMDecodeFailed.Error())
 		return
 	}
 	if len(rest) > 0 {
@@ -144,13 +144,13 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 // @Router			/api/v1/pki/csr/sign [post]
 func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
@@ -163,13 +163,13 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 		WorkloadSessionID string `json:"workload_session_id"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal CSR sign request: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	certPEM, chainPEM, err := c.pki.SignCSR(req.CSR, req.LeafType, req.OrganizationID, req.OperatorID, req.UserID, req.WorkloadSessionID, "")
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: sign CSR: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrPKISignCSR, err).Error())
 		return
 	}
 
@@ -188,13 +188,13 @@ func (c *PKIController) handlePKICSRSign(w http.ResponseWriter, r *http.Request)
 // @Router			/api/v1/pki/certificates/revoke [post]
 func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
@@ -203,17 +203,17 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 		Reason string `json:"reason"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal revoke request: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	if req.Serial == "" {
-		c.responder.Error(w, http.StatusBadRequest, "pki: serial required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 		return
 	}
 
 	if err := c.pki.RevokeCertificate(req.Serial, req.Reason); err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: revoke certificate: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrPKIRevokeCertificate, err).Error())
 		return
 	}
 
@@ -229,13 +229,13 @@ func (c *PKIController) handlePKICertificatesRevoke(w http.ResponseWriter, r *ht
 // @Router			/.well-known/g8e/pki/crl [get]
 func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	crlDER, err := c.pki.GenerateCRL()
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: generate CRL: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrPKIGenerateCRL, err).Error())
 		return
 	}
 
@@ -255,48 +255,48 @@ func (c *PKIController) handlePKIRevocationBundle(w http.ResponseWriter, r *http
 // @Router			/api/v1/pki/devices/enroll [post]
 func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	if c.registration == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, "pki: registration service not available")
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
 		return
 	}
 
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		c.responder.Error(w, http.StatusUnauthorized, "pki: mTLS client certificate required")
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrMissingCertificate.Error())
 		return
 	}
 
 	userID, err := ExtractUserIDFromCert(r.TLS.PeerCertificates[0])
 	if err != nil {
-		c.responder.Error(w, http.StatusUnauthorized, fmt.Errorf("pki: extract user ID from certificate: %w", err).Error())
+		c.responder.Error(w, http.StatusUnauthorized, fmt.Errorf("%w: %v", constants.ErrCertParseFailed, err).Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	var req models.OperatorRegistrationRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal enrollment request: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	// Device enrollment does not require an organization context
 	organizationID := ""
 	if req.CSR == "" {
-		c.responder.Error(w, http.StatusBadRequest, "pki: csr_pem is required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 		return
 	}
 
 	resp, err := c.registration.RegisterDeviceCSR(userID, organizationID, req)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: register device CSR: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrEnrollmentFailed, err).Error())
 		return
 	}
 
@@ -312,30 +312,30 @@ func (c *PKIController) handlePKIDevicesEnroll(w http.ResponseWriter, r *http.Re
 // @Router			/api/v1/pki/apps/enroll [post]
 func (c *PKIController) handlePKIAppsEnroll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	if c.appEnrollment == nil {
-		c.responder.Error(w, http.StatusServiceUnavailable, "pki: app enrollment service not available")
+		c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrServiceUnavailable.Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	var req AppEnrollRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal app enrollment request: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	resp, err := c.appEnrollment.EnrollApp(req)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: enroll app: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrEnrollmentFailed, err).Error())
 		return
 	}
 
@@ -356,67 +356,67 @@ func (c *PKIController) handlePKIAppsEnroll(w http.ResponseWriter, r *http.Reque
 // @Router			/api/v1/pki/apps/delegated [post]
 func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	// Require mTLS authentication from a human CLI session
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		c.responder.Error(w, http.StatusUnauthorized, "pki: mTLS client certificate required")
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrMissingCertificate.Error())
 		return
 	}
 
 	// Extract user ID from the CLI certificate
 	userID, err := ExtractUserIDFromCert(r.TLS.PeerCertificates[0])
 	if err != nil {
-		c.responder.Error(w, http.StatusUnauthorized, fmt.Errorf("pki: extract user ID from certificate: %w", err).Error())
+		c.responder.Error(w, http.StatusUnauthorized, fmt.Errorf("%w: %v", constants.ErrCertParseFailed, err).Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: read request body: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	var req AppEnrollRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("pki: unmarshal delegated credential request: %w", err).Error())
+		c.responder.Error(w, http.StatusBadRequest, fmt.Errorf("%w: %v", constants.ErrInvalidJSONBody, err).Error())
 		return
 	}
 
 	// Validate request
 	if req.CSR == "" {
-		c.responder.Error(w, http.StatusBadRequest, "pki: csr_pem is required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 		return
 	}
 	if req.AppName == "" {
-		c.responder.Error(w, http.StatusBadRequest, "pki: app_name is required")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrMissingRequiredField.Error())
 		return
 	}
 
 	// Sanitize app name
 	sanitizedName := req.AppName
 	if !isValidAppName(sanitizedName) {
-		c.responder.Error(w, http.StatusBadRequest, "pki: app_name must contain only alphanumeric characters, hyphens, and underscores")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrValidationFailed.Error())
 		return
 	}
 
 	// Validate CSR format
 	block, _ := pem.Decode([]byte(req.CSR))
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		c.responder.Error(w, http.StatusBadRequest, "pki: invalid CSR PEM format")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrPKIInvalidCSR.Error())
 		return
 	}
 
 	csr, err := x509.ParseCertificateRequest(block.Bytes)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "pki: failed to parse CSR")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrPKIParseCSR.Error())
 		return
 	}
 
 	if err := csr.CheckSignature(); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "pki: CSR signature check failed")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrPKICSRSignatureCheck.Error())
 		return
 	}
 
@@ -425,23 +425,23 @@ func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Re
 	certPEM, chainPEM, err := c.pki.SignDelegatedCSR(req.CSR, sanitizedName, userID)
 	if err != nil {
 		c.logger.Error("Failed to sign delegated CSR", "app_name", sanitizedName, "user_id", userID, "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, "pki: failed to sign delegated certificate")
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrPKISignCSR.Error())
 		return
 	}
 
 	// Extract the appID from the signed certificate
 	certBlock, _ := pem.Decode([]byte(certPEM))
 	if certBlock == nil {
-		c.responder.Error(w, http.StatusInternalServerError, "pki: failed to parse issued certificate")
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrPEMDecodeFailed.Error())
 		return
 	}
 	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Sprintf("pki: failed to parse issued certificate: %v", err))
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrCertParseFailed, err).Error())
 		return
 	}
 	if len(parsedCert.URIs) == 0 {
-		c.responder.Error(w, http.StatusInternalServerError, "pki: issued certificate has no URI SAN")
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrValidationFailed.Error())
 		return
 	}
 	appID := parsedCert.URIs[0].String()
@@ -477,7 +477,7 @@ func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Re
 // @Router			/bootstrap-ca [get]
 func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -522,7 +522,7 @@ echo "[g8e] You can now use: ./g8e auth enroll"
 // @Router			/bootstrap-ca-macos [get]
 func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -569,7 +569,7 @@ echo "[g8e] You can now use: ./g8e auth enroll"
 // @Router			/bootstrap-ca.ps1 [get]
 func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -667,20 +667,20 @@ func (c *PKIController) handleTrustScriptWindowsAlias(w http.ResponseWriter, r *
 // @Router			/.well-known/g8e/bin/{filename} [get]
 func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	filename := filepath.Base(r.URL.Path)
 	if filename == "" || filename == "." {
-		c.responder.Error(w, http.StatusBadRequest, "pki: invalid filename")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrPathValidation.Error())
 		return
 	}
 
 	// Validate binary name pattern for security
 	binaryPattern := regexp.MustCompile(`^g8e-(linux|darwin|windows)-(amd64|arm64|386)(\.exe)?$`)
 	if !binaryPattern.MatchString(filename) {
-		c.responder.Error(w, http.StatusBadRequest, "pki: invalid binary name")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrPathValidation.Error())
 		return
 	}
 
@@ -705,7 +705,7 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 
 	if binaryPath == "" {
 		c.logger.Error("Binary not found", "filename", filename, "checked_paths", possiblePaths)
-		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("pki: binary not found: %s", filename))
+		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
 		return
 	}
 
@@ -724,7 +724,7 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 // @Router			/g8e-operator.sh [get]
 func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -737,7 +737,7 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 	script, err := scripts.RenderLinuxDeployScript(data)
 	if err != nil {
 		c.logger.Error("Failed to render Linux deploy script", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: render Linux deploy script: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrInternal, err).Error())
 		return
 	}
 
@@ -756,7 +756,7 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 // @Router			/g8e-operator.ps1 [get]
 func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
@@ -801,7 +801,7 @@ func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http
 	script, err := scripts.RenderWindowsDeployScript(data)
 	if err != nil {
 		c.logger.Error("Failed to render Windows deploy script", "error", err)
-		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("pki: render Windows deploy script: %w", err).Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("%w: %v", constants.ErrInternal, err).Error())
 		return
 	}
 

@@ -112,7 +112,46 @@ The platform is built via the Makefile. Run `make help` for available targets.
 
 **Error handling:** Always check errors; wrap with context using `fmt.Errorf("component: action: %w", err)`
 
-**Typed errors:** Define typed error constants for error reasons instead of hand-trolled strings. When adding error types, check for any hand-trolled strings that should be properly typed errors (e.g., error reason strings, status codes, rejection reasons). Define these as typed constants in `internal/constants/` and use them consistently across the codebase.
+**Typed errors:** Define typed error constants for error reasons instead of hand-rolled strings. All error constants MUST be defined in `internal/constants/errors.go` and used consistently across the codebase.
+
+**When to use centralized error constants:**
+- Package-level error variables (e.g., `ErrNotFound`, `ErrInvalidInput`)
+- Error reasons that are checked or compared elsewhere
+- Error messages that represent distinct failure modes
+- Any error that could be wrapped with `errors.Is()` or `errors.As()`
+
+**When to use `fmt.Errorf()`:**
+- Wrapping errors with context: `fmt.Errorf("component: action: %w", err)`
+- Dynamic error messages that include runtime values
+- One-off errors in test code
+
+**Examples:**
+
+```go
+// GOOD - Use centralized constant
+if user == nil {
+    return constants.ErrUserNotFound
+}
+
+// GOOD - Wrap with context
+if err != nil {
+    return fmt.Errorf("failed to load user: %w", err)
+}
+
+// BAD - Hand-rolled string that should be a constant
+if user == nil {
+    return errors.New("user not found")  // Use constants.ErrUserNotFound instead
+}
+
+// BAD - Package-level error in wrong location
+var ErrCustomError = errors.New("custom error")  // Move to internal/constants/errors.go
+```
+
+**Adding new error constants:**
+1. Check `internal/constants/errors.go` for existing errors that match your use case
+2. If no suitable constant exists, add a new one to `internal/constants/errors.go`
+3. Use the new constant consistently across the codebase
+4. Search for hand-rolled strings that should be replaced with the new constant
 
 **No panics** in production paths; return errors instead
 

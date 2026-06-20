@@ -22,6 +22,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"net/http"
@@ -474,7 +475,7 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "enrollment failed")
+	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
 
 // TestEnrollAgentApp_GatewayUnreachable tests error handling when the gateway is unreachable.
@@ -504,7 +505,7 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to POST delegated credential request")
+	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
 
 // TestEnrollAgentApp_NoCLICredentials tests error handling when CLI credentials are missing.
@@ -533,7 +534,7 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no CLI session found")
+	assert.True(t, errors.Is(err, constants.ErrNotAuthenticated))
 }
 
 // TestEnrollAgentApp_MissingCLICert tests error handling when CLI cert is missing.
@@ -562,7 +563,7 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "load CLI certificate")
+	assert.True(t, errors.Is(err, constants.ErrFailedToLoadClientCertificate))
 }
 
 // TestEnrollAgentApp_MissingCABundle tests error handling when CA bundle is missing.
@@ -588,7 +589,7 @@ func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read CA bundle")
+	assert.True(t, errors.Is(err, constants.ErrFailedToReadTrustBundle))
 }
 
 // TestEnrollAgentApp_WrongSPIFFEID tests re-enrollment when cert has wrong SPIFFE ID.

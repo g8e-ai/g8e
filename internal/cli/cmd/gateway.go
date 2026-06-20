@@ -191,17 +191,17 @@ func gatewayStartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("config: failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("platform: failed to create process manager: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("platform: failed to check Operator status: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 			}
 			if running {
 				cmd.Printf("g8e Gateway is already running (PID: %d)\n", pid)
@@ -243,7 +243,7 @@ func gatewayStartCmd() *cobra.Command {
 			// Validate posture at CLI edge for clean error messages
 			postureObj, err := governance.ParseGovernancePosture(startCfg.Posture)
 			if err != nil {
-				return fmt.Errorf("governance: invalid posture: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInvalidPosture, err)
 			}
 			cmd.Printf("[g8e] Gateway posture: %s\n", postureObj.Description())
 			if err := pm.StartOperator(platform.OperatorStartOptions{
@@ -264,12 +264,12 @@ func gatewayStartCmd() *cobra.Command {
 				CertIdentityMode:   identityResult.CertMode,
 				IdentityData:       identityResult.IdentityData,
 			}); err != nil {
-				return fmt.Errorf("platform: failed to start operator: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 
 			_, pid, err = pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("platform: failed to check Operator status after start: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 			}
 
 			externalIP := network.GetExternalInterfaceIP()
@@ -319,7 +319,7 @@ func gatewayStartCmd() *cobra.Command {
 				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it
 				logPath := pm.GetLogPath()
 				if err := platform.TailLog(logPath, true); err != nil {
-					return fmt.Errorf("platform: failed to follow logs: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 				}
 			}
 
@@ -354,17 +354,17 @@ func gatewayStopCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("config: failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("platform: failed to create process manager: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("platform: failed to check Operator status: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 			}
 			if !running {
 				cmd.Println("g8e Gateway is not running")
@@ -373,7 +373,7 @@ func gatewayStopCmd() *cobra.Command {
 
 			cmd.Printf("Stopping g8e Gateway (PID: %d)...\n", pid)
 			if err := pm.StopOperator(); err != nil {
-				return fmt.Errorf("platform: failed to stop operator: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 			}
 
 			cmd.Println("g8e Gateway stopped successfully")
@@ -390,7 +390,7 @@ func gatewayStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("config: failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			cmd.Println("g8e Gateway Status")
@@ -413,12 +413,12 @@ func gatewayStatusCmd() *cobra.Command {
 			// Fallback to ProcessManager check (for background/host mode)
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("platform: failed to create process manager: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			running, pid, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("platform: failed to check Operator status: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 			}
 
 			if running {
@@ -445,30 +445,30 @@ func gatewayRestartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("config: failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("platform: failed to create process manager: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			running, _, err := pm.OperatorStatus()
 			if err != nil {
-				return fmt.Errorf("platform: failed to check Operator status: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
 			}
 
 			if running {
 				cmd.Println("Stopping g8e Gateway...")
 				if err := pm.StopOperator(); err != nil {
-					return fmt.Errorf("platform: failed to stop operator: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 				}
 			}
 
 			cmd.Println("Starting g8e Gateway...")
 			currentPosture, err := pm.ReadPosture()
 			if err != nil {
-				return fmt.Errorf("platform: failed to read current posture: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrPostureReadFailed, err)
 			}
 			if currentPosture == "" {
 				currentPosture = "doctrine"
@@ -494,7 +494,7 @@ func gatewayRestartCmd() *cobra.Command {
 				CertIdentityMode:   "",
 				IdentityData:       nil,
 			}); err != nil {
-				return fmt.Errorf("platform: failed to start operator: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 
 			cmd.Println("g8e Gateway restarted successfully")
@@ -517,12 +517,12 @@ func gatewayLogsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("config: failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("platform: failed to create process manager: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			logPath := pm.GetLogPath()
@@ -547,17 +547,17 @@ func gatewaySettingsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("config: failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			client, err := api.NewClient(cfg)
 			if err != nil {
-				return fmt.Errorf("api: failed to create client: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			resp, err := client.Get("/api/settings")
 			if err != nil {
-				return fmt.Errorf("api: failed to get settings: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 			}
 
 			cmd.Println(string(resp))
@@ -595,7 +595,7 @@ func gatewayResetCmd() *cobra.Command {
 			stopCmd.SetErr(cmd.ErrOrStderr())
 			stopCmd.SetIn(cmd.InOrStdin())
 			if err := stopCmd.Execute(); err != nil {
-				return fmt.Errorf("gateway: failed to stop gateway: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 			}
 
 			cleanCmd := gatewayCleanCmd()
@@ -604,7 +604,7 @@ func gatewayResetCmd() *cobra.Command {
 			cleanCmd.SetErr(cmd.ErrOrStderr())
 			cleanCmd.SetIn(cmd.InOrStdin())
 			if err := cleanCmd.Execute(); err != nil {
-				return fmt.Errorf("gateway: failed to clean gateway: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			startCmd := gatewayStartCmd()
@@ -613,7 +613,7 @@ func gatewayResetCmd() *cobra.Command {
 			startCmd.SetErr(cmd.ErrOrStderr())
 			startCmd.SetIn(cmd.InOrStdin())
 			if err := startCmd.Execute(); err != nil {
-				return fmt.Errorf("gateway: failed to start gateway: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
 
 			return nil
@@ -636,7 +636,7 @@ func gatewayCleanCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load("")
 			if err != nil {
-				return fmt.Errorf("config: failed to load config: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
 			if !force {
@@ -659,11 +659,11 @@ func gatewayCleanCmd() *cobra.Command {
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
 			if err != nil {
-				return fmt.Errorf("platform: failed to create process manager: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			if err := pm.Clean(); err != nil {
-				return fmt.Errorf("platform: failed to clean: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
 
 			cmd.Println("Clean complete. All runtime state and credentials destroyed.")

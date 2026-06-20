@@ -91,9 +91,9 @@ func NewClientWithURL(cfg *config.Config, baseURL string) (*Client, error) {
 func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error) {
 	var bodyReader io.Reader
 	if body != nil {
-		bodyBytes, err := json.Marshal(body)
+	bodyBytes, err := json.Marshal(body)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request body: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 		}
 		bodyReader = bytes.NewReader(bodyBytes)
 	}
@@ -105,7 +105,7 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 	url := baseURL + path
 	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
 	if body != nil {
@@ -119,22 +119,22 @@ func (c *Client) DoRequest(method, path string, body interface{}) ([]byte, error
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
 	}
 
 	// Validate response is valid JSON
 	if !json.Valid(respBody) {
-		return nil, fmt.Errorf("API returned invalid JSON response: %s", string(respBody))
+		return nil, fmt.Errorf("%w: %s", constants.ErrInvalidJSONResponse, string(respBody))
 	}
 
 	return respBody, nil

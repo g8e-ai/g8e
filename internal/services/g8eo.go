@@ -87,7 +87,7 @@ func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TL
 
 	bootstrapService, err := auth.NewBootstrapService(cfg, logger, tlsConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create bootstrap service: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	service.bootstrap = bootstrapService
 
@@ -106,7 +106,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	defer vs.mu.Unlock()
 
 	if vs.running {
-		return fmt.Errorf("operator service is already running")
+		return fmt.Errorf("%w", constants.ErrServiceUnavailable)
 	}
 
 	vs.ctx, vs.cancel = context.WithCancel(ctx)
@@ -115,11 +115,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	bootstrapConfig, err := vs.bootstrap.RequestBootstrapConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to authenticate: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrNotAuthenticated, err)
 	}
 
 	if err = vs.bootstrap.ApplyBootstrapConfig(bootstrapConfig); err != nil {
-		return fmt.Errorf("failed to apply bootstrap configuration: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}
 
 	vs.execution = execution.NewExecutionService(vs.config, vs.logger)
@@ -138,29 +138,29 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 	gatewayDB, err := gateway.OpenCanonicalDBService(dataDir, secretsDir, vs.config.VaultDir, vs.logger, false, vaultKeyPath, vs.config.VaultRequireUnlock, nil)
 	if err != nil {
-		return fmt.Errorf("failed to initialize gateway database (required for state root calculation): %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrGatewayDatabaseServiceNotConfigured, err)
 	}
 	vs.gatewayDB = gatewayDB
 	vs.logger.Info("Gateway database initialized (canonical state root)")
 
 	vs.secretManager, err = gateway.NewSecretManager(vs.gatewayDB.GetDB(), secretsDir, vs.logger)
 	if err != nil {
-		return fmt.Errorf("failed to initialize secret manager: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyNotFound, err)
 	}
 	if err := vs.secretManager.InitAppSettings(); err != nil {
-		return fmt.Errorf("failed to initialize app settings: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	vs.logger.Info("Secret manager initialized")
 
 	// Initialize Data Services - mandatory for replay protection
 	if !vs.config.ExecutionVaultEnabled {
-		return fmt.Errorf("execution vault must be enabled for replay protection - set ExecutionVaultEnabled=true")
+		return fmt.Errorf("%w: execution vault must be enabled for replay protection - set ExecutionVaultEnabled=true", constants.ErrInternal)
 	}
 
 	// Reuse vault from CanonicalDBService (already initialized and unlocked)
 	encryptionVault := vs.gatewayDB.GetVault()
 	if encryptionVault == nil {
-		return fmt.Errorf("vault not available from CanonicalDBService")
+		return fmt.Errorf("%w: vault not available from CanonicalDBService", constants.ErrVaultNotInitialized)
 	}
 	vs.logger.Info("Vault reused from CanonicalDBService")
 
@@ -171,7 +171,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	executionVaultConfig.RetentionDays = vs.config.ExecutionVaultRetentionDays
 	vs.executionVault, err = storage.NewExecutionVaultService(executionVaultConfig, vs.logger, encryptionVault)
 	if err != nil {
-		return fmt.Errorf("failed to initialize execution vault: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	vs.logger.Info("Execution vault initialized")
 
@@ -180,7 +180,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	tokenStoreConfig.DBPath = filepath.Join(dataDir, constants.TokenStoreDBFilename)
 	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, encryptionVault)
 	if err != nil {
-		return fmt.Errorf("failed to initialize token store: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	vs.logger.Info("Token store initialized")
 
@@ -189,7 +189,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	suspendedTxConfig.DBPath = filepath.Join(dataDir, constants.SuspendedTxFilename)
 	vs.suspendedTxStore, err = storage.NewSuspendedTransactionService(suspendedTxConfig, vs.logger)
 	if err != nil {
-		return fmt.Errorf("failed to initialize suspended transaction store: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	vs.logger.Info("Suspended transaction store initialized")
 
@@ -211,19 +211,19 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	auditStoreConfig.EncryptionVault = encryptionVault
 	vs.auditStore, err = storage.NewSQLAuditStore(auditStoreConfig, vs.logger)
 	if err != nil {
-		return fmt.Errorf("failed to initialize audit store: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if vs.config.OperatorSessionId == "" {
-		return fmt.Errorf("operator session ID required before audit store can accept events")
+		return fmt.Errorf("%w: operator session ID required before audit store can accept events", constants.ErrGatewayOperatorSessionIDRequired)
 	}
 	operator_session, err := vs.auditStore.GetOperatorSession(vs.config.OperatorSessionId)
 	if err != nil {
-		return fmt.Errorf("failed to verify audit session: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrGatewayOperatorSessionInvalid, err)
 	}
 	if operator_session == nil {
 		if err := vs.auditStore.CreateSession(vs.config.OperatorSessionId, string(constants.UserRoleOperator), "Operator Session", vs.config.OperatorID); err != nil {
-			return fmt.Errorf("failed to create audit session: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrAuditRecordUserMsg, err)
 		}
 	}
 
@@ -235,7 +235,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 		ledger, err := storage.NewGitLedgerService(ledgerConfig, vs.logger)
 		if err != nil {
-			return fmt.Errorf("failed to initialize ledger: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrLedgerConfigRequired, err)
 		}
 		vs.ledger = ledger
 		vs.logger.Info("Ledger initialized")
@@ -253,7 +253,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	replayStoreConfig.DBPath = filepath.Join(dataDir, constants.ReplayStoreDBFilename)
 	replayStore, err := storage.NewSQLReplayStore(replayStoreConfig, vs.logger)
 	if err != nil {
-		return fmt.Errorf("failed to initialize replay store (required for transaction verification): %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDatabaseReplay, err)
 	}
 	vs.replayStore = replayStore
 	vs.logger.Info("Replay store initialized for transaction verification")
@@ -264,13 +264,13 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	if vs.pubSubClient == nil {
 		vs.pubSubClient, err = pubsub.NewOperatorPubSubClient(vs.config.PubSubURL, vs.config.TLSServerName, vs.logger, vs.tlsConfig)
 		if err != nil {
-			return fmt.Errorf("failed to create Operator pub/sub client: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
 	}
 
 	vs.pubSubResults, err = pubsub.NewPubSubResultsService(vs.config, vs.logger, vs.pubSubClient)
 	if err != nil {
-		return fmt.Errorf("failed to initialize results service: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)
 	}
 
 	// Create governance dependencies for transaction verification
@@ -284,22 +284,22 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Load signing keys for Actuator and Consensus (fail-closed if missing)
 	actuatorPriv, actuatorKeyID, err := vs.secretManager.GetActuatorKey()
 	if err != nil {
-		return fmt.Errorf("failed to load Actuator signing key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
 	consensusPriv, err := vs.secretManager.GetConsensusKey()
 	if err != nil {
-		return fmt.Errorf("failed to load Consensus signing key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
 	vs.logger.Info("Consensus signing key loaded successfully")
 
 	// Load trusted L2 signers from filesystem (create directory if it doesn't exist)
 	trustedSignersDir := filepath.Join(vs.config.PKIDir, "trusted_signers")
 	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
-		return fmt.Errorf("failed to create trusted signers directory %s: %w", trustedSignersDir, err)
+		return fmt.Errorf("%w: failed to create trusted signers directory %s: %w", constants.ErrDirCreateFailed, trustedSignersDir, err)
 	}
 	signerStore, err := governance.NewFilesystemSignerStore(trustedSignersDir, vs.logger)
 	if err != nil {
-		return fmt.Errorf("failed to load trusted signers from %s: %w", trustedSignersDir, err)
+		return fmt.Errorf("%w: failed to load trusted signers from %s: %w", constants.ErrPathNotFound, trustedSignersDir, err)
 	}
 	vs.logger.Info("Trusted L2 signers loaded from filesystem", "directory", trustedSignersDir)
 
@@ -333,11 +333,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig)
 	if err != nil {
-		return fmt.Errorf("failed to initialize command service: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)
 	}
 
 	if err = vs.pubSubCommands.Start(vs.ctx); err != nil {
-		return fmt.Errorf("failed to start command service: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrServiceUnavailable, err)
 	}
 
 	vs.running = true
@@ -461,7 +461,7 @@ type auditStoreTransactionStore struct {
 func (a *auditStoreTransactionStore) DocSet(collection, id string, data json.RawMessage) error {
 	var receipt models.ActionReceiptRecord
 	if err := json.Unmarshal(data, &receipt); err != nil {
-		return fmt.Errorf("auditStoreTransactionStore: failed to decode action receipt record: %w", err)
+		return fmt.Errorf("%w: auditStoreTransactionStore: failed to decode action receipt record: %w", constants.ErrInvalidJSONBody, err)
 	}
 	// Record directly in receipts table via transaction-native API
 	return a.store.RecordActionReceipt(&receipt)

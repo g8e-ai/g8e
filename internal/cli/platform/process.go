@@ -73,7 +73,7 @@ type ProcessManager struct {
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 	// Initialize paths relative to projectRoot
 	if err := paths.InitWithBase(projectRoot); err != nil {
-		return nil, fmt.Errorf("process manager: failed to initialize paths: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 
 	runtimeDir := paths.Infra.RuntimeDir
@@ -98,7 +98,7 @@ func (pm *ProcessManager) ensureDirectories() error {
 	dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0700); err != nil {
-			return fmt.Errorf("process manager: failed to create directory %s: %w", dir, err)
+			return fmt.Errorf("%w: %s: %v", constants.ErrDirCreateFailed, dir, err)
 		}
 	}
 	return nil
@@ -120,7 +120,7 @@ func (pm *ProcessManager) networkIdentityArgs(identityData []byte) ([]string, er
 func (pm *ProcessManager) writeNetworkIdentityFile(identityData []byte) (string, error) {
 	identityFile := filepath.Join(pm.runtimeDir, constants.NetworkIdentityFilename)
 	if err := os.WriteFile(identityFile, identityData, 0600); err != nil {
-		return "", fmt.Errorf("process manager: failed to write network identity file: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 	return identityFile, nil
 }
@@ -129,7 +129,7 @@ func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
 	if err != nil {
-		return fmt.Errorf("process manager: port %d (%s) is already in use: %w", port, name, err)
+		return fmt.Errorf("%w: port %d (%s): %v", constants.ErrPortUnavailable, port, name, err)
 	}
 	listener.Close()
 	return nil
@@ -138,12 +138,12 @@ func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
 func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, error) {
 	pid, err := pm.readPID(constants.OperatorPIDFilename)
 	if err != nil {
-		return 0, fmt.Errorf("process manager: failed to read pid file: %w", err)
+		return 0, fmt.Errorf("%w: %v", constants.ErrPIDReadFailed, err)
 	}
 
 	if pid != 0 && !pm.isProcessRunning(pid) {
 		if err := pm.deletePID(constants.OperatorPIDFilename); err != nil {
-			return 0, fmt.Errorf("process manager: failed to delete stale pid file %d: %w", pid, err)
+			return 0, fmt.Errorf("%w: pid %d: %v", constants.ErrPathValidation, pid, err)
 		}
 	}
 
@@ -158,11 +158,11 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 
 		conflictingPID := pm.findProcessOnPort(port)
 		if conflictingPID > 0 && conflictingPID == pid {
-			return 0, fmt.Errorf("process manager: port %d (%s) is already in use by tracked process %d", port, name, conflictingPID)
+			return 0, fmt.Errorf("%w: port %d (%s) by process %d", constants.ErrPortUnavailable, port, name, conflictingPID)
 		}
 	}
 
-	return 0, fmt.Errorf("process manager: failed to find available port starting from %d after %d attempts", startPort, MaxPortAttempts)
+	return 0, fmt.Errorf("%w: starting from %d after %d attempts", constants.ErrPortUnavailable, startPort, MaxPortAttempts)
 }
 
 func (pm *ProcessManager) readPID(filename string) (int, error) {
@@ -172,12 +172,12 @@ func (pm *ProcessManager) readPID(filename string) (int, error) {
 		if os.IsNotExist(err) {
 			return 0, nil
 		}
-		return 0, fmt.Errorf("process manager: failed to read pid file: %w", err)
+		return 0, fmt.Errorf("%w: %v", constants.ErrPIDReadFailed, err)
 	}
 
 	var pid int
 	if _, err := fmt.Sscanf(string(pidData), "%d", &pid); err != nil {
-		return 0, fmt.Errorf("process manager: failed to parse pid: %w", err)
+		return 0, fmt.Errorf("%w: %v", constants.ErrPIDReadFailed, err)
 	}
 
 	return pid, nil
@@ -191,7 +191,7 @@ func (pm *ProcessManager) writePID(filename string, pid int) error {
 func (pm *ProcessManager) deletePID(filename string) error {
 	pidFile := filepath.Join(pm.pidDir, filename)
 	if err := os.Remove(pidFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("process manager: failed to delete pid file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 	return nil
 }
@@ -208,12 +208,12 @@ func (pm *ProcessManager) readPosture() (string, error) {
 		if os.IsNotExist(err) {
 			return "", nil
 		}
-		return "", fmt.Errorf("process manager: failed to read posture file: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrPostureReadFailed, err)
 	}
 	posture := string(postureData)
 	// Validate posture is one of the allowed values
 	if posture != "" && posture != "doctrine" && posture != "consensus" && posture != "notary" {
-		return "", fmt.Errorf("process manager: invalid posture value '%s' in posture file: must be doctrine, consensus, or notary", posture)
+		return "", fmt.Errorf("%w: invalid value '%s': must be doctrine, consensus, or notary", constants.ErrInvalidPosture, posture)
 	}
 	return posture, nil
 }
@@ -221,7 +221,7 @@ func (pm *ProcessManager) readPosture() (string, error) {
 func (pm *ProcessManager) deletePosture() error {
 	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
 	if err := os.Remove(postureFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("process manager: failed to delete posture file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 	return nil
 }
@@ -286,7 +286,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	// Find the first available port starting from httpPort
 	availableHTTPPort, err := pm.findAvailablePort(effectiveHTTPPort, "Operator HTTP")
 	if err != nil {
-		return fmt.Errorf("process manager: failed to find available HTTP port: %w", err)
+		return fmt.Errorf("%w: HTTP port: %v", constants.ErrPortUnavailable, err)
 	}
 
 	// Calculate offset from original httpPort to maintain port spacing
@@ -295,7 +295,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	// Verify the calculated HTTPS port is available
 	if err := pm.checkPortAvailable(availableHTTPSPort, "Operator HTTPS"); err != nil {
-		return fmt.Errorf("process manager: failed to verify HTTPS port %d: %w", availableHTTPSPort, err)
+		return fmt.Errorf("%w: HTTPS port %d: %v", constants.ErrPortUnavailable, availableHTTPSPort, err)
 	}
 
 	binPath, err := pm.getOperatorBinary()
@@ -306,7 +306,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	logFile := filepath.Join(pm.logDir, paths.OperatorLogPath)
 	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		return fmt.Errorf("process manager: failed to open log file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 
 	args := []string{
@@ -360,36 +360,36 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	if err := cmd.Start(); err != nil {
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("process manager: failed to start operator: %w (additionally failed to close log file: %v)", err, closeErr)
+			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrProcessStartFailed, err, closeErr)
 		}
-		return fmt.Errorf("process manager: failed to start operator: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
 	}
 
 	if err := pm.writePID(constants.OperatorPIDFilename, cmd.Process.Pid); err != nil {
 		_ = cmd.Process.Kill()
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("process manager: failed to write pid file: %w (additionally failed to close log file: %v)", err, closeErr)
+			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPIDWriteFailed, err, closeErr)
 		}
-		return fmt.Errorf("process manager: failed to write pid file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPIDWriteFailed, err)
 	}
 
 	if err := pm.writePosture(opts.Posture); err != nil {
 		_ = cmd.Process.Kill()
 		_ = pm.deletePID(constants.OperatorPIDFilename)
 		if closeErr := logHandle.Close(); closeErr != nil {
-			return fmt.Errorf("process manager: failed to write posture file: %w (additionally failed to close log file: %v)", err, closeErr)
+			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPostureWriteFailed, err, closeErr)
 		}
-		return fmt.Errorf("process manager: failed to write posture file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPostureWriteFailed, err)
 	}
 
 	if err := logHandle.Close(); err != nil {
-		return fmt.Errorf("process manager: failed to close log file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 
 	time.Sleep(2 * time.Second)
 	if !pm.isProcessRunning(cmd.Process.Pid) {
 		_ = pm.deletePID(constants.OperatorPIDFilename)
-		return fmt.Errorf("process manager: operator failed to start, check %s", logFile)
+		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logFile)
 	}
 
 	return nil
@@ -420,7 +420,7 @@ func (pm *ProcessManager) StopOperator() error {
 	}
 
 	if err := pm.stopProcess(pid, "operator"); err != nil {
-		return err
+		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
 	}
 
 	if err := pm.deletePID(constants.OperatorPIDFilename); err != nil {
@@ -464,19 +464,19 @@ func (pm *ProcessManager) GetLogPath() string {
 
 func (pm *ProcessManager) Reset() error {
 	if err := pm.StopOperator(); err != nil {
-		return fmt.Errorf("process manager: failed to stop operator: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
 	}
 
 	if err := os.RemoveAll(pm.dataDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("process manager: failed to wipe data directory: %w", err)
+		return fmt.Errorf("%w: data directory: %v", constants.ErrPathValidation, err)
 	}
 
 	if err := os.RemoveAll(pm.secretsDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("process manager: failed to wipe secrets directory: %w", err)
+		return fmt.Errorf("%w: secrets directory: %v", constants.ErrPathValidation, err)
 	}
 
 	if err := pm.ensureDirectories(); err != nil {
-		return fmt.Errorf("process manager: failed to recreate directories: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 
 	return nil
@@ -484,11 +484,11 @@ func (pm *ProcessManager) Reset() error {
 
 func (pm *ProcessManager) Clean() error {
 	if err := pm.StopOperator(); err != nil {
-		return fmt.Errorf("process manager: failed to stop operator: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrProcessStopFailed, err)
 	}
 
 	if err := os.RemoveAll(pm.runtimeDir); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("process manager: failed to remove runtime directory: %w", err)
+		return fmt.Errorf("%w: runtime directory: %v", constants.ErrPathValidation, err)
 	}
 
 	return nil
@@ -498,16 +498,16 @@ func (pm *ProcessManager) Clean() error {
 func TailLog(logPath string, follow bool) error {
 	file, err := os.Open(logPath)
 	if err != nil {
-		return fmt.Errorf("tail log: failed to open log file: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 	defer file.Close()
 
 	// Print existing content
 	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("tail log: failed to seek to start of file: %w", err)
+		return fmt.Errorf("%w: seek to start: %v", constants.ErrDirectoryRead, err)
 	}
 	if _, err := io.Copy(os.Stdout, file); err != nil {
-		return fmt.Errorf("tail log: failed to print log content: %w", err)
+		return fmt.Errorf("%w: print content: %v", constants.ErrDirectoryRead, err)
 	}
 
 	if !follow {
@@ -516,7 +516,7 @@ func TailLog(logPath string, follow bool) error {
 
 	// Follow mode: seek to end and watch for new content
 	if _, err := file.Seek(0, io.SeekEnd); err != nil {
-		return fmt.Errorf("tail log: failed to seek to end of file: %w", err)
+		return fmt.Errorf("%w: seek to end: %v", constants.ErrDirectoryRead, err)
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -542,7 +542,7 @@ func TailLog(logPath string, follow bool) error {
 						time.Sleep(100 * time.Millisecond)
 						continue
 					}
-					errChan <- fmt.Errorf("tail log: failed to read log line: %w", err)
+					errChan <- fmt.Errorf("%w: read line: %v", constants.ErrDirectoryRead, err)
 					return
 				}
 				lineChan <- line

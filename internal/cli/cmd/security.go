@@ -197,7 +197,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			cmd.Println("Generating CSR for enrollment...")
 			hostname, err := os.Hostname()
 			if err != nil {
-				return fmt.Errorf("security: failed to get hostname: %w", err)
+				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err))
 			}
 			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 			if err != nil {
@@ -217,7 +217,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			if err := os.MkdirAll(pkiDir, constants.PermDirPrivate); err != nil {
-				return fmt.Errorf("security: failed to create PKI directory: %w", err)
+				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err))
 			}
 
 			certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
@@ -229,17 +229,17 @@ func securityPKIEnrollCmd() *cobra.Command {
 			}
 
 			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
-				return fmt.Errorf("security: failed to save certificate chain: %w", err)
+				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrChainSaveFailed, err))
 			}
 
 			if regResp.HubTrustBundle != "" {
 				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
 				if err := os.MkdirAll(trustDir, constants.PermDirPrivate); err != nil {
-					return fmt.Errorf("security: failed to create trust directory: %w", err)
+					return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err))
 				}
 				bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
 				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-					return fmt.Errorf("security: failed to save trust bundle: %w", err)
+					return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err))
 				}
 			}
 

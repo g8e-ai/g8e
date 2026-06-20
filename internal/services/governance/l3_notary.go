@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -62,13 +63,13 @@ func NewOutboundL3Notary(suspendedStore storage.SuspendedTransactionStore, logge
 // This replaces the previous string-only acceptance with cryptographic verification.
 func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if userID == "" {
-		return false, fmt.Errorf("user_id is required for CLI L3 verification")
+		return false, constants.ErrUserIDRequired
 	}
 	if transactionHash == "" {
-		return false, fmt.Errorf("transaction_hash is required for CLI L3 verification")
+		return false, constants.ErrCLIL3TransactionHashRequired
 	}
 	if proof == nil {
-		return false, fmt.Errorf("L3 proof is required")
+		return false, constants.ErrGatewayL3ProofRequired
 	}
 
 	// Check if the transaction exists in the suspended store
@@ -79,19 +80,19 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 	}
 	if !ok {
 		v.logger.Warn("CLI L3 verification failed: transaction not found in suspended store", "transaction_hash", transactionHash)
-		return false, fmt.Errorf("transaction not found in suspended store - must be approved via CLI")
+		return false, constants.ErrNotFound
 	}
 
 	// Verify the user ID matches
 	if tx.UserID != userID {
 		v.logger.Warn("CLI L3 verification failed: user ID mismatch", "expected_user_id", tx.UserID, "provided_user_id", userID)
-		return false, fmt.Errorf("user ID mismatch")
+		return false, constants.ErrCLIL3SessionUserMismatch
 	}
 
 	// Require explicit approval decision
 	if !tx.Approved {
 		v.logger.Warn("CLI L3 verification failed: transaction not approved", "transaction_hash", transactionHash)
-		return false, fmt.Errorf("transaction not approved - use 'g8e approve' command")
+		return false, constants.ErrTransactionApproveFailed
 	}
 
 	// Verify approval has not expired (30 minute approval window)
@@ -99,14 +100,14 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 		approvalExpiry := tx.ApprovedAt.Add(30 * time.Minute)
 		if time.Now().UTC().After(approvalExpiry) {
 			v.logger.Warn("CLI L3 verification failed: approval expired", "transaction_hash", transactionHash, "approved_at", tx.ApprovedAt)
-			return false, fmt.Errorf("approval expired - transaction must be re-approved")
+			return false, constants.ErrTransactionExpired
 		}
 	}
 
 	// Require cryptographic signature over transaction hash
 	if proof.CliSignature == "" {
 		v.logger.Warn("CLI L3 verification failed: CLI signature missing", "transaction_hash", transactionHash)
-		return false, fmt.Errorf("CLI signature required - proof must contain cryptographic signature over transaction hash")
+		return false, constants.ErrCLIL3CertFingerprintRequired
 	}
 
 	// Verify signature format (hex-encoded Ed25519 signature)
@@ -117,13 +118,13 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 	}
 	if len(sigBytes) != ed25519.SignatureSize {
 		v.logger.Warn("CLI L3 verification failed: invalid signature length", "transaction_hash", transactionHash, "length", len(sigBytes))
-		return false, fmt.Errorf("invalid signature length: expected %d bytes, got %d", ed25519.SignatureSize, len(sigBytes))
+		return false, constants.ErrInvalidCiphertext
 	}
 
 	// Verify the stored approval signature matches the proof signature
 	if tx.ApprovalSignature != proof.CliSignature {
 		v.logger.Warn("CLI L3 verification failed: signature mismatch", "transaction_hash", transactionHash)
-		return false, fmt.Errorf("signature mismatch - proof signature does not match stored approval signature")
+		return false, constants.ErrCLIL3FingerprintMismatch
 	}
 
 	// Verify the certificate fingerprint matches the expected fingerprint
@@ -132,7 +133,7 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 			"transaction_hash", transactionHash,
 			"expected", tx.ExpectedCertFingerprint,
 			"provided", proof.MtlsCertFingerprint)
-		return false, fmt.Errorf("certificate fingerprint mismatch - approval was for a different certificate")
+		return false, constants.ErrCLIL3FingerprintMismatch
 	}
 
 	// Note: Full signature verification against the public key requires access to the CLI session

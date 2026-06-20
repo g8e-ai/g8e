@@ -152,7 +152,7 @@ type LocalHttpStdioOptions struct {
 // LoadLocalHttpStdio creates configuration for --local-http-stdio mode.
 func LoadLocalHttpStdio(opts LocalHttpStdioOptions) (*LocalHttpStdioConfig, error) {
 	if opts.GatewayURL == "" {
-		return nil, fmt.Errorf("gateway URL is required (--insecure-url)")
+		return nil, constants.ErrGatewayURLRequired
 	}
 	logLevel := opts.LogLevel
 	if logLevel == "" {
@@ -329,10 +329,10 @@ func validateAndResolveGatewayPorts(httpPort, httpsPort int, allowTestPortZero b
 			// All zero means "use defaults and resolve"
 		} else {
 			if httpPort == 0 {
-				return 0, 0, fmt.Errorf("httpPort cannot be 0 in production")
+				return 0, 0, constants.ErrConfigHTTPPortZero
 			}
 			if httpsPort == 0 {
-				return 0, 0, fmt.Errorf("httpsPort cannot be 0 in production")
+				return 0, 0, constants.ErrConfigHTTPSPortZero
 			}
 		}
 	}
@@ -346,7 +346,7 @@ func validateAndResolveGatewayPorts(httpPort, httpsPort int, allowTestPortZero b
 	// Zero-valued ports are ignored so test/default configurations can leave
 	// optional ports unset without tripping false conflicts.
 	if httpPort > 0 && httpsPort > 0 && httpPort == httpsPort {
-		return 0, 0, fmt.Errorf("httpPort (%d) and httpsPort (%d) must be different", httpPort, httpsPort)
+		return 0, 0, constants.ErrConfigPortsMustDiffer
 	}
 
 	return httpPort, httpsPort, nil
@@ -491,12 +491,12 @@ func Load(opts LoadOptions) (*Config, error) {
 		var err error
 		workDir, err = filepath.Abs(workDir)
 		if err != nil {
-			return nil, fmt.Errorf("invalid --working-dir %q: %w", opts.WorkDir, err)
+			return nil, fmt.Errorf("%w: %q", constants.ErrConfigInvalidWorkingDir, opts.WorkDir)
 		}
 	}
 
 	if opts.OperatorEndpoint == "" {
-		return nil, fmt.Errorf("OperatorEndpoint is required")
+		return nil, constants.ErrEndpointRequired
 	}
 
 	// Build config from explicit options
