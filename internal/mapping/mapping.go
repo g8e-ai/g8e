@@ -19,126 +19,93 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// eventToAction is the single source of truth for the EventType <-> ActionType
+// relationship. The reverse map (actionToEvent) is derived from this in init().
+// Add new pairs here only — never touch actionToEvent directly.
+var eventToAction = map[constants.EventType]constants.ActionType{
+	constants.Event.Operator.Eval.AnswerRequested:    constants.ActionTypeEvalAnswer,
+	constants.Event.Operator.HeartbeatRequested:      constants.ActionTypeHeartbeat,
+	constants.Event.Operator.ShutdownRequested:       constants.ActionTypeShutdown,
+	constants.Event.Operator.Command.Requested:       constants.ActionTypeExecuteBash,
+	constants.Event.Operator.Command.CancelRequested: constants.ActionTypeCancel,
+	constants.Event.Operator.FileEdit.Requested:      constants.ActionTypeFileEdit,
+	constants.Event.Operator.FetchFileHistory.Requested: constants.ActionTypeFetchFileHistory,
+	constants.Event.Operator.RestoreFile.Requested:   constants.ActionTypeRestoreFile,
+	constants.Event.Operator.FsList.Requested:        constants.ActionTypeFsList,
+	constants.Event.Operator.FsRead.Requested:        constants.ActionTypeFsRead,
+	constants.Event.Operator.FsGrep.Requested:        constants.ActionTypeFsGrep,
+	constants.Event.Operator.FetchLogs.Requested:     constants.ActionTypeFetchLogs,
+	constants.Event.Operator.FetchHistory.Requested:  constants.ActionTypeFetchHistory,
+	constants.Event.Operator.Intent.Requested:        constants.ActionTypeGrantIntent,
+	constants.Event.Operator.Intent.RevokeRequested:  constants.ActionTypeRevokeIntent,
+	constants.Event.Operator.Mcp.CallRequested:       constants.ActionTypeMcpCall,
+	constants.Event.Operator.A2a.CallRequested:       constants.ActionTypeA2aCall,
+	constants.Event.Operator.PortCheck.Requested:     constants.ActionTypePortCheck,
+	constants.EventAppInvestigationCreated:            constants.ActionTypeInvestigationCreate,
+}
+
+var actionToEvent map[constants.ActionType]constants.EventType
+
+func init() {
+	actionToEvent = make(map[constants.ActionType]constants.EventType, len(eventToAction))
+	for e, a := range eventToAction {
+		actionToEvent[a] = e
+	}
+}
+
 // MapEventTypeToActionType maps protobuf event types to GovernanceEnvelope action types.
 func MapEventTypeToActionType(eventType constants.EventType) constants.ActionType {
-	switch eventType {
-	case constants.Event.Operator.Eval.AnswerRequested:
-		return constants.ActionTypeEvalAnswer
-	case constants.Event.Operator.HeartbeatRequested:
-		return constants.ActionTypeHeartbeat
-	case constants.Event.Operator.ShutdownRequested:
-		return constants.ActionTypeShutdown
-	case constants.Event.Operator.Command.Requested:
-		return constants.ActionTypeExecuteBash
-	case constants.Event.Operator.Command.CancelRequested:
-		return constants.ActionTypeCancel
-	case constants.Event.Operator.FileEdit.Requested:
-		return constants.ActionTypeFileEdit
-	case constants.Event.Operator.FetchFileHistory.Requested:
-		return constants.ActionTypeFetchFileHistory
-	case constants.Event.Operator.RestoreFile.Requested:
-		return constants.ActionTypeRestoreFile
-	case constants.Event.Operator.FsList.Requested:
-		return constants.ActionTypeFsList
-	case constants.Event.Operator.FsRead.Requested:
-		return constants.ActionTypeFsRead
-	case constants.Event.Operator.FsGrep.Requested:
-		return constants.ActionTypeFsGrep
-	case constants.Event.Operator.FetchLogs.Requested:
-		return constants.ActionTypeFetchLogs
-	case constants.Event.Operator.FetchHistory.Requested:
-		return constants.ActionTypeFetchHistory
-	case constants.Event.Operator.Intent.Requested:
-		return constants.ActionTypeGrantIntent
-	case constants.Event.Operator.Intent.RevokeRequested:
-		return constants.ActionTypeRevokeIntent
-	case constants.Event.Operator.Mcp.CallRequested:
-		return constants.ActionTypeMcpCall
-	case constants.Event.Operator.A2a.CallRequested:
-		return constants.ActionTypeA2aCall
-	case constants.Event.Operator.PortCheck.Requested:
-		return constants.ActionTypePortCheck
-	case constants.EventAppInvestigationCreated:
-		return constants.ActionTypeInvestigationCreate
-	default:
-		return constants.ActionType(eventType)
+	if a, ok := eventToAction[eventType]; ok {
+		return a
 	}
+	return constants.ActionType(eventType)
 }
 
 // MapActionTypeToEventType maps GovernanceEnvelope action types back to protobuf event types.
 func MapActionTypeToEventType(actionType constants.ActionType) constants.EventType {
-	switch actionType {
-	case constants.ActionTypeEvalAnswer:
-		return constants.Event.Operator.Eval.AnswerRequested
-	case constants.ActionTypeHeartbeat:
-		return constants.Event.Operator.HeartbeatRequested
-	case constants.ActionTypeShutdown:
-		return constants.Event.Operator.ShutdownRequested
-	case constants.ActionTypeExecuteBash:
-		return constants.Event.Operator.Command.Requested
-	case constants.ActionTypeCancel:
-		return constants.Event.Operator.Command.CancelRequested
-	case constants.ActionTypeFileEdit:
-		return constants.Event.Operator.FileEdit.Requested
-	case constants.ActionTypeFetchFileHistory:
-		return constants.Event.Operator.FetchFileHistory.Requested
-	case constants.ActionTypeRestoreFile:
-		return constants.Event.Operator.RestoreFile.Requested
-	case constants.ActionTypeFsList:
-		return constants.Event.Operator.FsList.Requested
-	case constants.ActionTypeFsRead:
-		return constants.Event.Operator.FsRead.Requested
-	case constants.ActionTypeFsGrep:
-		return constants.Event.Operator.FsGrep.Requested
-	case constants.ActionTypeFetchLogs:
-		return constants.Event.Operator.FetchLogs.Requested
-	case constants.ActionTypeFetchHistory:
-		return constants.Event.Operator.FetchHistory.Requested
-	case constants.ActionTypeGrantIntent:
-		return constants.Event.Operator.Intent.Requested
-	case constants.ActionTypeRevokeIntent:
-		return constants.Event.Operator.Intent.RevokeRequested
-	case constants.ActionTypeMcpCall:
-		return constants.Event.Operator.Mcp.CallRequested
-	case constants.ActionTypeA2aCall:
-		return constants.Event.Operator.A2a.CallRequested
-	case constants.ActionTypePortCheck:
-		return constants.Event.Operator.PortCheck.Requested
-	case constants.ActionTypeInvestigationCreate:
-		return constants.EventAppInvestigationCreated
-	default:
-		return constants.EventType(actionType)
+	if e, ok := actionToEvent[actionType]; ok {
+		return e
 	}
+	return constants.EventType(actionType)
+}
+
+func actionResult(a constants.ActionType) constants.ActionType {
+	return constants.ActionType(string(a) + "_RESULT")
+}
+
+func actionCancelled(a constants.ActionType) constants.ActionType {
+	return constants.ActionType(string(a) + "_CANCELLED")
+}
+
+var eventToResultAction = map[constants.EventType]constants.ActionType{
+	constants.Event.Operator.Heartbeat: actionResult(constants.ActionTypeHeartbeat),
+
+	constants.Event.Operator.Command.Completed: actionResult(constants.ActionTypeExecuteBash),
+	constants.Event.Operator.Command.Failed:    actionResult(constants.ActionTypeExecuteBash),
+	constants.Event.Operator.Command.Cancelled: actionCancelled(constants.ActionTypeExecuteBash),
+
+	constants.Event.Operator.Command.StatusUpdated.Queued:    "EXECUTE_STATUS_UPDATE",
+	constants.Event.Operator.Command.StatusUpdated.Running:   "EXECUTE_STATUS_UPDATE",
+	constants.Event.Operator.Command.StatusUpdated.Completed: "EXECUTE_STATUS_UPDATE",
+	constants.Event.Operator.Command.StatusUpdated.Failed:    "EXECUTE_STATUS_UPDATE",
+	constants.Event.Operator.Command.StatusUpdated.Cancelled: "EXECUTE_STATUS_UPDATE",
+
+	constants.Event.Operator.FileEdit.Completed: actionResult(constants.ActionTypeFileEdit),
+	constants.Event.Operator.FileEdit.Failed:    actionResult(constants.ActionTypeFileEdit),
+
+	constants.Event.Operator.FsList.Completed: actionResult(constants.ActionTypeFsList),
+	constants.Event.Operator.FsList.Failed:    actionResult(constants.ActionTypeFsList),
+
+	constants.Event.Operator.FsGrep.Completed: actionResult(constants.ActionTypeFsGrep),
+	constants.Event.Operator.FsGrep.Failed:    actionResult(constants.ActionTypeFsGrep),
 }
 
 // MapEventTypeToResultActionType maps protobuf event types to GovernanceEnvelope result action types.
 func MapEventTypeToResultActionType(eventType constants.EventType) constants.ActionType {
-	switch eventType {
-	case constants.Event.Operator.Heartbeat:
-		return constants.ActionType(string(constants.ActionTypeHeartbeat) + "_RESULT")
-	case constants.Event.Operator.Command.Completed,
-		constants.Event.Operator.Command.Failed:
-		return constants.ActionType(string(constants.ActionTypeExecuteBash) + "_RESULT")
-	case constants.Event.Operator.Command.Cancelled:
-		return constants.ActionType(string(constants.ActionTypeExecuteBash) + "_CANCELLED")
-	case constants.Event.Operator.Command.StatusUpdated.Queued,
-		constants.Event.Operator.Command.StatusUpdated.Running,
-		constants.Event.Operator.Command.StatusUpdated.Completed,
-		constants.Event.Operator.Command.StatusUpdated.Failed,
-		constants.Event.Operator.Command.StatusUpdated.Cancelled:
-		return constants.ActionType("EXECUTE_STATUS_UPDATE")
-	case constants.Event.Operator.FileEdit.Completed,
-		constants.Event.Operator.FileEdit.Failed:
-		return constants.ActionType(string(constants.ActionTypeFileEdit) + "_RESULT")
-	case constants.Event.Operator.FsList.Completed,
-		constants.Event.Operator.FsList.Failed:
-		return constants.ActionType(string(constants.ActionTypeFsList) + "_RESULT")
-	case constants.Event.Operator.FsGrep.Completed,
-		constants.Event.Operator.FsGrep.Failed:
-		return constants.ActionType(string(constants.ActionTypeFsGrep) + "_RESULT")
-	default:
-		return constants.ActionType(string(eventType) + "_RESULT")
+	if a, ok := eventToResultAction[eventType]; ok {
+		return a
 	}
+	return actionResult(constants.ActionType(eventType))
 }
 
 // ProtoToExecutionStatus maps protobuf ExecutionStatus enum to internal ExecutionStatus constants.
