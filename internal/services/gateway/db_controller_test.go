@@ -1071,7 +1071,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "id and public_key_hex required")
+		assert.Contains(t, rr.Body.String(), "missing required field")
 	})
 
 	t.Run("POST - missing public_key", func(t *testing.T) {
@@ -1084,7 +1084,7 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "id and public_key_hex required")
+		assert.Contains(t, rr.Body.String(), "missing required field")
 	})
 
 	t.Run("POST - invalid JSON", func(t *testing.T) {

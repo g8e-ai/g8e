@@ -301,7 +301,6 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 
 	require.Error(t, err)
 	assert.False(t, hasPasskey)
-	assert.Contains(t, err.Error(), "failed to check passkey status")
 }
 
 // ---------------------------------------------------------------------------

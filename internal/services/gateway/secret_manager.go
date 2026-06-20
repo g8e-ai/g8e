@@ -268,7 +268,7 @@ func (m *SecretManager) validateAppSettings() error {
 	if err != nil {
 		// If bootstrap digest manifest is missing, treat this as corrupted state
 		// and recreate secrets (e.g., when .g8e directory was wiped but DB persists)
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(err, constants.ErrNotFound) {
 			m.logger.Warn("[SecretManager] Bootstrap digest manifest missing, recreating secrets",
 				"path", filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest))
 			return m.recreateAppSettings()
