@@ -122,7 +122,7 @@ type MaximalEnvelope struct {
 func (c *Client) SubmitEnvelope(ctx context.Context, p Persona, envelope *commonv1.GovernanceEnvelope) (status int, body []byte, err error) {
 	wire, err := protojson.Marshal(envelope)
 	if err != nil {
-		return 0, nil, fmt.Errorf("marshal envelope: %w", err)
+		return 0, nil, fmt.Errorf("%w: %w", constants.ErrPubSubMarshalEnvelope, err)
 	}
 
 	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.GovernanceEnvelopes, wire)
@@ -142,7 +142,7 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 	}
 	payloadBytes, err := proto.Marshal(call)
 	if err != nil {
-		return "", 0, nil, fmt.Errorf("marshal payload: %w", err)
+		return "", 0, nil, fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
 	// JSON-first mirror of intent for consumers that read intent_data.
@@ -179,7 +179,7 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 	// 3. Canonical hash — REAL hasher. id == transaction_hash == SHA256(canonical).
 	txHash, err = governance.GenerateMessageID(env)
 	if err != nil {
-		return "", 0, nil, fmt.Errorf("generate message id: %w", err)
+		return "", 0, nil, fmt.Errorf("%w: %w", constants.ErrTxTransactionHashMissing, err)
 	}
 	env.Id = txHash
 	env.TransactionHash = txHash
@@ -196,7 +196,7 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 	// 5. protojson is the canonical client-facing wire format (NOT encoding/json).
 	wire, err := protojson.Marshal(env)
 	if err != nil {
-		return txHash, 0, nil, fmt.Errorf("protojson marshal: %w", err)
+		return txHash, 0, nil, fmt.Errorf("%w: %w", constants.ErrPubSubMarshalEnvelope, err)
 	}
 
 	status, body, err = c.do(ctx, p, http.MethodPost, c.cfg.MTLSBaseURL+constants.APIPaths.GovernanceEnvelopes, wire)

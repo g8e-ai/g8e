@@ -109,7 +109,7 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) 
 	}
 
 	if config.EncryptionVault == nil {
-		return nil, fmt.Errorf("EncryptionVault is required for audit vault service")
+		return nil, constants.ErrAuditStoreEncryptionVaultRequired
 	}
 
 	avs := &TestSQLAuditStore{
@@ -123,7 +123,7 @@ func NewTestSQLAuditStore(config *TestSQLAuditStoreConfig, logger *slog.Logger) 
 	}
 
 	if err := avs.bootstrap(); err != nil {
-		return nil, fmt.Errorf("audit vault bootstrap failed: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreBootstrapFailed, err)
 	}
 
 	interval := time.Duration(config.PruneIntervalMinutes) * time.Minute
@@ -145,11 +145,11 @@ func (avs *TestSQLAuditStore) bootstrap() error {
 	avs.logger.Info("Bootstrapping audit vault", "data_dir", avs.config.DataDir)
 
 	if err := avs.createDirectoryStructure(); err != nil {
-		return fmt.Errorf("failed to create directory structure: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateDirFailed, err)
 	}
 
 	if err := avs.verifyWritePermissions(); err != nil {
-		return fmt.Errorf("FATAL: storage not writable (zero tolerance for data loss risk): %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreNotWritable, err)
 	}
 
 	if avs.gitPath != "" {
@@ -161,7 +161,7 @@ func (avs *TestSQLAuditStore) bootstrap() error {
 	}
 
 	if err := avs.initDatabase(); err != nil {
-		return fmt.Errorf("failed to initialize database: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitDBFailed, err)
 	}
 
 	avs.logger.Info("Audit vault bootstrap completed successfully")
@@ -179,7 +179,7 @@ func (avs *TestSQLAuditStore) createDirectoryStructure() error {
 
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+			return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCreateDirPathFailed, dir, err)
 		}
 	}
 
@@ -196,7 +196,7 @@ func (avs *TestSQLAuditStore) verifyWritePermissions() error {
 	testFile := filepath.Join(avs.config.DataDir, ".write_test")
 
 	if err := os.WriteFile(testFile, []byte("write_test"), 0600); err != nil {
-		return fmt.Errorf("cannot write to %s: %w", avs.config.DataDir, err)
+		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, avs.config.DataDir, err)
 	}
 
 	if err := os.Remove(testFile); err != nil {
@@ -297,12 +297,12 @@ func (avs *TestSQLAuditStore) initDatabase() error {
 	cfg := sqliteutil.DefaultDBConfig(dbPath)
 	db, err := sqliteutil.OpenDB(cfg, avs.logger)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreOpenDBFailed, err)
 	}
 
 	if _, err := db.Exec(auditVaultSchema); err != nil {
 		db.Close()
-		return fmt.Errorf("failed to initialize schema: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreInitSchemaFailed, err)
 	}
 
 	avs.db = db
@@ -400,7 +400,7 @@ func (avs *TestSQLAuditStore) CreateSession(id, sessionType, title, userIdentity
 		return nil
 	}
 	if id == "" || strings.TrimSpace(id) != id {
-		return storage.ErrAuditSessionMissing
+		return constants.ErrAuditSessionMissing
 	}
 	if sessionType == "" {
 		sessionType = string(constants.UserRoleOperator)
@@ -409,7 +409,7 @@ func (avs *TestSQLAuditStore) CreateSession(id, sessionType, title, userIdentity
 	query := `INSERT INTO sessions (id, session_type, title, user_identity) VALUES (?, ?, ?, ?)`
 	_, err := avs.db.ExecWithRetry(query, id, sessionType, title, userIdentity)
 	if err != nil {
-		return fmt.Errorf("failed to create Operator session: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreCreateSessionFailed, err)
 	}
 
 	avs.logger.Info("OperatorSession created", "operator_session_id", id, "session_type", sessionType, "title", title)
@@ -419,7 +419,7 @@ func (avs *TestSQLAuditStore) CreateSession(id, sessionType, title, userIdentity
 // GetOperatorSession retrieves a session by ID
 func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSession, error) {
 	if avs == nil || avs.db == nil {
-		return nil, fmt.Errorf("audit vault is disabled")
+		return nil, constants.ErrAuditStoreDisabled
 	}
 
 	query := `SELECT id, title, created_at, user_identity FROM sessions WHERE id = ?`
@@ -433,7 +433,7 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get session: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreGetSessionFailed, err)
 	}
 
 	session.CreatedAt, _ = sqliteutil.ParseTimestamp(createdAtStr)
@@ -450,19 +450,19 @@ func (avs *TestSQLAuditStore) GetOperatorSession(id string) (*storage.OperatorSe
 
 func (avs *TestSQLAuditStore) requireExistingSessionTx(tx *sql.Tx, event *storage.Event) error {
 	if event == nil {
-		return storage.ErrAuditEventNil
+		return constants.ErrAuditEventNil
 	}
 	if event.OperatorSessionID == "" || strings.TrimSpace(event.OperatorSessionID) != event.OperatorSessionID {
-		return storage.ErrAuditSessionMissing
+		return constants.ErrAuditSessionMissing
 	}
 
 	var exists int
 	err := tx.QueryRow(`SELECT 1 FROM sessions WHERE id = ?`, event.OperatorSessionID).Scan(&exists)
 	if err == sql.ErrNoRows {
-		return fmt.Errorf("%w: %s", storage.ErrAuditSessionUnknown, event.OperatorSessionID)
+		return fmt.Errorf("%w: %s", constants.ErrAuditSessionUnknown, event.OperatorSessionID)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to verify audit session: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreVerifySessionFailed, err)
 	}
 	return nil
 }
@@ -487,7 +487,7 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 
 		stmt, err := tx.Prepare(query)
 		if err != nil {
-			return fmt.Errorf("failed to prepare batch statement: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrAuditStorePrepareBatchFailed, err)
 		}
 		defer stmt.Close()
 
@@ -506,17 +506,17 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 
 			contentTextBytes, err := avs.encryptContent(event.ContentText)
 			if err != nil {
-				return fmt.Errorf("failed to encrypt content_text: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
 			}
 
 			stdoutBytes, err := avs.encryptContent(stdout)
 			if err != nil {
-				return fmt.Errorf("failed to encrypt stdout: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
 			}
 
 			stderrBytes, err := avs.encryptContent(stderr)
 			if err != nil {
-				return fmt.Errorf("failed to encrypt stderr: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
 			}
 
 			_, err = stmt.Exec(
@@ -535,7 +535,7 @@ func (avs *TestSQLAuditStore) RecordEvents(events []*storage.Event) error {
 				encryptedFlag,
 			)
 			if err != nil {
-				return fmt.Errorf("failed to execute batch statement: %w", err)
+				return fmt.Errorf("%w: %w", constants.ErrAuditStoreExecuteBatchFailed, err)
 			}
 		}
 
@@ -599,7 +599,7 @@ func (avs *TestSQLAuditStore) RecordChaosEvents(events []*ChaosEvent) error {
 
 		stmt, err := tx.Prepare(query)
 		if err != nil {
-			return fmt.Errorf("failed to prepare statement: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrAuditStorePrepareBatchFailed, err)
 		}
 		defer stmt.Close()
 
@@ -644,17 +644,17 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 
 		contentTextBytes, err := avs.encryptContent(event.ContentText)
 		if err != nil {
-			return fmt.Errorf("failed to encrypt content_text: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptContentFailed, err)
 		}
 
 		stdoutBytes, err := avs.encryptContent(stdout)
 		if err != nil {
-			return fmt.Errorf("failed to encrypt stdout: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStdoutFailed, err)
 		}
 
 		stderrBytes, err := avs.encryptContent(stderr)
 		if err != nil {
-			return fmt.Errorf("failed to encrypt stderr: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptStderrFailed, err)
 		}
 
 		query := `
@@ -686,7 +686,7 @@ func (avs *TestSQLAuditStore) RecordEvent(event *storage.Event) (int64, error) {
 			encryptedFlag,
 		)
 		if err != nil {
-			return fmt.Errorf("failed to record event: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordEventFailed, err)
 		}
 
 		id, _ := result.LastInsertId()
@@ -757,7 +757,7 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 		sqliteutil.FormatTimestamp(record.Timestamp),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to record action receipt: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordReceiptFailed, err)
 	}
 
 	avs.logger.Info("ActionReceipt recorded",
@@ -770,7 +770,7 @@ func (avs *TestSQLAuditStore) RecordActionReceipt(record *models.ActionReceiptRe
 // GetActionReceipt retrieves a single action receipt by transaction ID.
 func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
-		return nil, fmt.Errorf("audit vault is disabled")
+		return nil, constants.ErrAuditStoreDisabled
 	}
 
 	query := `
@@ -795,7 +795,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get action receipt: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreGetReceiptFailed, err)
 	}
 
 	r.ExecutedAt = time.UnixMilli(executedAtMs)
@@ -807,7 +807,7 @@ func (avs *TestSQLAuditStore) GetActionReceipt(transactionID string) (*models.Ac
 // ListActionReceipts retrieves action receipts with optional filtering and pagination.
 func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit, offset int) ([]*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
-		return nil, fmt.Errorf("audit vault is disabled")
+		return nil, constants.ErrAuditStoreDisabled
 	}
 
 	if limit <= 0 {
@@ -849,7 +849,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 		return row, err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to query action receipts: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryReceiptsFailed, err)
 	}
 
 	var results []*models.ActionReceiptRecord
@@ -865,7 +865,7 @@ func (avs *TestSQLAuditStore) ListActionReceipts(operatorSessionID string, limit
 // ListActionReceiptsSince retrieves action receipts newer than the given timestamp.
 func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int) ([]*models.ActionReceiptRecord, error) {
 	if avs == nil || avs.db == nil {
-		return nil, fmt.Errorf("audit vault is disabled")
+		return nil, constants.ErrAuditStoreDisabled
 	}
 
 	if limit <= 0 {
@@ -900,7 +900,7 @@ func (avs *TestSQLAuditStore) ListActionReceiptsSince(since time.Time, limit int
 		return row, err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to query action receipts since %v: %w", since, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryReceiptsSinceFailed, err)
 	}
 
 	var results []*models.ActionReceiptRecord
@@ -937,7 +937,7 @@ func (avs *TestSQLAuditStore) truncateOutput(output string) (string, bool) {
 // Content fields are decrypted if they were stored encrypted and the vault is unlocked
 func (avs *TestSQLAuditStore) GetEvents(operatorSessionID string, limit, offset int) ([]*storage.Event, error) {
 	if avs == nil || avs.db == nil {
-		return nil, fmt.Errorf("audit vault is disabled")
+		return nil, constants.ErrAuditStoreDisabled
 	}
 
 	if limit <= 0 {
@@ -990,7 +990,7 @@ func (avs *TestSQLAuditStore) GetEvents(operatorSessionID string, limit, offset 
 		return row, err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to query events: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryEventsFailed, err)
 	}
 
 	var events []*storage.Event
@@ -1072,7 +1072,7 @@ func (avs *TestSQLAuditStore) RecordFileMutation(mutation *storage.FileMutationL
 		mutation.DiffStat,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to record file mutation: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrAuditStoreRecordFileMutationFailed, err)
 	}
 
 	avs.logger.Info("File mutation recorded",
@@ -1086,7 +1086,7 @@ func (avs *TestSQLAuditStore) RecordFileMutation(mutation *storage.FileMutationL
 // GetFileMutations retrieves file mutations for an event
 func (avs *TestSQLAuditStore) GetFileMutations(eventID int64) ([]*storage.FileMutationLog, error) {
 	if avs == nil || avs.db == nil {
-		return nil, fmt.Errorf("audit vault is disabled")
+		return nil, constants.ErrAuditStoreDisabled
 	}
 
 	query := `
@@ -1116,7 +1116,7 @@ func (avs *TestSQLAuditStore) GetFileMutations(eventID int64) ([]*storage.FileMu
 		return row, err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to query file mutations: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryFileMutationsFailed, err)
 	}
 
 	var mutations []*storage.FileMutationLog
@@ -1271,12 +1271,12 @@ func (avs *TestSQLAuditStore) encryptContent(content string) ([]byte, error) {
 	}
 
 	if !avs.encryptionVault.IsUnlocked() {
-		return nil, fmt.Errorf("vault is locked, cannot encrypt content")
+		return nil, constants.ErrAuditStoreVaultLocked
 	}
 
 	encrypted, err := avs.encryptionVault.Encrypt([]byte(content))
 	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt content: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreEncryptFailed, err)
 	}
 
 	return encrypted, nil
@@ -1289,12 +1289,12 @@ func (avs *TestSQLAuditStore) decryptContent(data []byte) (string, error) {
 	}
 
 	if !avs.encryptionVault.IsUnlocked() {
-		return "", fmt.Errorf("vault is locked, cannot decrypt content")
+		return "", constants.ErrAuditStoreVaultLocked
 	}
 
 	decrypted, err := avs.encryptionVault.Decrypt(data)
 	if err != nil {
-		return "", fmt.Errorf("failed to decrypt content: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrAuditStoreDecryptFailed, err)
 	}
 
 	return string(decrypted), nil

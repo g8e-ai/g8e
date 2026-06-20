@@ -74,7 +74,7 @@ type OperatorPubSubClient struct {
 // to the deprecated global certs.GetTLSConfig().
 func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger, certsTLSConfig *certs.TLSConfig) (*OperatorPubSubClient, error) {
 	if baseURL == "" {
-		return nil, fmt.Errorf("operator pub/sub URL is required")
+		return nil, constants.ErrPubSubURLRequired
 	}
 
 	isSecure := len(baseURL) >= 6 && baseURL[:6] == "wss://"
@@ -92,7 +92,7 @@ func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger, ce
 			tlsCfg, err = certs.GetTLSConfig()
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to configure transport security: %w", err)
+			return nil, fmt.Errorf("%w: %v", constants.ErrPubSubTLSConfig, err)
 		}
 		if serverName != "" {
 			tlsCfg.ServerName = serverName
@@ -143,7 +143,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 			string(constants.ConnectionStateError), err,
 			"http_status", statusCode,
 			"tls_enabled", c.tlsConfig != nil)
-		return nil, fmt.Errorf("failed to connect to Operator pub/sub (http_status=%d): %w", statusCode, err)
+		return nil, fmt.Errorf("%w (http_status=%d): %v", constants.ErrPubSubConnect, statusCode, err)
 	}
 
 	subMsg := pubsubv1.PubSubMessage{
@@ -154,7 +154,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 	_ = ws.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
 	if err := ws.WriteMessage(websocket.BinaryMessage, subBytes); err != nil {
 		ws.Close()
-		return nil, fmt.Errorf("failed to subscribe to channel %s: %w", channel, err)
+		return nil, fmt.Errorf("%w (%s): %v", constants.ErrPubSubSubscribe, channel, err)
 	}
 
 	// Block until the broker confirms the subscription is registered. Frames
@@ -163,7 +163,7 @@ func (c *OperatorPubSubClient) Subscribe(ctx context.Context, channel string) (<
 	var pending [][]byte
 	if err := c.waitForSubscribedACK(ctx, ws, channel, &pending); err != nil {
 		ws.Close()
-		return nil, fmt.Errorf("subscription ACK not received for channel %s: %w", channel, err)
+		return nil, fmt.Errorf("%w (%s): %v", constants.ErrPubSubSubscriptionACK, channel, err)
 	}
 
 	out := make(chan []byte, 64)
@@ -245,7 +245,7 @@ func (c *OperatorPubSubClient) waitForSubscribedACK(ctx context.Context, ws *web
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
-			return fmt.Errorf("connection error while waiting for subscribed ACK: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrPubSubConnectionError, err)
 		}
 
 		var event pubsubv1.PubSubEvent
@@ -284,7 +284,7 @@ func (c *OperatorPubSubClient) connectPubWs() error {
 		if resp != nil {
 			resp.Body.Close()
 		}
-		return fmt.Errorf("failed to connect publish WebSocket: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPubSubPublishConnect, err)
 	}
 	c.pubWs = ws
 	return nil
@@ -297,7 +297,7 @@ func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data
 	defer c.mu.Unlock()
 
 	if c.closed {
-		return fmt.Errorf("operator pub/sub client is closed")
+		return constants.ErrPubSubClosed
 	}
 
 	if c.pubWs == nil {
@@ -313,7 +313,7 @@ func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data
 	}
 	msgBytes, err := proto.Marshal(&msg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal publish payload: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrPubSubMarshalPayload, err)
 	}
 
 	_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
@@ -321,13 +321,13 @@ func (c *OperatorPubSubClient) Publish(ctx context.Context, channel string, data
 		c.pubWs.Close()
 		c.pubWs = nil
 		if err := c.connectPubWs(); err != nil {
-			return fmt.Errorf("failed to reconnect publish WebSocket: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrPubSubPublishReconnect, err)
 		}
 		_ = c.pubWs.SetWriteDeadline(time.Now().Add(pubSubWriteTimeout))
 		if err := c.pubWs.WriteMessage(websocket.BinaryMessage, msgBytes); err != nil {
 			c.pubWs.Close()
 			c.pubWs = nil
-			return fmt.Errorf("failed to publish to Operator after reconnect: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrPubSubPublish, err)
 		}
 	}
 

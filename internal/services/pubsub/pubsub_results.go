@@ -55,7 +55,7 @@ func (rr *PubSubResultsService) PublishExecutionResult(ctx context.Context, resu
 
 	rr.logger.Info("Publishing execution result", "original_message_id", originalMsg.ID)
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, caseID, taskID, investigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish execution result: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishExecutionResult, err)
 	}
 
 	rr.logger.Info("Execution result transmitted to g8e",
@@ -69,7 +69,7 @@ func (rr *PubSubResultsService) PublishCancellationResult(ctx context.Context, r
 	eventType := constants.Event.Operator.Command.Cancelled
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish cancellation result: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishCancellationResult, err)
 	}
 
 	rr.logger.Info("Cancellation result transmitted to g8e",
@@ -82,7 +82,7 @@ func (rr *PubSubResultsService) PublishFileEditResult(ctx context.Context, resul
 	eventType := rr.determineEventStatus(result, constants.Event.Operator.FileEdit.Completed, constants.Event.Operator.FileEdit.Failed)
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish file edit result: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishFileEditResult, err)
 	}
 
 	rr.logger.Info("File operation result transmitted to g8e", "operator_session_id", rr.config.OperatorSessionId)
@@ -94,7 +94,7 @@ func (rr *PubSubResultsService) PublishFsListResult(ctx context.Context, result 
 	eventType := rr.determineEventStatus(result, constants.Event.Operator.FsList.Completed, constants.Event.Operator.FsList.Failed)
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish fs list result: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishFsListResult, err)
 	}
 
 	rr.logger.Info("FS list result transmitted to g8e", "operator_session_id", rr.config.OperatorSessionId)
@@ -106,7 +106,7 @@ func (rr *PubSubResultsService) PublishFsGrepResult(ctx context.Context, result 
 	eventType := rr.determineEventStatus(result, constants.Event.Operator.FsGrep.Completed, constants.Event.Operator.FsGrep.Failed)
 
 	if err := rr.publishResultEnvelopeUniversal(ctx, eventType, originalMsg.CaseID, originalMsg.TaskID, originalMsg.InvestigationID, originalMsg, result); err != nil {
-		return fmt.Errorf("failed to publish fs grep result: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishFsGrepResult, err)
 	}
 
 	rr.logger.Info("FS grep result transmitted to g8e", "operator_session_id", rr.config.OperatorSessionId)
@@ -147,11 +147,11 @@ func (rr *PubSubResultsService) PublishExecutionStatus(ctx context.Context, stat
 	}
 	env, err := BuildUniversalResultEnvelope(rr.config, eventType, status, originalMsg.ID, operatorID, originalMsg.CaseID, originalMsg.InvestigationID, originalMsg.TaskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
 	if err != nil {
-		return fmt.Errorf("failed to build Universal status envelope: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubBuildStatusEnvelope, err)
 	}
 
 	if err := rr.publishUniversal(ctx, env, operatorID, originalMsg.OperatorSessionID); err != nil {
-		return fmt.Errorf("failed to publish Universal status update: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishStatusUpdate, err)
 	}
 
 	rr.logger.Info("Execution status update transmitted", "event_type", eventType, "execution_id", executionID)
@@ -168,17 +168,17 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 
 	env, err := BuildUniversalResultEnvelope(rr.config, constants.Event.Operator.Heartbeat, heartbeat, "", rr.config.OperatorID, "", "", nil, "", "")
 	if err != nil {
-		return fmt.Errorf("failed to build heartbeat envelope: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubBuildHeartbeatEnvelope, err)
 	}
 
 	data, err := protojson.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("failed to marshal heartbeat envelope: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubMarshalHeartbeatEnvelope, err)
 	}
 
 	channelName := HeartbeatChannel(rr.config.OperatorID, operatorSessionID)
 	if err := rr.client.Publish(ctx, channelName, data); err != nil {
-		return fmt.Errorf("failed to send heartbeat: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubPublishHeartbeat, err)
 	}
 	return nil
 }
@@ -188,7 +188,7 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commonv1.GovernanceEnvelope, operatorID, operatorSessionID string) error {
 	data, err := protojson.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Governance Envelope: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubMarshalEnvelope, err)
 	}
 	if operatorID == "" {
 		operatorID = rr.config.OperatorID
@@ -234,7 +234,7 @@ func (rr *PubSubResultsService) publishResultEnvelopeUniversal(
 
 	env, err := BuildUniversalResultEnvelope(rr.config, eventType, payload, originalMessageID, senderID, caseID, investigationID, taskID, originalMsg.WebSessionID, originalMsg.CLISessionID)
 	if err != nil {
-		return fmt.Errorf("failed to build Governance Envelope: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPubSubBuildResultEnvelope, err)
 	}
 
 	return rr.publishUniversal(ctx, env, senderID, originalMsg.OperatorSessionID)

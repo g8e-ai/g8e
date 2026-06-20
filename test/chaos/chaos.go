@@ -194,7 +194,7 @@ func signedEnvelope(
 
 	hash, err := govpkg.GenerateMessageID(env)
 	if err != nil {
-		return nil, fmt.Errorf("hash generation: %w", err)
+		return nil, fmt.Errorf("hash generation failed: %w", err)
 	}
 	env.Id = hash
 	env.TransactionHash = hash
@@ -357,7 +357,7 @@ func Run(cfg Config) error {
 
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
-		return fmt.Errorf("chaos: failed to initialize paths: %w", err)
+		return fmt.Errorf("failed to initialize paths: %w", err)
 	}
 
 	// Use shared test vault directory for persistent inspection
@@ -366,19 +366,19 @@ func Run(cfg Config) error {
 	if dataDir == "" {
 		testVaultDir = paths.Infra.TestVaultDir
 		if err := os.MkdirAll(testVaultDir, 0755); err != nil {
-			return fmt.Errorf("chaos: failed to create test vault directory: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 		}
 
 		// Create unique subdirectory for this test run
 		testRunID := fmt.Sprintf("%s-chaos-test", time.Now().Format("20060102-150405"))
 		dataDir = filepath.Join(testVaultDir, testRunID)
 		if err := os.MkdirAll(dataDir, 0755); err != nil {
-			return fmt.Errorf("chaos: failed to create test run directory: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 		}
 	} else {
 		// If user specified a directory, ensure it exists
 		if err := os.MkdirAll(dataDir, 0755); err != nil {
-			return fmt.Errorf("chaos: failed to create specified data directory: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 		}
 	}
 
@@ -404,7 +404,7 @@ func Run(cfg Config) error {
 	// trusted signers map, which is exactly what the test suite does.
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		return fmt.Errorf("chaos: failed to generate L2 signing key: %w", err)
+		return fmt.Errorf("failed to generate L2 signing key: %w", err)
 	}
 	const keyID = "chaos-l2-key"
 	trustedSigners := map[string]ed25519.PublicKey{keyID: pubKey}
@@ -412,28 +412,28 @@ func Run(cfg Config) error {
 	// ── vault ────────────────────────────────────────────────────────────────
 	vaultDir := filepath.Join(dataDir, "vault")
 	if err := os.MkdirAll(vaultDir, 0700); err != nil {
-		return fmt.Errorf("chaos: failed to create vault directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 	_, vaultPrivKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
-		return fmt.Errorf("chaos: failed to generate vault key: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrVaultKeyGenerateFailed, err)
 	}
 	vaultHeader, _, err := vault.NewVaultHeader(vaultPrivKey)
 	if err != nil {
-		return fmt.Errorf("chaos: failed to create vault header: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrVaultHeaderCreateFailed, err)
 	}
 	if err := vaultHeader.Save(vaultDir); err != nil {
-		return fmt.Errorf("chaos: failed to save vault header: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrVaultHeaderSaveFailed, err)
 	}
 	encryptionVault, err := vault.NewVault(&vault.VaultConfig{
 		DataDir: vaultDir,
 		Logger:  logger,
 	})
 	if err != nil {
-		return fmt.Errorf("chaos: failed to create vault: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrVaultCreateFailed, err)
 	}
 	if err := encryptionVault.Unlock(vaultPrivKey); err != nil {
-		return fmt.Errorf("chaos: failed to unlock vault: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrVaultUnlockFailed, err)
 	}
 
 	// ── audit vault ───────────────────────────────────────────────────────────
@@ -452,7 +452,7 @@ func Run(cfg Config) error {
 	}
 	av, err := storagetest.NewTestSQLAuditStore(avCfg, logger)
 	if err != nil {
-		return fmt.Errorf("chaos: failed to initialise audit vault: %w", err)
+		return fmt.Errorf("failed to initialize audit vault: %w", err)
 	}
 	// ── generate session IDs for concurrency ──────────────────────────────────
 	workerCount := runtime.NumCPU() * 2
@@ -463,12 +463,12 @@ func Run(cfg Config) error {
 		operator_session, err := av.GetOperatorSession(sessionID)
 		if err != nil {
 			av.Close()
-			return fmt.Errorf("chaos: failed to inspect chaos audit session: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrAuditStoreGetSessionFailed, err)
 		}
 		if operator_session == nil {
 			if err := av.CreateSession(sessionID, "operator", fmt.Sprintf("Chaos Worker %d", i+1), "chaos@test.local"); err != nil {
 				av.Close()
-				return fmt.Errorf("chaos: failed to create chaos audit session: %w", err)
+				return fmt.Errorf("%w: %v", constants.ErrAuditStoreCreateSessionFailed, err)
 			}
 		}
 	}
@@ -658,7 +658,7 @@ func buildEnvelope(id int, cat category, stateRoot string, privKey ed25519.Priva
 	case catFileMutation:
 		return buildFileMutationEnvelope(id, stateRoot, privKey, keyID, sessionID)
 	default:
-		return nil, fmt.Errorf("unknown category: %d", cat)
+		return nil, fmt.Errorf("unknown chaos category: %d", cat)
 	}
 }
 

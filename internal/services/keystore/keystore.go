@@ -56,7 +56,7 @@ type Keystore struct {
 // This is primarily used for testing with the in-memory test backend.
 func NewWithBackend(secretsDir string, logger *slog.Logger, backend Backend) (*Keystore, error) {
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 	return &Keystore{
 		logger:     logger,
@@ -85,7 +85,7 @@ func (k *Keystore) Initialize() error {
 			k.logger.Info("[Keystore] Master key not found, generating new key", "backend", k.backend.Name())
 			return k.generateAndStoreMasterKey()
 		}
-		return fmt.Errorf("retrieve master key: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
 
 	if len(key) != keySize {
@@ -104,7 +104,7 @@ func (k *Keystore) generateAndStoreMasterKey() error {
 	}
 
 	if err := k.backend.StoreMasterKey(key); err != nil {
-		return fmt.Errorf("store master key: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreStoreFailed, err)
 	}
 
 	k.logger.Info("[Keystore] Master key generated and stored in OS key store", "backend", k.backend.Name())
@@ -115,7 +115,7 @@ func (k *Keystore) generateAndStoreMasterKey() error {
 func (k *Keystore) encrypt(plaintext string) (*EncryptedSecret, error) {
 	key, err := k.backend.RetrieveMasterKey()
 	if err != nil {
-		return nil, fmt.Errorf("retrieve master key for encryption: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
 
 	block, err := aes.NewCipher(key)
@@ -150,7 +150,7 @@ func (k *Keystore) decrypt(enc *EncryptedSecret) (string, error) {
 
 	key, err := k.backend.RetrieveMasterKey()
 	if err != nil {
-		return "", fmt.Errorf("retrieve master key for decryption: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
 
 	block, err := aes.NewCipher(key)
@@ -229,7 +229,7 @@ func (k *Keystore) Encrypt(plaintext string) (string, error) {
 
 	data, err := json.Marshal(enc)
 	if err != nil {
-		return "", fmt.Errorf("marshal encrypted value: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreMarshalFailed, err)
 	}
 
 	return base64.StdEncoding.EncodeToString(data), nil
@@ -264,12 +264,12 @@ func (k *Keystore) DeleteSecret(name string) error {
 // Purge removes all secrets from disk and deletes the master key from the OS key store.
 func (k *Keystore) Purge() error {
 	if err := k.backend.DeleteMasterKey(); err != nil {
-		return fmt.Errorf("delete master key from OS key store: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreDeleteFailed, err)
 	}
 
 	entries, err := os.ReadDir(k.secretsDir)
 	if err != nil {
-		return fmt.Errorf("read secrets directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreReadDir, err)
 	}
 
 	var purgeErrors []error
@@ -299,7 +299,7 @@ func (k *Keystore) EnforcePermissions() error {
 
 	entries, err := os.ReadDir(k.secretsDir)
 	if err != nil {
-		return fmt.Errorf("read secrets directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreReadDir, err)
 	}
 
 	for _, entry := range entries {

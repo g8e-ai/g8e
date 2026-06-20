@@ -21,7 +21,6 @@ import (
 	"crypto/subtle"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -29,6 +28,8 @@ import (
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/hkdf"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 const (
@@ -41,20 +42,11 @@ const (
 	aesKWDefaultIVLow  = 0xA6A6A6A6
 )
 
-var (
-	ErrInvalidKeySize      = errors.New("invalid key size: must be 32 bytes")
-	ErrInvalidNonceSize    = errors.New("invalid nonce size: must be 12 bytes")
-	ErrDecryptionFailed    = errors.New("decryption failed: authentication error")
-	ErrKeyWrapFailed       = errors.New("key wrap failed")
-	ErrKeyUnwrapFailed     = errors.New("key unwrap failed: integrity check failed")
-	ErrInvalidWrappedKey   = errors.New("invalid wrapped key size")
-	ErrInvalidPlaintextKey = errors.New("plaintext key must be multiple of 8 bytes")
-)
 
 // DeriveKEK derives a Key Encryption Key from private key bytes using HKDF-SHA256.
 func DeriveKEK(privateKey []byte) ([]byte, error) {
 	if len(privateKey) == 0 {
-		return nil, errors.New("private key cannot be empty")
+		return nil, constants.ErrVaultPrivateKeyEmpty
 	}
 
 	reader := hkdf.New(sha256.New, privateKey, nil, []byte(HKDFInfo))
@@ -112,12 +104,12 @@ func PrivateKeyFingerprint(privateKey []byte) []byte {
 //   - R[i] = LSB(64, B)
 func AESKeyWrap(kek, plaintext []byte) ([]byte, error) {
 	if len(kek) != 16 && len(kek) != 24 && len(kek) != 32 {
-		return nil, ErrInvalidKeySize
+		return nil, constants.ErrVaultInvalidKeySize
 	}
 
 	n := len(plaintext)
 	if n < 16 || n%8 != 0 {
-		return nil, ErrInvalidPlaintextKey
+		return nil, constants.ErrVaultInvalidPlaintextKey
 	}
 
 	block, err := aes.NewCipher(kek)
@@ -176,12 +168,12 @@ func AESKeyWrap(kek, plaintext []byte) ([]byte, error) {
 //   - R[i] = LSB(64, B)
 func AESKeyUnwrap(kek, ciphertext []byte) ([]byte, error) {
 	if len(kek) != 16 && len(kek) != 24 && len(kek) != 32 {
-		return nil, ErrInvalidKeySize
+		return nil, constants.ErrVaultInvalidKeySize
 	}
 
 	n := len(ciphertext)
 	if n < 24 || n%8 != 0 {
-		return nil, ErrInvalidWrappedKey
+		return nil, constants.ErrVaultInvalidWrappedKey
 	}
 
 	block, err := aes.NewCipher(kek)
@@ -227,7 +219,7 @@ func AESKeyUnwrap(kek, ciphertext []byte) ([]byte, error) {
 	binary.BigEndian.PutUint32(expectedA[4:8], aesKWDefaultIVLow)
 
 	if subtle.ConstantTimeCompare(a, expectedA) != 1 {
-		return nil, ErrKeyUnwrapFailed
+		return nil, constants.ErrVaultKeyUnwrapFailed
 	}
 
 	plaintext := make([]byte, numBlocks*8)
@@ -241,10 +233,10 @@ func AESKeyUnwrap(kek, ciphertext []byte) ([]byte, error) {
 // EncryptAESGCM encrypts plaintext using AES-256-GCM with the provided key and nonce.
 func EncryptAESGCM(key, nonce, plaintext, additionalData []byte) ([]byte, error) {
 	if len(key) != KeySize {
-		return nil, ErrInvalidKeySize
+		return nil, constants.ErrVaultInvalidKeySize
 	}
 	if len(nonce) != NonceSize {
-		return nil, ErrInvalidNonceSize
+		return nil, constants.ErrVaultInvalidNonceSize
 	}
 
 	block, err := aes.NewCipher(key)
@@ -264,10 +256,10 @@ func EncryptAESGCM(key, nonce, plaintext, additionalData []byte) ([]byte, error)
 // DecryptAESGCM decrypts ciphertext using AES-256-GCM with the provided key and nonce.
 func DecryptAESGCM(key, nonce, ciphertext, additionalData []byte) ([]byte, error) {
 	if len(key) != KeySize {
-		return nil, ErrInvalidKeySize
+		return nil, constants.ErrVaultInvalidKeySize
 	}
 	if len(nonce) != NonceSize {
-		return nil, ErrInvalidNonceSize
+		return nil, constants.ErrVaultInvalidNonceSize
 	}
 
 	block, err := aes.NewCipher(key)
@@ -282,7 +274,7 @@ func DecryptAESGCM(key, nonce, ciphertext, additionalData []byte) ([]byte, error
 
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, additionalData)
 	if err != nil {
-		return nil, ErrDecryptionFailed
+		return nil, constants.ErrVaultDecryptionFailed
 	}
 
 	return plaintext, nil

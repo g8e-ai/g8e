@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -174,7 +175,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = AESKeyUnwrap(kek2, wrapped)
-		require.ErrorIs(t, err, ErrKeyUnwrapFailed)
+		require.ErrorIs(t, err, constants.ErrVaultKeyUnwrapFailed)
 	})
 
 	t.Run("tampered ciphertext fails unwrap", func(t *testing.T) {
@@ -188,7 +189,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		wrapped[10] ^= 0xFF
 
 		_, err = AESKeyUnwrap(kek, wrapped)
-		require.ErrorIs(t, err, ErrKeyUnwrapFailed)
+		require.ErrorIs(t, err, constants.ErrVaultKeyUnwrapFailed)
 	})
 
 	t.Run("invalid key sizes rejected", func(t *testing.T) {
@@ -197,7 +198,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		plaintext, _ := GenerateDEK()
 
 		_, err := AESKeyWrap(invalidKEK, plaintext)
-		require.ErrorIs(t, err, ErrInvalidKeySize)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidKeySize)
 	})
 
 	t.Run("invalid plaintext size rejected", func(t *testing.T) {
@@ -206,7 +207,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		invalidPlaintext := make([]byte, 15)
 
 		_, err := AESKeyWrap(kek, invalidPlaintext)
-		require.ErrorIs(t, err, ErrInvalidPlaintextKey)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidPlaintextKey)
 	})
 
 	t.Run("too short plaintext rejected", func(t *testing.T) {
@@ -215,7 +216,7 @@ func TestAESKeyWrapUnwrap(t *testing.T) {
 		shortPlaintext := make([]byte, 8)
 
 		_, err := AESKeyWrap(kek, shortPlaintext)
-		require.ErrorIs(t, err, ErrInvalidPlaintextKey)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidPlaintextKey)
 	})
 }
 
@@ -262,7 +263,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = DecryptAESGCM(key, nonce, ciphertext, []byte("wrong aad"))
-		require.ErrorIs(t, err, ErrDecryptionFailed)
+		require.ErrorIs(t, err, constants.ErrVaultDecryptionFailed)
 	})
 
 	t.Run("wrong key fails decryption", func(t *testing.T) {
@@ -276,7 +277,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = DecryptAESGCM(key2, nonce, ciphertext, nil)
-		require.ErrorIs(t, err, ErrDecryptionFailed)
+		require.ErrorIs(t, err, constants.ErrVaultDecryptionFailed)
 	})
 
 	t.Run("tampered ciphertext fails decryption", func(t *testing.T) {
@@ -291,7 +292,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		ciphertext[5] ^= 0xFF
 
 		_, err = DecryptAESGCM(key, nonce, ciphertext, nil)
-		require.ErrorIs(t, err, ErrDecryptionFailed)
+		require.ErrorIs(t, err, constants.ErrVaultDecryptionFailed)
 	})
 
 	t.Run("invalid key size rejected", func(t *testing.T) {
@@ -301,7 +302,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		plaintext := []byte("test")
 
 		_, err := EncryptAESGCM(invalidKey, nonce, plaintext, nil)
-		require.ErrorIs(t, err, ErrInvalidKeySize)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidKeySize)
 	})
 
 	t.Run("invalid nonce size rejected", func(t *testing.T) {
@@ -311,7 +312,7 @@ func TestAESGCMEncryptDecrypt(t *testing.T) {
 		plaintext := []byte("test")
 
 		_, err := EncryptAESGCM(key, invalidNonce, plaintext, nil)
-		require.ErrorIs(t, err, ErrInvalidNonceSize)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidNonceSize)
 	})
 }
 
@@ -845,7 +846,7 @@ func TestAESKeyUnwrapInvalidKEK(t *testing.T) {
 		wrapped := make([]byte, 40)
 
 		_, err := AESKeyUnwrap(invalidKEK, wrapped)
-		require.ErrorIs(t, err, ErrInvalidKeySize)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidKeySize)
 	})
 }
 

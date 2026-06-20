@@ -112,7 +112,7 @@ func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
 
 	err = ks.Initialize()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid length")
+	assert.ErrorIs(t, err, constants.ErrKeyStoreInvalidKeyLength)
 }
 
 func TestKeystore_EncryptSecret(t *testing.T) {
@@ -183,7 +183,7 @@ func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
 
 	_, err = ks.DecryptSecret("nonexistent-secret")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read encrypted secret")
+	assert.ErrorIs(t, err, constants.ErrKeyStoreReadFailed)
 }
 
 func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
@@ -203,7 +203,7 @@ func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 
 	_, err = ks.DecryptSecret("test-secret")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unmarshal encrypted secret")
+	assert.ErrorIs(t, err, constants.ErrKeyStoreUnmarshalFailed)
 }
 
 func TestKeystore_DeleteSecret(t *testing.T) {

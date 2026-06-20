@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/protocol"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -198,27 +199,27 @@ func classifyEnvelopeError(err error) int {
 	}
 	msg := err.Error()
 	switch {
-	case errors.Is(err, governance.ErrInvalidEnvelope),
-		errors.Is(err, governance.ErrTransactionIDMissing),
-		errors.Is(err, governance.ErrUnknownActionType),
-		errors.Is(err, governance.ErrPayloadMissing),
-		errors.Is(err, governance.ErrPayloadDecodeFailed),
-		errors.Is(err, governance.ErrL1ValidationFailed),
-		errors.Is(err, governance.ErrTransactionHashMissing),
-		errors.Is(err, governance.ErrTransactionHashMismatch),
-		errors.Is(err, governance.ErrTransactionExpired),
-		errors.Is(err, governance.ErrNonceMissing),
-		errors.Is(err, governance.ErrTransactionReplay),
-		errors.Is(err, governance.ErrStateRootMissing),
-		errors.Is(err, governance.ErrStateRootRequired),
-		errors.Is(err, governance.ErrStateRootMismatch),
-		errors.Is(err, governance.ErrL2SignatureMissing),
-		errors.Is(err, governance.ErrL2SignatureInvalid),
-		errors.Is(err, governance.ErrL2KeyNotConfigured),
-		errors.Is(err, governance.ErrL3ProofMissing),
-		errors.Is(err, governance.ErrL3ProofInvalid),
-		errors.Is(err, governance.ErrL3NotaryNotConfigured),
-		errors.Is(err, governance.ErrTxInFlight):
+	case errors.Is(err, constants.ErrTxInvalidEnvelope),
+		errors.Is(err, constants.ErrTxTransactionIDMissing),
+		errors.Is(err, constants.ErrTxUnknownActionType),
+		errors.Is(err, constants.ErrTxPayloadMissing),
+		errors.Is(err, constants.ErrTxPayloadDecodeFailed),
+		errors.Is(err, constants.ErrTxL1ValidationFailed),
+		errors.Is(err, constants.ErrTxTransactionHashMissing),
+		errors.Is(err, constants.ErrTxTransactionHashMismatch),
+		errors.Is(err, constants.ErrTxTransactionExpired),
+		errors.Is(err, constants.ErrTxNonceMissing),
+		errors.Is(err, constants.ErrTxTransactionReplay),
+		errors.Is(err, constants.ErrTxStateRootMissing),
+		errors.Is(err, constants.ErrTxStateRootRequired),
+		errors.Is(err, constants.ErrTxStateRootMismatch),
+		errors.Is(err, constants.ErrTxL2SignatureMissing),
+		errors.Is(err, constants.ErrTxL2SignatureInvalid),
+		errors.Is(err, constants.ErrTxL2KeyNotConfigured),
+		errors.Is(err, constants.ErrTxL3ProofMissing),
+		errors.Is(err, constants.ErrTxL3ProofInvalid),
+		errors.Is(err, constants.ErrTxL3NotaryNotConfigured),
+		errors.Is(err, constants.ErrTxInFlight):
 		return http.StatusForbidden
 	}
 	// Wrapped invalid-envelope decode error from ProcessEnvelope.
