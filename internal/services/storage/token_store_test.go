@@ -16,6 +16,7 @@ package storage
 import (
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -592,4 +593,201 @@ func TestTokenStoreService_NegativeTTL(t *testing.T) {
 	retrieved, err = ts.KVGet(context.Background(), key)
 	require.NoError(t, err)
 	assert.Equal(t, value, retrieved)
+}
+
+// TestTokenStoreService_PruneExpiredKeys verifies that the prune function
+// removes expired keys from the database.
+func TestTokenStoreService_PruneExpiredKeys(t *testing.T) {
+	t.Parallel()
+	ts, testVault, _ := setupTestTokenStore(t)
+	defer testVault.Close()
+
+	// Set keys with different TTLs
+	err := ts.KVSet(context.Background(), "permanent-key", "permanent-value", 0)
+	require.NoError(t, err)
+
+	err = ts.KVSet(context.Background(), "expired-key", "expired-value", 1)
+	require.NoError(t, err)
+
+	// Both should be retrievable immediately
+	_, err = ts.KVGet(context.Background(), "permanent-key")
+	require.NoError(t, err)
+	_, err = ts.KVGet(context.Background(), "expired-key")
+	require.NoError(t, err)
+
+	// Wait for expiration
+	time.Sleep(2 * time.Second)
+
+	// Manually trigger prune by calling the prune function
+	pruneFunc := tokenStorePrune(ts.config)
+	err = pruneFunc(context.Background(), ts.db, ts.logger)
+	require.NoError(t, err)
+
+	// Permanent key should still exist
+	retrieved, err := ts.KVGet(context.Background(), "permanent-key")
+	require.NoError(t, err)
+	assert.Equal(t, "permanent-value", retrieved)
+
+	// Expired key should be gone
+	_, err = ts.KVGet(context.Background(), "expired-key")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "key not found")
+}
+
+// TestTokenStoreService_PruneSizeLimit verifies that the prune function
+// handles the size limit check without error.
+func TestTokenStoreService_PruneSizeLimit(t *testing.T) {
+	t.Parallel()
+	ts, testVault, _ := setupTestTokenStore(t)
+	defer testVault.Close()
+
+	// Insert multiple values
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		value := fmt.Sprintf("value-%d", i)
+		err := ts.KVSet(context.Background(), key, value, 0)
+		require.NoError(t, err)
+	}
+
+	// Manually trigger prune with the actual config
+	pruneFunc := tokenStorePrune(ts.config)
+	err := pruneFunc(context.Background(), ts.db, ts.logger)
+	// Prune should succeed even if no keys are removed (database size is under limit)
+	require.NoError(t, err)
+
+	// Verify all keys still exist (since database size is under limit)
+	for i := 0; i < 10; i++ {
+		key := fmt.Sprintf("key-%d", i)
+		_, err := ts.KVGet(context.Background(), key)
+		require.NoError(t, err)
+	}
+}
+
+// TestTokenStoreService_PruneHandlesNilDB verifies that the prune function
+// handles database errors gracefully.
+func TestTokenStoreService_PruneHandlesErrors(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
+	testVault := CreateTestVault(t, vaultDir, privKey)
+	defer testVault.Close()
+
+	logger := testutil.NewTestLogger()
+
+	config := &TokenStoreConfig{
+		DBPath:               filepath.Join(tempDir, constants.TokenStoreDBFilename),
+		MaxDBSizeMB:          100,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 60,
+	}
+
+	ts, err := NewTokenStoreService(config, logger, testVault)
+	require.NoError(t, err)
+	defer ts.Close()
+
+	// Close the database to simulate an error
+	ts.db.Close()
+
+	// Prune should handle the closed database gracefully
+	pruneFunc := tokenStorePrune(ts.config)
+	err = pruneFunc(context.Background(), ts.db, ts.logger)
+	// The function should return an error when database operations fail
+	assert.Error(t, err)
+}
+
+// TestTokenStoreService_ZeroTTL verifies that TTL=0 means no expiration.
+func TestTokenStoreService_ZeroTTL(t *testing.T) {
+	t.Parallel()
+	ts, testVault, _ := setupTestTokenStore(t)
+	defer testVault.Close()
+
+	key := "zero-ttl-key"
+	value := "value"
+
+	err := ts.KVSet(context.Background(), key, value, 0)
+	require.NoError(t, err)
+
+	// Should be retrievable immediately
+	retrieved, err := ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
+	assert.Equal(t, value, retrieved)
+
+	// Should still be retrievable after time passes
+	time.Sleep(1 * time.Second)
+	retrieved, err = ts.KVGet(context.Background(), key)
+	require.NoError(t, err)
+	assert.Equal(t, value, retrieved)
+}
+
+// TestTokenStoreService_UnicodeCharacters verifies that the service
+// handles Unicode characters in keys and values.
+func TestTokenStoreService_UnicodeCharacters(t *testing.T) {
+	t.Parallel()
+	ts, testVault, _ := setupTestTokenStore(t)
+	defer testVault.Close()
+
+	cases := []struct {
+		key   string
+		value string
+	}{
+		{"key-日本語", "value-日本語"},
+		{"key-中文", "value-中文"},
+		{"key-한글", "value-한글"},
+		{"key-العربية", "value-العربية"},
+		{"key-emoji-😀", "value-emoji-🎉"},
+	}
+
+	for _, tc := range cases {
+		err := ts.KVSet(context.Background(), tc.key, tc.value, 0)
+		require.NoError(t, err)
+
+		retrieved, err := ts.KVGet(context.Background(), tc.key)
+		require.NoError(t, err)
+		assert.Equal(t, tc.value, retrieved)
+	}
+}
+
+// TestTokenStoreService_VeryLongKey verifies that the service handles
+// very long keys (stress test).
+func TestTokenStoreService_VeryLongKey(t *testing.T) {
+	t.Parallel()
+	ts, testVault, _ := setupTestTokenStore(t)
+	defer testVault.Close()
+
+	// Create a very long key (10KB)
+	longKey := make([]byte, 10*1024)
+	for i := range longKey {
+		longKey[i] = byte('a' + (i % 26))
+	}
+
+	value := "value"
+	err := ts.KVSet(context.Background(), string(longKey), value, 0)
+	require.NoError(t, err)
+
+	retrieved, err := ts.KVGet(context.Background(), string(longKey))
+	require.NoError(t, err)
+	assert.Equal(t, value, retrieved)
+}
+
+// TestTokenStoreService_ContextCancellation verifies that operations
+// respect context cancellation.
+func TestTokenStoreService_ContextCancellation(t *testing.T) {
+	t.Parallel()
+	ts, testVault, _ := setupTestTokenStore(t)
+	defer testVault.Close()
+
+	// Create a cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Operations should still complete since they don't actively check context
+	// (this is a documentation test showing current behavior)
+	err := ts.KVSet(ctx, "key", "value", 0)
+	require.NoError(t, err)
+
+	_, err = ts.KVGet(ctx, "key")
+	require.NoError(t, err)
 }

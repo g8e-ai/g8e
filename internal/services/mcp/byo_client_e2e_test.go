@@ -31,6 +31,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -81,7 +82,7 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "byo-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		publicBaseURL:     netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxPayloadBytes:   10 * 1024 * 1024, // 10MB
 	}
 
@@ -278,7 +279,7 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 		signingKey:        privKey,
 		keyID:             "a2a-test-key",
 		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		publicBaseURL:     netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		maxPayloadBytes:   10 * 1024 * 1024,
 	}
 

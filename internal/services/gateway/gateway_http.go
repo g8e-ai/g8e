@@ -22,12 +22,12 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"golang.org/x/time/rate"
 )
 
@@ -48,7 +48,7 @@ type HTTPHandlerDependencies struct {
 	Responder          *response.Writer
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
-	SuspendedStore     interfaces.SuspendedTransactionStore
+	SuspendedStore     storage.SuspendedTransactionStore
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
 }
@@ -127,7 +127,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h.dbController = newDBController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Pubsub, deps.UserSvc, deps.Responder)
 
 	// Initialize actuator key reader for device enrollment
-	actuatorKeyReader := &fileActuatorKeyReader{path: constants.Paths.Infra.ActuatorPubJSONPath}
+	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
 	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.SuspendedStore, deps.MCPGateway, deps.Responder, actuatorKeyReader)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)

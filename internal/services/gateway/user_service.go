@@ -106,10 +106,10 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 	if isBootstrap {
 		existingBootstrap, err := s.FindBootstrapUser()
 		if err != nil {
-			return nil, fmt.Errorf("failed to check for existing bootstrap user: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 		}
 		if existingBootstrap != nil {
-			return nil, fmt.Errorf("bootstrap user already exists")
+			return nil, constants.ErrAlreadyExists
 		}
 	}
 
@@ -137,11 +137,11 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 
 	data, err := json.Marshal(user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal user: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	s.logger.Info("[USER-SERVICE] User created", "user_id", userID, "is_bootstrap", isBootstrap)
@@ -154,14 +154,14 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 // requests bearing a disabled user identity. See `User.IsActive`.
 func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID string) error {
 	if userID == "" {
-		return fmt.Errorf("user_id is required")
+		return constants.ErrUserIDRequired
 	}
 	existing, err := s.GetByID(userID)
 	if err != nil {
-		return fmt.Errorf("failed to load user %s: %w", userID, err)
+		return fmt.Errorf("%w: %w", constants.ErrUserNotFound, err)
 	}
 	if existing == nil {
-		return fmt.Errorf("user not found: %s", userID)
+		return constants.ErrUserNotFound
 	}
 	if existing.Status == constants.UserStatusDisabled {
 		// Already disabled - idempotent no-op, but still record an audit row
@@ -180,7 +180,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 	}
 
 	if err := s.updateUserStatus(userID, constants.UserStatusDisabled); err != nil {
-		return fmt.Errorf("failed to disable user %s: %w", userID, err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Invalidate auth cache for this user
@@ -201,7 +201,7 @@ func (s *UserService) Disable(userID, reason, actorUserID, actorOperatorID strin
 		// and propagate - the caller (registration) treats this as a hard
 		// failure so we never reach a half-state where owner is disabled
 		// but the audit trail does not record why.
-		return fmt.Errorf("user %s disabled but audit append failed: %w", userID, err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	s.logger.Info("[USER-SERVICE] User disabled", "user_id", userID, "reason", reason, "actor", actorUserID)
@@ -223,7 +223,7 @@ func (s *UserService) FindBootstrapUser() (*models.User, error) {
 		return nil, nil
 	}
 	if len(docs) > 1 {
-		return nil, fmt.Errorf("invariant violation: %d bootstrap users found, expected at most 1", len(docs))
+		return nil, fmt.Errorf("%w: %d bootstrap users found, expected at most 1", constants.ErrConstraintViolation, len(docs))
 	}
 	return s.docToUser(docs[0])
 }
@@ -237,7 +237,7 @@ func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	}
 	data, err := json.Marshal(entry)
 	if err != nil {
-		return fmt.Errorf("failed to marshal admin audit entry: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 	return s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionAuthAdminAudit), entry.ID, data)
 }
@@ -258,7 +258,7 @@ func (s *UserService) GetByID(userID string) (*models.User, error) {
 // GetBySub retrieves a user by subject (JWT sub claim).
 func (s *UserService) GetBySub(sub string) (*models.User, error) {
 	if sub == "" {
-		return nil, fmt.Errorf("sub is required")
+		return nil, constants.ErrMissingRequiredField
 	}
 	return s.GetByID(sub)
 }
@@ -266,10 +266,10 @@ func (s *UserService) GetBySub(sub string) (*models.User, error) {
 // CreateUserFromInvitation creates a new user from an invitation for JIT provisioning.
 func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.Invitation) (*models.User, error) {
 	if sub == "" {
-		return nil, fmt.Errorf("sub is required")
+		return nil, constants.ErrMissingRequiredField
 	}
 	if invitation == nil {
-		return nil, fmt.Errorf("invitation is required")
+		return nil, constants.ErrMissingRequiredField
 	}
 
 	s.logger.Info("[USER-SERVICE] JIT provisioning new user from JWT via invitation", "sub", sub, "org", invitation.OrganizationID)
@@ -291,11 +291,11 @@ func (s *UserService) CreateUserFromInvitation(sub string, invitation *models.In
 
 	data, err := json.Marshal(user)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal user: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), sub, data); err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if err := s.ConsumeInvitation(invitation.ID); err != nil {
@@ -316,12 +316,12 @@ func (s *UserService) updateUserStatus(userID string, status constants.UserStatu
 
 	updateBytes, err := json.Marshal(updates)
 	if err != nil {
-		return fmt.Errorf("failed to marshal status update: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
-		return fmt.Errorf("failed to update user status: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	return nil
@@ -336,12 +336,12 @@ func (s *UserService) UpdatePasskeyCredentials(userID string, credentials []mode
 
 	updateBytes, err := json.Marshal(updates)
 	if err != nil {
-		return fmt.Errorf("failed to marshal credentials update: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, updateBytes)
 	if err != nil {
-		return fmt.Errorf("failed to update user credentials: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	return nil
@@ -363,7 +363,7 @@ func (s *UserService) DeleteUser(userID string) error {
 		return err
 	}
 	if !deleted {
-		return fmt.Errorf("user not found: %s", userID)
+		return constants.ErrUserNotFound
 	}
 
 	// Invalidate auth cache for this user
@@ -379,12 +379,12 @@ func (s *UserService) DeleteUser(userID string) error {
 func (s *UserService) docToUser(doc *models.Document) (*models.User, error) {
 	data, err := json.Marshal(doc.ForWire())
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal doc: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	var user models.User
 	if err := json.Unmarshal(data, &user); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
 	user.ID = doc.ID
 	return &user, nil
@@ -448,11 +448,11 @@ func (s *PersonaService) CreatePersona(persona *models.Persona) error {
 
 	data, err := json.Marshal(persona)
 	if err != nil {
-		return fmt.Errorf("failed to marshal persona %s: %w", persona.ID, err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionPersonas), persona.ID, data); err != nil {
-		return fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	s.logger.Info("[PERSONA-SERVICE] Persona created", "persona_id", persona.ID, "name", persona.Name)
@@ -527,12 +527,12 @@ func (s *PersonaService) MapRolesToPersona(roles []string) (string, error) {
 func (s *PersonaService) docToPersona(doc *models.Document) (*models.Persona, error) {
 	data, err := json.Marshal(doc.ForWire())
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal doc: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	var persona models.Persona
 	if err := json.Unmarshal(data, &persona); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal persona: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
 	persona.ID = doc.ID
 	return &persona, nil
@@ -541,7 +541,7 @@ func (s *PersonaService) docToPersona(doc *models.Document) (*models.Persona, er
 // FindActiveInvitationBySub finds an active, unconsumed invitation for the given subject.
 func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation, error) {
 	if sub == "" {
-		return nil, fmt.Errorf("sub is required")
+		return nil, constants.ErrMissingRequiredField
 	}
 
 	filters := []models.DocFilter{
@@ -551,7 +551,7 @@ func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation,
 
 	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionInvitations), filters, "", 1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query invitations: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if len(docs) == 0 {
@@ -561,11 +561,11 @@ func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation,
 	var invitation models.Invitation
 	docData, err := json.Marshal(docs[0].ForWire())
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal doc data: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	if err := json.Unmarshal(docData, &invitation); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal invitation: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
 	invitation.ID = docs[0].ID
 
@@ -580,10 +580,10 @@ func (s *UserService) FindActiveInvitationBySub(sub string) (*models.Invitation,
 func (s *UserService) ConsumeInvitation(id string) error {
 	invitation, err := s.GetInvitationByID(id)
 	if err != nil {
-		return fmt.Errorf("failed to load invitation: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrUserNotFound, err)
 	}
 	if invitation == nil {
-		return fmt.Errorf("invitation not found: %s", id)
+		return constants.ErrUserNotFound
 	}
 
 	invitation.IsConsumed = true
@@ -591,11 +591,11 @@ func (s *UserService) ConsumeInvitation(id string) error {
 
 	data, err := json.Marshal(invitation)
 	if err != nil {
-		return fmt.Errorf("failed to marshal invitation: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionInvitations), id, data); err != nil {
-		return fmt.Errorf("failed to update invitation: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	s.logger.Info("[USER-SERVICE] Invitation consumed", "invitation_id", id)
@@ -615,11 +615,11 @@ func (s *UserService) GetInvitationByID(id string) (*models.Invitation, error) {
 	var invitation models.Invitation
 	docData, err := json.Marshal(doc.ForWire())
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal doc data: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	if err := json.Unmarshal(docData, &invitation); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal invitation: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
 	invitation.ID = doc.ID
 
@@ -629,7 +629,7 @@ func (s *UserService) GetInvitationByID(id string) (*models.Invitation, error) {
 // CreateInvitation creates a new invitation for a user to join an organization.
 func (s *UserService) CreateInvitation(organizationID, sub, createdBy string, roles []string, ttl time.Duration) (*models.Invitation, error) {
 	if organizationID == "" || sub == "" || createdBy == "" {
-		return nil, fmt.Errorf("organization_id, sub, and created_by are required")
+		return nil, constants.ErrMissingRequiredField
 	}
 	if len(roles) == 0 {
 		roles = []string{"user"}
@@ -648,11 +648,11 @@ func (s *UserService) CreateInvitation(organizationID, sub, createdBy string, ro
 
 	data, err := json.Marshal(invitation)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal invitation: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionInvitations), invitation.ID, data); err != nil {
-		return nil, fmt.Errorf("failed to save invitation: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	s.logger.Info("[USER-SERVICE] Invitation created", "invitation_id", invitation.ID, "sub", sub, "org", organizationID)

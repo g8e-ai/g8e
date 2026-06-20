@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/mapping"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -132,7 +133,7 @@ func BuildUniversalResultEnvelope(
 		OperatorId:        senderID,
 		OperatorSessionId: cfg.OperatorSessionId,
 		EventType:         string(eventType),
-		ActionType:        string(constants.MapEventTypeToResultActionType(eventType)),
+		ActionType:        string(mapping.MapEventTypeToResultActionType(eventType)),
 		Payload:           payloadBytes,
 		IntentData:        intentDataStruct,
 		CaseId:            caseID,

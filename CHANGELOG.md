@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-06-20
+
+### Overview
+
+v1.1.5 is a code quality and test coverage release that focuses on error typing improvements, comprehensive test coverage expansion, and codebase cleanup. This release dissolves unnecessary abstractions, centralizes posture definitions, and significantly improves test coverage across CLI, pubsub, network, storage, and history handler components.
+
+### Changed
+
+* **Error Typing Improvements** — Systematically improved error typing across governance and storage services for better error handling and consistency.
+* **Test Coverage Expansion** — Significantly improved test coverage for CLI auth, pubsub, network operations, storage services, and history handler.
+* **Emulator Reorganization** — Moved agentic tool emulator to test directory for better code organization.
+* **Scenario Test Dissolution** — Dissolved scenario tests into standard integration tests for improved maintainability.
+* **Codebase Cleanup** — Removed unnecessary utilities (slices, sliceutil), unused mocks, and dissolved unnecessary interfaces.
+* **Posture Definitions Centralization** — Centralized posture definitions and removed duplicate code.
+* **Signal Definitions Improvements** — Improved signal definitions for better clarity and consistency.
+* **Constants Cleanup** — Cleaned up constants and removed deprecated entries.
+* **HTTP Client Directory Cleanup** — Reorganized HTTP client directory structure.
+
+### Fixed
+
+* **Test Errors** — Fixed various test errors and improved test reliability across multiple test suites.
+* **Lint Issues** — Addressed linting issues identified by static analysis tools.
+* **Code Formatting** — Applied gofmt and standardized code formatting.
+
 ## [1.1.4] - 2026-06-19
 
 ### Overview
@@ -19,6 +43,7 @@ v1.1.4 is a code quality and test coverage release that significantly improves t
 
 ### Breaking Changes
 
+* **`emulator` renamed to `agentic-tool-emulator`** - The emulator CLI command and internal package are renamed to `agentic-tool-emulator` for clarity. Directory renamed from `internal/emulator` to `internal/agentic_tool_emulator`, CLI command changed from `g8e emulator` to `g8e agentic-tool-emulator`, and all references in code, documentation, and configuration files are updated accordingly.
 * **`insecure_mcp` renamed to `local_http_stdio`** - The insecure MCP mode is renamed to `local_http_stdio` for clarity. Service directory, package names, constants, JSON keys, and all references are updated accordingly.
 
 ### Changed
@@ -407,7 +432,7 @@ v1.0.10 is a major release that hardens the platform's security posture, simplif
 * **Storage layer refactor** — Major refactor of the storage subsystem:
   * `TokenStoreService.KVScanPrefix` now decrypts values (previously returned encrypted ciphertext).
   * Removed dead `TextScrubber` dependency from `ExecutionVaultService`.
-  * Chaos test infrastructure moved to `internal/test/chaos/`.
+  * Chaos test infrastructure moved to `test/chaos/`.
 
 * **Gateway architecture** — Decomposed gateway HTTP handling into dedicated controllers:
   * `AuthController` — authentication, enrollment, and session management.

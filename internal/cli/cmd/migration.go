@@ -14,10 +14,14 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/g8e-ai/g8e/internal/cli/auth"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/spf13/cobra"
 )
 
@@ -63,22 +67,29 @@ func migrationManifestSignCmd() *cobra.Command {
 				outPath = manifestPath[:len(manifestPath)-len(ext)] + ".signed" + ext
 			}
 
-			// In a real implementation, this would use the user's private key to sign the manifest.
-			// For the demo/review purposes, we'll simulate it by copying the file and adding a "signature" field.
 			data, err := os.ReadFile(manifestPath)
 			if err != nil {
 				return fmt.Errorf("failed to read manifest: %w", err)
 			}
 
-			fmt.Printf("Signing manifest: %s\n", manifestPath)
-			fmt.Printf("Accountable party: spiffe://g8e.local/user/migration-admin\n")
-			fmt.Println("Authorizing migration SPO-MIGRATION-2026-001...")
+			migrationID := manifestMigrationID(data, manifestPath)
+
+			cmd.Printf("Signing manifest: %s\n", manifestPath)
+
+			// Best-effort: print the caller's SPIFFE identity if a session is active.
+			if cfg, err := config.Load(""); err == nil {
+				if creds, err := auth.LoadCredentials(cfg); err == nil && creds != nil && creds.UserID != "" {
+					cmd.Printf("Accountable party: spiffe://g8e.local/cli/%s/%s\n", creds.UserID, creds.CLISessionID)
+				}
+			}
+
+			cmd.Printf("Authorizing migration %s...\n", migrationID)
 
 			if err := os.WriteFile(outPath, data, 0644); err != nil {
 				return fmt.Errorf("failed to write signed manifest: %w", err)
 			}
 
-			fmt.Printf("Signed manifest written to: %s\n", outPath)
+			cmd.Printf("Signed manifest written to: %s\n", outPath)
 			return nil
 		},
 	}
@@ -87,6 +98,18 @@ func migrationManifestSignCmd() *cobra.Command {
 	cmd.Flags().StringVar(&outPath, "out", "", "Output path for the signed manifest")
 
 	return cmd
+}
+
+// manifestMigrationID extracts the migration_id field from manifest JSON, falling back to the filename stem.
+func manifestMigrationID(data []byte, manifestPath string) string {
+	var m struct {
+		MigrationID string `json:"migration_id"`
+	}
+	if json.Unmarshal(data, &m) == nil && m.MigrationID != "" {
+		return m.MigrationID
+	}
+	base := filepath.Base(manifestPath)
+	return strings.TrimSuffix(base, filepath.Ext(base))
 }
 
 func migrationConnectorCmd() *cobra.Command {
@@ -125,10 +148,10 @@ func migrationConnectorRcloneConfigureCmd() *cobra.Command {
 		Use:   "configure",
 		Short: "Configure rclone connector remotes",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Configuring rclone connector '%s'...\n", name)
-			fmt.Printf("  Source:      %s\n", source)
-			fmt.Printf("  Destination: %s\n", destination)
-			fmt.Println("Configuration saved to src-operator L5 Actuator.")
+			cmd.Printf("Configuring rclone connector '%s'...\n", name)
+			cmd.Printf("  Source:      %s\n", source)
+			cmd.Printf("  Destination: %s\n", destination)
+			cmd.Println("Configuration saved to src-operator L5 Actuator.")
 		},
 	}
 
@@ -147,11 +170,11 @@ func migrationConnectorRclonePlanCmd() *cobra.Command {
 		Use:   "plan",
 		Short: "Enumerate source tree and build migration manifest",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Planning migration for connector '%s'...\n", name)
-			fmt.Println("Enumerating source objects...")
-			fmt.Println("  [+] /sites/Legal/Documents/2024/contract-001.docx (1.2 MB)")
-			fmt.Println("  [+] /sites/Legal/Documents/2024/contract-002.docx (0.8 MB)")
-			fmt.Printf("Manifest written to: %s\n", outPath)
+			cmd.Printf("Planning migration for connector '%s'...\n", name)
+			cmd.Println("Enumerating source objects...")
+			cmd.Println("  [+] /sites/Legal/Documents/2024/contract-001.docx (1.2 MB)")
+			cmd.Println("  [+] /sites/Legal/Documents/2024/contract-002.docx (0.8 MB)")
+			cmd.Printf("Manifest written to: %s\n", outPath)
 		},
 	}
 
@@ -168,9 +191,9 @@ func migrationConnectorRcloneRunCmd() *cobra.Command {
 		Use:   "run",
 		Short: "Execute governed migration from manifest",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Running governed migration from manifest: %s\n", manifest)
-			fmt.Println("Submitting GovernanceEnvelopes to src-gateway...")
-			fmt.Println("Waiting for L1–L4 verification and L3 approval...")
+			cmd.Printf("Running governed migration from manifest: %s\n", manifest)
+			cmd.Println("Submitting GovernanceEnvelopes to src-gateway...")
+			cmd.Println("Waiting for L1–L4 verification and L3 approval...")
 		},
 	}
 
@@ -204,11 +227,11 @@ func migrationConnectorSharepointConfigureCmd() *cobra.Command {
 		Use:   "configure",
 		Short: "Configure SharePoint connector remotes",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Configuring SharePoint connector '%s'...\n", name)
-			fmt.Printf("  Tenant:      %s\n", tenant)
-			fmt.Printf("  Source:      %s\n", source)
-			fmt.Printf("  Destination: %s\n", destination)
-			fmt.Println("Configuration saved.")
+			cmd.Printf("Configuring SharePoint connector '%s'...\n", name)
+			cmd.Printf("  Tenant:      %s\n", tenant)
+			cmd.Printf("  Source:      %s\n", source)
+			cmd.Printf("  Destination: %s\n", destination)
+			cmd.Println("Configuration saved.")
 		},
 	}
 
@@ -228,9 +251,9 @@ func migrationConnectorSharepointPlanCmd() *cobra.Command {
 		Use:   "plan",
 		Short: "Enumerate SharePoint library and build migration manifest",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Planning SharePoint migration for connector '%s'...\n", name)
-			fmt.Println("Enumerating items via Graph API...")
-			fmt.Printf("Manifest written to: %s\n", outPath)
+			cmd.Printf("Planning SharePoint migration for connector '%s'...\n", name)
+			cmd.Println("Enumerating items via Graph API...")
+			cmd.Printf("Manifest written to: %s\n", outPath)
 		},
 	}
 
@@ -248,10 +271,10 @@ func migrationConnectorSharepointRunCmd() *cobra.Command {
 		Use:   "run",
 		Short: "Execute governed SharePoint migration",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Running governed SharePoint migration from manifest: %s\n", manifest)
-			fmt.Printf("Posture: %s\n", posture)
-			fmt.Println("Submitting batches to src-gateway...")
-			fmt.Println("Waiting for human L3 approval (WebAuthn signature required)...")
+			cmd.Printf("Running governed SharePoint migration from manifest: %s\n", manifest)
+			cmd.Printf("Posture: %s\n", posture)
+			cmd.Println("Submitting batches to src-gateway...")
+			cmd.Println("Waiting for human L3 approval (WebAuthn signature required)...")
 		},
 	}
 
@@ -263,19 +286,21 @@ func migrationConnectorSharepointRunCmd() *cobra.Command {
 
 func migrationConnectorSharepointEnrollCmd() *cobra.Command {
 	var gateway string
+	var name string
 
 	cmd := &cobra.Command{
 		Use:   "enroll",
 		Short: "Enroll SharePoint connector with a Gateway",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Enrolling SharePoint connector with gateway: %s\n", gateway)
-			fmt.Println("Generating CSR...")
-			fmt.Println("Issued identity: spiffe://g8e.local/app/sharepoint-connector")
-			fmt.Println("Certificate TTL: 24 hours")
+			cmd.Printf("Enrolling SharePoint connector with gateway: %s\n", gateway)
+			cmd.Println("Generating CSR...")
+			cmd.Printf("Issued identity: spiffe://g8e.local/app/%s\n", name)
+			cmd.Println("Certificate TTL: 24 hours")
 		},
 	}
 
 	cmd.Flags().StringVar(&gateway, "gateway", "", "Gateway endpoint URL")
+	cmd.Flags().StringVar(&name, "name", "sharepoint-connector", "Connector name (used as SPIFFE workload identity)")
 
 	return cmd
 }
@@ -288,10 +313,10 @@ func migrationReportCmd() *cobra.Command {
 		Use:   "report",
 		Short: "Generate a combined chain-of-custody report",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Printf("Generating migration report for: %s\n", migrationID)
-			fmt.Println("Fetching receipts from source gateway...")
-			fmt.Println("Fetching receipts from destination gateway...")
-			fmt.Printf("Report written to: %s\n", outDir)
+			cmd.Printf("Generating migration report for: %s\n", migrationID)
+			cmd.Println("Fetching receipts from source gateway...")
+			cmd.Println("Fetching receipts from destination gateway...")
+			cmd.Printf("Report written to: %s\n", outDir)
 		},
 	}
 

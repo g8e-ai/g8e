@@ -230,13 +230,13 @@ The following packages are test-only and are not part of the production dependen
 
 **`internal/services/storage/storagetest/`** - Test-only audit storage implementations
 - `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
-- Used only in test code (e.g., chaos tester at `internal/test/chaos/chaos.go`)
+- Used only in test code (e.g., chaos tester at `test/chaos/chaos.go`)
 - Implements `TransactionAuditStore` interface via a no-op `DocSet` method
 - Production code uses `storage.SQLAuditStore` from `audit_store.go`
 
-**`internal/test/chaos/`** - Chaos engineering test infrastructure
+**`test/chaos/`** - Chaos engineering test infrastructure
 - Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
 - This is intentional test infrastructure, not production code
-- Located in `internal/test/` to clearly indicate test-only status
+- Located in `test/` to clearly indicate test-only status
 
 **Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest` package provides test implementations that should never be used in production code paths.

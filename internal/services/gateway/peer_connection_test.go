@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,13 +57,13 @@ func TestPeerConnectionManager_InvalidURL(t *testing.T) {
 
 func TestPeerConnectionManager_GatewayID(t *testing.T) {
 	baseDir := t.TempDir()
-	err := constants.InitPathsWithBase(baseDir)
+	err := paths.InitWithBase(baseDir)
 	require.NoError(t, err)
 
 	infra := setupTestInfrastructure(t, true)
 
 	// Create data dir if it doesn't exist (InitPathsWithBase doesn't create them)
-	err = os.MkdirAll(constants.Paths.Infra.DataDir, 0755)
+	err = os.MkdirAll(paths.Infra.DataDir, 0755)
 	require.NoError(t, err)
 
 	pcm := NewPeerConnectionManager(infra.Cfg, infra.Logger, infra.DB, infra.PKI)
@@ -75,7 +75,7 @@ func TestPeerConnectionManager_GatewayID(t *testing.T) {
 	assert.Contains(t, id1, "gw-")
 
 	// Verify file exists
-	data, err := os.ReadFile(constants.GatewayIDPath)
+	data, err := os.ReadFile(paths.GatewayIDPath)
 	require.NoError(t, err)
 	assert.Equal(t, id1, string(data))
 
@@ -87,7 +87,7 @@ func TestPeerConnectionManager_GatewayID(t *testing.T) {
 
 func TestPeerConnectionManager_StartEnrollment(t *testing.T) {
 	baseDir := t.TempDir()
-	err := constants.InitPathsWithBase(baseDir)
+	err := paths.InitWithBase(baseDir)
 	require.NoError(t, err)
 
 	infra := setupTestInfrastructure(t, true)
@@ -96,9 +96,9 @@ func TestPeerConnectionManager_StartEnrollment(t *testing.T) {
 	infra.Cfg.Gateway.FederationSeedURL = "https://seed.g8e.local"
 
 	// Ensure data and pki dirs exist
-	err = os.MkdirAll(constants.Paths.Infra.DataDir, 0755)
+	err = os.MkdirAll(paths.Infra.DataDir, 0755)
 	require.NoError(t, err)
-	err = os.MkdirAll(filepath.Join(constants.Paths.Infra.PkiDir, "peer"), 0755)
+	err = os.MkdirAll(filepath.Join(paths.Infra.PkiDir, "peer"), 0755)
 	require.NoError(t, err)
 
 	pcm := NewPeerConnectionManager(infra.Cfg, infra.Logger, infra.DB, infra.PKI)
@@ -116,9 +116,9 @@ func TestPeerConnectionManager_StartEnrollment(t *testing.T) {
 	assert.NotEmpty(t, pcm.gatewayID)
 
 	// Check if peer cert files were created
-	assert.FileExists(t, constants.PeerCertPath)
-	assert.FileExists(t, constants.PeerKeyPath)
-	assert.FileExists(t, constants.PeerChainPath)
+	assert.FileExists(t, paths.PeerCertPath)
+	assert.FileExists(t, paths.PeerKeyPath)
+	assert.FileExists(t, paths.PeerChainPath)
 
 	pcm.Stop()
 }

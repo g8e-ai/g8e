@@ -25,7 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
+	"github.com/g8e-ai/g8e/internal/mapping"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -99,7 +99,7 @@ type CommandServiceConfig struct {
 	FileEdit          *execution.FileEditService
 	PubSubClient      PubSubClient
 	ResultsService    ResultsPublisher
-	ExecutionVault    interfaces.ExecutionVault
+	ExecutionVault    storage.ExecutionVault
 	AuditStore        *storage.SQLAuditStore
 	Ledger            *storage.GitLedgerService
 	HistoryHandler    *storage.HistoryHandler
@@ -135,7 +135,7 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 		// TODO: Migrate CLI commands to DI-based TLS config
 		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Operator pub/sub client: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrPubSubEmptyPayload, err)
 		}
 	}
 
@@ -199,10 +199,10 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 
 	// Validate required governance dependencies (fail-closed: missing deps = fatal error)
 	if c.ReplayStore == nil {
-		return nil, fmt.Errorf("ReplayStore is required for transaction verification")
+		return nil, constants.ErrTxReplayStoreMissing
 	}
 	if c.StateRootProvider == nil {
-		return nil, fmt.Errorf("StateRootProvider is required for transaction verification")
+		return nil, constants.ErrTxStateRootRequired
 	}
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
@@ -247,8 +247,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 	}
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
-	// Use constants.AllActionTypes() as the single source of truth for valid action types
-	knownActionTypes := constants.AllActionTypes()
+	knownActionTypes := constants.AllActionTypes
 	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode
 	posture := string(c.Config.Gateway.Posture)
 	if posture == "" {
@@ -359,7 +358,7 @@ func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 	defer rs.mu.Unlock()
 
 	if rs.running {
-		return fmt.Errorf("command service is already running")
+		return constants.ErrGatewayAlreadyRunning
 	}
 
 	rs.ctx, rs.cancel = context.WithCancel(ctx)
@@ -367,7 +366,7 @@ func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 
 	rs.heartbeat.ctx = rs.ctx
 
-	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
+	channelName := CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
 
 	// Only subscribe to pub/sub channel when running as a traditional Operator (with identity)
 	// In gateway mode, commands arrive via HTTP/WebSocket endpoints directly
@@ -566,12 +565,12 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, constants.ErrPubSubEmptyPayload
 	}
 	if len(payload) > MaxPayloadSize {
-		return nil, fmt.Errorf("payload exceeds %d byte limit", MaxPayloadSize)
+		return nil, fmt.Errorf("payload exceeds %d byte limit: %w", MaxPayloadSize, constants.ErrPubSubEmptyPayload)
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{}
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
-		return nil, fmt.Errorf("invalid GovernanceEnvelope: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrTxInvalidEnvelope, err)
 	}
 
 	if rs.l4warden == nil {
@@ -587,7 +586,7 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, constants.ErrPubSubActuator
 	}
 
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	eventType := mapping.MapActionTypeToEventType(verified.ActionType)
 	cmdMsg := &PubSubCommandMessage{
 		ID:                envelope.Id,
 		EventType:         eventType,
@@ -631,7 +630,7 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 
 	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator
 	// Map GovernanceEnvelope action types back to protobuf event types for handler dispatch
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	eventType := mapping.MapActionTypeToEventType(verified.ActionType)
 
 	payload := env.Payload
 	if len(payload) == 0 {
@@ -693,14 +692,14 @@ func (rs *OperatorPubSubService) ExecuteVerifiedTransaction(ctx context.Context,
 	handler, ok := rs.handlers[eventType]
 	if !ok {
 		rs.logger.Error("No handler registered for event type", "event_type", string(eventType))
-		return "", fmt.Errorf("no handler for event type: %s", string(eventType))
+		return "", fmt.Errorf("no handler for event type %s: %w", string(eventType), constants.ErrTxUnknownActionType)
 	}
 
 	// Type assert to *PubSubCommandMessage
 	pubsubMsg, ok := cmdMsg.(*PubSubCommandMessage)
 	if !ok {
 		rs.logger.Error("Invalid cmdMsg type", "expected", "*PubSubCommandMessage", "got", fmt.Sprintf("%T", cmdMsg))
-		return "", fmt.Errorf("invalid cmdMsg type: %T", cmdMsg)
+		return "", fmt.Errorf("invalid cmdMsg type %T: %w", cmdMsg, constants.ErrTxPayloadDecodeFailed)
 	}
 	rs.logger.Info("Executing verified transaction through Actuator", "event_type", eventType)
 
@@ -738,7 +737,7 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 	}
 	mcpReq, ok := req.(*operatorv1.McpCallRequested)
 	if !ok {
-		return "", fmt.Errorf("invalid payload type for MCP call: %T", req)
+		return "", fmt.Errorf("invalid payload type for MCP call %T: %w", req, constants.ErrTxPayloadActionMismatch)
 	}
 	if mcpReq.ToolName == "" {
 		return "", constants.ErrPubSubMCPMissingToolName
@@ -755,7 +754,7 @@ func (rs *OperatorPubSubService) handleMcpCallRequestSync(ctx context.Context, m
 
 	summary, err := rs.mcpGateway.DispatchToDownstream(ctx, mcpReq.ToolName, args, msg.OperatorSessionID)
 	if err != nil {
-		return "", fmt.Errorf("downstream MCP dispatch failed: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrGatewayDownstreamHTTPError, err)
 	}
 	// Bound the receipt summary to avoid unbounded growth on chatty tools.
 	if len(summary) > constants.ReceiptSummaryMaxBytes {
@@ -781,7 +780,7 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 	}
 	a2aReq, ok := req.(*operatorv1.A2ACallRequested)
 	if !ok {
-		return "", fmt.Errorf("invalid payload type for A2A call: %T", req)
+		return "", fmt.Errorf("invalid payload type for A2A call %T: %w", req, constants.ErrTxPayloadActionMismatch)
 	}
 	if a2aReq.SkillName == "" {
 		return "", constants.ErrPubSubA2AMissingSkillName
@@ -798,7 +797,7 @@ func (rs *OperatorPubSubService) handleA2aCallRequestSync(ctx context.Context, m
 
 	summary, err := rs.mcpGateway.DispatchToA2ADownstream(ctx, a2aReq.SkillName, payload)
 	if err != nil {
-		return "", fmt.Errorf("downstream A2A dispatch failed: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrGatewayDownstreamHTTPError, err)
 	}
 	// Bound the receipt summary to avoid unbounded growth on chatty tools.
 	if len(summary) > constants.ReceiptSummaryMaxBytes {
@@ -818,7 +817,7 @@ func (rs *OperatorPubSubService) handleAppInvestigationCreatedSync(ctx context.C
 	// For APP_INVESTIGATION_CREATED, the ID is the investigation ID from the envelope.
 	if err := rs.actuator.ConsoleAuditStore.DocSet(string(constants.CollectionInvestigations), msg.ID, msg.Payload); err != nil {
 		rs.logger.Error("Failed to create investigation document", string(constants.ConnectionStateError), err, "investigation_id", msg.ID)
-		return "", fmt.Errorf("failed to create investigation document: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrAuditRecordUserMsg, err)
 	}
 
 	rs.logger.Info("Investigation document created successfully", "investigation_id", msg.ID)
@@ -864,7 +863,7 @@ func (rs *OperatorPubSubService) handleEvalAnswerRequestSync(ctx context.Context
 	evalReq, ok := req.(*operatorv1.EvalAnswerRequested)
 	if !ok {
 		rs.logger.Error("Invalid payload type for eval answer request", "got", fmt.Sprintf("%T", req))
-		return "", fmt.Errorf("invalid payload type: %T", req)
+		return "", fmt.Errorf("invalid payload type %T: %w", req, constants.ErrTxPayloadActionMismatch)
 	}
 
 	rs.logger.Info("Eval answer recorded",
@@ -902,7 +901,7 @@ func (rs *OperatorPubSubService) SendAutomaticHeartbeat() {
 // pubsubAuditLogger implements mcp.AuditLogger using the SQLAuditStore so that
 // read_field tool calls produce audit records in operator mode.
 type pubsubAuditLogger struct {
-	store  *storage.SQLAuditStore
+	store  AuditEventRecorder
 	logger *slog.Logger
 }
 

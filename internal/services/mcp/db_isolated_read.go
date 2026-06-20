@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	_ "modernc.org/sqlite"
 )
 
@@ -61,7 +62,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 		Query        string `json:"query"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
-		return CallToolResult{}, fmt.Errorf("invalid arguments: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	if req.DatabasePath == "" || req.Query == "" {
@@ -77,7 +78,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+			return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrMCPMarshalResult, err)
 		}
 		return CallToolResult{
 			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
@@ -92,7 +93,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+			return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrMCPMarshalResult, err)
 		}
 		return CallToolResult{
 			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
@@ -102,7 +103,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 	dsn := fmt.Sprintf("file:%s?mode=ro", req.DatabasePath)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to open database: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrSQLDatabaseOpenFailed, err)
 	}
 	defer db.Close()
 
@@ -116,7 +117,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
-			return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+			return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrMCPMarshalResult, err)
 		}
 		return CallToolResult{
 			Content: []TextContent{{Type: "text", Text: string(resultJSON)}},
@@ -126,7 +127,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	columns, err := rows.Columns()
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to get columns: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrSQLQueryFailed, err)
 	}
 
 	var resultRows []DBRow
@@ -159,7 +160,7 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {
-		return CallToolResult{}, fmt.Errorf("failed to marshal result: %w", err)
+		return CallToolResult{}, fmt.Errorf("%w: %w", constants.ErrMCPMarshalResult, err)
 	}
 
 	return CallToolResult{

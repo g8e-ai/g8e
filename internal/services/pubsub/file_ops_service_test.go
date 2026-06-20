@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -27,6 +28,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 )
+
+// mockAuditEventRecorder is a test-only implementation of AuditEventRecorder
+type mockAuditEventRecorder struct {
+	recordedEvents []*storage.Event
+}
+
+func (m *mockAuditEventRecorder) RecordEvent(event *storage.Event) (int64, error) {
+	m.recordedEvents = append(m.recordedEvents, event)
+	return int64(len(m.recordedEvents)), nil
+}
 
 func TestPayloadToFileEditRequest(t *testing.T) {
 	t.Run("converts valid payload", func(t *testing.T) {
@@ -467,6 +478,75 @@ func TestFileOpsService_HandleFsReadRequest(t *testing.T) {
 // This test verifies that the ledger two-phase commit methods are NOT currently being called
 // during file edit operations, which means file mutations are NOT being recorded in the
 // git-backed ledger as intended by the architecture.
+func TestFileOpsService_SetAuditStoreForObserved(t *testing.T) {
+	t.Run("sets audit store for observed-state content evidence", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+
+		// Create a mock audit store
+		mockAuditStore := &mockAuditEventRecorder{}
+		svc.SetAuditStoreForObserved(mockAuditStore)
+
+		assert.Equal(t, mockAuditStore, svc.auditStoreForObserved)
+	})
+
+	t.Run("sets nil audit store", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+
+		svc.SetAuditStoreForObserved(nil)
+		assert.Nil(t, svc.auditStoreForObserved)
+	})
+}
+
+func TestFileOpsService_HandleFsListRequest(t *testing.T) {
+	t.Run("rejects invalid protobuf payload", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.FsList.Requested,
+			Payload:   []byte("invalid protobuf"),
+		}
+
+		svc.HandleFsListRequest(context.Background(), msg)
+		// Should log error and return without panic
+	})
+
+	t.Run("uses default path when not specified", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := NewMockOperatorPubSubClient()
+		fileEditSvc := execution.NewFileEditService(cfg, logger)
+		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
+
+		req := &operatorv1.FsListRequested{}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			ID:        "msg-1",
+			EventType: constants.Event.Operator.FsList.Requested,
+			Payload:   payload,
+		}
+
+		svc.HandleFsListRequest(context.Background(), msg)
+		// Should not panic
+	})
+}
+
 func TestFileOpsService_LedgerIntegration(t *testing.T) {
 	t.Run("documents ledger integration gap for file write", func(t *testing.T) {
 		t.Parallel()

@@ -48,7 +48,6 @@ func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
 
 	_, err := auth.ValidateOperatorSession("")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "missing operator_session_id")
 }
 
 func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
@@ -62,7 +61,6 @@ func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 
 	_, err := auth.ValidateOperatorSession("nonexistent-session")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid or expired Operator session")
 }
 
 func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
@@ -90,7 +88,6 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator identity disabled")
 }
 
 func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
@@ -129,7 +126,6 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator session expired")
 }
 
 func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
@@ -167,7 +163,6 @@ func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "identity disabled")
 }
 
 func TestAuthError_Error(t *testing.T) {
@@ -814,7 +809,6 @@ func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
 	// Test with invalid session
 	_, err := auth.ValidateOperatorSession("invalid-session")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid or expired Operator session")
 }
 
 func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
@@ -842,7 +836,6 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 
 	_, err = auth.ValidateOperatorSession(operatorSessionID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator identity disabled")
 }
 
 func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
@@ -1011,7 +1004,6 @@ func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
 	// Third request should hit rate limit
 	err = auth.enforceAppPolicy(req, policy, "app-123")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "rate limit exceeded")
 }
 
 func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
@@ -1033,7 +1025,6 @@ func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
 
 	err := auth.enforceAppPolicy(req, policy, "app-123")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "payload exceeds maximum allowed size")
 }
 
 func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {

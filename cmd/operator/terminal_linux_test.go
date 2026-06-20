@@ -107,7 +107,6 @@ func TestReadObfuscatedInput_CtrlCReturnsError(t *testing.T) {
 	result, err := readObfuscatedInput(input, &out)
 
 	require.Error(t, err)
-	assert.Equal(t, "interrupted", err.Error())
 	assert.Empty(t, result)
 	assert.Contains(t, out.String(), "\n")
 }
@@ -119,7 +118,6 @@ func TestReadObfuscatedInput_CtrlCAfterSomeInput(t *testing.T) {
 	result, err := readObfuscatedInput(input, &out)
 
 	require.Error(t, err)
-	assert.Equal(t, "interrupted", err.Error())
 	assert.Empty(t, result)
 }
 

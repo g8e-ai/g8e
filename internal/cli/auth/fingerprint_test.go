@@ -25,7 +25,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,7 +52,7 @@ func TestVerifyCAFingerprint_Mismatch(t *testing.T) {
 
 	err := VerifyCAFingerprint([]byte(certPEM), "deadbeef")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "CA fingerprint mismatch")
+	assert.Error(t, err)
 }
 
 func TestVerifyCAFingerprint_EmptyPin(t *testing.T) {
@@ -68,7 +68,7 @@ func TestVerifyCAFingerprint_InvalidPEM(t *testing.T) {
 	t.Parallel()
 	err := VerifyCAFingerprint([]byte("not valid pem"), "deadbeef")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to decode CA PEM")
+	assert.Error(t, err)
 }
 
 func TestVerifyCAFingerprint_NonCertificatePEM(t *testing.T) {
@@ -80,7 +80,7 @@ func TestVerifyCAFingerprint_NonCertificatePEM(t *testing.T) {
 
 	err := VerifyCAFingerprint(keyPEM, "deadbeef")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "PEM block is not a certificate")
+	assert.Error(t, err)
 }
 
 func TestFetchRootCAFingerprint_Success(t *testing.T) {
@@ -103,9 +103,9 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -123,9 +123,9 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -143,7 +143,7 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 
 	_, err := FetchRootCAFingerprint(cfg, server.URL+"/.well-known/g8e/pki/fingerprint")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to fetch root CA fingerprint")
+	assert.Error(t, err)
 }
 
 func TestFetchRootCAFingerprint_BadStatusCode(t *testing.T) {

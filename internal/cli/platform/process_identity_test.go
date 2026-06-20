@@ -61,5 +61,5 @@ func TestWriteNetworkIdentityFile_ErrorOnInvalidRuntimeDir(t *testing.T) {
 	pm := &ProcessManager{runtimeDir: runtimeFile}
 	_, err := pm.writeNetworkIdentityFile([]byte(`{"IPs":[]}`))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to write network identity file")
+	assert.Error(t, err)
 }

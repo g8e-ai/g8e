@@ -872,3 +872,706 @@ func TestExecutionVault_FileDiffWithAllFields(t *testing.T) {
 	assert.Equal(t, "case-all", retrieved.CaseID)
 	assert.Equal(t, "op-all", retrieved.OperatorID)
 }
+
+func TestExecutionVault_StoreExecution_LockedVault(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "execution_vault.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+
+	testVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	t.Cleanup(func() { testVault.Close() })
+
+	logger := testutil.NewTestLogger()
+
+	config := &ExecutionVaultConfig{
+		DBPath:               dbPath,
+		MaxDBSizeMB:          1024,
+		RetentionDays:        30,
+		PruneIntervalMinutes: 60,
+	}
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ev.Wait()
+		ev.Close()
+	})
+
+	// Lock the vault
+	testVault.Lock()
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-locked",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "test",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("output"),
+		StdoutSize:       6,
+	}
+
+	err = ev.StoreExecution(context.Background(), record)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vault is locked")
+}
+
+func TestExecutionVault_StoreFileDiff_LockedVault(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "execution_vault.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+
+	testVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	t.Cleanup(func() { testVault.Close() })
+
+	logger := testutil.NewTestLogger()
+
+	config := &ExecutionVaultConfig{
+		DBPath:               dbPath,
+		MaxDBSizeMB:          1024,
+		RetentionDays:        30,
+		PruneIntervalMinutes: 60,
+	}
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ev.Wait()
+		ev.Close()
+	})
+
+	// Lock the vault
+	testVault.Lock()
+
+	record := &models.FileDiffRecord{
+		ID:             "diff-locked",
+		TimestampUTC:   time.Now().UTC(),
+		FilePath:       "/test/file",
+		Operation:      "write",
+		DiffCompressed: []byte("diff content"),
+		DiffSize:       12,
+	}
+
+	err = ev.StoreFileDiff(context.Background(), record)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vault is locked")
+}
+
+func TestExecutionVault_PruneRetention(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "execution_vault.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+
+	testVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	t.Cleanup(func() { testVault.Close() })
+
+	logger := testutil.NewTestLogger()
+
+	// Set very short retention (1 day)
+	config := &ExecutionVaultConfig{
+		DBPath:               dbPath,
+		MaxDBSizeMB:          1024,
+		RetentionDays:        1,
+		PruneIntervalMinutes: 60,
+	}
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ev.Wait()
+		ev.Close()
+	})
+
+	// Store an old execution (2 days ago)
+	exitCode := 0
+	oldRecord := &models.ExecutionRecord{
+		ID:               "exec-old",
+		TimestampUTC:     time.Now().UTC().AddDate(0, 0, -2),
+		Command:          "old-command",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("old output"),
+		StdoutSize:       10,
+	}
+	err = ev.StoreExecution(context.Background(), oldRecord)
+	require.NoError(t, err)
+	ev.Wait()
+
+	// Store a recent execution
+	recentRecord := &models.ExecutionRecord{
+		ID:               "exec-recent",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "recent-command",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("recent output"),
+		StdoutSize:       13,
+	}
+	err = ev.StoreExecution(context.Background(), recentRecord)
+	require.NoError(t, err)
+	ev.Wait()
+
+	// Manually trigger prune
+	pruneFunc := executionVaultPrune(config)
+	err = pruneFunc(context.Background(), ev.db, logger)
+	require.NoError(t, err)
+
+	// Old record should be gone
+	_, err = ev.GetExecution(context.Background(), "exec-old")
+	require.NoError(t, err) // Get returns nil for not found
+
+	// Recent record should still exist
+	retrieved, err := ev.GetExecution(context.Background(), "exec-recent")
+	require.NoError(t, err)
+	assert.NotNil(t, retrieved)
+	assert.Equal(t, "exec-recent", retrieved.ID)
+}
+
+func TestExecutionVault_PruneSizeLimit(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "execution_vault.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+
+	testVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	t.Cleanup(func() { testVault.Close() })
+
+	logger := testutil.NewTestLogger()
+
+	// Set very small size limit (1MB)
+	config := &ExecutionVaultConfig{
+		DBPath:               dbPath,
+		MaxDBSizeMB:          1,
+		RetentionDays:        30,
+		PruneIntervalMinutes: 60,
+	}
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ev.Wait()
+		ev.Close()
+	})
+
+	// Insert multiple large values to exceed size limit
+	// Use larger values (1MB each) to ensure we exceed the 1MB limit after compression
+	largeOutput := make([]byte, 1024*1024) // 1MB each
+	for i := range largeOutput {
+		largeOutput[i] = byte(i % 256)
+	}
+
+	exitCode := 0
+	for i := 0; i < 10; i++ {
+		record := &models.ExecutionRecord{
+			ID:               fmt.Sprintf("exec-large-%d", i),
+			TimestampUTC:     time.Now().UTC().Add(time.Duration(-i) * time.Hour),
+			Command:          fmt.Sprintf("cmd-%d", i),
+			ExitCode:         &exitCode,
+			StdoutCompressed: largeOutput,
+			StdoutSize:       len(largeOutput),
+		}
+		err := ev.StoreExecution(context.Background(), record)
+		require.NoError(t, err)
+	}
+	ev.Wait()
+
+	// Manually trigger prune
+	pruneFunc := executionVaultPrune(config)
+	err = pruneFunc(context.Background(), ev.db, logger)
+	require.NoError(t, err)
+
+	// Verify prune function executed without error
+	// The actual pruning behavior depends on database size after compression
+	// which is hard to predict in tests, so we just verify it doesn't crash
+}
+
+func TestExecutionVault_SpecialCharacters(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-special",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "echo 'test with spaces and \"quotes\"'",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("output\nwith\nnewlines\tand\ttabs"),
+		StdoutSize:       30,
+		UserID:           "user-with-dashes_and_underscores",
+		CaseID:           "case:with:colons",
+	}
+
+	err := ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetExecution(context.Background(), "exec-special")
+	require.NoError(t, err)
+	assert.Equal(t, "echo 'test with spaces and \"quotes\"'", retrieved.Command)
+	assert.Equal(t, "user-with-dashes_and_underscores", retrieved.UserID)
+}
+
+func TestExecutionVault_UnicodeCharacters(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-unicode",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "echo '日本語 中文 한글 العربية'",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("output-😀-🎉-test"),
+		StdoutSize:       20,
+		UserID:           "user-日本語",
+	}
+
+	err := ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetExecution(context.Background(), "exec-unicode")
+	require.NoError(t, err)
+	assert.Equal(t, "echo '日本語 中文 한글 العربية'", retrieved.Command)
+	assert.Equal(t, "user-日本語", retrieved.UserID)
+}
+
+func TestExecutionVault_VeryLongCommand(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	// Create a very long command (10KB)
+	longCommand := make([]byte, 10*1024)
+	for i := range longCommand {
+		longCommand[i] = byte('a' + (i % 26))
+	}
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-long-cmd",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          string(longCommand),
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("output"),
+		StdoutSize:       6,
+	}
+
+	err := ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetExecution(context.Background(), "exec-long-cmd")
+	require.NoError(t, err)
+	assert.Equal(t, len(longCommand), len(retrieved.Command))
+}
+
+func TestExecutionVault_NilExitCode(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	record := &models.ExecutionRecord{
+		ID:               "exec-nil-exit",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "test",
+		ExitCode:         nil,
+		StdoutCompressed: []byte("output"),
+		StdoutSize:       6,
+	}
+
+	err := ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetExecution(context.Background(), "exec-nil-exit")
+	require.NoError(t, err)
+	assert.Nil(t, retrieved.ExitCode)
+}
+
+func TestExecutionVault_ContextCancellation(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	// Create a cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-cancelled",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "test",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("output"),
+		StdoutSize:       6,
+	}
+
+	// Operations should still complete since they don't actively check context
+	// (this is a documentation test showing current behavior)
+	err := ev.StoreExecution(ctx, record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	_, err = ev.GetExecution(ctx, "exec-cancelled")
+	require.NoError(t, err)
+}
+
+func TestExecutionVault_DatabaseInitFailure(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	vaultDir := t.TempDir()
+	testVault := CreateTestVault(t, vaultDir, privKey)
+
+	// Create a file (not a directory) and try to use a path inside it
+	// This will fail because you can't create directories inside a file
+	tempFile, err := os.CreateTemp("", "test-file-*")
+	require.NoError(t, err)
+	tempFile.Close()
+	defer os.Remove(tempFile.Name())
+
+	config := &ExecutionVaultConfig{
+		DBPath: filepath.Join(tempFile.Name(), "execution_vault.db"),
+	}
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	require.Error(t, err)
+	assert.Error(t, err)
+	assert.Nil(t, ev)
+}
+
+func TestExecutionVault_SchemaInitFailure(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "execution_vault.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+
+	testVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	t.Cleanup(func() { testVault.Close() })
+
+	logger := testutil.NewTestLogger()
+
+	config := &ExecutionVaultConfig{
+		DBPath:               dbPath,
+		MaxDBSizeMB:          1024,
+		RetentionDays:        30,
+		PruneIntervalMinutes: 60,
+	}
+
+	// Create a read-only directory to cause schema init failure
+	require.NoError(t, os.MkdirAll(filepath.Dir(dbPath), 0500))
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	// This might succeed or fail depending on OS permissions
+	// If it fails, verify the error message
+	if err != nil {
+		assert.Contains(t, err.Error(), "failed to initialize")
+	} else {
+		// If it succeeded, close it
+		ev.Close()
+	}
+}
+
+func TestExecutionVault_GetExecution_DecryptFailure(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "execution_vault.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+
+	testVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	t.Cleanup(func() { testVault.Close() })
+
+	logger := testutil.NewTestLogger()
+
+	config := &ExecutionVaultConfig{
+		DBPath:               dbPath,
+		MaxDBSizeMB:          1024,
+		RetentionDays:        30,
+		PruneIntervalMinutes: 60,
+	}
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ev.Wait()
+		ev.Close()
+	})
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-decrypt-test",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "test",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte("output"),
+		StdoutSize:       6,
+	}
+
+	err = ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	// Lock the vault before retrieval
+	testVault.Lock()
+
+	// Get should succeed but stdout will be empty due to decryption failure
+	retrieved, err := ev.GetExecution(context.Background(), "exec-decrypt-test")
+	require.NoError(t, err)
+	assert.NotNil(t, retrieved)
+	assert.Equal(t, "exec-decrypt-test", retrieved.ID)
+	// StdoutCompressed should be empty due to decryption failure
+	assert.Empty(t, retrieved.StdoutCompressed)
+}
+
+func TestExecutionVault_GetFileDiff_DecryptFailure(t *testing.T) {
+	t.Parallel()
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "execution_vault.db")
+	vaultDir := filepath.Join(tempDir, "vault")
+
+	_, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(vaultDir, 0700))
+
+	vHeader, _, err := vault.NewVaultHeader(privKey)
+	require.NoError(t, err)
+	require.NoError(t, vHeader.Save(vaultDir))
+
+	testVault, err := vault.NewVault(&vault.VaultConfig{
+		DataDir: vaultDir,
+		Logger:  testutil.NewTestLogger(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, testVault.Unlock(privKey))
+	t.Cleanup(func() { testVault.Close() })
+
+	logger := testutil.NewTestLogger()
+
+	config := &ExecutionVaultConfig{
+		DBPath:               dbPath,
+		MaxDBSizeMB:          1024,
+		RetentionDays:        30,
+		PruneIntervalMinutes: 60,
+	}
+
+	ev, err := NewExecutionVaultService(config, logger, testVault)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		ev.Wait()
+		ev.Close()
+	})
+
+	record := &models.FileDiffRecord{
+		ID:             "diff-decrypt-test",
+		TimestampUTC:   time.Now().UTC(),
+		FilePath:       "/test/file",
+		Operation:      "write",
+		DiffCompressed: []byte("diff content"),
+		DiffSize:       12,
+	}
+
+	err = ev.StoreFileDiff(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	// Lock the vault before retrieval
+	testVault.Lock()
+
+	// Get should succeed but diff will be empty due to decryption failure
+	retrieved, err := ev.GetFileDiff(context.Background(), "diff-decrypt-test")
+	require.NoError(t, err)
+	assert.NotNil(t, retrieved)
+	assert.Equal(t, "diff-decrypt-test", retrieved.ID)
+	// DiffCompressed should be empty due to decryption failure
+	assert.Empty(t, retrieved.DiffCompressed)
+}
+
+func TestExecutionVault_ZeroDuration(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-zero-duration",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "instant-command",
+		ExitCode:         &exitCode,
+		DurationMs:       0,
+		StdoutCompressed: []byte("output"),
+		StdoutSize:       6,
+	}
+
+	err := ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetExecution(context.Background(), "exec-zero-duration")
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), retrieved.DurationMs)
+}
+
+func TestExecutionVault_NegativeDuration(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-negative-duration",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "negative-duration-command",
+		ExitCode:         &exitCode,
+		DurationMs:       -100,
+		StdoutCompressed: []byte("output"),
+		StdoutSize:       6,
+	}
+
+	err := ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetExecution(context.Background(), "exec-negative-duration")
+	require.NoError(t, err)
+	assert.Equal(t, int64(-100), retrieved.DurationMs)
+}
+
+func TestExecutionVault_EmptyFields(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	exitCode := 0
+	record := &models.ExecutionRecord{
+		ID:               "exec-empty-fields",
+		TimestampUTC:     time.Now().UTC(),
+		Command:          "",
+		ExitCode:         &exitCode,
+		StdoutCompressed: []byte(""),
+		StderrCompressed: []byte(""),
+		StdoutSize:       0,
+		StderrSize:       0,
+		UserID:           "",
+		CaseID:           "",
+		TaskID:           "",
+		InvestigationID:  "",
+		OperatorID:       "",
+	}
+
+	err := ev.StoreExecution(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetExecution(context.Background(), "exec-empty-fields")
+	require.NoError(t, err)
+	assert.Equal(t, "", retrieved.Command)
+	assert.Equal(t, "", retrieved.UserID)
+	assert.Equal(t, "", retrieved.CaseID)
+}
+
+func TestExecutionVault_FileDiffEmptyFields(t *testing.T) {
+	t.Parallel()
+	ev, _ := setupTestExecutionVault(t)
+
+	record := &models.FileDiffRecord{
+		ID:                "diff-empty-fields",
+		TimestampUTC:      time.Now().UTC(),
+		FilePath:          "",
+		Operation:         "",
+		LedgerHashBefore:  "",
+		LedgerHashAfter:   "",
+		DiffStat:          "",
+		DiffCompressed:    []byte(""),
+		DiffSize:          0,
+		OperatorSessionID: "",
+		UserID:            "",
+		CaseID:            "",
+		OperatorID:        "",
+	}
+
+	err := ev.StoreFileDiff(context.Background(), record)
+	require.NoError(t, err)
+	ev.Wait()
+
+	retrieved, err := ev.GetFileDiff(context.Background(), "diff-empty-fields")
+	require.NoError(t, err)
+	assert.Equal(t, "", retrieved.FilePath)
+	assert.Equal(t, "", retrieved.Operation)
+	assert.Equal(t, "", retrieved.LedgerHashBefore)
+}

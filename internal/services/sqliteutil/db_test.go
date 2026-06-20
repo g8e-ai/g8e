@@ -16,12 +16,15 @@ package sqliteutil
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"log/slog"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -714,4 +717,286 @@ func TestFindSubstring_AtEnd(t *testing.T) {
 func TestFindSubstring_SingleChar(t *testing.T) {
 	t.Parallel()
 	assert.True(t, findSubstring("abc", "b"))
+}
+
+// Tier 1 Unit Tests (no external dependencies - mocks/stubs only)
+
+func TestDefaultDBConfig_Tier1_SetsAllDefaults(t *testing.T) {
+	t.Parallel()
+	cfg := DefaultDBConfig("/test/path.db")
+
+	assert.Equal(t, "/test/path.db", cfg.Path)
+	assert.Equal(t, 64, cfg.CacheSizeMB)
+	assert.Equal(t, 30000, cfg.BusyTimeoutMs)
+	assert.True(t, cfg.SetFilePermissions)
+	assert.Equal(t, 10, cfg.MaxRetries)
+	assert.Equal(t, 50, cfg.RetryBaseDelayMs)
+}
+
+func TestDefaultDBConfig_Tier1_PathIsSet(t *testing.T) {
+	t.Parallel()
+	customPath := "/custom/path/to/database.sqlite"
+	cfg := DefaultDBConfig(customPath)
+
+	assert.Equal(t, customPath, cfg.Path)
+}
+
+func TestDBConfig_Tier1_AllFieldsAccessible(t *testing.T) {
+	t.Parallel()
+	cfg := DBConfig{
+		Path:               "/test.db",
+		CacheSizeMB:        128,
+		BusyTimeoutMs:      5000,
+		SetFilePermissions: false,
+		MaxRetries:         5,
+		RetryBaseDelayMs:   100,
+	}
+
+	assert.Equal(t, "/test.db", cfg.Path)
+	assert.Equal(t, 128, cfg.CacheSizeMB)
+	assert.Equal(t, 5000, cfg.BusyTimeoutMs)
+	assert.False(t, cfg.SetFilePermissions)
+	assert.Equal(t, 5, cfg.MaxRetries)
+	assert.Equal(t, 100, cfg.RetryBaseDelayMs)
+}
+
+func TestDB_Tier1_GetPathReturnsConfiguredPath(t *testing.T) {
+	t.Parallel()
+	db := &DB{
+		path: "/configured/path.db",
+	}
+
+	assert.Equal(t, "/configured/path.db", db.GetPath())
+}
+
+func TestDB_Tier1_GetPathEmptyString(t *testing.T) {
+	t.Parallel()
+	db := &DB{
+		path: "",
+	}
+
+	assert.Equal(t, "", db.GetPath())
+}
+
+func TestIsUniqueConstraintError_Tier1_NilError(t *testing.T) {
+	t.Parallel()
+	assert.False(t, IsUniqueConstraintError(nil))
+}
+
+func TestIsUniqueConstraintError_Tier1_ErrAlreadyExists(t *testing.T) {
+	t.Parallel()
+	err := constants.ErrAlreadyExists
+	assert.True(t, IsUniqueConstraintError(err))
+}
+
+func TestIsUniqueConstraintError_Tier1_ContainsUniqueConstraintFailed(t *testing.T) {
+	t.Parallel()
+	// Wrap with a message containing the unique constraint error string
+	customErr := fmt.Errorf("UNIQUE constraint failed: test_column")
+	assert.True(t, IsUniqueConstraintError(customErr))
+}
+
+func TestIsUniqueConstraintError_Tier1_GenericError(t *testing.T) {
+	t.Parallel()
+	err := assert.AnError
+	assert.False(t, IsUniqueConstraintError(err))
+}
+
+func TestIsUniqueConstraintError_Tier1_CaseSensitive(t *testing.T) {
+	t.Parallel()
+	lowercaseErr := fmt.Errorf("unique constraint failed: column")
+	assert.False(t, IsUniqueConstraintError(lowercaseErr), "should be case-sensitive")
+}
+
+func TestIsDuplicateColumnError_Tier1_NilError(t *testing.T) {
+	t.Parallel()
+	assert.False(t, IsDuplicateColumnError(nil))
+}
+
+func TestIsDuplicateColumnError_Tier1_ErrDuplicateColumn(t *testing.T) {
+	t.Parallel()
+	err := constants.ErrDuplicateColumn
+	assert.True(t, IsDuplicateColumnError(err))
+}
+
+func TestIsDuplicateColumnError_Tier1_ContainsDuplicateColumnName(t *testing.T) {
+	t.Parallel()
+	customErr := fmt.Errorf("duplicate column name: test_column")
+	assert.True(t, IsDuplicateColumnError(customErr))
+}
+
+func TestIsDuplicateColumnError_Tier1_GenericError(t *testing.T) {
+	t.Parallel()
+	err := assert.AnError
+	assert.False(t, IsDuplicateColumnError(err))
+}
+
+func TestIsDuplicateColumnError_Tier1_CaseSensitive(t *testing.T) {
+	t.Parallel()
+	lowercaseErr := fmt.Errorf("duplicate column name: column")
+	assert.True(t, IsDuplicateColumnError(lowercaseErr))
+}
+
+func TestIsBusyError_Tier1_NilError(t *testing.T) {
+	t.Parallel()
+	assert.False(t, isBusyError(nil))
+}
+
+func TestIsBusyError_Tier1_DatabaseIsLocked(t *testing.T) {
+	t.Parallel()
+	err := fmt.Errorf("database is locked")
+	assert.True(t, isBusyError(err))
+}
+
+func TestIsBusyError_Tier1_SQLITE_BUSY(t *testing.T) {
+	t.Parallel()
+	err := fmt.Errorf("SQLITE_BUSY")
+	assert.True(t, isBusyError(err))
+}
+
+func TestIsBusyError_Tier1_GenericError(t *testing.T) {
+	t.Parallel()
+	err := assert.AnError
+	assert.False(t, isBusyError(err))
+}
+
+func TestIsBusyError_Tier1_CaseSensitive(t *testing.T) {
+	t.Parallel()
+	lowercaseErr := fmt.Errorf("database is locked")
+	assert.True(t, isBusyError(lowercaseErr))
+
+	lowercaseBusy := fmt.Errorf("sqlite_busy")
+	assert.False(t, isBusyError(lowercaseBusy), "SQLITE_BUSY should be case-sensitive")
+}
+
+func TestIsBusyError_Tier1_ContainsInMessage(t *testing.T) {
+	t.Parallel()
+	err := fmt.Errorf("some error: database is locked: more context")
+	assert.True(t, isBusyError(err))
+}
+
+func TestContains_Tier1_EmptyString(t *testing.T) {
+	t.Parallel()
+	assert.False(t, contains("", "test"))
+}
+
+func TestContains_Tier1_EmptySubstring(t *testing.T) {
+	t.Parallel()
+	assert.True(t, contains("test", ""))
+}
+
+func TestContains_Tier1_ExactMatch(t *testing.T) {
+	t.Parallel()
+	assert.True(t, contains("test", "test"))
+}
+
+func TestContains_Tier1_SubstringPresent(t *testing.T) {
+	t.Parallel()
+	assert.True(t, contains("hello world", "world"))
+}
+
+func TestContains_Tier1_SubstringAbsent(t *testing.T) {
+	t.Parallel()
+	assert.False(t, contains("hello world", "xyz"))
+}
+
+func TestContains_Tier1_SubstringLongerThanString(t *testing.T) {
+	t.Parallel()
+	assert.False(t, contains("hi", "hello"))
+}
+
+func TestContains_Tier1_CaseSensitive(t *testing.T) {
+	t.Parallel()
+	assert.False(t, contains("Hello World", "world"))
+	assert.True(t, contains("Hello World", "World"))
+}
+
+func TestContains_Tier1_SpecialCharacters(t *testing.T) {
+	t.Parallel()
+	assert.True(t, contains("test-string", "-"))
+	assert.True(t, contains("test.string", "."))
+	assert.True(t, contains("test string", " "))
+}
+
+func TestFindSubstring_Tier1_Found(t *testing.T) {
+	t.Parallel()
+	assert.True(t, findSubstring("hello world", "world"))
+}
+
+func TestFindSubstring_Tier1_NotFound(t *testing.T) {
+	t.Parallel()
+	assert.False(t, findSubstring("hello world", "xyz"))
+}
+
+func TestFindSubstring_Tier1_EmptySubstring(t *testing.T) {
+	t.Parallel()
+	assert.True(t, findSubstring("test", ""))
+}
+
+func TestFindSubstring_Tier1_AtStart(t *testing.T) {
+	t.Parallel()
+	assert.True(t, findSubstring("hello world", "hello"))
+}
+
+func TestFindSubstring_Tier1_AtEnd(t *testing.T) {
+	t.Parallel()
+	assert.True(t, findSubstring("hello world", "world"))
+}
+
+func TestFindSubstring_Tier1_SingleChar(t *testing.T) {
+	t.Parallel()
+	assert.True(t, findSubstring("abc", "b"))
+}
+
+func TestFindSubstring_Tier1_MultipleOccurrences(t *testing.T) {
+	t.Parallel()
+	assert.True(t, findSubstring("ababa", "aba"))
+}
+
+func TestFindSubstring_Tier1_CaseSensitive(t *testing.T) {
+	t.Parallel()
+	assert.False(t, findSubstring("Hello World", "world"))
+	assert.True(t, findSubstring("Hello World", "World"))
+}
+
+func TestFindSubstring_Tier1_Overlapping(t *testing.T) {
+	t.Parallel()
+	assert.True(t, findSubstring("aaa", "aa"))
+}
+
+func TestDB_Tier1_StructFieldsAccessible(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(nil, nil))
+	db := &DB{
+		DB:     nil,
+		logger: logger,
+		path:   "/test.db",
+		config: DBConfig{Path: "/test.db"},
+	}
+
+	assert.Nil(t, db.DB)
+	assert.Same(t, logger, db.logger)
+	assert.Equal(t, "/test.db", db.path)
+	assert.Equal(t, "/test.db", db.config.Path)
+}
+
+func TestDB_Tier1_NilFieldsAllowed(t *testing.T) {
+	t.Parallel()
+	db := &DB{}
+
+	assert.Nil(t, db.DB)
+	assert.Nil(t, db.logger)
+	assert.Empty(t, db.path)
+	assert.Empty(t, db.config.Path)
+}
+
+func TestDB_Tier1_EmbeddedSQLDBAccessible(t *testing.T) {
+	t.Parallel()
+	// Test that the embedded sql.DB field is accessible
+	var sqlDB *sql.DB
+	db := &DB{
+		DB: sqlDB,
+	}
+
+	assert.Same(t, sqlDB, db.DB)
 }

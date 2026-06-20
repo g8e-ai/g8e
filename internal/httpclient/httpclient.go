@@ -15,6 +15,7 @@ package httpclient
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -50,7 +51,7 @@ func newBaseTransport(tlsCfg *tls.Config) *http.Transport {
 func New() (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
+		return nil, err
 	}
 
 	return &http.Client{
@@ -64,7 +65,7 @@ func New() (*http.Client, error) {
 func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
+		return nil, err
 	}
 
 	return &http.Client{
@@ -77,7 +78,7 @@ func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
 func NewWithTimeout(timeout time.Duration) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
+		return nil, err
 	}
 
 	return &http.Client{
@@ -90,7 +91,7 @@ func NewWithTimeout(timeout time.Duration) (*http.Client, error) {
 func NewWithTLSConfigAndTimeout(tlsConfig *certs.TLSConfig, timeout time.Duration) (*http.Client, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
+		return nil, err
 	}
 
 	return &http.Client{
@@ -110,7 +111,7 @@ func NewWithTLS(tlsCfg *tls.Config) *http.Client {
 func WebSocketDialer() (*websocket.Dialer, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
+		return nil, err
 	}
 
 	return &websocket.Dialer{
@@ -123,7 +124,7 @@ func WebSocketDialer() (*websocket.Dialer, error) {
 func WebSocketDialerWithTLSConfig(tlsConfig *certs.TLSConfig) (*websocket.Dialer, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
+		return nil, err
 	}
 
 	return &websocket.Dialer{
@@ -161,7 +162,7 @@ func MustWebSocketDialer() *websocket.Dialer {
 func NewWithServerName(serverName string) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
+		return nil, err
 	}
 	tlsCfg.ServerName = serverName
 	return &http.Client{
@@ -174,7 +175,7 @@ func NewWithServerName(serverName string) (*http.Client, error) {
 func NewWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string) (*http.Client, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
+		return nil, err
 	}
 	tlsCfg.ServerName = serverName
 	return &http.Client{
@@ -187,7 +188,7 @@ func NewWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string
 func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error) {
 	tlsCfg, err := certs.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
+		return nil, err
 	}
 	tlsCfg.ServerName = serverName
 	return &websocket.Dialer{
@@ -200,11 +201,43 @@ func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error)
 func WebSocketDialerWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string) (*websocket.Dialer, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config from TLSConfig: %w", err)
+		return nil, err
 	}
 	tlsCfg.ServerName = serverName
 	return &websocket.Dialer{
 		TLSClientConfig:  tlsCfg,
 		HandshakeTimeout: DefaultTLSTimeout,
 	}, nil
+}
+
+// ExtractErrorMessage returns a human-readable error string from a raw JSON
+// `error` field produced by client, accepting either:
+//   - a plain JSON string: "some error"
+//   - the standard client error envelope object: {"code": "...", "message": "...", ...}
+//
+// g8eo HTTP response structs should model `error` as json.RawMessage rather
+// than `string`, and call this helper when surfacing the error to the user.
+// Modeling it as a bare `string` causes a silent decode failure whenever the
+// server returns the object form, masking the real server error.
+func ExtractErrorMessage(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var obj struct {
+		Message string `json:"message"`
+		Code    string `json:"code"`
+	}
+	if err := json.Unmarshal(raw, &obj); err == nil {
+		if obj.Message != "" && obj.Code != "" {
+			return fmt.Sprintf("%s: %s", obj.Code, obj.Message)
+		}
+		if obj.Message != "" {
+			return obj.Message
+		}
+	}
+	return string(raw)
 }

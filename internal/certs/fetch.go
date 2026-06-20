@@ -23,6 +23,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // FetchTrustBundle fetches the hub trust bundle from the given URL
@@ -40,31 +42,31 @@ func FetchTrustBundle(ctx context.Context, caURL string, caFingerprint string) (
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, caURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build CA fetch request: %w", err)
+		return nil, fmt.Errorf("%w: failed to build CA fetch request", constants.ErrHTTPRequestCreateFailed)
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch CA certificate from %s: %w", caURL, err)
+		return nil, fmt.Errorf("%w: failed to fetch CA certificate from %s", constants.ErrHTTPRequestExecuteFailed, caURL)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("CA fetch returned HTTP %d from %s", resp.StatusCode, caURL)
+		return nil, fmt.Errorf("%w: CA fetch returned HTTP %d from %s", constants.ErrHTTPStatusError, resp.StatusCode, caURL)
 	}
 
 	pem, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CA certificate body: %w", err)
+		return nil, fmt.Errorf("%w: failed to read CA certificate body", constants.ErrHTTPResponseReadFailed)
 	}
 
 	if len(pem) == 0 {
-		return nil, fmt.Errorf("CA certificate from %s is empty", caURL)
+		return nil, fmt.Errorf("%w: CA certificate from %s is empty", constants.ErrEmptyTrustBundle, caURL)
 	}
 
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(pem) {
-		return nil, fmt.Errorf("CA certificate from %s is not a valid PEM-encoded certificate", caURL)
+		return nil, fmt.Errorf("%w: CA certificate from %s is not a valid PEM-encoded certificate", constants.ErrCAParseFailed, caURL)
 	}
 
 	// Verify CA fingerprint if pin is provided
@@ -101,11 +103,11 @@ func verifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	// Parse the PEM to extract the DER-encoded certificate
 	block, _ := pem.Decode(caPEM)
 	if block == nil {
-		return fmt.Errorf("failed to decode CA PEM")
+		return constants.ErrPEMDecodeFailed
 	}
 
 	if block.Type != "CERTIFICATE" {
-		return fmt.Errorf("PEM block is not a certificate (type: %s)", block.Type)
+		return fmt.Errorf("%w: PEM block is not a certificate (type: %s)", constants.ErrInvalidPEMType, block.Type)
 	}
 
 	// Compute SHA-256 hash of the DER-encoded certificate
@@ -113,7 +115,7 @@ func verifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	actualFP := hex.EncodeToString(hash[:])
 
 	if actualFP != expectedFingerprint {
-		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFingerprint, actualFP)
+		return fmt.Errorf("%w: CA fingerprint mismatch: expected %s, got %s", constants.ErrValidationFailed, expectedFingerprint, actualFP)
 	}
 
 	return nil

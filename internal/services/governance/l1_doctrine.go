@@ -1019,7 +1019,7 @@ func (v *L1Doctrine) AnalyzeMCPArguments(argumentsJSON string) ([]ThreatSignal, 
 	// Parse the JSON arguments using json.RawMessage to avoid untyped maps
 	var raw json.RawMessage
 	if err := json.Unmarshal([]byte(argumentsJSON), &raw); err != nil {
-		return nil, fmt.Errorf("invalid JSON arguments: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
 	}
 
 	// Recursively analyze all string values in the arguments with depth limit

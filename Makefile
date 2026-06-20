@@ -51,7 +51,7 @@ TEST_TIMEOUT := 180s
 TEST_SHORT_TIMEOUT := 180s
 TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
-COVERAGE_THRESHOLD := 65
+COVERAGE_THRESHOLD := 70
 
 # =============================================================================
 # COVERAGE EXCLUSIONS — single source of truth
@@ -61,11 +61,11 @@ COVERAGE_THRESHOLD := 65
 EXCLUDE_PKGS := \
 	mocks \
 	/cmd/ \
-	/internal/test \
 	/test/ \
 	/internal/protocol/proto \
 	/internal/contracts \
 	/internal/interfaces \
+	/internal/constants \
 	/internal/services/gateway/docs \
 	/internal/services/gateway/scripts \
 	/internal/services/storage/storagetest
@@ -133,7 +133,6 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests (unit + integration)"
-	@echo "  test-short            Run short tests with race detection"
 	@echo "  test-pkg-<path>       Run tests for a specific package (e.g., make test-pkg-internal/services/auth)"
 	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-shuffle          Run all tests with randomized order"
@@ -141,12 +140,6 @@ help:
 	@echo "  test-docker           Run Tier 3 (Docker E2E) tests - requires Docker"
 	@echo "  test-gov              Run Tier 3 (Gov Demo E2E) tests - requires Docker"
 	@echo "  test-gateway          Run gateway-specific integration tests"
-	@echo "  test-mcp              Run MCP integration tests (legacy - redirects to test-integration)"
-	@echo "  test-a2a              Run A2A integration tests (legacy - redirects to test-integration)"
-	@echo "  test-universal-gateway Run universal gateway integration tests (legacy - redirects to test-integration)"
-	@echo "  test-byo              Run BYO client integration tests (legacy - redirects to test-integration)"
-	@echo "  test-native           Run native tool integration tests (legacy - redirects to test-integration)"
-	@echo "  test-scenario         Run scenario integration tests (legacy - redirects to test-integration)"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -260,6 +253,7 @@ protoc-install:
 .PHONY: build
 build:
 	@echo "Building g8e Operator for current platform..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@NODE_BINARY=$(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH); \
 	if [ "$(HOST_OS)" = "windows" ]; then \
@@ -285,6 +279,7 @@ build:
 .PHONY: build-all
 build-all:
 	@echo "Building g8e Operator for all platforms..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for platform in $(PLATFORMS); do \
 		GOOS=$${platform%/*}; \
@@ -306,6 +301,7 @@ build-all:
 .PHONY: build-darwin
 build-darwin:
 	@echo "Building g8e for Darwin..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(DARWIN_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-darwin-$$arch; \
@@ -318,6 +314,7 @@ build-darwin:
 .PHONY: build-linux
 build-linux:
 	@echo "Building g8e for Linux..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(LINUX_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-linux-$$arch; \
@@ -330,6 +327,7 @@ build-linux:
 .PHONY: build-windows
 build-windows:
 	@echo "Building g8e for Windows..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@for arch in $(WINDOWS_ARCHS); do \
 		NODE_BINARY=$(BIN_DIR)/g8e-windows-$$arch.exe; \
@@ -342,6 +340,7 @@ build-windows:
 .PHONY: build-docker
 build-docker:
 	@echo "Building g8e binary in Docker (linux/amd64)..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@docker run --rm -e GOOS=linux -e GOARCH=amd64 -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-linux-amd64"
@@ -351,6 +350,7 @@ build-docker:
 .PHONY: build-linux-docker
 build-linux-docker:
 	@echo "Building g8e for Linux in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(LINUX_ARCHS); do \
@@ -363,6 +363,7 @@ build-linux-docker:
 .PHONY: build-windows-docker
 build-windows-docker:
 	@echo "Building g8e for Windows in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(WINDOWS_ARCHS); do \
@@ -375,6 +376,7 @@ build-windows-docker:
 .PHONY: build-darwin-docker
 build-darwin-docker:
 	@echo "Building g8e for Darwin in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(DARWIN_ARCHS); do \
@@ -387,6 +389,7 @@ build-darwin-docker:
 .PHONY: build-all-docker
 build-all-docker:
 	@echo "Building g8e for all platforms in Docker..."
+	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for platform in $(PLATFORMS); do \
@@ -416,10 +419,6 @@ test-unit:
 	@echo "Running Tier 1 (Unit) tests..."
 	@go test -p=1 -tags=!integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
-.PHONY: test-short
-test-short:
-	@echo "Running short unit tests (skips long-running tests)..."
-	@go test $(TEST_RACE) -short $(TEST_COUNT) -timeout $(TEST_SHORT_TIMEOUT) $(TEST_PKGS)
 
 # Tier 2: In-Process Integration Tests - no external dependencies
 .PHONY: test-integration
@@ -427,23 +426,12 @@ test-integration:
 	@echo "Running Tier 2 (In-Process Integration) tests..."
 	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
-# Tier 3a: Docker E2E Tests - requires Docker
+# Tier 3: Docker E2E Tests - requires Docker
 .PHONY: test-docker
 test-docker:
 	@echo "Running Tier 3 (Docker E2E) tests..."
 	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
-# Tier 3b: Gov Demo E2E Tests - requires Docker
-.PHONY: test-gov
-test-gov:
-	@echo "Running Tier 3 (Gov Demo E2E) tests..."
-	@go test -tags=e2e -run TestDockerGateway_GovDemo $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
-
-# Legacy targets - redirect to honest names
-.PHONY: test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway
-test-mcp test-a2a test-byo test-native test-scenario test-universal-gateway:
-	@echo "Running integration tests (legacy target)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./...
 
 # Gateway tests (subset of integration tests)
 .PHONY: test-gateway

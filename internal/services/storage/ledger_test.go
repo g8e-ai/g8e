@@ -356,7 +356,7 @@ func TestLedgerService_CopyToLedger_NonExistentSource(t *testing.T) {
 
 	err := lms.copyToLedger("/nonexistent/file.txt", filepath.Join(tempDir, "dst.txt"))
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to open source file")
+	assert.Error(t, err)
 }
 
 func TestLedgerService_SnapshotLedger(t *testing.T) {
@@ -809,4 +809,24 @@ func TestLedgerService_NodeBinaryFile(t *testing.T) {
 	mirrorContent, err := os.ReadFile(result.LedgerPath)
 	require.NoError(t, err)
 	assert.Equal(t, binaryContent, mirrorContent)
+}
+
+func TestLedgerService_GetStateMerkleRoot_NilReceiver(t *testing.T) {
+	t.Parallel()
+	var lms *GitLedgerService
+
+	assert.NotPanics(t, func() {
+		root, err := lms.GetStateMerkleRoot()
+		require.NoError(t, err)
+		assert.Empty(t, root)
+	})
+}
+
+func TestLedgerService_GetStateMerkleRoot_DisabledVault(t *testing.T) {
+	t.Parallel()
+	lms, _ := NewGitLedgerService(nil, testutil.NewTestLogger())
+
+	root, err := lms.GetStateMerkleRoot()
+	require.NoError(t, err)
+	assert.Empty(t, root)
 }

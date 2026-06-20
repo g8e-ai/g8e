@@ -21,7 +21,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/interfaces"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -35,7 +34,7 @@ type HistoryService struct {
 	config         *config.Config
 	logger         *slog.Logger
 	client         PubSubClient
-	executionVault interfaces.ExecutionVault
+	executionVault storage.ExecutionVault
 	historyHandler *storage.HistoryHandler
 	auditStore     AuditEventRecorder // *storage.SQLAuditStore - optional for observed-state content evidence
 	scrubbing      *scrubbing.ScrubbingService

@@ -65,7 +65,7 @@ type AuditStoreConfig struct {
 
 `EncryptionVault` is required; `NewSQLAuditStore` returns an error if it is nil.
 
-Default values (`DefaultAuditStoreConfig`): `DataDir: ".g8e/data"`, `DBPath: "g8e.db"`, `MaxDBSizeMB: 2048`, `RetentionDays: 90`, `PruneIntervalMinutes: 60`, `OutputTruncationThreshold: 102400`, `HeadTailSize: 51200`.
+Default values (`DefaultAuditStoreConfig`): `DataDir: ".g8e/data"`, `DBPath: "g8e.db"` (resolved to `.g8e/data/g8e.db` via `pathutil.ResolveDBPath`), `MaxDBSizeMB: 2048`, `RetentionDays: 90`, `PruneIntervalMinutes: 60`, `OutputTruncationThreshold: 102400`, `HeadTailSize: 51200`.
 
 **Key Methods:**
 
@@ -179,7 +179,7 @@ type ExecutionVaultConfig struct {
 
 `vault.Vault` is passed as a constructor argument and is required. `NewExecutionVaultService` returns an error if it is nil.
 
-Default values (`DefaultExecutionVaultConfig`): `DBPath: ".g8e/execution_vault.db"`, `MaxDBSizeMB: 1024`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
+Default values (`DefaultExecutionVaultConfig`): `DBPath: ".g8e/execution_vault.db"` (from `constants.ExecutionVaultDBPath`), `MaxDBSizeMB: 1024`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
 
 **Key Methods:**
 
@@ -207,7 +207,7 @@ Default values (`DefaultExecutionVaultConfig`): `DBPath: ".g8e/execution_vault.d
 
 - **TTL support**: Keys may be set with a `ttlSeconds` value; expiry is stored as a timestamp and checked on read.
 - **Encryption at rest**: All values are encrypted with AES-256-GCM before storage. The vault must be unlocked; `KVSet` returns an error if it is locked.
-- **Prefix scanning**: `KVScanPrefix` retrieves all non-expired keys matching a prefix, decrypting each value.
+- **Prefix scanning**: `KVScanPrefix` retrieves all non-expired keys matching a prefix, decrypting each value. Decryption failures are logged and skipped rather than returning an error.
 - **Automatic expiry pruning**: The background pruner deletes expired keys, then prunes the oldest 10% when the database exceeds the size limit.
 
 **Configuration:**
@@ -223,7 +223,7 @@ type TokenStoreConfig struct {
 
 `vault.Vault` is passed as a constructor argument and is required.
 
-Default values (`DefaultTokenStoreConfig`): `DBPath: ".g8e/token_store.db"`, `MaxDBSizeMB: 512`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
+Default values (`DefaultTokenStoreConfig`): `DBPath: ".g8e/token_store.db"` (from `constants.TokenStoreDBPath`), `MaxDBSizeMB: 512`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
 
 **Key Methods (from `interfaces.TokenStore`):**
 
@@ -264,7 +264,7 @@ type ReplayStoreConfig struct {
 }
 ```
 
-Default value (`DefaultReplayStoreConfig`): `DBPath: ".g8e/replay_store.db"`.
+Default value (`DefaultReplayStoreConfig`): `DBPath: ".g8e/replay_store.db"` (from `constants.ReplayStoreDBPath`).
 
 No background pruner is started; callers invoke `Prune` and `CleanupStaleReserved` directly.
 
@@ -307,7 +307,7 @@ type SuspendedTransactionConfig struct {
 }
 ```
 
-Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_transactions.db"`, `MaxDBSizeMB: 256`, `RetentionDays: 7`, `PruneIntervalMinutes: 30`.
+Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_transactions.db"` (from `constants.SuspendedTransactionDBPath`), `MaxDBSizeMB: 256`, `RetentionDays: 7`, `PruneIntervalMinutes: 30`.
 
 **Key Methods:**
 
@@ -317,6 +317,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_t
 - `ApproveSuspendedTransaction(ctx, txHash, approvedBy, approvalSignature, certFingerprint)`: Mark a transaction as approved.
 - `DeleteSuspendedTransaction(ctx, txHash)`: Remove a transaction after approval or rejection.
 - `CleanupExpiredSuspendedTransactions(ctx)`: Delete expired records; returns the count deleted and any error.
+- `GetExpiredSuspendedTransactions(ctx)`: Retrieve expired transactions for audit purposes.
 - `Wait()`: Block until all in-flight writes complete.
 - `Close()`: Stop the pruner and close the database.
 
@@ -368,8 +369,10 @@ func NewCommitmentLedger(db *sqliteutil.DB, logger *slog.Logger) *CommitmentLedg
 **Constructor:**
 
 ```go
-func NewHistoryHandler(auditStore *SQLAuditStore, ledger *GitLedgerService, logger *slog.Logger) *HistoryHandler
+func NewHistoryHandler(auditStore auditStoreInterface, ledger ledgerInterface, logger loggerInterface) *HistoryHandler
 ```
+
+The constructor accepts interface types for dependency injection and unit testing. The `auditStoreInterface` requires `GetOperatorSession`, `GetEvents`, and `GetFileMutations`. The `ledgerInterface` requires `GetFileHistory`, `RestoreFileFromCommit`, `GetFileAtCommit`, and two-phase commit methods.
 
 **Key Methods:**
 

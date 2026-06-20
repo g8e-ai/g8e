@@ -56,7 +56,7 @@ type Keystore struct {
 // This is primarily used for testing with the in-memory test backend.
 func NewWithBackend(secretsDir string, logger *slog.Logger, backend Backend) (*Keystore, error) {
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 	return &Keystore{
 		logger:     logger,
@@ -85,11 +85,11 @@ func (k *Keystore) Initialize() error {
 			k.logger.Info("[Keystore] Master key not found, generating new key", "backend", k.backend.Name())
 			return k.generateAndStoreMasterKey()
 		}
-		return fmt.Errorf("retrieve master key: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
 
 	if len(key) != keySize {
-		return fmt.Errorf("master key has invalid length %d, expected %d", len(key), keySize)
+		return fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreInvalidKeyLength, len(key), keySize)
 	}
 
 	k.logger.Info("[Keystore] Master key retrieved from OS key store", "backend", k.backend.Name())
@@ -100,11 +100,11 @@ func (k *Keystore) Initialize() error {
 func (k *Keystore) generateAndStoreMasterKey() error {
 	key := make([]byte, keySize)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		return fmt.Errorf("generate master key: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreGenerateFailed, err)
 	}
 
 	if err := k.backend.StoreMasterKey(key); err != nil {
-		return fmt.Errorf("store master key: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreStoreFailed, err)
 	}
 
 	k.logger.Info("[Keystore] Master key generated and stored in OS key store", "backend", k.backend.Name())
@@ -115,22 +115,22 @@ func (k *Keystore) generateAndStoreMasterKey() error {
 func (k *Keystore) encrypt(plaintext string) (*EncryptedSecret, error) {
 	key, err := k.backend.RetrieveMasterKey()
 	if err != nil {
-		return nil, fmt.Errorf("retrieve master key for encryption: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, fmt.Errorf("create AES cipher: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreCipherCreate, err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return nil, fmt.Errorf("create GCM mode: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreGCMCreate, err)
 	}
 
 	nonce := make([]byte, nonceSize)
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return nil, fmt.Errorf("generate nonce: %w", err)
+		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreNonceGenerate, err)
 	}
 
 	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
@@ -145,22 +145,22 @@ func (k *Keystore) encrypt(plaintext string) (*EncryptedSecret, error) {
 // decrypt performs AES-256-GCM decryption on an EncryptedSecret and returns plaintext.
 func (k *Keystore) decrypt(enc *EncryptedSecret) (string, error) {
 	if enc.Version != keyVersion {
-		return "", fmt.Errorf("unsupported secret version %d, expected %d", enc.Version, keyVersion)
+		return "", fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreUnsupportedVersion, enc.Version, keyVersion)
 	}
 
 	key, err := k.backend.RetrieveMasterKey()
 	if err != nil {
-		return "", fmt.Errorf("retrieve master key for decryption: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", fmt.Errorf("create AES cipher: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreCipherCreate, err)
 	}
 
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return "", fmt.Errorf("create GCM mode: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreGCMCreate, err)
 	}
 
 	plaintext, err := gcm.Open(nil, enc.Nonce, enc.Ciphertext, nil)
@@ -180,17 +180,17 @@ func (k *Keystore) EncryptSecret(name, plaintext string) error {
 
 	data, err := json.Marshal(enc)
 	if err != nil {
-		return fmt.Errorf("marshal encrypted secret: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreMarshalFailed, err)
 	}
 
 	path := filepath.Join(k.secretsDir, name)
 	tmpPath := path + constants.TmpFileSuffix
 	if err := os.WriteFile(tmpPath, data, constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("write encrypted secret: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreWriteFailed, err)
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {
-		return fmt.Errorf("atomic rename: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreRenameFailed, err)
 	}
 
 	k.logger.Debug("[Keystore] Secret encrypted and written", "name", name)
@@ -202,12 +202,12 @@ func (k *Keystore) DecryptSecret(name string) (string, error) {
 	path := filepath.Join(k.secretsDir, name)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("read encrypted secret: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreReadFailed, err)
 	}
 
 	var enc EncryptedSecret
 	if err := json.Unmarshal(data, &enc); err != nil {
-		return "", fmt.Errorf("unmarshal encrypted secret: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreUnmarshalFailed, err)
 	}
 
 	plaintext, err := k.decrypt(&enc)
@@ -229,7 +229,7 @@ func (k *Keystore) Encrypt(plaintext string) (string, error) {
 
 	data, err := json.Marshal(enc)
 	if err != nil {
-		return "", fmt.Errorf("marshal encrypted value: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreMarshalFailed, err)
 	}
 
 	return base64.StdEncoding.EncodeToString(data), nil
@@ -240,12 +240,12 @@ func (k *Keystore) Encrypt(plaintext string) (string, error) {
 func (k *Keystore) Decrypt(encodedCiphertext string) (string, error) {
 	data, err := base64.StdEncoding.DecodeString(encodedCiphertext)
 	if err != nil {
-		return "", fmt.Errorf("decode base64 ciphertext: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreDecodeBase64, err)
 	}
 
 	var enc EncryptedSecret
 	if err := json.Unmarshal(data, &enc); err != nil {
-		return "", fmt.Errorf("unmarshal encrypted value: %w", err)
+		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreUnmarshalFailed, err)
 	}
 
 	return k.decrypt(&enc)
@@ -255,7 +255,7 @@ func (k *Keystore) Decrypt(encodedCiphertext string) (string, error) {
 func (k *Keystore) DeleteSecret(name string) error {
 	path := filepath.Join(k.secretsDir, name)
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("delete secret: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreDeleteSecret, err)
 	}
 	k.logger.Debug("[Keystore] Secret deleted", "name", name)
 	return nil
@@ -264,12 +264,12 @@ func (k *Keystore) DeleteSecret(name string) error {
 // Purge removes all secrets from disk and deletes the master key from the OS key store.
 func (k *Keystore) Purge() error {
 	if err := k.backend.DeleteMasterKey(); err != nil {
-		return fmt.Errorf("delete master key from OS key store: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreDeleteFailed, err)
 	}
 
 	entries, err := os.ReadDir(k.secretsDir)
 	if err != nil {
-		return fmt.Errorf("read secrets directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreReadDir, err)
 	}
 
 	var purgeErrors []error
@@ -279,7 +279,7 @@ func (k *Keystore) Purge() error {
 		}
 		path := filepath.Join(k.secretsDir, entry.Name())
 		if err := os.Remove(path); err != nil {
-			purgeErrors = append(purgeErrors, fmt.Errorf("delete secret file %s: %w", path, err))
+			purgeErrors = append(purgeErrors, fmt.Errorf("%w %s: %v", constants.ErrKeyStoreDeleteFile, path, err))
 		}
 	}
 
@@ -294,12 +294,12 @@ func (k *Keystore) Purge() error {
 // EnforcePermissions enforces strict filesystem permissions on the secrets directory.
 func (k *Keystore) EnforcePermissions() error {
 	if err := os.Chmod(k.secretsDir, constants.PermDirPrivate); err != nil {
-		return fmt.Errorf("chmod secrets directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreChmodDir, err)
 	}
 
 	entries, err := os.ReadDir(k.secretsDir)
 	if err != nil {
-		return fmt.Errorf("read secrets directory: %w", err)
+		return fmt.Errorf("%w: %v", constants.ErrKeyStoreReadDir, err)
 	}
 
 	for _, entry := range entries {
@@ -308,7 +308,7 @@ func (k *Keystore) EnforcePermissions() error {
 		}
 		path := filepath.Join(k.secretsDir, entry.Name())
 		if err := os.Chmod(path, constants.PermFilePrivate); err != nil {
-			return fmt.Errorf("chmod secret file: %w", err)
+			return fmt.Errorf("%w: %v", constants.ErrKeyStoreChmodFile, err)
 		}
 	}
 

@@ -16,8 +16,9 @@ package certs
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"sync"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // TrustStore holds the CA trust bundle for TLS verification.
@@ -53,11 +54,11 @@ func (ts *TrustStore) GetRootCAs() (*x509.CertPool, error) {
 	ts.mu.RUnlock()
 
 	if len(pem) == 0 {
-		return nil, fmt.Errorf("CA not set - call SetCA before making TLS connections")
+		return nil, constants.ErrEmptyTrustBundle
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(pem) {
-		return nil, fmt.Errorf("failed to parse CA certificate")
+		return nil, constants.ErrCAParseFailed
 	}
 	return pool, nil
 }
@@ -170,11 +171,11 @@ func GetServerCARootCAs() (*x509.CertPool, error) {
 	serverCAMu.RUnlock()
 
 	if len(pem) == 0 {
-		return nil, fmt.Errorf("server CA not set - call certs.SetCA before making TLS connections")
+		return nil, constants.ErrEmptyTrustBundle
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM(pem) {
-		return nil, fmt.Errorf("failed to parse server CA certificate")
+		return nil, constants.ErrCAParseFailed
 	}
 	return pool, nil
 }

@@ -14,11 +14,14 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -309,7 +312,7 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 
 }
@@ -321,7 +324,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 		}
 
 		result := config.OperatorBootstrapURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 }
 
@@ -332,7 +335,7 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 		}
 
 		result := config.OperatorPublicURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 }
 
@@ -343,7 +346,7 @@ func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 		}
 
 		result := config.OperatorDiscoveryURL()
-		assert.Equal(t, constants.LocalhostHTTPURL(constants.Ports.OperatorHttp), result)
+		assert.Equal(t, netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp), result)
 	})
 }
 
@@ -362,6 +365,352 @@ func TestDefaultConstants(t *testing.T) {
 
 	t.Run("default credentials dir constant", func(t *testing.T) {
 		assert.Equal(t, ".g8e", DefaultCredentialsDir)
+	})
+}
+
+func TestLoadWithPaths(t *testing.T) {
+	t.Run("loads config with custom paths from struct", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		customPaths := DefaultInfraPaths()
+		customPaths.Host = "test-host"
+		customPaths.Infra.AppCertDir = "custom/app/certs"
+		customPaths.Infra.CACertPath = "custom/ca.pem"
+		customPaths.Infra.DBPath = "custom/data.db"
+		customPaths.Infra.DocsDir = "custom/docs"
+		customPaths.Infra.PKIDir = "custom/pki"
+		customPaths.Infra.ProtocolConstantsDir = "custom/protocol/constants"
+		customPaths.Infra.ProtocolDir = "custom/protocol"
+		customPaths.Infra.ProtocolModelsDir = "custom/protocol/models"
+		customPaths.Infra.SecretsDir = "custom/secrets"
+		customPaths.Infra.SSHConfigPath = "custom/ssh_config"
+		customPaths.Infra.VaultDir = "custom/vault"
+		customPaths.Infra.VaultKeyPath = "custom/vault/key"
+
+		// Convert to JSON for LoadWithPaths
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
+
+		config, err := LoadWithPaths(tempDir, pathsData)
+		require.NoError(t, err)
+		assert.NotNil(t, config)
+		assert.Equal(t, tempDir, config.ProjectRoot)
+		assert.Equal(t, "test-host", config.Paths.Host)
+		assert.Equal(t, filepath.Join(tempDir, "custom/app/certs"), config.Paths.Infra.AppCertDir)
+		assert.Equal(t, filepath.Join(tempDir, "custom/ca.pem"), config.Paths.Infra.CACertPath)
+		assert.Equal(t, filepath.Join(tempDir, "custom/data.db"), config.Paths.Infra.DBPath)
+	})
+
+	t.Run("uses current directory when project root is empty", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		originalWd, err := os.Getwd()
+		require.NoError(t, err)
+		defer os.Chdir(originalWd)
+
+		err = os.Chdir(tempDir)
+		require.NoError(t, err)
+
+		customPaths := DefaultPathsConfig()
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
+
+		config, err := LoadWithPaths("", pathsData)
+		require.NoError(t, err)
+		assert.NotNil(t, config)
+		assert.Equal(t, tempDir, config.ProjectRoot)
+	})
+
+	t.Run("returns error for invalid JSON", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		invalidJSON := `{"host": invalid}`
+
+		config, err := LoadWithPaths(tempDir, []byte(invalidJSON))
+		require.Error(t, err)
+		assert.Nil(t, config)
+		assert.Contains(t, err.Error(), "failed to parse paths")
+	})
+
+	t.Run("resolves absolute paths as-is", func(t *testing.T) {
+		tempDir := t.TempDir()
+		absPath := "/absolute/path/to/cert.pem"
+
+		customPaths := DefaultInfraPaths()
+		customPaths.Infra.CACertPath = absPath
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
+
+		config, err := LoadWithPaths(tempDir, pathsData)
+		require.NoError(t, err)
+		assert.Equal(t, absPath, config.Paths.Infra.CACertPath)
+	})
+
+	t.Run("resolves relative paths relative to project root", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		customPaths := DefaultInfraPaths()
+		customPaths.Infra.CACertPath = "relative/ca.pem"
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
+
+		config, err := LoadWithPaths(tempDir, pathsData)
+		require.NoError(t, err)
+		assert.Equal(t, filepath.Join(tempDir, "relative/ca.pem"), config.Paths.Infra.CACertPath)
+	})
+
+	t.Run("handles empty infra fields gracefully", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		customPaths := DefaultInfraPaths()
+		customPaths.Infra.AppCertDir = ""
+		customPaths.Infra.CACertPath = ""
+		customPaths.Infra.DBPath = ""
+		pathsData, err := json.Marshal(customPaths)
+		require.NoError(t, err)
+
+		config, err := LoadWithPaths(tempDir, pathsData)
+		require.NoError(t, err)
+		assert.NotNil(t, config)
+		assert.Empty(t, config.Paths.Infra.AppCertDir)
+		assert.Empty(t, config.Paths.Infra.CACertPath)
+		assert.Empty(t, config.Paths.Infra.DBPath)
+	})
+}
+
+func TestResolveInfraPaths(t *testing.T) {
+	t.Run("resolves all relative paths relative to project root", func(t *testing.T) {
+		projectRoot := "/project/root"
+		paths := &PathsConfig{
+			Infra: struct {
+				AppCertDir           string `json:"app_cert_dir"`
+				CACertPath           string `json:"ca_cert_path"`
+				DBPath               string `json:"db_path"`
+				DocsDir              string `json:"docs_dir"`
+				PKIDir               string `json:"pki_dir"`
+				ProtocolConstantsDir string `json:"protocol_constants_dir"`
+				ProtocolDir          string `json:"protocol_dir"`
+				ProtocolModelsDir    string `json:"protocol_models_dir"`
+				SecretsDir           string `json:"secrets_dir"`
+				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
+			}{
+				AppCertDir:           "relative/app/certs",
+				CACertPath:           "relative/ca.pem",
+				DBPath:               "relative/data.db",
+				DocsDir:              "relative/docs",
+				PKIDir:               "relative/pki",
+				ProtocolConstantsDir: "relative/protocol/constants",
+				ProtocolDir:          "relative/protocol",
+				ProtocolModelsDir:    "relative/protocol/models",
+				SecretsDir:           "relative/secrets",
+				SSHConfigPath:        "relative/ssh_config",
+				VaultDir:             "relative/vault",
+				VaultKeyPath:         "relative/vault/key",
+			},
+		}
+
+		resolveInfraPaths(paths, projectRoot)
+
+		assert.Equal(t, filepath.Join(projectRoot, "relative/app/certs"), paths.Infra.AppCertDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/ca.pem"), paths.Infra.CACertPath)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/data.db"), paths.Infra.DBPath)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/docs"), paths.Infra.DocsDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/pki"), paths.Infra.PKIDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/protocol/constants"), paths.Infra.ProtocolConstantsDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/protocol"), paths.Infra.ProtocolDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/protocol/models"), paths.Infra.ProtocolModelsDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/secrets"), paths.Infra.SecretsDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/ssh_config"), paths.Infra.SSHConfigPath)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/vault"), paths.Infra.VaultDir)
+		assert.Equal(t, filepath.Join(projectRoot, "relative/vault/key"), paths.Infra.VaultKeyPath)
+	})
+
+	t.Run("preserves absolute paths unchanged", func(t *testing.T) {
+		projectRoot := "/project/root"
+		absPath := "/absolute/path"
+		paths := &PathsConfig{
+			Infra: struct {
+				AppCertDir           string `json:"app_cert_dir"`
+				CACertPath           string `json:"ca_cert_path"`
+				DBPath               string `json:"db_path"`
+				DocsDir              string `json:"docs_dir"`
+				PKIDir               string `json:"pki_dir"`
+				ProtocolConstantsDir string `json:"protocol_constants_dir"`
+				ProtocolDir          string `json:"protocol_dir"`
+				ProtocolModelsDir    string `json:"protocol_models_dir"`
+				SecretsDir           string `json:"secrets_dir"`
+				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
+			}{
+				AppCertDir: absPath,
+				CACertPath: absPath,
+				DBPath:     absPath,
+			},
+		}
+
+		resolveInfraPaths(paths, projectRoot)
+
+		assert.Equal(t, absPath, paths.Infra.AppCertDir)
+		assert.Equal(t, absPath, paths.Infra.CACertPath)
+		assert.Equal(t, absPath, paths.Infra.DBPath)
+	})
+
+	t.Run("handles empty strings gracefully", func(t *testing.T) {
+		projectRoot := "/project/root"
+		paths := &PathsConfig{
+			Infra: struct {
+				AppCertDir           string `json:"app_cert_dir"`
+				CACertPath           string `json:"ca_cert_path"`
+				DBPath               string `json:"db_path"`
+				DocsDir              string `json:"docs_dir"`
+				PKIDir               string `json:"pki_dir"`
+				ProtocolConstantsDir string `json:"protocol_constants_dir"`
+				ProtocolDir          string `json:"protocol_dir"`
+				ProtocolModelsDir    string `json:"protocol_models_dir"`
+				SecretsDir           string `json:"secrets_dir"`
+				SSHConfigPath        string `json:"ssh_config_path"`
+				VaultDir             string `json:"vault_dir"`
+				VaultKeyPath         string `json:"vault_key_path"`
+			}{
+				AppCertDir: "",
+				CACertPath: "",
+				DBPath:     "",
+			},
+		}
+
+		resolveInfraPaths(paths, projectRoot)
+
+		assert.Empty(t, paths.Infra.AppCertDir)
+		assert.Empty(t, paths.Infra.CACertPath)
+		assert.Empty(t, paths.Infra.DBPath)
+	})
+}
+
+func TestConfig_AppCertFile(t *testing.T) {
+	t.Run("returns app cert file path with name", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
+		config := &Config{
+			CredentialsDir: credentialsDir,
+		}
+
+		result := config.AppCertFile("myapp")
+		assert.Equal(t, filepath.Join(credentialsDir, "apps", "myapp.crt"), result)
+	})
+
+	t.Run("handles empty app name", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
+		config := &Config{
+			CredentialsDir: credentialsDir,
+		}
+
+		result := config.AppCertFile("")
+		assert.Equal(t, filepath.Join(credentialsDir, "apps", ".crt"), result)
+	})
+}
+
+func TestConfig_AppKeyFile(t *testing.T) {
+	t.Run("returns app key file path with name", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
+		config := &Config{
+			CredentialsDir: credentialsDir,
+		}
+
+		result := config.AppKeyFile("myapp")
+		assert.Equal(t, filepath.Join(credentialsDir, "apps", "myapp.key"), result)
+	})
+
+	t.Run("handles empty app name", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
+		config := &Config{
+			CredentialsDir: credentialsDir,
+		}
+
+		result := config.AppKeyFile("")
+		assert.Equal(t, filepath.Join(credentialsDir, "apps", ".key"), result)
+	})
+}
+
+func TestConfig_TrustBundleFile(t *testing.T) {
+	t.Run("returns trust bundle file path", func(t *testing.T) {
+		credentialsDir := filepath.Join(string(filepath.Separator), "credentials", "dir")
+		config := &Config{
+			CredentialsDir: credentialsDir,
+		}
+
+		result := config.TrustBundleFile()
+		assert.Equal(t, filepath.Join(credentialsDir, "g8eg-ca-bundle.pem"), result)
+	})
+}
+
+func TestConfig_OperatorHTTPURL_Override(t *testing.T) {
+	t.Run("returns custom URL when Host contains protocol", func(t *testing.T) {
+		customURL := "https://custom-test-server:8443"
+		config := &Config{
+			Paths: &PathsConfig{
+				Host: customURL,
+			},
+		}
+
+		result := config.OperatorHTTPURL()
+		assert.Equal(t, customURL, result)
+	})
+
+	t.Run("returns default localhost URL when Host is simple hostname", func(t *testing.T) {
+		config := &Config{
+			Paths: &PathsConfig{
+				Host: "localhost",
+			},
+		}
+
+		result := config.OperatorHTTPURL()
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+	})
+
+	t.Run("returns default localhost URL when Host is IP address", func(t *testing.T) {
+		config := &Config{
+			Paths: &PathsConfig{
+				Host: "127.0.0.1",
+			},
+		}
+
+		result := config.OperatorHTTPURL()
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+	})
+
+	t.Run("returns default localhost URL when Paths is nil", func(t *testing.T) {
+		config := &Config{
+			Paths: nil,
+		}
+
+		result := config.OperatorHTTPURL()
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+	})
+
+	t.Run("handles http:// protocol override", func(t *testing.T) {
+		customURL := "http://custom-test-server:8080"
+		config := &Config{
+			Paths: &PathsConfig{
+				Host: customURL,
+			},
+		}
+
+		result := config.OperatorHTTPURL()
+		assert.Equal(t, customURL, result)
+	})
+}
+
+func TestConfig_TrustBundlePath_NilPaths(t *testing.T) {
+	t.Run("returns constants path when Paths is nil", func(t *testing.T) {
+		config := &Config{
+			ProjectRoot: "/project/root",
+			Paths:       nil,
+		}
+
+		result := config.TrustBundlePath()
+		assert.Equal(t, paths.Infra.CaCertPath, result)
 	})
 }
 

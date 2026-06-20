@@ -17,12 +17,14 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 func TestNewProcessManager(t *testing.T) {
@@ -385,7 +387,7 @@ func TestGetLogPath(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	expectedPath := filepath.Join(pm.logDir, constants.OperatorLogPath)
+	expectedPath := filepath.Join(pm.logDir, paths.OperatorLogPath)
 	actualPath := pm.GetLogPath()
 
 	if actualPath != expectedPath {
@@ -534,8 +536,8 @@ func TestConstants(t *testing.T) {
 	if constants.OperatorPIDFilename == "" {
 		t.Error("constants.OperatorPIDFilename should not be empty")
 	}
-	if constants.OperatorLogPath == "" {
-		t.Error("constants.OperatorLogPath should not be empty")
+	if paths.OperatorLogPath == "" {
+		t.Error("paths.OperatorLogPath should not be empty")
 	}
 	if ShutdownTimeout == 0 {
 		t.Error("ShutdownTimeout should not be zero")
@@ -788,5 +790,197 @@ func TestCleanWithNonExistentRuntime(t *testing.T) {
 	// Don't create runtime directory - it should not error
 	if err := pm.Clean(); err != nil {
 		t.Errorf("Clean should not error when runtime doesn't exist: %v", err)
+	}
+}
+
+func TestCheckPortAvailable(t *testing.T) {
+	tmpDir := t.TempDir()
+	pm, err := NewProcessManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProcessManager failed: %v", err)
+	}
+
+	// Find an available port
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to find available port: %v", err)
+	}
+	addr := listener.Addr().(*net.TCPAddr)
+	availablePort := addr.Port
+	listener.Close()
+
+	// Test available port
+	if err := pm.checkPortAvailable(availablePort, "test"); err != nil {
+		t.Errorf("port %d should be available: %v", availablePort, err)
+	}
+
+	// Test port in use
+	listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", availablePort))
+	if err != nil {
+		t.Fatalf("failed to listen on port %d: %v", availablePort, err)
+	}
+	defer listener.Close()
+
+	err = pm.checkPortAvailable(availablePort, "test")
+	if err == nil {
+		t.Error("expected error for port in use")
+	}
+}
+
+func TestWritePosture(t *testing.T) {
+	tmpDir := t.TempDir()
+	pm, err := NewProcessManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProcessManager failed: %v", err)
+	}
+
+	if err := pm.ensureDirectories(); err != nil {
+		t.Fatalf("ensureDirectories failed: %v", err)
+	}
+
+	testPosture := "doctrine"
+	if err := pm.writePosture(testPosture); err != nil {
+		t.Fatalf("writePosture failed: %v", err)
+	}
+
+	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
+	data, err := os.ReadFile(postureFile)
+	if err != nil {
+		t.Fatalf("failed to read posture file: %v", err)
+	}
+
+	if string(data) != testPosture {
+		t.Errorf("expected posture %s, got %s", testPosture, string(data))
+	}
+
+	// Verify file permissions on Unix systems
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(postureFile)
+		if err != nil {
+			t.Fatalf("failed to stat posture file: %v", err)
+		}
+		if info.Mode().Perm() != 0600 {
+			t.Errorf("posture file has incorrect permissions %o, expected 0600", info.Mode().Perm())
+		}
+	}
+}
+
+func TestReadPosture(t *testing.T) {
+	tmpDir := t.TempDir()
+	pm, err := NewProcessManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProcessManager failed: %v", err)
+	}
+
+	if err := pm.ensureDirectories(); err != nil {
+		t.Fatalf("ensureDirectories failed: %v", err)
+	}
+
+	// Test non-existent posture file
+	posture, err := pm.readPosture()
+	if err != nil {
+		t.Errorf("readPosture should return nil for non-existent file: %v", err)
+	}
+	if posture != "" {
+		t.Errorf("expected empty posture for non-existent file, got %s", posture)
+	}
+
+	// Test valid posture
+	validPostures := []string{"doctrine", "consensus", "notary"}
+	for _, p := range validPostures {
+		if err := pm.writePosture(p); err != nil {
+			t.Fatalf("writePosture failed: %v", err)
+		}
+
+		posture, err = pm.readPosture()
+		if err != nil {
+			t.Errorf("readPosture failed for %s: %v", p, err)
+		}
+		if posture != p {
+			t.Errorf("expected posture %s, got %s", p, posture)
+		}
+	}
+
+	// Test invalid posture
+	if err := pm.writePosture("invalid"); err != nil {
+		t.Fatalf("writePosture failed: %v", err)
+	}
+
+	_, err = pm.readPosture()
+	if err == nil {
+		t.Error("expected error for invalid posture value")
+	}
+}
+
+func TestDeletePosture(t *testing.T) {
+	tmpDir := t.TempDir()
+	pm, err := NewProcessManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProcessManager failed: %v", err)
+	}
+
+	if err := pm.ensureDirectories(); err != nil {
+		t.Fatalf("ensureDirectories failed: %v", err)
+	}
+
+	// Test deleting existing posture file
+	if err := pm.writePosture("doctrine"); err != nil {
+		t.Fatalf("writePosture failed: %v", err)
+	}
+
+	if err := pm.deletePosture(); err != nil {
+		t.Errorf("deletePosture failed: %v", err)
+	}
+
+	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
+	if _, err := os.Stat(postureFile); !os.IsNotExist(err) {
+		t.Error("posture file should not exist after deletion")
+	}
+
+	// Test deleting non-existent posture file (should not error)
+	if err := pm.deletePosture(); err != nil {
+		t.Errorf("deletePosture should not error for non-existent file: %v", err)
+	}
+}
+
+func TestReadPosturePublic(t *testing.T) {
+	tmpDir := t.TempDir()
+	pm, err := NewProcessManager(tmpDir)
+	if err != nil {
+		t.Fatalf("NewProcessManager failed: %v", err)
+	}
+
+	if err := pm.ensureDirectories(); err != nil {
+		t.Fatalf("ensureDirectories failed: %v", err)
+	}
+
+	// Test ReadPosture public method
+	if err := pm.writePosture("consensus"); err != nil {
+		t.Fatalf("writePosture failed: %v", err)
+	}
+
+	posture, err := pm.ReadPosture()
+	if err != nil {
+		t.Errorf("ReadPosture failed: %v", err)
+	}
+	if posture != "consensus" {
+		t.Errorf("expected posture consensus, got %s", posture)
+	}
+}
+
+func TestSetProcessGroup(t *testing.T) {
+	// Test that setProcessGroup sets the appropriate process group attributes
+	cmd := exec.Command("echo", "test")
+	setProcessGroup(cmd)
+
+	// On Unix, SysProcAttr should be set
+	// On Windows, it's a no-op
+	if runtime.GOOS != "windows" {
+		if cmd.SysProcAttr == nil {
+			t.Error("SysProcAttr should be set on Unix")
+		}
+		if !cmd.SysProcAttr.Setsid {
+			t.Error("Setsid should be true on Unix")
+		}
 	}
 }

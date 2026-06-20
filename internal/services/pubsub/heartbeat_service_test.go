@@ -643,3 +643,58 @@ func TestHeartbeatService_Scheduler(t *testing.T) {
 		assert.Nil(t, svc.done)
 	})
 }
+
+func TestHeartbeatService_Publish(t *testing.T) {
+	t.Run("publishes heartbeat via results publisher", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc := NewHeartbeatService(cfg, logger, nil)
+
+		mockPublisher := &mockResultsPublisher{}
+		svc.SetResultsPublisher(mockPublisher)
+
+		heartbeat := &operatorv1.HeartbeatResult{
+			OperatorId:        "op-1",
+			OperatorSessionId: "session-1",
+			Status:            "automatic",
+		}
+
+		err := svc.Publish(context.Background(), heartbeat)
+		require.NoError(t, err)
+		assert.True(t, mockPublisher.publishHeartbeatCalled)
+	})
+
+	t.Run("returns error when results publisher is nil", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc := NewHeartbeatService(cfg, logger, nil)
+
+		heartbeat := &operatorv1.HeartbeatResult{
+			OperatorId: "op-1",
+		}
+
+		err := svc.Publish(context.Background(), heartbeat)
+		assert.Error(t, err)
+	})
+
+	t.Run("propagates publish error from results publisher", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc := NewHeartbeatService(cfg, logger, nil)
+
+		mockPublisher := &mockResultsPublisher{
+			publishHeartbeatError: assert.AnError,
+		}
+		svc.SetResultsPublisher(mockPublisher)
+
+		heartbeat := &operatorv1.HeartbeatResult{
+			OperatorId: "op-1",
+		}
+
+		err := svc.Publish(context.Background(), heartbeat)
+		assert.Error(t, err)
+	})
+}

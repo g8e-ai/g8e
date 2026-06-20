@@ -43,13 +43,13 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 			txHash := args[0]
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
+				return fmt.Errorf("failed to load config: %w", constants.ErrConfigLoadFailed)
 			}
 
 			// Read CLI private key
 			keyData, err := os.ReadFile(cfg.CLIKeyFile())
 			if err != nil {
-				return fmt.Errorf("approve: read CLI private key: %w", err)
+				return fmt.Errorf("approve: read CLI private key: %w", constants.ErrKeyReadFailed)
 			}
 
 			// Parse PEM-encoded private key
@@ -58,13 +58,13 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 				return fmt.Errorf("approve: decode PEM private key: %w", constants.ErrPEMDecodeFailed)
 			}
 			if len(rest) > 0 {
-				return fmt.Errorf("approve: extra data after PEM block")
+				return fmt.Errorf("approve: extra data after PEM block: %w", constants.ErrPEMExtraData)
 			}
 
 			// Ed25519 keys are encoded in PKCS8 format
 			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 			if err != nil {
-				return fmt.Errorf("approve: parse private key: %w", err)
+				return fmt.Errorf("approve: parse private key: %w", constants.ErrKeyParseFailed)
 			}
 
 			privKey, ok := key.(ed25519.PrivateKey)
@@ -79,7 +79,7 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 			// Calculate certificate fingerprint for verification
 			certData, err := os.ReadFile(cfg.CLICertFile())
 			if err != nil {
-				return fmt.Errorf("approve: read CLI certificate: %w", err)
+				return fmt.Errorf("approve: read CLI certificate: %w", constants.ErrCertReadFailed)
 			}
 
 			certBlock, rest := pem.Decode(certData)
@@ -87,12 +87,12 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 				return fmt.Errorf("approve: decode PEM certificate: %w", constants.ErrPEMDecodeFailed)
 			}
 			if len(rest) > 0 {
-				return fmt.Errorf("approve: extra data after PEM certificate block")
+				return fmt.Errorf("approve: extra data after PEM certificate block: %w", constants.ErrPEMExtraData)
 			}
 
 			cert, err := x509.ParseCertificate(certBlock.Bytes)
 			if err != nil {
-				return fmt.Errorf("approve: parse certificate: %w", err)
+				return fmt.Errorf("approve: parse certificate: %w", constants.ErrCertParseFailed)
 			}
 
 			hash := sha256.Sum256(cert.Raw)
@@ -110,7 +110,7 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 
 			reqBody, err := json.Marshal(req)
 			if err != nil {
-				return fmt.Errorf("approve: marshal request: %w", err)
+				return fmt.Errorf("approve: marshal request: %w", constants.ErrRequestMarshalFailed)
 			}
 
 			// Call approval API
@@ -122,7 +122,7 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 			approvePath := constants.APIPaths.ApprovePagePrefix + txHash
 			resp, err := client.Post(approvePath, reqBody)
 			if err != nil {
-				return fmt.Errorf("approve: approve transaction: %w", err)
+				return fmt.Errorf("approve: approve transaction: %w", constants.ErrTransactionApproveFailed)
 			}
 
 			type approvalResponse struct {
@@ -131,7 +131,7 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 			}
 			var result approvalResponse
 			if err := json.Unmarshal(resp, &result); err != nil {
-				return fmt.Errorf("approve: parse response: %w", err)
+				return fmt.Errorf("approve: parse response: %w", constants.ErrResponseParseFailed)
 			}
 
 			cmd.Printf("Transaction %s approved successfully\n", txHash)

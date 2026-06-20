@@ -64,7 +64,7 @@ func (s *DocumentStoreService) DocGet(collection, id string) (*models.Document, 
 func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMessage) error {
 	var userDoc map[string]json.RawMessage
 	if err := json.Unmarshal(data, &userDoc); err != nil {
-		return fmt.Errorf("DocumentStoreService: unmarshal document: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
 	if userDoc == nil {
 		userDoc = make(map[string]json.RawMessage)
@@ -75,7 +75,7 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 
 	dataJSON, err := json.Marshal(userDoc)
 	if err != nil {
-		return fmt.Errorf("DocumentStoreService: marshal document: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	now := time.Now().UTC()
@@ -106,7 +106,7 @@ func (s *DocumentStoreService) DocSet(collection, id string, data json.RawMessag
 func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data json.RawMessage, createdAt, updatedAt time.Time) error {
 	var userDoc map[string]json.RawMessage
 	if err := json.Unmarshal(data, &userDoc); err != nil {
-		return fmt.Errorf("DocumentStoreService: unmarshal document: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalDocument, err)
 	}
 	if userDoc == nil {
 		userDoc = make(map[string]json.RawMessage)
@@ -117,7 +117,7 @@ func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data 
 
 	dataJSON, err := json.Marshal(userDoc)
 	if err != nil {
-		return fmt.Errorf("DocumentStoreService: marshal document: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	now := time.Now().UTC()
@@ -165,7 +165,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 
 	var incoming map[string]json.RawMessage
 	if err := json.Unmarshal(fields, &incoming); err != nil {
-		return nil, fmt.Errorf("DocumentStoreService: unmarshal fields: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalFields, err)
 	}
 
 	for k, v := range incoming {
@@ -242,7 +242,7 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.F
 		return mcp.FieldValue{}, constants.ErrNotFound
 	}
 	if err != nil {
-		return mcp.FieldValue{}, fmt.Errorf("DocumentStoreService: extract field %s: %w", fieldPath, err)
+		return mcp.FieldValue{}, fmt.Errorf("%w: %w", constants.ErrDocumentStoreExtractField, err)
 	}
 	if encoded == nil {
 		return mcp.FieldValue{}, constants.ErrNotFound
@@ -250,7 +250,7 @@ func (s *DocumentStoreService) GetField(collection, id, fieldPath string) (mcp.F
 
 	var out interface{}
 	if err := json.Unmarshal([]byte(*encoded), &out); err != nil {
-		return mcp.FieldValue{}, fmt.Errorf("DocumentStoreService: decode field %s: %w", fieldPath, err)
+		return mcp.FieldValue{}, fmt.Errorf("%w: %w", constants.ErrDocumentStoreDecodeField, err)
 	}
 
 	return mcp.ConvertToFieldValue(out), nil
@@ -279,7 +279,7 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 		}
 
 		if err := sqliteutil.ValidateIdentifier(f.Field); err != nil {
-			return nil, fmt.Errorf("DocumentStoreService: invalid filter field: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreInvalidFilterField, err)
 		}
 
 		// Use parameter for path and literals for operators to satisfy CodeQL.
@@ -302,7 +302,7 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 
 		var nativeVal interface{}
 		if err := json.Unmarshal(f.Value, &nativeVal); err != nil {
-			return nil, fmt.Errorf("DocumentStoreService: invalid filter value: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreInvalidFilterValue, err)
 		}
 		args = append(args, "$."+f.Field, nativeVal)
 	}
@@ -316,7 +316,7 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 		}
 
 		if err := sqliteutil.ValidateIdentifier(orderField); err != nil {
-			return nil, fmt.Errorf("DocumentStoreService: invalid orderBy field: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreInvalidOrderByField, err)
 		}
 
 		// Identifier is validated, dir is whitelisted to ASC/DESC.
@@ -368,16 +368,16 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 func scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr string) (*models.Document, error) {
 	createdAt, err := sqliteutil.ParseTimestamp(createdAtStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse created_at: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreParseCreatedAt, err)
 	}
 	updatedAt, err := sqliteutil.ParseTimestamp(updatedAtStr)
 	if err != nil {
-		return nil, fmt.Errorf("parse updated_at: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreParseUpdatedAt, err)
 	}
 
 	var data map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(dataJSON), &data); err != nil {
-		return nil, fmt.Errorf("unmarshal document data: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalData, err)
 	}
 
 	return &models.Document{

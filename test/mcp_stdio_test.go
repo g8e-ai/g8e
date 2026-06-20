@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,10 +144,10 @@ func TestMCPGateway_ConfigTemplate(t *testing.T) {
 // The binary is cached in .g8e/test-bin/g8e to avoid rebuilding on every test run.
 func getTestNodeBinaryPath() (string, error) {
 	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase(constants.ProjectRootFromTestDir); err != nil {
+	if err := paths.InitWithBase(constants.ProjectRootFromTestDir); err != nil {
 		return "", fmt.Errorf("failed to initialize paths: %w", err)
 	}
-	repoRoot := constants.Paths.Infra.RuntimeDir
+	repoRoot := paths.Infra.RuntimeDir
 
 	// Use a dedicated test binary directory
 	testBinDir := filepath.Join(repoRoot, ".g8e", "test-bin")
@@ -191,10 +192,10 @@ func getTestNodeBinaryPath() (string, error) {
 // Helper function to run CLI commands for testing
 func runCLICommand(args ...string) (string, error) {
 	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase(constants.ProjectRootFromTestDir); err != nil {
+	if err := paths.InitWithBase(constants.ProjectRootFromTestDir); err != nil {
 		return "", fmt.Errorf("failed to initialize paths: %w", err)
 	}
-	repoRoot := constants.Paths.Infra.RuntimeDir
+	repoRoot := paths.Infra.RuntimeDir
 
 	g8ePath, err := getTestNodeBinaryPath()
 	if err != nil {
@@ -216,10 +217,10 @@ func runCLICommand(args ...string) (string, error) {
 // Helper function to read file contents
 func readFile(path string) (string, error) {
 	// Initialize paths relative to test directory
-	if err := constants.InitPathsWithBase(constants.ProjectRootFromTestDir); err != nil {
+	if err := paths.InitWithBase(constants.ProjectRootFromTestDir); err != nil {
 		return "", fmt.Errorf("failed to initialize paths: %w", err)
 	}
-	repoRoot := constants.Paths.Infra.RuntimeDir
+	repoRoot := paths.Infra.RuntimeDir
 
 	fullPath := filepath.Join(repoRoot, path)
 	content, err := os.ReadFile(fullPath)

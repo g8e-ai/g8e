@@ -20,6 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestFormatTimestamp_NormalizesToUTC(t *testing.T) {
@@ -30,7 +32,7 @@ func TestFormatTimestamp_NormalizesToUTC(t *testing.T) {
 	eastern := time.Date(2025, 6, 15, 12, 0, 0, 0, loc)
 	result := FormatTimestamp(eastern)
 
-	parsed, err := time.Parse(TimestampFormat, result)
+	parsed, err := time.Parse(constants.TimestampFormat, result)
 	require.NoError(t, err)
 	assert.Equal(t, time.UTC, parsed.Location())
 	assert.True(t, eastern.Equal(parsed))
@@ -56,7 +58,7 @@ func TestNowTimestamp_IsUTCRFC3339Nano(t *testing.T) {
 	result := NowTimestamp()
 	after := time.Now().UTC()
 
-	parsed, err := time.Parse(TimestampFormat, result)
+	parsed, err := time.Parse(constants.TimestampFormat, result)
 	require.NoError(t, err)
 	assert.False(t, parsed.Before(before) || parsed.After(after))
 	assert.True(t, strings.HasSuffix(result, "Z"), "expected UTC suffix 'Z', got %q", result)

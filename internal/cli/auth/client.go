@@ -117,7 +117,7 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate ECDSA key: %w", err)
+		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	template := x509.CertificateRequest{
@@ -130,7 +130,7 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create CSR: %w", err)
+		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	csrPEM := pem.EncodeToMemory(&pem.Block{
@@ -146,17 +146,17 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 	trustBundlePath := cfg.TrustBundlePath()
 	if trustBundlePath == "" {
-		return nil, fmt.Errorf("trust bundle path not configured")
+		return nil, constants.ErrGatewayURLRequired
 	}
 
 	caPEM, err := os.ReadFile(trustBundlePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read trust bundle from %s: %w", trustBundlePath, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM(caPEM) {
-		return nil, fmt.Errorf("failed to parse CA certificates from trust bundle")
+		return nil, constants.ErrCAParseFailed
 	}
 
 	tlsConfig := &tls.Config{
@@ -183,19 +183,19 @@ func FetchRootCAFingerprint(cfg *config.Config, baseURL string) (string, error) 
 	fingerprintURL := fmt.Sprintf("%s/.well-known/g8e/pki/fingerprint", discoveryURL)
 	resp, err := http.Get(fingerprintURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch root CA fingerprint: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fingerprint fetch returned HTTP %d", resp.StatusCode)
+		return "", fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	var fpResp struct {
 		RootCA string `json:"root_ca"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&fpResp); err != nil {
-		return "", fmt.Errorf("failed to decode fingerprint response: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	return fpResp.RootCA, nil
@@ -211,11 +211,11 @@ func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	// Parse the PEM to extract the DER-encoded certificate
 	block, _ := pem.Decode(caPEM)
 	if block == nil {
-		return fmt.Errorf("failed to decode CA PEM")
+		return constants.ErrPEMDecodeFailed
 	}
 
 	if block.Type != "CERTIFICATE" {
-		return fmt.Errorf("PEM block is not a certificate (type: %s)", block.Type)
+		return constants.ErrInvalidPEMType
 	}
 
 	// Compute SHA-256 hash of the DER-encoded certificate
@@ -223,7 +223,7 @@ func VerifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {
 	actualFP := hex.EncodeToString(hash[:])
 
 	if actualFP != expectedFingerprint {
-		return fmt.Errorf("CA fingerprint mismatch: expected %s, got %s", expectedFingerprint, actualFP)
+		return constants.ErrValidationFailed
 	}
 
 	return nil
@@ -236,7 +236,7 @@ func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerpr
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Get local OS user information to send to gateway
@@ -251,7 +251,7 @@ func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerpr
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	// Use bootstrap port (plain HTTP) for initial bootstrap
@@ -262,7 +262,7 @@ func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerpr
 	url := fmt.Sprintf("%s/api/v1/auth/bootstrap", discoveryURL)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -271,28 +271,28 @@ func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerpr
 	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to bootstrap: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	var regResp RegistrationResponse
 	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	if regResp.Error != "" {
-		return nil, fmt.Errorf("bootstrap failed: %s", regResp.Error)
+		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
 	}
 
 	// Verify CA bundle fingerprint if pin is provided
 	if caFingerprint != "" && regResp.HubTrustBundle != "" {
 		if err := VerifyCAFingerprint([]byte(regResp.HubTrustBundle), caFingerprint); err != nil {
-			return nil, fmt.Errorf("CA fingerprint verification failed: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
 		}
 	}
 
@@ -308,7 +308,7 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Get local OS user information to send to gateway
@@ -322,7 +322,7 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	// Use bootstrap port (plain HTTP) for CLI enrollment
@@ -333,7 +333,7 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 	url := fmt.Sprintf("%s/api/v1/auth/cli/enroll", discoveryURL)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -342,22 +342,22 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to enroll CLI: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	var regResp RegistrationResponse
 	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	if regResp.Error != "" {
-		return nil, fmt.Errorf("CLI enrollment failed: %s", regResp.Error)
+		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
 	}
 
 	return &regResp, nil
@@ -371,7 +371,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	// Fetch current trust bundle from Operator bootstrap endpoint to handle CA rotation
@@ -382,44 +382,44 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", discoveryURL)
 	trustBundleResp, err := http.Get(trustBundleURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch trust bundle from operator: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer trustBundleResp.Body.Close()
 
 	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
 	if trustBundleResp.StatusCode < http.StatusOK || trustBundleResp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("trust bundle fetch returned HTTP %d", trustBundleResp.StatusCode)
+		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, trustBundleResp.StatusCode)
 	}
 
 	currentTrustBundle, err := io.ReadAll(trustBundleResp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read trust bundle response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	if len(currentTrustBundle) == 0 {
-		return nil, fmt.Errorf("fetched trust bundle is empty")
+		return nil, constants.ErrEmptyTrustBundle
 	}
 
 	// Verify CA bundle fingerprint if pin is provided
 	if caFingerprint != "" {
 		if err := VerifyCAFingerprint(currentTrustBundle, caFingerprint); err != nil {
-			return nil, fmt.Errorf("CA fingerprint verification failed: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
 		}
 	}
 
 	// Update local trust bundle with current version from operator
 	trustBundlePath := cfg.TrustBundlePath()
 	if err := os.MkdirAll(filepath.Dir(trustBundlePath), 0755); err != nil {
-		return nil, fmt.Errorf("failed to create trust directory: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
-		return nil, fmt.Errorf("failed to write trust bundle: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 
 	// Load existing CLI certificate for mTLS
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return nil, fmt.Errorf("failed to load CLI certificate: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Use the freshly fetched trust bundle for TLS verification
@@ -427,7 +427,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM(caPEM) {
-		return nil, fmt.Errorf("failed to parse CA certificates")
+		return nil, constants.ErrCAParseFailed
 	}
 
 	tlsConfig := &tls.Config{
@@ -450,7 +450,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	publicURL := cfg.OperatorPublicURL()
@@ -460,7 +460,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	url := fmt.Sprintf("%s/api/v1/pki/devices/enroll", publicURL)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -471,27 +471,27 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		if isCertificateVerificationError(err) {
 			return nil, fmt.Errorf("%w: %w", constants.ErrTrustBundleStale, err)
 		}
-		return nil, fmt.Errorf("failed to re-enroll: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("re-enrollment failed with HTTP %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	var regResp RegistrationResponse
 	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response (status %d): %w\nBody: %s", resp.StatusCode, err, string(respBody))
+		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	if regResp.Error != "" {
-		return nil, fmt.Errorf("re-enrollment failed: %s", regResp.Error)
+		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
 	}
 
 	return &regResp, nil
@@ -529,17 +529,17 @@ func isCertificateVerificationError(err error) bool {
 
 func SaveCredentials(cfg *config.Config, creds *Credentials) error {
 	if err := os.MkdirAll(cfg.CredentialsDir, 0700); err != nil {
-		return fmt.Errorf("failed to create credentials directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	credsFile := cfg.CredentialsFile()
 	credsData, err := json.Marshal(creds)
 	if err != nil {
-		return fmt.Errorf("failed to marshal credentials: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
 	if err := os.WriteFile(credsFile, credsData, 0600); err != nil {
-		return fmt.Errorf("failed to write credentials file: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
 	return nil
@@ -552,12 +552,12 @@ func LoadCredentials(cfg *config.Config) (*Credentials, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to read credentials file: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
 
 	var creds Credentials
 	if err := json.Unmarshal(credsData, &creds); err != nil {
-		return nil, fmt.Errorf("failed to parse credentials: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
 	return &creds, nil
@@ -568,13 +568,13 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	fmt.Printf("→ Starting native Windows Hello authentication...\n")
 	creds, err := LoadCredentials(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to load credentials: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
 	if creds == nil || creds.UserID == "" {
-		return fmt.Errorf("no user ID found in credentials; run 'g8e auth enroll' first")
+		return constants.ErrNotAuthenticated
 	}
 	if creds.CLISessionID == "" {
-		return fmt.Errorf("no CLI session ID found in credentials; run 'g8e auth enroll' first")
+		return constants.ErrNotAuthenticated
 	}
 
 	fmt.Printf("→ Loaded credentials - User ID: %s, CLI Session ID: %s\n", creds.UserID, creds.CLISessionID)
@@ -583,19 +583,19 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	fmt.Printf("→ Loading CLI certificate from: %s\n", cfg.CLICertFile())
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return fmt.Errorf("failed to load CLI certificate: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Load trust bundle for TLS verification
 	fmt.Printf("→ Loading trust bundle from: %s\n", cfg.TrustBundleFile())
 	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
 	if err != nil {
-		return fmt.Errorf("failed to read trust bundle from %s: %w", cfg.TrustBundleFile(), err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM(caPEM) {
-		return fmt.Errorf("failed to parse CA certificates from trust bundle")
+		return constants.ErrCAParseFailed
 	}
 
 	// Create HTTP client with mTLS (client certificate + trust bundle)
@@ -619,11 +619,11 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	fmt.Printf("→ Requesting authentication challenge from: %s\n", challengeURL)
 	reqBody, err := json.Marshal(models.PasskeyChallengeRequest{UserID: creds.UserID})
 	if err != nil {
-		return fmt.Errorf("failed to marshal challenge request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 	req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	// Add CLI session ID header for auth middleware
@@ -632,7 +632,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	fmt.Printf("→ Sending authentication challenge request...\n")
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to get challenge: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -640,7 +640,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 	if resp.StatusCode == http.StatusOK {
 		var challengeData models.PasskeyChallengeResponse
 		if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
-			return fmt.Errorf("failed to decode challenge: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 		}
 
 		if !challengeData.Success {
@@ -649,13 +649,13 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 				// Use browser-based registration on all platforms (including Windows)
 				// The browser's WebAuthn API properly handles Windows Hello integration
 				if err := RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
-					return fmt.Errorf("passkey registration failed: %w", err)
+					return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 				}
 
 				// Re-attempt authentication after registration
 				return PerformNativeWindowsAuth(cfg)
 			}
-			return fmt.Errorf("gateway returned failure for challenge request: %s", challengeData.Error)
+			return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, challengeData.Error)
 		}
 
 		// 2. Trigger Windows Hello
@@ -667,12 +667,12 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		}
 		clientDataBytes, err := json.Marshal(clientDataJSON)
 		if err != nil {
-			return fmt.Errorf("failed to marshal clientDataJSON: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 		}
 
 		assertion, err := AuthenticateWithWindowsHello(challengeData.Options.Response.RelyingPartyID, clientDataBytes)
 		if err != nil {
-			return fmt.Errorf("windows Hello authentication failed: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 		}
 
 		// 3. Verify Authentication
@@ -692,7 +692,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		verifyBody, _ := json.Marshal(verifyReq)
 		verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
 		if err != nil {
-			return fmt.Errorf("failed to create verify request: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 		}
 		verifyReqHTTP.Header.Set("Content-Type", "application/json")
 		// Add CLI session ID header for auth middleware
@@ -700,13 +700,12 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 
 		verifyResp, err := client.Do(verifyReqHTTP)
 		if err != nil {
-			return fmt.Errorf("failed to verify assertion: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 		}
 		defer verifyResp.Body.Close()
 
 		if verifyResp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(verifyResp.Body)
-			return fmt.Errorf("verification failed (%d): %s", verifyResp.StatusCode, string(body))
+			return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
 		}
 
 		var verifyResult struct {
@@ -714,11 +713,11 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 			Error   string `json:"error"`
 		}
 		if err := json.NewDecoder(verifyResp.Body).Decode(&verifyResult); err != nil {
-			return fmt.Errorf("failed to decode verification result: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 		}
 
 		if !verifyResult.Success {
-			return fmt.Errorf("authentication failed: %s", verifyResult.Error)
+			return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, verifyResult.Error)
 		}
 
 		return nil
@@ -726,7 +725,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Printf("→ Challenge request failed - Response body: %s\n", string(body))
-	return fmt.Errorf("challenge request failed (%d): %s", resp.StatusCode, string(body))
+	return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 }
 
 // RegisterPasskeyWithWindowsHello performs native passkey registration using Windows Hello APIs.
@@ -739,7 +738,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	// Get local OS user information directly
 	localOSUser := getLocalOSUser()
 	if localOSUser == nil || localOSUser.Username == "" {
-		return fmt.Errorf("failed to get local OS user information")
+		return constants.ErrUserNotFound
 	}
 	userName := localOSUser.Username
 	fmt.Printf("→ OS username: %s\n", userName)
@@ -748,19 +747,19 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	fmt.Printf("→ Loading CLI certificate from: %s\n", cfg.CLICertFile())
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return fmt.Errorf("failed to load CLI cert: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Load trust bundle for TLS verification
 	fmt.Printf("→ Loading trust bundle from: %s\n", cfg.TrustBundleFile())
 	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
 	if err != nil {
-		return fmt.Errorf("failed to read trust bundle from %s: %w", cfg.TrustBundleFile(), err)
+		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM(caPEM) {
-		return fmt.Errorf("failed to parse CA certificates from trust bundle")
+		return constants.ErrCAParseFailed
 	}
 
 	tlsConfig := &tls.Config{
@@ -778,11 +777,11 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		UserName: userName,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to marshal challenge request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 	req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
 	if err != nil {
-		return fmt.Errorf("failed to create challenge request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
@@ -791,7 +790,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	fmt.Printf("→ Sending registration challenge request...\n")
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to get registration challenge: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -799,7 +798,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("→ Challenge response body: %s\n", string(body))
-		return fmt.Errorf("failed to get registration challenge (%d): %s", resp.StatusCode, string(body))
+		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	var challengeData struct {
@@ -820,7 +819,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		} `json:"options"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
-		return fmt.Errorf("failed to decode registration challenge: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	// 2. Trigger Windows Hello Registration
@@ -833,10 +832,10 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	userIDBase64 := challengeData.Options.PublicKey.User.ID
 	userIDBytes, err := base64.RawURLEncoding.DecodeString(userIDBase64)
 	if err != nil {
-		return fmt.Errorf("failed to decode user ID: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 	if len(userIDBytes) > 64 {
-		return fmt.Errorf("user ID too long for Windows Hello: %d bytes (max 64)", len(userIDBytes))
+		return constants.ErrValidationFailed
 	}
 	fmt.Printf("→ Windows Hello user ID (decoded): %x (%d bytes)\n", userIDBytes, len(userIDBytes))
 
@@ -850,7 +849,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	}
 	clientDataBytes, err := json.Marshal(clientDataJSON)
 	if err != nil {
-		return fmt.Errorf("failed to marshal clientDataJSON: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
 	attestation, err := RegisterWithWindowsHello(
@@ -861,7 +860,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		clientDataBytes,
 	)
 	if err != nil {
-		return fmt.Errorf("windows Hello registration failed: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
 	fmt.Printf("→ Windows Hello registration successful, verifying with gateway...\n")
@@ -881,20 +880,19 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	verifyBody, _ := json.Marshal(verifyReq)
 	verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
 	if err != nil {
-		return fmt.Errorf("failed to create verify request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 	verifyReqHTTP.Header.Set("Content-Type", "application/json")
 	verifyReqHTTP.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
 
 	verifyResp, err := client.Do(verifyReqHTTP)
 	if err != nil {
-		return fmt.Errorf("failed to verify registration: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer verifyResp.Body.Close()
 
 	if verifyResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(verifyResp.Body)
-		return fmt.Errorf("registration verification failed (%d): %s", verifyResp.StatusCode, string(body))
+		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
 	}
 
 	fmt.Println("✓ Passkey registered successfully via Windows Hello!")
@@ -904,7 +902,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 func DeleteCredentials(cfg *config.Config) error {
 	credsFile := cfg.CredentialsFile()
 	if err := os.Remove(credsFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to delete credentials file: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
 	certFiles := []string{
@@ -915,7 +913,7 @@ func DeleteCredentials(cfg *config.Config) error {
 
 	for _, file := range certFiles {
 		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to delete %s: %w", file, err)
+			return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 		}
 	}
 
@@ -924,12 +922,12 @@ func DeleteCredentials(cfg *config.Config) error {
 
 func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, keyFile string) error {
 	if err := os.MkdirAll(filepath.Dir(certFile), 0700); err != nil {
-		return fmt.Errorf("failed to create cert directory: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	keyBytes, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
-		return fmt.Errorf("failed to marshal private key: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
 	}
 
 	keyPEM := pem.EncodeToMemory(&pem.Block{
@@ -938,7 +936,7 @@ func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, k
 	})
 
 	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
-		return fmt.Errorf("failed to write key file: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	certContent := certPEM
@@ -947,7 +945,7 @@ func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, k
 	}
 
 	if err := os.WriteFile(certFile, []byte(certContent), 0600); err != nil {
-		return fmt.Errorf("failed to write cert file: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	return nil
@@ -961,7 +959,7 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	// Parse the URL to extract host:port
 	parts := strings.Split(operatorURL, "://")
 	if len(parts) != 2 {
-		return fmt.Errorf("invalid Operator URL: %s", operatorURL)
+		return fmt.Errorf("%w: %s", constants.ErrGatewayURLRequired, operatorURL)
 	}
 
 	hostPort := parts[1]
@@ -972,7 +970,7 @@ func CheckOperatorRunningAtURL(operatorURL string) error {
 	// Try to connect to the port
 	conn, err := net.Dial(string(constants.NetworkProtocolTCP), hostPort)
 	if err != nil {
-		return fmt.Errorf("g8e Gateway is not running or not responding at %s: %w", operatorURL, err)
+		return fmt.Errorf("%w: %w", constants.ErrServiceUnavailable, err)
 	}
 	conn.Close()
 
@@ -998,14 +996,14 @@ func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("failed to read response: %w", err)
+		return false, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	var statusResp struct {
 		Bootstrapped bool `json:"bootstrapped"`
 	}
 	if err := json.Unmarshal(respBody, &statusResp); err != nil {
-		return false, fmt.Errorf("failed to parse response: %w", err)
+		return false, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	return statusResp.Bootstrapped, nil
@@ -1015,21 +1013,21 @@ func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 func parseCertPEM(certFile string) (*x509.Certificate, error) {
 	certPEM, err := os.ReadFile(certFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read certificate file: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrCertReadFailed, err)
 	}
 
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
-		return nil, fmt.Errorf("failed to decode PEM block from certificate file")
+		return nil, constants.ErrPEMDecodeFailed
 	}
 
 	if block.Type != "CERTIFICATE" {
-		return nil, fmt.Errorf("PEM block is not a certificate (type: %s)", block.Type)
+		return nil, constants.ErrInvalidPEMType
 	}
 
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
 	}
 
 	return cert, nil
@@ -1064,12 +1062,12 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 	case "operator":
 		certFile = cfg.OperatorCertFile()
 	default:
-		return fmt.Errorf("unknown certificate type: %s", certType)
+		return constants.ErrValidationFailed
 	}
 
 	expiringSoon, err := CheckCertExpiry(certFile)
 	if err != nil {
-		return fmt.Errorf("failed to check certificate expiry: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
 	}
 
 	if !expiringSoon {
@@ -1078,30 +1076,30 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("failed to get hostname: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
 
 	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("failed to generate CLI CSR: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	regResp, err := ReEnroll(cfg, "", cliCSR, caFingerprint, "")
 	if err != nil {
-		return fmt.Errorf("automatic re-enrollment failed: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
 	if regResp.CLISessionID == "" || regResp.CLICert == "" {
-		return fmt.Errorf("unexpected re-enrollment response (missing required fields)")
+		return constants.ErrMissingRequiredField
 	}
 
 	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
-		return fmt.Errorf("failed to save renewed CLI credentials: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
 	if regResp.HubTrustBundle != "" {
 		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
-			return fmt.Errorf("failed to save renewed hub trust bundle: %w", err)
+			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
 
@@ -1113,7 +1111,7 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 	}
 
 	if err := SaveCredentials(cfg, creds); err != nil {
-		return fmt.Errorf("failed to save renewed credentials: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
 	return nil
@@ -1126,12 +1124,12 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate system fingerprint: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get hostname: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
 
 	req := models.DeviceEnrollRequest{
@@ -1143,14 +1141,14 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	// Use the device enrollment endpoint for initial enrollment (no mTLS required)
 	url := fmt.Sprintf("http://%s/api/v1/auth/device/enroll", gatewayEndpoint)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -1160,33 +1158,33 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	// Accept 2xx status codes as success (200 OK, 201 Created, etc.)
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("enrollment failed with status %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	var regResp RegistrationResponse
 	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	if !regResp.Success {
-		return nil, fmt.Errorf("enrollment failed: %s", regResp.Error)
+		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
 	}
 
 	// Verify CA bundle fingerprint if pin is provided
 	if caFingerprint != "" && regResp.HubTrustBundle != "" {
 		if err := VerifyCAFingerprint([]byte(regResp.HubTrustBundle), caFingerprint); err != nil {
-			return nil, fmt.Errorf("CA fingerprint verification failed: %w", err)
+			return nil, fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
 		}
 	}
 

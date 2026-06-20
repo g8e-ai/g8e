@@ -407,3 +407,208 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 		assert.Equal(t, string(constants.Event.Operator.FileEdit.Failed), env.EventType)
 	})
 }
+
+func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
+	t.Run("publishes running status", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		status := &pb.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		}
+
+		taskID := "task-101"
+		originalMsg := &PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			InvestigationID:   "invest-789",
+			TaskID:            &taskID,
+			WebSessionID:      "web-session-123",
+			CLISessionID:      "cli-session-456",
+			OperatorSessionID: "op-session-789",
+		}
+
+		err = svc.PublishExecutionStatus(context.Background(), status, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.StatusUpdated.Running), env.EventType)
+	})
+
+	t.Run("publishes completed status", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		status := &pb.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
+		}
+
+		originalMsg := &PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "op-session-789",
+		}
+
+		err = svc.PublishExecutionStatus(context.Background(), status, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.StatusUpdated.Completed), env.EventType)
+	})
+
+	t.Run("publishes failed status", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		status := &pb.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_FAILED,
+		}
+
+		originalMsg := &PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "op-session-789",
+		}
+
+		err = svc.PublishExecutionStatus(context.Background(), status, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.StatusUpdated.Failed), env.EventType)
+	})
+
+	t.Run("publishes cancelled status", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		status := &pb.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_CANCELLED,
+		}
+
+		originalMsg := &PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "op-session-789",
+		}
+
+		err = svc.PublishExecutionStatus(context.Background(), status, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.StatusUpdated.Cancelled), env.EventType)
+	})
+
+	t.Run("publishes queued status for unspecified", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		status := &pb.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED,
+		}
+
+		originalMsg := &PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "op-session-789",
+		}
+
+		err = svc.PublishExecutionStatus(context.Background(), status, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, string(constants.Event.Operator.Command.StatusUpdated.Queued), env.EventType)
+	})
+
+	t.Run("uses original message ID for correlation", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		status := &pb.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		}
+
+		originalMsg := &PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "op-session-789",
+		}
+
+		err = svc.PublishExecutionStatus(context.Background(), status, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, "msg-123", env.Id)
+	})
+
+	t.Run("uses custom operator ID when provided", func(t *testing.T) {
+		t.Parallel()
+		db := NewMockOperatorPubSubClient()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		svc, err := NewPubSubResultsService(cfg, logger, db)
+		require.NoError(t, err)
+
+		customOpID := "custom-operator-123"
+		status := &pb.CommandResult{
+			ExecutionId: "exec-123",
+			Status:      pb.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
+		}
+
+		originalMsg := &PubSubCommandMessage{
+			ID:                "msg-123",
+			EventType:         constants.Event.Operator.Command.Requested,
+			CaseID:            "case-456",
+			OperatorSessionID: "op-session-789",
+			OperatorID:        &customOpID,
+		}
+
+		err = svc.PublishExecutionStatus(context.Background(), status, originalMsg)
+		require.NoError(t, err)
+
+		receivedMsg := requireLastPublishedUniversal(t, db)
+		env := mustUnmarshalGovernanceEnvelope(t, receivedMsg)
+		assert.Equal(t, customOpID, env.OperatorId)
+	})
+}

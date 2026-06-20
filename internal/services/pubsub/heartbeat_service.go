@@ -18,6 +18,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"runtime"
@@ -267,6 +268,9 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 
 // Publish publishes a heartbeat to the results publisher.
 func (hs *HeartbeatService) Publish(ctx context.Context, heartbeat *operatorv1.HeartbeatResult) error {
+	if hs.results == nil {
+		return errors.New("results publisher not configured")
+	}
 	return hs.results.PublishHeartbeat(ctx, heartbeat)
 }
 
