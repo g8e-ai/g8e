@@ -34,9 +34,51 @@ The g8e platform operates as a reference monitor that is tamper-evident, always 
 
 g8e is actor-agnostic and governs actions rather than actors. AI agents, human users, CI/CD pipelines, and scheduled tasks submit actions through the same admission API. Any component that produces a conformant `GovernanceEnvelope` is treated as a principal.
 
+```mermaid
+graph TD
+    subgraph Clients ["Any AI client — agent-agnostic"]
+        C1["MCP client<br/>(Claude / Cursor / Windsurf)"]
+        C2["Agentic ensemble<br/>(A2A / tool calls)"]
+    end
+
+    GW["Governance Gateway · g8eg<br/>(Policy Decision Point)<br/>admits signed envelopes · owns PKI"]
+
+    subgraph Fleet ["Sovereign hosts — platform-agnostic"]
+        O1["Governed Operator · g8eo<br/>(Policy Execution Point)<br/>governs + executes locally"]
+        D1[("Raw data + audit<br/>stay on host")]
+        O1 --- D1
+    end
+
+    C1 -. "HTTP/mTLS<br/>universal endpoint" .-> GW
+    C2 --> GW
+    O1 -. "outbound-only mTLS" .-> GW
+```
+
 ## System Architecture
 
 g8e integrates action and context planes into a single architectural model.
+
+```mermaid
+flowchart LR
+    Client["AI client / BYO agent / native app"]
+    Ingress["Protocol translator or native envelope producer"]
+    Gateway["g8eg Governance Gateway"]
+    Verify["L1 / L2 / L3 / state / replay verification"]
+    Operator["g8eo Governed Operator"]
+    Warden["Warden execution boundary"]
+    Vault["Local audit vault and ledger"]
+    Target["Host OS / file system / downstream MCP or A2A server"]
+
+    Client --> Ingress
+    Ingress --> Gateway
+    Gateway --> Verify
+    Verify --> Operator
+    Operator --> Warden
+    Warden --> Vault
+    Warden --> Target
+    Target --> Warden
+    Warden --> Vault
+```
 
 ### Action Plane
 Every mutation must clear a five-layer admission pipeline at the host before execution. The system drops and records any actions that are stale, unsigned, unauthorized, or non-compliant with policy. The default state is closed.
@@ -44,9 +86,70 @@ Every mutation must clear a five-layer admission pipeline at the host before exe
 ### Context Plane
 Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger called the Local-First Audit Architecture (LFAA). This occurs before the side effect is executed. The ledger provides a cryptographically provable chain of intent, interpretation, and outcome. Agents derive context from this chain and verify it against live host state through governed tools.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Principal as Principal<br/>(Human / AI Agent)
+    participant Ensemble as Producer<br/>(g8e-compatible agentic ensemble / BYO / MCP client)
+    participant Gateway as Governance Gateway<br/>(g8eg)
+    participant Operator as Governed Operator<br/>(g8eo)
+
+    Principal->>Ensemble: Submit intent (MCP / A2A / tool call)
+    Note over Ensemble: Reach Consensus (L2)<br/>Wrap in signed GovernanceEnvelope
+    Ensemble->>Gateway: Submit envelope for admission
+
+    Operator->>Gateway: Open outbound-only mTLS tunnel
+    Operator->>Gateway: Fetch pending GovernanceEnvelope
+
+    Note over Operator: Run verification layers — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+
+    Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
+    Gateway->>Principal: Return final safe output
+```
+
 ## Admission Pipeline
 
 The admission pipeline consists of five layers with independent failure domains:
+
+```mermaid
+graph TD
+    Start["Signed GovernanceEnvelope<br/>(Incoming Transaction)"]
+
+    subgraph Verification ["Operator Verification - protocol-mandated"]
+        direction TB
+        L1{"L1: Technical Bedrock<br/>Forbidden Patterns?"}
+        L2{"L2: Consensus<br/>Tribunal Signature?"}
+        L3{"L3: Authorization<br/>Human Presence?"}
+        State{"State Check<br/>Merkle Root Fresh?"}
+        L4{"L4: Warden<br/>Pre-dispatch Gate"}
+        
+        FailClosed["Fail Closed<br/>Typed Rejection + Audit Entry"]
+        Actuator["L5: Actuator<br/>Execute + Signed Receipt"]
+        LocalVault([Local Audit Vault])
+
+        L1 -- "Passed" --> L2
+        L1 -- "Violated" ----> FailClosed
+        
+        L2 -- "Passed" --> L3
+        L2 -- "Invalid/Missing" ---> FailClosed
+        
+        L3 -- "Authorized" --> State
+        L3 -- "Denied" --> FailClosed
+        
+        State -- "Fresh" --> L4
+        State -- "Stale" --> FailClosed
+
+        L4 -- "Verified" --> Actuator
+        L4 -- "Failed" --> FailClosed
+
+        Actuator --> LocalVault
+        FailClosed --> LocalVault
+    end
+
+    LocalVault --> Done["Recorded · Signed · Audited"]
+
+    Start --> L1
+```
 
 1. **L1 Doctrine**: Deterministic static analysis. It enforces rules against forbidden patterns and MITRE ATT&CK indicators. This layer is active for every action.
 2. **L2 Consensus**: Multi-model consensus. It requires Ed25519 signing over the canonical SHA-256 transaction hash.
