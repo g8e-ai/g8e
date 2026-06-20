@@ -793,6 +793,12 @@ var (
 	ErrMCPK8sGetPodLogs           = errors.New("failed to get pod logs")
 	ErrMCPK8sDescribePod          = errors.New("failed to describe pod")
 
+	// Reporting errors
+	ErrReportStoreUnavailable   = errors.New("reporting: store unavailable")
+	ErrReportWriteFailed        = errors.New("reporting: write failed")
+	ErrReportVerificationFailed = errors.New("reporting: verification failed")
+	ErrReportOutputDirFailed    = errors.New("reporting: output directory failed")
+
 	// PubSub client errors
 	ErrPubSubURLRequired      = errors.New("pubsub URL is required")
 	ErrPubSubTLSConfig        = errors.New("failed to configure TLS")

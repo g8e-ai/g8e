@@ -974,6 +974,213 @@ func (ass *SQLAuditStore) GetFileMutations(eventID int64) ([]*FileMutationLog, e
 	return mutations, nil
 }
 
+// ListSessions retrieves all sessions with pagination, ordered by created_at ASC.
+func (ass *SQLAuditStore) ListSessions(limit, offset int) ([]*OperatorSession, error) {
+	if ass == nil || ass.db == nil {
+		return nil, constants.ErrAuditStoreDisabled
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT id, title, session_type, created_at, user_identity
+	FROM sessions
+	ORDER BY created_at ASC
+	LIMIT ? OFFSET ?
+	`
+
+	type sessionRow struct {
+		session      OperatorSession
+		sessionType  sql.NullString
+		title        sql.NullString
+		userIdentity sql.NullString
+		createdAtStr string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (sessionRow, error) {
+		var row sessionRow
+		err := r.Scan(&row.session.ID, &row.title, &row.sessionType, &row.createdAtStr, &row.userIdentity)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreGetSessionFailed, err)
+	}
+
+	var sessions []*OperatorSession
+	for _, row := range rows {
+		row.session.CreatedAt, _ = sqliteutil.ParseTimestamp(row.createdAtStr)
+		if row.title.Valid {
+			row.session.Title = row.title.String
+		}
+		if row.userIdentity.Valid {
+			row.session.UserIdentity = row.userIdentity.String
+		}
+		sessions = append(sessions, &row.session)
+	}
+
+	return sessions, nil
+}
+
+// ListEvents retrieves events with optional session filter and pagination, ordered by timestamp ASC.
+// When sessionID is empty, all events across all sessions are returned.
+func (ass *SQLAuditStore) ListEvents(sessionID string, limit, offset int) ([]*Event, error) {
+	if ass == nil || ass.db == nil {
+		return nil, constants.ErrAuditStoreDisabled
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	var query strings.Builder
+	query.WriteString(`
+	SELECT id, operator_session_id, timestamp, type, content_text,
+		command_raw, command_exit_code, command_stdout, command_stderr,
+		execution_duration_ms, stored_locally, stdout_truncated, stderr_truncated,
+		COALESCE(encrypted, 0) as encrypted
+	FROM events
+	`)
+
+	args := []interface{}{}
+	if sessionID != "" {
+		query.WriteString(" WHERE operator_session_id = ?")
+		args = append(args, sessionID)
+	}
+	query.WriteString(" ORDER BY timestamp ASC LIMIT ? OFFSET ?")
+	args = append(args, limit, offset)
+
+	type eventRow struct {
+		event              Event
+		timestampStr       string
+		contentTextBytes   []byte
+		commandStdoutBytes []byte
+		commandStderrBytes []byte
+		commandRaw         sql.NullString
+		commandExitCode    sql.NullInt64
+		storedLocally      sql.NullBool
+		stdoutTruncated    sql.NullBool
+		stderrTruncated    sql.NullBool
+		encryptedFlag      int
+	}
+
+	rows, err := sqliteutil.MaterializeRows(ass.db, query.String(), args, func(r *sql.Rows) (eventRow, error) {
+		var row eventRow
+		err := r.Scan(
+			&row.event.ID, &row.event.OperatorSessionID, &row.timestampStr, &row.event.Type,
+			&row.contentTextBytes, &row.commandRaw, &row.commandExitCode,
+			&row.commandStdoutBytes, &row.commandStderrBytes, &row.event.ExecutionDurationMs,
+			&row.storedLocally, &row.stdoutTruncated, &row.stderrTruncated, &row.encryptedFlag,
+		)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryEventsFailed, err)
+	}
+
+	var events []*Event
+	for _, row := range rows {
+		row.event.Timestamp, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+
+		if row.encryptedFlag == 1 && ass.encryptionVault != nil && ass.encryptionVault.IsUnlocked() {
+			if len(row.contentTextBytes) > 0 {
+				if dec, err := ass.decryptContent(row.contentTextBytes); err == nil {
+					row.event.ContentText = dec
+				}
+			}
+			if len(row.commandStdoutBytes) > 0 {
+				if dec, err := ass.decryptContent(row.commandStdoutBytes); err == nil {
+					row.event.CommandStdout = dec
+				}
+			}
+			if len(row.commandStderrBytes) > 0 {
+				if dec, err := ass.decryptContent(row.commandStderrBytes); err == nil {
+					row.event.CommandStderr = dec
+				}
+			}
+		} else {
+			row.event.ContentText = string(row.contentTextBytes)
+			row.event.CommandStdout = string(row.commandStdoutBytes)
+			row.event.CommandStderr = string(row.commandStderrBytes)
+		}
+
+		if row.commandRaw.Valid {
+			row.event.CommandRaw = row.commandRaw.String
+		}
+		if row.commandExitCode.Valid {
+			ec := int(row.commandExitCode.Int64)
+			row.event.CommandExitCode = &ec
+		}
+		if row.storedLocally.Valid {
+			row.event.StoredLocally = row.storedLocally.Bool
+		}
+		if row.stdoutTruncated.Valid {
+			row.event.StdoutTruncated = row.stdoutTruncated.Bool
+		}
+		if row.stderrTruncated.Valid {
+			row.event.StderrTruncated = row.stderrTruncated.Bool
+		}
+
+		events = append(events, &row.event)
+	}
+
+	return events, nil
+}
+
+// ListFileMutations retrieves file mutations with pagination, ordered by id ASC.
+func (ass *SQLAuditStore) ListFileMutations(limit, offset int) ([]*FileMutationLog, error) {
+	if ass == nil || ass.db == nil {
+		return nil, constants.ErrAuditStoreDisabled
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT id, event_id, filepath, operation, ledger_hash_before, ledger_hash_after, diff_stat
+	FROM file_mutation_log
+	ORDER BY id ASC
+	LIMIT ? OFFSET ?
+	`
+
+	type mutationRow struct {
+		mutation   FileMutationLog
+		hashBefore sql.NullString
+		hashAfter  sql.NullString
+		diffStat   sql.NullString
+	}
+
+	rows, err := sqliteutil.MaterializeRows(ass.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (mutationRow, error) {
+		var row mutationRow
+		err := r.Scan(
+			&row.mutation.ID, &row.mutation.EventID, &row.mutation.Filepath, &row.mutation.Operation,
+			&row.hashBefore, &row.hashAfter, &row.diffStat,
+		)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrAuditStoreQueryFileMutationsFailed, err)
+	}
+
+	var mutations []*FileMutationLog
+	for _, row := range rows {
+		if row.hashBefore.Valid {
+			row.mutation.LedgerHashBefore = row.hashBefore.String
+		}
+		if row.hashAfter.Valid {
+			row.mutation.LedgerHashAfter = row.hashAfter.String
+		}
+		if row.diffStat.Valid {
+			row.mutation.DiffStat = row.diffStat.String
+		}
+		mutations = append(mutations, &row.mutation)
+	}
+
+	return mutations, nil
+}
+
 // auditStorePrune returns a PruneFunc that handles retention pruning
 // for events, orphaned sessions, and orphaned file mutations.
 func auditStorePrune(config *AuditStoreConfig) sqliteutil.PruneFunc {

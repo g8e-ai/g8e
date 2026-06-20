@@ -603,6 +603,155 @@ func (ev *ExecutionVaultService) GetFileDiffsBySession(ctx context.Context, oper
 	return records, nil
 }
 
+// ListExecutions retrieves execution log records with pagination (no blobs), ordered by timestamp_utc ASC.
+func (ev *ExecutionVaultService) ListExecutions(ctx context.Context, limit, offset int) ([]*models.ExecutionRecord, error) {
+	if ev == nil || ev.db == nil {
+		return nil, constants.ErrLedgerDisabled
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT id, timestamp_utc, command, exit_code, duration_ms,
+		stdout_hash, stderr_hash, stdout_size, stderr_size,
+		user_id, case_id, task_id, investigation_id, operator_id
+	FROM execution_log
+	ORDER BY timestamp_utc ASC
+	LIMIT ? OFFSET ?
+	`
+
+	type execRow struct {
+		record          models.ExecutionRecord
+		timestampStr    string
+		taskID          sql.NullString
+		investigationID sql.NullString
+		operatorID      sql.NullString
+		userID          sql.NullString
+		caseID          sql.NullString
+		stdoutHash      sql.NullString
+		stderrHash      sql.NullString
+	}
+
+	rows, err := sqliteutil.MaterializeRows(ev.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (execRow, error) {
+		var row execRow
+		err := r.Scan(
+			&row.record.ID, &row.timestampStr, &row.record.Command, &row.record.ExitCode, &row.record.DurationMs,
+			&row.stdoutHash, &row.stderrHash, &row.record.StdoutSize, &row.record.StderrSize,
+			&row.userID, &row.caseID, &row.taskID, &row.investigationID, &row.operatorID,
+		)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("execution_vault: list executions: %w", err)
+	}
+
+	var records []*models.ExecutionRecord
+	for _, row := range rows {
+		row.record.TimestampUTC, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		if row.stdoutHash.Valid {
+			row.record.StdoutHash = row.stdoutHash.String
+		}
+		if row.stderrHash.Valid {
+			row.record.StderrHash = row.stderrHash.String
+		}
+		if row.userID.Valid {
+			row.record.UserID = row.userID.String
+		}
+		if row.caseID.Valid {
+			row.record.CaseID = row.caseID.String
+		}
+		if row.taskID.Valid {
+			row.record.TaskID = row.taskID.String
+		}
+		if row.investigationID.Valid {
+			row.record.InvestigationID = row.investigationID.String
+		}
+		if row.operatorID.Valid {
+			row.record.OperatorID = row.operatorID.String
+		}
+		records = append(records, &row.record)
+	}
+
+	return records, nil
+}
+
+// ListFileDiffs retrieves file diff log records with pagination (no blobs), ordered by timestamp_utc ASC.
+func (ev *ExecutionVaultService) ListFileDiffs(ctx context.Context, limit, offset int) ([]*models.FileDiffRecord, error) {
+	if ev == nil || ev.db == nil {
+		return nil, constants.ErrLedgerDisabled
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT id, timestamp_utc, file_path, operation,
+		ledger_hash_before, ledger_hash_after, diff_stat,
+		diff_hash, diff_size, operator_session_id, user_id, case_id, operator_id
+	FROM file_diff_log
+	ORDER BY timestamp_utc ASC
+	LIMIT ? OFFSET ?
+	`
+
+	type diffRow struct {
+		record       models.FileDiffRecord
+		timestampStr string
+		hashBefore   sql.NullString
+		hashAfter    sql.NullString
+		sessID       sql.NullString
+		userID       sql.NullString
+		caseID       sql.NullString
+		operatorID   sql.NullString
+		diffHash     sql.NullString
+	}
+
+	rows, err := sqliteutil.MaterializeRows(ev.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (diffRow, error) {
+		var row diffRow
+		err := r.Scan(
+			&row.record.ID, &row.timestampStr, &row.record.FilePath, &row.record.Operation,
+			&row.hashBefore, &row.hashAfter, &row.record.DiffStat,
+			&row.diffHash, &row.record.DiffSize,
+			&row.sessID, &row.userID, &row.caseID, &row.operatorID,
+		)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("execution_vault: list file diffs: %w", err)
+	}
+
+	var records []*models.FileDiffRecord
+	for _, row := range rows {
+		row.record.TimestampUTC, _ = sqliteutil.ParseTimestamp(row.timestampStr)
+		if row.hashBefore.Valid {
+			row.record.LedgerHashBefore = row.hashBefore.String
+		}
+		if row.hashAfter.Valid {
+			row.record.LedgerHashAfter = row.hashAfter.String
+		}
+		if row.diffHash.Valid {
+			row.record.DiffHash = row.diffHash.String
+		}
+		if row.sessID.Valid {
+			row.record.OperatorSessionID = row.sessID.String
+		}
+		if row.userID.Valid {
+			row.record.UserID = row.userID.String
+		}
+		if row.caseID.Valid {
+			row.record.CaseID = row.caseID.String
+		}
+		if row.operatorID.Valid {
+			row.record.OperatorID = row.operatorID.String
+		}
+		records = append(records, &row.record)
+	}
+
+	return records, nil
+}
+
 // executionVaultPrune returns a PruneFunc for retention and size-based pruning.
 func executionVaultPrune(config *ExecutionVaultConfig) sqliteutil.PruneFunc {
 	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {

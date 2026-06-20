@@ -69,6 +69,16 @@ type FileHistoryEntry struct {
 	FilePath   string
 }
 
+// LedgerCommit represents a single git commit in the ledger for export.
+type LedgerCommit struct {
+	CommitHash   string
+	ParentHash   string
+	TimestampUTC time.Time
+	Message      string
+	FilesChanged int
+	DiffStat     string
+}
+
 // ── Constructor ─────────────────────────────────────────────────────────
 
 // NewGitLedgerService creates a new GitLedgerService.
@@ -540,6 +550,71 @@ func (s *GitLedgerService) GetStateMerkleRoot() (string, error) {
 		return "", fmt.Errorf("ledger: %w", constants.ErrInternal)
 	}
 	return ref.Hash().String(), nil
+}
+
+// ListCommits lists commits from the ledger repo for a session (or the files repo if sessionID is empty).
+// Returns up to limit commits ordered newest-first (repo.Log order), then reversed to oldest-first for the CSV.
+func (s *GitLedgerService) ListCommits(sessionID string, limit int) ([]LedgerCommit, error) {
+	if !s.gitReady() {
+		return nil, nil
+	}
+
+	if limit <= 0 {
+		limit = 500
+	}
+
+	ledgerDir, err := s.GetSessionLedgerPath(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("ledger: list commits: %w", err)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	repo, err := git.PlainOpen(ledgerDir)
+	if err != nil {
+		return nil, nil
+	}
+
+	cIter, err := repo.Log(&git.LogOptions{})
+	if err != nil {
+		return nil, nil
+	}
+	defer cIter.Close()
+
+	var commits []LedgerCommit
+	count := 0
+	_ = cIter.ForEach(func(c *object.Commit) error {
+		if count >= limit {
+			return storer.ErrStop
+		}
+
+		parentHash := ""
+		if c.NumParents() > 0 {
+			parentHash = c.ParentHashes[0].String()
+		}
+
+		stats, _ := c.Stats()
+		filesChanged := 0
+		diffStat := ""
+		if stats != nil {
+			filesChanged = len(stats)
+			diffStat = stats.String()
+		}
+
+		commits = append(commits, LedgerCommit{
+			CommitHash:   c.Hash.String(),
+			ParentHash:   parentHash,
+			TimestampUTC: c.Author.When.UTC(),
+			Message:      strings.TrimSpace(c.Message),
+			FilesChanged: filesChanged,
+			DiffStat:     diffStat,
+		})
+		count++
+		return nil
+	})
+
+	return commits, nil
 }
 
 // GetFileHistory retrieves the git history for a specific file.

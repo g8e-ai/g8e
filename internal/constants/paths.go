@@ -286,4 +286,20 @@ const (
 
 	// Temporary file suffix for atomic writes
 	TmpFileSuffix = ".tmp"
+
+	// Reporting output directory and file names
+	ReportsDirname                 = "reports"
+	ReportReceiptsFilename         = "receipts.csv"
+	ReportSessionsFilename         = "sessions.csv"
+	ReportEventsFilename           = "events.csv"
+	ReportFileMutationsFilename    = "file_mutations.csv"
+	ReportExecutionsFilename       = "executions.csv"
+	ReportFileDiffsFilename        = "file_diffs.csv"
+	ReportCommitmentsFilename      = "commitments.csv"
+	ReportLedgerCommitsFilename    = "ledger_commits.csv"
+	ReportLedgerMerkleRootFilename = "ledger_merkle_root.csv"
+	ReportReplayNoncesFilename     = "replay_nonces.csv"
+	ReportSuspendedTxFilename      = "suspended_transactions.csv"
+	ReportVerificationFilename     = "verification_summary.csv"
+	ReportManifestFilename         = "manifest.csv"
 )

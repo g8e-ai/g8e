@@ -18,9 +18,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
+
+// CommitmentRow represents a single row from the commitment_ledger table.
+type CommitmentRow struct {
+	Seq                           int64
+	TransactionID                 string
+	TransactionHash               string
+	PriorCommitmentHash           string
+	Hash                          string
+	StateRootAtCommit             string
+	L2SignatureDigest             string
+	ActuatorIntentSignatureDigest string
+	HumanSignatureDigest          string
+	ActionType                    string
+	TargetResource                string
+	CommittedAt                   time.Time
+	AuditorKeyID                  string
+	Signature                     string
+}
 
 // CommitmentLedger is the SQLite-backed storage for commitment attestations.
 // It stores raw JSON attestations with atomic append operations to guarantee
@@ -64,6 +83,82 @@ func (cl *CommitmentLedger) GetLatestCommitmentJSON() ([]byte, error) {
 	}
 
 	return []byte(attestationJSON), nil
+}
+
+// ListCommitments retrieves all commitments ordered by committed_at_unix_ms ASC (chain order).
+func (cl *CommitmentLedger) ListCommitments() ([]*CommitmentRow, error) {
+	if cl == nil || cl.db == nil {
+		return nil, fmt.Errorf("commitment ledger not initialized")
+	}
+
+	query := `
+	SELECT id, transaction_id, transaction_hash, prior_commitment_hash, hash,
+		state_root_at_commit, l2_signature_digest, Actuator_intent_signature_digest,
+		human_signature_digest, action_type, target_resource,
+		committed_at_unix_ms, auditor_key_id, signature
+	FROM commitment_ledger
+	ORDER BY committed_at_unix_ms ASC
+	`
+
+	type commitRow struct {
+		row            CommitmentRow
+		stateRoot      sql.NullString
+		l2Digest       sql.NullString
+		actuatorDigest sql.NullString
+		humanDigest    sql.NullString
+		actionType     sql.NullString
+		targetResource sql.NullString
+		auditorKeyID   sql.NullString
+		signature      sql.NullString
+		committedAtMs  int64
+	}
+
+	rows, err := sqliteutil.MaterializeRows(cl.db, query, nil, func(r *sql.Rows) (commitRow, error) {
+		var row commitRow
+		err := r.Scan(
+			&row.row.Seq, &row.row.TransactionID, &row.row.TransactionHash,
+			&row.row.PriorCommitmentHash, &row.row.Hash,
+			&row.stateRoot, &row.l2Digest, &row.actuatorDigest, &row.humanDigest,
+			&row.actionType, &row.targetResource, &row.committedAtMs,
+			&row.auditorKeyID, &row.signature,
+		)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("commitment ledger: list: %w", err)
+	}
+
+	var results []*CommitmentRow
+	for _, row := range rows {
+		row.row.CommittedAt = time.UnixMilli(row.committedAtMs)
+		if row.stateRoot.Valid {
+			row.row.StateRootAtCommit = row.stateRoot.String
+		}
+		if row.l2Digest.Valid {
+			row.row.L2SignatureDigest = row.l2Digest.String
+		}
+		if row.actuatorDigest.Valid {
+			row.row.ActuatorIntentSignatureDigest = row.actuatorDigest.String
+		}
+		if row.humanDigest.Valid {
+			row.row.HumanSignatureDigest = row.humanDigest.String
+		}
+		if row.actionType.Valid {
+			row.row.ActionType = row.actionType.String
+		}
+		if row.targetResource.Valid {
+			row.row.TargetResource = row.targetResource.String
+		}
+		if row.auditorKeyID.Valid {
+			row.row.AuditorKeyID = row.auditorKeyID.String
+		}
+		if row.signature.Valid {
+			row.row.Signature = row.signature.String
+		}
+		results = append(results, &row.row)
+	}
+
+	return results, nil
 }
 
 // AppendCommitmentJSON atomically appends a new commitment (as JSON) to the ledger.
