@@ -14,6 +14,6 @@
 package system
 
 // ResolveProjectRoot is deprecated.
-// Path resolution is now handled by constants.InitPaths()
+// Path resolution is now handled by paths.Init()
 // All path resolution should use constants.Paths.* instead.
 // Tests for path resolution are now in internal/constants/paths_test.go

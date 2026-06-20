@@ -439,7 +439,7 @@ func (tv *L4Warden) releaseInFlight(nonce string) {
 // Mutation classification is defined in protocol/constants/status.json via the _mutation field.
 // Actions marked as mutations require L3 Notary (human-presence) verification.
 func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
-	return constants.IsMutation(actionType)
+	return actionType.IsMutation()
 }
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.

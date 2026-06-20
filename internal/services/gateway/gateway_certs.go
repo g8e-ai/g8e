@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/protocol"
 )
@@ -1135,7 +1136,7 @@ func (pki *PKIAuthority) RenewServiceCertWithNames(extraIPs []net.IP, extraDNSNa
 	}
 
 	// Load the newly generated certificate and key
-	chainPath := constants.Paths.Infra.GatewayChainPath
+	chainPath := paths.Infra.GatewayChainPath
 	chainPEM, err := os.ReadFile(chainPath)
 	if err != nil {
 		return fmt.Errorf("pki: load renewed service cert chain: %w", err)

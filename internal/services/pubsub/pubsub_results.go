@@ -176,7 +176,7 @@ func (rr *PubSubResultsService) PublishHeartbeat(ctx context.Context, heartbeat 
 		return fmt.Errorf("failed to marshal heartbeat envelope: %w", err)
 	}
 
-	channelName := constants.HeartbeatChannel(rr.config.OperatorID, operatorSessionID)
+	channelName := HeartbeatChannel(rr.config.OperatorID, operatorSessionID)
 	if err := rr.client.Publish(ctx, channelName, data); err != nil {
 		return fmt.Errorf("failed to send heartbeat: %w", err)
 	}
@@ -193,7 +193,7 @@ func (rr *PubSubResultsService) publishUniversal(ctx context.Context, env *commo
 	if operatorID == "" {
 		operatorID = rr.config.OperatorID
 	}
-	channel := constants.ResultsChannel(operatorID, operatorSessionID)
+	channel := ResultsChannel(operatorID, operatorSessionID)
 	rr.logger.Info("Publishing result",
 		"channel", channel,
 		"event_type", env.EventType,

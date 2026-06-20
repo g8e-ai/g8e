@@ -25,7 +25,7 @@ import (
 
 // New creates a new Keystore instance with file-based storage on Windows.
 // Windows Credential Manager integration could be added in the future.
-// Production callers should pass constants.Paths.Infra.SecretsDir for secretsDir.
+// Production callers should pass paths.Infra.SecretsDir for secretsDir.
 func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
 	if err := os.MkdirAll(secretsDir, constants.PermDirPrivate); err != nil {
 		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)

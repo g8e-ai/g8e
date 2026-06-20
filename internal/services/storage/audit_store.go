@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
@@ -50,7 +51,7 @@ type AuditStoreConfig struct {
 // Note: DataDir should be set by the caller based on the actual work directory.
 func DefaultAuditStoreConfig() *AuditStoreConfig {
 	return &AuditStoreConfig{
-		DataDir:                   constants.Paths.Infra.DataDir,
+		DataDir:                   paths.Infra.DataDir,
 		DBPath:                    constants.DbFilename,
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,

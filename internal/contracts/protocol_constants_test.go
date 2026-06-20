@@ -32,6 +32,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -62,7 +63,7 @@ func init() {
 		}
 		current = parent
 	}
-	if err := constants.InitPathsWithBase(filepath.Dir(protocolConstantsDir)); err != nil {
+	if err := paths.InitWithBase(filepath.Dir(protocolConstantsDir)); err != nil {
 		panic(fmt.Sprintf("failed to initialize paths: %v", err))
 	}
 }
@@ -570,9 +571,9 @@ func TestProtocolChannelsMatchGoConstants(t *testing.T) {
 	// Channel prefixes are now defined in constants/channels.go
 	// These are not in the JSON anymore, so we test the Go functions directly
 	t.Run("channel prefixes used by CmdChannel/ResultsChannel/HeartbeatChannel", func(t *testing.T) {
-		assert.Equal(t, "cmd:op1:s1", constants.CmdChannel("op1", "s1"))
-		assert.Equal(t, "results:op1:s1", constants.ResultsChannel("op1", "s1"))
-		assert.Equal(t, "heartbeat:op1:s1", constants.HeartbeatChannel("op1", "s1"))
+		assert.Equal(t, "cmd:op1:s1", CmdChannel("op1", "s1"))
+		assert.Equal(t, "results:op1:s1", ResultsChannel("op1", "s1"))
+		assert.Equal(t, "heartbeat:op1:s1", HeartbeatChannel("op1", "s1"))
 	})
 }
 

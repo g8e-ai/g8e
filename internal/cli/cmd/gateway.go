@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
@@ -403,8 +404,8 @@ func gatewayStatusCmd() *cobra.Command {
 					cmd.Println("State: RUNNING (HTTP check)")
 					cmd.Printf("\nEndpoints:\n")
 					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
+					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+					cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 					return nil
 				}
 			}
@@ -424,8 +425,8 @@ func gatewayStatusCmd() *cobra.Command {
 				cmd.Printf("State: RUNNING (PID: %d)\n", pid)
 				cmd.Printf("\nEndpoints:\n")
 				cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
-				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", constants.LocalhostHTTPURL(constants.Ports.OperatorHttp))
+				cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
+				cmd.Printf("  MCP HTTP:           %s (Plain HTTP for MCP calls)\n", netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp))
 			} else {
 				cmd.Println("State: STOPPED")
 			}

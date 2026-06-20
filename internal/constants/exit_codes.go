@@ -13,8 +13,6 @@
 
 package constants
 
-import "strings"
-
 // Exit codes for the g8e Operator
 // These enable the g8e script to provide accurate error messages
 const (
@@ -76,90 +74,3 @@ const (
 	ExitCodeKilled = 137
 )
 
-// ExitCodeFromError analyzes an error and returns the appropriate exit code
-func ExitCodeFromError(err error) int {
-	if err == nil {
-		return ExitSuccess
-	}
-
-	errStr := err.Error()
-
-	// Check for permission denied errors
-	if containsAny(errStr, []string{
-		"permission denied",
-		"access denied",
-		"not writable",
-		"cannot write",
-	}) {
-		return ExitPermissionDenied
-	}
-
-	// Check for TLS certificate trust failures (non-retryable, stale CA)
-	if containsAny(errStr, []string{
-		"certificate signed by unknown authority",
-		"certificate has expired",
-		"certificate is not trusted",
-		"tls: bad certificate",
-		"tls: unknown certificate authority",
-		"x509: certificate",
-		"cert trust failure",
-	}) {
-		return ExitCertTrustFailure
-	}
-
-	// Check for authentication errors
-	if containsAny(errStr, []string{
-		"authentication failed",
-		"unauthorized",
-		"401",
-	}) {
-		return ExitAuthFailure
-	}
-
-	// Check for network errors
-	if containsAny(errStr, []string{
-		"connection refused",
-		"no such host",
-		"network unreachable",
-		"timeout",
-		"dial tcp",
-		"connectivity failed",
-	}) {
-		return ExitNetworkError
-	}
-
-	// Check for storage errors (database, git, filesystem)
-	if containsAny(errStr, []string{
-		"failed to initialize audit vault",
-		"failed to initialize database",
-		"failed to create directory",
-		"git init failed",
-		"disk full",
-		"no space left",
-	}) {
-		return ExitStorageError
-	}
-
-	// Check for config errors
-	if containsAny(errStr, []string{
-		"failed to load configuration",
-		"missing required",
-		"invalid config",
-	}) {
-		return ExitConfigError
-	}
-
-	return ExitGeneralError
-}
-
-// containsAny checks if s contains any of the substrings (case-insensitive).
-// All error-text substrings in ExitCodeFromError are ASCII, so ToLower is safe.
-func containsAny(s string, substrings []string) bool {
-	sLower := strings.ToLower(s)
-	for _, sub := range substrings {
-		if strings.Contains(sLower, strings.ToLower(sub)) {
-			return true
-		}
-	}
-	return false
-}

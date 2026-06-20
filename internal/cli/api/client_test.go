@@ -37,6 +37,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 func generateTestCert(t *testing.T) (certPEM, keyPEM []byte, privKey *ecdsa.PrivateKey) {
@@ -102,13 +103,13 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	projectRoot := filepath.Join(tempDir, "project")
 	require.NoError(t, os.MkdirAll(projectRoot, 0755))
 
-	runtimeDir := filepath.Join(projectRoot, constants.Paths.Infra.RuntimeDir)
+	runtimeDir := filepath.Join(projectRoot, paths.Infra.RuntimeDir)
 	require.NoError(t, os.MkdirAll(runtimeDir, 0755))
 
-	pkiDir := filepath.Join(projectRoot, constants.Paths.Infra.PkiDir)
+	pkiDir := filepath.Join(projectRoot, paths.Infra.PkiDir)
 	require.NoError(t, os.MkdirAll(pkiDir, 0755))
 
-	secretsDir := filepath.Join(projectRoot, constants.Paths.Infra.SecretsDir)
+	secretsDir := filepath.Join(projectRoot, paths.Infra.SecretsDir)
 	require.NoError(t, os.MkdirAll(secretsDir, 0755))
 
 	credentialsDir := filepath.Join(tempDir, "credentials")
@@ -122,14 +123,14 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 		"host": "localhost",
 		"infra": map[string]any{
 			"app_cert_dir":           filepath.Join(tempDir, "app", "certs"),
-			"ca_cert_path":           constants.Paths.Infra.CaCertPath,
+			"ca_cert_path":           paths.Infra.CaCertPath,
 			"db_path":                filepath.Join(tempDir, "db"),
 			"docs_dir":               filepath.Join(tempDir, "docs"),
-			"pki_dir":                constants.Paths.Infra.PkiDir,
+			"pki_dir":                paths.Infra.PkiDir,
 			"protocol_constants_dir": "protocol/constants",
 			"protocol_dir":           "protocol",
 			"protocol_models_dir":    "protocol/models",
-			"secrets_dir":            constants.Paths.Infra.SecretsDir,
+			"secrets_dir":            paths.Infra.SecretsDir,
 			"ssh_config_path":        filepath.Join(tempDir, "ssh", "config"),
 		},
 	}
@@ -140,7 +141,7 @@ func setupTestConfig(t *testing.T) (*config.Config, string) {
 	require.NoError(t, os.WriteFile(pathsPath, []byte(pathsJSON), 0644))
 
 	caCertPEM := generateTestCA(t)
-	trustBundlePath := filepath.Join(projectRoot, constants.Paths.Infra.CaCertPath)
+	trustBundlePath := filepath.Join(projectRoot, paths.Infra.CaCertPath)
 	require.NoError(t, os.MkdirAll(filepath.Dir(trustBundlePath), 0755))
 	require.NoError(t, os.WriteFile(trustBundlePath, caCertPEM, 0644))
 

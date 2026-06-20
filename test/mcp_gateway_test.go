@@ -42,6 +42,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/test/fixtures"
 )
@@ -72,11 +73,11 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
+	publicURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
+	mcpURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
@@ -193,11 +194,11 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
 	// Set public base URL for approval links
-	publicURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
+	publicURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
-	mcpURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
+	mcpURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
 	t.Run("nested object arguments", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{
@@ -383,7 +384,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	identity := fixtures.EnrollClientIdentity(t, fixture, "error-user", "error-org", "error-fingerprint", "error-host")
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
-	mcpURL := constants.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
+	mcpURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		callReq := mcp.JSONRPCRequest{

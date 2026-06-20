@@ -35,6 +35,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
@@ -147,7 +149,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 
 	// Initialize suspended transaction service for gateway mode
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               constants.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
+		DBPath:               paths.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -313,7 +315,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 
 	// Initialize suspended transaction service for gateway mode (test configuration)
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               constants.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
+		DBPath:               paths.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -385,7 +387,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
 	publicBaseURL := cfg.Gateway.PublicBaseURL
 	if publicBaseURL == "" {
-		publicBaseURL = constants.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
+		publicBaseURL = netutil.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
 	}
 	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{

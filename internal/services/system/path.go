@@ -13,6 +13,6 @@
 
 package system
 
-// Path resolution is now handled by constants.InitPaths()
+// Path resolution is now handled by paths.Init()
 // This file is kept for backwards compatibility but is deprecated.
 // All path resolution should use constants.Paths.* instead.

@@ -34,6 +34,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -213,9 +214,9 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -246,9 +247,9 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -299,9 +300,9 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -348,9 +349,9 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -414,9 +415,9 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -454,9 +455,9 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -483,9 +484,9 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -513,9 +514,9 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -542,9 +543,9 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -571,9 +572,9 @@ func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -597,9 +598,9 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}

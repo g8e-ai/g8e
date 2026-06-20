@@ -17,8 +17,6 @@
 // This file is manually maintained to match the JSON SSOT.
 package constants
 
-import "fmt"
-
 // DefaultEndpoint is the default g8e Operator endpoint hostname.
 // It is also the TLS ServerName used when connecting to a raw IP address,
 // because the embedded CA certificate is issued to this hostname.
@@ -30,15 +28,3 @@ const DefaultEndpoint = "localhost"
 // When an Operator connects to a Gateway via IP address, it uses this hostname
 // for TLS ServerName verification since the Gateway's certificate is issued to this name.
 const GatewayInternalHostname = "g8e.local"
-
-// LocalhostHTTPSURL returns a localhost HTTPS URL with the specified port.
-// This is the canonical way to construct localhost HTTPS URLs for the g8e platform.
-func LocalhostHTTPSURL(port int) string {
-	return fmt.Sprintf("https://localhost:%d", port)
-}
-
-// LocalhostHTTPURL returns a localhost HTTP URL with the specified port.
-// This is the canonical way to construct localhost HTTP URLs for the g8e platform.
-func LocalhostHTTPURL(port int) string {
-	return fmt.Sprintf("http://localhost:%d", port)
-}

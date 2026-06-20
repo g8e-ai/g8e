@@ -13,6 +13,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
 )
 
 // Auth selects how Agentic Tool Emulator authenticates to the Gateway's mTLS surface.
@@ -77,8 +78,8 @@ type Config struct {
 // Default returns a config wired for a local two-container dev stack.
 func Default() Config {
 	cfg := Config{
-		MTLSBaseURL:    constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
-		PublicBaseURL:  constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		MTLSBaseURL:    netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		PublicBaseURL:  netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
 		EnsembleSize:   3,
 		ConsensusKeyID: "auditor-ensemble",
 		PrincipalKeyID: "auditor-principal",

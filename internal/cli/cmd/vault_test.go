@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -114,7 +115,7 @@ func TestVaultInitCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		cmd := vaultInitCmd()
 		cmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -136,7 +137,7 @@ func TestVaultInitCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		customVault := filepath.Join(tp.BaseDir, "custom-vault")
 		customKey := filepath.Join(tp.BaseDir, "custom.key")
@@ -157,7 +158,7 @@ func TestVaultInitCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		cmd := vaultInitCmd()
 		cmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -173,7 +174,7 @@ func TestVaultUnlockCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		initCmd := vaultInitCmd()
 		initCmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -194,7 +195,7 @@ func TestVaultUnlockCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		initCmd := vaultInitCmd()
 		initCmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -216,7 +217,7 @@ func TestVaultRekeyCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		initCmd := vaultInitCmd()
 		initCmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -244,7 +245,7 @@ func TestVaultStatusCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		cmd := vaultStatusCmd()
 		cmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -258,7 +259,7 @@ func TestVaultStatusCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		initCmd := vaultInitCmd()
 		initCmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -280,7 +281,7 @@ func TestVaultResetCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		initCmd := vaultInitCmd()
 		initCmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -302,7 +303,7 @@ func TestVaultResetCmd(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		initCmd := vaultInitCmd()
 		initCmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -327,7 +328,7 @@ func TestVaultExportImport(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		initCmd := vaultInitCmd()
 		initCmd.Flags().Set("vault-dir", tp.VaultDir)
@@ -350,7 +351,7 @@ func TestVaultExportImport(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
 		require.NoError(t, tp.EnsureDirs())
 
-		require.NoError(t, constants.InitPathsWithBase(tp.BaseDir))
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
 		key := make([]byte, vault.KeySize)
 		_, _ = rand.Read(key)

@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
@@ -67,7 +68,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	cfg.NoGit = true
 
 	// Initialize vault for encryption (required since storage refactor)
-	vaultDir := filepath.Join(cfg.WorkDir, constants.Paths.Infra.VaultDir)
+	vaultDir := filepath.Join(cfg.WorkDir, paths.Infra.VaultDir)
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	testKey := []byte("g8e_test_abc123xyz789_TEST_KEY_1")
 	keyPath := filepath.Join(vaultDir, "key")
@@ -78,7 +79,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NoError(t, header.Save(vaultDir))
 
 	// Initialize keystore with test backend for master key (required for gateway database)
-	secretsDir := filepath.Join(cfg.WorkDir, constants.Paths.Infra.SecretsDir)
+	secretsDir := filepath.Join(cfg.WorkDir, paths.Infra.SecretsDir)
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
 	testBackend, err := keystore.NewTestBackend()
 	require.NoError(t, err)

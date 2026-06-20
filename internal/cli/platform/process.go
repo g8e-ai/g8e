@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 const (
@@ -71,14 +72,14 @@ type ProcessManager struct {
 
 func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 	// Initialize paths relative to projectRoot
-	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+	if err := paths.InitWithBase(projectRoot); err != nil {
 		return nil, fmt.Errorf("process manager: failed to initialize paths: %w", err)
 	}
 
-	runtimeDir := constants.Paths.Infra.RuntimeDir
-	pkiDir := constants.Paths.Infra.PkiDir
-	secretsDir := constants.Paths.Infra.SecretsDir
-	dataDir := constants.Paths.Infra.DataDir
+	runtimeDir := paths.Infra.RuntimeDir
+	pkiDir := paths.Infra.PkiDir
+	secretsDir := paths.Infra.SecretsDir
+	dataDir := paths.Infra.DataDir
 	logDir := filepath.Join(runtimeDir, constants.LogDirname)
 	pidDir := filepath.Join(runtimeDir, constants.PidDirname)
 
@@ -302,7 +303,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return err
 	}
 
-	logFile := filepath.Join(pm.logDir, constants.OperatorLogPath)
+	logFile := filepath.Join(pm.logDir, paths.OperatorLogPath)
 	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("process manager: failed to open log file: %w", err)
@@ -458,7 +459,7 @@ func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
 }
 
 func (pm *ProcessManager) GetLogPath() string {
-	return filepath.Join(pm.logDir, constants.OperatorLogPath)
+	return filepath.Join(pm.logDir, paths.OperatorLogPath)
 }
 
 func (pm *ProcessManager) Reset() error {

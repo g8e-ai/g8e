@@ -26,6 +26,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/models"
 
 	"github.com/g8e-ai/g8e/internal/services/auth"
@@ -130,7 +131,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Initialize CanonicalDBService for canonical state root calculation
 	// This ensures outbound mode uses the same state root schema as gateway mode
-	dataDir := filepath.Join(vs.config.WorkDir, constants.Paths.Infra.DataDir)
+	dataDir := filepath.Join(vs.config.WorkDir, paths.Infra.DataDir)
 	vaultKeyPath := vs.config.VaultKeyPath
 	if vaultKeyPath != "" && !filepath.IsAbs(vaultKeyPath) {
 		vaultKeyPath = filepath.Join(vs.config.WorkDir, vaultKeyPath)

@@ -27,6 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
@@ -295,11 +296,11 @@ func testSummaryCmd() *cobra.Command {
 		Long:  `View aggregated chaos test results from the test vault database. This queries the chaos_events table across all test runs in the test vault directory.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Initialize paths to get test vault directory
-			if err := constants.InitPaths(); err != nil {
+			if err := paths.Init(); err != nil {
 				return fmt.Errorf("failed to initialize paths: %w", err)
 			}
 
-			testVaultDir := constants.Paths.Infra.TestVaultDir
+			testVaultDir := paths.Infra.TestVaultDir
 			if _, err := os.Stat(testVaultDir); os.IsNotExist(err) {
 				cmd.Printf("Test vault directory not found at %s\n", testVaultDir)
 				cmd.Println("Run './g8e test chaos' first to generate test data.")

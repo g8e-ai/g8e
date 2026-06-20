@@ -21,6 +21,8 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 const (
@@ -117,7 +119,7 @@ func Load(projectRoot string) (*Config, error) {
 		}
 	}
 
-	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+	if err := paths.InitWithBase(projectRoot); err != nil {
 		return nil, fmt.Errorf("cli config: failed to initialize paths: %w", err)
 	}
 
@@ -222,7 +224,7 @@ func resolveInfraPaths(paths *PathsConfig, projectRoot string) {
 
 func (c *Config) TrustBundlePath() string {
 	if c.Paths == nil {
-		return constants.Paths.Infra.CaCertPath
+		return paths.Infra.CaCertPath
 	}
 	if c.Paths.Infra.CACertPath == "" {
 		return ""
@@ -276,17 +278,17 @@ func (c *Config) OperatorHTTPURL() string {
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
 		return c.Paths.Host
 	}
-	return constants.LocalhostHTTPSURL(c.OperatorHTTPSPort())
+	return netutil.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
 // OperatorPublicURL returns the HTTPS port for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
-	return constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+	return netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 }
 
 // OperatorDiscoveryURL returns the HTTP port for CA download and bootstrap routes
 func (c *Config) OperatorDiscoveryURL() string {
-	return constants.LocalhostHTTPURL(constants.Ports.OperatorHttp)
+	return netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 }
 
 // OperatorBootstrapURL is deprecated; use OperatorPublicURL for CSR-based enrollment

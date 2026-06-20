@@ -11,15 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package constants
+package netutil
 
-import (
-	"testing"
+import "fmt"
 
-	"github.com/stretchr/testify/assert"
-)
+// LocalhostHTTPSURL returns a localhost HTTPS URL with the specified port.
+func LocalhostHTTPSURL(port int) string {
+	return fmt.Sprintf("https://localhost:%d", port)
+}
 
-func TestEnvVarConstants_ZeroEnvVars(t *testing.T) {
-	// g8e uses ZERO environment variables
-	assert.Empty(t, EnvVar)
+// LocalhostHTTPURL returns a localhost HTTP URL with the specified port.
+func LocalhostHTTPURL(port int) string {
+	return fmt.Sprintf("http://localhost:%d", port)
 }

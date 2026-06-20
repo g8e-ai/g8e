@@ -18,7 +18,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/test/chaos"
 )
 
@@ -45,8 +45,8 @@ Distribution:
 	}
 
 	cmd.Flags().IntVar(&chaosCount, "count", 100, "number of payloads to fire")
-	cmd.Flags().StringVar(&chaosDataDir, "data-dir", "", "audit vault data dir (default: <project-root>/"+constants.Paths.Infra.TestVaultDir+"/<timestamp>)")
-	cmd.Flags().StringVar(&chaosPKIDir, "pki-dir", "", "PKI dir for trusted_signers (default: <cwd>/"+constants.Paths.Infra.PkiDir+")")
+	cmd.Flags().StringVar(&chaosDataDir, "data-dir", "", "audit vault data dir (default: <project-root>/"+paths.Infra.TestVaultDir+"/<timestamp>)")
+	cmd.Flags().StringVar(&chaosPKIDir, "pki-dir", "", "PKI dir for trusted_signers (default: <cwd>/"+paths.Infra.PkiDir+")")
 
 	return cmd
 }

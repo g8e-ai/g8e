@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 func TestNewProcessManager(t *testing.T) {
@@ -386,7 +387,7 @@ func TestGetLogPath(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	expectedPath := filepath.Join(pm.logDir, constants.OperatorLogPath)
+	expectedPath := filepath.Join(pm.logDir, paths.OperatorLogPath)
 	actualPath := pm.GetLogPath()
 
 	if actualPath != expectedPath {
@@ -535,8 +536,8 @@ func TestConstants(t *testing.T) {
 	if constants.OperatorPIDFilename == "" {
 		t.Error("constants.OperatorPIDFilename should not be empty")
 	}
-	if constants.OperatorLogPath == "" {
-		t.Error("constants.OperatorLogPath should not be empty")
+	if paths.OperatorLogPath == "" {
+		t.Error("paths.OperatorLogPath should not be empty")
 	}
 	if ShutdownTimeout == 0 {
 		t.Error("ShutdownTimeout should not be zero")

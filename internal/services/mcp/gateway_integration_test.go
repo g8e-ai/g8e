@@ -761,7 +761,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			nil, // AppPolicyStore not used in this test
 			acceptingL3,
 			nil, // Doctrine defaults to L1Doctrine
-			constants.AllActionTypes(),
+			constants.AllActionTypes,
 			"doctrine", // Doctrine posture doesn't require L2/L3
 			nil,        // Clock defaults to RealClock
 		)
@@ -854,7 +854,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			nil, // AppPolicyStore not used in this test
 			rejectingL3,
 			nil, // Doctrine defaults to L1Doctrine
-			constants.AllActionTypes(),
+			constants.AllActionTypes,
 			"doctrine", // Doctrine posture doesn't require L2/L3
 			nil,        // Clock defaults to RealClock
 		)

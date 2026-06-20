@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -310,7 +312,7 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 
 }
@@ -322,7 +324,7 @@ func TestConfig_OperatorBootstrapURL(t *testing.T) {
 		}
 
 		result := config.OperatorBootstrapURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 }
 
@@ -333,7 +335,7 @@ func TestConfig_OperatorPublicURL(t *testing.T) {
 		}
 
 		result := config.OperatorPublicURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 }
 
@@ -344,7 +346,7 @@ func TestConfig_OperatorDiscoveryURL(t *testing.T) {
 		}
 
 		result := config.OperatorDiscoveryURL()
-		assert.Equal(t, constants.LocalhostHTTPURL(constants.Ports.OperatorHttp), result)
+		assert.Equal(t, netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp), result)
 	})
 }
 
@@ -664,7 +666,7 @@ func TestConfig_OperatorHTTPURL_Override(t *testing.T) {
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 
 	t.Run("returns default localhost URL when Host is IP address", func(t *testing.T) {
@@ -675,7 +677,7 @@ func TestConfig_OperatorHTTPURL_Override(t *testing.T) {
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 
 	t.Run("returns default localhost URL when Paths is nil", func(t *testing.T) {
@@ -684,7 +686,7 @@ func TestConfig_OperatorHTTPURL_Override(t *testing.T) {
 		}
 
 		result := config.OperatorHTTPURL()
-		assert.Equal(t, constants.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
+		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
 	})
 
 	t.Run("handles http:// protocol override", func(t *testing.T) {
@@ -708,7 +710,7 @@ func TestConfig_TrustBundlePath_NilPaths(t *testing.T) {
 		}
 
 		result := config.TrustBundlePath()
-		assert.Equal(t, constants.Paths.Infra.CaCertPath, result)
+		assert.Equal(t, paths.Infra.CaCertPath, result)
 	})
 }
 

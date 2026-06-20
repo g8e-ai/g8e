@@ -42,6 +42,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/test/fixtures"
@@ -65,7 +66,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 		// The full health response (including StateMerkleRoot) is served on the
 		// mTLS HTTPS API surface; the plain HTTP port only serves bootstrap
 		// health, which omits the state root.
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		resp, err := apiClient.Get(mtlsURL + constants.APIPaths.Health)
 		require.NoError(t, err)
 
@@ -77,7 +78,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 	})
 
 	t.Run("MCP tools/list with gateway", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/tools/list")
 		if err != nil {
 			t.Logf("tools/list failed: %v (may indicate no downstream MCP server configured)", err)
@@ -93,7 +94,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 	})
 
 	t.Run("MCP resources/list with gateway", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/resources/list")
 		if err != nil {
 			t.Logf("resources/list failed: %v", err)
@@ -109,7 +110,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 	})
 
 	t.Run("MCP prompts/list with gateway", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/prompts/list")
 		if err != nil {
 			t.Logf("prompts/list failed: %v", err)
@@ -125,7 +126,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 	})
 
 	t.Run("MCP tools/call with governance envelope", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/call",
@@ -169,7 +170,7 @@ func TestUniversalGateway_A2AFlow(t *testing.T) {
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	t.Run("A2A skill call with governance envelope", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "a2a/call",
@@ -216,7 +217,7 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	t.Run("MCP payload detected on universal endpoint", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/list",
@@ -236,7 +237,7 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 	})
 
 	t.Run("A2A payload detected on universal endpoint", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "a2a/call",
@@ -273,7 +274,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	t.Run("L1 hard gates enforced", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/call",
@@ -305,7 +306,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 	})
 
 	t.Run("L2 consensus verification", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/call",
@@ -334,7 +335,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 	})
 
 	t.Run("L3 approval verification", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/call",
@@ -380,7 +381,7 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	t.Run("transaction suspension for L3 approval", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/call",
@@ -403,7 +404,7 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 	})
 
 	t.Run("query suspended transactions", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		req, _ := http.NewRequest("GET", mtlsURL+"/api/v1/suspended-transactions", nil)
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -435,7 +436,7 @@ func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	t.Run("downstream server tools/list", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/tools/list")
 		if err != nil {
 			t.Logf("Downstream server not configured: %v", err)
@@ -452,7 +453,7 @@ func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
 	})
 
 	t.Run("downstream server tools/call", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/call",
@@ -489,7 +490,7 @@ func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
 
 	t.Run("governance envelope uses protojson", func(t *testing.T) {
-		mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 		callReq := map[string]interface{}{
 			"jsonrpc": "2.0",
 			"method":  "tools/call",

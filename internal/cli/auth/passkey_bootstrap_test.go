@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -282,9 +283,9 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -314,9 +315,9 @@ func TestRegisterPasskeyDirectly(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}

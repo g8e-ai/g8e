@@ -65,6 +65,7 @@ EXCLUDE_PKGS := \
 	/internal/protocol/proto \
 	/internal/contracts \
 	/internal/interfaces \
+	/internal/constants \
 	/internal/services/gateway/docs \
 	/internal/services/gateway/scripts \
 	/internal/services/storage/storagetest

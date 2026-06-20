@@ -22,6 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -106,9 +107,9 @@ func TestLogoutCmd(t *testing.T) {
 		// Avoid using setupTestConfig which creates a conflicting .g8e directory
 		cfg := &config.Config{
 			ProjectRoot:    tmpDir,
-			RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-			PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-			SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+			RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+			PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+			SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 			CredentialsDir: tmpDir,
 			Paths: &config.PathsConfig{
 				Infra: struct {
@@ -125,16 +126,16 @@ func TestLogoutCmd(t *testing.T) {
 					VaultDir             string `json:"vault_dir"`
 					VaultKeyPath         string `json:"vault_key_path"`
 				}{
-					CACertPath:           constants.Paths.Infra.CaCertPath,
-					PKIDir:               constants.Paths.Infra.PkiDir,
-					SecretsDir:           constants.Paths.Infra.SecretsDir,
-					AppCertDir:           constants.Paths.Infra.AppCertDir,
-					ProtocolDir:          constants.Paths.Infra.ProtocolDir,
-					ProtocolConstantsDir: constants.Paths.Infra.ProtocolConstantsDir,
-					ProtocolModelsDir:    constants.Paths.Infra.ProtocolModelsDir,
-					DocsDir:              constants.Paths.Infra.DocsDir,
-					SSHConfigPath:        constants.Paths.Infra.SshConfigPath,
-					DBPath:               constants.Paths.Infra.DbPath,
+					CACertPath:           paths.Infra.CaCertPath,
+					PKIDir:               paths.Infra.PkiDir,
+					SecretsDir:           paths.Infra.SecretsDir,
+					AppCertDir:           paths.Infra.AppCertDir,
+					ProtocolDir:          paths.Infra.ProtocolDir,
+					ProtocolConstantsDir: paths.Infra.ProtocolConstantsDir,
+					ProtocolModelsDir:    paths.Infra.ProtocolModelsDir,
+					DocsDir:              paths.Infra.DocsDir,
+					SSHConfigPath:        paths.Infra.SshConfigPath,
+					DBPath:               paths.Infra.DbPath,
 				},
 			},
 		}

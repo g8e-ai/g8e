@@ -44,6 +44,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
@@ -315,7 +316,7 @@ func (f *GatewayFixture) WaitForReady(t *testing.T) {
 	t.Helper()
 	client := &http.Client{Timeout: 2 * time.Second}
 	require.Eventually(t, func() bool {
-		httpURL := constants.LocalhostHTTPURL(f.Service.GetHTTPPort())
+		httpURL := netutil.LocalhostHTTPURL(f.Service.GetHTTPPort())
 		resp, err := client.Get(httpURL + constants.APIPaths.Health)
 		if err != nil {
 			return false
@@ -461,7 +462,7 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}
 
 	// Enroll via CSR endpoint
-	mtlsURL := constants.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
+	mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
 	regReq := models.OperatorRegistrationRequest{
 		CSR:               string(csrPEM),
 		CLICSR:            string(cliCSRPEM),

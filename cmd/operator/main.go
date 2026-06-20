@@ -65,6 +65,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/cmd"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/exitcode"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/execution"
@@ -148,7 +150,7 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 // It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
 func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) error {
 	// Create PKI directory
-	pkiDir := filepath.Join(workDir, constants.Paths.Infra.PkiDir)
+	pkiDir := filepath.Join(workDir, paths.Infra.PkiDir)
 	trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
 	if err := os.MkdirAll(trustDir, 0700); err != nil {
 		return fmt.Errorf("failed to create PKI directory: %w", err)
@@ -608,7 +610,7 @@ func main() {
 	flag.StringVar(&clientCert, "client-cert", "", "Client certificate (for mTLS)")
 	flag.StringVar(&endpointURL, "e", "", "Endpoint (hostname or IP)")
 	flag.StringVar(&endpointURL, "endpoint", "", "Endpoint (hostname or IP)")
-	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+constants.Paths.Infra.CaCertPath+" or fetch from "+constants.WellKnownPKICABundle+")")
+	flag.StringVar(&trustBundlePath, "trust-bundle", "", "Path to trust bundle PEM file (default: "+paths.Infra.CaCertPath+" or fetch from "+constants.WellKnownPKICABundle+")")
 	flag.StringVar(&workingDir, "working-dir", "", "Working directory (default: directory Operator was launched from)")
 	flag.BoolVar(&cloudMode, "c", true, "Cloud mode")
 	flag.BoolVar(&cloudMode, string(constants.OperatorTypeCloud), true, "Cloud mode")
@@ -628,9 +630,9 @@ func main() {
 	flag.BoolVar(&notaryMode, "notary", false, "Gateway mode: L1/L2/L3 strictly enforced")
 	flag.IntVar(&gatewayHTTPPort, "http-port", constants.Ports.OperatorHttp, "HTTP port for bootstrap and MCP routes (default: from paths.json)")
 	flag.IntVar(&gatewayHTTPSPort, "https-port", constants.Ports.OperatorHttps, "HTTPS port for mTLS API and public surface (default: from paths.json)")
-	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: "+constants.Paths.Infra.DataDir+" in working directory)")
-	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: "+constants.Paths.Infra.PkiDir+")")
-	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: "+constants.Paths.Infra.SecretsDir+")")
+	flag.StringVar(&gatewayDataDir, "data-dir", "", "Data directory for SQLite database (default: "+paths.Infra.DataDir+" in working directory)")
+	flag.StringVar(&gatewayPKIDir, "pki-dir", "", "Directory for TLS certificates (default: "+paths.Infra.PkiDir+")")
+	flag.StringVar(&gatewaySecretsDir, "secrets-dir", "", "Directory for platform secrets (default: "+paths.Infra.SecretsDir+")")
 	flag.StringVar(&gatewayVaultDir, "vault-dir", "", "Directory for vault data (default: "+constants.DefaultVaultDirDesc+")")
 	flag.StringVar(&gatewayVaultKeyPath, "vault-key", "", "Path to vault private key (default: "+constants.DefaultVaultKeyDesc+")")
 	flag.BoolVar(&gatewayVaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
@@ -785,7 +787,7 @@ func main() {
 
 	// Load trust bundle for TLS verification. Priority:
 	// 1. Explicit --trust-bundle path
-	// 2. Local PKI directory ("+constants.Paths.Infra.CaCertPath+")
+	// 2. Local PKI directory ("+paths.Infra.CaCertPath+")
 	// 3. Fetch from Operator "+constants.WellKnownPKICABundle+" endpoint
 	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir, trustStore)
 	if !trustLoaded {
@@ -813,13 +815,13 @@ func main() {
 	// Priority: 1. Explicit flags, 2. Project-local .g8e/pki/operator.*, 3. Project-local .g8e/pki/client.*
 	if privateKey == "" {
 		// Try project-local Operator key (created by enrollment)
-		projectOperatorKey := filepath.Join(launchDir, constants.Paths.Infra.PkiDir, constants.PkiFileOperatorKey)
+		projectOperatorKey := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorKey)
 		if _, err := os.Stat(projectOperatorKey); err == nil {
 			privateKey = projectOperatorKey
 			logger.Info("Using default Operator key from project directory", "path", privateKey)
 		} else {
 			// Try project-local client key
-			projectKey := filepath.Join(launchDir, constants.Paths.Infra.PkiDir, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
+			projectKey := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
 			if _, err := os.Stat(projectKey); err == nil {
 				privateKey = projectKey
 				logger.Info("Using default client key from project directory", "path", privateKey)
@@ -829,13 +831,13 @@ func main() {
 
 	if clientCert == "" {
 		// Try project-local Operator cert (created by enrollment)
-		projectOperatorCert := filepath.Join(launchDir, constants.Paths.Infra.PkiDir, constants.PkiFileOperatorCert)
+		projectOperatorCert := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorCert)
 		if _, err := os.Stat(projectOperatorCert); err == nil {
 			clientCert = projectOperatorCert
 			logger.Info("Using default Operator certificate from project directory", "path", clientCert)
 		} else {
 			// Try project-local client cert
-			projectCert := filepath.Join(launchDir, constants.Paths.Infra.PkiDir, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
+			projectCert := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
 			if _, err := os.Stat(projectCert); err == nil {
 				clientCert = projectCert
 				logger.Info("Using default client certificate from project directory", "path", clientCert)
@@ -855,11 +857,11 @@ func main() {
 		}
 
 		// After enrollment, set the certificate paths
-		privateKey = filepath.Join(launchDir, constants.Paths.Infra.PkiDir, constants.PkiFileOperatorKey)
-		clientCert = filepath.Join(launchDir, constants.Paths.Infra.PkiDir, constants.PkiFileOperatorCert)
+		privateKey = filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorKey)
+		clientCert = filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorCert)
 
 		// Reload trust bundle after enrollment (enrollment may have updated it)
-		trustBundlePath := filepath.Join(launchDir, constants.Paths.Infra.PkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		trustBundlePath := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 		if pemData, err := os.ReadFile(trustBundlePath); err == nil {
 			trustStore.SetCA(pemData)
 			logger.Info("Trust bundle reloaded after enrollment", "path", trustBundlePath)
@@ -964,7 +966,7 @@ func main() {
 	g8eoService, err := services.NewG8eoService(cfg, logger, tlsConfig)
 	if err != nil {
 		logger.Error("Failed to create Operator service", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitCodeFromError(err))
+		os.Exit(exitcode.FromError(err))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -976,7 +978,7 @@ func main() {
 	go func() {
 		if err := g8eoService.Start(ctx); err != nil {
 			logger.Error("Failed to start g8e", string(constants.ConnectionStateError), err)
-			os.Exit(constants.ExitCodeFromError(err))
+			os.Exit(exitcode.FromError(err))
 		}
 	}()
 
@@ -1093,7 +1095,7 @@ func probeGatewayTLS(logger *slog.Logger, endpoint string, trustStore *certs.Tru
 
 // loadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
-// 2. Working directory PKI path ("+constants.Paths.Infra.CaCertPath+")
+// 2. Working directory PKI path ("+paths.Infra.CaCertPath+")
 // Returns true on the first valid PEM found, which is installed via
 // trustStore.SetCA. Returns false if no valid trust bundle is found.
 func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trustStore *certs.TrustStore) bool {
@@ -1104,7 +1106,7 @@ func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trust
 	}
 
 	if workingDir != "" {
-		pkiPath := filepath.Join(workingDir, constants.Paths.Infra.CaCertPath)
+		pkiPath := filepath.Join(workingDir, paths.Infra.CaCertPath)
 		pathsToCheck = append(pathsToCheck, pkiPath)
 	}
 
@@ -1271,20 +1273,20 @@ func (h *operatorHandler) WithGroup(name string) slog.Handler {
 // runs an in-process command service to act as the sovereign execution Gateway.
 func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile string) {
 	// Initialize paths relative to current working directory
-	if err := constants.InitPaths(); err != nil {
+	if err := paths.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
 		os.Exit(constants.ExitConfigError)
 	}
 
 	// Create log directory and file
-	runtimeDir := constants.Paths.Infra.RuntimeDir
+	runtimeDir := paths.Infra.RuntimeDir
 	logDir := filepath.Join(runtimeDir, constants.LogDirname)
 	if err := os.MkdirAll(logDir, 0700); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logFile := filepath.Join(logDir, constants.OperatorLogPath)
+	logFile := filepath.Join(logDir, paths.OperatorLogPath)
 	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
@@ -1300,13 +1302,13 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 
 	// Apply defaults for empty directory flags (constants are now absolute)
 	if dataDir == "" {
-		dataDir = constants.Paths.Infra.DataDir
+		dataDir = paths.Infra.DataDir
 	}
 	if pkiDir == "" {
-		pkiDir = constants.Paths.Infra.PkiDir
+		pkiDir = paths.Infra.PkiDir
 	}
 	if secretsDir == "" {
-		secretsDir = constants.Paths.Infra.SecretsDir
+		secretsDir = paths.Infra.SecretsDir
 	}
 
 	logger.Info("Gateway paths configured", "data_dir", dataDir, "pki_dir", pkiDir, "secrets_dir", secretsDir)
@@ -1342,7 +1344,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	svc, err := gateway.NewGatewayModeService(cfg, logger)
 	if err != nil {
 		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitCodeFromError(err))
+		os.Exit(exitcode.FromError(err))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1433,7 +1435,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	cmdSvc, err := pubsub.NewOperatorPubSubService(psConfig)
 	if err != nil {
 		logger.Error("Failed to initialize in-process command service", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitCodeFromError(err))
+		os.Exit(exitcode.FromError(err))
 	}
 
 	// Wire the synchronous fail-closed mutation gate into the gateway HTTP
@@ -1449,7 +1451,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	go func() {
 		if err := svc.Start(ctx); err != nil {
 			logger.Error("Gateway service failed", string(constants.ConnectionStateError), err)
-			os.Exit(constants.ExitCodeFromError(err))
+			os.Exit(exitcode.FromError(err))
 		}
 	}()
 
@@ -1500,7 +1502,7 @@ func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyS
 		os.Exit(constants.ExitConfigError)
 	}
 
-	dataDir := filepath.Join(workDir, constants.Paths.Infra.DataDir)
+	dataDir := filepath.Join(workDir, paths.Infra.DataDir)
 
 	vault, err := vault.NewVault(&vault.VaultConfig{
 		DataDir: dataDir,
@@ -1610,7 +1612,7 @@ func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create INSECURE MCP node service: %v\n", err)
-		os.Exit(constants.ExitCodeFromError(err))
+		os.Exit(exitcode.FromError(err))
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1619,7 +1621,7 @@ func runInsecureMode(gatewayURL, token, nodeID, displayName, pathEnv, logLevel s
 	go func() {
 		if err := svc.Start(ctx); err != nil {
 			logger.Error("INSECURE MCP node service failed", string(constants.ConnectionStateError), err)
-			os.Exit(constants.ExitCodeFromError(err))
+			os.Exit(exitcode.FromError(err))
 		}
 	}()
 

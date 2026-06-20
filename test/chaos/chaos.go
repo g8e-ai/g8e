@@ -46,6 +46,8 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/mapping"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -354,7 +356,7 @@ func Run(cfg Config) error {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	// Initialize paths relative to current working directory
-	if err := constants.InitPaths(); err != nil {
+	if err := paths.Init(); err != nil {
 		return fmt.Errorf("chaos: failed to initialize paths: %w", err)
 	}
 
@@ -362,7 +364,7 @@ func Run(cfg Config) error {
 	dataDir := cfg.DataDir
 	var testVaultDir string
 	if dataDir == "" {
-		testVaultDir = constants.Paths.Infra.TestVaultDir
+		testVaultDir = paths.Infra.TestVaultDir
 		if err := os.MkdirAll(testVaultDir, 0755); err != nil {
 			return fmt.Errorf("chaos: failed to create test vault directory: %w", err)
 		}
@@ -382,7 +384,7 @@ func Run(cfg Config) error {
 
 	pkiDir := cfg.PKIDir
 	if pkiDir == "" {
-		pkiDir = constants.Paths.Infra.PkiDir
+		pkiDir = paths.Infra.PkiDir
 	}
 
 	logArgs := []any{
@@ -486,7 +488,7 @@ func Run(cfg Config) error {
 	}
 
 	// Initialize Ledger (nil for chaos tester - no actual ledger needed)
-	ledgerBaseDir := filepath.Join(constants.Paths.Infra.RuntimeDir, constants.DataDirname, constants.LedgerDirname)
+	ledgerBaseDir := filepath.Join(paths.Infra.RuntimeDir, constants.DataDirname, constants.LedgerDirname)
 	ledger, _ := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ledgerBaseDir, EncryptionVault: nil}, logger)
 
 	// Initialize L1 Doctrine for threat detection
@@ -692,7 +694,7 @@ func fireOne(
 
 	cmdMsg := pubsub.PubSubCommandMessage{
 		ID:                env.Id,
-		EventType:         constants.MapActionTypeToEventType(constants.ActionType(env.ActionType)),
+		EventType:         mapping.MapActionTypeToEventType(constants.ActionType(env.ActionType)),
 		OperatorSessionID: env.OperatorSessionId,
 		Payload:           env.Payload,
 		Timestamp:         env.Timestamp.AsTime(),
@@ -702,7 +704,7 @@ func fireOne(
 	// so we use a custom execution flow that still hits the handler but batches the audit log.
 
 	// Execute through the handler
-	eventType := constants.MapActionTypeToEventType(constants.ActionType(env.ActionType))
+	eventType := mapping.MapActionTypeToEventType(constants.ActionType(env.ActionType))
 	_, err := actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
 
 	if err != nil {

@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 const (
@@ -38,12 +39,12 @@ const (
 
 func getDefaultNodeBinaryDir() string {
 	// Initialize paths relative to current working directory
-	if err := constants.InitPaths(); err != nil {
+	if err := paths.Init(); err != nil {
 		// If we can't get cwd, fall back to current directory
-		_ = constants.InitPathsWithBase(".")
+		_ = paths.InitWithBase(".")
 	}
 	// Use project root (parent of .g8e) for bin directory
-	return filepath.Join(constants.Paths.Infra.RuntimeDir, "../bin")
+	return filepath.Join(paths.Infra.RuntimeDir, "../bin")
 }
 
 // StreamStatusEvent is written as a JSON line to stdout for each host event.

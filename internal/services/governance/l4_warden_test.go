@@ -50,7 +50,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		nil, // AppPolicyStore not used in tests
 		l3Notary,
 		nil,                        // doctrine defaults to L1Doctrine
-		constants.AllActionTypes(), // Use SSOT for action types
+		constants.AllActionTypes, // Use SSOT for action types
 		posture,
 		nil, // Clock defaults to RealClock
 	), privKey
@@ -174,7 +174,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 // This mirrors the logic in L4Warden.isMutation.
 func isMutationAction(actionType constants.ActionType) bool {
 	// Include all mutation actions that L4Warden expects L3 proof for
-	return constants.IsMutation(actionType) || actionType == constants.ActionTypeMcpCall || actionType == constants.ActionTypeA2aCall || actionType == constants.ActionTypeEvalAnswer || actionType == constants.ActionTypeInvestigationCreate
+	return actionType.IsMutation() || actionType == constants.ActionTypeMcpCall || actionType == constants.ActionTypeA2aCall || actionType == constants.ActionTypeEvalAnswer || actionType == constants.ActionTypeInvestigationCreate
 }
 
 func TestL4Warden_AcceptsValidNonMutationGovernanceEnvelope(t *testing.T) {
@@ -407,7 +407,7 @@ func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 // to constants but not to the decodePayloadForAction switch.
 func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
 	t.Parallel()
-	allActionTypes := constants.AllActionTypes()
+	allActionTypes := constants.AllActionTypes
 	if len(allActionTypes) == 0 {
 		t.Fatal("AllActionTypes() returned empty list")
 	}
@@ -513,7 +513,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		appPolicyStore,
 		l3Notary,
 		nil, // doctrine defaults to L1Doctrine
-		constants.AllActionTypes(),
+		constants.AllActionTypes,
 		"notary",
 		nil, // Clock defaults to RealClock
 	), privKey

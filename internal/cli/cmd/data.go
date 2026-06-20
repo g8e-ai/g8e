@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
 )
@@ -310,7 +311,7 @@ func dataAuditSummaryCmd() *cobra.Command {
 		Use:   string(constants.StreamStatusSummary),
 		Short: "Show audit event summary by type",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dbPath := constants.Paths.Infra.DbPath
+			dbPath := paths.Infra.DbPath
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 				return fmt.Errorf("audit vault database not found at %s", dbPath)
 			}

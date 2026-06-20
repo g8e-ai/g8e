@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 // GatewayPosture defines the governance enforcement posture for the Gateway.
@@ -360,29 +361,29 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 	if projectRoot == "" {
 		projectRoot = "."
 	}
-	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+	if err := paths.InitWithBase(projectRoot); err != nil {
 		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
 	}
 
 	// Resolve paths using canonical constants
 	dataDir := opts.DataDir
 	if dataDir == "" {
-		dataDir = constants.Paths.Infra.DataDir
+		dataDir = paths.Infra.DataDir
 	}
 	pkiDir := opts.PKIDir
 	if pkiDir == "" {
-		pkiDir = constants.Paths.Infra.PkiDir
+		pkiDir = paths.Infra.PkiDir
 	}
 
 	mcpDownstreamURL := opts.MCPDownstreamURL
 	a2aDownstreamURL := opts.A2ADownstreamURL
 	secretsDir := opts.SecretsDir
 	if secretsDir == "" {
-		secretsDir = constants.Paths.Infra.SecretsDir
+		secretsDir = paths.Infra.SecretsDir
 	}
 
-	vaultDir := constants.Paths.Infra.VaultDir
-	vaultKeyPath := constants.Paths.Infra.VaultKeyPath
+	vaultDir := paths.Infra.VaultDir
+	vaultKeyPath := paths.Infra.VaultKeyPath
 
 	// Validate and resolve gateway ports
 	httpPort, httpsPort, err := validateAndResolveGatewayPorts(
@@ -478,7 +479,7 @@ func Load(opts LoadOptions) (*Config, error) {
 	if projectRoot == "" {
 		projectRoot = "."
 	}
-	if err := constants.InitPathsWithBase(projectRoot); err != nil {
+	if err := paths.InitWithBase(projectRoot); err != nil {
 		return nil, fmt.Errorf("config: failed to initialize paths: %w", err)
 	}
 
@@ -547,22 +548,22 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Default PKIDir to .g8e/pki if not explicitly set
 	if cfg.PKIDir == "" {
-		cfg.PKIDir = constants.Paths.Infra.PkiDir
+		cfg.PKIDir = paths.Infra.PkiDir
 	}
 
 	// Default SecretsDir to .g8e/secrets if not explicitly set
 	if cfg.SecretsDir == "" {
-		cfg.SecretsDir = constants.Paths.Infra.SecretsDir
+		cfg.SecretsDir = paths.Infra.SecretsDir
 	}
 
 	// Default VaultDir to .g8e/vault if not explicitly set
 	if cfg.VaultDir == "" {
-		cfg.VaultDir = constants.Paths.Infra.VaultDir
+		cfg.VaultDir = paths.Infra.VaultDir
 	}
 
 	// Default VaultKeyPath to .g8e/vault/key if not explicitly set
 	if cfg.VaultKeyPath == "" {
-		cfg.VaultKeyPath = constants.Paths.Infra.VaultKeyPath
+		cfg.VaultKeyPath = paths.Infra.VaultKeyPath
 	}
 
 	// Default VaultRequireUnlock to false (matches CLI flag default)

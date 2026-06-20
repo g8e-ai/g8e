@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/spf13/cobra"
 )
 
@@ -158,7 +159,7 @@ func swaggerServeCmd() *cobra.Command {
 
 			// Since http-swagger requires embedding in a Go server, we'll provide instructions
 			cmd.Println("\nNote: To serve Swagger UI, start the g8e Gateway and access:")
-			cmd.Printf("  %s/swagger/index.html\n", constants.LocalhostHTTPSURL(8443))
+			cmd.Printf("  %s/swagger/index.html\n", netutil.LocalhostHTTPSURL(8443))
 			cmd.Println("\nOr use a standalone tool like:")
 			cmd.Printf("  npx @apidevtools/swagger-cli serve %s -p %d\n", swaggerJSON, port)
 			cmd.Printf("  docker run -p %d:8080 -e SWAGGER_JSON=/swagger/swagger.json -v %s:/swagger swaggerapi/swagger-ui\n", port, absDocsPath)

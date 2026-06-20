@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -252,9 +253,9 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -274,9 +275,9 @@ func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 	}
 
@@ -292,9 +293,9 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -319,9 +320,9 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, constants.Paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
+		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
+		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
+		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}

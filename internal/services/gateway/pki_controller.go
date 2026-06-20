@@ -32,6 +32,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
@@ -482,7 +483,7 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
-	localCAPath := filepath.ToSlash(constants.Paths.Infra.CaCertPath)
+	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
 
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
@@ -574,7 +575,7 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
-	localCAPath := filepath.ToSlash(constants.Paths.Infra.CaCertPath)
+	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
 	binaryName := constants.BinaryNameWindows
 	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
 

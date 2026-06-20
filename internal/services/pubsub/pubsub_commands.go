@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/mapping"
 	"github.com/g8e-ai/g8e/internal/models"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
@@ -246,8 +247,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 	}
 
 	// Initialize TransactionVerifier for strict pre-dispatch verification
-	// Use constants.AllActionTypes() as the single source of truth for valid action types
-	knownActionTypes := constants.AllActionTypes()
+	knownActionTypes := constants.AllActionTypes
 	// Use Gateway.Posture for gateway mode, Config.Posture for outbound mode
 	posture := string(c.Config.Gateway.Posture)
 	if posture == "" {
@@ -366,7 +366,7 @@ func (rs *OperatorPubSubService) Start(ctx context.Context) error {
 
 	rs.heartbeat.ctx = rs.ctx
 
-	channelName := constants.CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
+	channelName := CmdChannel(rs.config.OperatorID, rs.config.OperatorSessionId)
 
 	// Only subscribe to pub/sub channel when running as a traditional Operator (with identity)
 	// In gateway mode, commands arrive via HTTP/WebSocket endpoints directly
@@ -586,7 +586,7 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, constants.ErrPubSubActuator
 	}
 
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	eventType := mapping.MapActionTypeToEventType(verified.ActionType)
 	cmdMsg := &PubSubCommandMessage{
 		ID:                envelope.Id,
 		EventType:         eventType,
@@ -630,7 +630,7 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 
 	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator
 	// Map GovernanceEnvelope action types back to protobuf event types for handler dispatch
-	eventType := constants.MapActionTypeToEventType(verified.ActionType)
+	eventType := mapping.MapActionTypeToEventType(verified.ActionType)
 
 	payload := env.Payload
 	if len(payload) == 0 {

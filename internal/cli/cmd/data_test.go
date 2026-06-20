@@ -24,6 +24,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -192,16 +193,16 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 				VaultDir             string `json:"vault_dir"`
 				VaultKeyPath         string `json:"vault_key_path"`
 			}{
-				AppCertDir:           filepath.Join(tmpDir, constants.Paths.Infra.AppCertDir),
-				CACertPath:           filepath.Join(tmpDir, constants.Paths.Infra.CaCertPath),
-				DBPath:               filepath.Join(tmpDir, constants.Paths.Infra.DbPath),
-				DocsDir:              filepath.Join(tmpDir, constants.Paths.Infra.DocsDir),
-				PKIDir:               filepath.Join(tmpDir, constants.Paths.Infra.PkiDir),
-				ProtocolConstantsDir: filepath.Join(tmpDir, constants.Paths.Infra.ProtocolConstantsDir),
-				ProtocolDir:          filepath.Join(tmpDir, constants.Paths.Infra.ProtocolDir),
-				ProtocolModelsDir:    filepath.Join(tmpDir, constants.Paths.Infra.ProtocolModelsDir),
-				SecretsDir:           filepath.Join(tmpDir, constants.Paths.Infra.SecretsDir),
-				SSHConfigPath:        filepath.Join(tmpDir, constants.Paths.Infra.SshConfigPath),
+				AppCertDir:           filepath.Join(tmpDir, paths.Infra.AppCertDir),
+				CACertPath:           filepath.Join(tmpDir, paths.Infra.CaCertPath),
+				DBPath:               filepath.Join(tmpDir, paths.Infra.DbPath),
+				DocsDir:              filepath.Join(tmpDir, paths.Infra.DocsDir),
+				PKIDir:               filepath.Join(tmpDir, paths.Infra.PkiDir),
+				ProtocolConstantsDir: filepath.Join(tmpDir, paths.Infra.ProtocolConstantsDir),
+				ProtocolDir:          filepath.Join(tmpDir, paths.Infra.ProtocolDir),
+				ProtocolModelsDir:    filepath.Join(tmpDir, paths.Infra.ProtocolModelsDir),
+				SecretsDir:           filepath.Join(tmpDir, paths.Infra.SecretsDir),
+				SSHConfigPath:        filepath.Join(tmpDir, paths.Infra.SshConfigPath),
 			},
 		},
 	}
@@ -285,12 +286,12 @@ func TestDataAuditSummaryCmd(t *testing.T) {
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+		require.NoError(t, paths.InitWithBase(tmpDir))
 
 		// Create data directory and empty database using global paths
-		dataDir := constants.Paths.Infra.DataDir
+		dataDir := paths.Infra.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := constants.Paths.Infra.DbPath
+		dbPath := paths.Infra.DbPath
 
 		// Create database with events table but no data
 		db, err := sql.Open("sqlite", dbPath)
@@ -566,12 +567,12 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+		require.NoError(t, paths.InitWithBase(tmpDir))
 
 		// Create data directory and database with test data
-		dataDir := constants.Paths.Infra.DataDir
+		dataDir := paths.Infra.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := constants.Paths.Infra.DbPath
+		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
 		require.NoError(t, err)
@@ -615,12 +616,12 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+		require.NoError(t, paths.InitWithBase(tmpDir))
 
 		// Create data directory and database with test data
-		dataDir := constants.Paths.Infra.DataDir
+		dataDir := paths.Infra.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := constants.Paths.Infra.DbPath
+		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
 		require.NoError(t, err)
@@ -663,12 +664,12 @@ func TestDataAuditSummaryQueryConstruction(t *testing.T) {
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+		require.NoError(t, paths.InitWithBase(tmpDir))
 
 		// Create data directory and database
-		dataDir := constants.Paths.Infra.DataDir
+		dataDir := paths.Infra.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := constants.Paths.Infra.DbPath
+		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
 		require.NoError(t, err)
@@ -691,12 +692,12 @@ func TestDataAuditSummaryQueryConstruction(t *testing.T) {
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+		require.NoError(t, paths.InitWithBase(tmpDir))
 
 		// Create data directory and database
-		dataDir := constants.Paths.Infra.DataDir
+		dataDir := paths.Infra.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := constants.Paths.Infra.DbPath
+		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
 		require.NoError(t, err)
@@ -721,12 +722,12 @@ func TestDataAuditSummaryOutputFormatting(t *testing.T) {
 		setupDataTestConfig(t, tmpDir)
 
 		// Initialize global paths to use tmpDir
-		require.NoError(t, constants.InitPathsWithBase(tmpDir))
+		require.NoError(t, paths.InitWithBase(tmpDir))
 
 		// Create data directory and database with test data
-		dataDir := constants.Paths.Infra.DataDir
+		dataDir := paths.Infra.DataDir
 		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := constants.Paths.Infra.DbPath
+		dbPath := paths.Infra.DbPath
 
 		db, err := sql.Open("sqlite", dbPath)
 		require.NoError(t, err)
