@@ -227,13 +227,11 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 	}
 
 	if fs.scrubbing != nil && fs.scrubbing.IsEnabled() {
-		if result.Content != nil {
-			scrubbed := fs.scrubbing.ScrubText(*result.Content)
-			result.Content = &scrubbed
+		if result.Content != "" {
+			result.Content = fs.scrubbing.ScrubText(result.Content)
 		}
-		if result.ErrorMessage != nil {
-			scrubbed := fs.scrubbing.ScrubText(*result.ErrorMessage)
-			result.ErrorMessage = &scrubbed
+		if result.ErrorMessage != "" {
+			result.ErrorMessage = fs.scrubbing.ScrubText(result.ErrorMessage)
 		}
 	}
 
@@ -245,31 +243,31 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			Operation:       string(result.Operation),
 			DurationSeconds: float32(result.DurationSeconds),
 		}
-		if result.ErrorMessage != nil {
-			protoResult.ErrorMessage = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			protoResult.ErrorMessage = result.ErrorMessage
 		}
-		if result.ErrorType != nil {
-			protoResult.ErrorType = *result.ErrorType
+		if result.ErrorType != "" {
+			protoResult.ErrorType = result.ErrorType
 		}
-		if result.BytesWritten != nil {
-			protoResult.BytesWritten = *result.BytesWritten
+		if result.BytesWritten != 0 {
+			protoResult.BytesWritten = result.BytesWritten
 		}
-		if result.LinesChanged != nil {
-			linesChanged := *result.LinesChanged
+		if result.LinesChanged != 0 {
+			linesChanged := result.LinesChanged
 			if linesChanged > maxInt32Value {
 				linesChanged = maxInt32Value
 			}
 			protoResult.LinesChanged = int32(linesChanged) //nolint:gosec // bounds checked above
 		}
-		if result.BackupPath != nil {
-			protoResult.BackupPath = *result.BackupPath
+		if result.BackupPath != "" {
+			protoResult.BackupPath = result.BackupPath
 		}
-		if result.Content != nil {
-			protoResult.Content = *result.Content
-			protoResult.StdoutSize = int32(len(*result.Content)) //nolint:gosec // bounded by pub/sub payload limits
+		if result.Content != "" {
+			protoResult.Content = result.Content
+			protoResult.StdoutSize = int32(len(result.Content)) //nolint:gosec // bounded by pub/sub payload limits
 		}
-		if result.ErrorMessage != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED {
-			protoResult.StderrSize = int32(len(*result.ErrorMessage)) //nolint:gosec // bounded by pub/sub payload limits
+		if result.ErrorMessage != "" && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED {
+			protoResult.StderrSize = int32(len(result.ErrorMessage)) //nolint:gosec // bounded by pub/sub payload limits
 		}
 
 		if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
@@ -306,16 +304,16 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 
 	result, err := fs.fsList.ExecuteFsList(ctx, fsListReq)
 	if err != nil {
-		result = &models.FsListResult{
-			ExecutionID:     fsListReq.ExecutionID,
-			CaseID:          fsListReq.CaseID,
-			TaskID:          fsListReq.TaskID,
-			InvestigationID: fsListReq.InvestigationID,
-			Path:            fsListReq.Path,
-			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr(err.Error()),
-			ErrorType:       system.StringPtr("execution_error"),
-		}
+			result = &models.FsListResult{
+				ExecutionID:     fsListReq.ExecutionID,
+				CaseID:          fsListReq.CaseID,
+				TaskID:          fsListReq.TaskID,
+				InvestigationID: fsListReq.InvestigationID,
+				Path:            fsListReq.Path,
+				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
+				ErrorMessage:    err.Error(),
+				ErrorType:       "execution_error",
+			}
 	}
 
 	if fs.vaultWriter != nil {
@@ -338,14 +336,11 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 		}
 
 		var stderr string
-		if result.ErrorMessage != nil {
-			stderr = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			stderr = result.ErrorMessage
 		}
 
-		taskID := ""
-		if result.TaskID != nil {
-			taskID = *result.TaskID
-		}
+		taskID := result.TaskID
 
 		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
@@ -379,11 +374,11 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 			TotalCount:      int32(totalCount), //nolint:gosec // bounds checked above
 			DurationSeconds: float32(result.DurationSeconds),
 		}
-		if result.ErrorMessage != nil {
-			protoResult.ErrorMessage = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			protoResult.ErrorMessage = result.ErrorMessage
 		}
-		if result.ErrorType != nil {
-			protoResult.ErrorType = *result.ErrorType
+		if result.ErrorType != "" {
+			protoResult.ErrorType = result.ErrorType
 		}
 		if result.Entries != nil {
 			protoResult.Entries = make([]*operatorv1.FsEntry, len(result.Entries))
@@ -446,8 +441,8 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 			Path:            fsGrepReq.Path,
 			Pattern:         fsGrepReq.Pattern,
 			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr(err.Error()),
-			ErrorType:       system.StringPtr("execution_error"),
+			ErrorMessage:    err.Error(),
+			ErrorType:       "execution_error",
 		}
 	}
 
@@ -471,14 +466,11 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 		}
 
 		var stderr string
-		if result.ErrorMessage != nil {
-			stderr = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			stderr = result.ErrorMessage
 		}
 
-		taskID := ""
-		if result.TaskID != nil {
-			taskID = *result.TaskID
-		}
+		taskID := result.TaskID
 
 		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
@@ -512,11 +504,11 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 			Truncated:       result.Truncated,
 			DurationSeconds: float32(result.DurationSeconds),
 		}
-		if result.ErrorMessage != nil {
-			protoResult.ErrorMessage = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			protoResult.ErrorMessage = result.ErrorMessage
 		}
-		if result.ErrorType != nil {
-			protoResult.ErrorType = *result.ErrorType
+		if result.ErrorType != "" {
+			protoResult.ErrorType = result.ErrorType
 		}
 		if result.Matches != nil {
 			protoResult.Matches = make([]*operatorv1.FsGrepMatch, len(result.Matches))
@@ -698,28 +690,28 @@ func payloadToFileEditRequest(msg *PubSubCommandMessage) (*models.FileEditReques
 	}
 
 	if p.Content != "" {
-		req.Content = system.StringPtr(p.Content)
+		req.Content = p.Content
 	}
 	if p.OldContent != "" {
-		req.OldContent = system.StringPtr(p.OldContent)
+		req.OldContent = p.OldContent
 	}
 	if p.NewContent != "" {
-		req.NewContent = system.StringPtr(p.NewContent)
+		req.NewContent = p.NewContent
 	}
 	if p.InsertContent != "" {
-		req.InsertContent = system.StringPtr(p.InsertContent)
+		req.InsertContent = p.InsertContent
 	}
 	if p.InsertPosition != 0 {
-		req.InsertPosition = system.IntPtr(int(p.InsertPosition))
+		req.InsertPosition = int(p.InsertPosition)
 	}
 	if p.StartLine != 0 {
-		req.StartLine = system.IntPtr(int(p.StartLine))
+		req.StartLine = int(p.StartLine)
 	}
 	if p.EndLine != 0 {
-		req.EndLine = system.IntPtr(int(p.EndLine))
+		req.EndLine = int(p.EndLine)
 	}
 	if p.PatchContent != "" {
-		req.PatchContent = system.StringPtr(p.PatchContent)
+		req.PatchContent = p.PatchContent
 	}
 
 	return req, nil

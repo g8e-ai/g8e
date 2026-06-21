@@ -17,24 +17,24 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+)
 
+import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 )
 
-func reportReplayNonces(ctx context.Context, outDir string, rs *storage.SQLReplayStore) (FileResult, error) {
-	path := filepath.Join(outDir, constants.ReportReplayNoncesFilename)
-
+func fetchReplayNonces(ctx context.Context, rs *storage.SQLReplayStore) ([]Row, error) {
 	var rows []Row
 	offset := 0
 	const batchSize = 500
 	for {
 		if ctx.Err() != nil {
-			return FileResult{}, ctx.Err()
+			return nil, ctx.Err()
 		}
 		batch, err := rs.ListNonces(batchSize, offset)
 		if err != nil {
-			return FileResult{}, fmt.Errorf("%w: replay_nonces: %w", constants.ErrReportStoreUnavailable, err)
+			return nil, fmt.Errorf("reporting: replay_nonces: failed to list nonces: %w", err)
 		}
 		for _, n := range batch {
 			rows = append(rows, ReplayNonceRow{
@@ -50,11 +50,23 @@ func reportReplayNonces(ctx context.Context, outDir string, rs *storage.SQLRepla
 		}
 		offset += batchSize
 	}
+	return rows, nil
+}
 
+func writeReplayNoncesCSV(outDir string, rows []Row) (FileResult, error) {
+	path := filepath.Join(outDir, constants.ReportReplayNoncesFilename)
 	res, err := writeCSV(path, ReplayNonceRow{}.Columns(), rows)
 	if err != nil {
-		return FileResult{}, fmt.Errorf("%w: replay_nonces: %w", constants.ErrReportWriteFailed, err)
+		return FileResult{}, fmt.Errorf("reporting: replay_nonces: failed to write CSV: %w", err)
 	}
 	res.Filename = constants.ReportReplayNoncesFilename
 	return res, nil
+}
+
+func reportReplayNonces(ctx context.Context, outDir string, rs *storage.SQLReplayStore) (FileResult, error) {
+	rows, err := fetchReplayNonces(ctx, rs)
+	if err != nil {
+		return FileResult{}, err
+	}
+	return writeReplayNoncesCSV(outDir, rows)
 }

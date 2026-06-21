@@ -24,7 +24,9 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+)
 
+import (
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -319,7 +321,7 @@ func (bs *BootstrapService) ApplyBootstrapConfig(bootstrapConfig *BootstrapConfi
 			// docs/architecture/operator.md. Surface this as a cert trust
 			// failure so ExitCodeFromError maps it to ExitCertTrustFailure (7).
 			bs.logger.Error("Per-operator mTLS certificate is invalid; aborting startup",
-				string(constants.ConnectionStateError), err)
+				constants.ConnectionStateError, err)
 			return fmt.Errorf("%w: %w", constants.ErrBootstrapCertTrust, err)
 		}
 		bs.logger.Info("HTTP transport upgraded to per-operator mTLS certificate (in-memory)")

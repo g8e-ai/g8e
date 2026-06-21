@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build darwin
 
 package keystore
 
@@ -23,21 +22,21 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// New creates a new Keystore instance with the keychain backend.
+// New creates a new Keystore instance with the keychain keyring.
 // Production callers should pass paths.Infra.SecretsDir for secretsDir.
 func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
 	if err := os.MkdirAll(secretsDir, constants.PermDirPrivate); err != nil {
 		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
 	}
 
-	backend, err := newKeychainBackend()
+	keyring, err := newKeychainKeyring()
 	if err != nil {
-		return nil, fmt.Errorf("keystore: initialize keychain backend: %w", err)
+		return nil, fmt.Errorf("keystore: initialize keychain keyring: %w", err)
 	}
 
 	return &Keystore{
 		logger:     logger,
 		secretsDir: secretsDir,
-		backend:    backend,
+		keyring:    keyring,
 	}, nil
 }

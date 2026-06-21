@@ -21,93 +21,93 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewTestBackend(t *testing.T) {
-	backend, err := NewTestBackend()
+func TestNewMemoryKeyring(t *testing.T) {
+	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
-	require.NotNil(t, backend)
-	assert.Equal(t, "test", backend.Name())
+	require.NotNil(t, keyring)
+	assert.Equal(t, "memory", keyring.Name())
 }
 
-func TestTestBackend_RetrieveMasterKey_NotFound(t *testing.T) {
-	backend, err := NewTestBackend()
+func TestMemoryKeyring_RetrieveMasterKey_NotFound(t *testing.T) {
+	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
 
-	key, err := backend.RetrieveMasterKey()
+	key, err := keyring.RetrieveMasterKey()
 	require.Error(t, err)
 	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 	assert.Nil(t, key)
 }
 
-func TestTestBackend_StoreAndRetrieveMasterKey(t *testing.T) {
-	backend, err := NewTestBackend()
+func TestMemoryKeyring_StoreAndRetrieveMasterKey(t *testing.T) {
+	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
 
 	testKey := []byte("test-master-key-32-bytes-long-12345")
-	err = backend.StoreMasterKey(testKey)
+	err = keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
-	retrievedKey, err := backend.RetrieveMasterKey()
+	retrievedKey, err := keyring.RetrieveMasterKey()
 	require.NoError(t, err)
 	assert.Equal(t, testKey, retrievedKey)
 }
 
-func TestTestBackend_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
-	backend, err := NewTestBackend()
+func TestMemoryKeyring_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
+	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
 
 	testKey := []byte("test-master-key-32-bytes-long-12345")
-	err = backend.StoreMasterKey(testKey)
+	err = keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
-	retrievedKey1, err := backend.RetrieveMasterKey()
+	retrievedKey1, err := keyring.RetrieveMasterKey()
 	require.NoError(t, err)
 
 	retrievedKey1[0] = 'X'
 
-	retrievedKey2, err := backend.RetrieveMasterKey()
+	retrievedKey2, err := keyring.RetrieveMasterKey()
 	require.NoError(t, err)
 	assert.Equal(t, testKey, retrievedKey2, "modifying retrieved key should not affect stored key")
 	assert.NotEqual(t, retrievedKey1, retrievedKey2)
 }
 
-func TestTestBackend_DeleteMasterKey(t *testing.T) {
-	backend, err := NewTestBackend()
+func TestMemoryKeyring_DeleteMasterKey(t *testing.T) {
+	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
 
 	testKey := []byte("test-master-key-32-bytes-long-12345")
-	err = backend.StoreMasterKey(testKey)
+	err = keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
-	err = backend.DeleteMasterKey()
+	err = keyring.DeleteMasterKey()
 	require.NoError(t, err)
 
-	key, err := backend.RetrieveMasterKey()
+	key, err := keyring.RetrieveMasterKey()
 	require.Error(t, err)
 	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 	assert.Nil(t, key)
 }
 
-func TestTestBackend_DeleteMasterKey_NotFound(t *testing.T) {
-	backend, err := NewTestBackend()
+func TestMemoryKeyring_DeleteMasterKey_NotFound(t *testing.T) {
+	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
 
-	err = backend.DeleteMasterKey()
+	err = keyring.DeleteMasterKey()
 	require.NoError(t, err)
 }
 
-func TestTestBackend_OverwriteMasterKey(t *testing.T) {
-	backend, err := NewTestBackend()
+func TestMemoryKeyring_OverwriteMasterKey(t *testing.T) {
+	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
 
 	key1 := []byte("first-master-key-32-bytes-long-123")
-	err = backend.StoreMasterKey(key1)
+	err = keyring.StoreMasterKey(key1)
 	require.NoError(t, err)
 
 	key2 := []byte("second-master-key-32-bytes-long-4")
-	err = backend.StoreMasterKey(key2)
+	err = keyring.StoreMasterKey(key2)
 	require.NoError(t, err)
 
-	retrievedKey, err := backend.RetrieveMasterKey()
+	retrievedKey, err := keyring.RetrieveMasterKey()
 	require.NoError(t, err)
 	assert.Equal(t, key2, retrievedKey, "second key should overwrite first")
 }

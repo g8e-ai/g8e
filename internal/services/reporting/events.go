@@ -36,7 +36,7 @@ func reportSessions(ctx context.Context, outDir string, store *storage.SQLAuditS
 		}
 		batch, err := store.ListSessions(batchSize, offset)
 		if err != nil {
-			return FileResult{}, fmt.Errorf("%w: sessions: %w", constants.ErrReportStoreUnavailable, err)
+			return FileResult{}, fmt.Errorf("reporting: sessions: %w", err)
 		}
 		for _, s := range batch {
 			rows = append(rows, SessionRow{
@@ -54,7 +54,7 @@ func reportSessions(ctx context.Context, outDir string, store *storage.SQLAuditS
 
 	res, err := writeCSV(path, SessionRow{}.Columns(), rows)
 	if err != nil {
-		return FileResult{}, fmt.Errorf("%w: sessions: %w", constants.ErrReportWriteFailed, err)
+		return FileResult{}, fmt.Errorf("reporting: sessions: %w", err)
 	}
 	res.Filename = constants.ReportSessionsFilename
 	return res, nil
@@ -72,7 +72,7 @@ func reportEvents(ctx context.Context, outDir string, store *storage.SQLAuditSto
 		}
 		batch, err := store.ListEvents("", batchSize, offset)
 		if err != nil {
-			return FileResult{}, fmt.Errorf("%w: events: %w", constants.ErrReportStoreUnavailable, err)
+			return FileResult{}, fmt.Errorf("reporting: events: %w", err)
 		}
 		for _, e := range batch {
 			contentSHA256 := ""
@@ -105,7 +105,7 @@ func reportEvents(ctx context.Context, outDir string, store *storage.SQLAuditSto
 
 	res, err := writeCSV(path, EventRow{}.Columns(), rows)
 	if err != nil {
-		return FileResult{}, fmt.Errorf("%w: events: %w", constants.ErrReportWriteFailed, err)
+		return FileResult{}, fmt.Errorf("reporting: events: %w", err)
 	}
 	res.Filename = constants.ReportEventsFilename
 	return res, nil

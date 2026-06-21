@@ -146,8 +146,8 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 			Command:         execReq.Command,
 			Args:            execReq.Args,
 			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr(execErr.Error()),
-			ErrorType:       system.StringPtr("execution_error"),
+			ErrorMessage:    func() *string { s := execErr.Error(); return &s }(),
+			ErrorType:       func() *string { s := "execution_error"; return &s }(),
 		}
 	} else if result == nil {
 		result = &models.ExecutionResultsPayload{
@@ -155,8 +155,8 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 			CaseID:       execReq.CaseID,
 			TaskID:       execReq.TaskID,
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage: system.StringPtr("execution returned no result"),
-			ErrorType:    system.StringPtr("execution_error"),
+			ErrorMessage: func() *string { s := "execution returned no result"; return &s }(),
+			ErrorType:    func() *string { s := "execution_error"; return &s }(),
 		}
 	} else {
 		cs.logger.Info("Command execution completed",
@@ -335,8 +335,8 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg *PubSubCo
 			CaseID:       msg.CaseID,
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 			StartTime:    &now,
-			ErrorMessage: system.StringPtr(fmt.Sprintf("Cancel failed: %v", err)),
-			ErrorType:    system.StringPtr("cancel_failed"),
+			ErrorMessage: func() *string { s := fmt.Sprintf("Cancel failed: %v", err); return &s }(),
+			ErrorType:    func() *string { s := "cancel_failed"; return &s }(),
 		}
 	} else {
 		cs.logger.Info("Command cancelled successfully", "execution_id", executionID)
@@ -345,8 +345,8 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg *PubSubCo
 			CaseID:       msg.CaseID,
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED,
 			StartTime:    &now,
-			ErrorMessage: system.StringPtr("Command cancelled by user"),
-			ErrorType:    system.StringPtr("user_cancelled"),
+			ErrorMessage: func() *string { s := "Command cancelled by user"; return &s }(),
+			ErrorType:    func() *string { s := "user_cancelled"; return &s }(),
 		}
 	}
 

@@ -84,10 +84,10 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	require.NoError(t, os.RemoveAll(secretsDir), "failed to clean secrets dir")
 	require.NoError(t, os.MkdirAll(secretsDir, 0755), "failed to create secrets dir")
 
-	backend, err := keystore.NewTestBackend()
-	require.NoError(t, err, "failed to create test keystore backend")
+	keyring, err := keystore.NewMemoryKeyring()
+	require.NoError(t, err, "failed to create test keystore keyring")
 
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
 	require.NoError(t, err, "failed to create keystore")
 	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
 	require.NoError(t, ks.EnforcePermissions(), "failed to enforce keystore permissions")

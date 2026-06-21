@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"runtime"
@@ -78,7 +79,11 @@ func (hs *HeartbeatService) SetContext(ctx context.Context) {
 
 // Build constructs a complete Heartbeat payload of the given type.
 func (hs *HeartbeatService) Build(heartbeatType models.HeartbeatType) *models.Heartbeat {
-	pwd, _ := os.Getwd()
+	pwd, err := os.Getwd()
+	if err != nil {
+		hs.logger.Warn("[HEARTBEAT] Failed to get working directory", "error", err)
+		pwd = ""
+	}
 
 	heartbeat := &models.Heartbeat{
 		EventType:         constants.Event.Operator.Heartbeat,
@@ -269,7 +274,7 @@ func (hs *HeartbeatService) buildProtoHeartbeat(h *models.Heartbeat) *operatorv1
 // Publish publishes a heartbeat to the results publisher.
 func (hs *HeartbeatService) Publish(ctx context.Context, heartbeat *operatorv1.HeartbeatResult) error {
 	if hs.results == nil {
-		return errors.New("results publisher not configured")
+		return constants.ErrPubSubResultsPublisher
 	}
 	return hs.results.PublishHeartbeat(ctx, heartbeat)
 }
@@ -278,7 +283,7 @@ func (hs *HeartbeatService) Publish(ctx context.Context, heartbeat *operatorv1.H
 func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg *PubSubCommandMessage) {
 	var protoReq operatorv1.HeartbeatRequested
 	if err := proto.Unmarshal(msg.Payload, &protoReq); err != nil {
-		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", string(constants.ConnectionStateError), err)
+		hs.logger.Error("[HEARTBEAT] Failed to decode heartbeat request payload as protobuf HeartbeatRequested", "error", err)
 		return
 	}
 
@@ -292,7 +297,7 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg *PubSubComman
 	if hs.results != nil {
 		protoHeartbeat := hs.buildProtoHeartbeat(heartbeat)
 		if err := hs.results.PublishHeartbeat(ctx, protoHeartbeat); err != nil {
-			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", string(constants.ConnectionStateError), err)
+			hs.logger.Error("[HEARTBEAT] Failed to send requested heartbeat", "error", err)
 		} else {
 			hs.logger.Info("[HEARTBEAT] Requested heartbeat sent successfully")
 		}
@@ -306,14 +311,13 @@ func (hs *HeartbeatService) HandleRequest(ctx context.Context, msg *PubSubComman
 }
 
 // SendAutomatic builds and publishes an automatic heartbeat immediately.
-func (hs *HeartbeatService) SendAutomatic() {
+func (hs *HeartbeatService) SendAutomatic() error {
 	hs.logger.Info("[HEARTBEAT] Sending automatic heartbeat")
 	heartbeat := hs.Build(models.HeartbeatTypeAutomatic)
 
 	data, err := json.Marshal(heartbeat)
 	if err != nil {
-		hs.logger.Error("[HEARTBEAT] Failed to marshal heartbeat", "error", err)
-		return
+		return fmt.Errorf("heartbeat: failed to marshal heartbeat: %w", err)
 	}
 
 	hash := sha256.Sum256(data)
@@ -340,11 +344,13 @@ func (hs *HeartbeatService) SendAutomatic() {
 	if hs.actuator != nil {
 		_, err := hs.actuator.Execute(hs.ctx, vt, cmdMsg)
 		if err != nil {
-			hs.logger.Error("[HEARTBEAT] Actuator execution failed", "error", err)
+			return fmt.Errorf("heartbeat: actuator execution failed: %w", err)
 		}
 	} else {
 		hs.logger.Warn("[HEARTBEAT] Actuator service not set, skipping receipted heartbeat dispatch")
 	}
+
+	return nil
 }
 
 // StartScheduler starts the periodic heartbeat ticker goroutine.
@@ -385,7 +391,9 @@ func (hs *HeartbeatService) startSchedulerUnlocked() {
 				hs.logger.Info("[HEARTBEAT] Heartbeat scheduler stopped via done channel")
 				return
 			case <-ticker.C:
-				hs.SendAutomatic()
+				if err := hs.SendAutomatic(); err != nil {
+					hs.logger.Error("[HEARTBEAT] Failed to send automatic heartbeat", "error", err)
+				}
 			case <-hs.ctx.Done():
 				hs.logger.Info("[HEARTBEAT] Heartbeat scheduler stopped via context cancellation")
 				return

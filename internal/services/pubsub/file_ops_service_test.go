@@ -64,7 +64,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 			ID:              "msg-1",
 			EventType:       constants.Event.Operator.FileEdit.Requested,
 			CaseID:          "case-1",
-			TaskID:          system.StringPtr("task-1"),
+			TaskID:          func() *string { s := "task-1"; return &s }(),
 			InvestigationID: "investigation-1",
 			Payload:         payload,
 		}
@@ -182,7 +182,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 			ID:              "msg-1",
 			EventType:       constants.Event.Operator.FsList.Requested,
 			CaseID:          "case-1",
-			TaskID:          system.StringPtr("task-1"),
+			TaskID:          func() *string { s := "task-1"; return &s }(),
 			InvestigationID: "investigation-1",
 			Payload:         payload,
 		}
@@ -275,7 +275,7 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 			ID:              "msg-1",
 			EventType:       constants.Event.Operator.FsGrep.Requested,
 			CaseID:          "case-1",
-			TaskID:          system.StringPtr("task-1"),
+			TaskID:          func() *string { s := "task-1"; return &s }(),
 			InvestigationID: "investigation-1",
 			Payload:         payload,
 		}

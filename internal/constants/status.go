@@ -347,6 +347,14 @@ const (
 	SessionKeyPrefixWeb      SessionKeyPrefix = "web_session"
 )
 
+// SuspendedTxStatus is a typed string for suspended transaction status.
+type SuspendedTxStatus string
+
+const (
+	SuspendedTxStatusPending  SuspendedTxStatus = "pending"
+	SuspendedTxStatusApproved SuspendedTxStatus = "approved"
+)
+
 // HistoryActor is a typed string for history actor.
 type HistoryActor string
 

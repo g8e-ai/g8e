@@ -76,6 +76,7 @@ const (
 	PathProcSysKernelRandomBootID                             = "/proc/sys/kernel/random/boot_id"
 	PathProcSelfCgroup                                        = "/proc/self/cgroup"
 	PathProcSelfMountinfo                                     = "/proc/self/mountinfo"
+	PathProcMounts                                            = "/proc/mounts"
 	PathProcLoadAvg                                           = "/proc/loadavg"
 	PathProcMemInfo                                           = "/proc/meminfo"
 	PathProcNet                                               = "/proc/net"
@@ -84,6 +85,15 @@ const (
 	PathProcNetTCP6                                           = "/proc/net/tcp6"
 	PathProcNetUDP6                                           = "/proc/net/udp6"
 	PathProcNetRaw                                            = "/proc/net/raw"
+	PathProcUptime                                            = "/proc/uptime"
+	PathProcStat                                              = "/proc/stat"
+	PathProcVersion                                           = "/proc/version"
+	PathProcOneCmdline                                        = "/proc/1/cmdline"
+	PathEtcOSRelease                                          = "/etc/os-release"
+	PathEtcTimezone                                           = "/etc/timezone"
+	PathEtcLocaltime                                          = "/etc/localtime"
+	PathBinSh                                                 = "/bin/sh"
+	PathRoot                                                  = "/"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 
 	// SSH paths
@@ -94,6 +104,8 @@ const (
 	PathWindowsProgramDataSsh = "C:\\ProgramData\\ssh\\known_hosts"
 	PathWindowsSystemRoot     = "SystemRoot"
 	PathWindowsHostsFile      = "System32\\drivers\\etc\\hosts"
+	PathWindowsRegistryCryptography = "SOFTWARE\\Microsoft\\Cryptography"
+	PathWindowsRegistryMachineGuid   = "MachineGuid"
 )
 
 // Environment variable constants
@@ -140,6 +152,7 @@ const (
 	DbFilename             = "g8e.db"
 	VaultKeyFilename       = "key"
 	VaultNewKeyFilename    = "key.new"
+	VaultHeaderFilename    = "vault.header"
 	SuspendedTxFilename    = "suspended_transactions.db"
 	ReceiptsFilename       = "receipts.json"
 	ReceiptsExportFilename = "receipts-export.json"
@@ -155,19 +168,19 @@ const (
 	SecretsFileCLIPrivateKey        = "cli_private_key"
 	SecretsFileSessionToken         = "session_token"
 
-	DemosDirname         = "demos"
-	DemosComposeFile     = "compose.yml"
-	DemosBinDirname      = "bin"
-	DemosBinaryName      = "g8e"
-	DemosTargetDataDir   = "target-data"
-	DemosDoctrineDir    = "doctrine"
-	DemosPARequestsFile  = "pa_requests.json"
-	DemosHIPAADoctrineFile = "phi_hipaa_doctrine.json"
+	DemosDirname                = "demos"
+	DemosComposeFile            = "compose.yml"
+	DemosBinDirname             = "bin"
+	DemosBinaryName             = "g8e"
+	DemosTargetDataDir          = "target-data"
+	DemosDoctrineDir            = "doctrine"
+	DemosPARequestsFile         = "pa_requests.json"
+	DemosHIPAADoctrineFile      = "phi_hipaa_doctrine.json"
 	DemosSecureDataDoctrineFile = "secure_data_transfer_doctrine.json"
-	DemosOrgHealthcare   = "healthcare"
-	DemosOrgFinance      = "finance"
-	DemosOrgGov          = "gov"
-	DemosOrgSecureData   = "secure-data"
+	DemosOrgHealthcare          = "healthcare"
+	DemosOrgFinance             = "finance"
+	DemosOrgGov                 = "gov"
+	DemosOrgSecureData          = "secure-data"
 
 	SwaggerFilename          = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"
@@ -259,6 +272,7 @@ const (
 
 	// File permission modes (octal)
 	PermDirPrivate  = 0700 // rwx------
+	PermDirStandard = 0755 // rwxr-xr-x
 	PermFilePrivate = 0600 // rw-------
 	PermFilePublic  = 0644 // rw-r--r--
 
@@ -290,9 +304,9 @@ const (
 	TestResultsDirname         = "test-results"
 
 	// Test-specific directory names
-	TestVaultDirname = "test-vault"
+	TestVaultDirname    = "test-vault"
 	TestProtocolDirname = "protocol"
-	TestDocsDirname = "docs"
+	TestDocsDirname     = "docs"
 
 	// Test-specific database filenames
 	TestLocalStateDBFilename = "local_state.db"
@@ -305,8 +319,21 @@ const (
 	FsListDefaultEntries = 100
 	FsListBatchSize      = 100
 
+	// FsGrep limits
+	FsGrepDefaultMaxMatches = 100
+	FsGrepMaxMatches       = 500
+	FsGrepScannerInitialBufSize = 64 * 1024
+	FsGrepScannerMaxBufSize     = 1024 * 1024
+
 	// Temporary file suffix for atomic writes
 	TmpFileSuffix = ".tmp"
+
+	// Backup file suffix pattern (for use with fmt.Sprintf)
+	BackupFileSuffixPattern = ".backup-%s-%s"
+
+	// SQLite file suffixes
+	SQLiteWALSuffix = "-wal"
+	SQLiteSHMSuffix = "-shm"
 
 	// Reporting output directory and file names
 	ReportsDirname                 = "reports"

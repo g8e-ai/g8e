@@ -11,13 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows
+//go:build linux || windows
 
 package keystore
 
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -26,22 +27,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewFileBackend(t *testing.T) {
+func TestNewFileKeyring(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := t.TempDir()
-	backend, err := newFileBackend(secretsDir)
+	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
-	assert.Equal(t, "file", backend.Name())
+	assert.Equal(t, "file", keyring.Name())
 }
 
-func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
+func TestFileKeyring_StoreRetrieveDelete(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := t.TempDir()
-	backend, err := newFileBackend(secretsDir)
+	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
-	assert.Equal(t, "file", backend.Name())
+	assert.Equal(t, "file", keyring.Name())
 
 	testKey := make([]byte, keySize)
 	for i := range testKey {
@@ -55,14 +56,14 @@ func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
 		{
 			name: "store",
 			fn: func(t *testing.T) {
-				err := backend.StoreMasterKey(testKey)
+				err := keyring.StoreMasterKey(testKey)
 				require.NoError(t, err)
 			},
 		},
 		{
 			name: "retrieve",
 			fn: func(t *testing.T) {
-				retrievedKey, err := backend.RetrieveMasterKey()
+				retrievedKey, err := keyring.RetrieveMasterKey()
 				require.NoError(t, err)
 				assert.Equal(t, testKey, retrievedKey)
 			},
@@ -70,14 +71,14 @@ func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
 		{
 			name: "delete",
 			fn: func(t *testing.T) {
-				err := backend.DeleteMasterKey()
+				err := keyring.DeleteMasterKey()
 				require.NoError(t, err)
 			},
 		},
 		{
 			name: "retrieve after delete",
 			fn: func(t *testing.T) {
-				_, err := backend.RetrieveMasterKey()
+				_, err := keyring.RetrieveMasterKey()
 				require.Error(t, err)
 				assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 			},
@@ -89,23 +90,23 @@ func TestFileBackend_StoreRetrieveDelete(t *testing.T) {
 	}
 }
 
-func TestFileBackend_RetrieveNotFound(t *testing.T) {
+func TestFileKeyring_RetrieveNotFound(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := t.TempDir()
-	backend, err := newFileBackend(secretsDir)
+	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
-	_, err = backend.RetrieveMasterKey()
+	_, err = keyring.RetrieveMasterKey()
 	require.Error(t, err)
 	assert.Equal(t, constants.ErrKeyStoreKeyNotFound, err)
 }
 
-func TestFileBackend_DeleteIdempotent(t *testing.T) {
+func TestFileKeyring_DeleteIdempotent(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := t.TempDir()
-	backend, err := newFileBackend(secretsDir)
+	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -115,14 +116,14 @@ func TestFileBackend_DeleteIdempotent(t *testing.T) {
 		{
 			name: "first delete",
 			fn: func(t *testing.T) {
-				err := backend.DeleteMasterKey()
+				err := keyring.DeleteMasterKey()
 				require.NoError(t, err)
 			},
 		},
 		{
 			name: "second delete",
 			fn: func(t *testing.T) {
-				err := backend.DeleteMasterKey()
+				err := keyring.DeleteMasterKey()
 				require.NoError(t, err)
 			},
 		},
@@ -133,15 +134,15 @@ func TestFileBackend_DeleteIdempotent(t *testing.T) {
 	}
 }
 
-func TestFileBackend_WithRealKeystore(t *testing.T) {
+func TestFileKeyring_WithRealKeystore(t *testing.T) {
 	t.Parallel()
 
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	backend, err := newFileBackend(secretsDir)
+	keyring, err := newFileKeyring(secretsDir)
 	require.NoError(t, err)
 
-	ks, err := NewWithBackend(secretsDir, logger, backend)
+	ks, err := NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 
 	err = ks.Initialize()
@@ -158,7 +159,12 @@ func TestFileBackend_WithRealKeystore(t *testing.T) {
 	secretPath := filepath.Join(secretsDir, "test-secret")
 	info, err := os.Stat(secretPath)
 	require.NoError(t, err)
-	// Windows doesn't support Unix permissions exactly, so just check file is not world-writable
 	perm := info.Mode().Perm()
-	assert.NotEqual(t, os.FileMode(0777), perm, "secret file should not be world-writable")
+	if runtime.GOOS == "windows" {
+		// Windows doesn't model Unix permission bits, so only assert the file
+		// is not world-writable.
+		assert.NotEqual(t, os.FileMode(0777), perm, "secret file should not be world-writable")
+	} else {
+		assert.Equal(t, os.FileMode(0600), perm)
+	}
 }

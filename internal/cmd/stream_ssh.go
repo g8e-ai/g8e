@@ -16,6 +16,7 @@ package cmd
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -26,6 +27,7 @@ import (
 	sshlib "golang.org/x/crypto/ssh"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 )
 
@@ -34,7 +36,7 @@ type streamResult struct {
 	Host      string
 	Status    constants.StreamStatus
 	SizeBytes int64
-	Error     string
+	Error     error
 	Elapsed   time.Duration
 }
 
@@ -67,19 +69,19 @@ func isTransientError(err error) bool {
 // Returns nil if the host is reachable and auth works, error otherwise.
 func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassphrase, knownHostsPath string, dialTimeout time.Duration) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("ssh: preflight: %w", err)
 	}
 	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandBuildAuth, err)
+		return fmt.Errorf("ssh: preflight: build auth: %w", err)
 	}
 	if len(authMethods) == 0 {
-		return constants.ErrMCPRunShellCommandNoAuth
+		return fmt.Errorf("ssh: preflight: %w", constants.ErrMCPRunShellCommandNoAuth)
 	}
 
 	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(knownHostsPath)
 	if cbErr != nil {
-		return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandHostKeyVerification, cbErr)
+		return fmt.Errorf("ssh: preflight: host key callback: %w", cbErr)
 	}
 
 	clientConfig := &sshlib.ClientConfig{
@@ -105,13 +107,13 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 			proxyCmd := strings.ReplaceAll(r.ProxyCommand, "%h", r.Hostname)
 			proxyCmd = strings.ReplaceAll(proxyCmd, "%p", r.Port)
 
-			cmd := exec.CommandContext(ctx, "sh", "-c", proxyCmd)
+			cmd := exec.CommandContext(ctx, constants.PathBinSh, "-c", proxyCmd)
 			stdin, err := cmd.StdinPipe()
 			if err != nil {
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+				}{nil, fmt.Errorf("ssh: preflight: stdin pipe: %w", err)}
 				return
 			}
 			stdout, err := cmd.StdoutPipe()
@@ -119,14 +121,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+				}{nil, fmt.Errorf("ssh: preflight: stdout pipe: %w", err)}
 				return
 			}
 			if err := cmd.Start(); err != nil {
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+				}{nil, fmt.Errorf("ssh: preflight: start proxy: %w", err)}
 				return
 			}
 
@@ -142,12 +144,12 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, err}
+				}{nil, fmt.Errorf("ssh: preflight: dial: %w", err)}
 				return
 			}
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
 				_ = tcpConn.SetKeepAlive(true)
-				_ = tcpConn.SetKeepAlivePeriod(15 * time.Second)
+				_ = tcpConn.SetKeepAlivePeriod(constants.SSHKeepaliveInterval)
 			}
 		}
 
@@ -157,7 +159,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 			dialDone <- struct {
 				client *sshlib.Client
 				err    error
-			}{nil, err}
+			}{nil, fmt.Errorf("ssh: preflight: client conn: %w", err)}
 			return
 		}
 		client := sshlib.NewClient(sshConn, chans, reqs)
@@ -169,7 +171,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("ssh: preflight: %w", ctx.Err())
 	case result := <-dialDone:
 		if result.err != nil {
 			return result.err
@@ -179,14 +181,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 		// Run a simple command to verify the session works
 		session, err := result.client.NewSession()
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandSSHSession, err)
+			return fmt.Errorf("ssh: preflight: session: %w", err)
 		}
 		defer session.Close()
 
 		// Run 'true' command - minimal check that remote shell works
 		err = session.Run("true")
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandSSHDial, err)
+			return fmt.Errorf("ssh: preflight: verify: %w", err)
 		}
 		return nil
 	}

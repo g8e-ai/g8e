@@ -47,3 +47,10 @@ const (
 	ChannelOperatorDevice  = "operator_device"
 	ChannelSseEvent        = "sse_event"
 )
+
+// Session channel prefixes (for operator session communication).
+const (
+	ChannelPrefixCmd       = "cmd"
+	ChannelPrefixResults   = "results"
+	ChannelPrefixHeartbeat = "heartbeat"
+)

@@ -968,7 +968,7 @@ func (s *ScrubbingService) GetTokenForValue(value string) string {
 
 	// Fail-closed: if persistence is required but unavailable, reject the operation
 	if s.config.RequirePersistence && s.tokenStore == nil {
-		s.logger.Error("Token persistence required but TokenStore unavailable - failing closed to prevent data loss")
+		s.logger.Error("scrubbing: token persistence required but TokenStore unavailable - failing closed to prevent data loss")
 		return ""
 	}
 

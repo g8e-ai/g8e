@@ -23,7 +23,7 @@ import (
 type FsGrepRequest struct {
 	ExecutionID     string  `json:"execution_id"`
 	CaseID          string  `json:"case_id"`
-	TaskID          *string `json:"task_id,omitempty"`
+	TaskID          string `json:"task_id,omitempty"`
 	InvestigationID string  `json:"investigation_id"`
 
 	Path       string   `json:"path"`
@@ -36,7 +36,7 @@ type FsGrepRequest struct {
 type FsGrepResult struct {
 	ExecutionID     string                     `json:"execution_id"`
 	CaseID          string                     `json:"case_id"`
-	TaskID          *string                    `json:"task_id,omitempty"`
+	TaskID          string                    `json:"task_id,omitempty"`
 	InvestigationID string                     `json:"investigation_id"`
 	Status          operatorv1.ExecutionStatus `json:"status"`
 
@@ -46,10 +46,10 @@ type FsGrepResult struct {
 	TotalMatches int           `json:"total_matches"`
 	Truncated    bool          `json:"truncated"`
 
-	StartTime       *time.Time `json:"start_time,omitempty"`
-	EndTime         *time.Time `json:"end_time,omitempty"`
+	StartTime       time.Time `json:"start_time,omitempty"`
+	EndTime         time.Time `json:"end_time,omitempty"`
 	DurationSeconds float64    `json:"duration_seconds"`
 
-	ErrorMessage *string `json:"error_message,omitempty"`
-	ErrorType    *string `json:"error_type,omitempty"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	ErrorType    string `json:"error_type,omitempty"`
 }

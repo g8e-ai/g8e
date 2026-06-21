@@ -1032,21 +1032,12 @@ func (v *L1Doctrine) AnalyzeMCPArguments(argumentsJSON string) ([]ThreatSignal, 
 	return signals, nil
 }
 
-// MaxDepthExceededError is returned when JSON recursion exceeds the safety limit
-type MaxDepthExceededError struct {
-	MaxDepth int
-	Path     string
-}
-
-func (e *MaxDepthExceededError) Error() string {
-	return fmt.Sprintf("JSON recursion depth exceeded maximum limit of %d at path: %s", e.MaxDepth, e.Path)
-}
 
 // analyzeJSONRecursive recursively traverses JSON raw message and detects threats in string fields.
-// Returns MaxDepthExceededError if the recursion depth exceeds maxDepth.
+// Returns ErrGovernanceJSONDepthExceeded if the recursion depth exceeds maxDepth.
 func (v *L1Doctrine) analyzeJSONRecursive(raw json.RawMessage, path string, signals *[]ThreatSignal, currentDepth int, maxDepth int) error {
 	if currentDepth > maxDepth {
-		return &MaxDepthExceededError{MaxDepth: maxDepth, Path: path}
+		return fmt.Errorf("%w: maxDepth=%d, path=%s", constants.ErrGovernanceJSONDepthExceeded, maxDepth, path)
 	}
 
 	// Try to parse as string first

@@ -43,9 +43,9 @@ func reportSuspendedTransactions(ctx context.Context, outDir string, sts storage
 
 	var rows []Row
 	for _, tx := range all {
-		status := "pending"
+		status := constants.SuspendedTxStatusPending
 		if tx.Approved {
-			status = "approved"
+			status = constants.SuspendedTxStatusApproved
 		}
 
 		rows = append(rows, SuspendedTxRow{
@@ -53,7 +53,7 @@ func reportSuspendedTransactions(ctx context.Context, outDir string, sts storage
 			UserID:            tx.UserID,
 			ActionType:        tx.ToolName,
 			TargetResource:    "",
-			Status:            status,
+			Status:            string(status),
 			CreatedAtUTC:      utcRFC3339(tx.CreatedAt),
 			ExpiresAtUTC:      utcRFC3339(tx.ExpiresAt),
 			ApprovedBy:        tx.ApprovedBy,

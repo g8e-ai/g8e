@@ -294,12 +294,12 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 
 	// Load trusted L2 signers from filesystem (create directory if it doesn't exist)
 	trustedSignersDir := paths.Infra.TrustedSignersDir
-	if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
-		return fmt.Errorf("%w: failed to create trusted signers directory %s: %w", constants.ErrDirCreateFailed, trustedSignersDir, err)
+	if err := os.MkdirAll(trustedSignersDir, constants.PermDirPrivate); err != nil {
+		return fmt.Errorf("%w: failed to create trusted signers directory: %w", constants.ErrDirCreateFailed, err)
 	}
 	signerStore, err := governance.NewFilesystemSignerStore(trustedSignersDir, vs.logger)
 	if err != nil {
-		return fmt.Errorf("%w: failed to load trusted signers from %s: %w", constants.ErrPathNotFound, trustedSignersDir, err)
+		return fmt.Errorf("%w: failed to load trusted signers: %w", constants.ErrPathNotFound, err)
 	}
 	vs.logger.Info("Trusted L2 signers loaded from filesystem", "directory", trustedSignersDir)
 
@@ -365,7 +365,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		"startup_duration", time.Since(vs.startTime))
 
 	// Print startup banner to stdout
-	printOperatorStartupBanner(vs.config)
+	printOperatorStartupBanner(vs.config, vs.logger)
 
 	vs.logger.Info("Standing by")
 	return nil
@@ -468,27 +468,17 @@ func (a *auditStoreTransactionStore) DocSet(collection, id string, data json.Raw
 }
 
 // printOperatorStartupBanner prints the Operator startup banner to stdout
-func printOperatorStartupBanner(cfg *config.Config) {
-	fmt.Println("[g8eo] Initializing Edge Execution Operator...")
-	fmt.Println()
-	fmt.Println(" ┌── Operator Integrity & Uplink ───────────────────────────────────────────────┐")
-	fmt.Println(" │ ✔ Identity & Attestation    : VERIFIED (mTLS Client Certificate Valid)")
-	fmt.Printf(" │ ✔ Gateway Uplink            : CONNECTED (WSS @ %s:%d)\n", cfg.Endpoint, cfg.HTTPPort)
-	fmt.Println(" │ ✔ Heartbeat Synchronized    : 30s interval established")
-	fmt.Println(" │ ✔ Sovereign Boundary        : ACTIVE (Data egress scrubbing enabled)")
-	fmt.Println(" └──────────────────────────────────────────────────────────────────────────────┘")
-	fmt.Println()
-	fmt.Println("────────────────────────────────────────────────────────────────────────────────")
-	fmt.Println(" CAPABILITIES & EXPOSED TOOLING")
-	fmt.Println("────────────────────────────────────────────────────────────────────────────────")
-	fmt.Println(" The following agentic capabilities are mounted to this execution platform.")
-	fmt.Println(" All state-mutating actions require cryptographic intent verification.")
-	fmt.Println()
-	fmt.Println("  - system.run      [GRANTED: Requires L1 Signature]")
-	fmt.Printf("  - fs.read         [GRANTED: Scoped to %s]\n", cfg.WorkDir)
-	fmt.Println("  - fs.write        [GRANTED: Requires L1 Signature]")
-	fmt.Println("  - net.fetch       [DENIED:  Air-gap mode active]")
-	fmt.Println()
-	fmt.Println("────────────────────────────────────────────────────────────────────────────────")
-	fmt.Println("[g8eo] Edge node operational. Awaiting cryptographically signed agentic intents...")
+func printOperatorStartupBanner(cfg *config.Config, logger *slog.Logger) {
+	logger.Info("[g8eo] Initializing Edge Execution Operator...")
+	logger.Info("Operator Integrity & Uplink",
+		"identity_attestation", "VERIFIED (mTLS Client Certificate Valid)",
+		"gateway_uplink", fmt.Sprintf("CONNECTED (WSS @ %s:%d)", cfg.Endpoint, cfg.HTTPPort),
+		"heartbeat", "30s interval established",
+		"sovereign_boundary", "ACTIVE (Data egress scrubbing enabled)")
+	logger.Info("CAPABILITIES & EXPOSED TOOLING",
+		"system.run", "GRANTED: Requires L1 Signature",
+		"fs.read", fmt.Sprintf("GRANTED: Scoped to %s", cfg.WorkDir),
+		"fs.write", "GRANTED: Requires L1 Signature",
+		"net.fetch", "DENIED: Air-gap mode active")
+	logger.Info("[g8eo] Edge node operational. Awaiting cryptographically signed agentic intents...")
 }

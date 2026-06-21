@@ -74,7 +74,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	// Validate and resolve path (security check)
 	absPath, err := security.ValidatePath(path, s.workDir)
 	if err != nil {
-		return s.failResult(result, "validation_error", fmt.Errorf("%w: %v", constants.ErrPathValidation, err).Error())
+		return s.failResult(result, constants.ErrFsGrepValidation, fmt.Errorf("fs_grep: path validation failed: %w", err))
 	}
 
 	result.Path = absPath
@@ -82,7 +82,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	// Compile regex
 	re, err := regexp.Compile(req.Pattern)
 	if err != nil {
-		return s.failResult(result, "invalid_pattern", fmt.Errorf("%w: %v", constants.ErrInvalidRegex, err).Error())
+		return s.failResult(result, constants.ErrFsGrepInvalidPattern, fmt.Errorf("fs_grep: invalid regex pattern: %w", err))
 	}
 
 	// Prepare includes filters
@@ -100,10 +100,10 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 
 	maxMatches := req.MaxMatches
 	if maxMatches <= 0 {
-		maxMatches = 100
+		maxMatches = constants.FsGrepDefaultMaxMatches
 	}
-	if maxMatches > 500 {
-		maxMatches = 500
+	if maxMatches > constants.FsGrepMaxMatches {
+		maxMatches = constants.FsGrepMaxMatches
 	}
 
 	matches := []models.FsGrepMatch{}
@@ -161,7 +161,11 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 		// Apply include filters if any
 		if len(includePatterns) > 0 {
 			matched := false
-			rel, _ := filepath.Rel(absPath, path)
+			rel, err := filepath.Rel(absPath, path)
+			if err != nil {
+				s.logger.Debug("Failed to get relative path for include filter", "path", path, "error", err)
+				return nil
+			}
 			for _, ip := range includePatterns {
 				if ip.MatchString(rel) || ip.MatchString(d.Name()) {
 					matched = true
@@ -191,7 +195,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	})
 
 	if err != nil && err != io.EOF {
-		return s.failResult(result, "grep_error", fmt.Errorf("%w: %v", constants.ErrGrepFailed, err).Error())
+		return s.failResult(result, constants.ErrFsGrepExecution, fmt.Errorf("fs_grep: grep execution failed: %w", err))
 	}
 
 	result.Matches = matches
@@ -215,15 +219,15 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 func (s *FsGrepService) searchInFile(path string, re *regexp.Regexp, limit int) ([]models.FsGrepMatch, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", constants.ErrFileOpenFailed, path)
+		return nil, fmt.Errorf("fs_grep: failed to open file %s: %w", path, constants.ErrFileOpenFailed)
 	}
 	defer file.Close()
 
 	var matches []models.FsGrepMatch
 	scanner := bufio.NewScanner(file)
 	// Limit line size to avoid OOM
-	buf := make([]byte, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
+	buf := make([]byte, constants.FsGrepScannerInitialBufSize)
+	scanner.Buffer(buf, constants.FsGrepScannerMaxBufSize)
 
 	lineNum := 0
 	for scanner.Scan() {
@@ -244,14 +248,16 @@ func (s *FsGrepService) searchInFile(path string, re *regexp.Regexp, limit int) 
 	return matches, scanner.Err()
 }
 
-func (s *FsGrepService) failResult(result *models.FsGrepResult, errorType, errorMsg string) (*models.FsGrepResult, error) {
+func (s *FsGrepService) failResult(result *models.FsGrepResult, errType error, err error) (*models.FsGrepResult, error) {
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-	result.ErrorType = &errorType
-	result.ErrorMessage = &errorMsg
+	errorTypeStr := errType.Error()
+	result.ErrorType = &errorTypeStr
+	errorMsgStr := err.Error()
+	result.ErrorMessage = &errorMsgStr
 	endTime := time.Now().UTC()
 	result.EndTime = &endTime
 	if result.StartTime != nil {
 		result.DurationSeconds = endTime.Sub(*result.StartTime).Seconds()
 	}
-	return result, nil
+	return result, err
 }

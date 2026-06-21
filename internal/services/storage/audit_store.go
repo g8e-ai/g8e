@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -85,7 +84,7 @@ type Event struct {
 	Type                constants.EventType
 	ContentText         string
 	CommandRaw          string
-	CommandExitCode     *int
+	CommandExitCode     int
 	CommandStdout       string
 	CommandStderr       string
 	ExecutionDurationMs int64
@@ -532,7 +531,8 @@ func (ass *SQLAuditStore) RecordEvent(event *Event) (int64, error) {
 			"operator_session_id", event.OperatorSessionID,
 			"stdout_truncated", stdoutTruncated,
 			"stderr_truncated", stderrTruncated,
-			"encrypted", encryptedFlag)
+			"encrypted", encryptedFlag,
+			"exit_code", event.CommandExitCode)
 
 		return nil
 	})
@@ -869,8 +869,9 @@ func (ass *SQLAuditStore) GetEvents(operatorSessionID string, limit, offset int)
 			row.event.CommandRaw = row.commandRaw.String
 		}
 		if row.commandExitCode.Valid {
-			exitCode := int(row.commandExitCode.Int64)
-			row.event.CommandExitCode = &exitCode
+			row.event.CommandExitCode = int(row.commandExitCode.Int64)
+		} else {
+			row.event.CommandExitCode = constants.ExitCodeNone
 		}
 		if row.storedLocally.Valid {
 			row.event.StoredLocally = row.storedLocally.Bool

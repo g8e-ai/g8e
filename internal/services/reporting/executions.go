@@ -34,7 +34,7 @@ func reportExecutions(ctx context.Context, outDir string, ev *storage.ExecutionV
 		}
 		batch, err := ev.ListExecutions(ctx, batchSize, offset)
 		if err != nil {
-			return FileResult{}, fmt.Errorf("%w: executions: %w", constants.ErrReportStoreUnavailable, err)
+			return FileResult{}, fmt.Errorf("reporting: list executions: %w", err)
 		}
 		for _, e := range batch {
 			rows = append(rows, ExecutionRow{
@@ -60,7 +60,7 @@ func reportExecutions(ctx context.Context, outDir string, ev *storage.ExecutionV
 
 	res, err := writeCSV(path, ExecutionRow{}.Columns(), rows)
 	if err != nil {
-		return FileResult{}, fmt.Errorf("%w: executions: %w", constants.ErrReportWriteFailed, err)
+		return FileResult{}, fmt.Errorf("reporting: write executions: %w", err)
 	}
 	res.Filename = constants.ReportExecutionsFilename
 	return res, nil
@@ -78,7 +78,7 @@ func reportFileDiffs(ctx context.Context, outDir string, ev *storage.ExecutionVa
 		}
 		batch, err := ev.ListFileDiffs(ctx, batchSize, offset)
 		if err != nil {
-			return FileResult{}, fmt.Errorf("%w: file_diffs: %w", constants.ErrReportStoreUnavailable, err)
+			return FileResult{}, fmt.Errorf("reporting: list file diffs: %w", err)
 		}
 		for _, d := range batch {
 			rows = append(rows, FileDiffRow{
@@ -104,7 +104,7 @@ func reportFileDiffs(ctx context.Context, outDir string, ev *storage.ExecutionVa
 
 	res, err := writeCSV(path, FileDiffRow{}.Columns(), rows)
 	if err != nil {
-		return FileResult{}, fmt.Errorf("%w: file_diffs: %w", constants.ErrReportWriteFailed, err)
+		return FileResult{}, fmt.Errorf("reporting: write file diffs: %w", err)
 	}
 	res.Filename = constants.ReportFileDiffsFilename
 	return res, nil

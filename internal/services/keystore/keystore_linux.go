@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
 
 package keystore
 
@@ -23,7 +22,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// New creates a new Keystore instance with the libsecret backend.
+// New creates a new Keystore instance with the libsecret keyring.
 // Falls back to file-based storage if libsecret is not available.
 // Production callers should pass paths.Infra.SecretsDir for secretsDir.
 func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
@@ -31,18 +30,18 @@ func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
 		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
 	}
 
-	backend, err := newLibsecretBackend()
+	keyring, err := newLibsecretKeyring()
 	if err != nil {
-		backend, err = newFileBackend(secretsDir)
+		keyring, err = newFileKeyring(secretsDir)
 		if err != nil {
-			return nil, fmt.Errorf("keystore: initialize file backend: %w", err)
+			return nil, fmt.Errorf("keystore: initialize file keyring: %w", err)
 		}
-		logger.Info("[Keystore] Using file-based storage (libsecret unavailable)", "backend", backend.Name())
+		logger.Info("[Keystore] Using file-based storage (libsecret unavailable)", "keyring", keyring.Name())
 	}
 
 	return &Keystore{
 		logger:     logger,
 		secretsDir: secretsDir,
-		backend:    backend,
+		keyring:    keyring,
 	}, nil
 }

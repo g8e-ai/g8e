@@ -48,23 +48,14 @@ type VaultConfig struct {
 	Logger *slog.Logger
 }
 
-// Vault-related errors
-var (
-	ErrVaultLocked       = errors.New("vault is locked")
-	ErrVaultNotInit      = errors.New("vault is not initialized")
-	ErrVaultAlreadyInit  = errors.New("vault is already initialized")
-	ErrVaultAlreadyOpen  = errors.New("vault is already unlocked")
-	ErrInvalidPrivateKey = errors.New("invalid private key for this vault")
-)
-
 // NewVault creates a new Vault instance.
 // The vault is not initialized or unlocked until Initialize() or Unlock() is called.
 func NewVault(config *VaultConfig) (*Vault, error) {
 	if config == nil {
-		return nil, errors.New("vault config is required")
+		return nil, constants.ErrVaultConfigRequired
 	}
 	if config.DataDir == "" {
-		return nil, errors.New("vault data directory is required")
+		return nil, constants.ErrVaultDataDirRequired
 	}
 
 	logger := config.Logger
@@ -88,21 +79,21 @@ func (v *Vault) Unlock(privateKey []byte) error {
 	defer v.mu.Unlock()
 
 	if v.unlocked {
-		return ErrVaultAlreadyOpen
+		return constants.ErrVaultAlreadyOpen
 	}
 
 	header, err := LoadVaultHeader(v.dataDir)
 	if err != nil {
-		if errors.Is(err, ErrHeaderNotFound) {
-			return ErrVaultNotInit
+		if errors.Is(err, constants.ErrVaultHeaderNotFound) {
+			return constants.ErrVaultNotInitialized
 		}
 		return fmt.Errorf("failed to load vault header: %w", err)
 	}
 
 	dek, err := header.UnwrapDEK(privateKey)
 	if err != nil {
-		if errors.Is(err, ErrKeyFingerprintMatch) {
-			return ErrInvalidPrivateKey
+		if errors.Is(err, constants.ErrVaultKeyFingerprintMatch) {
+			return constants.ErrVaultInvalidPrivateKey
 		}
 		return fmt.Errorf("failed to unwrap DEK: %w", err)
 	}
@@ -130,8 +121,8 @@ func (v *Vault) Rekey(oldPrivateKey, newPrivateKey []byte) error {
 		var err error
 		header, err = LoadVaultHeader(v.dataDir)
 		if err != nil {
-			if errors.Is(err, ErrHeaderNotFound) {
-				return ErrVaultNotInit
+			if errors.Is(err, constants.ErrVaultHeaderNotFound) {
+				return constants.ErrVaultNotInitialized
 			}
 			return fmt.Errorf("failed to load vault header: %w", err)
 		}
@@ -196,7 +187,7 @@ func (v *Vault) GetDEK() ([]byte, error) {
 	defer v.mu.RUnlock()
 
 	if !v.unlocked || v.dek == nil {
-		return nil, ErrVaultLocked
+		return nil, constants.ErrVaultLocked
 	}
 
 	dekCopy := make([]byte, len(v.dek))
@@ -212,7 +203,7 @@ func (v *Vault) Encrypt(plaintext []byte) ([]byte, error) {
 	defer v.mu.RUnlock()
 
 	if !v.unlocked || v.dek == nil {
-		return nil, ErrVaultLocked
+		return nil, constants.ErrVaultLocked
 	}
 
 	nonce, err := GenerateNonce()
@@ -240,11 +231,11 @@ func (v *Vault) Decrypt(ciphertext []byte) ([]byte, error) {
 	defer v.mu.RUnlock()
 
 	if !v.unlocked || v.dek == nil {
-		return nil, ErrVaultLocked
+		return nil, constants.ErrVaultLocked
 	}
 
 	if len(ciphertext) < NonceSize {
-		return nil, errors.New("ciphertext too short")
+		return nil, constants.ErrVaultCiphertextTooShort
 	}
 
 	nonce := ciphertext[:NonceSize]
@@ -284,7 +275,7 @@ func (v *Vault) VerifyIntegrity(privateKey []byte) error {
 // This is a destructive operation that requires explicit confirmation.
 func (v *Vault) Reset(confirmDestroy bool) error {
 	if !confirmDestroy {
-		return errors.New("vault reset requires explicit confirmation")
+		return constants.ErrVaultResetConfirmation
 	}
 
 	v.mu.Lock()
@@ -305,8 +296,8 @@ func (v *Vault) Reset(confirmDestroy bool) error {
 		v.logger.Warn("Failed to delete database file", string(constants.ConnectionStateError), err)
 	}
 
-	os.Remove(v.dbPath + "-wal")
-	os.Remove(v.dbPath + "-shm")
+	os.Remove(v.dbPath + constants.SQLiteWALSuffix)
+	os.Remove(v.dbPath + constants.SQLiteSHMSuffix)
 
 	v.logger.Info("Vault reset complete - all data destroyed")
 

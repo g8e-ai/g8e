@@ -164,7 +164,7 @@ func (fes *FileEditService) executeRead(ctx context.Context, request *models.Fil
 	if request.ReadOptions != nil && request.ReadOptions.IncludeStats {
 		stats, err := fes.collectFileStats(request.FilePath, fileInfo)
 		if err != nil {
-			fes.logger.Warn("Failed to collect file stats", string(constants.ConnectionStateError), err)
+			fes.logger.Warn("Failed to collect file stats", "error", err)
 		} else {
 			result.FileStats = stats
 		}
@@ -283,13 +283,13 @@ func (fes *FileEditService) executeWrite(ctx context.Context, request *models.Fi
 
 	// Ensure parent directory exists
 	dir := filepath.Dir(request.FilePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, constants.PermDirStandard); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Write content to file
 	bytesWritten := int64(len(*request.Content))
-	if err := os.WriteFile(request.FilePath, []byte(*request.Content), 0600); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(*request.Content), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
@@ -361,7 +361,7 @@ func (fes *FileEditService) executeReplace(ctx context.Context, request *models.
 
 	// Write back to file
 	bytesWritten := int64(len(originalContent))
-	if err := os.WriteFile(request.FilePath, []byte(originalContent), 0600); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(originalContent), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
@@ -432,7 +432,7 @@ func (fes *FileEditService) executeInsert(ctx context.Context, request *models.F
 
 	// Write back to file
 	bytesWritten := int64(len(newContent))
-	if err := os.WriteFile(request.FilePath, []byte(newContent), 0600); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(newContent), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
@@ -499,7 +499,7 @@ func (fes *FileEditService) executeDelete(ctx context.Context, request *models.F
 
 	// Write back to file
 	bytesWritten := int64(len(newContent))
-	if err := os.WriteFile(request.FilePath, []byte(newContent), 0600); err != nil {
+	if err := os.WriteFile(request.FilePath, []byte(newContent), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
@@ -555,7 +555,7 @@ func (fes *FileEditService) createBackup(filePath string) (backupPath string, er
 	}
 	hashStr := hex.EncodeToString(h.Sum(nil))[:8]
 
-	backupPath = fmt.Sprintf("%s.backup-%s-%s", filePath, timestamp, hashStr)
+	backupPath = fmt.Sprintf("%s%s", filePath, fmt.Sprintf(constants.BackupFileSuffixPattern, timestamp, hashStr))
 
 	// Reset file pointer to beginning
 	if _, err := file.Seek(0, 0); err != nil {
@@ -563,7 +563,7 @@ func (fes *FileEditService) createBackup(filePath string) (backupPath string, er
 	}
 
 	// Create backup file
-	backupFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	backupFile, err := os.OpenFile(backupPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, constants.PermFilePublic)
 	if err != nil {
 		return "", err
 	}

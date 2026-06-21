@@ -13,8 +13,6 @@
 
 package reporting
 
-import "fmt"
-
 // Row is the contract for a typed CSV row.
 type Row interface {
 	Columns() []string
@@ -332,9 +330,3 @@ func (ManifestRow) Columns() []string {
 func (r ManifestRow) Record() []string {
 	return []string{r.File, r.RecordType, r.RowCount, r.SHA256, r.GeneratedAtUTC, r.VaultUnlocked}
 }
-
-// intStr formats an int as a string.
-func intStr(n int) string { return fmt.Sprintf("%d", n) }
-
-// int64Str formats an int64 as a string.
-func int64Str(n int64) string { return fmt.Sprintf("%d", n) }

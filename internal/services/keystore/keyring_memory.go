@@ -19,44 +19,45 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// testBackend is an in-memory backend for testing only.
+// memoryKeyring is an in-memory keyring for testing only.
 // It is instance-based, ensuring each test instance has its own master key.
-type testBackend struct {
+type memoryKeyring struct {
 	mu  sync.RWMutex
 	key []byte
 }
 
-func NewTestBackend() (Backend, error) {
-	return &testBackend{}, nil
+// NewMemoryKeyring creates an in-memory keyring for use in tests.
+func NewMemoryKeyring() (Keyring, error) {
+	return &memoryKeyring{}, nil
 }
 
-func (b *testBackend) Name() string {
-	return string(constants.EnvironmentTest)
+func (m *memoryKeyring) Name() string {
+	return "memory"
 }
 
-func (b *testBackend) RetrieveMasterKey() ([]byte, error) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	if b.key == nil {
+func (m *memoryKeyring) RetrieveMasterKey() ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.key == nil {
 		return nil, constants.ErrKeyStoreKeyNotFound
 	}
-	keyCopy := make([]byte, len(b.key))
-	copy(keyCopy, b.key)
+	keyCopy := make([]byte, len(m.key))
+	copy(keyCopy, m.key)
 	return keyCopy, nil
 }
 
-func (b *testBackend) StoreMasterKey(key []byte) error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (m *memoryKeyring) StoreMasterKey(key []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	keyCopy := make([]byte, len(key))
 	copy(keyCopy, key)
-	b.key = keyCopy
+	m.key = keyCopy
 	return nil
 }
 
-func (b *testBackend) DeleteMasterKey() error {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.key = nil
+func (m *memoryKeyring) DeleteMasterKey() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.key = nil
 	return nil
 }

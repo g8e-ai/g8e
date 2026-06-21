@@ -80,12 +80,12 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	vault.SecureZero(dek)
 	require.NoError(t, header.Save(vaultDir))
 
-	// Initialize keystore with test backend for master key (required for gateway database)
+	// Initialize keystore with in-memory keyring for the master key (required for gateway database)
 	secretsDir := paths.Infra.SecretsDir
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
-	testBackend, err := keystore.NewTestBackend()
+	testBackend, err := keystore.NewMemoryKeyring()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(secretsDir, testutil.NewVerboseTestLogger(t), testBackend)
+	ks, err := keystore.NewWithKeyring(secretsDir, testutil.NewVerboseTestLogger(t), testBackend)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())

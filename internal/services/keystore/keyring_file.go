@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
+//go:build linux || windows
 
 package keystore
 
@@ -25,22 +25,23 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// fileBackend stores the master key in a file within the secrets directory.
-// This is a fallback for Linux systems without libsecret installed.
-type fileBackend struct {
+// fileKeyring stores the master key in a file within the secrets directory.
+// It is the fallback when no OS-native keyring is available: the libsecret
+// fallback on Linux and the default keyring on Windows.
+type fileKeyring struct {
 	masterKeyPath string
 }
 
-func newFileBackend(secretsDir string) (Backend, error) {
-	return &fileBackend{masterKeyPath: filepath.Join(secretsDir, constants.MasterKeyFilename)}, nil
+func newFileKeyring(secretsDir string) (Keyring, error) {
+	return &fileKeyring{masterKeyPath: filepath.Join(secretsDir, constants.MasterKeyFilename)}, nil
 }
 
-func (b *fileBackend) Name() string {
+func (f *fileKeyring) Name() string {
 	return "file"
 }
 
-func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
-	data, err := os.ReadFile(b.masterKeyPath)
+func (f *fileKeyring) RetrieveMasterKey() ([]byte, error) {
+	data, err := os.ReadFile(f.masterKeyPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, constants.ErrKeyStoreKeyNotFound
@@ -61,7 +62,7 @@ func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
 	return key, nil
 }
 
-func (b *fileBackend) StoreMasterKey(key []byte) error {
+func (f *fileKeyring) StoreMasterKey(key []byte) error {
 	// Validate key length (AES-256 requires 32 bytes)
 	if len(key) != keySize {
 		return fmt.Errorf("invalid master key length %d, expected %d", len(key), keySize)
@@ -69,13 +70,13 @@ func (b *fileBackend) StoreMasterKey(key []byte) error {
 
 	// Encode as base64 for safe storage
 	encoded := base64.StdEncoding.EncodeToString(key)
-	tmpPath := b.masterKeyPath + ".tmp"
+	tmpPath := f.masterKeyPath + constants.TmpFileSuffix
 
 	if err := os.WriteFile(tmpPath, []byte(encoded), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("write master key file: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, b.masterKeyPath); err != nil {
+	if err := os.Rename(tmpPath, f.masterKeyPath); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("atomic rename master key file: %w", err)
 	}
@@ -83,8 +84,8 @@ func (b *fileBackend) StoreMasterKey(key []byte) error {
 	return nil
 }
 
-func (b *fileBackend) DeleteMasterKey() error {
-	if err := os.Remove(b.masterKeyPath); err != nil && !os.IsNotExist(err) {
+func (f *fileKeyring) DeleteMasterKey() error {
+	if err := os.Remove(f.masterKeyPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("delete master key file: %w", err)
 	}
 	return nil

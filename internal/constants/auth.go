@@ -95,15 +95,32 @@ const (
 	HeaderXForwardedHost                = "X-Forwarded-Host"
 	HeaderXForwardedProto               = "X-Forwarded-Proto"
 	HeaderXFrameOptions                 = "X-Frame-Options"
+	HeaderContentSecurityPolicy        = "Content-Security-Policy"
 	HeaderXProxyOrganizationID          = "X-Proxy-Organization-Id"
 	HeaderXProxyUserID                  = "X-Proxy-User-Id"
 	HeaderXRequestTimestamp             = "X-Request-Timestamp"
+)
+
+// JSON-RPC 2.0 protocol constants.
+const (
+	JSONRPCVersion       = "2.0"
+	JSONRPCFieldVersion  = "jsonrpc"
+	JSONRPCFieldMethod   = "method"
+	JSONRPCFieldParams   = "params"
+	JSONRPCFieldID       = "id"
+	JSONRPCFieldResult   = "result"
+	JSONRPCFieldError    = "error"
+	JSONRPCFieldCode     = "code"
+	JSONRPCFieldMessage  = "message"
+	JSONRPCFieldData     = "data"
+	JSONRPCErrorCodeInternal = -32603
 )
 
 // HTTP header value constants.
 const (
 	HeaderValueNoSniff         = "nosniff"
 	HeaderValueDeny            = "DENY"
+	HeaderValueCSPNone         = "default-src 'none'; frame-ancestors 'none'"
 	HeaderValueKeepAlive       = "keep-alive"
 	HeaderValueNoCache         = "no-cache"
 	HeaderValueTextEvent       = "text/event-stream"

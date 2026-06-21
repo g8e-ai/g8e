@@ -339,7 +339,7 @@ func TestHistoryService_publishFetchLogsResult(t *testing.T) {
 		record := &models.ExecutionRecord{
 			ID:               "exec-1",
 			Command:          "ls -la",
-			ExitCode:         system.IntPtr(0),
+			ExitCode:         func() *int { i := 0; return &i }(),
 			DurationMs:       1000,
 			StdoutCompressed: []byte("stdout data"),
 			StderrCompressed: []byte("stderr data"),

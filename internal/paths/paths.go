@@ -68,14 +68,14 @@ var Infra struct {
 	ActuatorPubPEMPath          string
 
 	// Operator PKI file paths
-	OperatorKeyPath       string
-	OperatorCertPath      string
-	OperatorChainPath     string
-	WardenPubPath         string
-	RootCAKeyPath         string
-	TrustedSignersDir     string
-	ClientPkiDir          string
-	ClientOperatorKeyPath string
+	OperatorKeyPath        string
+	OperatorCertPath       string
+	OperatorChainPath      string
+	WardenPubPath          string
+	RootCAKeyPath          string
+	TrustedSignersDir      string
+	ClientPkiDir           string
+	ClientOperatorKeyPath  string
 	ClientOperatorCertPath string
 
 	// Secrets file paths
@@ -83,7 +83,7 @@ var Infra struct {
 	BootstrapDigestPath string
 
 	// Log paths
-	LogDir         string
+	LogDir          string
 	OperatorLogFile string
 
 	// Storage DB paths
@@ -93,18 +93,18 @@ var Infra struct {
 	LedgerDir            string
 
 	// Demo paths
-	DemosDir             string
-	DemosHealthcareDir   string
-	DemosFinanceDir      string
-	DemosGovDir          string
-	DemosSecureDataDir   string
-	DemosHealthcareTargetDataDir string
-	DemosHealthcareDoctrineDir   string
-	DemosHealthcarePARequestsPath string
-	DemosHealthcareComposePath    string
+	DemosDir                         string
+	DemosHealthcareDir               string
+	DemosFinanceDir                  string
+	DemosGovDir                      string
+	DemosSecureDataDir               string
+	DemosHealthcareTargetDataDir     string
+	DemosHealthcareDoctrineDir       string
+	DemosHealthcarePARequestsPath    string
+	DemosHealthcareComposePath       string
 	DemosHealthcareDoctrineHIPAAPath string
-	DemosSecureDataDoctrineDir    string
-	DemosSecureDataDoctrinePath   string
+	DemosSecureDataDoctrineDir       string
+	DemosSecureDataDoctrinePath      string
 } = struct {
 	DbPath                      string
 	PkiDir                      string
@@ -162,18 +162,18 @@ var Infra struct {
 	ReplayStoreDBPath    string
 	LedgerDir            string
 
-	DemosDir             string
-	DemosHealthcareDir   string
-	DemosFinanceDir      string
-	DemosGovDir          string
-	DemosSecureDataDir   string
-	DemosHealthcareTargetDataDir string
-	DemosHealthcareDoctrineDir   string
-	DemosHealthcarePARequestsPath string
-	DemosHealthcareComposePath    string
+	DemosDir                         string
+	DemosHealthcareDir               string
+	DemosFinanceDir                  string
+	DemosGovDir                      string
+	DemosSecureDataDir               string
+	DemosHealthcareTargetDataDir     string
+	DemosHealthcareDoctrineDir       string
+	DemosHealthcarePARequestsPath    string
+	DemosHealthcareComposePath       string
 	DemosHealthcareDoctrineHIPAAPath string
-	DemosSecureDataDoctrineDir    string
-	DemosSecureDataDoctrinePath   string
+	DemosSecureDataDoctrineDir       string
+	DemosSecureDataDoctrinePath      string
 }{
 	DbPath:                  ".g8e/data/g8e.db",
 	PkiDir:                  ".g8e/pki",
@@ -228,18 +228,18 @@ var Infra struct {
 	ReplayStoreDBPath:    ".g8e/data/replay_store.db",
 	LedgerDir:            ".g8e/data/ledger",
 
-	DemosDir:             "demos",
-	DemosHealthcareDir:   "demos/healthcare",
-	DemosFinanceDir:      "demos/finance",
-	DemosGovDir:          "demos/gov",
-	DemosSecureDataDir:   "demos/secure-data",
-	DemosHealthcareTargetDataDir: "demos/healthcare/target-data",
-	DemosHealthcareDoctrineDir:   "demos/healthcare/doctrine",
-	DemosHealthcarePARequestsPath: "demos/healthcare/target-data/pa_requests.json",
-	DemosHealthcareComposePath:    "demos/healthcare/compose.yml",
+	DemosDir:                         "demos",
+	DemosHealthcareDir:               "demos/healthcare",
+	DemosFinanceDir:                  "demos/finance",
+	DemosGovDir:                      "demos/gov",
+	DemosSecureDataDir:               "demos/secure-data",
+	DemosHealthcareTargetDataDir:     "demos/healthcare/target-data",
+	DemosHealthcareDoctrineDir:       "demos/healthcare/doctrine",
+	DemosHealthcarePARequestsPath:    "demos/healthcare/target-data/pa_requests.json",
+	DemosHealthcareComposePath:       "demos/healthcare/compose.yml",
 	DemosHealthcareDoctrineHIPAAPath: "demos/healthcare/doctrine/phi_hipaa_doctrine.json",
-	DemosSecureDataDoctrineDir:    "demos/secure-data/doctrine",
-	DemosSecureDataDoctrinePath:   "demos/secure-data/doctrine/secure_data_transfer_doctrine.json",
+	DemosSecureDataDoctrineDir:       "demos/secure-data/doctrine",
+	DemosSecureDataDoctrinePath:      "demos/secure-data/doctrine/secure_data_transfer_doctrine.json",
 }
 
 // Mutable path vars that are derived from the base directory at init time.
@@ -360,21 +360,21 @@ func GetSuspendedTransactionsDBPath(dataDir string) string {
 // AgentConfigPaths holds precomputed agent configuration paths for a given home directory.
 // Call once per command with the user's home directory to avoid repeated filepath.Join calls.
 type AgentConfigPaths struct {
-	CursorConfigDir string
-	CursorConfigPath string
-	DevinConfigDir   string
-	DevinConfigPath  string
-	GeminiConfigDir  string
-	GeminiConfigPath string
-	GooseConfigDir   string
-	GooseConfigPath  string
-	VSCodeConfigDir  string
-	VSCodeConfigPath string
-	CodeiumConfigDir string
-	CodeiumConfigPath string
-	TabbyConfigDir   string
-	TabbyConfigPath  string
-	ContinueConfigDir string
+	CursorConfigDir    string
+	CursorConfigPath   string
+	DevinConfigDir     string
+	DevinConfigPath    string
+	GeminiConfigDir    string
+	GeminiConfigPath   string
+	GooseConfigDir     string
+	GooseConfigPath    string
+	VSCodeConfigDir    string
+	VSCodeConfigPath   string
+	CodeiumConfigDir   string
+	CodeiumConfigPath  string
+	TabbyConfigDir     string
+	TabbyConfigPath    string
+	ContinueConfigDir  string
 	ContinueConfigPath string
 }
 
@@ -382,21 +382,21 @@ type AgentConfigPaths struct {
 // Used by CLI commands that write agent MCP configurations.
 func GetAgentConfigPaths(homeDir string) AgentConfigPaths {
 	return AgentConfigPaths{
-		CursorConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor),
-		CursorConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor, constants.AgentConfigFileMCP),
-		DevinConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin),
-		DevinConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin, constants.AgentConfigFileMCPDevin),
-		GeminiConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini),
-		GeminiConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings),
-		GooseConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose),
-		GooseConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings),
-		VSCodeConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode),
-		VSCodeConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode, constants.AgentConfigFileMCP),
-		CodeiumConfigDir: pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium),
-		CodeiumConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium, constants.AgentConfigFileMCP),
-		TabbyConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby),
-		TabbyConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby, constants.AgentConfigFileMCP),
-		ContinueConfigDir: pathutil.SafeJoin(homeDir, constants.AgentConfigDirContinue),
+		CursorConfigDir:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor),
+		CursorConfigPath:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor, constants.AgentConfigFileMCP),
+		DevinConfigDir:     pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin),
+		DevinConfigPath:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin, constants.AgentConfigFileMCPDevin),
+		GeminiConfigDir:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini),
+		GeminiConfigPath:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings),
+		GooseConfigDir:     pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose),
+		GooseConfigPath:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings),
+		VSCodeConfigDir:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode),
+		VSCodeConfigPath:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode, constants.AgentConfigFileMCP),
+		CodeiumConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium),
+		CodeiumConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium, constants.AgentConfigFileMCP),
+		TabbyConfigDir:     pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby),
+		TabbyConfigPath:    pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby, constants.AgentConfigFileMCP),
+		ContinueConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirContinue),
 		ContinueConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirContinue, constants.AgentConfigFileSettings),
 	}
 }
@@ -404,11 +404,11 @@ func GetAgentConfigPaths(homeDir string) AgentConfigPaths {
 // SSHConfigPaths holds precomputed SSH configuration paths for a given home directory.
 // Call once per command with the user's home directory to avoid repeated filepath.Join calls.
 type SSHConfigPaths struct {
-	ConfigPath     string
-	KnownHostsPath string
+	ConfigPath      string
+	KnownHostsPath  string
 	IDE25519KeyPath string
-	IDECDSAKeyPath string
-	IDRSAKeyPath   string
+	IDECDSAKeyPath  string
+	IDRSAKeyPath    string
 }
 
 // GetSSHConfigPaths precomputes all SSH configuration paths from the given home directory.
@@ -416,11 +416,10 @@ type SSHConfigPaths struct {
 func GetSSHConfigPaths(homeDir string) SSHConfigPaths {
 	sshDir := pathutil.SafeJoin(homeDir, ".ssh")
 	return SSHConfigPaths{
-		ConfigPath:     pathutil.SafeJoin(sshDir, "config"),
-		KnownHostsPath: pathutil.SafeJoin(sshDir, "known_hosts"),
+		ConfigPath:      pathutil.SafeJoin(sshDir, "config"),
+		KnownHostsPath:  pathutil.SafeJoin(sshDir, "known_hosts"),
 		IDE25519KeyPath: pathutil.SafeJoin(sshDir, "id_ed25519"),
-		IDECDSAKeyPath: pathutil.SafeJoin(sshDir, "id_ecdsa"),
-		IDRSAKeyPath:   pathutil.SafeJoin(sshDir, "id_rsa"),
+		IDECDSAKeyPath:  pathutil.SafeJoin(sshDir, "id_ecdsa"),
+		IDRSAKeyPath:    pathutil.SafeJoin(sshDir, "id_rsa"),
 	}
 }
-

@@ -23,7 +23,7 @@ import (
 type FsListRequest struct {
 	ExecutionID     string  `json:"execution_id"`
 	CaseID          string  `json:"case_id"`
-	TaskID          *string `json:"task_id,omitempty"`
+	TaskID          string `json:"task_id,omitempty"`
 	InvestigationID string  `json:"investigation_id"`
 
 	Path        string `json:"path"`
@@ -42,9 +42,9 @@ type FsListEntry struct {
 	ModTime int64  `json:"mod_time"`
 
 	IsSymlink     bool    `json:"is_symlink,omitempty"`
-	SymlinkTarget *string `json:"symlink_target,omitempty"`
-	Owner         *string `json:"owner,omitempty"`
-	Group         *string `json:"group,omitempty"`
+	SymlinkTarget string `json:"symlink_target,omitempty"`
+	Owner         string `json:"owner,omitempty"`
+	Group         string `json:"group,omitempty"`
 	Inode         uint64  `json:"inode,omitempty"`
 	Nlink         uint64  `json:"nlink,omitempty"`
 }
@@ -53,7 +53,7 @@ type FsListEntry struct {
 type FsListResult struct {
 	ExecutionID     string                     `json:"execution_id"`
 	CaseID          string                     `json:"case_id"`
-	TaskID          *string                    `json:"task_id,omitempty"`
+	TaskID          string                    `json:"task_id,omitempty"`
 	InvestigationID string                     `json:"investigation_id"`
 	Status          operatorv1.ExecutionStatus `json:"status"`
 
@@ -62,12 +62,12 @@ type FsListResult struct {
 	TotalCount int           `json:"total_count"`
 	Truncated  bool          `json:"truncated"`
 
-	StartTime       *time.Time `json:"start_time,omitempty"`
-	EndTime         *time.Time `json:"end_time,omitempty"`
+	StartTime       time.Time `json:"start_time,omitempty"`
+	EndTime         time.Time `json:"end_time,omitempty"`
 	DurationSeconds float64    `json:"duration_seconds"`
 
-	ErrorMessage *string `json:"error_message,omitempty"`
-	ErrorType    *string `json:"error_type,omitempty"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	ErrorType    string `json:"error_type,omitempty"`
 
 	SystemInfo *ExecutionSystemInfo `json:"system_info,omitempty"`
 }

@@ -26,26 +26,26 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func TestNewKeychainBackend(t *testing.T) {
+func TestNewKeychainKeyring(t *testing.T) {
 	t.Parallel()
 
 	if _, err := exec.LookPath("security"); err != nil {
-		t.Skip("security command not available, skipping keychain backend test")
+		t.Skip("security command not available, skipping keychain keyring test")
 	}
 
-	backend, err := newKeychainBackend()
+	keyring, err := newKeychainKeyring()
 	require.NoError(t, err)
-	assert.Equal(t, "keychain", backend.Name())
+	assert.Equal(t, "keychain", keyring.Name())
 }
 
-func TestKeychainBackend_StoreRetrieveDelete(t *testing.T) {
+func TestKeychainKeyring_StoreRetrieveDelete(t *testing.T) {
 	t.Parallel()
 
 	if _, err := exec.LookPath("security"); err != nil {
-		t.Skip("security command not available, skipping keychain backend test")
+		t.Skip("security command not available, skipping keychain keyring test")
 	}
 
-	backend, err := newKeychainBackend()
+	keyring, err := newKeychainKeyring()
 	require.NoError(t, err)
 
 	testKey := make([]byte, keySize)
@@ -53,53 +53,53 @@ func TestKeychainBackend_StoreRetrieveDelete(t *testing.T) {
 		testKey[i] = byte(i)
 	}
 
-	err = backend.StoreMasterKey(testKey)
+	err = keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
-	retrievedKey, err := backend.RetrieveMasterKey()
+	retrievedKey, err := keyring.RetrieveMasterKey()
 	require.NoError(t, err)
 	assert.Equal(t, testKey, retrievedKey)
 
-	err = backend.DeleteMasterKey()
+	err = keyring.DeleteMasterKey()
 	require.NoError(t, err)
 
-	_, err = backend.RetrieveMasterKey()
+	_, err = keyring.RetrieveMasterKey()
 	require.Error(t, err)
 	assert.Equal(t, constants.ErrKeyNotFound, err)
 }
 
-func TestKeychainBackend_RetrieveNotFound(t *testing.T) {
+func TestKeychainKeyring_RetrieveNotFound(t *testing.T) {
 	t.Parallel()
 
 	if _, err := exec.LookPath("security"); err != nil {
-		t.Skip("security command not available, skipping keychain backend test")
+		t.Skip("security command not available, skipping keychain keyring test")
 	}
 
-	backend, err := newKeychainBackend()
+	keyring, err := newKeychainKeyring()
 	require.NoError(t, err)
 
-	err = backend.DeleteMasterKey()
+	err = keyring.DeleteMasterKey()
 	require.NoError(t, err)
 
-	_, err = backend.RetrieveMasterKey()
+	_, err = keyring.RetrieveMasterKey()
 	require.Error(t, err)
 	assert.Equal(t, constants.ErrKeyNotFound, err)
 }
 
-func TestKeychainBackend_DeleteIdempotent(t *testing.T) {
+func TestKeychainKeyring_DeleteIdempotent(t *testing.T) {
 	t.Parallel()
 
 	if _, err := exec.LookPath("security"); err != nil {
-		t.Skip("security command not available, skipping keychain backend test")
+		t.Skip("security command not available, skipping keychain keyring test")
 	}
 
-	backend, err := newKeychainBackend()
+	keyring, err := newKeychainKeyring()
 	require.NoError(t, err)
 
-	err = backend.DeleteMasterKey()
+	err = keyring.DeleteMasterKey()
 	require.NoError(t, err)
 
-	err = backend.DeleteMasterKey()
+	err = keyring.DeleteMasterKey()
 	require.NoError(t, err)
 }
 
@@ -107,7 +107,7 @@ func TestNewDarwin_WithKeychain(t *testing.T) {
 	t.Parallel()
 
 	if _, err := exec.LookPath("security"); err != nil {
-		t.Skip("security command not available, skipping keychain backend test")
+		t.Skip("security command not available, skipping keychain keyring test")
 	}
 
 	secretsDir := t.TempDir()
@@ -115,5 +115,5 @@ func TestNewDarwin_WithKeychain(t *testing.T) {
 
 	ks, err := New(secretsDir, logger)
 	require.NoError(t, err)
-	assert.Equal(t, "keychain", ks.BackendName())
+	assert.Equal(t, "keychain", ks.KeyringName())
 }

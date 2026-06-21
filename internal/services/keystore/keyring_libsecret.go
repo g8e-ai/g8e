@@ -25,22 +25,22 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// libsecretBackend uses the libsecret/GNOME Keyring for key storage on Linux.
-type libsecretBackend struct{}
+// libsecretKeyring uses the libsecret/GNOME Keyring for key storage on Linux.
+type libsecretKeyring struct{}
 
-func newLibsecretBackend() (Backend, error) {
+func newLibsecretKeyring() (Keyring, error) {
 	// Check if secret-tool is available
 	if _, err := exec.LookPath("secret-tool"); err != nil {
 		return nil, fmt.Errorf("libsecret: check secret-tool availability: %w (install libsecret-tools)", err)
 	}
-	return &libsecretBackend{}, nil
+	return &libsecretKeyring{}, nil
 }
 
-func (b *libsecretBackend) Name() string {
+func (l *libsecretKeyring) Name() string {
 	return "libsecret"
 }
 
-func (b *libsecretBackend) RetrieveMasterKey() ([]byte, error) {
+func (l *libsecretKeyring) RetrieveMasterKey() ([]byte, error) {
 	args := []string{
 		"lookup",
 		keyStoreName,
@@ -70,7 +70,7 @@ func (b *libsecretBackend) RetrieveMasterKey() ([]byte, error) {
 	return key, nil
 }
 
-func (b *libsecretBackend) StoreMasterKey(key []byte) error {
+func (l *libsecretKeyring) StoreMasterKey(key []byte) error {
 	// Encode key as base64 for safe storage
 	encoded := base64.StdEncoding.EncodeToString(key)
 
@@ -90,7 +90,7 @@ func (b *libsecretBackend) StoreMasterKey(key []byte) error {
 	return nil
 }
 
-func (b *libsecretBackend) DeleteMasterKey() error {
+func (l *libsecretKeyring) DeleteMasterKey() error {
 	args := []string{
 		"clear",
 		keyStoreName,

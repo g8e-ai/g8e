@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows
 
 package keystore
 
@@ -31,16 +30,16 @@ func New(secretsDir string, logger *slog.Logger) (*Keystore, error) {
 		return nil, fmt.Errorf("keystore: create secrets directory: %w", err)
 	}
 
-	backend, err := newFileBackend(secretsDir)
+	keyring, err := newFileKeyring(secretsDir)
 	if err != nil {
-		return nil, fmt.Errorf("keystore: initialize file backend: %w", err)
+		return nil, fmt.Errorf("keystore: initialize file keyring: %w", err)
 	}
 
-	logger.Info("[Keystore] Using file-based storage (Windows)", "backend", backend.Name())
+	logger.Info("[Keystore] Using file-based storage (Windows)", "keyring", keyring.Name())
 
 	return &Keystore{
 		logger:     logger,
 		secretsDir: secretsDir,
-		backend:    backend,
+		keyring:    keyring,
 	}, nil
 }

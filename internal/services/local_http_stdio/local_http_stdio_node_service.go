@@ -202,7 +202,7 @@ func (s *LocalHttpStdioNodeService) Start(ctx context.Context) error {
 
 		if err := s.runSession(s.ctx); err != nil {
 			s.logger.Warn("OperatorSession ended, reconnecting",
-				string(constants.ConnectionStateError), err,
+				constants.ConnectionStateError, err,
 				"backoff", backoff)
 		}
 
@@ -376,13 +376,13 @@ func (s *LocalHttpStdioNodeService) readLoop(ctx context.Context, conn *websocke
 func (s *LocalHttpStdioNodeService) handleInvokeEvent(ctx context.Context, rawParams interface{}) {
 	data, err := json.Marshal(rawParams)
 	if err != nil {
-		s.logger.Warn("Failed to marshal invoke payload", string(constants.ConnectionStateError), err)
+		s.logger.Warn("Failed to marshal invoke payload", constants.ConnectionStateError, err)
 		return
 	}
 
 	var req ocNodeInvokeRequest
 	if err := json.Unmarshal(data, &req); err != nil {
-		s.logger.Warn("Failed to parse node.invoke.request", string(constants.ConnectionStateError), err)
+		s.logger.Warn("Failed to parse node.invoke.request", constants.ConnectionStateError, err)
 		return
 	}
 
@@ -449,7 +449,7 @@ func (s *LocalHttpStdioNodeService) handleSystemRun(ctx context.Context, req ocN
 
 	s.logger.Info("system.run complete",
 		"id", req.ID,
-		string(constants.AuthAuditResultSuccess), payload.Success,
+		constants.AuthAuditResultSuccess, payload.Success,
 		"exit_code", exitCode,
 		"timed_out", timedOut)
 
@@ -489,7 +489,7 @@ func (s *LocalHttpStdioNodeService) handleSystemWhich(ctx context.Context, req o
 func (s *LocalHttpStdioNodeService) sendInvokeResult(req ocNodeInvokeRequest, payload interface{}) {
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		s.logger.Error("Failed to marshal invoke result payload", string(constants.ConnectionStateError), err)
+		s.logger.Error("Failed to marshal invoke result payload", constants.ConnectionStateError, err)
 		s.sendInvokeError(req, "INTERNAL", "failed to marshal result")
 		return
 	}
@@ -508,7 +508,7 @@ func (s *LocalHttpStdioNodeService) sendInvokeResult(req ocNodeInvokeRequest, pa
 		Params: resultParams,
 	}
 	if err := s.sendFrame(frame); err != nil {
-		s.logger.Warn("Failed to send invoke result", "id", req.ID, string(constants.ConnectionStateError), err)
+		s.logger.Warn("Failed to send invoke result", "id", req.ID, constants.ConnectionStateError, err)
 	}
 }
 
@@ -526,7 +526,7 @@ func (s *LocalHttpStdioNodeService) sendInvokeError(req ocNodeInvokeRequest, cod
 		Params: resultParams,
 	}
 	if err := s.sendFrame(frame); err != nil {
-		s.logger.Warn("Failed to send invoke error", "id", req.ID, "code", code, string(constants.ConnectionStateError), err)
+		s.logger.Warn("Failed to send invoke error", "id", req.ID, "code", code, constants.ConnectionStateError, err)
 	}
 }
 

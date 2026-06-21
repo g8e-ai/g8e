@@ -481,7 +481,9 @@ func (rs *OperatorPubSubService) listenForCommands(channelName string) {
 		rs.logger.Info("Channel established - Ready to receive")
 		reconnectDelay = rs.reconnectBaseDelay
 
-		rs.heartbeat.SendAutomatic()
+		if err := rs.heartbeat.SendAutomatic(); err != nil {
+			rs.logger.Error("Failed to send automatic heartbeat", "error", err)
+		}
 
 		disconnected := false
 		receivedMessage := false
@@ -894,8 +896,8 @@ func (rs *OperatorPubSubService) handleHeartbeatEvent(ctx context.Context, msg *
 }
 
 // SendAutomaticHeartbeat publishes an automatic heartbeat immediately.
-func (rs *OperatorPubSubService) SendAutomaticHeartbeat() {
-	rs.heartbeat.SendAutomatic()
+func (rs *OperatorPubSubService) SendAutomaticHeartbeat() error {
+	return rs.heartbeat.SendAutomatic()
 }
 
 // pubsubAuditLogger implements mcp.AuditLogger using the SQLAuditStore so that

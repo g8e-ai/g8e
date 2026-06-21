@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -269,11 +270,14 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 				Args:            request.Args,
 				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
 				StartTime:       &now,
-				ReturnCode:      system.IntPtr(constants.ExitCodeCannotExecute), // Command invoked cannot execute
+				ReturnCode:      func() *int { i := constants.ExitCodeCannotExecute; return &i }(), // Command invoked cannot execute
 				Stdout:          "",
 				Stderr:          fmt.Sprintf("Cloud CLI command '%s' is not available. This Operator was not started with --cloud flag.", cloudCmd),
-				ErrorMessage:    system.StringPtr(fmt.Sprintf("cloud CLI '%s' blocked: Operator requires --cloud flag", cloudCmd)),
-				ErrorType:       system.StringPtr("cloud_cli_blocked"),
+				ErrorMessage: func() *string {
+					s := fmt.Sprintf("cloud CLI '%s' blocked: Operator requires --cloud flag", cloudCmd)
+					return &s
+				}(),
+				ErrorType:       func() *string { s := "cloud_cli_blocked"; return &s }(),
 				DurationSeconds: 0,
 			}, nil
 		}
@@ -282,7 +286,12 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 	// Log execution context
 	es.logger.Debug("Execution context details",
 		"timeout_seconds", request.TimeoutSeconds,
-		"working_dir", system.StringPtrValue(request.WorkingDirectory))
+		"working_dir", func() string {
+			if request.WorkingDirectory == nil {
+				return "<nil>"
+			}
+			return *request.WorkingDirectory
+		}())
 
 	// Acquire semaphore for concurrency control
 	select {
@@ -345,9 +354,9 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		execCtx.mu.Lock()
 		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING {
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-			result.ErrorMessage = system.StringPtr(err.Error())
-			result.ErrorType = system.StringPtr("execution_error")
-			result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
+			result.ErrorMessage = func() *string { s := err.Error(); return &s }()
+			result.ErrorType = func() *string { s := "execution_error"; return &s }()
+			result.ReturnCode = func() *int { i := es.errorToReturnCode(err); return &i }()
 		}
 		execCtx.mu.Unlock()
 	}
@@ -372,7 +381,12 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 		"command", request.Command,
 		"status", result.Status,
 		"duration_seconds", result.DurationSeconds,
-		"return_code", system.IntPtrValue(result.ReturnCode),
+		"return_code", func() string {
+			if result.ReturnCode == nil {
+				return "<nil>"
+			}
+			return strconv.Itoa(*result.ReturnCode)
+		}(),
 		"stdout_preview", stdoutPreview,
 		"stderr_preview", stderrPreview)
 	execCtx.mu.Unlock()
@@ -547,9 +561,9 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		result.EndTime = &endTime
 		result.DurationSeconds = duration.Seconds()
 		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-		result.ErrorMessage = system.StringPtr(err.Error())
-		result.ErrorType = system.StringPtr("start_error")
-		result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
+		result.ErrorMessage = func() *string { s := err.Error(); return &s }()
+		result.ErrorType = func() *string { s := "start_error"; return &s }()
+		result.ReturnCode = func() *int { i := es.errorToReturnCode(err); return &i }()
 		execCtx.mu.Unlock()
 		return err
 	}
@@ -595,14 +609,14 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT
-			result.ErrorMessage = system.StringPtr("Command execution timed out")
-			result.ErrorType = system.StringPtr("timeout")
-			result.ReturnCode = system.IntPtr(constants.ExitCodeTimeout)
+			result.ErrorMessage = func() *string { s := "Command execution timed out"; return &s }()
+			result.ErrorType = func() *string { s := "timeout"; return &s }()
+			result.ReturnCode = func() *int { i := constants.ExitCodeTimeout; return &i }()
 		} else if exitError, ok := err.(*exec.ExitError); ok {
 			// Command ran but exited with non-zero
 			if waitStatus, ok := exitError.Sys().(syscall.WaitStatus); ok {
 				exitCode := waitStatus.ExitStatus()
-				result.ReturnCode = system.IntPtr(exitCode)
+				result.ReturnCode = func() *int { i := exitCode; return &i }()
 
 				// Exit codes 126 and 127 may indicate shell errors, but only if stderr
 				// contains the actual error message. A deliberate "exit 127" should be
@@ -616,15 +630,15 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 					strings.Contains(stderrLower, "cannot execute")):
 					// Actual permission denied error from shell
 					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-					result.ErrorMessage = system.StringPtr("Permission denied: command is not executable")
-					result.ErrorType = system.StringPtr("permission_denied")
+					result.ErrorMessage = func() *string { s := "Permission denied: command is not executable"; return &s }()
+					result.ErrorType = func() *string { s := "permission_denied"; return &s }()
 				case exitCode == 127 && (strings.Contains(stderrLower, "not found") ||
 					strings.Contains(stderrLower, "no such file") ||
 					strings.Contains(stderrLower, "command not found")):
 					// Actual command not found error from shell
 					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-					result.ErrorMessage = system.StringPtr("Command not found")
-					result.ErrorType = system.StringPtr("command_not_found")
+					result.ErrorMessage = func() *string { s := "Command not found"; return &s }()
+					result.ErrorType = func() *string { s := "command_not_found"; return &s }()
 				default:
 					// All other non-zero exit codes (including deliberate exit 126/127) are normal completion
 					// The command executed and returned an exit code - that's a successful execution
@@ -637,18 +651,18 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		} else if errors.Is(err, constants.ErrProcessKilled) {
 			// Process was killed (by us on timeout/cancel, or externally)
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-			result.ErrorMessage = system.StringPtr("Command was terminated")
-			result.ErrorType = system.StringPtr(string(constants.CommandExitStatusKilled))
-			result.ReturnCode = system.IntPtr(constants.ExitCodeKilled)
+			result.ErrorMessage = func() *string { s := "Command was terminated"; return &s }()
+			result.ErrorType = func() *string { s := string(constants.CommandExitStatusKilled); return &s }()
+			result.ReturnCode = func() *int { i := constants.ExitCodeKilled; return &i }()
 		} else {
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-			result.ErrorMessage = system.StringPtr(err.Error())
-			result.ErrorType = system.StringPtr("execution_error")
-			result.ReturnCode = system.IntPtr(es.errorToReturnCode(err))
+			result.ErrorMessage = func() *string { s := err.Error(); return &s }()
+			result.ErrorType = func() *string { s := "execution_error"; return &s }()
+			result.ReturnCode = func() *int { i := es.errorToReturnCode(err); return &i }()
 		}
 	} else {
 		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
-		result.ReturnCode = system.IntPtr(constants.ExitCodeSuccess)
+		result.ReturnCode = func() *int { i := constants.ExitCodeSuccess; return &i }()
 	}
 
 	// Create terminal output for UI

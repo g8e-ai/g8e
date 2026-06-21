@@ -111,7 +111,13 @@ func reportVerification(ctx context.Context, outDir string, auditStore *storage.
 				ActionType:      c.ActionType,
 				TargetResource:  c.TargetResource,
 			}
-			b, _ := json.Marshal(payload)
+			b, err := json.Marshal(payload)
+			if err != nil {
+				addRow("commitment_hash_recompute", "commitment_ledger", c.Hash, verifyResultSkipped,
+					fmt.Sprintf("failed to marshal hash fields: %v", err))
+				allHashesOK = false
+				break
+			}
 			computed := sha256.Sum256(b)
 			computedHex := hex.EncodeToString(computed[:])
 			if computedHex != c.Hash {

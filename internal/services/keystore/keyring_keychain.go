@@ -26,22 +26,22 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// keychainBackend uses macOS Keychain for key storage.
-type keychainBackend struct{}
+// keychainKeyring uses macOS Keychain for key storage.
+type keychainKeyring struct{}
 
-func newKeychainBackend() (Backend, error) {
+func newKeychainKeyring() (Keyring, error) {
 	// Check if security command is available
 	if _, err := exec.LookPath("security"); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrKeyStoreSecurityNotFound, err)
 	}
-	return &keychainBackend{}, nil
+	return &keychainKeyring{}, nil
 }
 
-func (b *keychainBackend) Name() string {
+func (c *keychainKeyring) Name() string {
 	return "keychain"
 }
 
-func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
+func (c *keychainKeyring) RetrieveMasterKey() ([]byte, error) {
 	account := fmt.Sprintf("%s/%s", keyStoreName, masterKeyName)
 
 	args := []string{
@@ -77,7 +77,7 @@ func (b *keychainBackend) RetrieveMasterKey() ([]byte, error) {
 	return key, nil
 }
 
-func (b *keychainBackend) StoreMasterKey(key []byte) error {
+func (c *keychainKeyring) StoreMasterKey(key []byte) error {
 	account := fmt.Sprintf("%s/%s", keyStoreName, masterKeyName)
 	encoded := base64.StdEncoding.EncodeToString(key)
 
@@ -97,7 +97,7 @@ func (b *keychainBackend) StoreMasterKey(key []byte) error {
 	return nil
 }
 
-func (b *keychainBackend) DeleteMasterKey() error {
+func (c *keychainKeyring) DeleteMasterKey() error {
 	account := fmt.Sprintf("%s/%s", keyStoreName, masterKeyName)
 
 	args := []string{

@@ -21,6 +21,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // FileResult is returned by writeCSV with the file stats needed for the manifest.
@@ -36,7 +38,7 @@ type FileResult struct {
 func writeCSV(path string, header []string, rows []Row) (FileResult, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {
-		return FileResult{}, fmt.Errorf("reporting: open %s: %w", path, err)
+		return FileResult{}, fmt.Errorf("reporting: open %s: %w", path, constants.ErrFileOpenFailed)
 	}
 	defer f.Close()
 
@@ -44,20 +46,20 @@ func writeCSV(path string, header []string, rows []Row) (FileResult, error) {
 	w := csv.NewWriter(io.MultiWriter(f, h))
 
 	if err := w.Write(header); err != nil {
-		return FileResult{}, fmt.Errorf("reporting: write header: %w", err)
+		return FileResult{}, fmt.Errorf("reporting: write header: %w", constants.ErrReportWriteFailed)
 	}
 
 	count := 0
 	for _, row := range rows {
 		if err := w.Write(row.Record()); err != nil {
-			return FileResult{}, fmt.Errorf("reporting: write row: %w", err)
+			return FileResult{}, fmt.Errorf("reporting: write row: %w", constants.ErrReportWriteFailed)
 		}
 		count++
 	}
 
 	w.Flush()
 	if err := w.Error(); err != nil {
-		return FileResult{}, fmt.Errorf("reporting: flush: %w", err)
+		return FileResult{}, fmt.Errorf("reporting: flush: %w", constants.ErrReportWriteFailed)
 	}
 
 	return FileResult{
@@ -78,6 +80,11 @@ func optionalTime(t *time.Time) string {
 		return ""
 	}
 	return utcRFC3339(*t)
+}
+
+// intStr formats an int as string.
+func intStr(n int) string {
+	return fmt.Sprintf("%d", n)
 }
 
 // boolStr returns "true" or "false".

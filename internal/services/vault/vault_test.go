@@ -382,7 +382,7 @@ func TestVaultHeaderUnwrapDEK(t *testing.T) {
 		defer SecureZero(dek)
 
 		_, err = header.UnwrapDEK(testPrivateKey2)
-		require.ErrorIs(t, err, ErrKeyFingerprintMatch)
+		require.ErrorIs(t, err, constants.ErrVaultKeyFingerprintMatch)
 	})
 }
 
@@ -398,7 +398,7 @@ func TestVaultHeaderRekey(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = header.UnwrapDEK(testPrivateKey1)
-		require.ErrorIs(t, err, ErrKeyFingerprintMatch)
+		require.ErrorIs(t, err, constants.ErrVaultKeyFingerprintMatch)
 
 		unwrappedDEK, err := header.UnwrapDEK(testPrivateKey2)
 		require.NoError(t, err)
@@ -443,7 +443,7 @@ func TestVaultHeaderSaveLoad(t *testing.T) {
 	t.Run("load non-existent returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := LoadVaultHeader(filepath.Join(tempDir, "nonexistent"))
-		require.ErrorIs(t, err, ErrHeaderNotFound)
+		require.ErrorIs(t, err, constants.ErrVaultHeaderNotFound)
 	})
 }
 
@@ -526,7 +526,7 @@ func TestVaultUnlock(t *testing.T) {
 		defer vault2.Close()
 
 		err := vault2.Unlock(testPrivateKey2)
-		require.ErrorIs(t, err, ErrInvalidPrivateKey)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidPrivateKey)
 	})
 
 	t.Run("unlock non-existent vault fails", func(t *testing.T) {
@@ -538,7 +538,7 @@ func TestVaultUnlock(t *testing.T) {
 		defer vault.Close()
 
 		err := vault.Unlock(testPrivateKey1)
-		require.ErrorIs(t, err, ErrVaultNotInit)
+		require.ErrorIs(t, err, constants.ErrVaultNotInitialized)
 	})
 }
 
@@ -564,7 +564,7 @@ func TestVaultRekey(t *testing.T) {
 		require.NoError(t, err)
 
 		err = vault2.Unlock(testPrivateKey1)
-		require.ErrorIs(t, err, ErrInvalidPrivateKey)
+		require.ErrorIs(t, err, constants.ErrVaultInvalidPrivateKey)
 
 		vault3, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 		defer vault3.Close()
@@ -596,7 +596,7 @@ func TestVaultLock(t *testing.T) {
 		assert.False(t, vault.IsUnlocked())
 
 		_, err := vault.GetDEK()
-		require.ErrorIs(t, err, ErrVaultLocked)
+		require.ErrorIs(t, err, constants.ErrVaultLocked)
 	})
 }
 
@@ -670,7 +670,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 		v.Lock()
 		_, err := v.Encrypt([]byte("test"))
-		require.ErrorIs(t, err, ErrVaultLocked)
+		require.ErrorIs(t, err, constants.ErrVaultLocked)
 	})
 
 	t.Run("decrypt fails when locked", func(t *testing.T) {
@@ -681,7 +681,7 @@ func TestVaultEncryptDecrypt(t *testing.T) {
 
 		v.Lock()
 		_, err := v.Decrypt(make([]byte, 32))
-		require.ErrorIs(t, err, ErrVaultLocked)
+		require.ErrorIs(t, err, constants.ErrVaultLocked)
 	})
 }
 
@@ -771,7 +771,7 @@ func TestVaultFullLifecycle(t *testing.T) {
 
 	vault4, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
 	err = vault4.Unlock(testPrivateKey1)
-	require.ErrorIs(t, err, ErrInvalidPrivateKey)
+	require.ErrorIs(t, err, constants.ErrVaultInvalidPrivateKey)
 	vault4.Close()
 
 	vault5, _ := NewVault(&VaultConfig{DataDir: dataDir, Logger: testutil.NewTestLogger()})
@@ -880,12 +880,12 @@ func TestLoadVaultHeaderCorrupted(t *testing.T) {
 	t.Run("corrupted JSON returns error", func(t *testing.T) {
 		t.Parallel()
 		tempDir := t.TempDir()
-		headerPath := filepath.Join(tempDir, VaultHeaderFile)
+		headerPath := filepath.Join(tempDir, constants.VaultHeaderFilename)
 
 		require.NoError(t, os.WriteFile(headerPath, []byte("not valid json {{{"), 0600))
 
 		_, err := LoadVaultHeader(tempDir)
-		require.ErrorIs(t, err, ErrHeaderCorrupted)
+		require.ErrorIs(t, err, constants.ErrVaultHeaderCorrupted)
 	})
 }
 

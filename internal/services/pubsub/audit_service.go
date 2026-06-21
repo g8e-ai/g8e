@@ -107,7 +107,7 @@ func (as *AuditService) recordDirectCommand(ctx context.Context, msg *PubSubComm
 			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         marshaler.Status(constants.AISourceTerminalDirect),
 			CommandRaw:          protoResult.Command,
-			CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
+			CommandExitCode:     int(protoResult.ExitCode),
 			CommandStdout:       protoResult.Output,
 			CommandStderr:       protoResult.Stderr,
 			ExecutionDurationMs: int64(protoResult.ExecutionTimeSeconds * 1000),
@@ -132,6 +132,7 @@ func (as *AuditService) recordDirectCommand(ctx context.Context, msg *PubSubComm
 			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       marshaler.Status(constants.AISourceTerminalDirect),
 			CommandRaw:        protoCmd.Command,
+			CommandExitCode:   constants.ExitCodeNone,
 		}
 
 		as.logger.Info("Direct terminal command recorded in audit store (LFAA)",

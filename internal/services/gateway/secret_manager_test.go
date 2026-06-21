@@ -51,12 +51,12 @@ func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 	return db
 }
 
-// newTestSecretManager creates a SecretManager with the in-memory test backend.
+// newTestSecretManager creates a SecretManager with the in-memory keyring.
 func newTestSecretManager(t *testing.T, db *sqliteutil.DB, secretsDir string) *SecretManager {
 	t.Helper()
-	backend, err := keystore.NewTestBackend()
+	keyring, err := keystore.NewMemoryKeyring()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(secretsDir, testutil.NewTestLogger(), backend)
+	ks, err := keystore.NewWithKeyring(secretsDir, testutil.NewTestLogger(), keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())

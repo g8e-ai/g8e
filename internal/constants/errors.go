@@ -127,6 +127,7 @@ var (
 	// Process manager errors
 	ErrProcessStartFailed = errors.New("process start failed")
 	ErrProcessStopFailed  = errors.New("process stop failed")
+	ErrProcessFindFailed  = errors.New("failed to find process")
 	ErrPortUnavailable    = errors.New("port unavailable")
 	ErrInvalidPosture     = errors.New("invalid posture")
 	ErrPIDReadFailed      = errors.New("failed to read PID file")
@@ -145,6 +146,11 @@ var (
 	ErrFileOpenFailed = errors.New("failed to open file")
 	ErrInvalidRegex   = errors.New("invalid regex pattern")
 	ErrGrepFailed     = errors.New("failed to perform grep")
+
+	// FsGrep error type constants
+	ErrFsGrepValidation = errors.New("fs_grep validation error")
+	ErrFsGrepInvalidPattern = errors.New("fs_grep invalid pattern")
+	ErrFsGrepExecution = errors.New("fs_grep execution error")
 
 	// Execution service errors
 	ErrExecutionServiceStopping = errors.New("execution service is stopping")
@@ -229,6 +235,7 @@ var (
 
 	// MCP git ops errors
 	ErrMCPGitOpsUnsupportedOperation = errors.New("unsupported operation")
+	ErrMCPGitOpsBinaryPathRequired   = errors.New("git binary path required")
 
 	// MCP TLS cert inspect errors
 	ErrMCPTLSCertInspectRequired = errors.New("either cert_path or host must be specified")
@@ -270,6 +277,10 @@ var (
 	ErrNetworkDetectWindows       = errors.New("detect Windows identity")
 	ErrNetworkGetHostname         = errors.New("get hostname")
 	ErrNetworkGetSysteminfo       = errors.New("get systeminfo")
+
+	// System utils errors
+	ErrSystemUtilsInvalidProcStatFormat = errors.New("invalid /proc/stat format")
+	ErrSystemUtilsInvalidCPULineFormat  = errors.New("invalid CPU line format")
 
 	// Audit service errors
 	ErrAuditUnmarshalUserMsg      = errors.New("failed to unmarshal user message payload")
@@ -326,6 +337,7 @@ var (
 	ErrPubSubA2AGateway                = errors.New("A2A gateway not configured")
 	ErrPubSubA2AMissingSkillName       = errors.New("A2A call missing skill_name")
 	ErrPubSubActuatorOrAuditStore      = errors.New("actuator or ConsoleAuditStore not configured")
+	ErrPubSubResultsPublisher          = errors.New("results publisher not configured")
 	ErrPubSubPublishExecutionResult    = errors.New("failed to publish execution result")
 	ErrPubSubPublishCancellationResult = errors.New("failed to publish cancellation result")
 	ErrPubSubPublishFileEditResult     = errors.New("failed to publish file edit result")
@@ -340,12 +352,13 @@ var (
 	ErrPubSubBuildResultEnvelope       = errors.New("failed to build Governance Envelope")
 
 	// Scrubbing service errors
-	ErrScrubbingInvalidPattern = errors.New("invalid custom scrub pattern")
-	ErrScrubbingRegexTimeout   = errors.New("regex compilation timeout")
-	ErrScrubbingTokenPersist   = errors.New("failed to persist token to local store")
-	ErrScrubbingTokenLoad      = errors.New("failed to load persisted tokens from TokenStore")
-	ErrScrubbingTokenKeyFormat = errors.New("invalid token key format")
-	ErrScrubbingTokenSequence  = errors.New("failed to parse token sequence")
+	ErrScrubbingInvalidPattern         = errors.New("invalid custom scrub pattern")
+	ErrScrubbingRegexTimeout           = errors.New("regex compilation timeout")
+	ErrScrubbingTokenPersist           = errors.New("failed to persist token to local store")
+	ErrScrubbingTokenLoad              = errors.New("failed to load persisted tokens from TokenStore")
+	ErrScrubbingTokenKeyFormat         = errors.New("invalid token key format")
+	ErrScrubbingTokenSequence          = errors.New("failed to parse token sequence")
+	ErrScrubbingTokenStoreUnavailable  = errors.New("token persistence required but TokenStore unavailable")
 
 	// Gateway service errors
 	ErrGatewayToolNameRequired             = errors.New("tool name required")
@@ -417,6 +430,8 @@ var (
 	ErrWindowsCertWriteFailed     = errors.New("failed to write certificate to temp file")
 	ErrWindowsPowerShellImport    = errors.New("failed to import certificate via PowerShell")
 	ErrWindowsPowerShellTrust     = errors.New("failed to trust Root CA via PowerShell")
+	ErrWindowsRegistryOpenKey     = errors.New("failed to open registry key")
+	ErrWindowsRegistryReadValue    = errors.New("failed to read registry value")
 
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
@@ -450,6 +465,15 @@ var (
 	ErrVaultRekeyFailed        = errors.New("failed to rekey vault")
 	ErrVaultResetFailed        = errors.New("failed to reset vault")
 	ErrVaultKeyWriteFailed     = errors.New("failed to write vault key")
+	ErrVaultStoreExecution     = errors.New("failed to store execution in vault")
+	ErrVaultStoreFileDiff      = errors.New("failed to store file diff in vault")
+	ErrVaultLocked             = errors.New("vault is locked")
+	ErrVaultAlreadyOpen        = errors.New("vault is already unlocked")
+	ErrVaultConfigRequired     = errors.New("vault config is required")
+	ErrVaultDataDirRequired    = errors.New("vault data directory is required")
+	ErrVaultResetConfirmation  = errors.New("vault reset requires explicit confirmation")
+	ErrVaultInvalidPrivateKey  = errors.New("invalid private key for this vault")
+	ErrVaultCiphertextTooShort = errors.New("ciphertext too short")
 
 	// Vault crypto errors
 	ErrVaultInvalidKeySize      = errors.New("invalid key size: must be 32 bytes")
@@ -460,6 +484,13 @@ var (
 	ErrVaultInvalidWrappedKey   = errors.New("invalid wrapped key size")
 	ErrVaultInvalidPlaintextKey = errors.New("plaintext key must be multiple of 8 bytes")
 	ErrVaultPrivateKeyEmpty     = errors.New("private key cannot be empty")
+
+	// Vault header errors
+	ErrVaultHeaderNotFound      = errors.New("vault header not found")
+	ErrVaultHeaderCorrupted     = errors.New("vault header is corrupted")
+	ErrVaultHeaderVersionUnsup  = errors.New("unsupported vault header version")
+	ErrVaultKeyFingerprintMatch = errors.New("private key fingerprint mismatch")
+	ErrVaultAlreadyExists       = errors.New("vault already exists")
 
 	// Config errors
 	ErrConfigHTTPPortZero      = errors.New("httpPort cannot be 0 in production")
@@ -536,6 +567,12 @@ var (
 	ErrFileEditLineRangeRequired        = errors.New("start_line and end_line are required for delete operation")
 	ErrFileEditPatchContentRequired     = errors.New("patch_content is required for patch operation")
 	ErrFileEditPatchNotImplemented      = errors.New("patch operation not yet implemented")
+
+	// Response writer errors
+	ErrResponseEncodeJSON           = errors.New("failed to encode JSON response")
+	ErrResponseMarshalJSONRPCResult = errors.New("failed to marshal JSON-RPC result")
+	ErrResponseEncodeJSONRPC        = errors.New("failed to encode JSON-RPC response")
+	ErrResponseEncodeJSONRPCError    = errors.New("failed to encode JSON-RPC error response")
 	ErrFileEditFileTooLarge             = errors.New("file too large for operation")
 	ErrFileEditOldContentNotFound       = errors.New("old_content not found in file")
 	ErrFileEditInsertPositionOutOfRange = errors.New("insert position out of range")
@@ -744,6 +781,9 @@ var (
 	ErrTxStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
 	ErrTxL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing")
 
+	// Governance L1 doctrine errors
+	ErrGovernanceJSONDepthExceeded = errors.New("JSON recursion depth exceeded maximum limit")
+
 	// Local HTTP stdio node service errors
 	ErrLocalHTTPStdioDial                      = errors.New("local http stdio: dial failed")
 	ErrLocalHTTPStdioHandshake                 = errors.New("local http stdio: handshake failed")
@@ -811,4 +851,7 @@ var (
 	ErrPubSubMarshalPayload   = errors.New("failed to marshal pubsub payload")
 	ErrPubSubPublishReconnect = errors.New("failed to reconnect for publish")
 	ErrPubSubPublish          = errors.New("failed to publish message")
+
+	// Context errors
+	ErrContextCancelled = errors.New("context cancelled")
 )
