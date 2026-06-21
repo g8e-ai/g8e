@@ -17,10 +17,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 // PARequest represents a PA request from the healthcare demo
@@ -44,8 +44,7 @@ type PARequestsFile struct {
 
 // readPARequest reads a PA request from the target data
 func readPARequest(demoDir, requestID string) (*PARequest, error) {
-	paPath := filepath.Join(demoDir, "target-data", "pa_requests.json")
-	data, err := os.ReadFile(paPath)
+	data, err := os.ReadFile(paths.Infra.DemosHealthcarePARequestsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PA requests file: %w", err)
 	}
@@ -123,7 +122,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		fmt.Println("  Copy-paste to inspect doctrine decisions for this request:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + paths.Infra.DemosHealthcareComposePath + " logs observability --tail 20")
 		fmt.Println()
 		_ = demoStep(demoDir, "audit tail",
 			false,
@@ -170,7 +169,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("  ── Proof ─────────────────────────────────────────────────────")
 		fmt.Println("  Copy-paste to confirm AUTO_APPROVED in the audit log:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability | grep -i auto_approved")
+		fmt.Println("    docker compose -f " + paths.Infra.DemosHealthcareComposePath + " logs observability | grep -i auto_approved")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
@@ -269,8 +268,8 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 
 		fmt.Println("  Doctrine rule that would block a PHI exfiltration attempt:")
 		fmt.Println()
-		if rule, err := readDoctrineRule(demoDir, "phi_hipaa_doctrine.json", "phi_exfil_attempt"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/phi_hipaa_doctrine.json | grep -A 10 phi_exfil_attempt\n")
+		if rule, err := readDoctrineRule(demoDir, constants.DemosHIPAADoctrineFile, "phi_exfil_attempt"); err == nil {
+			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 phi_exfil_attempt\n", constants.DemosHIPAADoctrineFile)
 			fmt.Printf("  id:         %s\n", rule.ID)
 			fmt.Printf("  severity:   %s\n", rule.Severity)
 			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
@@ -290,7 +289,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println()
 		fmt.Println("  Then inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + paths.Infra.DemosHealthcareComposePath + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")

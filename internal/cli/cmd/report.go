@@ -70,13 +70,16 @@ func reportAllCmd() *cobra.Command {
 			}
 
 			opts := reporting.Options{
-				DataDir:      dataDir,
-				RuntimeDir:   runtimeDir,
-				LedgerDir:    ledgerDir,
-				VaultDir:     paths.Infra.VaultDir,
-				VaultKeyPath: paths.Infra.VaultKeyPath,
-				OutDir:       outDir,
-				Logger:       slog.Default(),
+				DataDir:                   dataDir,
+				RuntimeDir:                runtimeDir,
+				LedgerDir:                 ledgerDir,
+				VaultDir:                  paths.Infra.VaultDir,
+				VaultKeyPath:              paths.Infra.VaultKeyPath,
+				OutDir:                    outDir,
+				ExecutionVaultDBPath:      paths.Infra.ExecutionVaultDBPath,
+				ReplayStoreDBPath:         paths.Infra.ReplayStoreDBPath,
+				SuspendedTransactionDBPath: paths.Infra.SuspendedTransactionsDBPath,
+				Logger:                    slog.Default(),
 			}
 
 			result, err := reporting.Run(cmd.Context(), opts)
@@ -135,13 +138,16 @@ func reportVerifyCmd() *cobra.Command {
 			}
 
 			opts := reporting.Options{
-				DataDir:      dataDir,
-				RuntimeDir:   runtimeDir,
-				LedgerDir:    ledgerDir,
-				VaultDir:     paths.Infra.VaultDir,
-				VaultKeyPath: paths.Infra.VaultKeyPath,
-				OutDir:       outDir,
-				Logger:       slog.Default(),
+				DataDir:                   dataDir,
+				RuntimeDir:                runtimeDir,
+				LedgerDir:                 ledgerDir,
+				VaultDir:                  paths.Infra.VaultDir,
+				VaultKeyPath:              paths.Infra.VaultKeyPath,
+				OutDir:                    outDir,
+				ExecutionVaultDBPath:      paths.Infra.ExecutionVaultDBPath,
+				ReplayStoreDBPath:         paths.Infra.ReplayStoreDBPath,
+				SuspendedTransactionDBPath: paths.Infra.SuspendedTransactionsDBPath,
+				Logger:                    slog.Default(),
 			}
 
 			result, err := reporting.Run(cmd.Context(), opts)

@@ -26,12 +26,12 @@ type Report struct {
 	Receipts          []clientpkg.Receipt `json:"receipts"`
 }
 
-// Write emits report.json and report.md into dir, returning their paths.
-func Write(dir string, rep Report) (string, string, error) {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+// Write emits report.json and report.md at the specified paths.
+// The directory containing jsonPath and mdPath will be created if it does not exist.
+func Write(jsonPath, mdPath string, rep Report) (string, string, error) {
+	if err := os.MkdirAll(filepath.Dir(jsonPath), 0o755); err != nil {
 		return "", "", err
 	}
-	jsonPath := filepath.Join(dir, "report.json")
 	b, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
 		return "", "", err
@@ -40,7 +40,6 @@ func Write(dir string, rep Report) (string, string, error) {
 		return "", "", err
 	}
 
-	mdPath := filepath.Join(dir, "report.md")
 	if err := os.WriteFile(mdPath, []byte(markdown(rep)), 0o644); err != nil {
 		return jsonPath, "", err
 	}

@@ -536,21 +536,69 @@ func TestPKIController_HandlePKICABundle(t *testing.T) {
 
 func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
 	t.Parallel()
-	c, _, _ := setupTestPKIController(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
-	rr := httptest.NewRecorder()
+	t.Run("Success - GET returns Windows script", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		rr := httptest.NewRecorder()
 
-	c.handleTrustScriptWindows(rr, req)
+		c.handleTrustScriptWindows(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
-	assert.NotEmpty(t, rr.Body.Bytes())
-	script := rr.Body.String()
-	assert.Contains(t, script, "CA bundle installed")
-	assert.Contains(t, script, "Download g8e Node")
-	assert.Contains(t, script, "security pki enroll")
-	assert.Contains(t, script, "Enrollment complete")
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
+		assert.NotEmpty(t, rr.Body.Bytes())
+		script := rr.Body.String()
+		assert.Contains(t, script, "CA bundle installed")
+		assert.Contains(t, script, "Download g8e Node")
+		assert.Contains(t, script, "security pki enroll")
+		assert.Contains(t, script, "Enrollment complete")
+	})
+
+	t.Run("Success - GET with X-Forwarded-Host uses external host", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		req.Header.Set("X-Forwarded-Host", "192.168.1.62")
+		rr := httptest.NewRecorder()
+
+		c.handleTrustScriptWindows(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		script := rr.Body.String()
+		assert.Contains(t, script, "192.168.1.62")
+		assert.NotContains(t, script, "localhost")
+	})
+
+	t.Run("Success - GET with Host header uses that host", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		req.Host = "192.168.1.62:8080"
+		rr := httptest.NewRecorder()
+
+		c.handleTrustScriptWindows(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		script := rr.Body.String()
+		assert.Contains(t, script, "192.168.1.62")
+		assert.NotContains(t, script, "localhost")
+	})
+
+	t.Run("Success - GET with localhost uses LocalAddrContextKey IP", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		req.Host = "localhost:8080"
+		// Set LocalAddrContextKey to simulate a non-loopback server address
+		localAddr := &net.TCPAddr{IP: net.ParseIP("192.168.1.62"), Port: 8080}
+		ctx := context.WithValue(req.Context(), http.LocalAddrContextKey, localAddr)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+
+		c.handleTrustScriptWindows(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		script := rr.Body.String()
+		assert.Contains(t, script, "192.168.1.62")
+		assert.NotContains(t, script, "localhost")
+	})
 }
 
 func TestPKIController_HandleTrustScriptLinux(t *testing.T) {

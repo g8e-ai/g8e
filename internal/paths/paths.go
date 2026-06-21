@@ -20,7 +20,6 @@ package paths
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -67,6 +66,45 @@ var Infra struct {
 	PkiBinariesDir              string
 	ActuatorPubJSONPath         string
 	ActuatorPubPEMPath          string
+
+	// Operator PKI file paths
+	OperatorKeyPath       string
+	OperatorCertPath      string
+	OperatorChainPath     string
+	WardenPubPath         string
+	RootCAKeyPath         string
+	TrustedSignersDir     string
+	ClientPkiDir          string
+	ClientOperatorKeyPath string
+	ClientOperatorCertPath string
+
+	// Secrets file paths
+	SessionEncKeyPath   string
+	BootstrapDigestPath string
+
+	// Log paths
+	LogDir         string
+	OperatorLogFile string
+
+	// Storage DB paths
+	ExecutionVaultDBPath string
+	TokenStoreDBPath     string
+	ReplayStoreDBPath    string
+	LedgerDir            string
+
+	// Demo paths
+	DemosDir             string
+	DemosHealthcareDir   string
+	DemosFinanceDir      string
+	DemosGovDir          string
+	DemosSecureDataDir   string
+	DemosHealthcareTargetDataDir string
+	DemosHealthcareDoctrineDir   string
+	DemosHealthcarePARequestsPath string
+	DemosHealthcareComposePath    string
+	DemosHealthcareDoctrineHIPAAPath string
+	DemosSecureDataDoctrineDir    string
+	DemosSecureDataDoctrinePath   string
 } = struct {
 	DbPath                      string
 	PkiDir                      string
@@ -102,6 +140,40 @@ var Infra struct {
 	PkiBinariesDir              string
 	ActuatorPubJSONPath         string
 	ActuatorPubPEMPath          string
+
+	OperatorKeyPath        string
+	OperatorCertPath       string
+	OperatorChainPath      string
+	WardenPubPath          string
+	RootCAKeyPath          string
+	TrustedSignersDir      string
+	ClientPkiDir           string
+	ClientOperatorKeyPath  string
+	ClientOperatorCertPath string
+
+	SessionEncKeyPath   string
+	BootstrapDigestPath string
+
+	LogDir          string
+	OperatorLogFile string
+
+	ExecutionVaultDBPath string
+	TokenStoreDBPath     string
+	ReplayStoreDBPath    string
+	LedgerDir            string
+
+	DemosDir             string
+	DemosHealthcareDir   string
+	DemosFinanceDir      string
+	DemosGovDir          string
+	DemosSecureDataDir   string
+	DemosHealthcareTargetDataDir string
+	DemosHealthcareDoctrineDir   string
+	DemosHealthcarePARequestsPath string
+	DemosHealthcareComposePath    string
+	DemosHealthcareDoctrineHIPAAPath string
+	DemosSecureDataDoctrineDir    string
+	DemosSecureDataDoctrinePath   string
 }{
 	DbPath:                  ".g8e/data/g8e.db",
 	PkiDir:                  ".g8e/pki",
@@ -134,6 +206,40 @@ var Infra struct {
 	PkiRevocationDir:        ".g8e/pki/revocation",
 	ActuatorPubJSONPath:     ".g8e/pki/Actuator_pub.json",
 	ActuatorPubPEMPath:      ".g8e/pki/Actuator_pub.pem",
+
+	OperatorKeyPath:        ".g8e/pki/operator.key",
+	OperatorCertPath:       ".g8e/pki/operator.crt",
+	OperatorChainPath:      ".g8e/pki/operator.chain.pem",
+	WardenPubPath:          ".g8e/pki/warden_pub.pem",
+	RootCAKeyPath:          ".g8e/pki/root/root_ca.key",
+	TrustedSignersDir:      ".g8e/pki/trusted_signers",
+	ClientPkiDir:           ".g8e/pki/client",
+	ClientOperatorKeyPath:  ".g8e/pki/client/operator.key",
+	ClientOperatorCertPath: ".g8e/pki/client/operator.crt",
+
+	SessionEncKeyPath:   ".g8e/secrets/session_encryption_key",
+	BootstrapDigestPath: ".g8e/secrets/bootstrap_digest.json",
+
+	LogDir:          ".g8e/logs",
+	OperatorLogFile: ".g8e/logs/operator.log",
+
+	ExecutionVaultDBPath: ".g8e/data/execution_vault.db",
+	TokenStoreDBPath:     ".g8e/data/token_store.db",
+	ReplayStoreDBPath:    ".g8e/data/replay_store.db",
+	LedgerDir:            ".g8e/data/ledger",
+
+	DemosDir:             "demos",
+	DemosHealthcareDir:   "demos/healthcare",
+	DemosFinanceDir:      "demos/finance",
+	DemosGovDir:          "demos/gov",
+	DemosSecureDataDir:   "demos/secure-data",
+	DemosHealthcareTargetDataDir: "demos/healthcare/target-data",
+	DemosHealthcareDoctrineDir:   "demos/healthcare/doctrine",
+	DemosHealthcarePARequestsPath: "demos/healthcare/target-data/pa_requests.json",
+	DemosHealthcareComposePath:    "demos/healthcare/compose.yml",
+	DemosHealthcareDoctrineHIPAAPath: "demos/healthcare/doctrine/phi_hipaa_doctrine.json",
+	DemosSecureDataDoctrineDir:    "demos/secure-data/doctrine",
+	DemosSecureDataDoctrinePath:   "demos/secure-data/doctrine/secure_data_transfer_doctrine.json",
 }
 
 // Mutable path vars that are derived from the base directory at init time.
@@ -193,26 +299,128 @@ func InitWithBase(baseDir string) error {
 	Infra.GatewayChainPath = pathutil.SafeJoin(Infra.PkiDir, "issued/hub/operator-gateway.chain.pem")
 	Infra.TrustDomainJSONPath = pathutil.SafeJoin(Infra.PkiDir, "trust/trust-domain.json")
 	Infra.ServiceCertPath = pathutil.SafeJoin(Infra.PkiDir, "issued/hub/operator-gateway.crt")
-	Infra.PkiRootDir = filepath.Join(Infra.PkiDir, "root")
-	Infra.PkiAuthoritiesDir = filepath.Join(Infra.PkiDir, "authorities")
-	Infra.PkiIssuedHubDir = filepath.Join(Infra.PkiDir, "issued/hub")
-	Infra.PkiIssuedGatewayPeerDir = filepath.Join(Infra.PkiDir, "issued/gateway-peer")
-	Infra.PkiTrustDir = filepath.Join(Infra.PkiDir, "trust")
-	Infra.PkiRevocationDir = filepath.Join(Infra.PkiDir, "revocation")
-	Infra.ActuatorPubJSONPath = filepath.Join(Infra.PkiDir, constants.ActuatorPubJSONFilename)
-	Infra.ActuatorPubPEMPath = filepath.Join(Infra.PkiDir, constants.ActuatorPubPEMFilename)
+	Infra.PkiRootDir = pathutil.SafeJoin(Infra.PkiDir, "root")
+	Infra.PkiAuthoritiesDir = pathutil.SafeJoin(Infra.PkiDir, "authorities")
+	Infra.PkiIssuedHubDir = pathutil.SafeJoin(Infra.PkiDir, "issued/hub")
+	Infra.PkiIssuedGatewayPeerDir = pathutil.SafeJoin(Infra.PkiDir, "issued/gateway-peer")
+	Infra.PkiTrustDir = pathutil.SafeJoin(Infra.PkiDir, "trust")
+	Infra.PkiRevocationDir = pathutil.SafeJoin(Infra.PkiDir, "revocation")
+	Infra.ActuatorPubJSONPath = pathutil.SafeJoin(Infra.PkiDir, constants.ActuatorPubJSONFilename)
+	Infra.ActuatorPubPEMPath = pathutil.SafeJoin(Infra.PkiDir, constants.ActuatorPubPEMFilename)
 
-	GatewayIDPath = filepath.Join(Infra.DataDir, constants.GatewayIDFilename)
-	NetworkIdentityPath = filepath.Join(Infra.PkiDir, constants.NetworkIdentityFilename)
-	PeerCertPath = filepath.Join(Infra.PkiDir, constants.PeerSubdir, constants.PeerCertFilename)
-	PeerKeyPath = filepath.Join(Infra.PkiDir, constants.PeerSubdir, constants.PeerKeyFilename)
-	PeerChainPath = filepath.Join(Infra.PkiDir, constants.PeerSubdir, constants.PeerChainFilename)
-	PkiGatewayKeyPath = filepath.Join(Infra.PkiIssuedHubDir, constants.PkiFileGatewayKey)
+	Infra.OperatorKeyPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiFileOperatorKey)
+	Infra.OperatorCertPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiFileOperatorCert)
+	Infra.OperatorChainPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiFileOperatorChain)
+	Infra.WardenPubPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiFileWardenPub)
+	Infra.RootCAKeyPath = pathutil.SafeJoin(Infra.PkiRootDir, constants.PkiFileRootCAKey)
+	Infra.TrustedSignersDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirTrustedSigners)
+	Infra.ClientPkiDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirClient)
+	Infra.ClientOperatorKeyPath = pathutil.SafeJoin(Infra.ClientPkiDir, constants.PkiFileOperatorKey)
+	Infra.ClientOperatorCertPath = pathutil.SafeJoin(Infra.ClientPkiDir, constants.PkiFileOperatorCert)
+
+	Infra.SessionEncKeyPath = pathutil.SafeJoin(Infra.SecretsDir, constants.SecretsFileSessionEncryptionKey)
+	Infra.BootstrapDigestPath = pathutil.SafeJoin(Infra.SecretsDir, constants.SecretsFileBootstrapDigest)
+
+	Infra.LogDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.LogDirname)
+	Infra.OperatorLogFile = pathutil.SafeJoin(Infra.LogDir, OperatorLogPath)
+
+	Infra.ExecutionVaultDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)
+	Infra.TokenStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.TokenStoreDBFilename)
+	Infra.ReplayStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)
+	Infra.LedgerDir = pathutil.SafeJoin(Infra.DataDir, constants.LedgerDirname)
+
+	Infra.DemosDir = pathutil.SafeJoin(baseDir, constants.DemosDirname)
+	Infra.DemosHealthcareDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgHealthcare)
+	Infra.DemosFinanceDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgFinance)
+	Infra.DemosGovDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgGov)
+	Infra.DemosSecureDataDir = pathutil.SafeJoin(Infra.DemosDir, constants.DemosOrgSecureData)
+	Infra.DemosHealthcareTargetDataDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosTargetDataDir)
+	Infra.DemosHealthcareDoctrineDir = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosDoctrineDir)
+	Infra.DemosHealthcarePARequestsPath = pathutil.SafeJoin(Infra.DemosHealthcareTargetDataDir, constants.DemosPARequestsFile)
+	Infra.DemosHealthcareComposePath = pathutil.SafeJoin(Infra.DemosHealthcareDir, constants.DemosComposeFile)
+	Infra.DemosHealthcareDoctrineHIPAAPath = pathutil.SafeJoin(Infra.DemosHealthcareDoctrineDir, constants.DemosHIPAADoctrineFile)
+	Infra.DemosSecureDataDoctrineDir = pathutil.SafeJoin(Infra.DemosSecureDataDir, constants.DemosDoctrineDir)
+	Infra.DemosSecureDataDoctrinePath = pathutil.SafeJoin(Infra.DemosSecureDataDoctrineDir, constants.DemosSecureDataDoctrineFile)
+
+	GatewayIDPath = pathutil.SafeJoin(Infra.DataDir, constants.GatewayIDFilename)
+	NetworkIdentityPath = pathutil.SafeJoin(Infra.PkiDir, constants.NetworkIdentityFilename)
+	PeerCertPath = pathutil.SafeJoin(Infra.PkiDir, constants.PeerSubdir, constants.PeerCertFilename)
+	PeerKeyPath = pathutil.SafeJoin(Infra.PkiDir, constants.PeerSubdir, constants.PeerKeyFilename)
+	PeerChainPath = pathutil.SafeJoin(Infra.PkiDir, constants.PeerSubdir, constants.PeerChainFilename)
+	PkiGatewayKeyPath = pathutil.SafeJoin(Infra.PkiIssuedHubDir, constants.PkiFileGatewayKey)
 	return nil
 }
 
 // GetSuspendedTransactionsDBPath constructs the suspended transaction database path
 // relative to the provided data directory.
 func GetSuspendedTransactionsDBPath(dataDir string) string {
-	return filepath.Join(dataDir, constants.SuspendedTxFilename)
+	return pathutil.SafeJoin(dataDir, constants.SuspendedTxFilename)
 }
+
+// AgentConfigPaths holds precomputed agent configuration paths for a given home directory.
+// Call once per command with the user's home directory to avoid repeated filepath.Join calls.
+type AgentConfigPaths struct {
+	CursorConfigDir string
+	CursorConfigPath string
+	DevinConfigDir   string
+	DevinConfigPath  string
+	GeminiConfigDir  string
+	GeminiConfigPath string
+	GooseConfigDir   string
+	GooseConfigPath  string
+	VSCodeConfigDir  string
+	VSCodeConfigPath string
+	CodeiumConfigDir string
+	CodeiumConfigPath string
+	TabbyConfigDir   string
+	TabbyConfigPath  string
+	ContinueConfigDir string
+	ContinueConfigPath string
+}
+
+// GetAgentConfigPaths precomputes all agent configuration paths from the given home directory.
+// Used by CLI commands that write agent MCP configurations.
+func GetAgentConfigPaths(homeDir string) AgentConfigPaths {
+	return AgentConfigPaths{
+		CursorConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor),
+		CursorConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirCursor, constants.AgentConfigFileMCP),
+		DevinConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin),
+		DevinConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirDevin, constants.AgentConfigFileMCPDevin),
+		GeminiConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini),
+		GeminiConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirGemini, constants.AgentConfigFileSettings),
+		GooseConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose),
+		GooseConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirGoose, constants.AgentConfigFileSettings),
+		VSCodeConfigDir:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode),
+		VSCodeConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirVSCode, constants.AgentConfigFileMCP),
+		CodeiumConfigDir: pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium),
+		CodeiumConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirCodeium, constants.AgentConfigFileMCP),
+		TabbyConfigDir:   pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby),
+		TabbyConfigPath:  pathutil.SafeJoin(homeDir, constants.AgentConfigDirTabby, constants.AgentConfigFileMCP),
+		ContinueConfigDir: pathutil.SafeJoin(homeDir, constants.AgentConfigDirContinue),
+		ContinueConfigPath: pathutil.SafeJoin(homeDir, constants.AgentConfigDirContinue, constants.AgentConfigFileSettings),
+	}
+}
+
+// SSHConfigPaths holds precomputed SSH configuration paths for a given home directory.
+// Call once per command with the user's home directory to avoid repeated filepath.Join calls.
+type SSHConfigPaths struct {
+	ConfigPath     string
+	KnownHostsPath string
+	IDE25519KeyPath string
+	IDECDSAKeyPath string
+	IDRSAKeyPath   string
+}
+
+// GetSSHConfigPaths precomputes all SSH configuration paths from the given home directory.
+// Used by SSH connection resolution functions.
+func GetSSHConfigPaths(homeDir string) SSHConfigPaths {
+	sshDir := pathutil.SafeJoin(homeDir, ".ssh")
+	return SSHConfigPaths{
+		ConfigPath:     pathutil.SafeJoin(sshDir, "config"),
+		KnownHostsPath: pathutil.SafeJoin(sshDir, "known_hosts"),
+		IDE25519KeyPath: pathutil.SafeJoin(sshDir, "id_ed25519"),
+		IDECDSAKeyPath: pathutil.SafeJoin(sshDir, "id_ecdsa"),
+		IDRSAKeyPath:   pathutil.SafeJoin(sshDir, "id_rsa"),
+	}
+}
+

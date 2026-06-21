@@ -109,7 +109,7 @@ func (c *PKIController) handlePKIFingerprint(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	rootCAPath := filepath.Join(c.pki.PKIDir(), constants.PkiSubdirRoot, constants.PkiFileRootCA)
+	rootCAPath := c.pki.RootCAPath()
 	pemData, err := os.ReadFile(rootCAPath)
 	if err != nil {
 		c.logger.Error("Failed to read root CA", "error", err, "path", rootCAPath)
@@ -481,6 +481,17 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Extract the gateway host from the request
+	gatewayHost := r.Header.Get("X-Forwarded-Host")
+	if gatewayHost == "" {
+		gatewayHost = r.Host
+	}
+
+	// Remove port if present
+	if h, _, err := net.SplitHostPort(gatewayHost); err == nil {
+		gatewayHost = h
+	}
+
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
@@ -488,8 +499,8 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
 
-GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
-GATEWAY_PORT="${GATEWAY_PORT:-%s}"
+GATEWAY_HOST="%s"
+GATEWAY_PORT="%s"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 LOCAL_CA_PATH="%s"
 
@@ -504,8 +515,8 @@ fi
 
 echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
 echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-echo "[g8e] You can now use: ./g8e auth enroll"
-`, port, caBundleURL, localCAPath)
+echo "[g8e] You can now use: ./g8e -e ${GATEWAY_HOST} auth enroll"
+`, gatewayHost, port, caBundleURL, localCAPath)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -526,14 +537,25 @@ func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Extract the gateway host from the request
+	gatewayHost := r.Header.Get("X-Forwarded-Host")
+	if gatewayHost == "" {
+		gatewayHost = r.Host
+	}
+
+	// Remove port if present
+	if h, _, err := net.SplitHostPort(gatewayHost); err == nil {
+		gatewayHost = h
+	}
+
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
 
-GATEWAY_HOST="${GATEWAY_HOST:-localhost}"
-GATEWAY_PORT="${GATEWAY_PORT:-%s}"
+GATEWAY_HOST="%s"
+GATEWAY_PORT="%s"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 TEMP_CA_PATH="/tmp/g8e-ca.crt"
 
@@ -551,8 +573,8 @@ sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keyc
 
 echo "[g8e] CA bundle installed and trusted."
 echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-echo "[g8e] You can now use: ./g8e auth enroll"
-`, port, caBundleURL)
+echo "[g8e] You can now use: ./g8e -e ${GATEWAY_HOST} auth enroll"
+`, gatewayHost, port, caBundleURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -573,6 +595,17 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Extract the gateway host from the request
+	gatewayHost := r.Header.Get("X-Forwarded-Host")
+	if gatewayHost == "" {
+		gatewayHost = r.Host
+	}
+
+	// Remove port if present
+	if h, _, err := net.SplitHostPort(gatewayHost); err == nil {
+		gatewayHost = h
+	}
+
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
@@ -581,8 +614,8 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 
 	script := fmt.Sprintf(`$ErrorActionPreference = "Continue"
 
-$GatewayHost = if ($env:GATEWAY_HOST) { $env:GATEWAY_HOST } else { "localhost" }
-$GatewayPort = if ($env:GATEWAY_PORT) { $env:GATEWAY_PORT } else { "%s" }
+$GatewayHost = "%s"
+$GatewayPort = "%s"
 $CABundleUrl = "http://${GatewayHost}:${GatewayPort}%s"
 $LocalCAPath = "%s"
 $NodeBinaryName = "%s"
@@ -623,24 +656,9 @@ if (-not (Test-Path $NodeBinaryName)) {
 
 Write-Host "[g8e] Node Binary downloaded to ${NodeBinaryName}"
 
-# Run enrollment
-Write-Host "[g8e] Running PKI enrollment with endpoint ${GatewayHost}..."
-& .\$NodeBinaryName security pki enroll --endpoint "${GatewayHost}"
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[g8e] ERROR: Enrollment failed with exit code ${LASTEXITCODE}"
-    return
-}
-
-Write-Host "[g8e] Enrollment complete"
-
 Write-Host "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-
-# Start the operator
-Write-Host "[g8e] Starting Operator with endpoint ${GatewayHost}..."
-Write-Host "[g8e] The Operator will run in this terminal. Press Ctrl+C to stop."
-& .\$NodeBinaryName -e $GatewayHost
-`, port, caBundleURL, localCAPath, binaryName, binaryURL)
+Write-Host "[g8e] You can now run: .\\${NodeBinaryName} -e ${GatewayHost} auth enroll"
+`, gatewayHost, port, caBundleURL, localCAPath, binaryName, binaryURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValuePowerShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -692,7 +710,7 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 	}
 
 	// Check in PKI binaries directory
-	possiblePaths = append(possiblePaths, filepath.Join(c.pki.PKIDir(), constants.PkiSubdirBinaries, filename))
+	possiblePaths = append(possiblePaths, filepath.Join(c.pki.BinariesDir(), filename))
 
 	var binaryPath string
 	for _, path := range possiblePaths {

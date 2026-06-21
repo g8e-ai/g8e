@@ -43,10 +43,11 @@ var requiredBootstrapSecrets = []string{
 
 // SecretManager handles generation and validation of platform security secrets.
 type SecretManager struct {
-	db         *sqliteutil.DB
-	logger     *slog.Logger
-	secretsDir string
-	keystore   *keystore.Keystore
+	db                  *sqliteutil.DB
+	logger              *slog.Logger
+	secretsDir          string
+	bootstrapDigestPath string
+	keystore            *keystore.Keystore
 }
 
 func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger) (*SecretManager, error) {
@@ -61,10 +62,11 @@ func NewSecretManager(db *sqliteutil.DB, secretsDir string, logger *slog.Logger)
 		return nil, fmt.Errorf("%w: enforce keystore permissions", err)
 	}
 	return &SecretManager{
-		db:         db,
-		secretsDir: secretsDir,
-		logger:     logger,
-		keystore:   ks,
+		db:                  db,
+		secretsDir:          secretsDir,
+		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+		logger:              logger,
+		keystore:            ks,
 	}, nil
 }
 
@@ -166,7 +168,7 @@ func (m *SecretManager) recreateAppSettings() error {
 	}
 
 	// Delete bootstrap digest manifest if it exists
-	manifestPath := filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)
+	manifestPath := m.bootstrapDigestPath
 	if err := os.Remove(manifestPath); err != nil && !os.IsNotExist(err) {
 		m.logger.Warn("[SecretManager] Failed to delete digest manifest during recreation",
 			"path", manifestPath, "error", err)
@@ -270,7 +272,7 @@ func (m *SecretManager) validateAppSettings() error {
 		// and recreate secrets (e.g., when .g8e directory was wiped but DB persists)
 		if errors.Is(err, constants.ErrNotFound) {
 			m.logger.Warn("[SecretManager] Bootstrap digest manifest missing, recreating secrets",
-				"path", filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest))
+				"path", m.bootstrapDigestPath)
 			return m.recreateAppSettings()
 		}
 		return fmt.Errorf("%w: secret_manager: validate app settings: read digest manifest", err)
@@ -339,7 +341,7 @@ func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) err
 		return fmt.Errorf("%w: secret_manager: write digest manifest: marshal manifest", err)
 	}
 
-	finalPath := filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)
+	finalPath := m.bootstrapDigestPath
 	tmpPath := finalPath + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		m.logger.Error("[SecretManager] Failed to write bootstrap digest manifest",
@@ -358,7 +360,7 @@ func (m *SecretManager) writeDigestManifestFromEncryptedFiles(now time.Time) err
 }
 
 func (m *SecretManager) readDigestManifest() (*bootstrapDigestManifest, error) {
-	manifestPath := filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)
+	manifestPath := m.bootstrapDigestPath
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -388,7 +390,7 @@ func (m *SecretManager) rejectPreexistingBootstrapState() error {
 			return fmt.Errorf("%w: secret_manager: reject preexisting bootstrap state: inspect secret %s", err, name)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(m.secretsDir, constants.SecretsFileBootstrapDigest)); err == nil {
+	if _, err := os.Stat(m.bootstrapDigestPath); err == nil {
 		return fmt.Errorf("%w: digest manifest", constants.ErrAlreadyExists)
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("%w: secret_manager: reject preexisting bootstrap state: inspect digest manifest", err)

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -98,7 +99,8 @@ func TestPeerConnectionManager_StartEnrollment(t *testing.T) {
 	// Ensure data and pki dirs exist
 	err = os.MkdirAll(paths.Infra.DataDir, 0755)
 	require.NoError(t, err)
-	err = os.MkdirAll(filepath.Join(paths.Infra.PkiDir, "peer"), 0755)
+	// Use pathutil.SafeJoin for cross-platform safety when joining with absolute paths.Infra.PkiDir
+	err = os.MkdirAll(pathutil.SafeJoin(paths.Infra.PkiDir, "peer"), 0755)
 	require.NoError(t, err)
 
 	pcm := NewPeerConnectionManager(infra.Cfg, infra.Logger, infra.DB, infra.PKI)

@@ -190,7 +190,7 @@ func (ass *SQLAuditStore) createDirectoryStructure() error {
 
 // verifyWritePermissions ensures the data directory is writable
 func (ass *SQLAuditStore) verifyWritePermissions() error {
-	testFile := filepath.Join(ass.config.DataDir, ".write_test")
+	testFile := pathutil.SafeJoin(ass.config.DataDir, ".write_test")
 
 	if err := os.WriteFile(testFile, []byte("write_test"), 0600); err != nil {
 		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, ass.config.DataDir, err)

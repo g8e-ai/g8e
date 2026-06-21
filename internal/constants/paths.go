@@ -155,10 +155,19 @@ const (
 	SecretsFileCLIPrivateKey        = "cli_private_key"
 	SecretsFileSessionToken         = "session_token"
 
-	DemosDirname     = "demos"
-	DemosComposeFile = "compose.yml"
-	DemosBinDirname  = "bin"
-	DemosBinaryName  = "g8e"
+	DemosDirname         = "demos"
+	DemosComposeFile     = "compose.yml"
+	DemosBinDirname      = "bin"
+	DemosBinaryName      = "g8e"
+	DemosTargetDataDir   = "target-data"
+	DemosDoctrineDir    = "doctrine"
+	DemosPARequestsFile  = "pa_requests.json"
+	DemosHIPAADoctrineFile = "phi_hipaa_doctrine.json"
+	DemosSecureDataDoctrineFile = "secure_data_transfer_doctrine.json"
+	DemosOrgHealthcare   = "healthcare"
+	DemosOrgFinance      = "finance"
+	DemosOrgGov          = "gov"
+	DemosOrgSecureData   = "secure-data"
 
 	SwaggerFilename          = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"
@@ -186,6 +195,7 @@ const (
 	// Operator-specific filenames
 	OperatorPIDFilename     = "operator.pid"
 	OperatorPostureFilename = "operator.posture"
+	OperatorBinaryFilename  = "g8e-operator"
 
 	// Peer certificate filenames
 	PeerCertFilename  = "peer.crt"
@@ -216,6 +226,7 @@ const (
 	SessionsDirname   = "sessions"
 	GitDirname        = ".git"
 	GitignoreFilename = ".gitignore"
+	GoModFilename     = "go.mod"
 
 	// Key filenames
 	MasterKeyFilename = ".master_key"
@@ -276,6 +287,16 @@ const (
 	TestGitDirname             = ".git"
 	TestFileTxtFilename        = "test.txt"
 	TestNonexistentTxtFilename = "nonexistent.txt"
+	TestResultsDirname         = "test-results"
+
+	// Test-specific directory names
+	TestVaultDirname = "test-vault"
+	TestProtocolDirname = "protocol"
+	TestDocsDirname = "docs"
+
+	// Test-specific database filenames
+	TestLocalStateDBFilename = "local_state.db"
+	TestAuditVaultDBFilename = "audit_vault.db"
 
 	// File system listing limits
 	FsListMaxDepth       = 3

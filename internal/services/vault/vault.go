@@ -29,6 +29,7 @@ import (
 // the DEK for database encryption operations.
 type Vault struct {
 	dataDir string
+	dbPath  string
 	logger  *slog.Logger
 
 	header   *VaultHeader
@@ -73,6 +74,7 @@ func NewVault(config *VaultConfig) (*Vault, error) {
 
 	v := &Vault{
 		dataDir: config.DataDir,
+		dbPath:  filepath.Join(config.DataDir, constants.DbFilename),
 		logger:  logger,
 	}
 
@@ -299,13 +301,12 @@ func (v *Vault) Reset(confirmDestroy bool) error {
 		return fmt.Errorf("failed to delete vault header: %w", err)
 	}
 
-	dbPath := filepath.Join(v.dataDir, "g8e.db")
-	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(v.dbPath); err != nil && !os.IsNotExist(err) {
 		v.logger.Warn("Failed to delete database file", string(constants.ConnectionStateError), err)
 	}
 
-	os.Remove(dbPath + "-wal")
-	os.Remove(dbPath + "-shm")
+	os.Remove(v.dbPath + "-wal")
+	os.Remove(v.dbPath + "-shm")
 
 	v.logger.Info("Vault reset complete - all data destroyed")
 

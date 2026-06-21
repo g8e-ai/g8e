@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 )
 
 const (
@@ -43,8 +43,9 @@ func getDefaultNodeBinaryDir() string {
 		// If we can't get cwd, fall back to current directory
 		_ = paths.InitWithBase(".")
 	}
-	// Use project root (parent of .g8e) for bin directory
-	return filepath.Join(paths.Infra.RuntimeDir, "../bin")
+	// Use pathutil.SafeJoin to handle cross-platform path joining correctly
+	// paths.Infra.RuntimeDir is absolute after Init(), so SafeJoin handles the relative "../bin" correctly
+	return pathutil.SafeJoin(paths.Infra.RuntimeDir, "../bin")
 }
 
 // StreamStatusEvent is written as a JSON line to stdout for each host event.

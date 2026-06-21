@@ -73,8 +73,8 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		}
 
 		fmt.Println("  ── Step 3: Confirm the migration doctrines are loaded ───────────")
-		if rule, err := readDoctrineRule(demoDir, "secure_data_transfer_doctrine.json", "migration_manifest_required"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/secure_data_transfer_doctrine.json | grep -A 10 migration_manifest_required\n")
+		if rule, err := readDoctrineRule(demoDir, constants.DemosSecureDataDoctrineFile, "migration_manifest_required"); err == nil {
+			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 migration_manifest_required\n", constants.DemosSecureDataDoctrineFile)
 			fmt.Printf("  id:         %s\n", rule.ID)
 			fmt.Printf("  severity:   %s\n", rule.Severity)
 			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
@@ -131,8 +131,8 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		}
 
 		fmt.Println("  ── Step 2: Confirm doctrine enforcement audit ───────────────────")
-		if rule, err := readDoctrineRule(demoDir, "secure_data_transfer_doctrine.json", "connector_bypass_attempt"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/secure_data_transfer_doctrine.json | grep -A 10 connector_bypass_attempt\n")
+		if rule, err := readDoctrineRule(demoDir, constants.DemosSecureDataDoctrineFile, "connector_bypass_attempt"); err == nil {
+			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 connector_bypass_attempt\n", constants.DemosSecureDataDoctrineFile)
 			fmt.Printf("  id:         %s\n", rule.ID)
 			fmt.Printf("  severity:   %s\n", rule.Severity)
 			fmt.Printf("  pattern:    %s\n", rule.Pattern)

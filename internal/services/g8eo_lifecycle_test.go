@@ -66,8 +66,11 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	cfg.PubSubURL = "ws://127.0.0.1:0" // dummy
 	cfg.NoGit = true
 
+	// Initialize paths with test directory
+	require.NoError(t, paths.InitWithBase(cfg.WorkDir))
+
 	// Initialize vault for encryption (required since storage refactor)
-	vaultDir := filepath.Join(cfg.WorkDir, paths.Infra.VaultDir)
+	vaultDir := paths.Infra.VaultDir
 	require.NoError(t, os.MkdirAll(vaultDir, 0700))
 	testKey := []byte("g8e_test_abc123xyz789_TEST_KEY_1")
 	keyPath := filepath.Join(vaultDir, "key")
@@ -78,7 +81,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NoError(t, header.Save(vaultDir))
 
 	// Initialize keystore with test backend for master key (required for gateway database)
-	secretsDir := filepath.Join(cfg.WorkDir, paths.Infra.SecretsDir)
+	secretsDir := paths.Infra.SecretsDir
 	require.NoError(t, os.MkdirAll(secretsDir, 0700))
 	testBackend, err := keystore.NewTestBackend()
 	require.NoError(t, err)

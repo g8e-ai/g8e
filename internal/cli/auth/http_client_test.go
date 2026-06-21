@@ -38,9 +38,9 @@ func TestNewSecureHTTPClient_Success(t *testing.T) {
 
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PKIDir,
+		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -62,9 +62,9 @@ func TestNewSecureHTTPClient_MissingTrustBundlePath(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PKIDir,
+		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -84,9 +84,9 @@ func TestNewSecureHTTPClient_InvalidPEM(t *testing.T) {
 
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PKIDir,
+		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}

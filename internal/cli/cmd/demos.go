@@ -23,6 +23,8 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -53,7 +55,7 @@ type DoctrineFile struct {
 
 // readDoctrineRule reads a doctrine file and returns a specific rule by ID
 func readDoctrineRule(demoDir, doctrineFile, ruleID string) (*DoctrineRule, error) {
-	doctrinePath := filepath.Join(demoDir, "doctrine", doctrineFile)
+	doctrinePath := pathutil.SafeJoin(demoDir, constants.DemosDoctrineDir, doctrineFile)
 	data, err := os.ReadFile(doctrinePath)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)

@@ -82,6 +82,8 @@ type ProcessManager struct {
 	dataDir     string
 	logDir      string
 	pidDir      string
+	logFile     string
+	postureFile string
 	// findOperatorProcessFn allows mocking for tests
 	findOperatorProcessFn func() int
 	// Windows-specific dependencies for testing
@@ -103,6 +105,8 @@ func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 	dataDir := paths.Infra.DataDir
 	logDir := filepath.Join(runtimeDir, constants.LogDirname)
 	pidDir := filepath.Join(runtimeDir, constants.PidDirname)
+	logFile := filepath.Join(logDir, paths.OperatorLogPath)
+	postureFile := filepath.Join(pidDir, constants.OperatorPostureFilename)
 
 	return &ProcessManager{
 		projectRoot: projectRoot,
@@ -112,6 +116,8 @@ func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 		dataDir:     dataDir,
 		logDir:      logDir,
 		pidDir:      pidDir,
+		logFile:     logFile,
+		postureFile: postureFile,
 	}, nil
 }
 
@@ -218,13 +224,11 @@ func (pm *ProcessManager) deletePID(filename string) error {
 }
 
 func (pm *ProcessManager) writePosture(posture string) error {
-	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
-	return os.WriteFile(postureFile, []byte(posture), 0600)
+	return os.WriteFile(pm.postureFile, []byte(posture), 0600)
 }
 
 func (pm *ProcessManager) readPosture() (string, error) {
-	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
-	postureData, err := os.ReadFile(postureFile)
+	postureData, err := os.ReadFile(pm.postureFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
@@ -240,8 +244,7 @@ func (pm *ProcessManager) readPosture() (string, error) {
 }
 
 func (pm *ProcessManager) deletePosture() error {
-	postureFile := filepath.Join(pm.pidDir, constants.OperatorPostureFilename)
-	if err := os.Remove(postureFile); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(pm.postureFile); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 	return nil
@@ -324,8 +327,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return err
 	}
 
-	logFile := filepath.Join(pm.logDir, paths.OperatorLogPath)
-	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	logHandle, err := os.OpenFile(pm.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
@@ -410,7 +412,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	time.Sleep(2 * time.Second)
 	if !pm.isProcessRunning(cmd.Process.Pid) {
 		_ = pm.deletePID(constants.OperatorPIDFilename)
-		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, logFile)
+		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, pm.logFile)
 	}
 
 	return nil

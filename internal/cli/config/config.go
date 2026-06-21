@@ -23,6 +23,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 )
 
 const (
@@ -123,27 +124,29 @@ func Load(projectRoot string) (*Config, error) {
 		return nil, fmt.Errorf("cli config: failed to initialize paths: %w", err)
 	}
 
-	paths := DefaultInfraPaths()
-	paths.Infra.ProtocolDir = filepath.Join(projectRoot, paths.Infra.ProtocolDir)
-	paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, paths.Infra.ProtocolConstantsDir)
-	paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, paths.Infra.ProtocolModelsDir)
-	paths.Infra.DBPath = filepath.Join(projectRoot, paths.Infra.DBPath)
-	paths.Infra.PKIDir = filepath.Join(projectRoot, paths.Infra.PKIDir)
-	paths.Infra.CACertPath = filepath.Join(projectRoot, paths.Infra.CACertPath)
-	paths.Infra.SecretsDir = filepath.Join(projectRoot, paths.Infra.SecretsDir)
-	paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
-	paths.Infra.DocsDir = filepath.Join(projectRoot, paths.Infra.DocsDir)
-	paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
-	paths.Infra.VaultDir = filepath.Join(projectRoot, paths.Infra.VaultDir)
-	paths.Infra.VaultKeyPath = filepath.Join(projectRoot, paths.Infra.VaultKeyPath)
+	pathsCfg := DefaultInfraPaths()
+	// paths.InitWithBase already makes all paths.Infra.* absolute
+	// Copy them directly without re-joining with projectRoot
+	pathsCfg.Infra.ProtocolDir = paths.Infra.ProtocolDir
+	pathsCfg.Infra.ProtocolConstantsDir = paths.Infra.ProtocolConstantsDir
+	pathsCfg.Infra.ProtocolModelsDir = paths.Infra.ProtocolModelsDir
+	pathsCfg.Infra.DBPath = paths.Infra.DbPath
+	pathsCfg.Infra.PKIDir = paths.Infra.PkiDir
+	pathsCfg.Infra.CACertPath = paths.Infra.CaCertPath
+	pathsCfg.Infra.SecretsDir = paths.Infra.SecretsDir
+	pathsCfg.Infra.AppCertDir = paths.Infra.AppCertDir
+	pathsCfg.Infra.DocsDir = paths.Infra.DocsDir
+	pathsCfg.Infra.SSHConfigPath = paths.Infra.SshConfigPath
+	pathsCfg.Infra.VaultDir = paths.Infra.VaultDir
+	pathsCfg.Infra.VaultKeyPath = paths.Infra.VaultKeyPath
 
 	return &Config{
 		ProjectRoot:    projectRoot,
-		RuntimeDir:     filepath.Join(projectRoot, DefaultRuntimeDir),
-		PKIDir:         filepath.Join(projectRoot, DefaultPKIDir),
-		SecretsDir:     filepath.Join(projectRoot, DefaultSecretsDir),
-		CredentialsDir: filepath.Join(projectRoot, DefaultCredentialsDir),
-		Paths:          &paths,
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PkiDir,
+		SecretsDir:     paths.Infra.SecretsDir,
+		CredentialsDir: paths.Infra.RuntimeDir,
+		Paths:          &pathsCfg,
 	}, nil
 }
 
@@ -159,10 +162,10 @@ func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
 		}
 	}
 
-	runtimeDir := filepath.Join(projectRoot, constants.RuntimeDirname)
-	pkiDir := filepath.Join(projectRoot, constants.DefaultPKIDir)
-	secretsDir := filepath.Join(projectRoot, constants.DefaultSecretsDir)
-	credentialsDir := filepath.Join(projectRoot, constants.RuntimeDirname)
+	runtimeDir := pathutil.SafeJoin(projectRoot, constants.RuntimeDirname)
+	pkiDir := pathutil.SafeJoin(projectRoot, constants.DefaultPKIDir)
+	secretsDir := pathutil.SafeJoin(projectRoot, constants.DefaultSecretsDir)
+	credentialsDir := pathutil.SafeJoin(projectRoot, constants.RuntimeDirname)
 
 	var paths PathsConfig
 	if err := json.Unmarshal(pathsData, &paths); err != nil {
@@ -183,42 +186,43 @@ func LoadWithPaths(projectRoot string, pathsData []byte) (*Config, error) {
 
 // resolveInfraPaths resolves all relative paths in the infra section relative to projectRoot.
 // This is test-only helper for LoadWithPaths.
+// Uses pathutil.SafeJoin to handle cross-platform path joining correctly.
 func resolveInfraPaths(paths *PathsConfig, projectRoot string) {
 	if paths.Infra.AppCertDir != "" && !filepath.IsAbs(paths.Infra.AppCertDir) {
-		paths.Infra.AppCertDir = filepath.Join(projectRoot, paths.Infra.AppCertDir)
+		paths.Infra.AppCertDir = pathutil.SafeJoin(projectRoot, paths.Infra.AppCertDir)
 	}
 	if paths.Infra.CACertPath != "" && !filepath.IsAbs(paths.Infra.CACertPath) {
-		paths.Infra.CACertPath = filepath.Join(projectRoot, paths.Infra.CACertPath)
+		paths.Infra.CACertPath = pathutil.SafeJoin(projectRoot, paths.Infra.CACertPath)
 	}
 	if paths.Infra.DBPath != "" && !filepath.IsAbs(paths.Infra.DBPath) {
-		paths.Infra.DBPath = filepath.Join(projectRoot, paths.Infra.DBPath)
+		paths.Infra.DBPath = pathutil.SafeJoin(projectRoot, paths.Infra.DBPath)
 	}
 	if paths.Infra.DocsDir != "" && !filepath.IsAbs(paths.Infra.DocsDir) {
-		paths.Infra.DocsDir = filepath.Join(projectRoot, paths.Infra.DocsDir)
+		paths.Infra.DocsDir = pathutil.SafeJoin(projectRoot, paths.Infra.DocsDir)
 	}
 	if paths.Infra.PKIDir != "" && !filepath.IsAbs(paths.Infra.PKIDir) {
-		paths.Infra.PKIDir = filepath.Join(projectRoot, paths.Infra.PKIDir)
+		paths.Infra.PKIDir = pathutil.SafeJoin(projectRoot, paths.Infra.PKIDir)
 	}
 	if paths.Infra.ProtocolConstantsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolConstantsDir) {
-		paths.Infra.ProtocolConstantsDir = filepath.Join(projectRoot, paths.Infra.ProtocolConstantsDir)
+		paths.Infra.ProtocolConstantsDir = pathutil.SafeJoin(projectRoot, paths.Infra.ProtocolConstantsDir)
 	}
 	if paths.Infra.ProtocolDir != "" && !filepath.IsAbs(paths.Infra.ProtocolDir) {
-		paths.Infra.ProtocolDir = filepath.Join(projectRoot, paths.Infra.ProtocolDir)
+		paths.Infra.ProtocolDir = pathutil.SafeJoin(projectRoot, paths.Infra.ProtocolDir)
 	}
 	if paths.Infra.ProtocolModelsDir != "" && !filepath.IsAbs(paths.Infra.ProtocolModelsDir) {
-		paths.Infra.ProtocolModelsDir = filepath.Join(projectRoot, paths.Infra.ProtocolModelsDir)
+		paths.Infra.ProtocolModelsDir = pathutil.SafeJoin(projectRoot, paths.Infra.ProtocolModelsDir)
 	}
 	if paths.Infra.SecretsDir != "" && !filepath.IsAbs(paths.Infra.SecretsDir) {
-		paths.Infra.SecretsDir = filepath.Join(projectRoot, paths.Infra.SecretsDir)
+		paths.Infra.SecretsDir = pathutil.SafeJoin(projectRoot, paths.Infra.SecretsDir)
 	}
 	if paths.Infra.SSHConfigPath != "" && !filepath.IsAbs(paths.Infra.SSHConfigPath) {
-		paths.Infra.SSHConfigPath = filepath.Join(projectRoot, paths.Infra.SSHConfigPath)
+		paths.Infra.SSHConfigPath = pathutil.SafeJoin(projectRoot, paths.Infra.SSHConfigPath)
 	}
 	if paths.Infra.VaultDir != "" && !filepath.IsAbs(paths.Infra.VaultDir) {
-		paths.Infra.VaultDir = filepath.Join(projectRoot, paths.Infra.VaultDir)
+		paths.Infra.VaultDir = pathutil.SafeJoin(projectRoot, paths.Infra.VaultDir)
 	}
 	if paths.Infra.VaultKeyPath != "" && !filepath.IsAbs(paths.Infra.VaultKeyPath) {
-		paths.Infra.VaultKeyPath = filepath.Join(projectRoot, paths.Infra.VaultKeyPath)
+		paths.Infra.VaultKeyPath = pathutil.SafeJoin(projectRoot, paths.Infra.VaultKeyPath)
 	}
 }
 
@@ -232,7 +236,8 @@ func (c *Config) TrustBundlePath() string {
 	if filepath.IsAbs(c.Paths.Infra.CACertPath) {
 		return c.Paths.Infra.CACertPath
 	}
-	return filepath.Join(c.ProjectRoot, c.Paths.Infra.CACertPath)
+	// Use pathutil.SafeJoin for cross-platform safety when joining relative paths
+	return pathutil.SafeJoin(c.ProjectRoot, c.Paths.Infra.CACertPath)
 }
 
 func (c *Config) CredentialsFile() string {

@@ -193,7 +193,7 @@ func (avs *TestSQLAuditStore) createDirectoryStructure() error {
 
 // verifyWritePermissions ensures the data directory is writable
 func (avs *TestSQLAuditStore) verifyWritePermissions() error {
-	testFile := filepath.Join(avs.config.DataDir, ".write_test")
+	testFile := pathutil.SafeJoin(avs.config.DataDir, ".write_test")
 
 	if err := os.WriteFile(testFile, []byte("write_test"), 0600); err != nil {
 		return fmt.Errorf("%w %s: %w", constants.ErrAuditStoreCannotWrite, avs.config.DataDir, err)
@@ -216,7 +216,7 @@ func (avs *TestSQLAuditStore) GetSessionLedgerPath(operatorSessionID string) (st
 	sessionPath := filepath.Join(avs.sessionsRoot, operatorSessionID)
 
 	avs.mu.RLock()
-	_, err := os.Stat(filepath.Join(sessionPath, ".git"))
+	_, err := os.Stat(pathutil.SafeJoin(sessionPath, ".git"))
 	avs.mu.RUnlock()
 
 	if err == nil {
@@ -228,7 +228,7 @@ func (avs *TestSQLAuditStore) GetSessionLedgerPath(operatorSessionID string) (st
 	defer avs.mu.Unlock()
 
 	// Double check
-	if _, err := os.Stat(filepath.Join(sessionPath, ".git")); err == nil {
+	if _, err := os.Stat(pathutil.SafeJoin(sessionPath, ".git")); err == nil {
 		return sessionPath, nil
 	}
 
@@ -251,7 +251,7 @@ func (avs *TestSQLAuditStore) initLedgerGit() error {
 
 // initGitRepo initializes a git repository in the specified directory using native go-git
 func (avs *TestSQLAuditStore) initGitRepo(path string) error {
-	gitDir := filepath.Join(path, ".git")
+	gitDir := pathutil.SafeJoin(path, ".git")
 
 	if _, err := os.Stat(gitDir); err == nil {
 		return nil
@@ -262,7 +262,7 @@ func (avs *TestSQLAuditStore) initGitRepo(path string) error {
 		return fmt.Errorf("git init failed: %w", err)
 	}
 
-	gitignore := filepath.Join(path, ".gitignore")
+	gitignore := pathutil.SafeJoin(path, ".gitignore")
 	if err := os.WriteFile(gitignore, []byte("# g8e Ledger\n"), 0600); err != nil {
 		return fmt.Errorf("failed to create .gitignore: %w", err)
 	}

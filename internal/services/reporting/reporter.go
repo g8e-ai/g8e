@@ -46,6 +46,15 @@ type Options struct {
 	VaultKeyPath string
 	// OutDir is the directory to write CSV files into.
 	OutDir string
+	// ExecutionVaultDBPath is the precomputed path to the execution vault DB.
+	// If empty, defaults to RuntimeDir/execution_vault.db.
+	ExecutionVaultDBPath string
+	// ReplayStoreDBPath is the precomputed path to the replay store DB.
+	// If empty, defaults to RuntimeDir/replay_store.db.
+	ReplayStoreDBPath string
+	// SuspendedTransactionDBPath is the precomputed path to the suspended transaction DB.
+	// If empty, defaults to DataDir/suspended_transactions.db.
+	SuspendedTransactionDBPath string
 	// Logger is optional; if nil, slog.Default() is used.
 	Logger *slog.Logger
 }
@@ -94,7 +103,11 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 	// Open execution vault.
 	evCfg := storage.DefaultExecutionVaultConfig()
-	evCfg.DBPath = filepath.Join(opts.RuntimeDir, constants.ExecutionVaultDBFilename)
+	if opts.ExecutionVaultDBPath != "" {
+		evCfg.DBPath = opts.ExecutionVaultDBPath
+	} else {
+		evCfg.DBPath = filepath.Join(opts.RuntimeDir, constants.ExecutionVaultDBFilename)
+	}
 	ev, evErr := storage.NewExecutionVaultService(evCfg, logger, v)
 	if evErr != nil {
 		logger.Warn("Execution vault unavailable; executions and file_diffs will be skipped", "error", evErr)
@@ -106,7 +119,11 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 	// Open replay store.
 	rsCfg := storage.DefaultReplayStoreConfig()
-	rsCfg.DBPath = filepath.Join(opts.RuntimeDir, constants.ReplayStoreDBFilename)
+	if opts.ReplayStoreDBPath != "" {
+		rsCfg.DBPath = opts.ReplayStoreDBPath
+	} else {
+		rsCfg.DBPath = filepath.Join(opts.RuntimeDir, constants.ReplayStoreDBFilename)
+	}
 	rs, rsErr := storage.NewSQLReplayStore(rsCfg, logger)
 	if rsErr != nil {
 		logger.Warn("Replay store unavailable; replay_nonces will be skipped", "error", rsErr)
@@ -118,7 +135,11 @@ func Run(ctx context.Context, opts Options) (RunResult, error) {
 
 	// Open suspended transaction store.
 	stsCfg := storage.DefaultSuspendedTransactionConfig()
-	stsCfg.DBPath = filepath.Join(opts.DataDir, constants.SuspendedTxFilename)
+	if opts.SuspendedTransactionDBPath != "" {
+		stsCfg.DBPath = opts.SuspendedTransactionDBPath
+	} else {
+		stsCfg.DBPath = filepath.Join(opts.DataDir, constants.SuspendedTxFilename)
+	}
 	sts, stsErr := storage.NewSuspendedTransactionService(stsCfg, logger)
 	if stsErr != nil {
 		logger.Warn("Suspended transaction store unavailable; suspended_transactions will be skipped", "error", stsErr)

@@ -150,18 +150,14 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 // It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
 func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) error {
 	// Create PKI directory
-	pkiDir := filepath.Join(workDir, paths.Infra.PkiDir)
-	trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
-	if err := os.MkdirAll(trustDir, 0700); err != nil {
+	if err := os.MkdirAll(paths.Infra.PkiTrustDir, 0700); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Remove any stale certs so enrollment always issues fresh ones tied to
 	// the current gateway PKI (e.g. after gateway restart/regen).
-	operatorKeyPath := filepath.Join(pkiDir, constants.PkiFileOperatorKey)
-	operatorCertPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
-	_ = os.Remove(operatorKeyPath)
-	_ = os.Remove(operatorCertPath)
+	_ = os.Remove(paths.Infra.OperatorKeyPath)
+	_ = os.Remove(paths.Infra.OperatorCertPath)
 
 	// Fetch trust bundle from Gateway HTTP endpoint
 	trustURL := fmt.Sprintf("http://%s:%d%s", gatewayIP, constants.Ports.OperatorHttp, constants.WellKnownPKICABundle)
@@ -172,11 +168,10 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	}
 
 	// Save trust bundle
-	trustBundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
-	if err := os.WriteFile(trustBundlePath, trustBundle, 0644); err != nil {
+	if err := os.WriteFile(paths.Infra.CaCertPath, trustBundle, 0644); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
-	logger.Info("Trust bundle saved", "path", trustBundlePath)
+	logger.Info("Trust bundle saved", "path", paths.Infra.CaCertPath)
 
 	// Generate system fingerprint for enrollment
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
@@ -275,28 +270,26 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 		Type:  "EC PRIVATE KEY",
 		Bytes: keyBytes,
 	})
-	keyPath := filepath.Join(pkiDir, constants.PkiFileOperatorKey)
-	logger.Info("Saving operator private key", "path", keyPath)
-	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+	logger.Info("Saving operator private key", "path", paths.Infra.OperatorKeyPath)
+	if err := os.WriteFile(paths.Infra.OperatorKeyPath, keyPEM, 0600); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
 	logger.Info("Operator private key saved successfully")
 
 	// Save operator certificate
-	certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
 	certContent := enrollResp.OperatorCert
 	if enrollResp.OperatorCertChain != "" {
 		certContent += "\n" + enrollResp.OperatorCertChain
 	}
-	logger.Info("Saving operator certificate", "path", certPath)
-	if err := os.WriteFile(certPath, []byte(certContent), 0600); err != nil {
+	logger.Info("Saving operator certificate", "path", paths.Infra.OperatorCertPath)
+	if err := os.WriteFile(paths.Infra.OperatorCertPath, []byte(certContent), 0600); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	logger.Info("Operator certificate saved successfully")
 
 	// Update trust bundle if Gateway returned a new one
 	if enrollResp.HubTrustBundle != "" {
-		if err := os.WriteFile(trustBundlePath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
+		if err := os.WriteFile(paths.Infra.CaCertPath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 		logger.Info("Updated trust bundle from Gateway")
@@ -304,11 +297,10 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 
 	// Save Actuator public key to trusted_signers so the operator can verify L2 signatures.
 	if enrollResp.ActuatorKeyID != "" && enrollResp.ActuatorPubKey != "" {
-		trustedSignersDir := filepath.Join(pkiDir, constants.PkiSubdirTrustedSigners)
-		if err := os.MkdirAll(trustedSignersDir, 0700); err != nil {
+		if err := os.MkdirAll(paths.Infra.TrustedSignersDir, 0700); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		signerPath := filepath.Join(trustedSignersDir, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
+		signerPath := filepath.Join(paths.Infra.TrustedSignersDir, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
 		if err := os.WriteFile(signerPath, []byte(enrollResp.ActuatorPubKey), 0600); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
@@ -384,7 +376,7 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	}
 
 	// Update local trust bundle
-	trustBundlePath := filepath.Join(filepath.Dir(clientCertFile), constants.PkiFileGatewayBundle)
+	trustBundlePath := paths.Infra.CaCertPath
 	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
@@ -551,6 +543,13 @@ func main() {
 		// Delegate to CLI commands
 		clicmd.Execute()
 		os.Exit(0)
+	}
+
+	// Initialize paths relative to current working directory
+	// This must be done before any path operations to ensure paths.Infra.* are absolute
+	if err := paths.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
+		os.Exit(constants.ExitConfigError)
 	}
 
 	settings := config.LoadSettings()
@@ -789,7 +788,7 @@ func main() {
 	// 1. Explicit --trust-bundle path
 	// 2. Local PKI directory (from paths.Infra.CaCertPath)
 	// 3. Fetch from Operator WellKnownPKICABundle endpoint
-	trustLoaded := loadTrustBundle(logger, trustBundlePath, workingDir, trustStore)
+	trustLoaded := loadTrustBundle(logger, trustBundlePath, trustStore)
 	if !trustLoaded {
 		if endpointURL != "" {
 			trustURL := fmt.Sprintf("http://%s:%d%s", endpointURL, constants.Ports.OperatorHttp, constants.WellKnownPKICABundle)
@@ -815,15 +814,13 @@ func main() {
 	// Priority: 1. Explicit flags, 2. Project-local operator certificates, 3. Project-local client certificates
 	if privateKey == "" {
 		// Try project-local Operator key (created by enrollment)
-		projectOperatorKey := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorKey)
-		if _, err := os.Stat(projectOperatorKey); err == nil {
-			privateKey = projectOperatorKey
+		if _, err := os.Stat(paths.Infra.OperatorKeyPath); err == nil {
+			privateKey = paths.Infra.OperatorKeyPath
 			logger.Info("Using default Operator key from project directory", "path", privateKey)
 		} else {
 			// Try project-local client key
-			projectKey := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiSubdirClient, constants.PkiFileOperatorKey)
-			if _, err := os.Stat(projectKey); err == nil {
-				privateKey = projectKey
+			if _, err := os.Stat(paths.Infra.ClientOperatorKeyPath); err == nil {
+				privateKey = paths.Infra.ClientOperatorKeyPath
 				logger.Info("Using default client key from project directory", "path", privateKey)
 			}
 		}
@@ -831,15 +828,13 @@ func main() {
 
 	if clientCert == "" {
 		// Try project-local Operator cert (created by enrollment)
-		projectOperatorCert := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorCert)
-		if _, err := os.Stat(projectOperatorCert); err == nil {
-			clientCert = projectOperatorCert
+		if _, err := os.Stat(paths.Infra.OperatorCertPath); err == nil {
+			clientCert = paths.Infra.OperatorCertPath
 			logger.Info("Using default Operator certificate from project directory", "path", clientCert)
 		} else {
 			// Try project-local client cert
-			projectCert := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiSubdirClient, constants.PkiFileOperatorCert)
-			if _, err := os.Stat(projectCert); err == nil {
-				clientCert = projectCert
+			if _, err := os.Stat(paths.Infra.ClientOperatorCertPath); err == nil {
+				clientCert = paths.Infra.ClientOperatorCertPath
 				logger.Info("Using default client certificate from project directory", "path", clientCert)
 			}
 		}
@@ -857,14 +852,13 @@ func main() {
 		}
 
 		// After enrollment, set the certificate paths
-		privateKey = filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorKey)
-		clientCert = filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiFileOperatorCert)
+		privateKey = paths.Infra.OperatorKeyPath
+		clientCert = paths.Infra.OperatorCertPath
 
 		// Reload trust bundle after enrollment (enrollment may have updated it)
-		trustBundlePath := filepath.Join(launchDir, paths.Infra.PkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
-		if pemData, err := os.ReadFile(trustBundlePath); err == nil {
+		if pemData, err := os.ReadFile(paths.Infra.CaCertPath); err == nil {
 			trustStore.SetCA(pemData)
-			logger.Info("Trust bundle reloaded after enrollment", "path", trustBundlePath)
+			logger.Info("Trust bundle reloaded after enrollment", "path", paths.Infra.CaCertPath)
 		}
 
 		// Keep using the original endpoint (localhost or provided IP) for Gateway connections
@@ -1095,20 +1089,17 @@ func probeGatewayTLS(logger *slog.Logger, endpoint string, trustStore *certs.Tru
 
 // loadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
-// 2. Working directory PKI path (from paths.Infra.CaCertPath)
+// 2. Local PKI path (from paths.Infra.CaCertPath)
 // Returns true on the first valid PEM found, which is installed via
 // trustStore.SetCA. Returns false if no valid trust bundle is found.
-func loadTrustBundle(logger *slog.Logger, explicitPath, workingDir string, trustStore *certs.TrustStore) bool {
+func loadTrustBundle(logger *slog.Logger, explicitPath string, trustStore *certs.TrustStore) bool {
 	pathsToCheck := []string{}
 
 	if explicitPath != "" {
 		pathsToCheck = append(pathsToCheck, explicitPath)
 	}
 
-	if workingDir != "" {
-		pkiPath := filepath.Join(workingDir, paths.Infra.CaCertPath)
-		pathsToCheck = append(pathsToCheck, pkiPath)
-	}
+	pathsToCheck = append(pathsToCheck, paths.Infra.CaCertPath)
 
 	for _, path := range pathsToCheck {
 		pemData, err := os.ReadFile(path)
@@ -1279,15 +1270,12 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	}
 
 	// Create log directory and file
-	runtimeDir := paths.Infra.RuntimeDir
-	logDir := filepath.Join(runtimeDir, constants.LogDirname)
-	if err := os.MkdirAll(logDir, 0700); err != nil {
+	if err := os.MkdirAll(paths.Infra.LogDir, 0700); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
 		os.Exit(constants.ExitConfigError)
 	}
 
-	logFile := filepath.Join(logDir, paths.OperatorLogPath)
-	logHandle, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	logHandle, err := os.OpenFile(paths.Infra.OperatorLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
 		os.Exit(constants.ExitConfigError)
@@ -1502,7 +1490,7 @@ func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyS
 		os.Exit(constants.ExitConfigError)
 	}
 
-	dataDir := filepath.Join(workDir, paths.Infra.DataDir)
+	dataDir := paths.Infra.DataDir
 
 	vault, err := vault.NewVault(&vault.VaultConfig{
 		DataDir: dataDir,

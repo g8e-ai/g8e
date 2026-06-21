@@ -28,11 +28,11 @@ import (
 // fileBackend stores the master key in a file within the secrets directory.
 // This is a fallback for Linux systems without libsecret installed.
 type fileBackend struct {
-	secretsDir string
+	masterKeyPath string
 }
 
 func newFileBackend(secretsDir string) (Backend, error) {
-	return &fileBackend{secretsDir: secretsDir}, nil
+	return &fileBackend{masterKeyPath: filepath.Join(secretsDir, constants.MasterKeyFilename)}, nil
 }
 
 func (b *fileBackend) Name() string {
@@ -40,8 +40,7 @@ func (b *fileBackend) Name() string {
 }
 
 func (b *fileBackend) RetrieveMasterKey() ([]byte, error) {
-	path := filepath.Join(b.secretsDir, constants.MasterKeyFilename)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(b.masterKeyPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, constants.ErrKeyStoreKeyNotFound
@@ -70,14 +69,13 @@ func (b *fileBackend) StoreMasterKey(key []byte) error {
 
 	// Encode as base64 for safe storage
 	encoded := base64.StdEncoding.EncodeToString(key)
-	path := filepath.Join(b.secretsDir, constants.MasterKeyFilename)
-	tmpPath := path + ".tmp"
+	tmpPath := b.masterKeyPath + ".tmp"
 
 	if err := os.WriteFile(tmpPath, []byte(encoded), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("write master key file: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := os.Rename(tmpPath, b.masterKeyPath); err != nil {
 		_ = os.Remove(tmpPath)
 		return fmt.Errorf("atomic rename master key file: %w", err)
 	}
@@ -86,8 +84,7 @@ func (b *fileBackend) StoreMasterKey(key []byte) error {
 }
 
 func (b *fileBackend) DeleteMasterKey() error {
-	path := filepath.Join(b.secretsDir, constants.MasterKeyFilename)
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(b.masterKeyPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("delete master key file: %w", err)
 	}
 	return nil
