@@ -33,10 +33,10 @@ import (
 )
 
 const (
-	KeySize            = 32
-	NonceSize          = 12
-	KeyFingerprintSize = 16
-	HKDFInfo           = "g8e-lfaa-kek-v1"
+	KeySize              = 32
+	NonceSize            = 12
+	KeyFingerprintSize   = 16
+	HKDFInfo             = "g8e-lfaa-kek-v1"
 	KeyFingerprintPepper = "g8e-vault-fingerprint-v1"
 
 	aesKWDefaultIVHigh = 0xA6A6A6A6

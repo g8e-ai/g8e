@@ -21,10 +21,10 @@ import (
 
 // FsGrepRequest represents a request to search for a pattern in files
 type FsGrepRequest struct {
-	ExecutionID     string  `json:"execution_id"`
-	CaseID          string  `json:"case_id"`
+	ExecutionID     string `json:"execution_id"`
+	CaseID          string `json:"case_id"`
 	TaskID          string `json:"task_id,omitempty"`
-	InvestigationID string  `json:"investigation_id"`
+	InvestigationID string `json:"investigation_id"`
 
 	Path       string   `json:"path"`
 	Pattern    string   `json:"pattern"`
@@ -36,7 +36,7 @@ type FsGrepRequest struct {
 type FsGrepResult struct {
 	ExecutionID     string                     `json:"execution_id"`
 	CaseID          string                     `json:"case_id"`
-	TaskID          string                    `json:"task_id,omitempty"`
+	TaskID          string                     `json:"task_id,omitempty"`
 	InvestigationID string                     `json:"investigation_id"`
 	Status          operatorv1.ExecutionStatus `json:"status"`
 
@@ -48,7 +48,7 @@ type FsGrepResult struct {
 
 	StartTime       time.Time `json:"start_time,omitempty"`
 	EndTime         time.Time `json:"end_time,omitempty"`
-	DurationSeconds float64    `json:"duration_seconds"`
+	DurationSeconds float64   `json:"duration_seconds"`
 
 	ErrorMessage string `json:"error_message,omitempty"`
 	ErrorType    string `json:"error_type,omitempty"`

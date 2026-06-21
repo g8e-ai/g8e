@@ -68,7 +68,7 @@ func TestSQLAuditStore_Event(t *testing.T) {
 		Type:                constants.Event.Operator.Audit.Command,
 		ContentText:         "List files",
 		CommandRaw:          "ls -la",
-		CommandExitCode:     &exitCode,
+		CommandExitCode:     exitCode,
 		CommandStdout:       "file1.txt\nfile2.txt",
 		CommandStderr:       "",
 		ExecutionDurationMs: 150,
@@ -124,7 +124,7 @@ func TestSQLAuditStore_RecordEvent_RejectsUnknownSession(t *testing.T) {
 		Type:                constants.Event.Operator.Audit.Command,
 		ContentText:         "direct terminal command",
 		CommandRaw:          "uptime",
-		CommandExitCode:     &exitCode,
+		CommandExitCode:     exitCode,
 		CommandStdout:       " 15:27:00 up 1 day,  3:42,  1 user,  load average: 0.10, 0.08, 0.06",
 		CommandStderr:       "",
 		ExecutionDurationMs: 10,
@@ -323,7 +323,7 @@ func TestSQLAuditStore_OutputTruncation(t *testing.T) {
 		Type:                constants.Event.Operator.Audit.Command,
 		ContentText:         "Large output test",
 		CommandRaw:          "echo large",
-		CommandExitCode:     &exitCode,
+		CommandExitCode:     exitCode,
 		CommandStdout:       string(largeOutput),
 		CommandStderr:       "",
 		ExecutionDurationMs: 50,
@@ -385,7 +385,7 @@ func TestSQLAuditStore_StderrTruncation(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "failing_command",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     "small stdout",
 		CommandStderr:     string(largeStderr),
 	}
@@ -441,7 +441,7 @@ func TestSQLAuditStore_EventPagination(t *testing.T) {
 			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         fmt.Sprintf("Event %d", i),
 			CommandRaw:          fmt.Sprintf("echo %d", i),
-			CommandExitCode:     &exitCode,
+			CommandExitCode:     exitCode,
 			CommandStdout:       fmt.Sprintf("Output %d", i),
 			ExecutionDurationMs: int64(i * 10),
 		}
@@ -566,17 +566,17 @@ func TestSQLAuditStore_NullExitCode(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.UserMsg,
 		ContentText:       "User message without exit code",
-		CommandExitCode:   nil, // No exit code for user messages
+		CommandExitCode:   constants.ExitCodeNone, // No exit code for user messages
 	}
 	eventID, err := avs.RecordEvent(event)
 	require.NoError(t, err)
 	assert.Positive(t, eventID)
 
-	// Retrieve and verify nil exit code
+	// Retrieve and verify ExitCodeNone sentinel
 	events, err := avs.GetEvents(operatorSessionID, 10, 0)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
-	assert.Nil(t, events[0].CommandExitCode)
+	assert.Equal(t, constants.ExitCodeNone, events[0].CommandExitCode)
 }
 
 func TestSQLAuditStore_DifferentEventTypes(t *testing.T) {
@@ -719,7 +719,7 @@ func TestSQLAuditStore_LongContentFields(t *testing.T) {
 		Type:              constants.Event.Operator.Audit.Command,
 		ContentText:       string(longContent),
 		CommandRaw:        "cat large_file",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     string(longContent),
 	}
 

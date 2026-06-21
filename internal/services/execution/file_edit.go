@@ -72,17 +72,15 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 		Operation:       request.Operation,
 		FilePath:        request.FilePath,
 		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
-		StartTime:       &startTime,
+		StartTime:       startTime,
 	}
 
 	// Validate file path (security check)
 	absPath, err := security.ValidatePath(request.FilePath, fes.config.WorkDir)
 	if err != nil {
 		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-		errMsg := fmt.Sprintf("Invalid file path: %v", err)
-		result.ErrorMessage = &errMsg
-		errType := "validation_error"
-		result.ErrorType = &errType
+		result.ErrorMessage = fmt.Sprintf("Invalid file path: %v", err)
+		result.ErrorType = "validation_error"
 		fes.finalizeResult(result)
 		return result, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
 	}
@@ -109,10 +107,8 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 	if err != nil {
 		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING {
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-			errMsg := err.Error()
-			result.ErrorMessage = &errMsg
-			errType := "execution_error"
-			result.ErrorType = &errType
+			result.ErrorMessage = err.Error()
+			result.ErrorType = "execution_error"
 		}
 	} else {
 		result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
@@ -129,11 +125,11 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 	}
 
 	// Include error details if present
-	if result.ErrorMessage != nil {
-		logArgs = append(logArgs, "error_message", *result.ErrorMessage)
+	if result.ErrorMessage != "" {
+		logArgs = append(logArgs, "error_message", result.ErrorMessage)
 	}
-	if result.ErrorType != nil {
-		logArgs = append(logArgs, "error_type", *result.ErrorType)
+	if result.ErrorType != "" {
+		logArgs = append(logArgs, "error_type", result.ErrorType)
 	}
 
 	fes.logger.Info("File edit operation completed", logArgs...)
@@ -178,7 +174,7 @@ func (fes *FileEditService) executeRead(ctx context.Context, request *models.Fil
 	defer file.Close()
 
 	// Handle line-based reading
-	if request.ReadOptions != nil && (request.ReadOptions.StartLine != nil || request.ReadOptions.EndLine != nil || request.ReadOptions.MaxLines != nil) {
+	if request.ReadOptions != nil && (request.ReadOptions.StartLine != 0 || request.ReadOptions.EndLine != 0 || request.ReadOptions.MaxLines != 0) {
 		content, err := fes.readFileLines(file, request.ReadOptions)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrFileEditReadLinesFailed, err)
@@ -218,18 +214,18 @@ func (fes *FileEditService) readFileLines(file *os.File, opts *models.FileReadOp
 	lineNum := 1
 
 	startLine := 1
-	if opts.StartLine != nil {
-		startLine = *opts.StartLine
+	if opts.StartLine != 0 {
+		startLine = opts.StartLine
 	}
 
 	endLine := -1
-	if opts.EndLine != nil {
-		endLine = *opts.EndLine
+	if opts.EndLine != 0 {
+		endLine = opts.EndLine
 	}
 
 	maxLines := -1
-	if opts.MaxLines != nil {
-		maxLines = *opts.MaxLines
+	if opts.MaxLines != 0 {
+		maxLines = opts.MaxLines
 	}
 
 	for scanner.Scan() {
@@ -293,11 +289,11 @@ func (fes *FileEditService) executeWrite(ctx context.Context, request *models.Fi
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
-	result.BytesWritten = &bytesWritten
+	result.BytesWritten = bytesWritten
 
 	// Count lines
 	lines := strings.Count(*request.Content, "\n") + 1
-	result.LinesChanged = &lines
+	result.LinesChanged = lines
 
 	fes.logger.Info("File written successfully",
 		"file_path", request.FilePath,
@@ -365,11 +361,11 @@ func (fes *FileEditService) executeReplace(ctx context.Context, request *models.
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
-	result.BytesWritten = &bytesWritten
+	result.BytesWritten = bytesWritten
 
 	// Count changed lines (approximation)
 	linesChanged := strings.Count(oldStr, "\n") + strings.Count(newStr, "\n")
-	result.LinesChanged = &linesChanged
+	result.LinesChanged = linesChanged
 
 	fes.logger.Info("Content replaced successfully",
 		"file_path", request.FilePath,
@@ -436,9 +432,9 @@ func (fes *FileEditService) executeInsert(ctx context.Context, request *models.F
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
-	result.BytesWritten = &bytesWritten
+	result.BytesWritten = bytesWritten
 	linesChanged := len(insertLines)
-	result.LinesChanged = &linesChanged
+	result.LinesChanged = linesChanged
 
 	fes.logger.Info("Content inserted successfully",
 		"file_path", request.FilePath,
@@ -503,9 +499,9 @@ func (fes *FileEditService) executeDelete(ctx context.Context, request *models.F
 		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
 	}
 
-	result.BytesWritten = &bytesWritten
+	result.BytesWritten = bytesWritten
 	linesDeleted := (endLine - startLine + 1)
-	result.LinesChanged = &linesDeleted
+	result.LinesChanged = linesDeleted
 
 	fes.logger.Info("Lines deleted successfully",
 		"file_path", request.FilePath,
@@ -636,13 +632,12 @@ func (fes *FileEditService) collectFileStats(filePath string, fileInfo os.FileIn
 
 // finalizeResult finalizes the file edit result
 func (fes *FileEditService) finalizeResult(result *models.FileEditResult) {
-	if result.EndTime == nil {
-		endTime := time.Now().UTC()
-		result.EndTime = &endTime
+	if result.EndTime.IsZero() {
+		result.EndTime = time.Now().UTC()
 	}
 
-	if result.StartTime != nil && result.EndTime != nil {
-		result.DurationSeconds = result.EndTime.Sub(*result.StartTime).Seconds()
+	if !result.StartTime.IsZero() && !result.EndTime.IsZero() {
+		result.DurationSeconds = result.EndTime.Sub(result.StartTime).Seconds()
 	}
 }
 

@@ -35,11 +35,9 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -54,13 +52,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services"
-	"github.com/g8e-ai/g8e/internal/services/execution"
-	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
-	local_http_stdio "github.com/g8e-ai/g8e/internal/services/local_http_stdio"
-	"github.com/g8e-ai/g8e/internal/services/pubsub"
-	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/system"
 )
 
 // Version information (set via ldflags during build)
@@ -147,11 +138,6 @@ func main() {
 	var gatewayRateLimitBurst int
 	var gatewayCertIdentityMode string
 	var gatewayNetworkIdentityFile string
-	var insecureMode bool
-	var insecureURL string
-	var insecureToken string
-	var insecureNodeID string
-	var insecureDisplayName string
 
 	var heartbeatInterval time.Duration
 
@@ -204,12 +190,6 @@ func main() {
 
 	flag.DurationVar(&heartbeatInterval, "heartbeat-interval", 0, "Heartbeat interval (e.g. 60s, 2m); overrides the 30s default")
 
-	flag.BoolVar(&insecureMode, "insecure", false, "INSECURE mode: connect to MCP gateway without governance (DANGEROUS - bypasses all L1/L2/L3 verification)")
-	flag.StringVar(&insecureURL, "insecure-url", "", "MCP Gateway WebSocket URL (e.g. ws://"+constants.DefaultEndpoint+":18789)")
-	flag.StringVar(&insecureToken, "insecure-token", "", "MCP Gateway auth token")
-	flag.StringVar(&insecureNodeID, "insecure-node-id", "", "Node ID to advertise (default: hostname)")
-	flag.StringVar(&insecureDisplayName, "insecure-name", "", "Display name shown in MCP gateway UI (default: node ID)")
-
 	flag.Parse()
 
 	// Check for version flag before other processing
@@ -260,7 +240,7 @@ func main() {
 
 	// If we have arguments after flag parsing but they weren't recognized as CLI commands,
 	// and we're not in operator mode (no -e, no posture flags), show usage help
-	if len(os.Args) > 1 && !cliCommands[os.Args[1]] && endpointURL == "" && postureCount == 0 && !insecureMode {
+	if len(os.Args) > 1 && !cliCommands[os.Args[1]] && endpointURL == "" && postureCount == 0 {
 		fmt.Fprintf(os.Stderr, "Error: unrecognized command or flag '%s'\n\n", os.Args[1])
 		fmt.Fprintf(os.Stderr, "Usage:\n")
 		fmt.Fprintf(os.Stderr, "  ./g8e [command] [flags]\n\n")
@@ -314,11 +294,6 @@ func main() {
 			gatewayVaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
 		}
 		runGatewayMode(posture, gatewayHTTPPort, gatewayHTTPSPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayVaultDir, gatewayVaultKeyPath, gatewayVaultRequireUnlock, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile)
-		return
-	}
-
-	if insecureMode {
-		runInsecureMode(insecureURL, insecureToken, insecureNodeID, insecureDisplayName, os.Getenv("PATH"), logLevel)
 		return
 	}
 
@@ -555,4 +530,3 @@ func main() {
 func printVersion() {
 	fmt.Printf("g8e\n  Version:   %s\n  Build ID:  %s\n  Build Time: %s\n  Platform:  %s\n", version, buildID, buildTime, platform)
 }
-

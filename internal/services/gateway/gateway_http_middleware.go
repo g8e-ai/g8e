@@ -90,23 +90,6 @@ func (h *HTTPHandler) corsMiddlewareForCLIPasskey(next http.Handler) http.Handle
 	})
 }
 
-// mcpOriginGuard rejects browser-originated requests whose Origin header does
-// not resolve to a loopback host. Non-browser clients (such as the Claude Code
-// CLI) do not send an Origin header and are allowed through. This implements
-// the MCP Streamable HTTP requirement to validate Origin to prevent DNS
-// rebinding attacks against the local server.
-func (h *HTTPHandler) mcpOriginGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" && !isLoopbackOrigin(origin) {
-			h.logger.Warn("MCP request rejected: non-local Origin", "origin", origin, "path", r.URL.Path)
-			h.responder.Error(w, http.StatusForbidden, "origin not allowed")
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
 // pathTraversalGuard rejects any request whose raw URL path contains a ".."
 // segment before Go's ServeMux can normalize the path and issue a 301 redirect.
 func (h *HTTPHandler) pathTraversalGuard(next http.Handler) http.Handler {
@@ -128,23 +111,6 @@ func (h *HTTPHandler) containsTraversal(path string) bool {
 		if seg == ".." {
 			return true
 		}
-	}
-	return false
-}
-
-// isLoopbackOrigin reports whether an Origin header value refers to a loopback
-// host (localhost, 127.0.0.0/8, or ::1).
-func isLoopbackOrigin(origin string) bool {
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	host := u.Hostname()
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return ip.IsLoopback()
 	}
 	return false
 }

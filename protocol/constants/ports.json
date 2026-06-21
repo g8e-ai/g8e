@@ -1,9 +1,7 @@
 {
   "ports": {
-    "LocalHttpStdioGateway": 18789,
     "OperatorHttp": 8080,
     "OperatorHttps": 8443,
-    "local_http_stdio_gateway": 18789,
     "operator_http": 8080,
     "operator_https": 8443
   }

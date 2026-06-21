@@ -1032,7 +1032,6 @@ func (v *L1Doctrine) AnalyzeMCPArguments(argumentsJSON string) ([]ThreatSignal, 
 	return signals, nil
 }
 
-
 // analyzeJSONRecursive recursively traverses JSON raw message and detects threats in string fields.
 // Returns ErrGovernanceJSONDepthExceeded if the recursion depth exceeds maxDepth.
 func (v *L1Doctrine) analyzeJSONRecursive(raw json.RawMessage, path string, signals *[]ThreatSignal, currentDepth int, maxDepth int) error {

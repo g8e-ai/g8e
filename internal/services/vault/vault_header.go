@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // VaultHeader contains the metadata and wrapped DEK for an encrypted vault.

@@ -1032,8 +1032,9 @@ func (avs *TestSQLAuditStore) GetEvents(operatorSessionID string, limit, offset 
 			row.event.CommandRaw = row.commandRaw.String
 		}
 		if row.commandExitCode.Valid {
-			exitCode := int(row.commandExitCode.Int64)
-			row.event.CommandExitCode = &exitCode
+			row.event.CommandExitCode = int(row.commandExitCode.Int64)
+		} else {
+			row.event.CommandExitCode = constants.ExitCodeNone
 		}
 		if row.storedLocally.Valid {
 			row.event.StoredLocally = row.storedLocally.Bool

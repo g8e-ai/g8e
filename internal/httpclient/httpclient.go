@@ -140,7 +140,6 @@ func WebSocketDialerWithTLS(tlsCfg *tls.Config) *websocket.Dialer {
 	}
 }
 
-
 // Deprecated: Use NewWithTLSConfigAndServerName instead. This function relies on mutable global state.
 func NewWithServerName(serverName string) (*http.Client, error) {
 	tlsCfg, err := certs.GetTLSConfig()

@@ -1110,8 +1110,9 @@ func (ass *SQLAuditStore) ListEvents(sessionID string, limit, offset int) ([]*Ev
 			row.event.CommandRaw = row.commandRaw.String
 		}
 		if row.commandExitCode.Valid {
-			ec := int(row.commandExitCode.Int64)
-			row.event.CommandExitCode = &ec
+			row.event.CommandExitCode = int(row.commandExitCode.Int64)
+		} else {
+			row.event.CommandExitCode = constants.ExitCodeNone
 		}
 		if row.storedLocally.Valid {
 			row.event.StoredLocally = row.storedLocally.Bool

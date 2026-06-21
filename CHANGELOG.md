@@ -44,7 +44,7 @@ v1.1.4 is a code quality and test coverage release that significantly improves t
 ### Breaking Changes
 
 * **`emulator` renamed to `agentic-tool-emulator`** - The emulator CLI command and internal package are renamed to `agentic-tool-emulator` for clarity. Directory renamed from `internal/emulator` to `internal/agentic_tool_emulator`, CLI command changed from `g8e emulator` to `g8e agentic-tool-emulator`, and all references in code, documentation, and configuration files are updated accordingly.
-* **`insecure_mcp` renamed to `local_http_stdio`** - The insecure MCP mode is renamed to `local_http_stdio` for clarity. Service directory, package names, constants, JSON keys, and all references are updated accordingly.
+* **`local_http_stdio` (formerly `insecure_mcp`) mode removed** - The ungoverned local MCP node mode is removed entirely. It connected to an MCP gateway over WebSocket and executed `system.run`/`system.which` with no L1/L2/L3 verification — an unconditional governance bypass. All local MCP traffic now goes exclusively through the governed mTLS/HTTPS gateway surface (`g8e mcp stdio`). The `--local-http-stdio*` flags, `LocalHttpStdioGateway` port (18789), service package, config loader, and related constants are deleted.
 
 ### Changed
 

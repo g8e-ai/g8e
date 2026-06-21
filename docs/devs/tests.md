@@ -633,7 +633,6 @@ Defaults from `protocol/constants/ports.json` (canonical source of truth):
 
 - `8080` - Gateway HTTP (bootstrap + MCP)
 - `8443` - Gateway HTTPS (mTLS API + public)
-- `18789` - Insecure MCP Gateway
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the g8e Node or front with an external port redirect.
 

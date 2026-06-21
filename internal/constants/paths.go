@@ -99,15 +99,15 @@ const (
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 
 	// SSH paths
-	PathEtcSshKnownHosts      = "/etc/ssh/known_hosts"
-	PathEtcSshSshKnownHosts   = "/etc/ssh/ssh_known_hosts"
-	PathHomeSshKnownHosts     = "$HOME/.ssh/known_hosts"
-	PathWindowsSshKnownHosts  = "$USERPROFILE\\.ssh\\known_hosts"
-	PathWindowsProgramDataSsh = "C:\\ProgramData\\ssh\\known_hosts"
-	PathWindowsSystemRoot     = "SystemRoot"
-	PathWindowsHostsFile      = "System32\\drivers\\etc\\hosts"
+	PathEtcSshKnownHosts            = "/etc/ssh/known_hosts"
+	PathEtcSshSshKnownHosts         = "/etc/ssh/ssh_known_hosts"
+	PathHomeSshKnownHosts           = "$HOME/.ssh/known_hosts"
+	PathWindowsSshKnownHosts        = "$USERPROFILE\\.ssh\\known_hosts"
+	PathWindowsProgramDataSsh       = "C:\\ProgramData\\ssh\\known_hosts"
+	PathWindowsSystemRoot           = "SystemRoot"
+	PathWindowsHostsFile            = "System32\\drivers\\etc\\hosts"
 	PathWindowsRegistryCryptography = "SOFTWARE\\Microsoft\\Cryptography"
-	PathWindowsRegistryMachineGuid   = "MachineGuid"
+	PathWindowsRegistryMachineGuid  = "MachineGuid"
 )
 
 // Environment variable constants
@@ -322,8 +322,8 @@ const (
 	FsListBatchSize      = 100
 
 	// FsGrep limits
-	FsGrepDefaultMaxMatches = 100
-	FsGrepMaxMatches       = 500
+	FsGrepDefaultMaxMatches     = 100
+	FsGrepMaxMatches            = 500
 	FsGrepScannerInitialBufSize = 64 * 1024
 	FsGrepScannerMaxBufSize     = 1024 * 1024
 

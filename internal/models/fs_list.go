@@ -21,10 +21,10 @@ import (
 
 // FsListRequest represents a request to list directory contents
 type FsListRequest struct {
-	ExecutionID     string  `json:"execution_id"`
-	CaseID          string  `json:"case_id"`
+	ExecutionID     string `json:"execution_id"`
+	CaseID          string `json:"case_id"`
 	TaskID          string `json:"task_id,omitempty"`
-	InvestigationID string  `json:"investigation_id"`
+	InvestigationID string `json:"investigation_id"`
 
 	Path        string `json:"path"`
 	MaxDepth    int    `json:"max_depth"`
@@ -41,19 +41,19 @@ type FsListEntry struct {
 	Mode    string `json:"mode"`
 	ModTime int64  `json:"mod_time"`
 
-	IsSymlink     bool    `json:"is_symlink,omitempty"`
+	IsSymlink     bool   `json:"is_symlink,omitempty"`
 	SymlinkTarget string `json:"symlink_target,omitempty"`
 	Owner         string `json:"owner,omitempty"`
 	Group         string `json:"group,omitempty"`
-	Inode         uint64  `json:"inode,omitempty"`
-	Nlink         uint64  `json:"nlink,omitempty"`
+	Inode         uint64 `json:"inode,omitempty"`
+	Nlink         uint64 `json:"nlink,omitempty"`
 }
 
 // FsListResult represents the result of a directory listing operation
 type FsListResult struct {
 	ExecutionID     string                     `json:"execution_id"`
 	CaseID          string                     `json:"case_id"`
-	TaskID          string                    `json:"task_id,omitempty"`
+	TaskID          string                     `json:"task_id,omitempty"`
 	InvestigationID string                     `json:"investigation_id"`
 	Status          operatorv1.ExecutionStatus `json:"status"`
 
@@ -64,7 +64,7 @@ type FsListResult struct {
 
 	StartTime       time.Time `json:"start_time,omitempty"`
 	EndTime         time.Time `json:"end_time,omitempty"`
-	DurationSeconds float64    `json:"duration_seconds"`
+	DurationSeconds float64   `json:"duration_seconds"`
 
 	ErrorMessage string `json:"error_message,omitempty"`
 	ErrorType    string `json:"error_type,omitempty"`

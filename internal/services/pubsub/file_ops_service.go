@@ -304,16 +304,16 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 
 	result, err := fs.fsList.ExecuteFsList(ctx, fsListReq)
 	if err != nil {
-			result = &models.FsListResult{
-				ExecutionID:     fsListReq.ExecutionID,
-				CaseID:          fsListReq.CaseID,
-				TaskID:          fsListReq.TaskID,
-				InvestigationID: fsListReq.InvestigationID,
-				Path:            fsListReq.Path,
-				Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-				ErrorMessage:    err.Error(),
-				ErrorType:       "execution_error",
-			}
+		result = &models.FsListResult{
+			ExecutionID:     fsListReq.ExecutionID,
+			CaseID:          fsListReq.CaseID,
+			TaskID:          fsListReq.TaskID,
+			InvestigationID: fsListReq.InvestigationID,
+			Path:            fsListReq.Path,
+			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
+			ErrorMessage:    err.Error(),
+			ErrorType:       "execution_error",
+		}
 	}
 
 	if fs.vaultWriter != nil {

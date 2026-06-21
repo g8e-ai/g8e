@@ -130,8 +130,8 @@ func (hh *HistoryHandler) HandleFetchHistory(requestJSON []byte) (*operatorv1.Fe
 			StderrTruncated:     event.StderrTruncated,
 			FileMutations:       []*operatorv1.AuditFileMutation{},
 		}
-		if event.CommandExitCode != nil {
-			auditEvent.CommandExitCode = int32(*event.CommandExitCode) //nolint:gosec // exit codes are 0-255
+		if event.CommandExitCode != constants.ExitCodeNone {
+			auditEvent.CommandExitCode = int32(event.CommandExitCode) //nolint:gosec // exit codes are 0-255
 		}
 
 		if event.Type == constants.Event.Operator.FileEdit.Completed {

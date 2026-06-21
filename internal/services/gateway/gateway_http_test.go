@@ -45,37 +45,6 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
-func TestIsLoopbackOrigin(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		origin   string
-		expected bool
-	}{
-		{"http://localhost:8080", true},
-		{"http://localhost", true},
-		{"https://localhost:443", true},
-		{"http://127.0.0.1:8080", true},
-		{"http://127.0.0.1", true},
-		{"http://127.0.0.2:8080", true},
-		{"http://[::1]:8080", true},
-		{"http://[::1]", true},
-		{"http://example.com:8080", false},
-		{"http://192.168.1.1:8080", false},
-		{"http://10.0.0.1:8080", false},
-		{"invalid-url", false},
-		{"", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.origin, func(t *testing.T) {
-			t.Parallel()
-			result := isLoopbackOrigin(tc.origin)
-			assert.Equal(t, tc.expected, result, "Origin %s should return %v", tc.origin, tc.expected)
-		})
-	}
-}
-
 func TestIsLocalNetworkOrigin(t *testing.T) {
 	t.Parallel()
 
@@ -174,96 +143,6 @@ func TestIsPrivateIP(t *testing.T) {
 			require.NotNil(t, ip, "Failed to parse IP: %s", tc.ip)
 			result := isPrivateIP(ip)
 			assert.Equal(t, tc.expected, result, "IP %s should return %v", tc.ip, tc.expected)
-		})
-	}
-}
-
-func TestMCPOriginGuard(t *testing.T) {
-	t.Parallel()
-	infra := setupTestInfrastructure(t, false)
-
-	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:           infra.Logger,
-		Responder:        infra.Responder,
-		SuspendedStore:   infra.SuspendedStore,
-		ScrubbingService: nil,
-		MaxPayloadBytes:  infra.Cfg.Gateway.MaxPayloadBytes,
-		Posture:          string(infra.Cfg.Gateway.Posture),
-	})
-	require.NoError(t, err, "failed to create MCP gateway")
-	h, err := newHTTPHandler(HTTPHandlerDependencies{
-		Cfg:                infra.Cfg,
-		Logger:             infra.Logger,
-		DB:                 infra.DB,
-		Pubsub:             infra.Pubsub,
-		Auth:               infra.Auth,
-		PKI:                infra.PKI,
-		CLISessionSvc:      infra.CLISessionSvc,
-		OperatorSessionSvc: infra.OperatorSessionSvc,
-		WebSessionSvc:      infra.WebSessionSvc,
-		Reg:                infra.Reg,
-		Passkey:            infra.Passkey,
-		UserSvc:            infra.UserSvc,
-		Responder:          infra.Responder,
-		MCPGateway:         mcpGateway,
-		AppEnrollment:      nil,
-		IsReady:            func() bool { return true },
-		IsGovernanceReady:  func() bool { return true },
-	})
-	require.NoError(t, err, "failed to create HTTP handler")
-
-	router := h.buildMCPHttpRouter()
-
-	cases := []struct {
-		name           string
-		origin         string
-		expectedStatus int
-	}{
-		{
-			name:           "no origin header allowed",
-			origin:         "",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "localhost origin allowed",
-			origin:         "http://localhost:8080",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "127.0.0.1 origin allowed",
-			origin:         "http://127.0.0.1:8080",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "::1 origin allowed",
-			origin:         "http://[::1]:8080",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "external origin rejected",
-			origin:         "http://example.com:8080",
-			expectedStatus: http.StatusForbidden,
-		},
-		{
-			name:           "private IP origin rejected",
-			origin:         "http://192.168.1.1:8080",
-			expectedStatus: http.StatusForbidden,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
-			if tc.origin != "" {
-				req.Header.Set("Origin", tc.origin)
-			}
-			w := httptest.NewRecorder()
-
-			router.ServeHTTP(w, req)
-
-			assert.Equal(t, tc.expectedStatus, w.Code, "Expected status %d for origin %s", tc.expectedStatus, tc.origin)
 		})
 	}
 }

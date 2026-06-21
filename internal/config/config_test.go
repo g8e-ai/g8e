@@ -298,57 +298,6 @@ func TestLoadGateway_RejectsPortZeroInProduction(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// LoadLocalHttpStdio
-// ---------------------------------------------------------------------------
-
-func TestLoadLocalHttpStdio_Valid(t *testing.T) {
-	gatewayURL := fmt.Sprintf("wss://gateway.example.com:%d", constants.Ports.LocalHttpStdioGateway)
-	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{
-		GatewayURL:  gatewayURL,
-		Token:       "token123",
-		NodeID:      "node-1",
-		DisplayName: "My Node",
-		LogLevel:    "debug",
-	})
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
-
-	assert.Equal(t, gatewayURL, cfg.GatewayURL)
-	assert.Equal(t, "token123", cfg.Token)
-	assert.Equal(t, "node-1", cfg.NodeID)
-	assert.Equal(t, "My Node", cfg.DisplayName)
-	assert.Equal(t, "debug", cfg.LogLevel)
-}
-
-func TestLoadLocalHttpStdio_LogLevelDefaultsToInfo(t *testing.T) {
-	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{GatewayURL: "wss://gateway.example.com"})
-	require.NoError(t, err)
-	assert.Equal(t, "info", cfg.LogLevel)
-}
-
-func TestLoadLocalHttpStdio_MissingGatewayURL(t *testing.T) {
-	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{
-		Token:       "tok",
-		NodeID:      "node",
-		DisplayName: "label",
-		LogLevel:    "info",
-	})
-	require.Error(t, err)
-	assert.Nil(t, cfg)
-	assert.Error(t, err)
-}
-
-func TestLoadLocalHttpStdio_OptionalFieldsEmpty(t *testing.T) {
-	gatewayURL := fmt.Sprintf("ws://gateway:%d", constants.Ports.LocalHttpStdioGateway)
-	cfg, err := LoadLocalHttpStdio(LocalHttpStdioOptions{GatewayURL: gatewayURL})
-	require.NoError(t, err)
-
-	assert.Empty(t, cfg.Token)
-	assert.Empty(t, cfg.NodeID)
-	assert.Empty(t, cfg.DisplayName)
-}
-
-// ---------------------------------------------------------------------------
 // HeartbeatInterval via Load
 // ---------------------------------------------------------------------------
 

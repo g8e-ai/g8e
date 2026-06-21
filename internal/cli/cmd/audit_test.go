@@ -258,7 +258,7 @@ func TestAuditEventsResponseParsing(t *testing.T) {
 				Timestamp         string `json:"timestamp"`
 				Type              string `json:"type"`
 				CommandRaw        string `json:"command_raw"`
-				CommandExitCode   *int   `json:"command_exit_code"`
+				CommandExitCode   int   `json:"command_exit_code"`
 			} `json:"events"`
 			Count int `json:"count"`
 		}
@@ -267,11 +267,10 @@ func TestAuditEventsResponseParsing(t *testing.T) {
 		assert.True(t, resp.Success)
 		assert.Len(t, resp.Events, 1)
 		assert.Equal(t, int64(1), resp.Events[0].ID)
-		assert.NotNil(t, resp.Events[0].CommandExitCode)
-		assert.Equal(t, 0, *resp.Events[0].CommandExitCode)
+		assert.Equal(t, 0, resp.Events[0].CommandExitCode)
 	})
 
-	t.Run("handles nil exit code", func(t *testing.T) {
+	t.Run("handles ExitCodeNone sentinel", func(t *testing.T) {
 		jsonResp := `{
 			"success": true,
 			"events": [
@@ -279,8 +278,9 @@ func TestAuditEventsResponseParsing(t *testing.T) {
 					"id": 1,
 					"operator_session_id": "sess-1",
 					"timestamp": "2024-01-01T00:00:00Z",
-					"type": "COMMAND_EXECUTION",
-					"command_raw": "ls -la"
+					"type": "USER_MESSAGE",
+					"command_raw": "",
+					"command_exit_code": -1
 				}
 			],
 			"count": 1
@@ -294,14 +294,14 @@ func TestAuditEventsResponseParsing(t *testing.T) {
 				Timestamp         string `json:"timestamp"`
 				Type              string `json:"type"`
 				CommandRaw        string `json:"command_raw"`
-				CommandExitCode   *int   `json:"command_exit_code"`
+				CommandExitCode   int   `json:"command_exit_code"`
 			} `json:"events"`
 			Count int `json:"count"`
 		}
 		err := json.Unmarshal([]byte(jsonResp), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
-		assert.Nil(t, resp.Events[0].CommandExitCode)
+		assert.Equal(t, constants.ExitCodeNone, resp.Events[0].CommandExitCode)
 	})
 }
 
@@ -834,7 +834,7 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error))
 					Timestamp         string `json:"timestamp"`
 					Type              string `json:"type"`
 					CommandRaw        string `json:"command_raw"`
-					CommandExitCode   *int   `json:"command_exit_code"`
+					CommandExitCode   int   `json:"command_exit_code"`
 				} `json:"events"`
 				Count int `json:"count"`
 			}
