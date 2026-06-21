@@ -87,7 +87,7 @@ func RunStream(args []string) {
 		preFlightCheck  bool
 	)
 
-	fs.StringVar(&arch, "arch", defaultArch, "Target architecture: amd64, arm64, 386")
+	fs.StringVar(&arch, "arch", constants.ArchAMD64, "Target architecture: amd64, arm64, 386")
 	fs.StringVar(&hostsFile, "hosts", "", "File of hosts (one per line) or - for stdin")
 	fs.IntVar(&concurrency, "concurrency", defaultConcurrency, "Max parallel SSH sessions")
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
@@ -127,7 +127,7 @@ func RunStream(args []string) {
 
 	// Validate arch
 	switch arch {
-	case string(constants.ArchAMD64), string(constants.ArchARM64), string(constants.Arch386):
+	case constants.ArchAMD64, constants.ArchARM64, constants.Arch386:
 	default:
 		fmt.Fprintf(os.Stderr, "[stream] unknown arch '%s' (valid: %s, %s, %s)\n",
 			arch, constants.ArchAMD64, constants.ArchARM64, constants.Arch386)
@@ -181,7 +181,7 @@ func RunStream(args []string) {
 	// Tally results
 	var succeeded, failed int
 	for _, res := range results {
-		if res.Error != "" {
+		if res.Error != nil {
 			failed++
 		} else {
 			succeeded++
@@ -259,12 +259,12 @@ func runConcurrentStream(
 			ElapsedMs: res.Elapsed.Milliseconds(),
 			Ts:        time.Now().UTC(),
 		}
-		if res.Error != "" {
-			evt.Error = res.Error
+		if res.Error != nil {
+			evt.Error = res.Error.Error()
 		}
 		emitJSON(&evt)
-		if res.Error != "" {
-			fmt.Fprintf(os.Stderr, "[stream] FAIL  %-30s %s\n", res.Host, res.Error)
+		if res.Error != nil {
+			fmt.Fprintf(os.Stderr, "[stream] FAIL  %-30s %v\n", res.Host, res.Error)
 		} else {
 			fmt.Fprintf(os.Stderr, "[stream] OK    %-30s %dms\n", res.Host, res.Elapsed.Milliseconds())
 		}

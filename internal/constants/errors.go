@@ -854,4 +854,9 @@ var (
 
 	// Context errors
 	ErrContextCancelled = errors.New("context cancelled")
+
+	// SSH errors
+	ErrSSHContextCancelled      = errors.New("ssh: context cancelled")
+	ErrSSHRetryBackoffCancelled = errors.New("ssh: context cancelled during retry backoff")
+	ErrSSHBeforeRunCancelled    = errors.New("ssh: context cancelled before run")
 )

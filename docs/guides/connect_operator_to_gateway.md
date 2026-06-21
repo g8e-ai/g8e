@@ -158,6 +158,10 @@ curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
 
+# Note: Documentation uses default ports: HTTP 8080, HTTPS 8443.
+
+...
+
 **For plain HTTP MCP (non-mTLS):**
 
 ```bash
