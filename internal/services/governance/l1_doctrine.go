@@ -138,11 +138,12 @@ func (v *L1Doctrine) ValidatePayload(msg proto.Message) []string {
 	return violations
 }
 
-// ValidateIntent is a placeholder for intent-based doctrine validation.
-// This will be integrated with Sentinel's intent allowlist in a follow-up.
+// ValidateIntent checks whether an intent is permitted by the Sentinel allowlist.
+// SECURITY-DEBT: Sentinel allowlist integration is not yet implemented.
+// All intents currently pass. This is a tracked gap, not silent behavior.
+// The function is called from L2 consensus (l2_consensus.go evaluateSafety).
+// Until Sentinel is wired, docs must not claim L1/L2 intent enforcement is active.
 func (v *L1Doctrine) ValidateIntent(intent constants.CloudIntent) bool {
-	// TODO: Integrate with Sentinel's intent validation
-	// For now, allow all intents - this is a temporary bridge
 	return true
 }
 
@@ -1032,21 +1033,11 @@ func (v *L1Doctrine) AnalyzeMCPArguments(argumentsJSON string) ([]ThreatSignal, 
 	return signals, nil
 }
 
-// MaxDepthExceededError is returned when JSON recursion exceeds the safety limit
-type MaxDepthExceededError struct {
-	MaxDepth int
-	Path     string
-}
-
-func (e *MaxDepthExceededError) Error() string {
-	return fmt.Sprintf("JSON recursion depth exceeded maximum limit of %d at path: %s", e.MaxDepth, e.Path)
-}
-
 // analyzeJSONRecursive recursively traverses JSON raw message and detects threats in string fields.
-// Returns MaxDepthExceededError if the recursion depth exceeds maxDepth.
+// Returns ErrGovernanceJSONDepthExceeded if the recursion depth exceeds maxDepth.
 func (v *L1Doctrine) analyzeJSONRecursive(raw json.RawMessage, path string, signals *[]ThreatSignal, currentDepth int, maxDepth int) error {
 	if currentDepth > maxDepth {
-		return &MaxDepthExceededError{MaxDepth: maxDepth, Path: path}
+		return fmt.Errorf("%w: maxDepth=%d, path=%s", constants.ErrGovernanceJSONDepthExceeded, maxDepth, path)
 	}
 
 	// Try to parse as string first

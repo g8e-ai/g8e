@@ -87,7 +87,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 		params := executionWriteParams{
 			id:         "exec-1",
 			command:    "ls -la",
-			exitCode:   intPtr(0),
+			exitCode:   0,
 			durationMs: 1000,
 			stdout:     "file1\nfile2",
 			stderr:     "",
@@ -108,7 +108,7 @@ func TestVaultWriter_WriteExecution(t *testing.T) {
 		params := executionWriteParams{
 			id:              "exec-1",
 			command:         "ls -la",
-			exitCode:        intPtr(0),
+			exitCode:        0,
 			durationMs:      1000,
 			stdout:          "file1\nfile2",
 			stderr:          "",

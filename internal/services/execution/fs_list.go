@@ -62,11 +62,11 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		Entries:         []models.FsListEntry{},
 	}
-	result.StartTime = &startTime
+	result.StartTime = startTime
 
 	// Resolve path - default to operator's working directory when none is specified
 	path := req.Path
-	if path == "" || path == "." {
+	if path == "" || path == constants.PathCurrentDir {
 		path = s.workDir
 	}
 
@@ -120,7 +120,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 
 	endTime := time.Now().UTC()
-	result.EndTime = &endTime
+	result.EndTime = endTime
 	result.DurationSeconds = endTime.Sub(startTime).Seconds()
 
 	s.logger.Info("fs_list operation completed",
@@ -211,7 +211,7 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 	if fi.Mode()&os.ModeSymlink != 0 {
 		entry.IsSymlink = true
 		if target, err := os.Readlink(fullPath); err == nil {
-			entry.SymlinkTarget = &target
+			entry.SymlinkTarget = target
 		}
 	}
 
@@ -225,10 +225,10 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 
 			// Get owner/group names
 			if owner := getUsername(stat.Uid); owner != "" {
-				entry.Owner = &owner
+				entry.Owner = owner
 			}
 			if group := getGroupname(stat.Gid); group != "" {
-				entry.Group = &group
+				entry.Group = group
 			}
 		}
 	}
@@ -239,13 +239,12 @@ func (s *FsListService) buildEntry(fi os.FileInfo, fullPath string) models.FsLis
 // failResult sets error state on result
 func (s *FsListService) failResult(result *models.FsListResult, err error, errorMsg string) (*models.FsListResult, error) {
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-	errorType := err.Error()
-	result.ErrorType = &errorType
-	result.ErrorMessage = &errorMsg
+	result.ErrorType = err.Error()
+	result.ErrorMessage = errorMsg
 	endTime := time.Now().UTC()
-	result.EndTime = &endTime
-	if result.StartTime != nil {
-		result.DurationSeconds = endTime.Sub(*result.StartTime).Seconds()
+	result.EndTime = endTime
+	if !result.StartTime.IsZero() {
+		result.DurationSeconds = endTime.Sub(result.StartTime).Seconds()
 	}
 	return result, nil
 }

@@ -127,7 +127,6 @@ var excludePatterns = []string{
 	"/e2e/",
 	"/contracts/",
 	"/constants/",
-	"services/system/path.go",
 }
 
 // constantSourceFiles are the files that define constants (relative to g8eo root).

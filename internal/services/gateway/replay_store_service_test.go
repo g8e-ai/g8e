@@ -19,20 +19,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTestReplayStoreService(t *testing.T) *ReplayStoreService {
+func newTestReplayStoreService(t *testing.T) (*ReplayStoreService, *sqliteutil.DB) {
 	t.Helper()
 	db := newTestDB(t)
-	return NewReplayStoreService(db.GetDB(), testutil.NewTestLogger())
+	svc := NewReplayStoreService(db.GetDB(), testutil.NewTestLogger())
+	return svc, db.GetDB()
 }
 
 func TestReplayStoreService_ReserveNonce(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, _ := newTestReplayStoreService(t)
 
 	// Reserve a new nonce
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -47,8 +48,7 @@ func TestReplayStoreService_ReserveNonce(t *testing.T) {
 }
 
 func TestReplayStoreService_ReserveNonce_Concurrent(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, _ := newTestReplayStoreService(t)
 
 	expiresAt := time.Now().Add(1 * time.Hour)
 	nonce := "concurrent-nonce"
@@ -73,8 +73,7 @@ func TestReplayStoreService_ReserveNonce_Concurrent(t *testing.T) {
 }
 
 func TestReplayStoreService_FinalizeNonce(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, db := newTestReplayStoreService(t)
 
 	// Create a nonce in the nonces table with expires_at
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -87,7 +86,6 @@ func TestReplayStoreService_FinalizeNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify nonce was updated
-	db := svc.db
 	var status string
 	err = db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", "test123").Scan(&status)
 	require.NoError(t, err)
@@ -95,8 +93,7 @@ func TestReplayStoreService_FinalizeNonce(t *testing.T) {
 }
 
 func TestReplayStoreService_FinalizeNonce_NonExistent(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, _ := newTestReplayStoreService(t)
 
 	// Finalize non-existent nonce should not error
 	err := svc.FinalizeNonce("nonexistent")
@@ -104,8 +101,7 @@ func TestReplayStoreService_FinalizeNonce_NonExistent(t *testing.T) {
 }
 
 func TestReplayStoreService_ReleaseNonce(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, db := newTestReplayStoreService(t)
 
 	// Create a nonce in the nonces table
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -118,7 +114,6 @@ func TestReplayStoreService_ReleaseNonce(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify nonce was deleted
-	db := svc.db
 	var count int
 	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", "test456").Scan(&count)
 	require.NoError(t, err)
@@ -126,8 +121,7 @@ func TestReplayStoreService_ReleaseNonce(t *testing.T) {
 }
 
 func TestReplayStoreService_ReleaseNonce_NonExistent(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, _ := newTestReplayStoreService(t)
 
 	// Release non-existent nonce should not error
 	err := svc.ReleaseNonce("nonexistent")
@@ -135,8 +129,7 @@ func TestReplayStoreService_ReleaseNonce_NonExistent(t *testing.T) {
 }
 
 func TestReplayStoreService_CleanupExpiredNonces(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, db := newTestReplayStoreService(t)
 
 	// Create an expired nonce
 	expiresAt := time.Now().Add(-1 * time.Hour)
@@ -155,7 +148,6 @@ func TestReplayStoreService_CleanupExpiredNonces(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify expired nonce was deleted
-	db := svc.db
 	var count int
 	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", "expired-nonce").Scan(&count)
 	require.NoError(t, err)
@@ -168,8 +160,7 @@ func TestReplayStoreService_CleanupExpiredNonces(t *testing.T) {
 }
 
 func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, db := newTestReplayStoreService(t)
 
 	nonce := "used-nonce"
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -183,7 +174,7 @@ func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
 
 	// Verify status is 'used'
 	var status string
-	err = svc.db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
+	err = db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
 	require.NoError(t, err)
 	assert.Equal(t, "used", status)
 
@@ -191,14 +182,13 @@ func TestReplayStoreService_FinalizeNonce_Used(t *testing.T) {
 	err = svc.FinalizeNonce(nonce)
 	require.NoError(t, err)
 
-	err = svc.db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
+	err = db.QueryRowWithRetry("SELECT status FROM nonces WHERE nonce = ?", nonce).Scan(&status)
 	require.NoError(t, err)
 	assert.Equal(t, "used", status)
 }
 
 func TestReplayStoreService_ReleaseNonce_Used(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
+	svc, db := newTestReplayStoreService(t)
 
 	nonce := "release-used-nonce"
 	expiresAt := time.Now().Add(1 * time.Hour)
@@ -215,16 +205,7 @@ func TestReplayStoreService_ReleaseNonce_Used(t *testing.T) {
 	require.NoError(t, err)
 
 	var count int
-	err = svc.db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", nonce).Scan(&count)
+	err = db.QueryRowWithRetry("SELECT COUNT(*) FROM nonces WHERE nonce = ?", nonce).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "nonce should still exist if it was already used")
-}
-
-func TestReplayStoreService_Close(t *testing.T) {
-	t.Parallel()
-	svc := newTestReplayStoreService(t)
-
-	// Close is a no-op, but should not panic
-	err := svc.Close()
-	require.NoError(t, err)
 }

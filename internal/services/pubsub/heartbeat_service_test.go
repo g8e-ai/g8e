@@ -495,7 +495,8 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		}
 		svc.SetActuator(mockActuator)
 
-		svc.SendAutomatic()
+		err := svc.SendAutomatic()
+		assert.NoError(t, err)
 		assert.True(t, actuatorCalled)
 	})
 
@@ -519,7 +520,8 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		}
 		svc.SetActuator(mockActuator)
 
-		svc.SendAutomatic()
+		err := svc.SendAutomatic()
+		assert.Error(t, err)
 		// Should not panic, should log error
 	})
 
@@ -530,7 +532,8 @@ func TestHeartbeatService_SendAutomatic(t *testing.T) {
 		svc := NewHeartbeatService(cfg, logger, nil)
 		svc.SetContext(context.Background())
 
-		svc.SendAutomatic()
+		err := svc.SendAutomatic()
+		assert.NoError(t, err)
 		// Should not panic, should log warning
 	})
 }

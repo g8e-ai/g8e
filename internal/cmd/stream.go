@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -29,6 +28,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 )
 
 const (
@@ -41,10 +41,11 @@ func getDefaultNodeBinaryDir() string {
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
 		// If we can't get cwd, fall back to current directory
-		_ = paths.InitWithBase(".")
+		_ = paths.InitWithBase(constants.ProjectRootFromCurrentDir)
 	}
-	// Use project root (parent of .g8e) for bin directory
-	return filepath.Join(paths.Infra.RuntimeDir, "../bin")
+	// Use pathutil.SafeJoin to handle cross-platform path joining correctly
+	// paths.Infra.RuntimeDir is absolute after Init(), so SafeJoin handles the relative "../bin" correctly
+	return pathutil.SafeJoin(paths.Infra.RuntimeDir, "..", constants.BinDirname)
 }
 
 // StreamStatusEvent is written as a JSON line to stdout for each host event.
@@ -86,7 +87,7 @@ func RunStream(args []string) {
 		preFlightCheck  bool
 	)
 
-	fs.StringVar(&arch, "arch", defaultArch, "Target architecture: amd64, arm64, 386")
+	fs.StringVar(&arch, "arch", constants.ArchAMD64, "Target architecture: amd64, arm64, 386")
 	fs.StringVar(&hostsFile, "hosts", "", "File of hosts (one per line) or - for stdin")
 	fs.IntVar(&concurrency, "concurrency", defaultConcurrency, "Max parallel SSH sessions")
 	fs.IntVar(&timeoutSec, "timeout", int(defaultTimeout.Seconds()), "Per-host dial+inject timeout in seconds")
@@ -126,18 +127,19 @@ func RunStream(args []string) {
 
 	// Validate arch
 	switch arch {
-	case "amd64", "arm64", "386":
+	case constants.ArchAMD64, constants.ArchARM64, constants.Arch386:
 	default:
-		fmt.Fprintf(os.Stderr, "[stream] unknown arch '%s' (valid: amd64, arm64, 386)\n", arch)
+		fmt.Fprintf(os.Stderr, "[stream] unknown arch '%s' (valid: %s, %s, %s)\n",
+			arch, constants.ArchAMD64, constants.ArchARM64, constants.Arch386)
 		os.Exit(constants.ExitConfigError)
 	}
 
 	// Load the binary into memory once
 	// Try simple path first (g8ep build), then arch-specific path (local build)
-	binPath := fmt.Sprintf("%s/g8e.operator", binaryDir)
+	binPath := pathutil.SafeJoin(binaryDir, constants.OperatorBinaryFilename)
 	binaryData, err := os.ReadFile(binPath)
 	if err != nil {
-		binPath = fmt.Sprintf("%s/linux-%s/g8e.operator", binaryDir, arch)
+		binPath = pathutil.SafeJoin(binaryDir, fmt.Sprintf("%s-%s", constants.OSLinux, arch), constants.OperatorBinaryFilename)
 		binaryData, err = os.ReadFile(binPath)
 	}
 	if err != nil {
@@ -163,9 +165,9 @@ func RunStream(args []string) {
 		cancel()
 	}()
 
-	// Print human-readable header to stderr
-	fmt.Fprintf(os.Stderr, "[stream] linux/%s  %d hosts  concurrency=%d  timeout=%ds\n",
-		arch, len(hosts), concurrency, timeoutSec)
+	// Human-readable header
+	fmt.Fprintf(os.Stderr, "[stream] %s/%s  %d hosts  concurrency=%d  timeout=%ds\n",
+		constants.OSLinux, arch, len(hosts), concurrency, timeoutSec)
 	fmt.Fprintf(os.Stderr, "[stream] binary: %s (%s)\n", binPath, humanBytes(int64(len(binaryData))))
 	if endpoint != "" {
 		fmt.Fprintf(os.Stderr, "[stream] endpoint: %s\n", endpoint)
@@ -179,7 +181,7 @@ func RunStream(args []string) {
 	// Tally results
 	var succeeded, failed int
 	for _, res := range results {
-		if res.Error != "" {
+		if res.Error != nil {
 			failed++
 		} else {
 			succeeded++
@@ -246,7 +248,7 @@ func runConcurrentStream(
 	}()
 
 	// Collect and emit results as they arrive (streaming output)
-	var results []streamResult
+	results := make([]streamResult, 0, len(hosts))
 	for res := range resultCh {
 		results = append(results, res)
 		// Emit per-host status immediately as JSON line
@@ -257,12 +259,12 @@ func runConcurrentStream(
 			ElapsedMs: res.Elapsed.Milliseconds(),
 			Ts:        time.Now().UTC(),
 		}
-		if res.Error != "" {
-			evt.Error = res.Error
+		if res.Error != nil {
+			evt.Error = res.Error.Error()
 		}
 		emitJSON(&evt)
-		if res.Error != "" {
-			fmt.Fprintf(os.Stderr, "[stream] FAIL  %-30s %s\n", res.Host, res.Error)
+		if res.Error != nil {
+			fmt.Fprintf(os.Stderr, "[stream] FAIL  %-30s %v\n", res.Host, res.Error)
 		} else {
 			fmt.Fprintf(os.Stderr, "[stream] OK    %-30s %dms\n", res.Host, res.Elapsed.Milliseconds())
 		}
@@ -325,7 +327,7 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 		} else {
 			f, err := os.Open(hostsFile)
 			if err != nil {
-				return nil, fmt.Errorf("stream: open hosts file: %w", err)
+				return nil, fmt.Errorf("stream: collect hosts: %w", err)
 			}
 			defer func() {
 				_ = f.Close()
@@ -336,7 +338,7 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 			add(scanner.Text())
 		}
 		if err := scanner.Err(); err != nil {
-			return nil, fmt.Errorf("stream: read hosts file: %w", err)
+			return nil, fmt.Errorf("stream: collect hosts: scan: %w", err)
 		}
 	}
 

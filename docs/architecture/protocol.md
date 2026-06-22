@@ -4,7 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-15
+Last Updated: 2026-06-22
+Version: v1.1.6
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -349,11 +350,22 @@ See [Network Architecture](./network.md) for detailed port topology, authenticat
 
 The g8e platform uses **ZERO environment variables** for production configuration. All paths are computed relative to project root, and all configuration is via CLI flags:
 
+- `--posture <mode>`: Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced) (default: doctrine)
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
 - `--secrets-dir <dir>`: Directory for platform secrets (default: `.g8e/secrets`)
+- `--vault-dir <dir>`: Directory for vault data (default: `.g8e/secrets/vault`)
+- `--vault-key <path>`: Path to vault private key (default: auto-generated in vault dir)
+- `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 - `--http-port <port>`: HTTP port for bootstrap and MCP routes (default: 8080)
 - `--https-port <port>`: HTTPS port for mTLS API and public surface (default: 8443)
+- `--passkey-rp-id <id>`: RP ID for passkey operations (default: localhost)
+- `--passkey-rp-name <name>`: RP Name for passkey operations (default: g8e)
+- `--rate-limit-rps <n>`: Gateway requests per second limit (set to 0 to disable)
+- `--rate-limit-burst <n>`: Gateway rate limit burst size
+- `--log <level>`: Log level: info, error, debug (default: info)
+- `--cert-mode <mode>`: Certificate mode: full (all hostnames/IPs), localhost (only localhost)
+- `--follow`: Follow log output after starting (like tail -f)
 
 ---
 

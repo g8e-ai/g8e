@@ -816,7 +816,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := 8 // 3 MCP + 3 A2A + 2 governance
+	expectedCount := 10 // 5 MCP + 3 A2A + 2 governance
 
 	if len(scenarios) != expectedCount {
 		t.Errorf("Registry should have %d scenarios, got %d", expectedCount, len(scenarios))

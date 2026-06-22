@@ -103,9 +103,6 @@ type GatewayConfig struct {
 	JWTIssuer          string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
 	JWTAudience        string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
-	// Federation
-	FederationSeedURL string // Optional seed gateway URL for federation (empty = standalone mode)
-
 	// HTTP server limits
 	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
 	ReadHeaderTimeout time.Duration // Timeout for reading request headers (default: 10s)
@@ -125,47 +122,6 @@ type GatewayConfig struct {
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
-}
-
-// LocalHttpStdioConfig holds configuration for --local-http-stdio mode.
-// In this mode the Operator connects to an MCP gateway without governance.
-// This mode bypasses all L1/L2/L3 verification and is DANGEROUS.
-type LocalHttpStdioConfig struct {
-	GatewayURL  string // ws:// or wss:// URL of the MCP gateway
-	Token       string // Shared-secret token for Gateway auth (optional)
-	NodeID      string // Stable identifier for this node (defaults to hostname)
-	DisplayName string // Human-readable label shown in MCP gateway UI
-	PathEnv     string // PATH value to advertise to the Gateway
-	LogLevel    string
-}
-
-// LocalHttpStdioOptions contains configuration values for LoadLocalHttpStdio.
-type LocalHttpStdioOptions struct {
-	GatewayURL  string
-	Token       string
-	NodeID      string
-	DisplayName string
-	PathEnv     string
-	LogLevel    string
-}
-
-// LoadLocalHttpStdio creates configuration for --local-http-stdio mode.
-func LoadLocalHttpStdio(opts LocalHttpStdioOptions) (*LocalHttpStdioConfig, error) {
-	if opts.GatewayURL == "" {
-		return nil, constants.ErrGatewayURLRequired
-	}
-	logLevel := opts.LogLevel
-	if logLevel == "" {
-		logLevel = "info"
-	}
-	return &LocalHttpStdioConfig{
-		GatewayURL:  opts.GatewayURL,
-		Token:       opts.Token,
-		NodeID:      opts.NodeID,
-		DisplayName: opts.DisplayName,
-		PathEnv:     opts.PathEnv,
-		LogLevel:    logLevel,
-	}, nil
 }
 
 // Config holds all configuration for g8eo

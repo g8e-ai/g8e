@@ -663,9 +663,6 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		msg = &operatorv1.HeartbeatRequested{}
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{}
-	case constants.ActionTypeMigrationTransfer:
-		// TODO: Implement payload for MIGRATION_TRANSFER
-		return nil, nil
 	case constants.ActionTypeInvestigationCreate:
 		// No typed payload for investigation create, it uses raw bytes
 		return nil, nil

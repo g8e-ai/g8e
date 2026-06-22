@@ -56,18 +56,23 @@ const (
 	PathUsrSbin                                               = "/usr/sbin"
 	PathUsrLocalBin                                           = "/usr/local/bin"
 	PathUsrLocalSbin                                          = "/usr/local/sbin"
+	PathBinBash                                               = "/bin/bash"
+	PathUsrBinBash                                            = "/usr/bin/bash"
+	PathUsrBinSh                                              = "/usr/bin/sh"
 	PathLib                                                   = "/lib"
 	PathLib64                                                 = "/lib64"
 	PathUsrLib                                                = "/usr/lib"
 	PathProc                                                  = "/proc"
 	PathSys                                                   = "/sys"
 	PathDev                                                   = "/dev"
+	PathDevNull                                               = "/dev/null"
+	PathDevZero                                               = "/dev/zero"
 	PathVar                                                   = "/var"
-	PathTmp                                                   = "/tmp"
 	PathVarLib                                                = "/var/lib"
 	PathVarLog                                                = "/var/log"
 	PathVarLogDmesg                                           = "/var/log/dmesg"
 	PathVarWWW                                                = "/var/www"
+	PathTmp                                                   = "/tmp"
 	PathOpt                                                   = "/opt"
 	PathHome                                                  = "/home"
 	PathEtcHostname                                           = "/etc/hostname"
@@ -76,6 +81,7 @@ const (
 	PathProcSysKernelRandomBootID                             = "/proc/sys/kernel/random/boot_id"
 	PathProcSelfCgroup                                        = "/proc/self/cgroup"
 	PathProcSelfMountinfo                                     = "/proc/self/mountinfo"
+	PathProcMounts                                            = "/proc/mounts"
 	PathProcLoadAvg                                           = "/proc/loadavg"
 	PathProcMemInfo                                           = "/proc/meminfo"
 	PathProcNet                                               = "/proc/net"
@@ -84,16 +90,34 @@ const (
 	PathProcNetTCP6                                           = "/proc/net/tcp6"
 	PathProcNetUDP6                                           = "/proc/net/udp6"
 	PathProcNetRaw                                            = "/proc/net/raw"
+	PathProcUptime                                            = "/proc/uptime"
+	PathProcStat                                              = "/proc/stat"
+	PathProcVersion                                           = "/proc/version"
+	PathProcOneCmdline                                        = "/proc/1/cmdline"
+	PathEtcOSRelease                                          = "/etc/os-release"
+	PathEtcTimezone                                           = "/etc/timezone"
+	PathEtcLocaltime                                          = "/etc/localtime"
+	PathBinSh                                                 = "/bin/sh"
+	PathRoot                                                  = "/"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 
 	// SSH paths
-	PathEtcSshKnownHosts      = "/etc/ssh/known_hosts"
-	PathEtcSshSshKnownHosts   = "/etc/ssh/ssh_known_hosts"
-	PathHomeSshKnownHosts     = "$HOME/.ssh/known_hosts"
-	PathWindowsSshKnownHosts  = "$USERPROFILE\\.ssh\\known_hosts"
-	PathWindowsProgramDataSsh = "C:\\ProgramData\\ssh\\known_hosts"
-	PathWindowsSystemRoot     = "SystemRoot"
-	PathWindowsHostsFile      = "System32\\drivers\\etc\\hosts"
+	PathEtcSshKnownHosts            = "/etc/ssh/known_hosts"
+	PathEtcSshSshKnownHosts         = "/etc/ssh/ssh_known_hosts"
+	PathHomeSshKnownHosts           = "$HOME/.ssh/known_hosts"
+	PathWindowsSshKnownHosts        = "$USERPROFILE\\.ssh\\known_hosts"
+	PathWindowsProgramDataSsh       = "C:\\ProgramData\\ssh\\known_hosts"
+	PathWindowsSystemRoot           = "SystemRoot"
+	PathWindowsHostsFile            = "System32\\drivers\\etc\\hosts"
+	PathWindowsRegistryCryptography = "SOFTWARE\\Microsoft\\Cryptography"
+	PathWindowsRegistryMachineGuid  = "MachineGuid"
+
+	// Windows Git Bash paths
+	PathWindowsGitBinBash    = "C:\\Program Files\\Git\\bin\\bash.exe"
+	PathWindowsGitUsrBinBash = "C:\\Program Files\\Git\\usr\\bin\\bash.exe"
+	PathWindowsGitBinSh      = "C:\\Program Files\\Git\\bin\\sh.exe"
+	PathWindowsMsys64Bash    = "C:\\msys64\\usr\\bin\\bash.exe"
+	PathWindowsCygwin64Bash  = "C:\\cygwin64\\bin\\bash.exe"
 )
 
 // Environment variable constants
@@ -140,6 +164,7 @@ const (
 	DbFilename             = "g8e.db"
 	VaultKeyFilename       = "key"
 	VaultNewKeyFilename    = "key.new"
+	VaultHeaderFilename    = "vault.header"
 	SuspendedTxFilename    = "suspended_transactions.db"
 	ReceiptsFilename       = "receipts.json"
 	ReceiptsExportFilename = "receipts-export.json"
@@ -155,10 +180,19 @@ const (
 	SecretsFileCLIPrivateKey        = "cli_private_key"
 	SecretsFileSessionToken         = "session_token"
 
-	DemosDirname     = "demos"
-	DemosComposeFile = "compose.yml"
-	DemosBinDirname  = "bin"
-	DemosBinaryName  = "g8e"
+	DemosDirname                = "demos"
+	DemosComposeFile            = "compose.yml"
+	DemosBinDirname             = "bin"
+	DemosBinaryName             = "g8e"
+	DemosTargetDataDir          = "target-data"
+	DemosDoctrineDir            = "doctrine"
+	DemosPARequestsFile         = "pa_requests.json"
+	DemosHIPAADoctrineFile      = "phi_hipaa_doctrine.json"
+	DemosSecureDataDoctrineFile = "secure_data_transfer_doctrine.json"
+	DemosOrgHealthcare          = "healthcare"
+	DemosOrgFinance             = "finance"
+	DemosOrgGov                 = "gov"
+	DemosOrgSecureData          = "secure-data"
 
 	SwaggerFilename          = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"
@@ -186,6 +220,7 @@ const (
 	// Operator-specific filenames
 	OperatorPIDFilename     = "operator.pid"
 	OperatorPostureFilename = "operator.posture"
+	OperatorBinaryFilename  = "g8e-operator"
 
 	// Peer certificate filenames
 	PeerCertFilename  = "peer.crt"
@@ -198,6 +233,7 @@ const (
 const (
 	ProjectRootFromTestDir    = "../../"
 	ProjectRootFromCurrentDir = "."
+	PathCurrentDir            = "."
 
 	// Directory names (single path segment, no separators)
 	RuntimeDirname        = ".g8e"
@@ -216,6 +252,7 @@ const (
 	SessionsDirname   = "sessions"
 	GitDirname        = ".git"
 	GitignoreFilename = ".gitignore"
+	GoModFilename     = "go.mod"
 
 	// Key filenames
 	MasterKeyFilename = ".master_key"
@@ -248,6 +285,7 @@ const (
 
 	// File permission modes (octal)
 	PermDirPrivate  = 0700 // rwx------
+	PermDirStandard = 0755 // rwxr-xr-x
 	PermFilePrivate = 0600 // rw-------
 	PermFilePublic  = 0644 // rw-r--r--
 
@@ -276,6 +314,17 @@ const (
 	TestGitDirname             = ".git"
 	TestFileTxtFilename        = "test.txt"
 	TestNonexistentTxtFilename = "nonexistent.txt"
+	TestResultsDirname         = "test-results"
+
+	// Test-specific directory names
+	TestVaultDirname    = "test-vault"
+	TestProtocolDirname = "protocol"
+	TestDocsDirname     = "docs"
+
+	// Test-specific database filenames
+	TestLocalStateDBFilename    = "local_state.db"
+	TestAuditVaultDBFilename    = "audit_vault.db"
+	TestSecretManagerDBFilename = "secret_manager_test.db"
 
 	// File system listing limits
 	FsListMaxDepth       = 3
@@ -284,6 +333,41 @@ const (
 	FsListDefaultEntries = 100
 	FsListBatchSize      = 100
 
+	// FsGrep limits
+	FsGrepDefaultMaxMatches     = 100
+	FsGrepMaxMatches            = 500
+	FsGrepScannerInitialBufSize = 64 * 1024
+	FsGrepScannerMaxBufSize     = 1024 * 1024
+
 	// Temporary file suffix for atomic writes
 	TmpFileSuffix = ".tmp"
+
+	// Backup file suffix pattern (for use with fmt.Sprintf)
+	BackupFileSuffixPattern = ".backup-%s-%s"
+
+	// SQLite file suffixes
+	SQLiteWALSuffix = "-wal"
+	SQLiteSHMSuffix = "-shm"
+
+	// Execution stream size limits
+	ExecutionMaxStreamSize = 10 * 1024 * 1024 // 10MB per stream
+	ExecutionMaxLines      = 50               // Max lines for terminal output preview
+	ExecutionPreviewLength = 300              // Max characters for log preview
+	FileEditMaxSize        = 50 * 1024 * 1024 // 50MB max file size for operations
+
+	// Reporting output directory and file names
+	ReportsDirname                 = "reports"
+	ReportReceiptsFilename         = "receipts.csv"
+	ReportSessionsFilename         = "sessions.csv"
+	ReportEventsFilename           = "events.csv"
+	ReportFileMutationsFilename    = "file_mutations.csv"
+	ReportExecutionsFilename       = "executions.csv"
+	ReportFileDiffsFilename        = "file_diffs.csv"
+	ReportCommitmentsFilename      = "commitments.csv"
+	ReportLedgerCommitsFilename    = "ledger_commits.csv"
+	ReportLedgerMerkleRootFilename = "ledger_merkle_root.csv"
+	ReportReplayNoncesFilename     = "replay_nonces.csv"
+	ReportSuspendedTxFilename      = "suspended_transactions.csv"
+	ReportVerificationFilename     = "verification_summary.csv"
+	ReportManifestFilename         = "manifest.csv"
 )

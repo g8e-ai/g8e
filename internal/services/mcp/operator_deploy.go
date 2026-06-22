@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/sftp"
 	sshlib "golang.org/x/crypto/ssh"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pkg/ssh"
 )
 
@@ -269,7 +270,7 @@ func (t *OperatorDeployTool) deployViaSSH(ctx context.Context, hostname, operato
 	// Check if operator binary is a local file that needs to be transferred
 	if filepath.IsAbs(operatorBinary) || !strings.Contains(operatorBinary, "/") {
 		// Transfer the binary to the remote host
-		remotePath := "/tmp/g8e-operator"
+		remotePath := constants.PathTmp + "/" + constants.OperatorBinaryFilename
 		if err := t.transferBinaryViaSCP(client, operatorBinary, remotePath); err != nil {
 			result.Error = fmt.Sprintf("transfer binary: %v", err)
 			result.Message = fmt.Sprintf("Failed to transfer operator binary: %v", err)

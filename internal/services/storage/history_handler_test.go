@@ -91,7 +91,7 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         "Test command",
 			CommandRaw:          "echo test",
-			CommandExitCode:     &exitCode,
+			CommandExitCode:     exitCode,
 			CommandStdout:       "test output",
 			ExecutionDurationMs: 100,
 		}
@@ -167,7 +167,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 		Type:                constants.Event.Operator.FileEdit.Completed,
 		ContentText:         "Write config",
 		CommandRaw:          "file_write /etc/config.yml",
-		CommandExitCode:     &exitCode,
+		CommandExitCode:     exitCode,
 		ExecutionDurationMs: 50,
 	}
 	eventID, err := auditStore.RecordEvent(event)
@@ -221,7 +221,7 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       "Test command",
 			CommandRaw:        "echo test",
-			CommandExitCode:   &exitCode,
+			CommandExitCode:   exitCode,
 		}
 		_, err := auditStore.RecordEvent(event)
 		require.NoError(t, err)
@@ -555,7 +555,7 @@ func TestHistoryHandler_AllEventTypes(t *testing.T) {
 			Timestamp:         time.Now().UTC(),
 			Type:              et,
 			ContentText:       string(et) + " content",
-			CommandExitCode:   &exitCode,
+			CommandExitCode:   exitCode,
 		}
 		_, err := auditStore.RecordEvent(event)
 		require.NoError(t, err)
@@ -598,7 +598,7 @@ func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.FileEdit.Completed,
 		ContentText:       "Batch file update",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 	}
 	eventID, err := auditStore.RecordEvent(event)
 	require.NoError(t, err)

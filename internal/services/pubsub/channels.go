@@ -13,19 +13,23 @@
 
 package pubsub
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+)
 
 // CmdChannel returns the command channel for an operator session.
 func CmdChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("cmd:%s:%s", operatorID, operatorSessionID)
+	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixCmd, operatorID, operatorSessionID)
 }
 
 // ResultsChannel returns the results channel for an operator session.
 func ResultsChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("results:%s:%s", operatorID, operatorSessionID)
+	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixResults, operatorID, operatorSessionID)
 }
 
 // HeartbeatChannel returns the heartbeat channel for an operator session.
 func HeartbeatChannel(operatorID, operatorSessionID string) string {
-	return fmt.Sprintf("heartbeat:%s:%s", operatorID, operatorSessionID)
+	return fmt.Sprintf("%s:%s:%s", constants.ChannelPrefixHeartbeat, operatorID, operatorSessionID)
 }

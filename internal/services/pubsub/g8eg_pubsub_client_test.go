@@ -15,8 +15,15 @@ package pubsub
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,31 +35,83 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/constants"
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
+func generateTestCAPEM(t *testing.T) []byte {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	require.NoError(t, err)
+	template := x509.Certificate{
+		SerialNumber:          serial,
+		IsCA:                  true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		BasicConstraintsValid: true,
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+	}
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	require.NoError(t, err)
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+}
+
+func newTestCertsTLSConfig(t *testing.T) *certs.TLSConfig {
+	t.Helper()
+	trustStore := certs.NewTrustStore(generateTestCAPEM(t))
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	return certs.NewTLSConfig(trustStore, clientIdentity)
+}
+
+func newTestCertsTLSConfigForServer(t *testing.T, server *httptest.Server) *certs.TLSConfig {
+	t.Helper()
+	serverCert := server.Certificate()
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverCert.Raw})
+	trustStore := certs.NewTrustStore(caPEM)
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	return certs.NewTLSConfig(trustStore, clientIdentity)
+}
+
+func newTestRawTLSConfigForServer(t *testing.T, server *httptest.Server) *tls.Config {
+	t.Helper()
+	certsTLSConfig := newTestCertsTLSConfigForServer(t, server)
+	tlsCfg, err := certsTLSConfig.GetTLSConfig()
+	require.NoError(t, err)
+	return tlsCfg
+}
+
+func httpsToWss(url string) string {
+	return strings.Replace(url, "https://", "wss://", 1)
+}
+
 func TestNewOperatorPubSubClient(t *testing.T) {
 	logger := slog.Default()
+	tlsCfg := newTestCertsTLSConfig(t)
 
 	t.Run("rejects empty baseURL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("", "", logger, nil)
+		client, err := NewOperatorPubSubClient("", "", logger, tlsCfg)
 		require.Error(t, err)
 		assert.Nil(t, client)
 		assert.Error(t, err)
 	})
 
-	t.Run("accepts ws:// URL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
-		require.NoError(t, err)
-		assert.NotNil(t, client)
-		assert.Equal(t, fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
-		assert.Nil(t, client.tlsConfig)
-		assert.Empty(t, client.serverName)
+	t.Run("rejects ws:// URL", func(t *testing.T) {
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, tlsCfg)
+		require.Error(t, err)
+		assert.Nil(t, client)
+	})
+
+	t.Run("rejects nil certsTLSConfig", func(t *testing.T) {
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
+		require.Error(t, err)
+		assert.Nil(t, client)
 	})
 
 	t.Run("accepts wss:// URL", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, tlsCfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), client.baseURL)
@@ -60,7 +119,7 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 	})
 
 	t.Run("sets serverName for TLS SNI override", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://192.168.1.1:%d", constants.Ports.OperatorHttp), "gateway.local", logger, nil)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://192.168.1.1:%d", constants.Ports.OperatorHttp), "gateway.local", logger, tlsCfg)
 		require.NoError(t, err)
 		assert.NotNil(t, client)
 		assert.Equal(t, "gateway.local", client.serverName)
@@ -70,15 +129,10 @@ func TestNewOperatorPubSubClient(t *testing.T) {
 
 func TestPubSubWSURL(t *testing.T) {
 	logger := slog.Default()
-
-	t.Run("returns correct URL for ws://", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
-		require.NoError(t, err)
-		assert.Equal(t, fmt.Sprintf("ws://localhost:%d/api/v1/pubsub/stream", constants.Ports.OperatorHttp), client.pubSubWSURL())
-	})
+	tlsCfg := newTestCertsTLSConfig(t)
 
 	t.Run("returns correct URL for wss://", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, tlsCfg)
 		require.NoError(t, err)
 		assert.Equal(t, fmt.Sprintf("wss://localhost:%d/api/v1/pubsub/stream", constants.Ports.OperatorHttp), client.pubSubWSURL())
 	})
@@ -88,7 +142,8 @@ func TestConnectPubWs(t *testing.T) {
 	logger := slog.Default()
 
 	t.Run("fails on invalid endpoint", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://invalid-host-that-does-not-exist:9999", "", logger, nil)
+		tlsCfg := newTestCertsTLSConfig(t)
+		client, err := NewOperatorPubSubClient("wss://invalid-host-that-does-not-exist:9999", "", logger, tlsCfg)
 		require.NoError(t, err)
 
 		client.mu.Lock()
@@ -100,7 +155,7 @@ func TestConnectPubWs(t *testing.T) {
 	})
 
 	t.Run("succeeds on valid endpoint", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -108,8 +163,9 @@ func TestConnectPubWs(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		wsURL := httpsToWss(server.URL)
+		tlsCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, tlsCfg)
 		require.NoError(t, err)
 
 		client.mu.Lock()
@@ -125,9 +181,10 @@ func TestConnectPubWs(t *testing.T) {
 
 func TestPublish(t *testing.T) {
 	logger := slog.Default()
+	tlsCfg := newTestCertsTLSConfig(t)
 
 	t.Run("fails when client is closed", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, tlsCfg)
 		require.NoError(t, err)
 		client.Close()
 
@@ -137,7 +194,7 @@ func TestPublish(t *testing.T) {
 	})
 
 	t.Run("fails on connection error", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://invalid-host:9999", "", logger, nil)
+		client, err := NewOperatorPubSubClient("wss://invalid-host:9999", "", logger, tlsCfg)
 		require.NoError(t, err)
 
 		err = client.Publish(context.Background(), "test-channel", []byte("test data"))
@@ -147,7 +204,7 @@ func TestPublish(t *testing.T) {
 
 	t.Run("succeeds on valid connection", func(t *testing.T) {
 		receivedData := make(chan []byte, 1)
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -159,8 +216,9 @@ func TestPublish(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		wsURL := httpsToWss(server.URL)
+		serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
 		require.NoError(t, err)
 
 		testData := []byte("test payload")
@@ -183,9 +241,10 @@ func TestPublish(t *testing.T) {
 
 func TestClose(t *testing.T) {
 	logger := slog.Default()
+	tlsCfg := newTestCertsTLSConfig(t)
 
 	t.Run("closes nil pubWs gracefully", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient(fmt.Sprintf("ws://localhost:%d", constants.Ports.OperatorHttp), "", logger, nil)
+		client, err := NewOperatorPubSubClient(fmt.Sprintf("wss://localhost:%d", constants.Ports.OperatorHttp), "", logger, tlsCfg)
 		require.NoError(t, err)
 		assert.NotPanics(t, func() {
 			client.Close()
@@ -193,7 +252,7 @@ func TestClose(t *testing.T) {
 	})
 
 	t.Run("closes active pubWs", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -202,8 +261,9 @@ func TestClose(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		wsURL := httpsToWss(server.URL)
+		serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
 		require.NoError(t, err)
 
 		err = client.Publish(context.Background(), "test-channel", []byte("test"))
@@ -218,9 +278,10 @@ func TestClose(t *testing.T) {
 
 func TestSubscribe(t *testing.T) {
 	logger := slog.Default()
+	tlsCfg := newTestCertsTLSConfig(t)
 
 	t.Run("fails on connection error", func(t *testing.T) {
-		client, err := NewOperatorPubSubClient("ws://invalid-host:9999", "", logger, nil)
+		client, err := NewOperatorPubSubClient("wss://invalid-host:9999", "", logger, tlsCfg)
 		require.NoError(t, err)
 
 		_, err = client.Subscribe(context.Background(), "test-channel")
@@ -229,7 +290,7 @@ func TestSubscribe(t *testing.T) {
 	})
 
 	t.Run("receives subscribed ACK and messages", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -265,8 +326,9 @@ func TestSubscribe(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		wsURL := httpsToWss(server.URL)
+		serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
 		require.NoError(t, err)
 
 		ch, err := client.Subscribe(context.Background(), "test-channel")
@@ -284,7 +346,7 @@ func TestSubscribe(t *testing.T) {
 	})
 
 	t.Run("buffers messages before ACK", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -320,8 +382,9 @@ func TestSubscribe(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		wsURL := httpsToWss(server.URL)
+		serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
 		require.NoError(t, err)
 
 		ch, err := client.Subscribe(context.Background(), "test-channel")
@@ -338,7 +401,7 @@ func TestSubscribe(t *testing.T) {
 	})
 
 	t.Run("closes channel on context cancellation", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -367,8 +430,9 @@ func TestSubscribe(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		wsURL := httpsToWss(server.URL)
+		serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
 		require.NoError(t, err)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -395,7 +459,7 @@ func TestWaitForSubscribedACK(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -404,15 +468,17 @@ func TestWaitForSubscribedACK(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		dialer := websocket.Dialer{}
+		wsURL := httpsToWss(server.URL)
+		rawTLSCfg := newTestRawTLSConfigForServer(t, server)
+		dialer := websocket.Dialer{TLSClientConfig: rawTLSCfg}
 		ws, resp, err := dialer.Dial(wsURL, nil)
 		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 		if resp != nil {
 			resp.Body.Close()
 		}
 
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
 		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 
 		var pending [][]byte
@@ -426,7 +492,7 @@ func TestWaitForSubscribedACK(t *testing.T) {
 	t.Run("returns error on connection close", func(t *testing.T) {
 		ctx := context.Background()
 
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			upgrader := websocket.Upgrader{}
 			conn, err := upgrader.Upgrade(w, r, nil)
 			assert.NoError(t, err)
@@ -434,15 +500,17 @@ func TestWaitForSubscribedACK(t *testing.T) {
 		}))
 		defer server.Close()
 
-		wsURL := strings.Replace(server.URL, "http", "ws", 1)
-		dialer := websocket.Dialer{}
+		wsURL := httpsToWss(server.URL)
+		rawTLSCfg := newTestRawTLSConfigForServer(t, server)
+		dialer := websocket.Dialer{TLSClientConfig: rawTLSCfg}
 		ws, resp, err := dialer.Dial(wsURL, nil)
 		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 		if resp != nil {
 			resp.Body.Close()
 		}
 
-		client, err := NewOperatorPubSubClient(wsURL, "", logger, nil)
+		serverTLSCfg := newTestCertsTLSConfigForServer(t, server)
+		client, err := NewOperatorPubSubClient(wsURL, "", logger, serverTLSCfg)
 		assert.NoError(t, err) //nolint:testifylint,require-error // in http handler
 
 		var pending [][]byte

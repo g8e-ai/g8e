@@ -362,7 +362,7 @@ func TestHandleFetchHistory_Success(t *testing.T) {
 					Type:              constants.Event.Operator.Audit.Command,
 					ContentText:       "test command",
 					CommandRaw:        "echo test",
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 					CommandStdout:     "output",
 					CommandStderr:     "",
 					StoredLocally:     true,
@@ -408,7 +408,7 @@ func TestHandleFetchHistory_NilExitCode(t *testing.T) {
 					OperatorSessionID: sessionID,
 					Timestamp:         time.Now().UTC(),
 					Type:              constants.Event.Operator.Audit.Command,
-					CommandExitCode:   nil, // nil exit code
+					CommandExitCode:   constants.ExitCodeNone, // no exit code
 				},
 			}, nil
 		},
@@ -428,7 +428,7 @@ func TestHandleFetchHistory_NilExitCode(t *testing.T) {
 
 	assert.True(t, result.Success)
 	assert.Len(t, result.Events, 1)
-	assert.Equal(t, int32(0), result.Events[0].CommandExitCode, "nil exit code should default to 0")
+	assert.Equal(t, int32(0), result.Events[0].CommandExitCode, "ExitCodeNone should default to 0 in protobuf")
 }
 
 // TestHandleFetchHistory_WithFileMutations verifies file mutation inclusion for file edit events
@@ -445,7 +445,7 @@ func TestHandleFetchHistory_WithFileMutations(t *testing.T) {
 					OperatorSessionID: sessionID,
 					Timestamp:         time.Now().UTC(),
 					Type:              constants.Event.Operator.FileEdit.Completed,
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 				},
 			}, nil
 		},
@@ -497,7 +497,7 @@ func TestHandleFetchHistory_FileMutationError(t *testing.T) {
 					OperatorSessionID: sessionID,
 					Timestamp:         time.Now().UTC(),
 					Type:              constants.Event.Operator.FileEdit.Completed,
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 				},
 			}, nil
 		},
@@ -539,7 +539,7 @@ func TestHandleFetchHistory_NonFileEditEvent(t *testing.T) {
 					OperatorSessionID: sessionID,
 					Timestamp:         time.Now().UTC(),
 					Type:              constants.Event.Operator.Audit.Command,
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 				},
 			}, nil
 		},

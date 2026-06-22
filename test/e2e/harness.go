@@ -22,12 +22,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/test"
 )
 
 // DockerE2EFixture spins up docker-compose, waits for health, and tears down on cleanup.
@@ -51,7 +52,7 @@ func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 	}
 
 	// Resolve repository root
-	repoRoot := resolveRepoRoot(t)
+	repoRoot := tests.ResolveRepoRootFromTestDir(t)
 
 	// Build absolute path to compose file
 	var composePath string
@@ -158,24 +159,4 @@ func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	require.NoError(t, err, "Failed to get operator logs")
 	logs := string(logsOutput)
 	require.Contains(t, logs, "connected", "Operator logs do not contain connection success marker")
-}
-
-// resolveRepoRoot finds the repository root using runtime.Caller.
-func resolveRepoRoot(t *testing.T) string {
-	t.Helper()
-	// Get the directory of this file using runtime.Caller
-	_, filename, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(filename)
-
-	// Navigate to repository root (test/e2e -> repository root)
-	repoRoot := filepath.Join(testDir, "..", "..")
-	repoRoot = filepath.Clean(repoRoot)
-
-	// Verify go.mod exists at repoRoot
-	goModPath := filepath.Join(repoRoot, "go.mod")
-	if _, err := os.Stat(goModPath); os.IsNotExist(err) {
-		t.Fatalf("go.mod not found at %s", goModPath)
-	}
-
-	return repoRoot
 }

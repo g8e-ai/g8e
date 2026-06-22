@@ -14,6 +14,7 @@
 package storage
 
 import (
+	"database/sql"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -22,6 +23,15 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
+
+// NonceRow represents a single nonce record for export.
+type NonceRow struct {
+	Nonce      string
+	Status     string
+	ReservedAt time.Time
+	UsedAt     *time.Time
+	ExpiresAt  time.Time
+}
 
 // containsString checks if a string contains a substring (case-sensitive).
 func containsString(s, substr string) bool {
@@ -94,6 +104,58 @@ func (rs *SQLReplayStore) initSchema() error {
 	}
 
 	return nil
+}
+
+// ListNonces retrieves nonce records with pagination, ordered by reserved_at ASC.
+func (rs *SQLReplayStore) ListNonces(limit, offset int) ([]*NonceRow, error) {
+	if rs == nil || rs.db == nil {
+		return nil, fmt.Errorf("replay store not initialized")
+	}
+
+	if limit <= 0 {
+		limit = 100
+	}
+
+	query := `
+	SELECT nonce, reserved_at, used_at, expires_at, status
+	FROM nonce_usage
+	ORDER BY reserved_at ASC
+	LIMIT ? OFFSET ?
+	`
+
+	type nonceRowRaw struct {
+		nonce         string
+		reservedAtStr string
+		usedAtStr     sql.NullString
+		expiresAtStr  string
+		status        string
+	}
+
+	rows, err := sqliteutil.MaterializeRows(rs.db, query, []interface{}{limit, offset}, func(r *sql.Rows) (nonceRowRaw, error) {
+		var row nonceRowRaw
+		err := r.Scan(&row.nonce, &row.reservedAtStr, &row.usedAtStr, &row.expiresAtStr, &row.status)
+		return row, err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("replay store: list nonces: %w", err)
+	}
+
+	var results []*NonceRow
+	for _, row := range rows {
+		n := &NonceRow{
+			Nonce:  row.nonce,
+			Status: row.status,
+		}
+		n.ReservedAt, _ = sqliteutil.ParseTimestamp(row.reservedAtStr)
+		n.ExpiresAt, _ = sqliteutil.ParseTimestamp(row.expiresAtStr)
+		if row.usedAtStr.Valid {
+			t, _ := sqliteutil.ParseTimestamp(row.usedAtStr.String)
+			n.UsedAt = &t
+		}
+		results = append(results, n)
+	}
+
+	return results, nil
 }
 
 // ReserveNonce atomically reserves a nonce for early replay protection.

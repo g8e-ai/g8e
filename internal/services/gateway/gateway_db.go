@@ -86,7 +86,7 @@ type CanonicalDBService struct {
 }
 
 // OpenCanonicalDBService opens (or creates) the unified SQLite database.
-// testMode enables the in-memory keystore backend for unit tests.
+// testMode enables the in-memory keystore keyring for unit tests.
 // vaultKeyPath is the path to the vault private key file (hex-encoded).
 // vaultRequireUnlock requires the vault to be unlocked before starting.
 // testKeystore is an optional keystore instance for test mode (prevents race conditions in parallel tests).
@@ -133,10 +133,10 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 			if err := encryptionVault.Unlock(privateKey); err != nil {
 				if vaultRequireUnlock {
 					db.Close()
-					if errors.Is(err, vault.ErrVaultNotInit) {
+					if errors.Is(err, constants.ErrVaultNotInitialized) {
 						return nil, fmt.Errorf("%w: %s", constants.ErrVaultNotInitialized, vaultDir)
 					}
-					if errors.Is(err, vault.ErrInvalidPrivateKey) {
+					if errors.Is(err, constants.ErrVaultInvalidPrivateKey) {
 						return nil, fmt.Errorf("%w: %s", constants.ErrVaultKeyDecodeFailed, vaultKeyPath)
 					}
 					return nil, fmt.Errorf("%w: %w", constants.ErrVaultUnlockFailed, err)
@@ -216,11 +216,11 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 	if testKeystore != nil {
 		ks = testKeystore
 	} else {
-		backend, err := keystore.NewTestBackend()
+		keyring, err := keystore.NewMemoryKeyring()
 		if err != nil {
 			return err
 		}
-		ks, err = keystore.NewWithBackend(secretsDir, s.logger, backend)
+		ks, err = keystore.NewWithKeyring(secretsDir, s.logger, keyring)
 		if err != nil {
 			return err
 		}
@@ -232,10 +232,11 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 		}
 	}
 	sm := &SecretManager{
-		db:         s.db,
-		secretsDir: secretsDir,
-		logger:     s.logger,
-		keystore:   ks,
+		db:                  s.db,
+		secretsDir:          secretsDir,
+		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+		logger:              s.logger,
+		keystore:            ks,
 	}
 	if err := sm.InitAppSettings(); err != nil {
 		return err

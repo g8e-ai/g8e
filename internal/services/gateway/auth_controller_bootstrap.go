@@ -441,7 +441,7 @@ func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *h
 		LocalOSUser       *models.LocalOSUser `json:"local_os_user,omitempty"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -669,7 +669,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		LocalOSUser       *models.LocalOSUser `json:"local_os_user,omitempty"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -704,7 +704,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 	}
 	if !bootstrapUser.IsActive() {
 		c.logger.Warn("Bootstrap user is disabled, refusing CLI enrollment", "user_id", bootstrapUser.ID)
-		c.responder.Error(w, http.StatusConflict, "bootstrap user is disabled, cannot enroll")
+		c.responder.Error(w, http.StatusConflict, constants.ErrBootstrapUserDisabledEnroll.Error())
 		return
 	}
 
@@ -840,7 +840,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		Hostname          string `json:"hostname"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -871,7 +871,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		// Bootstrap user exists - check if rotation is allowed
 		if !bootstrapUser.IsActive() {
 			c.logger.Warn("Bootstrap user is disabled, refusing device enrollment", "user_id", bootstrapUser.ID)
-			c.responder.Error(w, http.StatusConflict, "bootstrap user is disabled, cannot enroll")
+			c.responder.Error(w, http.StatusConflict, constants.ErrBootstrapUserDisabledEnroll.Error())
 			return
 		}
 		user = bootstrapUser

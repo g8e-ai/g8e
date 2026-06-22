@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 const (
@@ -65,22 +67,22 @@ func NewJWKSProvider(url string) *JWKSProvider {
 func (p *JWKSProvider) fetchKeys(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.url, nil)
 	if err != nil {
-		return fmt.Errorf("jwks: create request: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrJWKSRequestCreate, err)
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("jwks: fetch keys: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrJWKSFetchKeys, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("jwks: unexpected status code: %d", resp.StatusCode)
+		return fmt.Errorf("%w: %d", constants.ErrJWKSUnexpectedStatus, resp.StatusCode)
 	}
 
 	var jwks JWKS
 	if err := json.NewDecoder(resp.Body).Decode(&jwks); err != nil {
-		return fmt.Errorf("jwks: decode response: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrJWKSDecodeResponse, err)
 	}
 
 	newKeys := make(map[string]*rsa.PublicKey)
@@ -130,7 +132,7 @@ func (p *JWKSProvider) GetKey(ctx context.Context, kid string) (*rsa.PublicKey, 
 	}
 
 	if err := p.fetchKeys(ctx); err != nil {
-		return nil, fmt.Errorf("jwks: fetch keys: %w", err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrJWKSFetchKeys, err)
 	}
 
 	p.mu.RLock()
@@ -138,7 +140,7 @@ func (p *JWKSProvider) GetKey(ctx context.Context, kid string) (*rsa.PublicKey, 
 	p.mu.RUnlock()
 
 	if !ok {
-		return nil, fmt.Errorf("jwks: key not found: %s", kid)
+		return nil, fmt.Errorf("%w: %s", constants.ErrJWKSKeyNotFound, kid)
 	}
 
 	return key, nil

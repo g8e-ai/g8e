@@ -26,13 +26,12 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/user"
-	"runtime"
 	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -347,18 +346,6 @@ func (s *PasskeyBootstrapServer) handleRegister(w http.ResponseWriter, r *http.R
 	_, _ = w.Write([]byte("OK"))
 }
 
-// openBrowser opens the default system browser to the given URL.
-func openBrowser(url string) error {
-	switch runtime.GOOS {
-	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		return exec.Command("open", url).Start()
-	default: // linux and other unix-like
-		return exec.Command("xdg-open", url).Start()
-	}
-}
-
 // RegisterPasskeyViaLocalhost starts a localhost server and guides the user through passkey registration
 func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string) error {
 	// Use external interface IP for gateway URL to support port forwarding scenarios
@@ -382,19 +369,17 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	}
 	defer server.Stop()
 
-	// Replace 0.0.0.0 with external IP for the display URL
+	// Replace 0.0.0.0 with g8e.local for the display URL
 	portStr := strings.TrimPrefix(url, "http://0.0.0.0:")
-	displayURL := fmt.Sprintf("http://%s:%s", externalIP, portStr)
+	displayURL := fmt.Sprintf("https://g8e.local:%s", portStr)
 
-	// Trust script URLs for both Unix and Windows platforms
+	// Trust script URLs for both Unix and Windows platforms (HTTP with external IP)
 	httpPort := constants.Ports.OperatorHttp
 	linuxURL := fmt.Sprintf("http://%s:%d%s", externalIP, httpPort, constants.APIPaths.BootstrapCALinux)
 	windowsURL := fmt.Sprintf("http://%s:%d%s", externalIP, httpPort, constants.APIPaths.BootstrapCAWindows)
 
-	// Attempt to auto-open the browser (best-effort)
-	if err := openBrowser(displayURL); err != nil {
-		log.Printf("Could not auto-open browser: %v", err)
-	}
+	// Attempt to auto-open the browser (best-effort, silent on failure)
+	_ = platform.OpenBrowser(displayURL)
 
 	fmt.Printf("\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════\n")

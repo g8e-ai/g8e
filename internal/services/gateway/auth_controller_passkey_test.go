@@ -118,7 +118,7 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		c.handleAuthPasskeysRegisterChallenge(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+		assert.Contains(t, rr.Body.String(), constants.ErrFirstCredentialOnly.Error())
 	})
 
 	t.Run("Success - session context user_id", func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestHandleAuthPasskeysRegisterChallenge(t *testing.T) {
 		c.handleAuthPasskeysRegisterChallenge(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user_id mismatch")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserIDMismatch.Error())
 	})
 }
 
@@ -207,7 +207,7 @@ func TestHandleAuthPasskeysRegisterVerify(t *testing.T) {
 		c.handleAuthPasskeysRegisterVerify(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+		assert.Contains(t, rr.Body.String(), constants.ErrFirstCredentialOnly.Error())
 	})
 }
 
@@ -251,7 +251,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.False(t, resp["success"].(bool))
-		assert.Contains(t, resp["error"].(string), "no passkeys registered")
+		assert.Contains(t, resp["error"].(string), constants.ErrNoPasskeysRegistered.Error())
 	})
 
 	t.Run("Success - session context user_id", func(t *testing.T) {
@@ -292,7 +292,7 @@ func TestHandleAuthPasskeysAuthenticateChallenge(t *testing.T) {
 		c.handleAuthPasskeysAuthenticateChallenge(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user_id mismatch")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserIDMismatch.Error())
 	})
 }
 
@@ -354,7 +354,7 @@ func TestHandleAuthPasskeysAuthenticateVerify(t *testing.T) {
 		c.handleAuthPasskeysAuthenticateVerify(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user_id mismatch")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserIDMismatch.Error())
 	})
 }
 
@@ -379,7 +379,7 @@ func TestHandleAuthPasskeys(t *testing.T) {
 		c.handleAuthPasskeys(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user_id required")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserIDRequired.Error())
 	})
 
 	t.Run("Success - list credentials", func(t *testing.T) {
@@ -428,7 +428,7 @@ func TestHandleAuthPasskeysRevoke(t *testing.T) {
 		c.handleAuthPasskeysRevoke(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user_id required")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserIDRequired.Error())
 	})
 
 	t.Run("Failure - missing credential_id", func(t *testing.T) {
@@ -443,7 +443,7 @@ func TestHandleAuthPasskeysRevoke(t *testing.T) {
 		c.handleAuthPasskeysRevoke(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "credential_id required")
+		assert.Contains(t, rr.Body.String(), constants.ErrCredentialIDRequired.Error())
 	})
 
 	t.Run("Success - revoke credential", func(t *testing.T) {

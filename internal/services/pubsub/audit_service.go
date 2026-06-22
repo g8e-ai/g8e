@@ -25,7 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -107,7 +106,7 @@ func (as *AuditService) recordDirectCommand(ctx context.Context, msg *PubSubComm
 			Type:                constants.Event.Operator.Audit.Command,
 			ContentText:         marshaler.Status(constants.AISourceTerminalDirect),
 			CommandRaw:          protoResult.Command,
-			CommandExitCode:     system.IntPtr(int(protoResult.ExitCode)),
+			CommandExitCode:     int(protoResult.ExitCode),
 			CommandStdout:       protoResult.Output,
 			CommandStderr:       protoResult.Stderr,
 			ExecutionDurationMs: int64(protoResult.ExecutionTimeSeconds * 1000),
@@ -132,6 +131,7 @@ func (as *AuditService) recordDirectCommand(ctx context.Context, msg *PubSubComm
 			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       marshaler.Status(constants.AISourceTerminalDirect),
 			CommandRaw:        protoCmd.Command,
+			CommandExitCode:   constants.ExitCodeNone,
 		}
 
 		as.logger.Info("Direct terminal command recorded in audit store (LFAA)",

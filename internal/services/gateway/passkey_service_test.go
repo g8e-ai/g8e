@@ -467,23 +467,6 @@ func TestPasskeyService_updateUser(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("Error - marshal failure", func(t *testing.T) {
-		t.Parallel()
-		svc, user := newPasskeyServiceForTest(t)
-
-		// Create a user with invalid data that can't be marshaled
-		invalidUser := &models.User{
-			ID: user.ID,
-			// This would need to be something that causes marshal to fail
-			// but since User is a simple struct, we'll just test the DB error path
-		}
-
-		// Close DB to force error
-		svc.db.Close()
-
-		err := svc.updateUser(user.ID, invalidUser)
-		require.Error(t, err)
-	})
 }
 
 func TestPasskeyService_storeWebAuthnSession(t *testing.T) {

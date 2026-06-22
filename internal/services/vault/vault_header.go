@@ -17,11 +17,12 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // VaultHeader contains the metadata and wrapped DEK for an encrypted vault.
@@ -56,19 +57,10 @@ type DEKParams struct {
 
 const (
 	VaultHeaderVersion = 1
-	VaultHeaderFile    = "vault.header"
 
 	KDFAlgorithm = "hkdf-sha256"
 	KEKAlgorithm = "aes-256-kw"
 	DEKAlgorithm = "aes-256-gcm"
-)
-
-var (
-	ErrHeaderNotFound      = errors.New("vault header not found")
-	ErrHeaderCorrupted     = errors.New("vault header is corrupted")
-	ErrHeaderVersionUnsup  = errors.New("unsupported vault header version")
-	ErrKeyFingerprintMatch = errors.New("private key fingerprint mismatch")
-	ErrVaultAlreadyExists  = errors.New("vault already exists")
 )
 
 // NewVaultHeader creates a new vault header with a freshly generated DEK
@@ -115,7 +107,7 @@ func NewVaultHeader(privateKey []byte) (*VaultHeader, []byte, error) {
 func (h *VaultHeader) UnwrapDEK(privateKey []byte) ([]byte, error) {
 	expectedFingerprint := hex.EncodeToString(PrivateKeyFingerprint(privateKey))
 	if h.KeyFingerprint != expectedFingerprint {
-		return nil, ErrKeyFingerprintMatch
+		return nil, constants.ErrVaultKeyFingerprintMatch
 	}
 
 	kek, err := DeriveKEK(privateKey)
@@ -166,7 +158,7 @@ func (h *VaultHeader) Rekey(oldPrivateKey, newPrivateKey []byte) error {
 
 // Save writes the header to disk at the specified data directory.
 func (h *VaultHeader) Save(dataDir string) error {
-	headerPath := filepath.Join(dataDir, VaultHeaderFile)
+	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
 
 	data, err := json.MarshalIndent(h, "", "  ")
 	if err != nil {
@@ -188,23 +180,23 @@ func (h *VaultHeader) Save(dataDir string) error {
 
 // LoadVaultHeader loads a vault header from the specified data directory.
 func LoadVaultHeader(dataDir string) (*VaultHeader, error) {
-	headerPath := filepath.Join(dataDir, VaultHeaderFile)
+	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
 
 	data, err := os.ReadFile(headerPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, ErrHeaderNotFound
+			return nil, constants.ErrVaultHeaderNotFound
 		}
 		return nil, fmt.Errorf("failed to read header: %w", err)
 	}
 
 	var header VaultHeader
 	if err := json.Unmarshal(data, &header); err != nil {
-		return nil, ErrHeaderCorrupted
+		return nil, constants.ErrVaultHeaderCorrupted
 	}
 
 	if header.Version > VaultHeaderVersion {
-		return nil, ErrHeaderVersionUnsup
+		return nil, constants.ErrVaultHeaderVersionUnsup
 	}
 
 	return &header, nil
@@ -212,14 +204,14 @@ func LoadVaultHeader(dataDir string) (*VaultHeader, error) {
 
 // VaultHeaderExists checks if a vault header exists at the specified data directory.
 func VaultHeaderExists(dataDir string) bool {
-	headerPath := filepath.Join(dataDir, VaultHeaderFile)
+	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
 	_, err := os.Stat(headerPath)
 	return err == nil
 }
 
 // DeleteVaultHeader removes the vault header file. This makes the vault unrecoverable.
 func DeleteVaultHeader(dataDir string) error {
-	headerPath := filepath.Join(dataDir, VaultHeaderFile)
+	headerPath := filepath.Join(dataDir, constants.VaultHeaderFilename)
 	if err := os.Remove(headerPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete header: %w", err)
 	}

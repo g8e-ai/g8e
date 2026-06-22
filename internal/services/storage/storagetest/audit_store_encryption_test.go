@@ -75,7 +75,7 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 		Type:              constants.Event.Operator.Audit.Command,
 		ContentText:       "User message about secrets",
 		CommandRaw:        "echo secret",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     sensitiveContent,
 		CommandStderr:     "Some error output",
 	}
@@ -132,7 +132,7 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "cat /etc/passwd",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     secretData,
 	})
 	require.NoError(t, err)
@@ -231,7 +231,7 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "echo test",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     originalData,
 	})
 	require.NoError(t, err)
@@ -312,7 +312,7 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "echo first",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     data1,
 	})
 	require.NoError(t, err)
@@ -324,7 +324,7 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.Audit.Command,
 		CommandRaw:        "echo second",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     data2,
 	})
 	require.NoError(t, err)

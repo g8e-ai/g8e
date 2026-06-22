@@ -11,8 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build integration
-
 package gateway
 
 import (
@@ -23,6 +21,8 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
+	"log/slog"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -31,10 +31,45 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockSecretManager is a mock implementation of SecretManager for unit testing.
+type mockSecretManager struct {
+	getKeyFunc          func(caType string) ([]byte, error)
+	storeKeyFunc        func(caType string, keyDER []byte) error
+	getServiceKeyFunc   func(serviceName string) ([]byte, error)
+	storeServiceKeyFunc func(serviceName string, keyDER []byte) error
+}
+
+func (m *mockSecretManager) GetCAPrivateKey(caType string) ([]byte, error) {
+	if m.getKeyFunc != nil {
+		return m.getKeyFunc(caType)
+	}
+	return nil, errors.New("mock secret manager: key not found")
+}
+
+func (m *mockSecretManager) StoreCAPrivateKey(caType string, keyDER []byte) error {
+	if m.storeKeyFunc != nil {
+		return m.storeKeyFunc(caType, keyDER)
+	}
+	return nil
+}
+
+func (m *mockSecretManager) GetServicePrivateKey(serviceName string) ([]byte, error) {
+	if m.getServiceKeyFunc != nil {
+		return m.getServiceKeyFunc(serviceName)
+	}
+	return nil, errors.New("mock secret manager: service key not found")
+}
+
+func (m *mockSecretManager) StoreServicePrivateKey(serviceName string, keyDER []byte) error {
+	if m.storeServiceKeyFunc != nil {
+		return m.storeServiceKeyFunc(serviceName, keyDER)
+	}
+	return nil
+}
 
 func TestRandomSerial(t *testing.T) {
 	t.Parallel()
@@ -469,66 +504,52 @@ func TestLoadCAPrivateKey(t *testing.T) {
 		var loadedKey *ecdsa.PrivateKey
 		err := pki.loadCAPrivateKey("root", &loadedKey)
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPKIPrivateKeyRequired)
 	})
 
 	t.Run("Returns error when key not found in keystore", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
-		secretsDir := t.TempDir()
-		logger := testutil.NewTestLogger()
-
-		// Create test database
-		db, err := OpenCanonicalDBService(tmpDir, secretsDir, filepath.Join(tmpDir, constants.VaultDirname), logger, true, "", false, nil)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
+		mockSM := &mockSecretManager{
+			getKeyFunc: func(caType string) ([]byte, error) {
+				return nil, constants.ErrKeyStoreKeyNotFound
+			},
+		}
 
 		pki := &PKIAuthority{
-			secretManager: sm,
+			secretManager: mockSM,
 		}
 
 		var loadedKey *ecdsa.PrivateKey
-		err = pki.loadCAPrivateKey("nonexistent", &loadedKey)
+		err := pki.loadCAPrivateKey("nonexistent", &loadedKey)
 		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrKeyStoreKeyNotFound)
 	})
 
 	t.Run("Returns error for malformed key DER", func(t *testing.T) {
 		t.Parallel()
-		tmpDir := t.TempDir()
-		secretsDir := t.TempDir()
-		logger := testutil.NewTestLogger()
-
-		// Create test database
-		db, err := OpenCanonicalDBService(tmpDir, secretsDir, filepath.Join(tmpDir, constants.VaultDirname), logger, true, "", false, nil)
-		require.NoError(t, err)
-		t.Cleanup(func() { db.Close() })
-
-		sm, err := NewSecretManager(db.db, secretsDir, logger)
-		require.NoError(t, err)
-
-		// Store invalid key DER
-		err = sm.StoreCAPrivateKey("root", []byte("invalid DER"))
-		require.NoError(t, err)
+		mockSM := &mockSecretManager{
+			getKeyFunc: func(caType string) ([]byte, error) {
+				return []byte("invalid DER"), nil
+			},
+		}
 
 		pki := &PKIAuthority{
-			secretManager: sm,
+			secretManager: mockSM,
 		}
 
 		var loadedKey *ecdsa.PrivateKey
-		err = pki.loadCAPrivateKey("root", &loadedKey)
+		err := pki.loadCAPrivateKey("root", &loadedKey)
 		assert.Error(t, err)
 	})
 }
 
 func TestNewPKIAuthority(t *testing.T) {
 	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	t.Run("Uses default PKI dir when pkiDir is empty", func(t *testing.T) {
 		t.Parallel()
 		dataDir := t.TempDir()
-		logger := testutil.NewTestLogger()
 
 		pki := newPKIAuthority(dataDir, "", nil, nil, logger)
 		expectedPKIDir := filepath.Join(dataDir, constants.PkiDirname)
@@ -539,7 +560,6 @@ func TestNewPKIAuthority(t *testing.T) {
 		t.Parallel()
 		dataDir := t.TempDir()
 		customPKIDir := filepath.Join(dataDir, "custom-pki")
-		logger := testutil.NewTestLogger()
 
 		pki := newPKIAuthority(dataDir, customPKIDir, nil, nil, logger)
 		assert.Equal(t, customPKIDir, pki.pkiDir)
@@ -549,7 +569,6 @@ func TestNewPKIAuthority(t *testing.T) {
 		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
-		logger := testutil.NewTestLogger()
 
 		pki := newPKIAuthority(dataDir, pkiDir, nil, nil, logger)
 		assert.Equal(t, pkiDir, pki.pkiDir)
@@ -558,5 +577,168 @@ func TestNewPKIAuthority(t *testing.T) {
 		assert.Equal(t, logger, pki.logger)
 		assert.Nil(t, pki.rootCert)
 		assert.Nil(t, pki.rootKey)
+	})
+}
+
+func TestPKIAuthority_PathGetters(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	dataDir := t.TempDir()
+	pkiDir := filepath.Join(dataDir, "pki")
+
+	pki := newPKIAuthority(dataDir, pkiDir, nil, nil, logger)
+
+	t.Run("TrustBundlePath returns correct path", func(t *testing.T) {
+		t.Parallel()
+		expected := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+		assert.Equal(t, expected, pki.TrustBundlePath())
+	})
+
+	t.Run("RootCAPath returns correct path", func(t *testing.T) {
+		t.Parallel()
+		expected := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+		assert.Equal(t, expected, pki.RootCAPath())
+	})
+
+	t.Run("BinariesDir returns correct path", func(t *testing.T) {
+		t.Parallel()
+		expected := filepath.Join(pkiDir, constants.PkiSubdirBinaries)
+		assert.Equal(t, expected, pki.BinariesDir())
+	})
+
+	t.Run("PKIDir returns correct path", func(t *testing.T) {
+		t.Parallel()
+		assert.Equal(t, pkiDir, pki.PKIDir())
+	})
+}
+
+func TestPKIAuthority_VerifyCertificate_Unit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Returns error for nil certificate", func(t *testing.T) {
+		t.Parallel()
+		pki := &PKIAuthority{}
+		err := pki.VerifyCertificate(nil)
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPKINoCertificate)
+	})
+}
+
+func TestPKIAuthority_RevokeCertificate(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Returns error when database is nil", func(t *testing.T) {
+		t.Parallel()
+		pki := &PKIAuthority{db: nil}
+		err := pki.RevokeCertificate("123", "test reason")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPKIDatabaseNotAvailable)
+	})
+}
+
+func TestPKIAuthority_GenerateCRL_Unit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Returns error when database is nil", func(t *testing.T) {
+		t.Parallel()
+		pki := &PKIAuthority{db: nil}
+		_, err := pki.GenerateCRL()
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPKIDatabaseNotAvailable)
+	})
+}
+
+func TestPKIAuthority_TLSConfig_Unit(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	t.Run("Returns valid TLS config", func(t *testing.T) {
+		t.Parallel()
+		key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		template := &x509.Certificate{
+			SerialNumber: big.NewInt(1),
+			Subject:      pkix.Name{CommonName: "Test Root CA"},
+			NotBefore:    time.Now(),
+			NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+			KeyUsage:     x509.KeyUsageCertSign,
+			IsCA:         true,
+		}
+		certDER, _ := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+		cert, _ := x509.ParseCertificate(certDER)
+
+		pki := &PKIAuthority{
+			logger:       logger,
+			rootCert:     cert,
+			operatorCert: cert,
+		}
+
+		config := pki.TLSConfig()
+		assert.NotNil(t, config)
+		assert.Equal(t, uint16(tls.VersionTLS13), config.MinVersion)
+		assert.Equal(t, tls.RequireAndVerifyClientCert, config.ClientAuth)
+		assert.NotNil(t, config.ClientCAs)
+		assert.NotNil(t, config.GetCertificate)
+	})
+}
+
+func TestPKIAuthority_SignCSR_Unit(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Returns error for gateway-peer when CA not loaded", func(t *testing.T) {
+		t.Parallel()
+		pki := &PKIAuthority{
+			gatewayPeerCert: nil,
+		}
+
+		key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		csr := &x509.CertificateRequest{
+			Subject: pkix.Name{CommonName: "test"},
+		}
+		csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csr, key)
+		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+
+		_, _, err := pki.SignCSR(string(csrPEM), "gateway-peer", "", "", "", "", "gateway-id")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPKIGatewayPeerCANotLoaded)
+	})
+
+	t.Run("Returns error for operator when CA not loaded", func(t *testing.T) {
+		t.Parallel()
+		pki := &PKIAuthority{
+			operatorCert: nil,
+		}
+
+		key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		csr := &x509.CertificateRequest{
+			Subject: pkix.Name{CommonName: "test"},
+		}
+		csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csr, key)
+		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+
+		_, _, err := pki.SignCSR(string(csrPEM), "operator", "org-id", "op-id", "session-id", "", "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPKIOperatorCANotLoaded)
+	})
+}
+
+func TestPKIAuthority_SignDelegatedCSR(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Returns error when operator CA not loaded", func(t *testing.T) {
+		t.Parallel()
+		pki := &PKIAuthority{
+			operatorCert: nil,
+		}
+
+		key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		csr := &x509.CertificateRequest{
+			Subject: pkix.Name{CommonName: "test"},
+		}
+		csrDER, _ := x509.CreateCertificateRequest(rand.Reader, csr, key)
+		csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+
+		_, _, err := pki.SignDelegatedCSR(string(csrPEM), "app-name", "user-id")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrPKIOperatorCANotLoaded)
 	})
 }

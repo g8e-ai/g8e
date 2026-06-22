@@ -14,10 +14,11 @@
 package system
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"runtime"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 const GitEmbedded = "embedded"
@@ -30,7 +31,7 @@ func ResolveGitBinary(logger *slog.Logger) string {
 // ValidateGitBinary is a stub for native go-git migration.
 func ValidateGitBinary(gitPath string) (string, error) {
 	if gitPath == "" {
-		return "", fmt.Errorf("no git binary path provided")
+		return "", constants.ErrMCPGitOpsBinaryPathRequired
 	}
 	return "go-git v5 (embedded)", nil
 }

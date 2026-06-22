@@ -34,7 +34,7 @@ type streamResult struct {
 	Host      string
 	Status    constants.StreamStatus
 	SizeBytes int64
-	Error     string
+	Error     error
 	Elapsed   time.Duration
 }
 
@@ -43,20 +43,9 @@ func isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
-	// Network timeouts, connection refused, temporary failures
-	transientPatterns := []string{
-		"timeout",
-		"connection refused",
-		"temporary failure",
-		"network is unreachable",
-		"no route to host",
-		"i/o timeout",
-		"broken pipe",
-		"connection reset",
-	}
-	for _, pattern := range transientPatterns {
-		if strings.Contains(strings.ToLower(errStr), pattern) {
+	errStr := strings.ToLower(err.Error())
+	for _, pattern := range constants.TransientNetworkErrorPatterns {
+		if strings.Contains(errStr, pattern) {
 			return true
 		}
 	}
@@ -67,19 +56,19 @@ func isTransientError(err error) bool {
 // Returns nil if the host is reachable and auth works, error otherwise.
 func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassphrase, knownHostsPath string, dialTimeout time.Duration) error {
 	if err := ctx.Err(); err != nil {
-		return err
+		return fmt.Errorf("ssh: preflight: %w", err)
 	}
 	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandBuildAuth, err)
+		return fmt.Errorf("ssh: build auth: %w", err)
 	}
 	if len(authMethods) == 0 {
-		return constants.ErrMCPRunShellCommandNoAuth
+		return fmt.Errorf("ssh: preflight: %w", constants.ErrMCPRunShellCommandNoAuth)
 	}
 
 	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(knownHostsPath)
 	if cbErr != nil {
-		return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandHostKeyVerification, cbErr)
+		return fmt.Errorf("ssh: host key callback: %w", cbErr)
 	}
 
 	clientConfig := &sshlib.ClientConfig{
@@ -105,13 +94,13 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 			proxyCmd := strings.ReplaceAll(r.ProxyCommand, "%h", r.Hostname)
 			proxyCmd = strings.ReplaceAll(proxyCmd, "%p", r.Port)
 
-			cmd := exec.CommandContext(ctx, "sh", "-c", proxyCmd)
+			cmd := exec.CommandContext(ctx, constants.PathBinSh, "-c", proxyCmd)
 			stdin, err := cmd.StdinPipe()
 			if err != nil {
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+				}{nil, fmt.Errorf("ssh: proxy stdin pipe: %w", err)}
 				return
 			}
 			stdout, err := cmd.StdoutPipe()
@@ -119,14 +108,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+				}{nil, fmt.Errorf("ssh: proxy stdout pipe: %w", err)}
 				return
 			}
 			if err := cmd.Start(); err != nil {
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+				}{nil, fmt.Errorf("ssh: start proxy: %w", err)}
 				return
 			}
 
@@ -142,12 +131,12 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 				dialDone <- struct {
 					client *sshlib.Client
 					err    error
-				}{nil, err}
+				}{nil, fmt.Errorf("ssh: dial: %w", err)}
 				return
 			}
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
 				_ = tcpConn.SetKeepAlive(true)
-				_ = tcpConn.SetKeepAlivePeriod(15 * time.Second)
+				_ = tcpConn.SetKeepAlivePeriod(constants.SSHKeepaliveInterval)
 			}
 		}
 
@@ -157,7 +146,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 			dialDone <- struct {
 				client *sshlib.Client
 				err    error
-			}{nil, err}
+			}{nil, fmt.Errorf("ssh: client connection: %w", err)}
 			return
 		}
 		client := sshlib.NewClient(sshConn, chans, reqs)
@@ -169,7 +158,7 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("ssh: preflight: %w", ctx.Err())
 	case result := <-dialDone:
 		if result.err != nil {
 			return result.err
@@ -179,14 +168,14 @@ func preFlightCheck(ctx context.Context, r ssh.HostConfig, sshAuthSock, sshPassp
 		// Run a simple command to verify the session works
 		session, err := result.client.NewSession()
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandSSHSession, err)
+			return fmt.Errorf("ssh: session: %w", err)
 		}
 		defer session.Close()
 
 		// Run 'true' command - minimal check that remote shell works
 		err = session.Run("true")
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrMCPRunShellCommandSSHDial, err)
+			return fmt.Errorf("ssh: verify: %w", err)
 		}
 		return nil
 	}
@@ -211,53 +200,51 @@ func streamToHost(
 	resultCh chan<- streamResult,
 ) {
 	start := time.Now()
-	r := ssh.HostConfig{}
 
-	emit := func(status constants.StreamStatus, errMsg string) {
+	emit := func(status constants.StreamStatus, err error) {
 		resultCh <- streamResult{
 			Host:      target,
 			Status:    status,
 			SizeBytes: int64(len(binaryData)),
-			Error:     errMsg,
+			Error:     err,
 			Elapsed:   time.Since(start),
 		}
 	}
 
 	select {
 	case <-ctx.Done():
-		emit(constants.StreamStatusCancelled, "context cancelled")
+		emit(constants.StreamStatusCancelled, constants.ErrSSHContextCancelled)
 		return
 	default:
 	}
 
-	var err error
-	r, err = ssh.ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser)
+	r, err := ssh.ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser)
 	if err != nil {
-		emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandResolveHost, err))
+		emit(constants.StreamStatusFailed, fmt.Errorf("ssh: resolve host: %w", err))
 		return
 	}
 
 	// Pre-flight check if enabled
 	if enablePreFlightCheck {
 		if err := preFlightCheck(ctx, r, sshAuthSock, sshPassphrase, sshKnownHostsPath, dialTimeout); err != nil {
-			emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandSSHDial, err))
+			emit(constants.StreamStatusFailed, err)
 			return
 		}
 	}
 
 	authMethods, err := ssh.BuildAuthMethods(r, sshAuthSock, sshPassphrase)
 	if err != nil {
-		emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandBuildAuth, err))
+		emit(constants.StreamStatusFailed, fmt.Errorf("ssh: build auth: %w", err))
 		return
 	}
 	if len(authMethods) == 0 {
-		emit(constants.StreamStatusFailed, constants.ErrMCPRunShellCommandNoAuth.Error())
+		emit(constants.StreamStatusFailed, fmt.Errorf("ssh: %w", constants.ErrMCPRunShellCommandNoAuth))
 		return
 	}
 
 	hostKeyCallback, cbErr := ssh.BuildHostKeyCallback(sshKnownHostsPath)
 	if cbErr != nil {
-		emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandHostKeyVerification, cbErr))
+		emit(constants.StreamStatusFailed, fmt.Errorf("ssh: host key callback: %w", cbErr))
 		return
 	}
 
@@ -282,7 +269,7 @@ func streamToHost(
 			select {
 			case <-time.After(backoff):
 			case <-ctx.Done():
-				emit(constants.StreamStatusCancelled, "context cancelled during retry backoff")
+				emit(constants.StreamStatusCancelled, constants.ErrSSHRetryBackoffCancelled)
 				return
 			}
 		}
@@ -303,13 +290,13 @@ func streamToHost(
 				proxyCmd := strings.ReplaceAll(r.ProxyCommand, "%h", r.Hostname)
 				proxyCmd = strings.ReplaceAll(proxyCmd, "%p", r.Port)
 
-				cmd := exec.CommandContext(ctx, "sh", "-c", proxyCmd)
+				cmd := exec.CommandContext(ctx, constants.PathBinSh, "-c", proxyCmd)
 				stdin, err := cmd.StdinPipe()
 				if err != nil {
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+					}{nil, fmt.Errorf("ssh: proxy stdin pipe: %w", err)}
 					return
 				}
 				stdout, err := cmd.StdoutPipe()
@@ -317,14 +304,14 @@ func streamToHost(
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+					}{nil, fmt.Errorf("ssh: proxy stdout pipe: %w", err)}
 					return
 				}
 				if err := cmd.Start(); err != nil {
 					dialDone <- struct {
 						client *sshlib.Client
 						err    error
-					}{nil, fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)}
+					}{nil, fmt.Errorf("ssh: start proxy: %w", err)}
 					return
 				}
 
@@ -348,7 +335,7 @@ func streamToHost(
 				// Enable TCP keepalive on the connection
 				if tcpConn, ok := conn.(*net.TCPConn); ok {
 					_ = tcpConn.SetKeepAlive(true)
-					_ = tcpConn.SetKeepAlivePeriod(15 * time.Second)
+					_ = tcpConn.SetKeepAlivePeriod(constants.SSHKeepaliveInterval)
 				}
 			}
 
@@ -372,7 +359,7 @@ func streamToHost(
 		var client *sshlib.Client
 		select {
 		case <-ctx.Done():
-			emit(constants.StreamStatusCancelled, "context cancelled")
+			emit(constants.StreamStatusCancelled, constants.ErrSSHContextCancelled)
 			return
 		case result := <-dialDone:
 			if result.err != nil {
@@ -380,7 +367,7 @@ func streamToHost(
 				if retryCount < maxRetries && isTransientError(result.err) {
 					continue // Retry transient errors
 				}
-				emit(constants.StreamStatusFailed, fmt.Sprintf("%s %s: %v (after %d retries)", constants.ErrMCPRunShellCommandSSHDial, addr, result.err, retryCount))
+				emit(constants.StreamStatusFailed, fmt.Errorf("ssh: dial: %s: %w (after %d retries)", addr, result.err, retryCount))
 				return
 			}
 			client = result.client
@@ -388,9 +375,9 @@ func streamToHost(
 		defer func() {
 			_ = client.Close()
 		}()
-		// Send keepalive requests every 15s, fail after 3 missed responses (45s total)
+		// Send keepalive requests
 		go func() {
-			ticker := time.NewTicker(15 * time.Second)
+			ticker := time.NewTicker(constants.SSHKeepaliveInterval)
 			defer ticker.Stop()
 			missedCount := 0
 			for {
@@ -398,10 +385,10 @@ func streamToHost(
 				case <-ctx.Done():
 					return
 				case <-ticker.C:
-					_, _, err := client.SendRequest("keepalive@g8e", true, nil)
+					_, _, err := client.SendRequest(constants.SSHKeepaliveRequestType, true, nil)
 					if err != nil {
 						missedCount++
-						if missedCount >= 3 {
+						if missedCount >= constants.SSHKeepaliveMaxMissed {
 							// Close client on persistent keepalive failure
 							client.Close()
 							return
@@ -419,7 +406,7 @@ func streamToHost(
 			if retryCount < maxRetries && isTransientError(err) {
 				continue // Retry transient errors
 			}
-			emit(constants.StreamStatusFailed, fmt.Sprintf("%s: %v (after %d retries)", constants.ErrMCPRunShellCommandSSHSession, err, retryCount))
+			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: session: %w (after %d retries)", err, retryCount))
 			return
 		}
 		defer func() {
@@ -429,71 +416,22 @@ func streamToHost(
 		// Wire binary data as the remote stdin.
 		session.Stdin = bytes.NewReader(binaryData)
 
-		// Capture stdout+stderr (bounded) so the caller can surface the remote
-		// operator's output when it exits non-zero. Without this, the deployment
-		// tool silently drops every remote log line and a failing Operator is
-		// indistinguishable from a generic SSH exit - see g8eo review notes.
+		// Capture stdout+stderr (bounded)
 		const maxCapturedBytes = 64 * 1024
 		stderrBuf := &boundedBuffer{limit: maxCapturedBytes}
 		stdoutBuf := &boundedBuffer{limit: maxCapturedBytes}
 		session.Stderr = stderrBuf
 		session.Stdout = stdoutBuf
 
-		// Build the remote ephemeral script inline.
-		//
-		// Critical: when the local stream is cancelled (Ctrl-C, ctx cancel) we
-		// must guarantee the remote Operator dies with the session. Without a
-		// PTY, sshd does not automatically HUP the remote process group, and a
-		// plain `& wait $!` pattern leaves the backgrounded Operator orphaned to
-		// init. We therefore:
-		//   1. Install a trap on HUP/INT/TERM that forwards the signal to the
-		//      operator's PID and the whole process group, then waits briefly
-		//      for graceful exit before SIGKILL.
-		//   2. Run the Operator in its own process group (setsid) so we can
-		//      signal the group, covering any children it spawned.
-		//   3. `wait "$PID"` is interruptible by trapped signals, so the trap
-		//      fires promptly rather than after the Operator exits on its own.
 		var remoteCmd string
 		if operatorArgs != "" {
-			remoteCmd = fmt.Sprintf(
-				`set -e
-B=$(mktemp)
-cat > "$B"
-chmod +x "$B"
-cleanup() {
-  sig=${1:-TERM}
-  if [ -n "${PID:-}" ] && kill -0 "$PID" 2>/dev/null; then
-    kill -"$sig" "-$PID" 2>/dev/null || kill -"$sig" "$PID" 2>/dev/null || true
-    for _ in 1 2 3 4 5 6 7 8 9 10; do
-      kill -0 "$PID" 2>/dev/null || break
-      sleep 0.2
-    done
-    kill -0 "$PID" 2>/dev/null && { kill -KILL "-$PID" 2>/dev/null || kill -KILL "$PID" 2>/dev/null || true; }
-  fi
-  rm -f "$B"
-}
-trap 'cleanup TERM; exit 143' HUP INT TERM
-trap 'rm -f "$B"' EXIT
-setsid "$B" %s < /dev/null &
-PID=$!
-wait "$PID"`,
-				operatorArgs,
-			)
+			remoteCmd = fmt.Sprintf(constants.RemoteEphemeralScriptTemplate, operatorArgs)
 		} else {
-			remoteCmd = `set -e; B=$(mktemp); cat > "$B"; chmod +x "$B"; trap 'rm -f "$B"' EXIT; echo "[g8e]Node Node Binary injected into $B -- run it manually: $B -e <endpoint> [options]"`
+			msg := fmt.Sprintf(constants.RemoteInjectedBinaryMessage, "$B", "$B")
+			remoteCmd = fmt.Sprintf(constants.RemoteInjectedScriptMinimal, msg)
 		}
 
-		// Check for context cancellation before running
-		select {
-		case <-ctx.Done():
-			emit(constants.StreamStatusCancelled, "context cancelled before run")
-			return
-		default:
-		}
-
-		// Watcher: on ctx cancellation, send SIGHUP to the remote shell and
-		// close the session so sshd tears down the channel. Our remote trap
-		// will fire and kill the Operator process group.
+		// Watcher: on ctx cancellation, send SIGHUP to the remote shell
 		runDone := make(chan struct{})
 		go func() {
 			select {
@@ -507,17 +445,14 @@ wait "$PID"`,
 		err = session.Run(remoteCmd)
 		close(runDone)
 		if err != nil {
-			// SSH exit status non-zero is surfaced as *ssh.ExitError - treat operator
-			// exit as a normal end of session, not a hard failure, but attach the
-			// captured remote stderr (and last-resort stdout) so the caller can
-			// tell a real auth/registration failure apart from a clean exit.
 			var exitErr *sshlib.ExitError
 			if isSSHExitError(err, &exitErr) {
-				msg := fmt.Sprintf("exit code %d", exitErr.ExitStatus())
+				// For exited status, include exit code and captured remote output
+				msg := fmt.Errorf("ssh: exit code %d", exitErr.ExitStatus())
 				if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
-					msg = fmt.Sprintf("%s: %s", msg, tail)
+					msg = fmt.Errorf("%w: %s", msg, tail)
 				} else if tail := strings.TrimSpace(stdoutBuf.String()); tail != "" {
-					msg = fmt.Sprintf("%s: %s", msg, tail)
+					msg = fmt.Errorf("%w: %s", msg, tail)
 				}
 				emit(constants.StreamStatusExited, msg)
 				return
@@ -526,20 +461,20 @@ wait "$PID"`,
 			if retryCount < maxRetries && isTransientError(err) {
 				continue // Retry transient errors
 			}
-			msg := fmt.Sprintf("%s: %v", constants.ErrMCPRunShellCommandSSHDial, err)
+			msg := fmt.Errorf("ssh: run: %w", err)
 			if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
-				msg = fmt.Sprintf("%s: %s", msg, tail)
+				msg = fmt.Errorf("%w: %s", msg, tail)
 			}
 			emit(constants.StreamStatusFailed, msg)
 			return
 		}
 
-		emit(constants.StreamStatusCompleted, "")
+		emit(constants.StreamStatusCompleted, nil)
 		return
 	}
 
 	// If we exhausted retries
-	emit(constants.StreamStatusFailed, fmt.Sprintf("%s: failed after %d retries, last error: %v", constants.ErrMCPRunShellCommandSSHDial, maxRetries, lastErr))
+	emit(constants.StreamStatusFailed, fmt.Errorf("ssh: exhausted retries: %d retries: last error: %w", maxRetries, lastErr))
 }
 
 // isSSHExitError checks whether err is an *ssh.ExitError and sets target.
@@ -585,17 +520,20 @@ type proxyConn struct {
 	addr   string
 }
 
-func (c *proxyConn) Read(b []byte) (n int, err error) {
+func (c *proxyConn) Read(b []byte) (int, error) {
 	return c.stdout.Read(b)
 }
 
-func (c *proxyConn) Write(b []byte) (n int, err error) {
+func (c *proxyConn) Write(b []byte) (int, error) {
 	return c.stdin.Write(b)
 }
 
 func (c *proxyConn) Close() error {
 	_ = c.stdin.Close()
-	_ = c.cmd.Wait()
+	// Wait for the proxy command to exit and return any error
+	if err := c.cmd.Wait(); err != nil {
+		return fmt.Errorf("ssh: proxy command wait: %w", err)
+	}
 	return nil
 }
 

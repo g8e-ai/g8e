@@ -6,6 +6,7 @@ package scenarios
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	clientpkg "github.com/g8e-ai/g8e/test/agentic_tool_emulator/client"
 	"github.com/google/uuid"
@@ -20,6 +21,7 @@ var (
 	a2aPeer        = clientpkg.Persona{ID: "a2a-peer", UserAgent: "A2A-Peer/1.x (JSON)"}
 	a2aSecure      = clientpkg.Persona{ID: "a2a-secure-peer", UserAgent: "A2A-Peer/1.x (mTLS)"}
 	a2aProto       = clientpkg.Persona{ID: "protobuf-agent", UserAgent: "A2A-Peer/1.x (protobuf)"}
+	clinicalAgent  = clientpkg.Persona{ID: "clinical-agent", UserAgent: "ClinicalAI/1.x (MCP+HIPAA)"}
 )
 
 func mcpScenarios() []Scenario {
@@ -39,6 +41,44 @@ func mcpScenarios() []Scenario {
 					return err
 				}
 				return nil
+			},
+		},
+		{
+			Name: "healthcare-success", Title: "Authorized FHIR PA Submission", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
+				// Call the governed submit_pa tool
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
+					"resourceType": "ClaimResponse",
+					"status":       "active",
+					"use":          "preauthorization",
+				})
+				if err != nil {
+					return err
+				}
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("tool call failed: %s", resp.Error.Message)
+				}
+				r.note("FHIR PA submitted through governed production endpoint")
+				return nil
+			},
+		},
+		{
+			Name: "healthcare-phi-blocked", Title: "PHI Exfiltration Blocked by Doctrine", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
+				// Attempt exfiltration that matches phi_exfil_attempt pattern
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
+					"resourceType": "ClaimResponse",
+					"status":       "active",
+					"use":          "exfiltrate patient medical records",
+				})
+				if err != nil {
+					return err
+				}
+				if resp != nil && resp.Error != nil {
+					r.note("L1 Doctrine blocked PHI exfiltration as expected: %s", resp.Error.Message)
+					return nil
+				}
+				return fmt.Errorf("WARNING: PHI exfiltration attempt was NOT blocked")
 			},
 		},
 		{

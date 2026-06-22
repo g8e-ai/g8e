@@ -127,6 +127,7 @@ var (
 	// Process manager errors
 	ErrProcessStartFailed = errors.New("process start failed")
 	ErrProcessStopFailed  = errors.New("process stop failed")
+	ErrProcessFindFailed  = errors.New("failed to find process")
 	ErrPortUnavailable    = errors.New("port unavailable")
 	ErrInvalidPosture     = errors.New("invalid posture")
 	ErrPIDReadFailed      = errors.New("failed to read PID file")
@@ -136,15 +137,21 @@ var (
 	ErrProcessInterrupted = errors.New("process interrupted")
 
 	// File system errors
-	ErrPathNotFound   = errors.New("path not found")
-	ErrStatFailed     = errors.New("failed to stat path")
-	ErrNotADirectory  = errors.New("path is not a directory")
-	ErrPathValidation = errors.New("invalid path")
-	ErrDirectoryList  = errors.New("failed to list directory")
-	ErrDirectoryRead  = errors.New("failed to read directory")
-	ErrFileOpenFailed = errors.New("failed to open file")
-	ErrInvalidRegex   = errors.New("invalid regex pattern")
-	ErrGrepFailed     = errors.New("failed to perform grep")
+	ErrPathNotFound         = errors.New("path not found")
+	ErrStatFailed           = errors.New("failed to stat path")
+	ErrNotADirectory        = errors.New("path is not a directory")
+	ErrPathValidation       = errors.New("invalid path")
+	ErrDirectoryList        = errors.New("failed to list directory")
+	ErrDirectoryRead        = errors.New("failed to read directory")
+	ErrFileOpenFailed       = errors.New("failed to open file")
+	ErrInvalidRegex         = errors.New("invalid regex pattern")
+	ErrGrepFailed           = errors.New("failed to perform grep")
+	ErrFileOwnershipExtract = errors.New("failed to extract syscall.Stat_t from FileInfo")
+
+	// FsGrep error type constants
+	ErrFsGrepValidation     = errors.New("fs_grep validation error")
+	ErrFsGrepInvalidPattern = errors.New("fs_grep invalid pattern")
+	ErrFsGrepExecution      = errors.New("fs_grep execution error")
 
 	// Execution service errors
 	ErrExecutionServiceStopping = errors.New("execution service is stopping")
@@ -153,6 +160,12 @@ var (
 	ErrCommandLookup            = errors.New("command lookup failed")
 	ErrShellRequired            = errors.New("shell required but not found")
 	ErrCloudCLIBlocked          = errors.New("cloud CLI command blocked")
+
+	// Execution error message constants
+	ErrMessageExecutionTimeout  = "Command execution timed out"
+	ErrMessagePermissionDenied  = "Permission denied: command is not executable"
+	ErrMessageCommandNotFound   = "Command not found"
+	ErrMessageCommandTerminated = "Command was terminated"
 
 	// MCP service errors
 	ErrMCPUnmarshalArguments = errors.New("unmarshal arguments")
@@ -229,6 +242,7 @@ var (
 
 	// MCP git ops errors
 	ErrMCPGitOpsUnsupportedOperation = errors.New("unsupported operation")
+	ErrMCPGitOpsBinaryPathRequired   = errors.New("git binary path required")
 
 	// MCP TLS cert inspect errors
 	ErrMCPTLSCertInspectRequired = errors.New("either cert_path or host must be specified")
@@ -270,6 +284,10 @@ var (
 	ErrNetworkDetectWindows       = errors.New("detect Windows identity")
 	ErrNetworkGetHostname         = errors.New("get hostname")
 	ErrNetworkGetSysteminfo       = errors.New("get systeminfo")
+
+	// System utils errors
+	ErrSystemUtilsInvalidProcStatFormat = errors.New("invalid /proc/stat format")
+	ErrSystemUtilsInvalidCPULineFormat  = errors.New("invalid CPU line format")
 
 	// Audit service errors
 	ErrAuditUnmarshalUserMsg      = errors.New("failed to unmarshal user message payload")
@@ -317,35 +335,39 @@ var (
 	ErrAuditStoreDecryptFailed            = errors.New("failed to decrypt content")
 
 	// PubSub service errors
-	ErrPubSubEmptyPayload              = errors.New("empty payload")
-	ErrPubSubTransactionVerifier       = errors.New("transaction verifier not configured")
-	ErrPubSubActuator                  = errors.New("actuator not configured")
-	ErrPubSubL4Warden                  = errors.New("L4Warden not configured")
-	ErrPubSubMCPGateway                = errors.New("MCP gateway not configured")
-	ErrPubSubMCPMissingToolName        = errors.New("MCP call missing tool_name")
-	ErrPubSubA2AGateway                = errors.New("A2A gateway not configured")
-	ErrPubSubA2AMissingSkillName       = errors.New("A2A call missing skill_name")
-	ErrPubSubActuatorOrAuditStore      = errors.New("actuator or ConsoleAuditStore not configured")
-	ErrPubSubPublishExecutionResult    = errors.New("failed to publish execution result")
-	ErrPubSubPublishCancellationResult = errors.New("failed to publish cancellation result")
-	ErrPubSubPublishFileEditResult     = errors.New("failed to publish file edit result")
-	ErrPubSubPublishFsListResult       = errors.New("failed to publish fs list result")
-	ErrPubSubPublishFsGrepResult       = errors.New("failed to publish fs grep result")
-	ErrPubSubBuildStatusEnvelope       = errors.New("failed to build Universal status envelope")
-	ErrPubSubPublishStatusUpdate       = errors.New("failed to publish Universal status update")
-	ErrPubSubBuildHeartbeatEnvelope    = errors.New("failed to build heartbeat envelope")
-	ErrPubSubMarshalHeartbeatEnvelope  = errors.New("failed to marshal heartbeat envelope")
-	ErrPubSubPublishHeartbeat          = errors.New("failed to send heartbeat")
-	ErrPubSubMarshalEnvelope           = errors.New("failed to marshal Governance Envelope")
-	ErrPubSubBuildResultEnvelope       = errors.New("failed to build Governance Envelope")
+	ErrPubSubEmptyPayload                 = errors.New("empty payload")
+	ErrPubSubTransactionVerifier          = errors.New("transaction verifier not configured")
+	ErrPubSubActuator                     = errors.New("actuator not configured")
+	ErrPubSubL4Warden                     = errors.New("L4Warden not configured")
+	ErrPubSubMCPGateway                   = errors.New("MCP gateway not configured")
+	ErrPubSubMCPMissingToolName           = errors.New("MCP call missing tool_name")
+	ErrPubSubA2AGateway                   = errors.New("A2A gateway not configured")
+	ErrPubSubA2AMissingSkillName          = errors.New("A2A call missing skill_name")
+	ErrPubSubActuatorOrAuditStore         = errors.New("actuator or ConsoleAuditStore not configured")
+	ErrPubSubResultsPublisher             = errors.New("results publisher not configured")
+	ErrPubSubPublishExecutionResult       = errors.New("failed to publish execution result")
+	ErrPubSubPublishCancellationResult    = errors.New("failed to publish cancellation result")
+	ErrPubSubPublishFileEditResult        = errors.New("failed to publish file edit result")
+	ErrPubSubPublishFsListResult          = errors.New("failed to publish fs list result")
+	ErrPubSubPublishFsGrepResult          = errors.New("failed to publish fs grep result")
+	ErrPubSubBuildStatusEnvelope          = errors.New("failed to build Universal status envelope")
+	ErrPubSubPublishStatusUpdate          = errors.New("failed to publish Universal status update")
+	ErrPubSubBuildHeartbeatEnvelope       = errors.New("failed to build heartbeat envelope")
+	ErrPubSubMarshalHeartbeatEnvelope     = errors.New("failed to marshal heartbeat envelope")
+	ErrPubSubPublishHeartbeat             = errors.New("failed to send heartbeat")
+	ErrPubSubMarshalEnvelope              = errors.New("failed to marshal Governance Envelope")
+	ErrPubSubBuildResultEnvelope          = errors.New("failed to build Governance Envelope")
+	ErrPubSubCertificateMissingOperatorID = errors.New("certificate missing Operator identity")
+	ErrPubSubInvalidChannelFormat         = errors.New("invalid channel format")
 
 	// Scrubbing service errors
-	ErrScrubbingInvalidPattern = errors.New("invalid custom scrub pattern")
-	ErrScrubbingRegexTimeout   = errors.New("regex compilation timeout")
-	ErrScrubbingTokenPersist   = errors.New("failed to persist token to local store")
-	ErrScrubbingTokenLoad      = errors.New("failed to load persisted tokens from TokenStore")
-	ErrScrubbingTokenKeyFormat = errors.New("invalid token key format")
-	ErrScrubbingTokenSequence  = errors.New("failed to parse token sequence")
+	ErrScrubbingInvalidPattern        = errors.New("invalid custom scrub pattern")
+	ErrScrubbingRegexTimeout          = errors.New("regex compilation timeout")
+	ErrScrubbingTokenPersist          = errors.New("failed to persist token to local store")
+	ErrScrubbingTokenLoad             = errors.New("failed to load persisted tokens from TokenStore")
+	ErrScrubbingTokenKeyFormat        = errors.New("invalid token key format")
+	ErrScrubbingTokenSequence         = errors.New("failed to parse token sequence")
+	ErrScrubbingTokenStoreUnavailable = errors.New("token persistence required but TokenStore unavailable")
 
 	// Gateway service errors
 	ErrGatewayToolNameRequired             = errors.New("tool name required")
@@ -373,6 +395,16 @@ var (
 	ErrGatewayA2AError                     = errors.New("A2A error")
 	ErrGatewayAlreadyRunning               = errors.New("gateway service already running")
 	ErrGatewayShutdownTimeout              = errors.New("shutdown timeout exceeded")
+	ErrGatewaySSERouteRequired             = errors.New("sse route requires exactly one of web_session_id, cli_session_id, user_id")
+	ErrGatewaySSERouteMutuallyExclusive    = errors.New("sse route is mutually-exclusive: set exactly one of web_session_id, cli_session_id, user_id")
+
+	// Gateway approval errors
+	ErrGatewayUnauthorized                = errors.New("unauthorized")
+	ErrGatewayTransactionNotFound         = errors.New("transaction not found")
+	ErrGatewayTransactionBelongsToAnother = errors.New("transaction belongs to another user")
+	ErrGatewayTransactionHashRequired     = errors.New("transaction hash required")
+	ErrGatewayCLISignatureRequired        = errors.New("cli_signature required")
+	ErrGatewayMTLSCertFingerprintRequired = errors.New("mtls_cert_fingerprint required")
 
 	// MCP native handler errors
 	ErrMCPNativeToolRegistration = errors.New("native tool registration failed")
@@ -417,6 +449,8 @@ var (
 	ErrWindowsCertWriteFailed     = errors.New("failed to write certificate to temp file")
 	ErrWindowsPowerShellImport    = errors.New("failed to import certificate via PowerShell")
 	ErrWindowsPowerShellTrust     = errors.New("failed to trust Root CA via PowerShell")
+	ErrWindowsRegistryOpenKey     = errors.New("failed to open registry key")
+	ErrWindowsRegistryReadValue   = errors.New("failed to read registry value")
 
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
@@ -450,6 +484,15 @@ var (
 	ErrVaultRekeyFailed        = errors.New("failed to rekey vault")
 	ErrVaultResetFailed        = errors.New("failed to reset vault")
 	ErrVaultKeyWriteFailed     = errors.New("failed to write vault key")
+	ErrVaultStoreExecution     = errors.New("failed to store execution in vault")
+	ErrVaultStoreFileDiff      = errors.New("failed to store file diff in vault")
+	ErrVaultLocked             = errors.New("vault is locked")
+	ErrVaultAlreadyOpen        = errors.New("vault is already unlocked")
+	ErrVaultConfigRequired     = errors.New("vault config is required")
+	ErrVaultDataDirRequired    = errors.New("vault data directory is required")
+	ErrVaultResetConfirmation  = errors.New("vault reset requires explicit confirmation")
+	ErrVaultInvalidPrivateKey  = errors.New("invalid private key for this vault")
+	ErrVaultCiphertextTooShort = errors.New("ciphertext too short")
 
 	// Vault crypto errors
 	ErrVaultInvalidKeySize      = errors.New("invalid key size: must be 32 bytes")
@@ -461,6 +504,13 @@ var (
 	ErrVaultInvalidPlaintextKey = errors.New("plaintext key must be multiple of 8 bytes")
 	ErrVaultPrivateKeyEmpty     = errors.New("private key cannot be empty")
 
+	// Vault header errors
+	ErrVaultHeaderNotFound      = errors.New("vault header not found")
+	ErrVaultHeaderCorrupted     = errors.New("vault header is corrupted")
+	ErrVaultHeaderVersionUnsup  = errors.New("unsupported vault header version")
+	ErrVaultKeyFingerprintMatch = errors.New("private key fingerprint mismatch")
+	ErrVaultAlreadyExists       = errors.New("vault already exists")
+
 	// Config errors
 	ErrConfigHTTPPortZero      = errors.New("httpPort cannot be 0 in production")
 	ErrConfigHTTPSPortZero     = errors.New("httpsPort cannot be 0 in production")
@@ -468,36 +518,91 @@ var (
 	ErrConfigInvalidWorkingDir = errors.New("invalid working directory")
 
 	// SSH config errors
-	ErrSSHOpenConfigFile     = errors.New("failed to open SSH config file")
-	ErrSSHExpandTilde        = errors.New("failed to expand tilde in path")
-	ErrSSHScanConfigFile     = errors.New("failed to scan SSH config file")
-	ErrSSHResolveHomeDir     = errors.New("failed to resolve home directory")
+	ErrSSHOpenConfigFile = errors.New("failed to open SSH config file")
+	ErrSSHExpandTilde    = errors.New("failed to expand tilde in path")
+	ErrSSHScanConfigFile = errors.New("failed to scan SSH config file")
+	ErrSSHResolveHomeDir = errors.New("failed to resolve home directory")
+
+	// JWKS errors
+	ErrJWKSRequestCreate    = errors.New("jwks: failed to create request")
+	ErrJWKSFetchKeys        = errors.New("jwks: failed to fetch keys")
+	ErrJWKSUnexpectedStatus = errors.New("jwks: unexpected status code")
+	ErrJWKSDecodeResponse   = errors.New("jwks: failed to decode response")
+	ErrJWKSKeyNotFound      = errors.New("jwks: key not found")
+
+	// JWT errors
+	ErrJWTInvalidFormat    = errors.New("invalid JWT format")
+	ErrJWTUnsupportedAlg   = errors.New("unsupported signing algorithm")
+	ErrJWTMissingKid       = errors.New("missing kid in header")
+	ErrJWTNotYetValid      = errors.New("token is not yet valid")
+	ErrJWTIssuerMismatch   = errors.New("token issuer mismatch")
+	ErrJWTAudienceMismatch = errors.New("token audience mismatch")
+
+	// SSH config errors
 	ErrSSHParseConfig        = errors.New("failed to parse SSH config")
 	ErrSSHDialAgentSocket    = errors.New("failed to dial SSH agent socket")
 	ErrSSHGetAgentSigners    = errors.New("failed to get SSH agent signers")
 	ErrSSHReadKeyFile        = errors.New("failed to read SSH key file")
 	ErrSSHParsePrivateKey    = errors.New("failed to parse SSH private key")
 	ErrSSHKnownHostsNotFound = errors.New("SSH known_hosts file not found")
-	ErrSSHParseKnownHosts    = errors.New("failed to parse SSH known_hosts file")
+	ErrSSHParseKnownHosts    = errors.New("failed to parse SSH known hosts file")
 
 	// Bootstrap service errors
-	ErrBootstrapTLSConfig       = errors.New("bootstrap: failed to configure TLS")
-	ErrBootstrapFingerprint     = errors.New("bootstrap: failed to generate system fingerprint")
-	ErrBootstrapAuth            = errors.New("bootstrap: failed to authenticate")
-	ErrBootstrapRequestMarshal  = errors.New("bootstrap: failed to marshal auth request")
-	ErrBootstrapRequestBuild    = errors.New("bootstrap: failed to build auth request")
-	ErrBootstrapRequestExecute  = errors.New("bootstrap: authentication request failed")
-	ErrBootstrapResponseRead    = errors.New("bootstrap: failed to read auth response")
-	ErrBootstrapResponseClose   = errors.New("bootstrap: failed to close response body")
-	ErrBootstrapResponseStatus  = errors.New("bootstrap: authentication failed with status")
-	ErrBootstrapResponseDecode  = errors.New("bootstrap: failed to decode auth response")
-	ErrBootstrapAuthFailed      = errors.New("bootstrap: authentication failed")
-	ErrBootstrapNoConfig        = errors.New("bootstrap: no configuration returned from Auth Services")
-	ErrBootstrapNoSessionID     = errors.New("bootstrap: no operator_session_id returned from Auth Services")
-	ErrBootstrapCertParse       = errors.New("bootstrap: failed to parse per-operator cert+key")
-	ErrBootstrapTLSConfigDI     = errors.New("bootstrap: failed to get base TLS config from DI")
-	ErrBootstrapTLSConfigLegacy = errors.New("bootstrap: failed to get base TLS config")
-	ErrBootstrapCertTrust       = errors.New("bootstrap: cert trust failure: per-operator mTLS cert invalid")
+	ErrBootstrapTLSConfig          = errors.New("bootstrap: failed to configure TLS")
+	ErrBootstrapFingerprint        = errors.New("bootstrap: failed to generate system fingerprint")
+	ErrBootstrapAuth               = errors.New("bootstrap: failed to authenticate")
+	ErrBootstrapRequestMarshal     = errors.New("bootstrap: failed to marshal auth request")
+	ErrIdentityBindingFailed       = errors.New("identity binding failed")
+	ErrMTLSRequired                = errors.New("mTLS client certificate required")
+	ErrCertURISANMissing           = errors.New("client certificate missing URI SAN")
+	ErrURISANMismatch              = errors.New("certificate URI SAN does not match envelope identity claims")
+	ErrEnvelopeProcessorNotInit    = errors.New("envelope processor not initialized")
+	ErrNilReceipt                  = errors.New("envelope processor returned nil receipt without error")
+	ErrOperatorSessionIDMissing    = errors.New("operator_session_id required")
+	ErrOperatorIDMissing           = errors.New("operator_id required")
+	ErrSourceComponentMissing      = errors.New("source_component required")
+	ErrBootstrapRequestBuild       = errors.New("bootstrap: failed to build auth request")
+	ErrBootstrapRequestExecute     = errors.New("bootstrap: authentication request failed")
+	ErrBootstrapResponseRead       = errors.New("bootstrap: failed to read auth response")
+	ErrBootstrapResponseClose      = errors.New("bootstrap: failed to close response body")
+	ErrBootstrapResponseStatus     = errors.New("bootstrap: authentication failed with status")
+	ErrBootstrapResponseDecode     = errors.New("bootstrap: failed to decode auth response")
+	ErrBootstrapAuthFailed         = errors.New("bootstrap: authentication failed")
+	ErrBootstrapLoopbackOnly       = errors.New("CSR auto-issue only available over loopback")
+	ErrBootstrapUserDisabled       = errors.New("bootstrap user is disabled, cannot rotate")
+	ErrBootstrapUserDisabledEnroll = errors.New("bootstrap user is disabled, cannot enroll")
+	ErrBootstrapInitialSetupOnly   = errors.New("bootstrap only available for initial setup")
+	ErrCLIEnrollmentLoopbackOnly   = errors.New("CLI enrollment only available over loopback")
+	ErrCLIEnrollmentAfterBootstrap = errors.New("CLI enrollment only available after bootstrap")
+	ErrDeviceEnrollmentInitialOnly = errors.New("device enrollment only available for initial setup")
+	ErrCLICSRRequired              = errors.New("cli_csr_pem is required")
+	ErrCLICSRMandatory             = errors.New("cli_csr_pem is mandatory")
+	ErrFirstCredentialOnly         = errors.New("first-credential registration only")
+	ErrUserIDMismatch              = errors.New("user_id mismatch")
+	ErrCredentialIDRequired        = errors.New("credential_id required")
+	ErrCSRRequired                 = errors.New("csr_pem is required")
+	ErrSystemFingerprintRequired   = errors.New("system_fingerprint is required")
+	ErrHostnameRequired            = errors.New("hostname is required")
+
+	// App enrollment service errors
+	ErrAppEnrollCSRRequired       = errors.New("csr_pem is required")
+	ErrAppEnrollAppNameRequired   = errors.New("app_name is required")
+	ErrAppEnrollAppTypeRequired   = errors.New("app_type is required")
+	ErrAppEnrollInvalidAppType    = errors.New("invalid app_type")
+	ErrAppEnrollInvalidAppName    = errors.New("app_name must contain only alphanumeric characters")
+	ErrAppEnrollInvalidCSRPEM     = errors.New("invalid CSR PEM format")
+	ErrAppEnrollParseCSR          = errors.New("failed to parse CSR")
+	ErrAppEnrollCSRSignatureCheck = errors.New("CSR signature check failed")
+	ErrAppEnrollSignCertificate   = errors.New("failed to sign certificate")
+	ErrAppEnrollParseIssuedCert   = errors.New("failed to parse issued certificate")
+	ErrAppEnrollNoURISAN          = errors.New("issued certificate has no URI SAN")
+	ErrAppEnrollMarshalAppPolicy  = errors.New("failed to marshal app policy")
+	ErrAppEnrollPersistAppPolicy  = errors.New("failed to persist app policy")
+	ErrBootstrapNoConfig          = errors.New("bootstrap: no configuration returned from Auth Services")
+	ErrBootstrapNoSessionID       = errors.New("bootstrap: no operator_session_id returned from Auth Services")
+	ErrBootstrapCertParse         = errors.New("bootstrap: failed to parse per-operator cert+key")
+	ErrBootstrapTLSConfigDI       = errors.New("bootstrap: failed to get base TLS config from DI")
+	ErrBootstrapCertTrust         = errors.New("bootstrap: cert trust failure: per-operator mTLS cert invalid")
 
 	// CLI L3 notary errors
 	ErrCLIL3TransactionHashRequired       = errors.New("transaction_hash required for CLI L3 verification")
@@ -527,15 +632,21 @@ var (
 	ErrCLIL3SignatureEncodingFailed       = errors.New("invalid signature encoding")
 
 	// File edit service errors
-	ErrFileEditUnsupportedOperation     = errors.New("unsupported file operation")
-	ErrFileEditContentRequired          = errors.New("content is required for write operation")
-	ErrFileEditOldContentRequired       = errors.New("old_content is required for replace operation")
-	ErrFileEditNewContentRequired       = errors.New("new_content is required for replace operation")
-	ErrFileEditInsertContentRequired    = errors.New("insert_content is required for insert operation")
-	ErrFileEditInsertPositionRequired   = errors.New("insert_position is required for insert operation")
-	ErrFileEditLineRangeRequired        = errors.New("start_line and end_line are required for delete operation")
-	ErrFileEditPatchContentRequired     = errors.New("patch_content is required for patch operation")
-	ErrFileEditPatchNotImplemented      = errors.New("patch operation not yet implemented")
+	ErrFileEditUnsupportedOperation   = errors.New("unsupported file operation")
+	ErrFileEditContentRequired        = errors.New("content is required for write operation")
+	ErrFileEditOldContentRequired     = errors.New("old_content is required for replace operation")
+	ErrFileEditNewContentRequired     = errors.New("new_content is required for replace operation")
+	ErrFileEditInsertContentRequired  = errors.New("insert_content is required for insert operation")
+	ErrFileEditInsertPositionRequired = errors.New("insert_position is required for insert operation")
+	ErrFileEditLineRangeRequired      = errors.New("start_line and end_line are required for delete operation")
+	ErrFileEditPatchContentRequired   = errors.New("patch_content is required for patch operation")
+	ErrFileEditPatchNotImplemented    = errors.New("patch operation not yet implemented")
+
+	// Response writer errors
+	ErrResponseEncodeJSON               = errors.New("failed to encode JSON response")
+	ErrResponseMarshalJSONRPCResult     = errors.New("failed to marshal JSON-RPC result")
+	ErrResponseEncodeJSONRPC            = errors.New("failed to encode JSON-RPC response")
+	ErrResponseEncodeJSONRPCError       = errors.New("failed to encode JSON-RPC error response")
 	ErrFileEditFileTooLarge             = errors.New("file too large for operation")
 	ErrFileEditOldContentNotFound       = errors.New("old_content not found in file")
 	ErrFileEditInsertPositionOutOfRange = errors.New("insert position out of range")
@@ -701,32 +812,6 @@ var (
 	ErrRegistrationFailedToUpdateBoundSessions     = errors.New("failed to update bound sessions document")
 	ErrRegistrationFailedToBindOperator            = errors.New("failed to bind Operator for target context")
 
-	// Federation/Peer connection errors
-	ErrFederationInvalidSeedURL     = errors.New("federation: invalid seed URL")
-	ErrFederationSeedURLScheme      = errors.New("federation: seed URL must use HTTPS scheme")
-	ErrFederationLoadGatewayID      = errors.New("federation: failed to load gateway ID")
-	ErrFederationWriteGatewayID     = errors.New("federation: failed to write gateway ID")
-	ErrFederationGatewayIDEmpty     = errors.New("federation: gateway ID file is empty")
-	ErrFederationReadPeerCert       = errors.New("federation: failed to read peer certificate")
-	ErrFederationReadPeerKey        = errors.New("federation: failed to read peer key")
-	ErrFederationReadPeerChain      = errors.New("federation: failed to read peer chain")
-	ErrFederationParsePeerCert      = errors.New("federation: failed to parse peer certificate/key pair")
-	ErrFederationCertExpiringSoon   = errors.New("federation: peer certificate is expiring soon")
-	ErrFederationGeneratePeerKey    = errors.New("federation: failed to generate peer keypair")
-	ErrFederationCreateCSR          = errors.New("federation: failed to create CSR")
-	ErrFederationSubmitCSR          = errors.New("federation: failed to submit CSR to seed")
-	ErrFederationCreatePeerDir      = errors.New("federation: failed to create peer directory")
-	ErrFederationMarshalPrivateKey  = errors.New("federation: failed to marshal private key")
-	ErrFederationWritePeerCert      = errors.New("federation: failed to write peer certificate")
-	ErrFederationWritePeerKey       = errors.New("federation: failed to write peer key")
-	ErrFederationWritePeerChain     = errors.New("federation: failed to write peer chain")
-	ErrFederationLoadCertKeyPair    = errors.New("federation: failed to load certificate/key pair")
-	ErrFederationHealthCheckClient  = errors.New("federation: health check: client not initialized")
-	ErrFederationHealthCheckRequest = errors.New("federation: health check: failed to create request")
-	ErrFederationHealthCheckFailed  = errors.New("federation: health check: request failed")
-	ErrFederationHealthCheckStatus  = errors.New("federation: health check: unexpected status code")
-	ErrFederationGenerateGatewayID  = errors.New("federation: failed to generate gateway ID")
-
 	// Script template errors
 	ErrScriptTemplateNotInitialized = errors.New("script template not initialized - call Init() first")
 	ErrScriptTemplateParseFailed    = errors.New("failed to parse script template")
@@ -744,32 +829,25 @@ var (
 	ErrTxStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
 	ErrTxL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing")
 
-	// Local HTTP stdio node service errors
-	ErrLocalHTTPStdioDial                      = errors.New("local http stdio: dial failed")
-	ErrLocalHTTPStdioHandshake                 = errors.New("local http stdio: handshake failed")
-	ErrLocalHTTPStdioReadChallenge             = errors.New("local http stdio: read challenge failed")
-	ErrLocalHTTPStdioUnexpectedChallenge       = errors.New("local http stdio: unexpected challenge frame")
-	ErrLocalHTTPStdioSendConnect               = errors.New("local http stdio: send connect failed")
-	ErrLocalHTTPStdioReadConnectResponse       = errors.New("local http stdio: read connect response failed")
-	ErrLocalHTTPStdioUnexpectedConnectResponse = errors.New("local http stdio: unexpected connect response")
-	ErrLocalHTTPStdioConnectRejected           = errors.New("local http stdio: connect rejected by gateway")
-	ErrLocalHTTPStdioNotConnected              = errors.New("local http stdio: not connected")
-	ErrTxL2SignatureInvalid                    = errors.New("TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification")
-	ErrTxL2KeyNotConfigured                    = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Consensus (L2Consensus) signer key not configured")
-	ErrTxL3ProofMissing                        = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
-	ErrTxL3ProofInvalid                        = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
-	ErrTxL3NotaryNotConfigured                 = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
-	ErrTxTransactionHashMissing                = errors.New("TX_HASH_MISSING: transaction_hash required")
-	ErrTxTransactionIDMissing                  = errors.New("TX_ID_MISSING: id required")
-	ErrTxExpiresAtMissing                      = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
-	ErrTxNonceMissing                          = errors.New("TX_NONCE_MISSING: nonce required")
-	ErrTxReplayStoreMissing                    = errors.New("TX_REPLAY_STORE_MISSING: replay store required")
-	ErrTxStateRootRequired                     = errors.New("TX_STATE_REQUIRED: state_merkle_root required")
-	ErrTxPayloadMissing                        = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
-	ErrTxPayloadActionMismatch                 = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
-	ErrTxL1ValidationFailed                    = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
-	ErrTxInFlight                              = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
-	ErrTxProviderMisconfigured                 = errors.New("PROVIDER_MISCONFIGURED: state root is empty")
+	// Governance L1 doctrine errors
+	ErrGovernanceJSONDepthExceeded = errors.New("JSON recursion depth exceeded maximum limit")
+
+	ErrTxL2SignatureInvalid     = errors.New("TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification")
+	ErrTxL2KeyNotConfigured     = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Consensus (L2Consensus) signer key not configured")
+	ErrTxL3ProofMissing         = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
+	ErrTxL3ProofInvalid         = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
+	ErrTxL3NotaryNotConfigured  = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")
+	ErrTxTransactionHashMissing = errors.New("TX_HASH_MISSING: transaction_hash required")
+	ErrTxTransactionIDMissing   = errors.New("TX_ID_MISSING: id required")
+	ErrTxExpiresAtMissing       = errors.New("TX_EXPIRES_AT_MISSING: expires_at required")
+	ErrTxNonceMissing           = errors.New("TX_NONCE_MISSING: nonce required")
+	ErrTxReplayStoreMissing     = errors.New("TX_REPLAY_STORE_MISSING: replay store required")
+	ErrTxStateRootRequired      = errors.New("TX_STATE_REQUIRED: state_merkle_root required")
+	ErrTxPayloadMissing         = errors.New("TX_PAYLOAD_MISSING: typed protobuf payload required")
+	ErrTxPayloadActionMismatch  = errors.New("TX_PAYLOAD_ACTION_MISMATCH: action type does not match typed payload")
+	ErrTxL1ValidationFailed     = errors.New("TX_DOCTRINE_L1_FAILED: typed payload violates Doctrine (L1Doctrine) forbidden patterns")
+	ErrTxInFlight               = errors.New("TX_IN_FLIGHT: transaction with same nonce already in-flight")
+	ErrTxProviderMisconfigured  = errors.New("PROVIDER_MISCONFIGURED: state root is empty")
 
 	// Kubernetes MCP tool errors
 	ErrMCPK8sCommandFailed        = errors.New("kubectl command failed")
@@ -793,6 +871,12 @@ var (
 	ErrMCPK8sGetPodLogs           = errors.New("failed to get pod logs")
 	ErrMCPK8sDescribePod          = errors.New("failed to describe pod")
 
+	// Reporting errors
+	ErrReportStoreUnavailable   = errors.New("reporting: store unavailable")
+	ErrReportWriteFailed        = errors.New("reporting: write failed")
+	ErrReportVerificationFailed = errors.New("reporting: verification failed")
+	ErrReportOutputDirFailed    = errors.New("reporting: output directory failed")
+
 	// PubSub client errors
 	ErrPubSubURLRequired      = errors.New("pubsub URL is required")
 	ErrPubSubTLSConfig        = errors.New("failed to configure TLS")
@@ -805,4 +889,49 @@ var (
 	ErrPubSubMarshalPayload   = errors.New("failed to marshal pubsub payload")
 	ErrPubSubPublishReconnect = errors.New("failed to reconnect for publish")
 	ErrPubSubPublish          = errors.New("failed to publish message")
+
+	// Context errors
+	ErrContextCancelled = errors.New("context cancelled")
+
+	// SSH errors
+	ErrSSHContextCancelled      = errors.New("ssh: context cancelled")
+	ErrSSHRetryBackoffCancelled = errors.New("ssh: context cancelled during retry backoff")
+	ErrSSHBeforeRunCancelled    = errors.New("ssh: context cancelled before run")
+
+	// Blob store errors
+	ErrBlobStoreCleanupFailed = errors.New("failed to cleanup expired blobs")
+	ErrBlobStorePutFailed     = errors.New("failed to store blob")
+	ErrBlobStoreGetFailed     = errors.New("failed to retrieve blob")
+	ErrBlobStoreDeleteFailed  = errors.New("failed to delete blob")
+	ErrBlobStoreScanFailed    = errors.New("failed to scan blob metadata")
+	ErrBlobStoreParseTime     = errors.New("failed to parse blob creation time")
+
+	// Auth service errors
+	ErrIdentityDisabled           = errors.New("identity disabled")
+	ErrOperatorIdentityDisabled   = errors.New("operator identity disabled")
+	ErrOperatorSessionExpired     = errors.New("operator session expired")
+	ErrMTLSCertRequired           = errors.New("mTLS client certificate required")
+	ErrMTLSCertRevoked            = errors.New("mTLS client certificate revoked or invalid")
+	ErrProtocolAuthRequired       = errors.New("protocol authentication required")
+	ErrMTLSIdentityMismatch       = errors.New("mTLS identity mismatch")
+	ErrSessionLoadFailed          = errors.New("failed to load session")
+	ErrSessionParseFailed         = errors.New("failed to parse session")
+	ErrCLISessionExpired          = errors.New("CLI session expired")
+	ErrIdentityValidationFailed   = errors.New("identity validation failed")
+	ErrAppPolicyNotFound          = errors.New("app policy not found")
+	ErrInvalidAppPolicy           = errors.New("invalid app policy")
+	ErrPrivilegedEndpointAccess   = errors.New("external apps cannot access privileged endpoints")
+	ErrWebSessionCookieRequired   = errors.New("web session cookie required")
+	ErrWebSessionCookieInvalid    = errors.New("invalid web session cookie")
+	ErrWebSessionValidationFailed = errors.New("web session validation failed")
+	ErrWebSessionNotFound         = errors.New("web session not found")
+	ErrWebSessionExpired          = errors.New("web session expired")
+	ErrJWTAuthNotConfigured       = errors.New("JWT authentication not configured")
+	ErrJWTTokenMissing            = errors.New("missing JWT token")
+	ErrJWTSignatureMissing        = errors.New("missing JWT bearer token")
+	ErrJWTSessionSubjectMissing   = errors.New("JWT missing subject claim")
+	ErrJWTInvalidToken            = errors.New("invalid JWT token")
+	ErrUserCreationFailed         = errors.New("user creation failed")
+	ErrCLISessionInvalid          = errors.New("invalid CLI session")
+	ErrCLICertBindingCheckFailed  = errors.New("CLI cert binding check failed")
 )

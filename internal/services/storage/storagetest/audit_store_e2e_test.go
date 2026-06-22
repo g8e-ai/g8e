@@ -94,7 +94,7 @@ func TestSQLAuditStore_EndToEnd_AuditTrail(t *testing.T) {
 		Type:                constants.Event.Operator.Audit.Command,
 		ContentText:         "Execute deployment",
 		CommandRaw:          "./deploy.sh",
-		CommandExitCode:     &exitCode,
+		CommandExitCode:     exitCode,
 		CommandStdout:       "Deployment successful\nApplication deployed to production",
 		CommandStderr:       "",
 		ExecutionDurationMs: 5000,
@@ -224,7 +224,7 @@ func TestSQLAuditStore_EndToEnd_MultipleTransactions(t *testing.T) {
 			Type:              constants.Event.Operator.Audit.Command,
 			ContentText:       string(tx.actionType),
 			CommandRaw:        fmt.Sprintf("action on %s", tx.resource),
-			CommandExitCode:   &exitCode,
+			CommandExitCode:   exitCode,
 		}
 		eventID, err := avs.RecordEvent(event)
 		require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestSQLAuditStore_Consistency_EventReceiptLinkage(t *testing.T) {
 		Type:              constants.Event.Operator.Audit.Command,
 		ContentText:       "Consistency check",
 		CommandRaw:        "ls -la",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 		CommandStdout:     "file1\nfile2",
 	}
 	_, err = avs.RecordEvent(event)

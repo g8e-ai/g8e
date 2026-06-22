@@ -14,31 +14,8 @@
 package system
 
 import (
-	"strconv"
 	"time"
 )
-
-func StringPtr(s string) *string {
-	return &s
-}
-
-func StringPtrValue(ptr *string) string {
-	if ptr == nil {
-		return "<nil>"
-	}
-	return *ptr
-}
-
-func IntPtr(i int) *int {
-	return &i
-}
-
-func IntPtrValue(ptr *int) string {
-	if ptr == nil {
-		return "<nil>"
-	}
-	return strconv.Itoa(*ptr)
-}
 
 // Clock is an injectable time source for deterministic testing.
 type Clock interface {
@@ -64,4 +41,19 @@ func (c *FixedClock) Now() time.Time {
 // NewFixedClock creates a FixedClock set to the given time.
 func NewFixedClock(t time.Time) *FixedClock {
 	return &FixedClock{fixed: t}
+}
+
+// Ptr returns a pointer to the given value.
+func Ptr[T any](v T) *T {
+	return &v
+}
+
+// StringPtr returns a pointer to the given string.
+func StringPtr(s string) *string {
+	return Ptr(s)
+}
+
+// IntPtr returns a pointer to the given int.
+func IntPtr(i int) *int {
+	return Ptr(i)
 }

@@ -1,5 +1,8 @@
 # Storage Architecture
 
+Last Updated: 2026-06-22
+Version: v1.1.6
+
 ## Overview
 
 The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Following the v1.0.10 refactor, the monolithic `AuditVaultService` is consolidated into `SQLAuditStore`, `GitLedgerService`, and `HistoryHandler`. All services reside under `../../internal/services/storage/`.

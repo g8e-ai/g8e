@@ -48,7 +48,6 @@ const (
 	ActionTypeMcpPromptList       ActionType = "MCP_PROMPT_LIST"
 	ActionTypeMcpResourceList     ActionType = "MCP_RESOURCE_LIST"
 	ActionTypeMcpResourceRead     ActionType = "MCP_RESOURCE_READ"
-	ActionTypeMigrationTransfer   ActionType = "MIGRATION_TRANSFER"
 	ActionTypePortCheck           ActionType = "PORT_CHECK"
 	ActionTypeRestoreFile         ActionType = "RESTORE_FILE"
 	ActionTypeRevokeIntent        ActionType = "REVOKE_INTENT"
@@ -78,7 +77,6 @@ var AllActionTypes = []ActionType{
 	ActionTypeMcpPromptList,
 	ActionTypeMcpResourceList,
 	ActionTypeMcpResourceRead,
-	ActionTypeMigrationTransfer,
 	ActionTypePortCheck,
 	ActionTypeRestoreFile,
 	ActionTypeRevokeIntent,
@@ -94,7 +92,6 @@ func (a ActionType) IsMutation() bool {
 		ActionTypeExecuteBash,
 		ActionTypeFileEdit,
 		ActionTypeMcpCall,
-		ActionTypeMigrationTransfer,
 		ActionTypeRestoreFile,
 		ActionTypeShutdown:
 		return true

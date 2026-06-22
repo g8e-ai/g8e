@@ -74,27 +74,19 @@ type BootstrapService struct {
 }
 
 // NewBootstrapService creates a new HTTP-based bootstrap service.
-// If tlsConfig is nil, it falls back to the deprecated global certs.GetTLSConfig().
+// tlsConfig must be non-nil; the platform always requires mutual TLS.
 func NewBootstrapService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig) (*BootstrapService, error) {
+	if tlsConfig == nil {
+		return nil, fmt.Errorf("%w: TLS config is required", constants.ErrBootstrapTLSConfig)
+	}
+
 	var client *http.Client
 	var err error
 
-	if tlsConfig != nil {
-		// DI path: use provided TLSConfig
-		if cfg.TLSServerName != "" {
-			client, err = httpclient.NewWithTLSConfigAndServerName(tlsConfig, cfg.TLSServerName)
-		} else {
-			client, err = httpclient.NewWithTLSConfig(tlsConfig)
-		}
+	if cfg.TLSServerName != "" {
+		client, err = httpclient.NewWithTLSConfigAndServerName(tlsConfig, cfg.TLSServerName)
 	} else {
-		// Legacy path: use global state (will be removed after migration)
-		// nolint:staticcheck // SA1019: deprecated - legacy fallback path
-		if cfg.TLSServerName != "" {
-			client, err = httpclient.NewWithServerName(cfg.TLSServerName)
-		} else {
-			// nolint:staticcheck // SA1019: deprecated - legacy fallback path
-			client, err = httpclient.New()
-		}
+		client, err = httpclient.NewWithTLSConfig(tlsConfig)
 	}
 
 	if err != nil {
@@ -336,17 +328,9 @@ func (bs *BootstrapService) rebuildTransportWithOperatorCert(certPEM, keyPEM str
 		return fmt.Errorf("%w: %w", constants.ErrBootstrapCertParse, err)
 	}
 
-	var baseTLSConfig *tls.Config
-	if bs.tlsConfig != nil {
-		baseTLSConfig, err = bs.tlsConfig.GetTLSConfig()
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrBootstrapTLSConfigDI, err)
-		}
-	} else {
-		baseTLSConfig, err = certs.GetTLSConfig()
-		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrBootstrapTLSConfigLegacy, err)
-		}
+	baseTLSConfig, err := bs.tlsConfig.GetTLSConfig()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrBootstrapTLSConfigDI, err)
 	}
 
 	operatorTLSConfig := &tls.Config{

@@ -293,30 +293,3 @@ func TestGetMachineID_UnsupportedOS(t *testing.T) {
 		assert.Contains(t, err.Error(), "unsupported operating system")
 	}
 }
-
-func TestIsHex(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		s    string
-		want bool
-	}{
-		{"valid lowercase hex", "abc123", true},
-		{"valid uppercase hex", "ABC123", true},
-		{"valid mixed case hex", "AbC123", true},
-		{"empty string", "", true},
-		{"invalid characters", "ghijkl", false},
-		{"with spaces", "abc 123", false},
-		{"with special chars", "abc!@#", false},
-		{"with numbers only", "123456", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			if got := isHex(tt.s); got != tt.want {
-				t.Errorf("isHex(%q) = %v, want %v", tt.s, got, tt.want)
-			}
-		})
-	}
-}

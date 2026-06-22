@@ -26,6 +26,7 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 // ConfigBlock holds parsed values for a single Host block from SSH config.
@@ -212,7 +213,8 @@ func ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 		if err != nil {
 			return r, fmt.Errorf("%w", constants.ErrSSHResolveHomeDir)
 		}
-		configPath = filepath.Join(home, ".ssh", "config")
+		sshPaths := paths.GetSSHConfigPaths(home)
+		configPath = sshPaths.ConfigPath
 	}
 
 	blocks, err := ParseConfig(configPath)
@@ -259,10 +261,11 @@ func ResolveHost(target, sshConfigPath, username, sshIdentityFile, sshUser strin
 		if err != nil {
 			return r, fmt.Errorf("%w", constants.ErrSSHResolveHomeDir)
 		}
+		sshPaths := paths.GetSSHConfigPaths(home)
 		candidates := []string{
-			filepath.Join(home, ".ssh", "id_ed25519"),
-			filepath.Join(home, ".ssh", "id_ecdsa"),
-			filepath.Join(home, ".ssh", "id_rsa"),
+			sshPaths.IDE25519KeyPath,
+			sshPaths.IDECDSAKeyPath,
+			sshPaths.IDRSAKeyPath,
 		}
 		for _, p := range candidates {
 			if _, err := os.Stat(p); err == nil {
@@ -340,7 +343,8 @@ func BuildHostKeyCallback(khPath string) (ssh.HostKeyCallback, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%w", constants.ErrSSHResolveHomeDir)
 		}
-		khPath = filepath.Join(home, ".ssh", "known_hosts")
+		sshPaths := paths.GetSSHConfigPaths(home)
+		khPath = sshPaths.KnownHostsPath
 	}
 	if _, err := os.Stat(khPath); err != nil {
 		return nil, fmt.Errorf("%w: %s", constants.ErrSSHKnownHostsNotFound, khPath)

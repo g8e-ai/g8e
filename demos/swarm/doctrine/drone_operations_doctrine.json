@@ -1,0 +1,173 @@
+{
+  "source": "drone_swarm_battlefield",
+  "version": "1.0.0",
+  "last_updated": "2026-06-21",
+  "license": "Proprietary",
+  "doctrines": [
+    {
+      "id": "unauthorized_weapon_release",
+      "name": "Unauthorized Weapon Release",
+      "category": "weapons_control",
+      "severity": "critical",
+      "pattern": "(?i)(fire|launch|release|deploy).*(weapon|missile|munition|ordnance)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "friendly_fire_risk",
+      "name": "Friendly Fire Risk",
+      "category": "safety",
+      "severity": "critical",
+      "pattern": "(?i)(target|engage|attack).*(friendly|ally|blue.force|our.troops)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.98,
+      "enabled": true
+    },
+    {
+      "id": "civilian_casualty_risk",
+      "name": "Civilian Casualty Risk",
+      "category": "safety",
+      "severity": "critical",
+      "pattern": "(?i)(target|engage|strike).*(civilian|non.combatant|population.center|residential)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.95,
+      "enabled": true
+    },
+    {
+      "id": "restricted_airspace_violation",
+      "name": "Restricted Airspace Violation",
+      "category": "navigation",
+      "severity": "high",
+      "pattern": "(?i)(enter|fly|navigate).*(restricted|no.fly|prohibited|controlled.airspace)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "communication_jamming",
+      "name": "Communication Jamming",
+      "category": "electronic_warfare",
+      "severity": "high",
+      "pattern": "(?i)(jam|block|disrupt|interfere).*(communication|signal|uplink|downlink)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.88,
+      "enabled": true
+    },
+    {
+      "id": "gps_spoofing",
+      "name": "GPS Spoofing",
+      "category": "navigation",
+      "severity": "critical",
+      "pattern": "(?i)(spoof|fake|forge|manipulate).*(gps|coordinates|location|position)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.92,
+      "enabled": true
+    },
+    {
+      "id": "unauthorized_command_override",
+      "name": "Unauthorized Command Override",
+      "category": "command_control",
+      "severity": "critical",
+      "pattern": "(?i)(override|bypass|ignore|disregard).*(command|order|authorization|clearance)",
+      "mitre_attack": "T1568.002",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.93,
+      "enabled": true
+    },
+    {
+      "id": "data_exfiltration",
+      "name": "Drone Data Exfiltration",
+      "category": "data_exfiltration",
+      "severity": "critical",
+      "pattern": "(?i)(exfil|exfiltrate|export|transmit).*(sensor|video|imagery|intel|reconnaissance)",
+      "mitre_attack": "T1567.001",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "autonomous_mode_override",
+      "name": "Autonomous Mode Override",
+      "category": "command_control",
+      "severity": "high",
+      "pattern": "(?i)(enable|activate|force).*(autonomous|fully.autonomous|no.pilot|unmanned.mode)",
+      "mitre_attack": "T1568.002",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    },
+    {
+      "id": "swarm_coordination_compromise",
+      "name": "Swarm Coordination Compromise",
+      "category": "command_control",
+      "severity": "critical",
+      "pattern": "(?i)(compromise|corrupt|manipulate).*(swarm|formation|coordination|synchronization)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.92,
+      "enabled": true
+    },
+    {
+      "id": "altitude_violation",
+      "name": "Altitude Violation",
+      "category": "navigation",
+      "severity": "medium",
+      "pattern": "(?i)(exceed|violate|above).*(max.altitude|ceiling|flight.level)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.80,
+      "enabled": true
+    },
+    {
+      "id": "speed_violation",
+      "name": "Speed Violation",
+      "category": "navigation",
+      "severity": "medium",
+      "pattern": "(?i)(exceed|violate|above).*(max.speed|velocity.limit|airspeed)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.80,
+      "enabled": true
+    },
+    {
+      "id": "battery_critical_override",
+      "name": "Battery Critical Override",
+      "category": "safety",
+      "severity": "high",
+      "pattern": "(?i)(ignore|override|continue).*(low.battery|critical.power|return.to.base)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.88,
+      "enabled": true
+    },
+    {
+      "id": "sensor_data_tampering",
+      "name": "Sensor Data Tampering",
+      "category": "data_integrity",
+      "severity": "high",
+      "pattern": "(?i)(tamper|forge|inject|modify).*(sensor|lidar|camera|thermal|ir)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Impact",
+      "confidence": 0.90,
+      "enabled": true
+    },
+    {
+      "id": "mission_breach",
+      "name": "Mission Parameters Breach",
+      "category": "mission_control",
+      "severity": "high",
+      "pattern": "(?i)(deviate|stray|leave).*(mission|area.of.operations|patrol.zone)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.85,
+      "enabled": true
+    }
+  ]
+}

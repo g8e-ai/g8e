@@ -1,5 +1,8 @@
 # Docker Gateway Guide
 
+Last Updated: 2026-06-22
+Version: v1.1.6
+
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
 ## Quick Start

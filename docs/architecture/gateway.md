@@ -4,6 +4,9 @@ title: g8e Gateway
 
 # g8e Gateway
 
+Last Updated: 2026-06-22
+Version: v1.1.6
+
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
 1.  **g8e Gateway** (Policy Decision Point / PDP): Serves as the central, BFT-governed coordinator for the platform.
@@ -33,7 +36,7 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 
 The g8e platform is built on the g8e Protocol. Conforming gateway and Operator implementations make that protocol live.
 
-- **g8e Gateway** (PDP): The g8e Node run in **Gateway mode** (`--doctrine`, `--consensus`, or `--notary`). It acts as the platform's backbone; protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
+- **g8e Gateway** (PDP): The g8e Node run in **Gateway mode** (`--posture doctrine`, `--posture consensus`, or `--posture notary`). It acts as the platform's backbone; protocol hub, policy decision point, persistence layer (SQLite), pub/sub broker, root CA, and audit authority.
 - **g8e Operator** (PEP): The g8e Node run in **Standard Mode**. It acts as the sovereign tool execution boundary on a managed host, executing actions only after they carry a valid, signed gateway lease. Gateway mode operators automatically expose MCP endpoints.
 
 ```mermaid
@@ -75,13 +78,13 @@ flowchart TD
 
 ## Operating Modes: Gateway Mode (PDP)
 
-By passing `--doctrine`, `--consensus`, or `--notary`, the g8e Node transforms into the platform's central backbone.
+By passing `--posture doctrine`, `--posture consensus`, or `--posture notary`, the g8e Node transforms into the platform's central backbone.
 
 - **Role**: Reference hub for the bundled deployment.
 - **Governance Posture**:
-    - **Doctrine** (`--doctrine`): L1 Doctrine enforced, L2 Consensus / L3 Notary audited.
-    - **Consensus** (`--consensus`): L1 Doctrine / L2 Consensus enforced, L3 Notary audited.
-    - **Notary** (`--notary`): L1 Doctrine / L2 Consensus / L3 Notary strictly enforced.
+    - **Doctrine** (`--posture doctrine`): L1 Doctrine enforced, L2 Consensus / L3 Notary audited.
+    - **Consensus** (`--posture consensus`): L1 Doctrine / L2 Consensus enforced, L3 Notary audited.
+    - **Notary** (`--posture notary`): L1 Doctrine / L2 Consensus / L3 Notary strictly enforced.
 - **Capabilities**:
     - **Gateway API**: `POST /api/v1/governance/envelopes` is the only customer-facing mutation entry point.
     - **Document Store**: JSON document CRUD on a Collection/ID pattern via `/api/v1/db/*`.
@@ -98,7 +101,7 @@ The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS exec
 
 **HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves the platform trust scripts (e.g., `/bootstrap-ca`, `/bootstrap-ca-macos`, `/bootstrap-ca.ps1`) required for self-signed CA trust. No MCP routes are available on this port.
 
-**HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured).
+**HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The public HTTPS router also serves Swagger UI at `/swagger/*` and the OpenAPI specification at `/swagger/doc.json`, providing interactive API documentation.
 
 ---
 
@@ -218,7 +221,7 @@ Triggers on the `documents`, `kv_store`, and `blobs` tables increment the state 
 
 ## Health Endpoint Consolidation
 
-The health endpoint is unified across the gateway service and available on all protocol surfaces. The implementation in `internal/services/gateway/gateway_http.go` provides consistent health checking behavior:
+The health endpoint is unified across the gateway service and available on all protocol surfaces. The implementation in `internal/services/gateway/gateway_http_health.go` provides consistent health checking behavior:
 
 ### Health Check Logic
 
@@ -370,7 +373,6 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | **Governance & Reputation** | `reputation_state`, `reputation_commitments`, `stake_resolutions`, `trusted_signers`, `app_policies` |
 | **AI & Context** | `memories`, `agent_activity_metadata`, `personas` |
 | **Configuration** | `settings` |
-| **Testing** | `chaos_events` |
 
 ---
 
@@ -399,7 +401,7 @@ The agent integration is implemented in `internal/cli/cmd/mcp.go` with the follo
 The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the gateway mTLS HTTPS endpoint:
 - Accepts JSON-RPC 2.0 requests over stdin/stdout
 - Proxies requests to the gateway HTTPS endpoint with mTLS
-- Attaches CLI session headers (cli_session_id, user_id, operator_id, operator_session_id)
+- Identity is carried in the delegated mTLS certificate's URI SANs (no session headers needed)
 - Detects L3 approval responses and polls for completion
 - Auto-opens browser for L3 approval URLs
 - Implements retry logic with configurable timeout (5 minutes default)
@@ -409,12 +411,13 @@ The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the g
 When the gateway returns an L3 approval response, the stdio proxy:
 1. Extracts the approval URL from the response (structured field or text content)
 2. Opens the browser automatically using `internal/cli/platform/browser.go`
-3. Polls the gateway every 10 seconds for up to 30 iterations
+3. Polls the gateway every 10 seconds for up to 30 iterations (total timeout: 300 seconds / 5 minutes)
 4. Returns the final result once approval is complete
 
 The polling logic is implemented in `proxySessionToGatewayWithRetry` with constants:
 - `l3ApprovalMaxIterations`: 30
 - `l3ApprovalPollInterval`: 10 seconds
+- Total timeout: 30 x 10 seconds = 300 seconds (5 minutes)
 
 ### Browser Utility
 

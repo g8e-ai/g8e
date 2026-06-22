@@ -23,12 +23,14 @@ var APIPaths = struct {
 	MCPToolsList     string `json:"mcp_tools_list"`
 	MCPToolsCall     string `json:"mcp_tools_call"`
 	MCPToolsCallSSE  string `json:"mcp_tools_call_sse"`
+	MCPToolsPrefix   string `json:"mcp_tools_prefix"`
 	MCPResourcesList string `json:"mcp_resources_list"`
 	MCPResourcesRead string `json:"mcp_resources_read"`
 	MCPPromptsList   string `json:"mcp_prompts_list"`
 	MCPPromptsGet    string `json:"mcp_prompts_get"`
 	// A2A routes
-	A2ACall string `json:"a2a_call"`
+	A2ACall   string `json:"a2a_call"`
+	A2APrefix string `json:"a2a_prefix"`
 	// Governance routes
 	GovernanceEnvelopes     string `json:"governance_envelopes"`
 	GovernanceSigners       string `json:"governance_signers"`
@@ -48,6 +50,7 @@ var APIPaths = struct {
 	DataPrefix      string `json:"data_prefix"`
 	DataItems       string `json:"data_items"`
 	DataBlobsPrefix string `json:"data_blobs_prefix"`
+	QueryPrefix     string `json:"query_prefix"`
 	// KV routes
 	KV       string `json:"kv"`
 	KVPrefix string `json:"kv_prefix"`
@@ -113,6 +116,8 @@ var APIPaths = struct {
 	WellKnownPKICABundle    string `json:"well_known_pki_ca_bundle"`
 	WellKnownPKIFingerprint string `json:"well_known_pki_fingerprint"`
 	WellKnownBinPrefix      string `json:"well_known_bin_prefix"`
+	WellKnownPKIPrefix      string `json:"well_known_pki_prefix"`
+	WellKnownTrustWindows   string `json:"well_known_trust_windows"`
 	// Bootstrap scripts
 	BootstrapCALinux   string `json:"bootstrap_ca_linux"`
 	BootstrapCAMacos   string `json:"bootstrap_ca_macos"`
@@ -140,12 +145,14 @@ var APIPaths = struct {
 	MCPToolsList:     "/api/v1/mcp/tools/list",
 	MCPToolsCall:     "/api/v1/mcp/tools/call",
 	MCPToolsCallSSE:  "/api/v1/mcp/tools/call/sse",
+	MCPToolsPrefix:   "/api/v1/mcp/tools/",
 	MCPResourcesList: "/api/v1/mcp/resources/list",
 	MCPResourcesRead: "/api/v1/mcp/resources/read",
 	MCPPromptsList:   "/api/v1/mcp/prompts/list",
 	MCPPromptsGet:    "/api/v1/mcp/prompts/get",
 	// A2A routes
-	A2ACall: "/api/v1/a2a/call",
+	A2ACall:   "/api/v1/a2a/call",
+	A2APrefix: "/api/v1/a2a/",
 	// Governance routes
 	GovernanceEnvelopes:     "/api/v1/governance/envelopes",
 	GovernanceSigners:       "/api/v1/governance/signers",
@@ -165,6 +172,7 @@ var APIPaths = struct {
 	DataPrefix:      "/api/v1/data/",
 	DataItems:       "/api/v1/data/items",
 	DataBlobsPrefix: "/api/v1/blobs/",
+	QueryPrefix:     "/_query",
 	// KV routes
 	KV:       "/api/v1/kv/",
 	KVPrefix: "/api/v1/kv/",
@@ -230,6 +238,8 @@ var APIPaths = struct {
 	WellKnownPKICABundle:    "/.well-known/g8e/pki/ca-bundle",
 	WellKnownPKIFingerprint: "/.well-known/g8e/pki/fingerprint",
 	WellKnownBinPrefix:      "/.well-known/g8e/bin/",
+	WellKnownPKIPrefix:      "/.well-known/g8e/pki/",
+	WellKnownTrustWindows:   "/.well-known/g8e/pki/trust-windows",
 	// Bootstrap scripts
 	BootstrapCALinux:   "/bootstrap-ca",
 	BootstrapCAMacos:   "/bootstrap-ca-macos",

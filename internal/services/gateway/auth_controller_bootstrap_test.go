@@ -19,7 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -87,7 +87,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.JSONEq(t, `{"error":"CSR auto-issue only available over loopback"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"`+constants.ErrBootstrapLoopbackOnly.Error()+`"}`, rr.Body.String())
 	})
 
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
@@ -144,7 +144,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.JSONEq(t, `{"error":"bootstrap user is disabled, cannot rotate"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"`+constants.ErrBootstrapUserDisabled.Error()+`"}`, rr.Body.String())
 	})
 
 	t.Run("Failure - Rejects bootstrap if ANY other users exist", func(t *testing.T) {
@@ -163,7 +163,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 		c.handleLocalBootstrapWithURL(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.JSONEq(t, `{"error":"bootstrap only available for initial setup"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"`+constants.ErrBootstrapInitialSetupOnly.Error()+`"}`, rr.Body.String())
 	})
 }
 
@@ -256,7 +256,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		c.handleCLIEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "CLI enrollment only available over loopback")
+		assert.Contains(t, rr.Body.String(), constants.ErrCLIEnrollmentLoopbackOnly.Error())
 	})
 
 	t.Run("Failure - Rejected when not bootstrapped", func(t *testing.T) {
@@ -277,7 +277,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		c.handleCLIEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "CLI enrollment only available after bootstrap")
+		assert.Contains(t, rr.Body.String(), constants.ErrCLIEnrollmentAfterBootstrap.Error())
 	})
 
 	t.Run("Failure - Rejected when bootstrap user disabled", func(t *testing.T) {
@@ -301,7 +301,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		c.handleCLIEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.Contains(t, rr.Body.String(), "bootstrap user is disabled")
+		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabledEnroll.Error())
 	})
 
 	t.Run("Failure - Missing cli_csr_pem", func(t *testing.T) {
@@ -323,7 +323,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		c.handleCLIEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "cli_csr_pem is required")
+		assert.Contains(t, rr.Body.String(), constants.ErrCLICSRRequired.Error())
 	})
 
 	t.Run("Failure - Method not allowed", func(t *testing.T) {
@@ -377,7 +377,7 @@ func TestHandleCLIPasskeyRegisterChallenge(t *testing.T) {
 		c.handleCLIPasskeyRegisterChallenge(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserNotFound.Error())
 	})
 
 	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
@@ -404,7 +404,7 @@ func TestHandleCLIPasskeyRegisterChallenge(t *testing.T) {
 		c.handleCLIPasskeyRegisterChallenge(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+		assert.Contains(t, rr.Body.String(), constants.ErrFirstCredentialOnly.Error())
 	})
 
 	t.Run("Success - valid request with mTLS enrollment", func(t *testing.T) {
@@ -467,7 +467,7 @@ func TestHandleCLIPasskeyRegisterVerify(t *testing.T) {
 		c.handleCLIPasskeyRegisterVerify(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserNotFound.Error())
 	})
 
 	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
@@ -493,7 +493,7 @@ func TestHandleCLIPasskeyRegisterVerify(t *testing.T) {
 		c.handleCLIPasskeyRegisterVerify(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+		assert.Contains(t, rr.Body.String(), constants.ErrFirstCredentialOnly.Error())
 	})
 
 	t.Run("Success - already enrolled allows multiple credentials", func(t *testing.T) {
@@ -526,7 +526,7 @@ func TestHandleCLIPasskeyRegisterVerify(t *testing.T) {
 		var resp map[string]interface{}
 		json.Unmarshal(rr.Body.Bytes(), &resp)
 		assert.False(t, resp["success"].(bool))
-		assert.NotContains(t, resp["error"].(string), "first-credential registration only")
+		assert.NotContains(t, resp["error"].(string), constants.ErrFirstCredentialOnly.Error())
 	})
 }
 
@@ -565,7 +565,7 @@ func TestHandleCLIBrowserPasskeyRegisterChallenge(t *testing.T) {
 		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserNotFound.Error())
 	})
 
 	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
@@ -593,7 +593,7 @@ func TestHandleCLIBrowserPasskeyRegisterChallenge(t *testing.T) {
 		c.handleCLIBrowserPasskeyRegisterChallenge(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+		assert.Contains(t, rr.Body.String(), constants.ErrFirstCredentialOnly.Error())
 	})
 
 	t.Run("Success - valid request", func(t *testing.T) {
@@ -657,7 +657,7 @@ func TestHandleCLIBrowserPasskeyRegisterVerify(t *testing.T) {
 		c.handleCLIBrowserPasskeyRegisterVerify(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserNotFound.Error())
 	})
 
 	t.Run("Failure - first-credential only with existing credentials", func(t *testing.T) {
@@ -684,7 +684,7 @@ func TestHandleCLIBrowserPasskeyRegisterVerify(t *testing.T) {
 		c.handleCLIBrowserPasskeyRegisterVerify(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "first-credential registration only")
+		assert.Contains(t, rr.Body.String(), constants.ErrFirstCredentialOnly.Error())
 	})
 }
 
@@ -709,7 +709,7 @@ func TestHandleCLIPasskeyAuthenticateChallenge(t *testing.T) {
 		c.handleCLIPasskeyAuthenticateChallenge(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+		assert.Contains(t, rr.Body.String(), constants.ErrInvalidJSONBody.Error())
 	})
 
 	t.Run("Failure - missing user_id", func(t *testing.T) {
@@ -724,7 +724,7 @@ func TestHandleCLIPasskeyAuthenticateChallenge(t *testing.T) {
 		c.handleCLIPasskeyAuthenticateChallenge(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user_id required")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserIDRequired.Error())
 	})
 
 	t.Run("Failure - no passkeys registered", func(t *testing.T) {
@@ -748,7 +748,7 @@ func TestHandleCLIPasskeyAuthenticateChallenge(t *testing.T) {
 		err = json.Unmarshal(rr.Body.Bytes(), &resp)
 		require.NoError(t, err)
 		assert.False(t, resp["success"].(bool))
-		assert.Contains(t, resp["error"].(string), "no passkeys registered")
+		assert.Contains(t, resp["error"].(string), constants.ErrNoPasskeysRegistered.Error())
 	})
 
 	t.Run("Success - valid request", func(t *testing.T) {
@@ -803,7 +803,7 @@ func TestHandleCLIPasskeyAuthenticateVerify(t *testing.T) {
 		c.handleCLIPasskeyAuthenticateVerify(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "invalid JSON body")
+		assert.Contains(t, rr.Body.String(), constants.ErrInvalidJSONBody.Error())
 	})
 
 	t.Run("Failure - missing user_id", func(t *testing.T) {
@@ -818,7 +818,7 @@ func TestHandleCLIPasskeyAuthenticateVerify(t *testing.T) {
 		c.handleCLIPasskeyAuthenticateVerify(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user_id required")
+		assert.Contains(t, rr.Body.String(), constants.ErrUserIDRequired.Error())
 	})
 
 	t.Run("Failure - verify error", func(t *testing.T) {
@@ -869,7 +869,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "invalid JSON")
+		assert.Contains(t, rr.Body.String(), constants.ErrInvalidJSONBody.Error())
 	})
 
 	t.Run("Failure - missing csr_pem", func(t *testing.T) {
@@ -887,7 +887,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "csr_pem is required")
+		assert.Contains(t, rr.Body.String(), constants.ErrCSRRequired.Error())
 	})
 
 	t.Run("Failure - missing system_fingerprint", func(t *testing.T) {
@@ -905,7 +905,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "system_fingerprint is required")
+		assert.Contains(t, rr.Body.String(), constants.ErrSystemFingerprintRequired.Error())
 	})
 
 	t.Run("Failure - missing hostname", func(t *testing.T) {
@@ -923,7 +923,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "hostname is required")
+		assert.Contains(t, rr.Body.String(), constants.ErrHostnameRequired.Error())
 	})
 
 	t.Run("Failure - bootstrap user disabled", func(t *testing.T) {
@@ -946,7 +946,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.Contains(t, rr.Body.String(), "bootstrap user is disabled")
+		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabledEnroll.Error())
 	})
 
 	t.Run("Failure - device enrollment on non-empty system", func(t *testing.T) {
@@ -968,7 +968,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "device enrollment only available for initial setup")
+		assert.Contains(t, rr.Body.String(), constants.ErrDeviceEnrollmentInitialOnly.Error())
 	})
 
 	t.Run("Failure - missing cli_csr_pem", func(t *testing.T) {
@@ -988,7 +988,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "cli_csr_pem is mandatory")
+		assert.Contains(t, rr.Body.String(), constants.ErrCLICSRMandatory.Error())
 	})
 
 	t.Run("Success - initial bootstrap", func(t *testing.T) {
@@ -1064,7 +1064,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 
 		// Mock actuator key reader that returns an error
 		c.actuatorKeyReader = &mockActuatorKeyReader{
-			err: errors.New("file not found"),
+			err: fmt.Errorf("failed to read actuator key: %w", constants.ErrPathNotFound),
 		}
 
 		body := map[string]string{

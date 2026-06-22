@@ -21,7 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
-	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -45,7 +44,7 @@ func TestPayloadToExecutionRequest(t *testing.T) {
 			ID:              "msg-1",
 			EventType:       constants.Event.Operator.Command.Requested,
 			CaseID:          "case-1",
-			TaskID:          system.StringPtr("task-1"),
+			TaskID:          func() *string { s := "task-1"; return &s }(),
 			InvestigationID: "investigation-1",
 			Payload:         payload,
 		}

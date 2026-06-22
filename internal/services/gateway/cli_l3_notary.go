@@ -82,7 +82,7 @@ func (v *CLIL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash
 
 	// Verify the fingerprint is a valid SHA256 hex string
 	if _, err := hex.DecodeString(proof.MtlsCertFingerprint); err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrCLIL3InvalidFingerprintFormat, err)
+		return false, fmt.Errorf("cli l3 notary: decode fingerprint: %w", err)
 	}
 
 	// Check if the user is active
@@ -90,7 +90,7 @@ func (v *CLIL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash
 		user, err := v.userSvc.GetByID(userID)
 		if err != nil {
 			v.logger.Error("Failed to load user for CLI L3 verification", "user_id", userID, "error", err)
-			return false, fmt.Errorf("%w: %w", constants.ErrUserNotFound, err)
+			return false, fmt.Errorf("cli l3 notary: load user: %w", err)
 		}
 		if user == nil {
 			return false, constants.ErrUserNotFound
@@ -113,7 +113,7 @@ func (v *CLIL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash
 	doc, err := v.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
 		v.logger.Error("Failed to load CLI session for L3 verification", "cli_session_id", cliSessionID, "error", err)
-		return false, fmt.Errorf("%w: %w", constants.ErrCLIL3SessionLoadFailed, err)
+		return false, fmt.Errorf("cli l3 notary: load cli session: %w", err)
 	}
 	if doc == nil {
 		v.logger.Warn("CLI L3 verification failed: CLI session not found", "cli_session_id", cliSessionID)
@@ -123,13 +123,13 @@ func (v *CLIL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash
 	sessionBytes, err := json.Marshal(doc.ForWire())
 	if err != nil {
 		v.logger.Warn("Failed to marshal CLI session", "cli_session_id", doc.ID, "error", err)
-		return false, fmt.Errorf("%w: %w", constants.ErrCLIL3SessionMarshalFailed, err)
+		return false, fmt.Errorf("cli l3 notary: marshal cli session: %w", err)
 	}
 
 	var session models.CLISession
 	if err := json.Unmarshal(sessionBytes, &session); err != nil {
 		v.logger.Warn("Failed to unmarshal CLI session", "cli_session_id", doc.ID, "error", err)
-		return false, fmt.Errorf("%w: %w", constants.ErrCLIL3SessionUnmarshalFailed, err)
+		return false, fmt.Errorf("cli l3 notary: unmarshal cli session: %w", err)
 	}
 
 	// Verify the session belongs to the user
@@ -169,7 +169,7 @@ func (v *CLIL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash
 		revoked, err := v.pki.IsRevoked(session.CertSerial)
 		if err != nil {
 			v.logger.Error("Failed to check certificate revocation status", "user_id", userID, "cli_session_id", cliSessionID, "cert_serial", session.CertSerial, "error", err)
-			return false, fmt.Errorf("%w: %w", constants.ErrCLIL3CertRevocationCheckFailed, err)
+			return false, fmt.Errorf("cli l3 notary: check cert revocation: %w", err)
 		}
 		if revoked {
 			v.logger.Warn("CLI L3 verification failed: certificate is revoked", "user_id", userID, "cli_session_id", cliSessionID, "cert_serial", session.CertSerial)
@@ -212,7 +212,7 @@ func (v *CLIL3Notary) VerifyCLICertificate(cert *x509.Certificate, cliSessionID,
 	// Verify certificate validity if PKI authority is available
 	if v.pki != nil {
 		if err := v.pki.VerifyCertificate(cert); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrCLIL3CertVerificationFailed, err)
+			return fmt.Errorf("cli l3 notary: verify certificate: %w", err)
 		}
 	}
 

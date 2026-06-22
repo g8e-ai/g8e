@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -137,7 +138,7 @@ func TestExecutionVault_StoreExecution_Basic(t *testing.T) {
 		ID:               "exec-123",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "ls -la",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       100,
 		StdoutCompressed: []byte("file1.txt\nfile2.txt\n"),
 		StderrCompressed: []byte(""),
@@ -165,7 +166,7 @@ func TestExecutionVault_StoreExecution_WithStderr(t *testing.T) {
 		ID:               "exec-456",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "invalid-command",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       50,
 		StdoutCompressed: []byte(""),
 		StderrCompressed: []byte("command not found"),
@@ -203,7 +204,7 @@ func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 		ID:               "exec-update",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "echo hello",
-		ExitCode:         &exitCode1,
+		ExitCode:         exitCode1,
 		DurationMs:       10,
 		StdoutCompressed: []byte("hello\n"),
 		StdoutSize:       6,
@@ -218,7 +219,7 @@ func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 		ID:               "exec-update",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "echo world",
-		ExitCode:         &exitCode2,
+		ExitCode:         exitCode2,
 		DurationMs:       15,
 		StdoutCompressed: []byte("world\n"),
 		StdoutSize:       6,
@@ -243,7 +244,7 @@ func TestExecutionVault_GetExecution_Basic(t *testing.T) {
 		ID:               "exec-get-123",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "cat file.txt",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       25,
 		StdoutCompressed: []byte("file content"),
 		StderrCompressed: []byte(""),
@@ -267,7 +268,7 @@ func TestExecutionVault_GetExecution_Basic(t *testing.T) {
 	assert.Equal(t, "exec-get-123", retrieved.ID)
 	assert.Equal(t, "cat file.txt", retrieved.Command)
 	assert.Equal(t, int64(25), retrieved.DurationMs)
-	assert.Equal(t, 0, *retrieved.ExitCode)
+	assert.Equal(t, 0, retrieved.ExitCode)
 	assert.Equal(t, "user-xyz", retrieved.UserID)
 	assert.Equal(t, "case-xyz", retrieved.CaseID)
 	assert.Equal(t, "task-xyz", retrieved.TaskID)
@@ -589,7 +590,7 @@ func TestExecutionVault_Wait(t *testing.T) {
 		ID:               "exec-wait",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "test",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("output"),
 	}
 
@@ -625,7 +626,7 @@ func TestExecutionVault_ConcurrentStoreExecution(t *testing.T) {
 				ID:               fmt.Sprintf("exec-concurrent-%d", idx),
 				TimestampUTC:     time.Now().UTC(),
 				Command:          fmt.Sprintf("cmd-%d", idx),
-				ExitCode:         &exitCode,
+				ExitCode:         exitCode,
 				DurationMs:       int64(idx),
 				StdoutCompressed: []byte(fmt.Sprintf("output-%d", idx)),
 				StdoutSize:       10,
@@ -699,7 +700,7 @@ func TestExecutionVault_LargeStdout(t *testing.T) {
 		ID:               "exec-large",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "generate-large",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       1000,
 		StdoutCompressed: largeOutput,
 		StdoutSize:       len(largeOutput),
@@ -723,7 +724,7 @@ func TestExecutionVault_EmptyOutput(t *testing.T) {
 		ID:               "exec-empty",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "true",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       5,
 		StdoutCompressed: []byte(""),
 		StderrCompressed: []byte(""),
@@ -753,7 +754,7 @@ func TestExecutionVault_MultipleExecutionsSameCase(t *testing.T) {
 			ID:               fmt.Sprintf("exec-case-%d", i),
 			TimestampUTC:     time.Now().UTC(),
 			Command:          fmt.Sprintf("cmd-%d", i),
-			ExitCode:         &exitCode,
+			ExitCode:         exitCode,
 			DurationMs:       int64(i * 10),
 			StdoutCompressed: []byte(fmt.Sprintf("output-%d", i)),
 			StdoutSize:       10,
@@ -806,7 +807,7 @@ func TestExecutionVault_ExecutionWithAllFields(t *testing.T) {
 		ID:               "exec-all-fields",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "comprehensive-test",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       12345,
 		StdoutCompressed: []byte("stdout output"),
 		StderrCompressed: []byte("stderr output"),
@@ -919,7 +920,7 @@ func TestExecutionVault_StoreExecution_LockedVault(t *testing.T) {
 		ID:               "exec-locked",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "test",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("output"),
 		StdoutSize:       6,
 	}
@@ -1029,7 +1030,7 @@ func TestExecutionVault_PruneRetention(t *testing.T) {
 		ID:               "exec-old",
 		TimestampUTC:     time.Now().UTC().AddDate(0, 0, -2),
 		Command:          "old-command",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("old output"),
 		StdoutSize:       10,
 	}
@@ -1042,7 +1043,7 @@ func TestExecutionVault_PruneRetention(t *testing.T) {
 		ID:               "exec-recent",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "recent-command",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("recent output"),
 		StdoutSize:       13,
 	}
@@ -1118,7 +1119,7 @@ func TestExecutionVault_PruneSizeLimit(t *testing.T) {
 			ID:               fmt.Sprintf("exec-large-%d", i),
 			TimestampUTC:     time.Now().UTC().Add(time.Duration(-i) * time.Hour),
 			Command:          fmt.Sprintf("cmd-%d", i),
-			ExitCode:         &exitCode,
+			ExitCode:         exitCode,
 			StdoutCompressed: largeOutput,
 			StdoutSize:       len(largeOutput),
 		}
@@ -1146,7 +1147,7 @@ func TestExecutionVault_SpecialCharacters(t *testing.T) {
 		ID:               "exec-special",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "echo 'test with spaces and \"quotes\"'",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("output\nwith\nnewlines\tand\ttabs"),
 		StdoutSize:       30,
 		UserID:           "user-with-dashes_and_underscores",
@@ -1172,7 +1173,7 @@ func TestExecutionVault_UnicodeCharacters(t *testing.T) {
 		ID:               "exec-unicode",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "echo '日本語 中文 한글 العربية'",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("output-😀-🎉-test"),
 		StdoutSize:       20,
 		UserID:           "user-日本語",
@@ -1203,7 +1204,7 @@ func TestExecutionVault_VeryLongCommand(t *testing.T) {
 		ID:               "exec-long-cmd",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          string(longCommand),
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("output"),
 		StdoutSize:       6,
 	}
@@ -1225,7 +1226,7 @@ func TestExecutionVault_NilExitCode(t *testing.T) {
 		ID:               "exec-nil-exit",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "test",
-		ExitCode:         nil,
+		ExitCode:         constants.ExitCodeNone,
 		StdoutCompressed: []byte("output"),
 		StdoutSize:       6,
 	}
@@ -1236,7 +1237,7 @@ func TestExecutionVault_NilExitCode(t *testing.T) {
 
 	retrieved, err := ev.GetExecution(context.Background(), "exec-nil-exit")
 	require.NoError(t, err)
-	assert.Nil(t, retrieved.ExitCode)
+	assert.Equal(t, constants.ExitCodeNone, retrieved.ExitCode)
 }
 
 func TestExecutionVault_ContextCancellation(t *testing.T) {
@@ -1252,7 +1253,7 @@ func TestExecutionVault_ContextCancellation(t *testing.T) {
 		ID:               "exec-cancelled",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "test",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("output"),
 		StdoutSize:       6,
 	}
@@ -1381,7 +1382,7 @@ func TestExecutionVault_GetExecution_DecryptFailure(t *testing.T) {
 		ID:               "exec-decrypt-test",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "test",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte("output"),
 		StdoutSize:       6,
 	}
@@ -1474,7 +1475,7 @@ func TestExecutionVault_ZeroDuration(t *testing.T) {
 		ID:               "exec-zero-duration",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "instant-command",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       0,
 		StdoutCompressed: []byte("output"),
 		StdoutSize:       6,
@@ -1498,7 +1499,7 @@ func TestExecutionVault_NegativeDuration(t *testing.T) {
 		ID:               "exec-negative-duration",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "negative-duration-command",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		DurationMs:       -100,
 		StdoutCompressed: []byte("output"),
 		StdoutSize:       6,
@@ -1522,7 +1523,7 @@ func TestExecutionVault_EmptyFields(t *testing.T) {
 		ID:               "exec-empty-fields",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "",
-		ExitCode:         &exitCode,
+		ExitCode:         exitCode,
 		StdoutCompressed: []byte(""),
 		StderrCompressed: []byte(""),
 		StdoutSize:       0,

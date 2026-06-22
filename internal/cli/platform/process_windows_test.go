@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,7 +132,6 @@ func TestSetProcessGroup(t *testing.T) {
 
 func TestIsProcessRunning_ZeroPID(t *testing.T) {
 	pm := &ProcessManager{}
-	pm.windowsProcessChecker = &mockWindowsProcessChecker{}
 
 	result := pm.isProcessRunning(0)
 	assert.False(t, result, "isProcessRunning should return false for PID 0")
@@ -632,15 +630,13 @@ func TestStopProcess_GracefulShutdownSucceeds(t *testing.T) {
 
 	// Override isProcessRunning to return false after graceful shutdown
 	callCount := 0
-	originalIsProcessRunning := pm.isProcessRunning
-	pm.isProcessRunning = func(pid int) bool {
+	pm.isProcessRunningFn = func(pid int) bool {
 		callCount++
 		if callCount == 1 {
 			return true // First check - process is running
 		}
 		return false // Second check - process stopped
 	}
-	defer func() { pm.isProcessRunning = originalIsProcessRunning }()
 
 	err := pm.stopProcess(1234, "test")
 	assert.NoError(t, err, "stopProcess should succeed with graceful shutdown")
@@ -671,15 +667,13 @@ func TestStopProcess_GracefulShutdownFailsForceKillSucceeds(t *testing.T) {
 
 	// Override isProcessRunning to return false after force kill
 	callCount := 0
-	originalIsProcessRunning := pm.isProcessRunning
-	pm.isProcessRunning = func(pid int) bool {
+	pm.isProcessRunningFn = func(pid int) bool {
 		callCount++
 		if callCount <= 2 {
 			return true // Process still running after graceful attempt
 		}
 		return false // Process stopped after force kill
 	}
-	defer func() { pm.isProcessRunning = originalIsProcessRunning }()
 
 	err := pm.stopProcess(1234, "test")
 	assert.NoError(t, err, "stopProcess should succeed with force kill")
@@ -704,11 +698,9 @@ func TestStopProcess_ForceKillFails(t *testing.T) {
 	}
 
 	// Override isProcessRunning to always return true
-	originalIsProcessRunning := pm.isProcessRunning
-	pm.isProcessRunning = func(pid int) bool {
+	pm.isProcessRunningFn = func(pid int) bool {
 		return true
 	}
-	defer func() { pm.isProcessRunning = originalIsProcessRunning }()
 
 	err := pm.stopProcess(1234, "test")
 	assert.Error(t, err, "stopProcess should error when force kill fails")
@@ -734,12 +726,10 @@ func TestStopProcess_WaitForExit(t *testing.T) {
 
 	// Override isProcessRunning to return false after a few checks
 	callCount := 0
-	originalIsProcessRunning := pm.isProcessRunning
-	pm.isProcessRunning = func(pid int) bool {
+	pm.isProcessRunningFn = func(pid int) bool {
 		callCount++
 		return callCount < 3 // Return true for first 2 checks, false on 3rd
 	}
-	defer func() { pm.isProcessRunning = originalIsProcessRunning }()
 
 	err := pm.stopProcess(1234, "test")
 	assert.NoError(t, err, "stopProcess should succeed after waiting for exit")
@@ -763,11 +753,9 @@ func TestStopProcess_CommandArguments(t *testing.T) {
 	}
 
 	// Override isProcessRunning to always return true
-	originalIsProcessRunning := pm.isProcessRunning
-	pm.isProcessRunning = func(pid int) bool {
+	pm.isProcessRunningFn = func(pid int) bool {
 		return true
 	}
-	defer func() { pm.isProcessRunning = originalIsProcessRunning }()
 
 	pm.stopProcess(1234, "test")
 

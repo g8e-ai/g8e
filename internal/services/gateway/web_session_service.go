@@ -50,16 +50,16 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 		ID:              webSessionID,
 		UserID:          userID,
 		CreatedAtUnixMs: now.UnixMilli(),
-		ExpiresAtUnixMs: now.Add(webSessionTTL).UnixMilli(),
+		ExpiresAtUnixMs: now.Add(constants.WebSessionTTL).UnixMilli(),
 	}
 
 	data, err := json.Marshal(webSession)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
+		return nil, fmt.Errorf("gateway: marshal web session: %w", err)
 	}
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID, data); err != nil {
-		s.logger.Error("Failed to create web session", string(constants.ConnectionStateError), err, "userID", userID)
-		return nil, fmt.Errorf("%w: %v", constants.ErrInternal, err)
+		s.logger.Error("Failed to create web session", "error", err, "userID", userID)
+		return nil, fmt.Errorf("gateway: create web session: %w", err)
 	}
 
 	s.logger.Info("Web session created", "userID", userID, "webSessionID", webSessionID[:8])
@@ -70,7 +70,7 @@ func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession,
 func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.WebSession, error) {
 	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrInternal, err)
+		return nil, fmt.Errorf("gateway: validate web session: %w", err)
 	}
 	if doc == nil {
 		return nil, constants.ErrNotFound
@@ -78,11 +78,11 @@ func (s *WebSessionService) ValidateWebSession(webSessionID string) (*models.Web
 
 	dataBytes, err := json.Marshal(doc.Data)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
+		return nil, fmt.Errorf("gateway: marshal web session data: %w", err)
 	}
 	var webSession models.WebSession
 	if err := json.Unmarshal(dataBytes, &webSession); err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalDocument, err)
+		return nil, fmt.Errorf("gateway: unmarshal web session: %w", err)
 	}
 
 	webSession.ID = webSessionID

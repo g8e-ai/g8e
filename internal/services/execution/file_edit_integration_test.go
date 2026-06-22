@@ -50,7 +50,7 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:          "test-case-1",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -90,8 +90,8 @@ func TestFileEditService_Integration(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.NotNil(t, result.Content)
-		assert.Equal(t, content, *result.Content)
+		assert.NotEmpty(t, result.Content)
+		assert.Equal(t, content, result.Content)
 		assert.NotNil(t, result.FileStats)
 		assert.Positive(t, result.FileStats.Size)
 
@@ -112,7 +112,7 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:       "test-case-backup",
 			Operation:    constants.FileOperationWrite,
 			FilePath:     testFile,
-			Content:      &newContent,
+			Content:      newContent,
 			CreateBackup: true,
 			RequestedBy:  "test-user",
 		}
@@ -121,11 +121,11 @@ func TestFileEditService_Integration(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.NotNil(t, result.BackupPath)
-		assert.FileExists(t, *result.BackupPath)
+		assert.NotEmpty(t, result.BackupPath)
+		assert.FileExists(t, result.BackupPath)
 
 		// Verify backup contains original
-		backupData, _ := os.ReadFile(*result.BackupPath)
+		backupData, _ := os.ReadFile(result.BackupPath)
 		assert.Equal(t, initialContent, string(backupData))
 
 		// Verify file has new content
@@ -149,8 +149,8 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:      "test-case-replace",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -182,8 +182,8 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:         "test-case-insert",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -216,8 +216,8 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:      "test-case-delete",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    testFile,
-			StartLine:   &startLine,
-			EndLine:     &endLine,
+			StartLine:   startLine,
+			EndLine:     endLine,
 			RequestedBy: "test-user",
 		}
 
@@ -255,7 +255,7 @@ func TestFileEditService_Integration(t *testing.T) {
 					CaseID:          "test-case-concurrent",
 					Operation:       constants.FileOperationWrite,
 					FilePath:        testFile,
-					Content:         &content,
+					Content:         content,
 					CreateIfMissing: true,
 					RequestedBy:     "test-user",
 				}
@@ -293,8 +293,8 @@ func TestFileEditService_Integration(t *testing.T) {
 			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
-				StartLine: &startLine,
-				EndLine:   &endLine,
+				StartLine: startLine,
+				EndLine:   endLine,
 			},
 			RequestedBy: "test-user",
 		}
@@ -303,11 +303,11 @@ func TestFileEditService_Integration(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.NotNil(t, result.Content)
-		assert.Contains(t, *result.Content, "Line 10")
-		assert.Contains(t, *result.Content, "Line 20")
-		assert.NotContains(t, *result.Content, "Line 9")
-		assert.NotContains(t, *result.Content, "Line 21")
+		assert.NotEmpty(t, result.Content)
+		assert.Contains(t, result.Content, "Line 10")
+		assert.Contains(t, result.Content, "Line 20")
+		assert.NotContains(t, result.Content, "Line 9")
+		assert.NotContains(t, result.Content, "Line 21")
 
 	})
 
@@ -328,7 +328,7 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:          "test-case-large",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -338,7 +338,7 @@ func TestFileEditService_Integration(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 		assert.FileExists(t, testFile)
-		assert.Greater(t, *result.BytesWritten, int64(50000))
+		assert.Greater(t, result.BytesWritten, int64(50000))
 	})
 
 	t.Run("file edit pipeline", func(t *testing.T) {
@@ -354,7 +354,7 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:          "test-case-pipeline",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content1,
+			Content:         content1,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -370,8 +370,8 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:      "test-case-pipeline",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -386,8 +386,8 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:         "test-case-pipeline",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -416,7 +416,7 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:          "test-case-error",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        nonExistent,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: false,
 			RequestedBy:     "test-user",
 		}
@@ -441,7 +441,7 @@ func TestFileEditService_Integration(t *testing.T) {
 			CaseID:          "test-case-special",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -486,15 +486,15 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 				CaseID:       "test-case-multi-backup",
 				Operation:    constants.FileOperationWrite,
 				FilePath:     testFile,
-				Content:      &content,
+				Content:      content,
 				CreateBackup: true,
 				RequestedBy:  "test-user",
 			}
 
 			result, err := svc.ExecuteFileEdit(context.Background(), req)
 			require.NoError(t, err)
-			assert.NotNil(t, result.BackupPath)
-			backupPaths = append(backupPaths, *result.BackupPath)
+			assert.NotEmpty(t, result.BackupPath)
+			backupPaths = append(backupPaths, result.BackupPath)
 		}
 
 		// Verify all backups exist
@@ -522,7 +522,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
-				MaxLines: &maxLines,
+				MaxLines: maxLines,
 			},
 			RequestedBy: "test-user",
 		}
@@ -532,7 +532,7 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
-		readLines := strings.Split(*result.Content, "\n")
+		readLines := strings.Split(result.Content, "\n")
 		assert.LessOrEqual(t, len(readLines), maxLines)
 	})
 
@@ -551,8 +551,8 @@ func TestFileEditService_AdvancedScenarios(t *testing.T) {
 			CaseID:      "test-case-multi-replace",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 

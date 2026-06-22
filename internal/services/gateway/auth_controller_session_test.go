@@ -132,7 +132,7 @@ func TestHandleUserMe(t *testing.T) {
 		c.handleUserMe(rr, req)
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "unauthorized")
+		assert.Contains(t, rr.Body.String(), constants.ErrNotAuthenticated.Error())
 	})
 
 	t.Run("Success - returns user data", func(t *testing.T) {
@@ -179,7 +179,7 @@ func TestHandleWebSession(t *testing.T) {
 		c.handleWebSession(rr, req)
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "unauthorized")
+		assert.Contains(t, rr.Body.String(), constants.ErrNotAuthenticated.Error())
 	})
 
 	t.Run("Success - returns session data with cookie", func(t *testing.T) {
