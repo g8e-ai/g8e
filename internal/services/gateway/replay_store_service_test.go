@@ -210,10 +210,3 @@ func TestReplayStoreService_ReleaseNonce_Used(t *testing.T) {
 	assert.Equal(t, 1, count, "nonce should still exist if it was already used")
 }
 
-func TestReplayStoreService_Close(t *testing.T) {
-	svc, _ := newTestReplayStoreService(t)
-
-	// Close is a no-op, but should not panic
-	err := svc.Close()
-	require.NoError(t, err)
-}

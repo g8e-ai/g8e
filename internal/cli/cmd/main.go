@@ -44,6 +44,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		auditCmd(),
 		reportCmd(),
 		swaggerCmd(),
+		agenticToolEmulatorCmd(),
 	)
 
 	return rootCmd

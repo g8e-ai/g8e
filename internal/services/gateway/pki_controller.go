@@ -606,6 +606,17 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		gatewayHost = h
 	}
 
+	// Substitute loopback with actual server IP so the script works on other nodes
+	if gatewayHost == "" || gatewayHost == "localhost" || gatewayHost == "127.0.0.1" || gatewayHost == "::1" {
+		if localAddr, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr); ok && localAddr != nil {
+			if ip, _, err := net.SplitHostPort(localAddr.String()); err == nil {
+				if ip != "" && ip != "127.0.0.1" && ip != "::1" && ip != "0.0.0.0" {
+					gatewayHost = ip
+				}
+			}
+		}
+	}
+
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)

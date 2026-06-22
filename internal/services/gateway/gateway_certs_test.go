@@ -612,7 +612,7 @@ func TestPKIAuthority_PathGetters(t *testing.T) {
 	})
 }
 
-func TestPKIAuthority_VerifyCertificate(t *testing.T) {
+func TestPKIAuthority_VerifyCertificate_Unit(t *testing.T) {
 	t.Parallel()
 
 	t.Run("Returns error for nil certificate", func(t *testing.T) {
@@ -636,7 +636,7 @@ func TestPKIAuthority_RevokeCertificate(t *testing.T) {
 	})
 }
 
-func TestPKIAuthority_GenerateCRL(t *testing.T) {
+func TestPKIAuthority_GenerateCRL_Unit(t *testing.T) {
 	t.Parallel()
 
 	t.Run("Returns error when database is nil", func(t *testing.T) {
@@ -648,7 +648,7 @@ func TestPKIAuthority_GenerateCRL(t *testing.T) {
 	})
 }
 
-func TestPKIAuthority_TLSConfig(t *testing.T) {
+func TestPKIAuthority_TLSConfig_Unit(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
@@ -681,7 +681,7 @@ func TestPKIAuthority_TLSConfig(t *testing.T) {
 	})
 }
 
-func TestPKIAuthority_SignCSR(t *testing.T) {
+func TestPKIAuthority_SignCSR_Unit(t *testing.T) {
 	t.Parallel()
 
 	t.Run("Returns error for gateway-peer when CA not loaded", func(t *testing.T) {

@@ -76,6 +76,43 @@ func (s *UserService) CreateBootstrapUserWithOSUser(localOSUser *models.LocalOSU
 	return s.createUser(true, localOSUser)
 }
 
+// CreateUserWithSub creates a user with the provided subject (JWT sub) as their ID.
+// Used for JIT provisioning when a valid JWT is presented for an unknown identity.
+func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
+	if sub == "" {
+		return nil, constants.ErrJWTSessionSubjectMissing
+	}
+
+	existing, err := s.GetByID(sub)
+	if err != nil {
+		return nil, fmt.Errorf("user service: JIT lookup failed: %w", err)
+	}
+	if existing != nil {
+		return existing, nil
+	}
+
+	user := &models.User{
+		ID:                 sub,
+		PasskeyCredentials: []models.PasskeyCredential{},
+		Provider:           string(constants.AuthProviderJWT),
+		Status:             constants.UserStatusActive,
+		IsBootstrap:        false,
+		WebAuthnUserID:     uuid.New().String(),
+	}
+
+	data, err := json.Marshal(user)
+	if err != nil {
+		return nil, fmt.Errorf("user service: failed to marshal JIT user: %w", err)
+	}
+
+	if err := s.db.DocSet(marshaler.CollectionName(constants.CollectionUsers), sub, data); err != nil {
+		return nil, fmt.Errorf("user service: failed to store JIT user: %w", err)
+	}
+
+	s.logger.Info("[USER-SERVICE] JIT user provisioned", "user_id", sub)
+	return user, nil
+}
+
 func getLocalOSUser() *models.LocalOSUser {
 	currentUser, err := user.Current()
 	if err != nil {
@@ -267,7 +304,6 @@ func (s *UserService) GetBySub(sub string) (*models.User, error) {
 	}
 	return s.GetByID(sub)
 }
-
 
 // updateUserStatus updates a user's status field.
 func (s *UserService) updateUserStatus(userID string, status constants.UserStatus) error {
@@ -499,4 +535,3 @@ func (s *PersonaService) docToPersona(doc *models.Document) (*models.Persona, er
 	persona.ID = doc.ID
 	return &persona, nil
 }
-

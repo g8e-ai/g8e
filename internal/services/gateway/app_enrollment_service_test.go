@@ -64,11 +64,6 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				if _, err := db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionTrustedSigners), appID); err != nil {
 					t.Logf("Failed to delete signer document: %v", err)
 				}
-				if pki.secretManager != nil {
-					if err := pki.secretManager.DeleteServicePrivateKey(appID); err != nil {
-						t.Logf("Failed to delete service private key: %v", err)
-					}
-				}
 			},
 		},
 		{

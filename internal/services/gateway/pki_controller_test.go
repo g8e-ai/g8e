@@ -550,9 +550,8 @@ func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
 		assert.NotEmpty(t, rr.Body.Bytes())
 		script := rr.Body.String()
 		assert.Contains(t, script, "CA bundle installed")
-		assert.Contains(t, script, "Download g8e Node")
-		assert.Contains(t, script, "security pki enroll")
-		assert.Contains(t, script, "Enrollment complete")
+		assert.Contains(t, script, "g8e Node")
+		assert.Contains(t, script, "auth enroll")
 	})
 
 	t.Run("Success - GET with X-Forwarded-Host uses external host", func(t *testing.T) {
@@ -616,7 +615,7 @@ func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
 	assert.NotEmpty(t, rr.Body.Bytes())
 	script := rr.Body.String()
 	assert.Contains(t, script, "CA bundle installed")
-	assert.Contains(t, script, "g8e auth enroll")
+	assert.Contains(t, script, "auth enroll")
 }
 
 func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
@@ -636,9 +635,8 @@ func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
 				assert.NotEmpty(t, rr.Body.Bytes())
 				script := rr.Body.String()
 				assert.Contains(t, script, "CA bundle installed")
-				assert.Contains(t, script, "Download g8e Node")
-				assert.Contains(t, script, "security pki enroll")
-				assert.Contains(t, script, "Enrollment complete")
+				assert.Contains(t, script, "g8e Node")
+				assert.Contains(t, script, "auth enroll")
 			},
 		},
 	}

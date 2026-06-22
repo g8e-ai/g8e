@@ -839,9 +839,14 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 		if user == nil {
-			s.logger.Warn("gateway: auth: user not found and JIT provisioning is disabled", "sub", jwt.Claims.Sub)
-			s.responder.Error(w, http.StatusForbidden, constants.ErrUserNotFound.Error())
-			return
+			var jitErr error
+			user, jitErr = s.userSvc.CreateUserWithSub(jwt.Claims.Sub)
+			if jitErr != nil {
+				s.logger.Error("gateway: auth: JIT user provisioning failed", "sub", jwt.Claims.Sub, "error", jitErr)
+				s.responder.Error(w, http.StatusInternalServerError, constants.ErrUserCreationFailed.Error())
+				return
+			}
+			s.cacheUser(jwt.Claims.Sub, user)
 		}
 
 		if !user.IsActive() {

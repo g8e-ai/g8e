@@ -232,10 +232,11 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 		}
 	}
 	sm := &SecretManager{
-		db:         s.db,
-		secretsDir: secretsDir,
-		logger:     s.logger,
-		keystore:   ks,
+		db:                  s.db,
+		secretsDir:          secretsDir,
+		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+		logger:              s.logger,
+		keystore:            ks,
 	}
 	if err := sm.InitAppSettings(); err != nil {
 		return err

@@ -301,7 +301,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		c.handleCLIEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabled.Error())
+		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabledEnroll.Error())
 	})
 
 	t.Run("Failure - Missing cli_csr_pem", func(t *testing.T) {
@@ -946,7 +946,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 		c.handleDeviceEnrollment(rr, req)
 
 		assert.Equal(t, http.StatusConflict, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabled.Error())
+		assert.Contains(t, rr.Body.String(), constants.ErrBootstrapUserDisabledEnroll.Error())
 	})
 
 	t.Run("Failure - device enrollment on non-empty system", func(t *testing.T) {
