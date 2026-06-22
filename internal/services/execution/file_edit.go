@@ -45,11 +45,6 @@ type FileEditService struct {
 	logger *slog.Logger
 }
 
-const (
-	// maxFileOperationSize is the maximum file size we'll read into memory (50MB)
-	maxFileOperationSize = 50 * 1024 * 1024
-)
-
 // NewFileEditService creates a new file editing service
 func NewFileEditService(cfg *config.Config, logger *slog.Logger) *FileEditService {
 	fes := &FileEditService{
@@ -87,7 +82,7 @@ func (fes *FileEditService) ExecuteFileEdit(ctx context.Context, request *models
 		result.ErrorMessage = fmt.Sprintf("Invalid file path: %v", err)
 		result.ErrorType = "validation_error"
 		fes.finalizeResult(result)
-		return result, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+		return result, fmt.Errorf("file edit: validate path: %w", err)
 	}
 	request.FilePath = absPath // Use resolved absolute path
 
@@ -158,7 +153,7 @@ func (fes *FileEditService) executeRead(ctx context.Context, request *models.Fil
 		if os.IsNotExist(err) {
 			return fmt.Errorf("%w: %s", constants.ErrPathNotFound, request.FilePath)
 		}
-		return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+		return fmt.Errorf("file edit: stat file: %w", err)
 	}
 
 	// Collect file stats if requested
@@ -174,7 +169,7 @@ func (fes *FileEditService) executeRead(ctx context.Context, request *models.Fil
 	// Read file content
 	file, err := os.Open(request.FilePath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditOpenFileFailed, err)
+		return fmt.Errorf("file edit: open file: %w", err)
 	}
 	defer file.Close()
 
@@ -182,24 +177,24 @@ func (fes *FileEditService) executeRead(ctx context.Context, request *models.Fil
 	if request.ReadOptions != nil && (request.ReadOptions.StartLine != 0 || request.ReadOptions.EndLine != 0 || request.ReadOptions.MaxLines != 0) {
 		content, err := fes.readFileLines(file, request.ReadOptions)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrFileEditReadLinesFailed, err)
+			return fmt.Errorf("file edit: read file lines: %w", err)
 		}
 		result.Content = content
 	} else {
 		// Read entire file with limit
 		fileInfo, err := file.Stat()
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+			return fmt.Errorf("file edit: stat file: %w", err)
 		}
 
-		if fileInfo.Size() > maxFileOperationSize {
-			return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), maxFileOperationSize)
+		if fileInfo.Size() > constants.FileEditMaxSize {
+			return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), constants.FileEditMaxSize)
 		}
 
 		var buf bytes.Buffer
-		_, err = io.Copy(&buf, io.LimitReader(file, maxFileOperationSize))
+		_, err = io.Copy(&buf, io.LimitReader(file, constants.FileEditMaxSize))
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrFileEditReadFileFailed, err)
+			return fmt.Errorf("file edit: read file: %w", err)
 		}
 		content := buf.String()
 		result.Content = content
@@ -271,12 +266,12 @@ func (fes *FileEditService) executeWrite(ctx context.Context, request *models.Fi
 
 	// Create backup if requested and file exists
 	if fileExists && request.CreateBackup {
-		if fileInfo.Size() > maxFileOperationSize {
-			return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), maxFileOperationSize)
+		if fileInfo.Size() > constants.FileEditMaxSize {
+			return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), constants.FileEditMaxSize)
 		}
 		backupPath, err := fes.createBackup(request.FilePath)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrFileEditCreateBackupFailed, err)
+			return fmt.Errorf("file edit: create backup: %w", err)
 		}
 		result.BackupPath = backupPath
 		fes.logger.Info("Backup created", "backup_path", backupPath)
@@ -285,13 +280,13 @@ func (fes *FileEditService) executeWrite(ctx context.Context, request *models.Fi
 	// Ensure parent directory exists
 	dir := filepath.Dir(request.FilePath)
 	if err := os.MkdirAll(dir, constants.PermDirStandard); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		return fmt.Errorf("file edit: create directory: %w", err)
 	}
 
 	// Write content to file
 	bytesWritten := int64(len(request.Content))
 	if err := os.WriteFile(request.FilePath, []byte(request.Content), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+		return fmt.Errorf("file edit: write file: %w", err)
 	}
 
 	result.BytesWritten = bytesWritten
@@ -319,22 +314,22 @@ func (fes *FileEditService) executeReplace(ctx context.Context, request *models.
 	// Read current file content (always fresh read)
 	fileInfo, err := os.Stat(request.FilePath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+		return fmt.Errorf("file edit: stat file: %w", err)
 	}
-	if fileInfo.Size() > maxFileOperationSize {
-		return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), maxFileOperationSize)
+	if fileInfo.Size() > constants.FileEditMaxSize {
+		return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), constants.FileEditMaxSize)
 	}
 
 	content, err := os.ReadFile(request.FilePath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditReadFileFailed, err)
+		return fmt.Errorf("file edit: read file: %w", err)
 	}
 
 	// Create backup if requested
 	if request.CreateBackup {
 		backupPath, err := fes.createBackup(request.FilePath)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrFileEditCreateBackupFailed, err)
+			return fmt.Errorf("file edit: create backup: %w", err)
 		}
 		result.BackupPath = backupPath
 	}
@@ -363,7 +358,7 @@ func (fes *FileEditService) executeReplace(ctx context.Context, request *models.
 	// Write back to file
 	bytesWritten := int64(len(originalContent))
 	if err := os.WriteFile(request.FilePath, []byte(originalContent), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+		return fmt.Errorf("file edit: write file: %w", err)
 	}
 
 	result.BytesWritten = bytesWritten
@@ -393,22 +388,22 @@ func (fes *FileEditService) executeInsert(ctx context.Context, request *models.F
 	// Read current file content
 	fileInfo, err := os.Stat(request.FilePath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+		return fmt.Errorf("file edit: stat file: %w", err)
 	}
-	if fileInfo.Size() > maxFileOperationSize {
-		return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), maxFileOperationSize)
+	if fileInfo.Size() > constants.FileEditMaxSize {
+		return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), constants.FileEditMaxSize)
 	}
 
 	content, err := os.ReadFile(request.FilePath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditReadFileFailed, err)
+		return fmt.Errorf("file edit: read file: %w", err)
 	}
 
 	// Create backup if requested
 	if request.CreateBackup {
 		backupPath, err := fes.createBackup(request.FilePath)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrFileEditCreateBackupFailed, err)
+			return fmt.Errorf("file edit: create backup: %w", err)
 		}
 		result.BackupPath = backupPath
 	}
@@ -434,7 +429,7 @@ func (fes *FileEditService) executeInsert(ctx context.Context, request *models.F
 	// Write back to file
 	bytesWritten := int64(len(newContent))
 	if err := os.WriteFile(request.FilePath, []byte(newContent), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+		return fmt.Errorf("file edit: write file: %w", err)
 	}
 
 	result.BytesWritten = bytesWritten
@@ -463,22 +458,22 @@ func (fes *FileEditService) executeDelete(ctx context.Context, request *models.F
 	// Read current file content
 	fileInfo, err := os.Stat(request.FilePath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+		return fmt.Errorf("file edit: stat file: %w", err)
 	}
-	if fileInfo.Size() > maxFileOperationSize {
-		return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), maxFileOperationSize)
+	if fileInfo.Size() > constants.FileEditMaxSize {
+		return fmt.Errorf("%w: %d bytes (max %d)", constants.ErrFileEditFileTooLarge, fileInfo.Size(), constants.FileEditMaxSize)
 	}
 
 	content, err := os.ReadFile(request.FilePath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditReadFileFailed, err)
+		return fmt.Errorf("file edit: read file: %w", err)
 	}
 
 	// Create backup if requested
 	if request.CreateBackup {
 		backupPath, err := fes.createBackup(request.FilePath)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrFileEditCreateBackupFailed, err)
+			return fmt.Errorf("file edit: create backup: %w", err)
 		}
 		result.BackupPath = backupPath
 	}
@@ -501,7 +496,7 @@ func (fes *FileEditService) executeDelete(ctx context.Context, request *models.F
 	// Write back to file
 	bytesWritten := int64(len(newContent))
 	if err := os.WriteFile(request.FilePath, []byte(newContent), constants.PermFilePrivate); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFileEditWriteFileFailed, err)
+		return fmt.Errorf("file edit: write file: %w", err)
 	}
 
 	result.BytesWritten = bytesWritten
@@ -528,14 +523,14 @@ func (fes *FileEditService) executePatch(ctx context.Context, request *models.Fi
 	if request.CreateBackup {
 		backupPath, err := fes.createBackup(request.FilePath)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrFileEditCreateBackupFailed, err)
+			return fmt.Errorf("file edit: create backup: %w", err)
 		}
 		result.BackupPath = backupPath
 	}
 
 	// For now, return an error indicating patch is not yet implemented
 	// Full unified diff parsing and application would require additional libraries
-	return fmt.Errorf("%w: use replace or write operations instead", constants.ErrFileEditPatchNotImplemented)
+	return constants.ErrFileEditPatchNotImplemented
 }
 
 // createBackup creates a backup of a file using streaming to prevent OOM
@@ -556,7 +551,7 @@ func (fes *FileEditService) createBackup(filePath string) (backupPath string, er
 	}
 	hashStr := hex.EncodeToString(h.Sum(nil))[:8]
 
-	backupPath = fmt.Sprintf("%s%s", filePath, fmt.Sprintf(constants.BackupFileSuffixPattern, timestamp, hashStr))
+	backupPath = filePath + fmt.Sprintf(constants.BackupFileSuffixPattern, timestamp, hashStr)
 
 	// Reset file pointer to beginning
 	if _, err := file.Seek(0, 0); err != nil {

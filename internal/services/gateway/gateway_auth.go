@@ -57,14 +57,14 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addExact(constants.APIPaths.State)
 
 	// PKI bootstrap routes (public material only)
-	r.addPrefix("/.well-known/g8e/pki/")
-	r.addPrefix("/.well-known/g8e/bin/")
+	r.addPrefix(constants.APIPaths.WellKnownPKIPrefix)
+	r.addPrefix(constants.APIPaths.WellKnownBinPrefix)
 
 	// Trust script endpoints (public for initial bootstrap)
 	r.addExact(constants.APIPaths.BootstrapCALinux)
 	r.addExact(constants.APIPaths.BootstrapCAMacos)
 	r.addExact(constants.APIPaths.BootstrapCAWindows)
-	r.addExact("/.well-known/g8e/pki/trust-windows")
+	r.addExact(constants.APIPaths.WellKnownTrustWindows)
 
 	// Deploy script endpoints (public for initial deployment)
 	r.addExact(constants.APIPaths.DeployScriptLinux)
@@ -83,9 +83,9 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	if jwksEnabled {
 		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
 		// MCP tools endpoints are public when JWKS is enabled for BYO clients
-		r.addPrefix("/api/v1/mcp/tools/")
+		r.addPrefix(constants.APIPaths.MCPToolsPrefix)
 		// A2A endpoints are public when JWKS is enabled
-		r.addPrefix("/api/v1/a2a/")
+		r.addPrefix(constants.APIPaths.A2APrefix)
 	}
 
 	return r
@@ -243,7 +243,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 
 	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
-		return nil, fmt.Errorf("auth: query operator session: %w", constants.ErrNotFound)
+		return nil, fmt.Errorf("gateway: auth: query operator session: %w", constants.ErrNotFound)
 	}
 
 	if len(docs) == 0 {
@@ -253,19 +253,19 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	// Convert Document to OperatorDocumentGo
 	b, err := json.Marshal(docs[0].ForWire())
 	if err != nil {
-		return nil, fmt.Errorf("auth: marshal operator document: %w", constants.ErrRequestMarshalFailed)
+		return nil, fmt.Errorf("gateway: auth: marshal operator document: %w", constants.ErrRequestMarshalFailed)
 	}
 
 	var op models.OperatorDocumentGo
 	if err := json.Unmarshal(b, &op); err != nil {
-		return nil, fmt.Errorf("auth: unmarshal operator document: %w", constants.ErrResponseParseFailed)
+		return nil, fmt.Errorf("gateway: auth: unmarshal operator document: %w", constants.ErrResponseParseFailed)
 	}
 
 	// [PIVOT] Reject terminated identities (Plan §4.6)
 	// We allow OFFLINE and STALE statuses to authenticate (to support bootstrap
 	// and recovery), but TERMINATED is a hard-gate rejection.
 	if op.Status == constants.OperatorStatusTerminated {
-		return nil, &AuthError{Message: "operator identity disabled", Status: http.StatusUnauthorized}
+		return nil, &AuthError{Message: constants.ErrOperatorIdentityDisabled.Error(), Status: http.StatusUnauthorized}
 	}
 
 	// Enforce session expiry (TTL)
@@ -273,7 +273,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 	sessionTTL := 24 * time.Hour
 	// We use the Document store's authoritative CreatedAt for TTL enforcement.
 	if !docs[0].CreatedAt.IsZero() && time.Since(docs[0].CreatedAt) > sessionTTL {
-		return nil, &AuthError{Message: "operator session expired", Status: http.StatusUnauthorized}
+		return nil, &AuthError{Message: constants.ErrOperatorSessionExpired.Error(), Status: http.StatusUnauthorized}
 	}
 
 	// Check if the linked user is active (plan §4.6)
@@ -286,7 +286,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 			var err error
 			user, err = s.userSvc.GetByID(op.UserID)
 			if err != nil {
-				return nil, fmt.Errorf("auth: load user %s: %w", op.UserID, constants.ErrUserNotFound)
+				return nil, fmt.Errorf("gateway: auth: load user %s: %w", op.UserID, constants.ErrUserNotFound)
 			}
 			if user != nil {
 				s.cacheUser(op.UserID, user)
@@ -294,7 +294,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 		}
 		if user != nil && !user.IsActive() {
 			// Return structured error for disabled users
-			return nil, &AuthError{Message: "identity disabled", Reason: constants.AuthErrorReasonIdentityDisabled, Status: http.StatusForbidden}
+			return nil, &AuthError{Message: constants.ErrIdentityDisabled.Error(), Reason: constants.AuthErrorReasonIdentityDisabled, Status: http.StatusForbidden}
 		}
 	}
 
@@ -353,16 +353,16 @@ func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// [PIVOT] Enforce mTLS for all routes (Phase 6)
 		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-			s.logger.Warn("mTLS required but no client certificate provided", "path", r.URL.Path)
-			s.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate required")
+			s.logger.Warn("gateway: auth: mTLS required but no client certificate provided", "path", r.URL.Path)
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRequired.Error())
 			return
 		}
 
 		// [PIVOT] Verify certificate revocation status (Phase 6)
 		if s.pki != nil {
 			if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
-				s.logger.Warn("auth: mTLS certificate revoked", "path", r.URL.Path, string(constants.ConnectionStateError), fmt.Errorf("auth: verify certificate: %w", constants.ErrCertParseFailed))
-				s.responder.Error(w, http.StatusUnauthorized, "mTLS client certificate revoked or invalid")
+				s.logger.Warn("gateway: auth: mTLS certificate revoked", "path", r.URL.Path, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: verify certificate: %w", constants.ErrCertParseFailed))
+				s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRevoked.Error())
 				return
 			}
 		}
@@ -399,7 +399,7 @@ func (s *AuthService) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		s.responder.Error(w, http.StatusUnauthorized, "protocol authentication required")
+		s.responder.Error(w, http.StatusUnauthorized, constants.ErrProtocolAuthRequired.Error())
 	})
 }
 
@@ -422,14 +422,14 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 				var err error
 				match, err = s.cliCertBoundToOperator(cert.URIs, cliSessionID, op.UserID, operatorSessionID)
 				if err != nil {
-					s.logger.Error("auth: CLI cert binding check failed", "operator_session_id", operatorSessionID, "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
-					s.responder.Error(w, http.StatusInternalServerError, "CLI cert binding check failed")
+					s.logger.Error("gateway: auth: CLI cert binding check failed", "operator_session_id", operatorSessionID, "cli_session_id", cliSessionID, string(constants.ConnectionStateError), err)
+					s.responder.Error(w, http.StatusInternalServerError, constants.ErrCLICertBindingCheckFailed.Error())
 					return true
 				}
 			}
 			if !match {
-				s.logger.Warn("mTLS URI SAN mismatch for Operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
-				s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
+				s.logger.Warn("gateway: auth: mTLS URI SAN mismatch for Operator session", "path", r.URL.Path, "operator_id", op.ID, "operator_session_id", operatorSessionID)
+				s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 				return true
 			}
 		}
@@ -443,7 +443,7 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 		return true
 	}
 
-	s.logger.Warn("Invalid Operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
+	s.logger.Warn("gateway: auth: Invalid Operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
 
 	if ae, ok := err.(*AuthError); ok {
 		s.responder.Error(w, ae.Status, ae.Message)
@@ -460,32 +460,32 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 
 		cliDoc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 		if err != nil {
-			s.logger.Error("auth: load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: load CLI session %s: %w", cliSessionID, constants.ErrNotFound))
-			s.responder.Error(w, http.StatusInternalServerError, "failed to load session")
+			s.logger.Error("gateway: auth: load CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load CLI session %s: %w", cliSessionID, constants.ErrNotFound))
+			s.responder.Error(w, http.StatusInternalServerError, constants.ErrSessionLoadFailed.Error())
 			return true
 		}
 		if cliDoc == nil {
-			s.logger.Warn("auth: CLI session not found", "cli_session_id", cliSessionID)
-			s.responder.Error(w, http.StatusUnauthorized, "invalid CLI session")
+			s.logger.Warn("gateway: auth: CLI session not found", "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrCLISessionInvalid.Error())
 			return true
 		}
 
 		var cliSession models.CLISession
 		b, err := json.Marshal(cliDoc.Data)
 		if err != nil {
-			s.logger.Error("auth: marshal CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: marshal CLI session %s: %w", cliSessionID, constants.ErrRequestMarshalFailed))
-			s.responder.Error(w, http.StatusInternalServerError, "failed to parse session")
+			s.logger.Error("gateway: auth: marshal CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: marshal CLI session %s: %w", cliSessionID, constants.ErrRequestMarshalFailed))
+			s.responder.Error(w, http.StatusInternalServerError, constants.ErrSessionParseFailed.Error())
 			return true
 		}
 		if err := json.Unmarshal(b, &cliSession); err != nil {
-			s.logger.Error("auth: unmarshal CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: unmarshal CLI session %s: %w", cliSessionID, constants.ErrResponseParseFailed))
-			s.responder.Error(w, http.StatusInternalServerError, "failed to parse session")
+			s.logger.Error("gateway: auth: unmarshal CLI session", "cli_session_id", cliSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: unmarshal CLI session %s: %w", cliSessionID, constants.ErrResponseParseFailed))
+			s.responder.Error(w, http.StatusInternalServerError, constants.ErrSessionParseFailed.Error())
 			return true
 		}
 
 		if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
-			s.logger.Warn("auth: CLI session expired", "cli_session_id", cliSessionID)
-			s.responder.Error(w, http.StatusUnauthorized, "CLI session expired")
+			s.logger.Warn("gateway: auth: CLI session expired", "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrCLISessionExpired.Error())
 			return true
 		}
 
@@ -496,8 +496,8 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				var err error
 				user, err = s.userSvc.GetByID(cliSession.UserID)
 				if err != nil {
-					s.logger.Error("auth: load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for CLI session: %w", cliSession.UserID, constants.ErrUserNotFound))
-					s.responder.Error(w, http.StatusInternalServerError, "identity validation failed")
+					s.logger.Error("gateway: auth: load user for CLI session", "user_id", cliSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load user %s for CLI session: %w", cliSession.UserID, constants.ErrUserNotFound))
+					s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
 					return true
 				}
 				if user != nil {
@@ -505,8 +505,8 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 				}
 			}
 			if user != nil && !user.IsActive() {
-				s.logger.Warn("auth: CLI session identity disabled", "user_id", cliSession.UserID)
-				s.responder.Error(w, http.StatusForbidden, "identity disabled")
+				s.logger.Warn("gateway: auth: CLI session identity disabled", "user_id", cliSession.UserID)
+				s.responder.Error(w, http.StatusForbidden, constants.ErrIdentityDisabled.Error())
 				return true
 			}
 		}
@@ -519,8 +519,8 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			}
 		}
 		if !match {
-			s.logger.Warn("auth: mTLS URI SAN mismatch for CLI session", "path", r.URL.Path, "cli_session_id", cliSessionID)
-			s.responder.Error(w, http.StatusForbidden, "mTLS identity mismatch")
+			s.logger.Warn("gateway: auth: mTLS URI SAN mismatch for CLI session", "path", r.URL.Path, "cli_session_id", cliSessionID)
+			s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 			return true
 		}
 		// Stamp context with user_id and optional operator session info (for MCP proxying)
@@ -548,26 +548,26 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 				appID := uriStr
 				doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionAppPolicies), appID)
 				if err != nil || doc == nil {
-					s.logger.Warn("auth: app policy not found", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("auth: load app policy %s: %w", appID, constants.ErrNotFound))
-					s.responder.Error(w, http.StatusForbidden, "app policy not found")
+					s.logger.Warn("gateway: auth: app policy not found", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load app policy %s: %w", appID, constants.ErrNotFound))
+					s.responder.Error(w, http.StatusForbidden, constants.ErrAppPolicyNotFound.Error())
 					return true
 				}
 
 				var policy models.AppPolicy
 				data, err := json.Marshal(doc.Data)
 				if err != nil {
-					s.logger.Error("auth: marshal app policy", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("auth: marshal app policy %s: %w", appID, constants.ErrRequestMarshalFailed))
-					s.responder.Error(w, http.StatusInternalServerError, "invalid app policy")
+					s.logger.Error("gateway: auth: marshal app policy", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: marshal app policy %s: %w", appID, constants.ErrRequestMarshalFailed))
+					s.responder.Error(w, http.StatusInternalServerError, constants.ErrInvalidAppPolicy.Error())
 					return true
 				}
 				if err := json.Unmarshal(data, &policy); err != nil {
-					s.logger.Error("auth: unmarshal app policy", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("auth: unmarshal app policy %s: %w", appID, constants.ErrResponseParseFailed))
-					s.responder.Error(w, http.StatusInternalServerError, "invalid app policy")
+					s.logger.Error("gateway: auth: unmarshal app policy", "app_id", appID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: unmarshal app policy %s: %w", appID, constants.ErrResponseParseFailed))
+					s.responder.Error(w, http.StatusInternalServerError, constants.ErrInvalidAppPolicy.Error())
 					return true
 				}
 
-				if strings.HasPrefix(r.URL.Path, "/_query") || strings.HasPrefix(r.URL.Path, constants.APIPaths.GovernanceEnvelopes) {
-					s.responder.Error(w, http.StatusForbidden, "external apps cannot access privileged endpoints")
+				if strings.HasPrefix(r.URL.Path, constants.APIPaths.QueryPrefix) || strings.HasPrefix(r.URL.Path, constants.APIPaths.GovernanceEnvelopes) {
+					s.responder.Error(w, http.StatusForbidden, constants.ErrPrivilegedEndpointAccess.Error())
 					return true
 				}
 
@@ -624,7 +624,7 @@ func (s *AuthService) enforceAppPolicy(r *http.Request, policy *models.AppPolicy
 	if policy.RateLimitRPS > 0 {
 		limiter := s.getLimiter(appID, policy.RateLimitRPS)
 		if !limiter.Allow() {
-			s.logger.Warn("auth: app rate limit exceeded", "app_id", appID, "rate_limit_rps", policy.RateLimitRPS, "path", r.URL.Path)
+			s.logger.Warn("gateway: auth: app rate limit exceeded", "app_id", appID, "rate_limit_rps", policy.RateLimitRPS, "path", r.URL.Path)
 			return &AuthError{Message: fmt.Sprintf("rate limit exceeded (%d RPS)", policy.RateLimitRPS), Reason: constants.AuthErrorReasonRateLimitExceeded, Status: http.StatusTooManyRequests}
 		}
 	}
@@ -637,7 +637,7 @@ func (s *AuthService) enforceAppPolicy(r *http.Request, policy *models.AppPolicy
 	}
 
 	// Check collection access for /_query paths (already blocked, but for future-proofing)
-	if strings.HasPrefix(r.URL.Path, "/_query") {
+	if strings.HasPrefix(r.URL.Path, constants.APIPaths.QueryPrefix) {
 		// Extract collection from query parameters
 		collection := r.URL.Query().Get("collection")
 		if collection != "" && len(policy.AllowedCollections) > 0 {
@@ -683,7 +683,7 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	}
 	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID)
 	if err != nil {
-		return false, fmt.Errorf("auth: load CLI session %s for cert binding: %w", cliSessionID, constants.ErrNotFound)
+		return false, fmt.Errorf("gateway: auth: load CLI session %s for cert binding: %w", cliSessionID, constants.ErrNotFound)
 	}
 	if doc == nil {
 		return false, nil
@@ -691,10 +691,10 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	var cliSession models.CLISession
 	b, err := json.Marshal(doc.Data)
 	if err != nil {
-		return false, fmt.Errorf("auth: marshal CLI session %s for cert binding: %w", cliSessionID, constants.ErrRequestMarshalFailed)
+		return false, fmt.Errorf("gateway: auth: marshal CLI session %s for cert binding: %w", cliSessionID, constants.ErrRequestMarshalFailed)
 	}
 	if err := json.Unmarshal(b, &cliSession); err != nil {
-		return false, fmt.Errorf("auth: unmarshal CLI session %s for cert binding: %w", cliSessionID, constants.ErrResponseParseFailed)
+		return false, fmt.Errorf("gateway: auth: unmarshal CLI session %s for cert binding: %w", cliSessionID, constants.ErrResponseParseFailed)
 	}
 	if !cliSession.ExpiresAt.IsZero() && cliSession.ExpiresAt.Before(time.Now()) {
 		return false, nil
@@ -715,25 +715,25 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("g8e_session")
 		if err != nil || cookie == nil {
-			s.responder.Error(w, http.StatusUnauthorized, "web session cookie required")
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionCookieRequired.Error())
 			return
 		}
 
 		webSessionID := cookie.Value
 		if webSessionID == "" {
-			s.responder.Error(w, http.StatusUnauthorized, "invalid web session cookie")
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionCookieInvalid.Error())
 			return
 		}
 
 		// Validate web session
 		doc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 		if err != nil {
-			s.logger.Error("auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: load web session %s: %w", webSessionID, constants.ErrNotFound))
-			s.responder.Error(w, http.StatusUnauthorized, "web session validation failed")
+			s.logger.Error("gateway: auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load web session %s: %w", webSessionID, constants.ErrNotFound))
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionValidationFailed.Error())
 			return
 		}
 		if doc == nil {
-			s.responder.Error(w, http.StatusUnauthorized, "web session not found")
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionNotFound.Error())
 			return
 		}
 
@@ -741,18 +741,18 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 		var webSession models.WebSession
 		data, err := json.Marshal(doc.Data)
 		if err != nil {
-			s.logger.Error("auth: marshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: marshal web session %s: %w", webSessionID, constants.ErrRequestMarshalFailed))
-			s.responder.Error(w, http.StatusUnauthorized, "web session parse failed")
+			s.logger.Error("gateway: auth: marshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: marshal web session %s: %w", webSessionID, constants.ErrRequestMarshalFailed))
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrSessionParseFailed.Error())
 			return
 		}
 		if err := json.Unmarshal(data, &webSession); err != nil {
-			s.logger.Error("auth: unmarshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("auth: unmarshal web session %s: %w", webSessionID, constants.ErrResponseParseFailed))
-			s.responder.Error(w, http.StatusUnauthorized, "web session parse failed")
+			s.logger.Error("gateway: auth: unmarshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: unmarshal web session %s: %w", webSessionID, constants.ErrResponseParseFailed))
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrSessionParseFailed.Error())
 			return
 		}
 
 		if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
-			s.responder.Error(w, http.StatusUnauthorized, "web session expired")
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionExpired.Error())
 			return
 		}
 
@@ -764,8 +764,8 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 				var err error
 				user, err = s.userSvc.GetByID(webSession.UserID)
 				if err != nil {
-					s.logger.Error("auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("auth: load user %s for web session: %w", webSession.UserID, constants.ErrUserNotFound))
-					s.responder.Error(w, http.StatusUnauthorized, "user validation failed")
+					s.logger.Error("gateway: auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load user %s for web session: %w", webSession.UserID, constants.ErrUserNotFound))
+					s.responder.Error(w, http.StatusUnauthorized, constants.ErrIdentityValidationFailed.Error())
 					return
 				}
 				if user != nil {
@@ -773,7 +773,7 @@ func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) 
 				}
 			}
 			if user != nil && !user.IsActive() {
-				s.responder.Error(w, http.StatusUnauthorized, "identity disabled")
+				s.responder.Error(w, http.StatusUnauthorized, constants.ErrIdentityDisabled.Error())
 				return
 			}
 		}
@@ -795,31 +795,31 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.jwks == nil {
 			s.logger.Warn("JWT authentication requested but JWKS provider not configured")
-			s.responder.Error(w, http.StatusServiceUnavailable, "JWT authentication not configured")
+			s.responder.Error(w, http.StatusServiceUnavailable, constants.ErrJWTAuthNotConfigured.Error())
 			return
 		}
 
 		authHeader := r.Header.Get(constants.HeaderAuthorization)
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			s.responder.Error(w, http.StatusUnauthorized, "missing JWT bearer token")
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrJWTSignatureMissing.Error())
 			return
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == "" {
-			s.responder.Error(w, http.StatusUnauthorized, "missing JWT token")
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrJWTTokenMissing.Error())
 			return
 		}
 
 		jwt, err := ParseAndVerifyJWT(r.Context(), tokenString, s.jwks, s.jwtRole, s.jwtIssuer, s.jwtAudience)
 		if err != nil {
-			s.logger.Warn("auth: JWT validation failed", string(constants.ConnectionStateError), fmt.Errorf("auth: verify JWT: %w", constants.ErrFailedToLoadCredentials))
-			s.responder.Error(w, http.StatusUnauthorized, "invalid JWT token")
+			s.logger.Warn("gateway: auth: JWT validation failed", string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: verify JWT: %w", constants.ErrFailedToLoadCredentials))
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrJWTInvalidToken.Error())
 			return
 		}
 
 		if jwt.Claims.Sub == "" {
-			s.responder.Error(w, http.StatusUnauthorized, "JWT missing subject claim")
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrJWTSessionSubjectMissing.Error())
 			return
 		}
 
@@ -830,8 +830,8 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 			var err error
 			user, err = s.userSvc.GetBySub(jwt.Claims.Sub)
 			if err != nil {
-				s.logger.Error("auth: JIT user lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("auth: lookup user by sub %s: %w", jwt.Claims.Sub, constants.ErrUserNotFound))
-				s.responder.Error(w, http.StatusInternalServerError, "user lookup failed")
+				s.logger.Error("gateway: auth: JIT user lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: lookup user by sub %s: %w", jwt.Claims.Sub, constants.ErrUserNotFound))
+				s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
 				return
 			}
 			if user != nil {
@@ -842,19 +842,19 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 			// User doesn't exist, check for an active invitation
 			invitation, err := s.userSvc.FindActiveInvitationBySub(jwt.Claims.Sub)
 			if err != nil {
-				s.logger.Error("auth: JIT invitation lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("auth: lookup invitation by sub %s: %w", jwt.Claims.Sub, constants.ErrNotFound))
-				s.responder.Error(w, http.StatusInternalServerError, "invitation lookup failed")
+				s.logger.Error("gateway: auth: JIT invitation lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: lookup invitation by sub %s: %w", jwt.Claims.Sub, constants.ErrNotFound))
+				s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
 				return
 			}
 			if invitation == nil {
-				s.logger.Warn("JIT provisioning rejected: no active invitation found", "sub", jwt.Claims.Sub)
-				s.responder.Error(w, http.StatusForbidden, "no active invitation found")
+				s.logger.Warn("gateway: auth: JIT provisioning rejected: no active invitation found", "sub", jwt.Claims.Sub)
+				s.responder.Error(w, http.StatusForbidden, constants.ErrJITProvisioningNoInvitation.Error())
 				return
 			}
 			user, err = s.userSvc.CreateUserFromInvitation(jwt.Claims.Sub, invitation)
 			if err != nil {
-				s.logger.Error("auth: JIT user creation failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("auth: create user from invitation: %w", constants.ErrInternal))
-				s.responder.Error(w, http.StatusInternalServerError, "user creation failed")
+				s.logger.Error("gateway: auth: JIT user creation failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: create user from invitation: %w", constants.ErrInternal))
+				s.responder.Error(w, http.StatusInternalServerError, constants.ErrUserCreationFailed.Error())
 				return
 			}
 			// Cache the newly created user
@@ -862,14 +862,14 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		if !user.IsActive() {
-			s.responder.Error(w, http.StatusForbidden, "identity disabled")
+			s.responder.Error(w, http.StatusForbidden, constants.ErrIdentityDisabled.Error())
 			return
 		}
 
 		// Persona Mapping: map JWT roles to binding persona
 		bindingPersona, err := s.personaSvc.MapRolesToPersona(jwt.Roles)
 		if err != nil {
-			s.logger.Warn("auth: map roles to persona failed, using default", "state", string(constants.ConnectionStateError), "error", err)
+			s.logger.Warn("gateway: auth: map roles to persona failed, using default", "state", string(constants.ConnectionStateError), "error", err)
 			bindingPersona = "default"
 		}
 
@@ -884,7 +884,7 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, constants.ContextKeyTenantID, tenantID)
 		ctx = context.WithValue(ctx, constants.ContextKeyBindingPersona, bindingPersona)
 
-		s.logger.Debug("JWT authentication successful", "user_id", user.ID, "tenant_id", tenantID, "persona", bindingPersona)
+		s.logger.Debug("gateway: auth: JWT authentication successful", "user_id", user.ID, "tenant_id", tenantID, "persona", bindingPersona)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

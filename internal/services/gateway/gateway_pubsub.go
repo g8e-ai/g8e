@@ -460,14 +460,14 @@ func extractMTLSIdentity(r *http.Request) (string, string) {
 func verifyChannelACL(channel, operatorID, identitySPIFFEID string) error {
 	if operatorID == "" {
 		// If no operator_id in cert, reject subscription
-		return fmt.Errorf("certificate missing Operator identity")
+		return constants.ErrPubSubCertificateMissingOperatorID
 	}
 
 	// Check if channel starts with the operator_id
 	// Format: results:<operator_id>:... or heartbeat:<operator_id>
 	parts := strings.Split(channel, ":")
 	if len(parts) < 2 {
-		return fmt.Errorf("invalid channel format")
+		return constants.ErrPubSubInvalidChannelFormat
 	}
 
 	// The second part should be the operator_id

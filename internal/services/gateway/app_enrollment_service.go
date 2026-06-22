@@ -71,13 +71,13 @@ type AppEnrollResponse struct {
 func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollResponse, error) {
 	// Validate request
 	if req.CSR == "" {
-		return &AppEnrollResponse{Success: false, Error: "csr_pem is required"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollCSRRequired.Error()}, nil
 	}
 	if req.AppName == "" {
-		return &AppEnrollResponse{Success: false, Error: "app_name is required"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollAppNameRequired.Error()}, nil
 	}
 	if req.AppType == "" {
-		return &AppEnrollResponse{Success: false, Error: "app_type is required"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollAppTypeRequired.Error()}, nil
 	}
 
 	// Validate app type
@@ -87,29 +87,29 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 		"custom":      true,
 	}
 	if !validAppTypes[req.AppType] {
-		return &AppEnrollResponse{Success: false, Error: "invalid app_type (must be mcp-client, a2a-gateway, or custom)"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollInvalidAppType.Error()}, nil
 	}
 
 	// Sanitize app name (alphanumeric, hyphens, underscores only)
 	sanitizedName := strings.Trim(req.AppName, " ")
 	if !isValidAppName(sanitizedName) {
-		return &AppEnrollResponse{Success: false, Error: "app_name must contain only alphanumeric characters, hyphens, and underscores"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollInvalidAppName.Error()}, nil
 	}
 
 	// Validate CSR format
 	block, _ := pem.Decode([]byte(req.CSR))
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {
-		return &AppEnrollResponse{Success: false, Error: "invalid CSR PEM format"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollInvalidCSRPEM.Error()}, nil
 	}
 
 	// Parse CSR to extract public key for L2 signer generation
 	csr, err := x509.ParseCertificateRequest(block.Bytes)
 	if err != nil {
-		return &AppEnrollResponse{Success: false, Error: "failed to parse CSR"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollParseCSR.Error()}, nil
 	}
 
 	if err := csr.CheckSignature(); err != nil {
-		return &AppEnrollResponse{Success: false, Error: "CSR signature check failed"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollCSRSignatureCheck.Error()}, nil
 	}
 
 	// Sign the CSR with the Operator intermediate CA
@@ -117,20 +117,20 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	certPEM, chainPEM, err := s.pki.SignCSR(req.CSR, "app", req.OrganizationID, sanitizedName, "", "", "")
 	if err != nil {
 		s.logger.Error("Failed to sign app CSR", "app_name", sanitizedName, "error", err)
-		return &AppEnrollResponse{Success: false, Error: "failed to sign certificate"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollSignCertificate.Error()}, nil
 	}
 
 	// Extract the actual appID from the signed certificate's URI SAN
 	certBlock, _ := pem.Decode([]byte(certPEM))
 	if certBlock == nil {
-		return &AppEnrollResponse{Success: false, Error: "failed to parse issued certificate"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollParseIssuedCert.Error()}, nil
 	}
 	parsedCert, err := x509.ParseCertificate(certBlock.Bytes)
 	if err != nil {
-		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("failed to parse issued certificate: %v", err)}, nil
+		return &AppEnrollResponse{Success: false, Error: fmt.Sprintf("%s: %v", constants.ErrAppEnrollParseIssuedCert.Error(), err)}, nil
 	}
 	if len(parsedCert.URIs) == 0 {
-		return &AppEnrollResponse{Success: false, Error: "issued certificate has no URI SAN"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollNoURISAN.Error()}, nil
 	}
 	appID := parsedCert.URIs[0].String()
 
@@ -148,11 +148,11 @@ func (s *AppEnrollmentService) EnrollApp(req AppEnrollRequest) (*AppEnrollRespon
 	data, err := json.Marshal(policy)
 	if err != nil {
 		s.logger.Error("Failed to marshal app policy", "app_id", appID, "error", err)
-		return &AppEnrollResponse{Success: false, Error: "failed to marshal app policy"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollMarshalAppPolicy.Error()}, nil
 	}
 	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionAppPolicies), appID, data); err != nil {
 		s.logger.Error("Failed to persist app policy", "app_id", appID, "error", err)
-		return &AppEnrollResponse{Success: false, Error: "failed to persist app policy"}, nil
+		return &AppEnrollResponse{Success: false, Error: constants.ErrAppEnrollPersistAppPolicy.Error()}, nil
 	}
 
 	// Fetch trust bundle

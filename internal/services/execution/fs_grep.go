@@ -24,7 +24,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+)
 
+import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/security"
@@ -67,7 +69,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 
 	// Resolve path
 	path := req.Path
-	if path == "" || path == "." {
+	if path == "" || path == constants.PathCurrentDir {
 		path = s.workDir
 	}
 

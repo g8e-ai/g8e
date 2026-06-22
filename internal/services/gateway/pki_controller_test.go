@@ -36,14 +36,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -77,7 +78,7 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
@@ -258,7 +259,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 			method: http.MethodGet,
 			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				pkiDir := c.pki.PKIDir()
-				rootPath := filepath.Join(pkiDir, "root", "root_ca.crt")
+				rootPath := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
 				err := os.WriteFile(rootPath, []byte("invalid pem data"), 0644)
 				require.NoError(t, err, "failed to write invalid PEM data")
 			},
@@ -664,7 +665,7 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	// Create binaries directory and a test binary
 	binaryDir := filepath.Join(c.pki.PKIDir(), constants.PkiSubdirBinaries)
 	require.NoError(t, os.MkdirAll(binaryDir, 0755))
-	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe")
+	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe") // Test-specific binary name, acceptable as test data
 	testNodeBinaryContent := []byte("test binary content")
 	require.NoError(t, os.WriteFile(testNodeBinaryPath, testNodeBinaryContent, 0644))
 

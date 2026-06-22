@@ -15,6 +15,8 @@
 // This includes WebAuthn/passkey constants, PKI leaf types, HTTP headers, and context keys.
 package constants
 
+import "time"
+
 // Passkey purpose constants define the intended use of a passkey credential.
 const (
 	// PasskeyPurposeRegister indicates the passkey is being created/registered.
@@ -185,4 +187,10 @@ const (
 	ContextKeyOperatorID ContextKey = "operator_id"
 	// ContextKeyOperatorSessionID stores the operator session ID in context.
 	ContextKeyOperatorSessionID ContextKey = "operator_session_id"
+)
+
+// Session constants
+const (
+	// WebSessionTTL defines the lifetime of a web session.
+	WebSessionTTL = 24 * time.Hour
 )

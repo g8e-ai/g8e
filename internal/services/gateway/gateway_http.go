@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/time/rate"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
@@ -28,7 +30,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	"golang.org/x/time/rate"
 )
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.

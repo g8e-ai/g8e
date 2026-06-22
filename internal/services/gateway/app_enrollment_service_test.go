@@ -79,7 +79,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "csr_pem is required",
+			wantError:   constants.ErrAppEnrollCSRRequired.Error(),
 		},
 		{
 			name: "reject enrollment with missing app name",
@@ -89,7 +89,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "app_name is required",
+			wantError:   constants.ErrAppEnrollAppNameRequired.Error(),
 		},
 		{
 			name: "reject enrollment with missing app type",
@@ -99,7 +99,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "app_type is required",
+			wantError:   constants.ErrAppEnrollAppTypeRequired.Error(),
 		},
 		{
 			name: "reject enrollment with invalid app type",
@@ -110,7 +110,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "invalid app_type",
+			wantError:   constants.ErrAppEnrollInvalidAppType.Error(),
 		},
 		{
 			name: "reject enrollment with invalid app name (special chars)",
@@ -121,7 +121,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "app_name must contain only alphanumeric characters",
+			wantError:   constants.ErrAppEnrollInvalidAppName.Error(),
 		},
 		{
 			name: "reject enrollment with invalid app name (spaces)",
@@ -132,7 +132,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "app_name must contain only alphanumeric characters",
+			wantError:   constants.ErrAppEnrollInvalidAppName.Error(),
 		},
 		{
 			name: "reject enrollment with invalid CSR PEM format",
@@ -143,7 +143,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "invalid CSR PEM format",
+			wantError:   constants.ErrAppEnrollInvalidCSRPEM.Error(),
 		},
 		{
 			name: "reject enrollment with malformed CSR",
@@ -154,7 +154,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 				OrganizationID: "test-org",
 			},
 			wantSuccess: false,
-			wantError:   "failed to parse CSR",
+			wantError:   constants.ErrAppEnrollParseCSR.Error(),
 		},
 	}
 
@@ -170,7 +170,7 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 			// If the test requires a CSR, generate it
 			if tt.req.CSR == "" && tt.wantSuccess {
 				tt.req.CSR = testutil.GenerateTestCSRP256(t, tt.req.AppName)
-			} else if tt.req.CSR == "" && !tt.wantSuccess && tt.wantError != "csr_pem is required" {
+			} else if tt.req.CSR == "" && !tt.wantSuccess && tt.wantError != constants.ErrAppEnrollCSRRequired.Error() {
 				// For negative tests that need a CSR to validate other fields
 				tt.req.CSR = testutil.GenerateTestCSRP256(t, tt.req.AppName)
 			}

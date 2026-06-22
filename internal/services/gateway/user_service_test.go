@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/user"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -35,9 +34,8 @@ import (
 func TestNewUserService(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	dbDir := t.TempDir()
-	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+	testPaths := testutil.NewTestPathsFromTemp(t)
+	db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -52,9 +50,8 @@ func TestUserService_CreateUser(t *testing.T) {
 	t.Run("Success - creates regular user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -79,9 +76,8 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 	t.Run("Success - creates bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -96,9 +92,8 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 	t.Run("Success - second bootstrap user fails", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -117,9 +112,8 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Success - disables user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -159,9 +153,8 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Success - idempotent when already disabled", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -189,9 +182,8 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Error - empty user_id", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -204,10 +196,8 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Error - user not found", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dataDir := t.TempDir()
-		secretsDir := t.TempDir()
-		vaultDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dataDir, secretsDir, vaultDir, logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -219,9 +209,8 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -248,9 +237,8 @@ func TestUserService_Disable(t *testing.T) {
 	t.Run("Error - GetByID failure when DB closed", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -279,7 +267,8 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - finds bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), t.TempDir(), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -299,7 +288,8 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 	t.Run("Success - returns nil when no bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		db, err := OpenCanonicalDBService(t.TempDir(), t.TempDir(), t.TempDir(), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 		userSvc := NewUserService(db, logger)
@@ -354,9 +344,8 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 	t.Run("False when no users exist", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -369,9 +358,8 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 	t.Run("True when user exists", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -387,9 +375,8 @@ func TestUserService_HasAnyUsers(t *testing.T) {
 	t.Run("Error - DocQuery failure", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -436,9 +423,8 @@ func TestPersonaService_CreatePersona(t *testing.T) {
 	t.Run("Success - creates persona", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -470,9 +456,8 @@ func TestPersonaService_GetByID(t *testing.T) {
 	t.Run("Success - retrieves existing persona", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -496,9 +481,8 @@ func TestPersonaService_GetByID(t *testing.T) {
 	t.Run("Success - returns nil for non-existent persona", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -516,9 +500,8 @@ func TestPersonaService_GetAll(t *testing.T) {
 	t.Run("Success - retrieves all personas", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -551,9 +534,8 @@ func TestPersonaService_GetAll(t *testing.T) {
 	t.Run("Success - returns empty list when no personas", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -571,9 +553,8 @@ func TestPersonaService_docToPersona(t *testing.T) {
 	t.Run("Success - converts valid doc to persona", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -602,9 +583,8 @@ func TestPersonaService_docToPersona(t *testing.T) {
 	t.Run("Error - handles malformed doc", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -627,9 +607,8 @@ func TestPersonaService_MapRolesToPersona(t *testing.T) {
 	t.Run("Success - maps role to matching persona", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -653,9 +632,8 @@ func TestPersonaService_MapRolesToPersona(t *testing.T) {
 	t.Run("Success - returns default when no roles", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -669,9 +647,8 @@ func TestPersonaService_MapRolesToPersona(t *testing.T) {
 	t.Run("Success - returns default when no match", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -685,9 +662,8 @@ func TestPersonaService_MapRolesToPersona(t *testing.T) {
 	t.Run("Success - returns default when persona load fails", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -708,9 +684,8 @@ func TestUserService_GetBySub(t *testing.T) {
 	t.Run("Success - retrieves user by sub", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -728,9 +703,8 @@ func TestUserService_GetBySub(t *testing.T) {
 	t.Run("Error - empty sub returns error", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -743,9 +717,8 @@ func TestUserService_GetBySub(t *testing.T) {
 	t.Run("Success - returns nil for non-existent sub", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -763,9 +736,8 @@ func TestUserService_CreateUserFromInvitation(t *testing.T) {
 	t.Run("Success - creates user from invitation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -795,9 +767,8 @@ func TestUserService_CreateUserFromInvitation(t *testing.T) {
 	t.Run("Error - empty sub returns error", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -821,9 +792,8 @@ func TestUserService_CreateUserFromInvitation(t *testing.T) {
 	t.Run("Error - nil invitation returns error", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -840,9 +810,8 @@ func TestUserService_UpdatePasskeyCredentials(t *testing.T) {
 	t.Run("Success - updates passkey credentials", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -875,9 +844,8 @@ func TestUserService_UpdatePasskeyCredentials(t *testing.T) {
 	t.Run("Error - DocUpdate failure", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -911,9 +879,8 @@ func TestUserService_DeleteUser(t *testing.T) {
 	t.Run("Success - deletes user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -934,9 +901,8 @@ func TestUserService_DeleteUser(t *testing.T) {
 	t.Run("Success - with auth cache invalidation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -961,9 +927,8 @@ func TestUserService_DeleteUser(t *testing.T) {
 	t.Run("Error - deleting non-existent user returns error", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -980,9 +945,8 @@ func TestUserService_docToUser(t *testing.T) {
 	t.Run("Success - converts valid doc to user", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1004,9 +968,8 @@ func TestUserService_docToUser(t *testing.T) {
 	t.Run("Error - handles malformed doc", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1029,9 +992,8 @@ func TestUserService_CreateInvitation(t *testing.T) {
 	t.Run("Success - creates invitation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1051,9 +1013,8 @@ func TestUserService_CreateInvitation(t *testing.T) {
 	t.Run("Success - creates invitation with default roles", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1068,9 +1029,8 @@ func TestUserService_CreateInvitation(t *testing.T) {
 	t.Run("Error - missing required fields", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1093,9 +1053,8 @@ func TestUserService_GetInvitationByID(t *testing.T) {
 	t.Run("Success - retrieves invitation by ID", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1114,9 +1073,8 @@ func TestUserService_GetInvitationByID(t *testing.T) {
 	t.Run("Success - returns nil for non-existent invitation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1134,9 +1092,8 @@ func TestUserService_FindActiveInvitationBySub(t *testing.T) {
 	t.Run("Success - finds active invitation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1155,9 +1112,8 @@ func TestUserService_FindActiveInvitationBySub(t *testing.T) {
 	t.Run("Success - returns nil for consumed invitation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1179,9 +1135,8 @@ func TestUserService_FindActiveInvitationBySub(t *testing.T) {
 	t.Run("Success - returns nil for expired invitation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1199,9 +1154,8 @@ func TestUserService_FindActiveInvitationBySub(t *testing.T) {
 	t.Run("Success - returns nil when no invitation exists", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1215,9 +1169,8 @@ func TestUserService_FindActiveInvitationBySub(t *testing.T) {
 	t.Run("Error - empty sub returns error", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1234,9 +1187,8 @@ func TestUserService_ConsumeInvitation(t *testing.T) {
 	t.Run("Success - consumes invitation", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -1260,9 +1212,8 @@ func TestUserService_ConsumeInvitation(t *testing.T) {
 	t.Run("Error - consuming non-existent invitation returns error", func(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
-		dbDir := t.TempDir()
-		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+		testPaths := testutil.NewTestPathsFromTemp(t)
+		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 

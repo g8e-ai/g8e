@@ -34,7 +34,6 @@ import (
 
 const (
 	passkeyChallengeTTL = 5 * time.Minute
-	webSessionTTL       = 24 * time.Hour
 	challengeBytes      = 32
 )
 

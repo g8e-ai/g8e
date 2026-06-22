@@ -223,7 +223,7 @@ func isCloudCLICommand(command string, args []string) (bool, string) {
 	}
 
 	// Check if cloud CLI is invoked via shell (e.g., sh -c "aws s3 ls")
-	if (command == "sh" || command == "/bin/sh" || command == "bash" || command == "/bin/bash") && len(args) >= 2 && args[0] == "-c" {
+	if (command == "sh" || command == constants.PathBinSh || command == "bash" || command == constants.PathBinBash) && len(args) >= 2 && args[0] == "-c" {
 		shellCmd := strings.Join(args[1:], " ")
 		for cloudCmd := range cloudCLICommands {
 			// Check if cloud command appears at start or after common prefixes
@@ -374,12 +374,12 @@ func (es *ExecutionService) ExecuteCommand(ctx context.Context, request *models.
 
 	// Create output preview for logging
 	stdoutPreview := result.Stdout
-	if len(stdoutPreview) > 300 {
-		stdoutPreview = stdoutPreview[:300] + "..."
+	if len(stdoutPreview) > constants.ExecutionPreviewLength {
+		stdoutPreview = stdoutPreview[:constants.ExecutionPreviewLength] + "..."
 	}
 	stderrPreview := result.Stderr
-	if len(stderrPreview) > 300 {
-		stderrPreview = stderrPreview[:300] + "..."
+	if len(stderrPreview) > constants.ExecutionPreviewLength {
+		stderrPreview = stderrPreview[:constants.ExecutionPreviewLength] + "..."
 	}
 
 	es.logger.Debug("Command execution completed",
@@ -407,8 +407,8 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	// Check if command is already a shell with -c flag to avoid double-wrapping
 	// e.g., Command="sh", Args=["-c", "echo $VAR"] should become just "echo $VAR"
 	// not "sh -c echo $VAR" which would then be wrapped again as /bin/sh -c "sh -c echo $VAR"
-	isShellCommand := request.Command == "sh" || request.Command == "/bin/sh" ||
-		request.Command == "bash" || request.Command == "/bin/bash"
+	isShellCommand := request.Command == "sh" || request.Command == constants.PathBinSh ||
+		request.Command == "bash" || request.Command == constants.PathBinBash
 
 	switch {
 	case isShellCommand && len(request.Args) >= 2 && request.Args[0] == "-c":
@@ -538,7 +538,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	var stdoutBuf, stderrBuf bytes.Buffer
 
 	// Default max output size is 10MB per stream to prevent OOM
-	maxStreamSize := 10 * 1024 * 1024
+	maxStreamSize := constants.ExecutionMaxStreamSize
 
 	// Create streaming writers that log output in real-time
 	stdoutWriter := newStreamingWriter(&stdoutBuf, es.logger, "stdout", request.ExecutionID, maxStreamSize)
@@ -611,7 +611,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT
-			result.ErrorMessage = "Command execution timed out"
+			result.ErrorMessage = constants.ErrMessageExecutionTimeout
 			result.ErrorType = "timeout"
 			result.ReturnCode = constants.ExitCodeTimeout
 		} else if exitError, ok := err.(*exec.ExitError); ok {
@@ -632,14 +632,14 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 					strings.Contains(stderrLower, "cannot execute")):
 					// Actual permission denied error from shell
 					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-					result.ErrorMessage = "Permission denied: command is not executable"
+					result.ErrorMessage = constants.ErrMessagePermissionDenied
 					result.ErrorType = "permission_denied"
 				case exitCode == 127 && (strings.Contains(stderrLower, "not found") ||
 					strings.Contains(stderrLower, "no such file") ||
 					strings.Contains(stderrLower, "command not found")):
 					// Actual command not found error from shell
 					result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-					result.ErrorMessage = "Command not found"
+					result.ErrorMessage = constants.ErrMessageCommandNotFound
 					result.ErrorType = "command_not_found"
 				default:
 					// All other non-zero exit codes (including deliberate exit 126/127) are normal completion
@@ -653,7 +653,7 @@ func (es *ExecutionService) executeCommandInternal(ctx context.Context, execCtx 
 		} else if errors.Is(err, constants.ErrProcessKilled) {
 			// Process was killed (by us on timeout/cancel, or externally)
 			result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-			result.ErrorMessage = "Command was terminated"
+			result.ErrorMessage = constants.ErrMessageCommandTerminated
 			result.ErrorType = string(constants.CommandExitStatusKilled)
 			result.ReturnCode = constants.ExitCodeKilled
 		} else {
@@ -688,7 +688,7 @@ func (es *ExecutionService) getShellPath() string {
 
 	if runtime.GOOS != "windows" {
 		// On Unix-like systems, try absolute paths first
-		for _, s := range []string{"/bin/bash", "/usr/bin/bash", "/bin/sh", "/usr/bin/sh"} {
+		for _, s := range []string{constants.PathBinBash, constants.PathUsrBinBash, constants.PathBinSh, constants.PathUsrBinSh} {
 			if _, err := os.Stat(s); err == nil {
 				return s
 			}
@@ -705,11 +705,11 @@ func (es *ExecutionService) getShellPath() string {
 	// On Windows, also try common Git Bash installation paths
 	if runtime.GOOS == "windows" {
 		commonPaths := []string{
-			"C:\\Program Files\\Git\\bin\\bash.exe",
-			"C:\\Program Files\\Git\\usr\\bin\\bash.exe",
-			"C:\\Program Files\\Git\\bin\\sh.exe",
-			"C:\\msys64\\usr\\bin\\bash.exe",
-			"C:\\cygwin64\\bin\\bash.exe",
+			constants.PathWindowsGitBinBash,
+			constants.PathWindowsGitUsrBinBash,
+			constants.PathWindowsGitBinSh,
+			constants.PathWindowsMsys64Bash,
+			constants.PathWindowsCygwin64Bash,
 		}
 		for _, path := range commonPaths {
 			if _, err := os.Stat(path); err == nil {
@@ -722,7 +722,7 @@ func (es *ExecutionService) getShellPath() string {
 	}
 
 	// Unix fallback
-	return "/bin/sh"
+	return constants.PathBinSh
 }
 
 // createTerminalOutput creates terminal-formatted output for UI interfaces
@@ -755,7 +755,7 @@ func (es *ExecutionService) createTerminalOutput(command string, args []string, 
 	}
 
 	// Get last 50 lines for UI
-	const maxLines = 50
+	const maxLines = constants.ExecutionMaxLines
 	allLines := make([]string, 0, len(stdoutLines)+len(stderrLines))
 	allLines = append(allLines, stdoutLines...)
 	allLines = append(allLines, stderrLines...)
@@ -939,7 +939,7 @@ func (es *ExecutionService) CancelExecution(requestID string) error {
 // Helper functions for system information
 
 func getLoadAverage() ([]float64, error) {
-	content, err := os.ReadFile("/proc/loadavg")
+	content, err := os.ReadFile(constants.PathProcLoadAvg)
 	if err != nil {
 		return nil, fmt.Errorf("execution: loadavg: read %s: %w", constants.PathProcLoadAvg, constants.ErrPathNotFound)
 	}

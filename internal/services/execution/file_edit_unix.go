@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
@@ -29,7 +30,7 @@ import (
 func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *models.FileStats) error {
 	stat, ok := fileInfo.Sys().(*syscall.Stat_t)
 	if !ok {
-		return fmt.Errorf("file_edit: collect ownership: failed to extract syscall.Stat_t from FileInfo")
+		return fmt.Errorf("file_edit: collect ownership: %w", constants.ErrFileOwnershipExtract)
 	}
 
 	uidStr := strconv.Itoa(int(stat.Uid))

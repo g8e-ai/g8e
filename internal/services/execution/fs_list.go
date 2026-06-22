@@ -66,7 +66,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 
 	// Resolve path - default to operator's working directory when none is specified
 	path := req.Path
-	if path == "" || path == "." {
+	if path == "" || path == constants.PathCurrentDir {
 		path = s.workDir
 	}
 

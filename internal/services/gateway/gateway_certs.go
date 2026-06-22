@@ -34,7 +34,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/protocol"
 )
 
@@ -50,6 +50,21 @@ const (
 	operatorCommonName    = "g8e Operator Intermediate CA"
 	gatewayPeerCommonName = "g8e Gateway Peer Intermediate CA"
 )
+
+// secretManagerInterface defines the methods PKIAuthority uses from SecretManager.
+type secretManagerInterface interface {
+	GetCAPrivateKey(caType string) ([]byte, error)
+	StoreCAPrivateKey(caType string, keyDER []byte) error
+	GetServicePrivateKey(serviceName string) ([]byte, error)
+	StoreServicePrivateKey(serviceName string, keyDER []byte) error
+}
+
+// docStoreInterface defines the methods PKIAuthority uses from the document store.
+type docStoreInterface interface {
+	DocSet(collection, id string, body []byte) error
+	DocGet(collection, id string) (*models.Document, error)
+	DocQuery(collection string, filter map[string]interface{}, sortField string, limit int) ([]*models.Document, error)
+}
 
 // revocationDocument represents a certificate revocation record.
 type revocationDocument struct {
@@ -71,7 +86,7 @@ type PKIAuthority struct {
 	db     *CanonicalDBService
 
 	pkiDir        string
-	secretManager *SecretManager
+	secretManager secretManagerInterface
 
 	// Precomputed directory paths (set once in newPKIAuthority)
 	rootDir        string
@@ -111,7 +126,7 @@ type PKIAuthority struct {
 	serviceCert tls.Certificate
 }
 
-func newPKIAuthority(dataDir, pkiDir string, db *CanonicalDBService, secretManager *SecretManager, logger *slog.Logger) *PKIAuthority {
+func newPKIAuthority(dataDir, pkiDir string, db *CanonicalDBService, secretManager secretManagerInterface, logger *slog.Logger) *PKIAuthority {
 	if pkiDir == "" {
 		pkiDir = filepath.Join(dataDir, constants.PkiDirname)
 	}
@@ -1197,8 +1212,7 @@ func (pki *PKIAuthority) RenewServiceCertWithNames(extraIPs []net.IP, extraDNSNa
 	}
 
 	// Load the newly generated certificate and key
-	chainPath := paths.Infra.GatewayChainPath
-	chainPEM, err := os.ReadFile(chainPath)
+	chainPEM, err := os.ReadFile(pki.serviceChainPath)
 	if err != nil {
 		return fmt.Errorf("%s: %w", constants.ErrPKILoadServiceCert, err)
 	}

@@ -56,6 +56,9 @@ const (
 	PathUsrSbin                                               = "/usr/sbin"
 	PathUsrLocalBin                                           = "/usr/local/bin"
 	PathUsrLocalSbin                                          = "/usr/local/sbin"
+	PathBinBash                                               = "/bin/bash"
+	PathUsrBinBash                                            = "/usr/bin/bash"
+	PathUsrBinSh                                              = "/usr/bin/sh"
 	PathLib                                                   = "/lib"
 	PathLib64                                                 = "/lib64"
 	PathUsrLib                                                = "/usr/lib"
@@ -108,6 +111,13 @@ const (
 	PathWindowsHostsFile            = "System32\\drivers\\etc\\hosts"
 	PathWindowsRegistryCryptography = "SOFTWARE\\Microsoft\\Cryptography"
 	PathWindowsRegistryMachineGuid  = "MachineGuid"
+
+	// Windows Git Bash paths
+	PathWindowsGitBinBash    = "C:\\Program Files\\Git\\bin\\bash.exe"
+	PathWindowsGitUsrBinBash = "C:\\Program Files\\Git\\usr\\bin\\bash.exe"
+	PathWindowsGitBinSh      = "C:\\Program Files\\Git\\bin\\sh.exe"
+	PathWindowsMsys64Bash    = "C:\\msys64\\usr\\bin\\bash.exe"
+	PathWindowsCygwin64Bash  = "C:\\cygwin64\\bin\\bash.exe"
 )
 
 // Environment variable constants
@@ -223,6 +233,7 @@ const (
 const (
 	ProjectRootFromTestDir    = "../../"
 	ProjectRootFromCurrentDir = "."
+	PathCurrentDir            = "."
 
 	// Directory names (single path segment, no separators)
 	RuntimeDirname        = ".g8e"
@@ -311,8 +322,9 @@ const (
 	TestDocsDirname     = "docs"
 
 	// Test-specific database filenames
-	TestLocalStateDBFilename = "local_state.db"
-	TestAuditVaultDBFilename = "audit_vault.db"
+	TestLocalStateDBFilename    = "local_state.db"
+	TestAuditVaultDBFilename    = "audit_vault.db"
+	TestSecretManagerDBFilename = "secret_manager_test.db"
 
 	// File system listing limits
 	FsListMaxDepth       = 3
@@ -336,6 +348,12 @@ const (
 	// SQLite file suffixes
 	SQLiteWALSuffix = "-wal"
 	SQLiteSHMSuffix = "-shm"
+
+	// Execution stream size limits
+	ExecutionMaxStreamSize = 10 * 1024 * 1024 // 10MB per stream
+	ExecutionMaxLines      = 50               // Max lines for terminal output preview
+	ExecutionPreviewLength = 300              // Max characters for log preview
+	FileEditMaxSize        = 50 * 1024 * 1024 // 50MB max file size for operations
 
 	// Reporting output directory and file names
 	ReportsDirname                 = "reports"
