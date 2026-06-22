@@ -839,26 +839,9 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 			}
 		}
 		if user == nil {
-			// User doesn't exist, check for an active invitation
-			invitation, err := s.userSvc.FindActiveInvitationBySub(jwt.Claims.Sub)
-			if err != nil {
-				s.logger.Error("gateway: auth: JIT invitation lookup failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: lookup invitation by sub %s: %w", jwt.Claims.Sub, constants.ErrNotFound))
-				s.responder.Error(w, http.StatusInternalServerError, constants.ErrIdentityValidationFailed.Error())
-				return
-			}
-			if invitation == nil {
-				s.logger.Warn("gateway: auth: JIT provisioning rejected: no active invitation found", "sub", jwt.Claims.Sub)
-				s.responder.Error(w, http.StatusForbidden, constants.ErrJITProvisioningNoInvitation.Error())
-				return
-			}
-			user, err = s.userSvc.CreateUserFromInvitation(jwt.Claims.Sub, invitation)
-			if err != nil {
-				s.logger.Error("gateway: auth: JIT user creation failed", "sub", jwt.Claims.Sub, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: create user from invitation: %w", constants.ErrInternal))
-				s.responder.Error(w, http.StatusInternalServerError, constants.ErrUserCreationFailed.Error())
-				return
-			}
-			// Cache the newly created user
-			s.cacheUser(jwt.Claims.Sub, user)
+			s.logger.Warn("gateway: auth: user not found and JIT provisioning is disabled", "sub", jwt.Claims.Sub)
+			s.responder.Error(w, http.StatusForbidden, constants.ErrUserNotFound.Error())
+			return
 		}
 
 		if !user.IsActive() {

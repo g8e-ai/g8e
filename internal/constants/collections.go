@@ -29,7 +29,6 @@ const (
 	CollectionOperatorUsage         CollectionName = "operator_usage"
 	CollectionCases                 CollectionName = "cases"
 	CollectionInvestigations        CollectionName = "investigations"
-	CollectionInvitations           CollectionName = "invitations"
 	CollectionTasks                 CollectionName = "tasks"
 	CollectionMemories              CollectionName = "memories"
 	CollectionSettings              CollectionName = "settings"

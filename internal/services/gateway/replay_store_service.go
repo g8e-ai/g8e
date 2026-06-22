@@ -19,18 +19,47 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
+// replayStoreDB defines the database operations required by ReplayStoreService.
+// This interface enables dependency injection for Tier 1 unit testing.
+type replayStoreDB interface {
+	QueryRowWithRetry(query string, args ...any) rowScanner
+	ExecWithRetry(query string, args ...any) (sql.Result, error)
+}
+
+// rowScanner is an interface that matches the Scan method of sql.Row
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+// dbAdapter wraps *sqliteutil.DB to implement replayStoreDB interface
+type dbAdapter struct {
+	*sqliteutil.DB
+}
+
+func (a *dbAdapter) QueryRowWithRetry(query string, args ...any) rowScanner {
+	return a.DB.QueryRowWithRetry(query, args...)
+}
+
 // ReplayStoreService provides nonce replay protection for gateway mode.
 type ReplayStoreService struct {
-	db     *sqliteutil.DB
+	db     replayStoreDB
 	logger *slog.Logger
 }
 
 // NewReplayStoreService creates a new replay store service.
 func NewReplayStoreService(db *sqliteutil.DB, logger *slog.Logger) *ReplayStoreService {
+	return &ReplayStoreService{
+		db:     &dbAdapter{DB: db},
+		logger: logger,
+	}
+}
+
+// newReplayStoreServiceWithDB creates a new replay store service with a custom DB implementation.
+// This is used for dependency injection in unit tests.
+func newReplayStoreServiceWithDB(db replayStoreDB, logger *slog.Logger) *ReplayStoreService {
 	return &ReplayStoreService{
 		db:     db,
 		logger: logger,
@@ -69,7 +98,7 @@ func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 func (s *ReplayStoreService) FinalizeNonce(nonce string) error {
 	_, err := s.db.ExecWithRetry("UPDATE nonces SET status = 'used' WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
-		return fmt.Errorf("finalize nonce: %w", constants.ErrSQLQueryFailed)
+		return fmt.Errorf("finalize nonce: %w", err)
 	}
 	return nil
 }
@@ -78,7 +107,7 @@ func (s *ReplayStoreService) FinalizeNonce(nonce string) error {
 func (s *ReplayStoreService) ReleaseNonce(nonce string) error {
 	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE nonce = ? AND status = 'reserved'", nonce)
 	if err != nil {
-		return fmt.Errorf("release nonce: %w", constants.ErrSQLQueryFailed)
+		return fmt.Errorf("release nonce: %w", err)
 	}
 	return nil
 }
@@ -93,7 +122,7 @@ func (s *ReplayStoreService) CleanupExpiredNonces() error {
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE expires_at < ?", now)
 	if err != nil {
-		return fmt.Errorf("cleanup expired nonces: %w", constants.ErrSQLQueryFailed)
+		return fmt.Errorf("cleanup expired nonces: %w", err)
 	}
 	return nil
 }

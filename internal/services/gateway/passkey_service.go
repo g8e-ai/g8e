@@ -37,20 +37,137 @@ const (
 	challengeBytes      = 32
 )
 
+// userStore defines the interface for user storage operations.
+type userStore interface {
+	GetUser(userID string) (*models.User, error)
+	UpdateUser(userID string, user *models.User) error
+}
+
+// sessionStore defines the interface for WebAuthn session storage.
+type sessionStore interface {
+	StoreSession(userID string, session *webauthn.SessionData) error
+	GetSession(userID string) (*webauthn.SessionData, error)
+}
+
+// webauthnClient defines the interface for WebAuthn operations.
+type webauthnClient interface {
+	BeginRegistration(user webauthn.User) (*protocol.CredentialCreation, *webauthn.SessionData, error)
+	FinishRegistration(user webauthn.User, session webauthn.SessionData, r *http.Request) (*webauthn.Credential, error)
+	BeginLogin(user webauthn.User) (*protocol.CredentialAssertion, *webauthn.SessionData, error)
+	FinishLogin(user webauthn.User, session webauthn.SessionData, r *http.Request) (*webauthn.Credential, error)
+	ValidateLogin(user webauthn.User, session webauthn.SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, error)
+}
+
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
 type PasskeyService struct {
-	db       *CanonicalDBService
-	logger   *slog.Logger
-	rpID     string
-	rpName   string
-	webauthn *webauthn.WebAuthn
+	userStore    userStore
+	sessionStore sessionStore
+	webauthn     webauthnClient
+	logger       *slog.Logger
+	rpID         string
+	rpName       string
 }
 
 // PasskeyConfig holds configuration for passkey operations.
 type PasskeyConfig struct {
 	RpID   string
 	RpName string
+}
+
+// dbUserStore implements userStore using CanonicalDBService.
+type dbUserStore struct {
+	db *CanonicalDBService
+}
+
+func (s *dbUserStore) GetUser(userID string) (*models.User, error) {
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
+	if err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		return nil, nil
+	}
+
+	data, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal doc data: %w", err)
+	}
+
+	var user models.User
+	if err := json.Unmarshal(data, &user); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
+	}
+	user.ID = doc.ID
+	return &user, nil
+}
+
+func (s *dbUserStore) UpdateUser(userID string, user *models.User) error {
+	data, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("failed to marshal user: %w", err)
+	}
+	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
+	return err
+}
+
+// dbSessionStore implements sessionStore using CanonicalDBService.
+type dbSessionStore struct {
+	db *CanonicalDBService
+}
+
+func (s *dbSessionStore) StoreSession(userID string, session *webauthn.SessionData) error {
+	data, err := json.Marshal(session)
+	if err != nil {
+		return err
+	}
+	return s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
+}
+
+func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error) {
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+	if err != nil {
+		return nil, err
+	}
+	if doc == nil {
+		return nil, constants.ErrExpired
+	}
+
+	var session webauthn.SessionData
+	b, err := json.Marshal(doc.Data)
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &session); err != nil {
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+// realWebauthnClient implements webauthnClient using the actual webauthn library.
+type realWebauthnClient struct {
+	w *webauthn.WebAuthn
+}
+
+func (c *realWebauthnClient) BeginRegistration(user webauthn.User) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
+	return c.w.BeginRegistration(user)
+}
+
+func (c *realWebauthnClient) FinishRegistration(user webauthn.User, session webauthn.SessionData, r *http.Request) (*webauthn.Credential, error) {
+	return c.w.FinishRegistration(user, session, r)
+}
+
+func (c *realWebauthnClient) BeginLogin(user webauthn.User) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
+	return c.w.BeginLogin(user)
+}
+
+func (c *realWebauthnClient) FinishLogin(user webauthn.User, session webauthn.SessionData, r *http.Request) (*webauthn.Credential, error) {
+	return c.w.FinishLogin(user, session, r)
+}
+
+func (c *realWebauthnClient) ValidateLogin(user webauthn.User, session webauthn.SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, error) {
+	return c.w.ValidateLogin(user, session, parsedResponse)
 }
 
 // NewPasskeyService creates a new PasskeyService with the given configuration.
@@ -79,11 +196,12 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 	}
 
 	return &PasskeyService{
-		db:       db,
-		logger:   logger,
-		rpID:     cfg.RpID,
-		rpName:   rpName,
-		webauthn: w,
+		userStore:    &dbUserStore{db: db},
+		sessionStore: &dbSessionStore{db: db},
+		webauthn:     &realWebauthnClient{w: w},
+		logger:       logger,
+		rpID:         cfg.RpID,
+		rpName:       rpName,
 	}, nil
 }
 
@@ -143,7 +261,10 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 	}
 
 	// Reconstruct request with the response body
-	r, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	r, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
 	r.Header.Set("Content-Type", "application/json")
 
 	credential, err := s.webauthn.FinishRegistration(user, *session, r)
@@ -258,7 +379,10 @@ func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte
 	}
 
 	// Reconstruct request with the response body
-	r, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	r, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
 	r.Header.Set("Content-Type", "application/json")
 
 	credential, err := s.webauthn.FinishLogin(user, *session, r)
@@ -400,7 +524,10 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 		return false, fmt.Errorf("failed to marshal assertion response: %w", err)
 	}
 
-	req, _ := http.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %w", err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	parsedResponse, err := protocol.ParseCredentialRequestResponse(req)
 	if err != nil {
@@ -416,26 +543,7 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 }
 
 func (s *PasskeyService) getUser(userID string) (*models.User, error) {
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionUsers), userID)
-	if err != nil {
-		return nil, err
-	}
-	if doc == nil {
-		return nil, nil
-	}
-
-	// Re-serialize the document data map to JSON for unmarshaling into struct
-	data, err := json.Marshal(doc.Data)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal doc data: %w", err)
-	}
-
-	var user models.User
-	if err := json.Unmarshal(data, &user); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal user: %w", err)
-	}
-	user.ID = doc.ID
-	return &user, nil
+	return s.userStore.GetUser(userID)
 }
 
 func (s *PasskeyService) addCredential(userID string, cred models.PasskeyCredential) error {
@@ -466,39 +574,13 @@ func (s *PasskeyService) setCredentials(userID string, creds []models.PasskeyCre
 }
 
 func (s *PasskeyService) updateUser(userID string, user *models.User) error {
-	data, err := json.Marshal(user)
-	if err != nil {
-		return fmt.Errorf("failed to marshal user: %w", err)
-	}
-	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
-	return err
+	return s.userStore.UpdateUser(userID, user)
 }
 
 func (s *PasskeyService) storeWebAuthnSession(userID string, session *webauthn.SessionData) error {
-	data, err := json.Marshal(session)
-	if err != nil {
-		return err
-	}
-	return s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID, data)
+	return s.sessionStore.StoreSession(userID, session)
 }
 
 func (s *PasskeyService) getWebAuthnSession(userID string) (*webauthn.SessionData, error) {
-	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
-	if err != nil {
-		return nil, err
-	}
-	if doc == nil {
-		return nil, constants.ErrExpired
-	}
-
-	var session webauthn.SessionData
-	b, err := json.Marshal(doc.Data)
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(b, &session); err != nil {
-		return nil, err
-	}
-
-	return &session, nil
+	return s.sessionStore.GetSession(userID)
 }

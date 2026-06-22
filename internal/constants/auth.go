@@ -170,8 +170,6 @@ const (
 	AuthErrorReasonJWTInvalid AuthErrorReason = "jwt_invalid"
 	// AuthErrorReasonJWTMissingSubject indicates the JWT is missing the subject claim.
 	AuthErrorReasonJWTMissingSubject AuthErrorReason = "jwt_missing_subject"
-	// AuthErrorReasonNoInvitation indicates no active invitation was found for JIT provisioning.
-	AuthErrorReasonNoInvitation AuthErrorReason = "no_invitation"
 )
 
 const (

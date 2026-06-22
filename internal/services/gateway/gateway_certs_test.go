@@ -37,10 +37,10 @@ import (
 
 // mockSecretManager is a mock implementation of SecretManager for unit testing.
 type mockSecretManager struct {
-	getKeyFunc           func(caType string) ([]byte, error)
-	storeKeyFunc         func(caType string, keyDER []byte) error
-	getServiceKeyFunc    func(serviceName string) ([]byte, error)
-	storeServiceKeyFunc  func(serviceName string, keyDER []byte) error
+	getKeyFunc          func(caType string) ([]byte, error)
+	storeKeyFunc        func(caType string, keyDER []byte) error
+	getServiceKeyFunc   func(serviceName string) ([]byte, error)
+	storeServiceKeyFunc func(serviceName string, keyDER []byte) error
 }
 
 func (m *mockSecretManager) GetCAPrivateKey(caType string) ([]byte, error) {
@@ -667,8 +667,8 @@ func TestPKIAuthority_TLSConfig(t *testing.T) {
 		cert, _ := x509.ParseCertificate(certDER)
 
 		pki := &PKIAuthority{
-			logger:      logger,
-			rootCert:    cert,
+			logger:       logger,
+			rootCert:     cert,
 			operatorCert: cert,
 		}
 

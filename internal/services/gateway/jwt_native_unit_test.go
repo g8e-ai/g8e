@@ -31,8 +31,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// stubJWKSProvider is a stub JWKSProvider for Tier 1 unit tests (no HTTP calls)
-// It directly uses the JWKSProvider struct but pre-populates keys to avoid network calls
+// stubJWKSProvider is a stub JWKSProvider for Tier 1 unit tests (no HTTP calls).
+// It directly uses the JWKSProvider struct but pre-populates keys to avoid network calls.
 func stubJWKSProvider(keys map[string]*rsa.PublicKey) *JWKSProvider {
 	return &JWKSProvider{
 		keys:      keys,
@@ -42,6 +42,9 @@ func stubJWKSProvider(keys map[string]*rsa.PublicKey) *JWKSProvider {
 	}
 }
 
+// generateTestJWT creates a test JWT with the given private key, key ID, header, and claims.
+// This helper function is used for Tier 1 unit tests to generate valid JWT tokens
+// without requiring external dependencies.
 func generateTestJWT(t *testing.T, privKey *rsa.PrivateKey, kid string, header map[string]interface{}, claims map[string]interface{}) string {
 	t.Helper()
 	if header == nil {
@@ -127,6 +130,30 @@ func TestExtractRoles(t *testing.T) {
 			roleClaim: "roles",
 			expected:  []string{"read", "write", "admin", "superuser"},
 		},
+		{
+			name: "Wrong type (bool)",
+			payload: map[string]interface{}{
+				"roles": true,
+			},
+			roleClaim: "roles",
+			expected:  nil,
+		},
+		{
+			name: "Wrong type (object)",
+			payload: map[string]interface{}{
+				"roles": map[string]string{"key": "value"},
+			},
+			roleClaim: "roles",
+			expected:  nil,
+		},
+		{
+			name: "Null value",
+			payload: map[string]interface{}{
+				"roles": nil,
+			},
+			roleClaim: "roles",
+			expected:  nil,
+		},
 	}
 
 	for _, tt := range tests {
@@ -140,6 +167,11 @@ func TestExtractRoles(t *testing.T) {
 
 	t.Run("Invalid JSON", func(t *testing.T) {
 		actual := extractRoles([]byte("{invalid json}"), "roles")
+		assert.Nil(t, actual)
+	})
+
+	t.Run("Empty payload", func(t *testing.T) {
+		actual := extractRoles([]byte("{}"), "roles")
 		assert.Nil(t, actual)
 	})
 }
@@ -311,9 +343,9 @@ func TestParseAndVerifyJWT_Unit(t *testing.T) {
 
 	t.Run("Valid token with single role string", func(t *testing.T) {
 		claims := map[string]interface{}{
-			"sub":   "user789",
-			"exp":   time.Now().Add(time.Hour).Unix(),
-			"role":  "superuser",
+			"sub":  "user789",
+			"exp":  time.Now().Add(time.Hour).Unix(),
+			"role": "superuser",
 		}
 		token := generateTestJWT(t, privKey, kid, nil, claims)
 		jwt, err := ParseAndVerifyJWT(context.Background(), token, mockJWKS, "role", "", "")
@@ -330,6 +362,19 @@ func TestParseAndVerifyJWT_Unit(t *testing.T) {
 		jwt, err := ParseAndVerifyJWT(context.Background(), token, mockJWKS, "roles", "", "")
 		require.NoError(t, err)
 		assert.Nil(t, jwt.Roles)
+	})
+
+	t.Run("Empty token string", func(t *testing.T) {
+		_, err := ParseAndVerifyJWT(context.Background(), "", mockJWKS, "roles", "", "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrJWTInvalidFormat)
+	})
+
+	t.Run("Token with empty segments", func(t *testing.T) {
+		_, err := ParseAndVerifyJWT(context.Background(), "..", mockJWKS, "roles", "", "")
+		assert.Error(t, err)
+		// Empty segments decode to empty bytes, which fail JSON unmarshaling
+		assert.Contains(t, err.Error(), "unmarshal")
 	})
 
 	t.Run("Token with exp=0 (no expiration)", func(t *testing.T) {
@@ -351,5 +396,63 @@ func TestParseAndVerifyJWT_Unit(t *testing.T) {
 		token := generateTestJWT(t, privKey, kid, nil, claims)
 		_, err := ParseAndVerifyJWT(context.Background(), token, mockJWKS, "roles", "", "")
 		assert.NoError(t, err) // Should not fail with nbf=0
+	})
+
+	t.Run("JWKS key not found", func(t *testing.T) {
+		token := generateTestJWT(t, privKey, kid, nil, validClaims)
+		emptyJWKS := stubJWKSProvider(map[string]*rsa.PublicKey{})
+		_, err := ParseAndVerifyJWT(context.Background(), token, emptyJWKS, "roles", "", "")
+		assert.Error(t, err)
+		// The error comes from JWKSProvider trying to fetch keys when key is not in cache
+		assert.Contains(t, err.Error(), "get public key")
+	})
+
+	t.Run("Valid token with all standard claims", func(t *testing.T) {
+		now := time.Now()
+		claims := map[string]interface{}{
+			"sub":       "user123",
+			"iss":       "test-issuer",
+			"aud":       "test-audience",
+			"exp":       now.Add(time.Hour).Unix(),
+			"nbf":       now.Unix(),
+			"iat":       now.Unix(),
+			"tenant_id": "tenant-abc",
+			"roles":     []string{"admin", "user"},
+		}
+		token := generateTestJWT(t, privKey, kid, nil, claims)
+		jwt, err := ParseAndVerifyJWT(context.Background(), token, mockJWKS, "roles", "test-issuer", "test-audience")
+		require.NoError(t, err)
+		assert.Equal(t, "user123", jwt.Claims.Sub)
+		assert.Equal(t, "test-issuer", jwt.Claims.Iss)
+		assert.Equal(t, "test-audience", jwt.Claims.Aud)
+		assert.Equal(t, "tenant-abc", jwt.Claims.TenantID)
+		assert.Equal(t, []string{"admin", "user"}, jwt.Roles)
+		assert.NotZero(t, jwt.Claims.Exp)
+		assert.NotZero(t, jwt.Claims.Nbf)
+		assert.NotZero(t, jwt.Claims.Iat)
+	})
+
+	t.Run("Header typ field validation", func(t *testing.T) {
+		header := map[string]interface{}{
+			"alg": "RS256",
+			"kid": kid,
+			"typ": "JWT",
+		}
+		token := generateTestJWT(t, privKey, kid, header, validClaims)
+		jwt, err := ParseAndVerifyJWT(context.Background(), token, mockJWKS, "roles", "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "JWT", jwt.Header.Typ)
+	})
+
+	t.Run("Tampered payload", func(t *testing.T) {
+		token := generateTestJWT(t, privKey, kid, nil, validClaims)
+		parts := strings.Split(token, ".")
+		// Tamper with payload
+		tamperedPayload := base64.RawURLEncoding.EncodeToString([]byte(`{"sub":"hacker"}`))
+		tamperedToken := parts[0] + "." + tamperedPayload + "." + parts[2]
+
+		_, err := ParseAndVerifyJWT(context.Background(), tamperedToken, mockJWKS, "roles", "", "")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "verify signature")
 	})
 }
