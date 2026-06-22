@@ -18,6 +18,8 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
@@ -30,8 +32,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"os/signal"
-	"syscall"
 )
 
 // runGatewayMode starts the Operator in gateway mode - the platform's central

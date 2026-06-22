@@ -87,7 +87,7 @@ func reportVerification(ctx context.Context, outDir string, auditStore *storage.
 	if ctx.Err() != nil {
 		return FileResult{}, vr, ctx.Err()
 	}
-	if commitments != nil && len(commitments) > 0 {
+	if len(commitments) > 0 {
 		allHashesOK := true
 		for _, c := range commitments {
 			if c.Seq == 0 {

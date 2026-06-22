@@ -34,7 +34,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/protocol"
 )
 
@@ -57,13 +56,6 @@ type secretManagerInterface interface {
 	StoreCAPrivateKey(caType string, keyDER []byte) error
 	GetServicePrivateKey(serviceName string) ([]byte, error)
 	StoreServicePrivateKey(serviceName string, keyDER []byte) error
-}
-
-// docStoreInterface defines the methods PKIAuthority uses from the document store.
-type docStoreInterface interface {
-	DocSet(collection, id string, body []byte) error
-	DocGet(collection, id string) (*models.Document, error)
-	DocQuery(collection string, filter map[string]interface{}, sortField string, limit int) ([]*models.Document, error)
 }
 
 // revocationDocument represents a certificate revocation record.

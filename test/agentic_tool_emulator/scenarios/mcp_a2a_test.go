@@ -225,10 +225,10 @@ func TestMCPScenarioNames(t *testing.T) {
 	scenarios := mcpScenarios()
 
 	expectedNames := map[string]bool{
-		"mcp-plain":             true,
-		"mcp-advanced":          true,
-		"mcp-secured":           true,
-		"healthcare-success":    true,
+		"mcp-plain":              true,
+		"mcp-advanced":           true,
+		"mcp-secured":            true,
+		"healthcare-success":     true,
 		"healthcare-phi-blocked": true,
 	}
 

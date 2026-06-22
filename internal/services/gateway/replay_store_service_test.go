@@ -209,4 +209,3 @@ func TestReplayStoreService_ReleaseNonce_Used(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "nonce should still exist if it was already used")
 }
-

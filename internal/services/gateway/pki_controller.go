@@ -522,6 +522,8 @@ echo "[g8e] You can now use: ./g8e -e ${GATEWAY_HOST} auth enroll"
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
 	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
+	// #nosec G705 - Script is generated from controlled format strings with validated parameters,
+	// and response is marked as shell content (not HTML), so XSS is not applicable.
 	_, _ = w.Write([]byte(script))
 }
 
@@ -580,6 +582,8 @@ echo "[g8e] You can now use: ./g8e -e ${GATEWAY_HOST} auth enroll"
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
 	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
+	// #nosec G705 - Script is generated from controlled format strings with validated parameters,
+	// and response is marked as shell content (not HTML), so XSS is not applicable.
 	_, _ = w.Write([]byte(script))
 }
 
@@ -675,6 +679,8 @@ Write-Host "[g8e] You can now run: .\\${NodeBinaryName} -e ${GatewayHost} auth e
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
 	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
 	w.WriteHeader(http.StatusOK)
+	// #nosec G705 - Script is generated from controlled format strings with validated parameters,
+	// and response is marked as PowerShell content (not HTML), so XSS is not applicable.
 	_, _ = w.Write([]byte(script))
 }
 

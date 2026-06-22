@@ -86,10 +86,13 @@ type ProcessManager struct {
 	postureFile string
 	// findOperatorProcessFn allows mocking for tests
 	findOperatorProcessFn func() int
-	// Windows-specific dependencies for testing
+	// Windows-specific dependencies for testing (used in process_windows.go)
+	//nolint:unused // Used in platform-specific files and tests
 	windowsProcessChecker WindowsProcessChecker
-	commandExecutor       CommandExecutor
-	// isProcessRunningFn allows mocking for tests
+	//nolint:unused // Used in platform-specific files and tests
+	commandExecutor CommandExecutor
+	// isProcessRunningFn allows mocking for tests (used in process_windows.go)
+	//nolint:unused // Used in platform-specific files and tests
 	isProcessRunningFn func(pid int) bool
 }
 
