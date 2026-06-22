@@ -103,9 +103,6 @@ type GatewayConfig struct {
 	JWTIssuer          string         // Expected issuer claim in JWT (optional, for multi-audience IdP deployments)
 	JWTAudience        string         // Expected audience claim in JWT (optional, for multi-audience IdP deployments)
 
-	// Federation
-	FederationSeedURL string // Optional seed gateway URL for federation (empty = standalone mode)
-
 	// HTTP server limits
 	MaxPayloadBytes   int64         // Maximum request payload size in bytes (default: 10MB)
 	ReadHeaderTimeout time.Duration // Timeout for reading request headers (default: 10s)

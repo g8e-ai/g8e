@@ -57,7 +57,7 @@ var pubSubWriteTimeout = 5 * time.Second
 type OperatorPubSubClient struct {
 	baseURL        string // e.g. "wss://localhost"
 	logger         *slog.Logger
-	tlsConfig      *tls.Config      // embedded CA trust; nil falls back to system CAs (plain ws://)
+	tlsConfig      *tls.Config      // mTLS config; always required
 	serverName     string           // TLS SNI override when endpoint is a raw IP
 	certsTLSConfig *certs.TLSConfig // DI-based TLS config
 
@@ -67,36 +67,29 @@ type OperatorPubSubClient struct {
 }
 
 // NewOperatorPubSubClient creates a client that connects to a Operator pub/sub endpoint.
-// baseURL must use ws:// or wss:// scheme.
+// baseURL must use wss:// scheme — plaintext ws:// is never permitted.
 // serverName overrides the TLS SNI hostname; pass an empty string when the
 // endpoint is a hostname (no override needed).
-// If certsTLSConfig is provided, it uses the DI-based TLS config; otherwise it falls back
-// to the deprecated global certs.GetTLSConfig().
+// certsTLSConfig must be non-nil; the platform always requires mutual TLS.
 func NewOperatorPubSubClient(baseURL, serverName string, logger *slog.Logger, certsTLSConfig *certs.TLSConfig) (*OperatorPubSubClient, error) {
 	if baseURL == "" {
 		return nil, constants.ErrPubSubURLRequired
 	}
 
-	isSecure := len(baseURL) >= 6 && baseURL[:6] == "wss://"
+	if len(baseURL) < 6 || baseURL[:6] != "wss://" {
+		return nil, fmt.Errorf("%w: URL must use wss:// scheme, got %q", constants.ErrPubSubTLSConfig, baseURL)
+	}
 
-	// For secure connections, load the embedded CA so the Operator trusts
-	// the server's self-signed certificate. Plain ws:// (local dev) skips this.
-	var tlsCfg *tls.Config
-	if isSecure {
-		var err error
-		if certsTLSConfig != nil {
-			// DI path: use provided TLSConfig
-			tlsCfg, err = certsTLSConfig.GetTLSConfig()
-		} else {
-			// Legacy path: use global state (will be removed after migration)
-			tlsCfg, err = certs.GetTLSConfig()
-		}
-		if err != nil {
-			return nil, fmt.Errorf("%w: %v", constants.ErrPubSubTLSConfig, err)
-		}
-		if serverName != "" {
-			tlsCfg.ServerName = serverName
-		}
+	if certsTLSConfig == nil {
+		return nil, fmt.Errorf("%w: TLS config is required", constants.ErrPubSubTLSConfig)
+	}
+
+	tlsCfg, err := certsTLSConfig.GetTLSConfig()
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", constants.ErrPubSubTLSConfig, err)
+	}
+	if serverName != "" {
+		tlsCfg.ServerName = serverName
 	}
 
 	return &OperatorPubSubClient{

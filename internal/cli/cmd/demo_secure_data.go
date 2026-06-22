@@ -88,19 +88,6 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  Copy-paste to run the governed migration via the SharePoint connector")
-		fmt.Println("  (in notary posture this suspends for human L3 approval, then emits")
-		fmt.Println("  signed receipts from both domains):")
-		fmt.Println()
-		fmt.Println("    ./g8e migration connector sharepoint run \\")
-		fmt.Println("      --manifest ./demos/secure-data/target-data/transfer_manifest.json \\")
-		fmt.Println("      --posture notary")
-		fmt.Println()
-		fmt.Println("  Then verify the combined chain-of-custody report:")
-		fmt.Println()
-		fmt.Println("    ./g8e migration report --migration-id SPO-MIGRATION-2026-001")
-		fmt.Println()
-
 		if hasErrors {
 			result.status = "FAIL"
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")

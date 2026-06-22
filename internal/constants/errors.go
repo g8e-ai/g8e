@@ -602,7 +602,6 @@ var (
 	ErrBootstrapNoSessionID       = errors.New("bootstrap: no operator_session_id returned from Auth Services")
 	ErrBootstrapCertParse         = errors.New("bootstrap: failed to parse per-operator cert+key")
 	ErrBootstrapTLSConfigDI       = errors.New("bootstrap: failed to get base TLS config from DI")
-	ErrBootstrapTLSConfigLegacy   = errors.New("bootstrap: failed to get base TLS config")
 	ErrBootstrapCertTrust         = errors.New("bootstrap: cert trust failure: per-operator mTLS cert invalid")
 
 	// CLI L3 notary errors
@@ -812,32 +811,6 @@ var (
 	ErrRegistrationFailedToUnmarshalBoundSessions  = errors.New("failed to unmarshal bound sessions document")
 	ErrRegistrationFailedToUpdateBoundSessions     = errors.New("failed to update bound sessions document")
 	ErrRegistrationFailedToBindOperator            = errors.New("failed to bind Operator for target context")
-
-	// Federation/Peer connection errors
-	ErrFederationInvalidSeedURL     = errors.New("federation: invalid seed URL")
-	ErrFederationSeedURLScheme      = errors.New("federation: seed URL must use HTTPS scheme")
-	ErrFederationLoadGatewayID      = errors.New("federation: failed to load gateway ID")
-	ErrFederationWriteGatewayID     = errors.New("federation: failed to write gateway ID")
-	ErrFederationGatewayIDEmpty     = errors.New("federation: gateway ID file is empty")
-	ErrFederationReadPeerCert       = errors.New("federation: failed to read peer certificate")
-	ErrFederationReadPeerKey        = errors.New("federation: failed to read peer key")
-	ErrFederationReadPeerChain      = errors.New("federation: failed to read peer chain")
-	ErrFederationParsePeerCert      = errors.New("federation: failed to parse peer certificate/key pair")
-	ErrFederationCertExpiringSoon   = errors.New("federation: peer certificate is expiring soon")
-	ErrFederationGeneratePeerKey    = errors.New("federation: failed to generate peer keypair")
-	ErrFederationCreateCSR          = errors.New("federation: failed to create CSR")
-	ErrFederationSubmitCSR          = errors.New("federation: failed to submit CSR to seed")
-	ErrFederationCreatePeerDir      = errors.New("federation: failed to create peer directory")
-	ErrFederationMarshalPrivateKey  = errors.New("federation: failed to marshal private key")
-	ErrFederationWritePeerCert      = errors.New("federation: failed to write peer certificate")
-	ErrFederationWritePeerKey       = errors.New("federation: failed to write peer key")
-	ErrFederationWritePeerChain     = errors.New("federation: failed to write peer chain")
-	ErrFederationLoadCertKeyPair    = errors.New("federation: failed to load certificate/key pair")
-	ErrFederationHealthCheckClient  = errors.New("federation: health check: client not initialized")
-	ErrFederationHealthCheckRequest = errors.New("federation: health check: failed to create request")
-	ErrFederationHealthCheckFailed  = errors.New("federation: health check: request failed")
-	ErrFederationHealthCheckStatus  = errors.New("federation: health check: unexpected status code")
-	ErrFederationGenerateGatewayID  = errors.New("federation: failed to generate gateway ID")
 
 	// Script template errors
 	ErrScriptTemplateNotInitialized = errors.New("script template not initialized - call Init() first")

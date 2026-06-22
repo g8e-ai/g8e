@@ -88,7 +88,7 @@ func main() {
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
 		// Delegate to CLI commands
-		clicmd.Execute()
+		clicmd.Execute(version)
 		os.Exit(0)
 	}
 
@@ -98,8 +98,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
 		os.Exit(constants.ExitConfigError)
 	}
-
-	settings := config.LoadSettings()
 
 	// Capture the launch directory before any flag parsing or os.Chdir calls.
 	launchDir, err := os.Getwd()
@@ -218,7 +216,7 @@ func main() {
 
 	// Show help if no arguments provided, or if first arg is a CLI command
 	if len(os.Args) == 1 || (len(os.Args) > 1 && cliCommands[os.Args[1]]) {
-		clicmd.Execute()
+		clicmd.Execute(version)
 		return
 	}
 
@@ -462,8 +460,8 @@ func main() {
 		NoGit:                 noGit,
 		LogLevel:              logLevel,
 		WorkDir:               effectiveWorkDir,
-		PKIDir:                settings.PKIDir,
-		SecretsDir:            settings.SecretsDir,
+		PKIDir:                "",
+		SecretsDir:            "",
 		HeartbeatInterval:     heartbeatInterval,
 		Shell:                 os.Getenv("SHELL"),
 		Lang:                  os.Getenv("LANG"),

@@ -129,14 +129,8 @@ type CommandServiceConfig struct {
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
 func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, error) {
 	client := c.PubSubClient
-	if client == nil && c.Config.PubSubURL != "" {
-		var err error
-		// Pass nil for tlsConfig - this CLI command uses the legacy global state
-		// TODO: Migrate CLI commands to DI-based TLS config
-		client, err = NewOperatorPubSubClient(c.Config.PubSubURL, c.Config.TLSServerName, c.Logger, nil)
-		if err != nil {
-			return nil, fmt.Errorf("%w: %w", constants.ErrPubSubEmptyPayload, err)
-		}
+	if client == nil {
+		return nil, fmt.Errorf("%w: PubSubClient is required", constants.ErrPubSubEmptyPayload)
 	}
 
 	serviceCtx, cancel := context.WithCancel(context.Background())

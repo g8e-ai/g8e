@@ -20,10 +20,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRootCmd() *cobra.Command {
+func NewRootCmd(version string) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "g8e",
-		Version: "1.1.3",
+		Version: version,
 		Short:   "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
 		Long: `g8e is a zero-trust execution platform for agentic infrastructure.
 The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
@@ -38,7 +38,6 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		mcpCmd(),
 		operatorCmd(),
 		vaultCmd(),
-		migrationCmd(),
 		testCmd(),
 		demosCmd(),
 		auditCmd(),
@@ -50,8 +49,8 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	return rootCmd
 }
 
-func Execute() {
-	rootCmd := NewRootCmd()
+func Execute(version string) {
+	rootCmd := NewRootCmd(version)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

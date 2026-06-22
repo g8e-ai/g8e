@@ -63,7 +63,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	u := server.URL[8:] // strip https://
 	cfg.Endpoint = "127.0.0.1"
 	fmt.Sscanf(u, "127.0.0.1:%d", &cfg.HTTPSPort)
-	cfg.PubSubURL = "ws://127.0.0.1:0" // dummy
+	cfg.PubSubURL = "wss://127.0.0.1:0" // dummy
 	cfg.NoGit = true
 
 	// Initialize paths with test directory
@@ -90,7 +90,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
 
-	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), nil)
+	service, err := NewG8eoService(cfg, testutil.NewVerboseTestLogger(t), newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	// 3. Inject mocks

@@ -138,11 +138,12 @@ func (v *L1Doctrine) ValidatePayload(msg proto.Message) []string {
 	return violations
 }
 
-// ValidateIntent is a placeholder for intent-based doctrine validation.
-// This will be integrated with Sentinel's intent allowlist in a follow-up.
+// ValidateIntent checks whether an intent is permitted by the Sentinel allowlist.
+// SECURITY-DEBT: Sentinel allowlist integration is not yet implemented.
+// All intents currently pass. This is a tracked gap, not silent behavior.
+// The function is called from L2 consensus (l2_consensus.go evaluateSafety).
+// Until Sentinel is wired, docs must not claim L1/L2 intent enforcement is active.
 func (v *L1Doctrine) ValidateIntent(intent constants.CloudIntent) bool {
-	// TODO: Integrate with Sentinel's intent validation
-	// For now, allow all intents - this is a temporary bridge
 	return true
 }
 
