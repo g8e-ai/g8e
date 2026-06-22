@@ -216,7 +216,7 @@ func TestEnrollAgentApp_Idempotency_ValidCert(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -249,7 +249,7 @@ func TestEnrollAgentApp_Idempotency_ExpiringCert(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -302,7 +302,7 @@ func TestEnrollAgentApp_NoCert(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -351,7 +351,7 @@ func TestEnrollAgentApp_NoURISAN(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -417,7 +417,7 @@ func TestEnrollAgentApp_InvalidCert(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -457,7 +457,7 @@ func TestEnrollAgentApp_EnrollmentError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -486,7 +486,7 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -516,7 +516,7 @@ func TestEnrollAgentApp_NoCLICredentials(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -545,7 +545,7 @@ func TestEnrollAgentApp_MissingCLICert(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -574,7 +574,7 @@ func TestEnrollAgentApp_MissingCABundle(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -600,7 +600,7 @@ func TestEnrollAgentApp_WrongSPIFFEID(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},

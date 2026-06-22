@@ -52,11 +52,11 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Equal(t, 0, *result.ReturnCode)
+		assert.Equal(t, 0, result.ReturnCode)
 		assert.Contains(t, result.Stdout, "hello world")
 		assert.Empty(t, result.Stderr)
-		assert.NotNil(t, result.StartTime)
-		assert.NotNil(t, result.EndTime)
+		assert.False(t, result.StartTime.IsZero())
+		assert.False(t, result.EndTime.IsZero())
 		assert.Greater(t, result.DurationSeconds, 0.0)
 	})
 
@@ -77,7 +77,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Equal(t, 42, *result.ReturnCode)
+		assert.Equal(t, 42, result.ReturnCode)
 	})
 
 	t.Run("command not found", func(t *testing.T) {
@@ -97,8 +97,8 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Equal(t, 127, *result.ReturnCode)
-		assert.Equal(t, "command_not_found", *result.ErrorType)
+		assert.Equal(t, 127, result.ReturnCode)
+		assert.Equal(t, "command_not_found", result.ErrorType)
 		assert.Contains(t, result.Stderr, "not found")
 	})
 
@@ -118,9 +118,9 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT, result.Status)
-		assert.Equal(t, 124, *result.ReturnCode)
-		assert.NotNil(t, result.ErrorMessage)
-		assert.Contains(t, *result.ErrorMessage, "timed out")
+		assert.Equal(t, 124, result.ReturnCode)
+		assert.NotEmpty(t, result.ErrorMessage)
+		assert.Contains(t, result.ErrorMessage, "timed out")
 	})
 
 	t.Run("command with working directory", func(t *testing.T) {
@@ -210,7 +210,7 @@ func TestExecutionService_ExecuteCommand(t *testing.T) {
 
 		// Start execution in goroutine
 		done := make(chan bool)
-		var result *models.ExecutionResultsPayload
+		var result *models.ExecutionResult
 		var err error
 		go func() {
 			result, err = svc.ExecuteCommand(ctx, req)
@@ -539,7 +539,7 @@ func TestExecutionService_CancelExecution_DoesNotSetCancelledStatus(t *testing.T
 		RequestedBy:    "test-user",
 	}
 
-	var result *models.ExecutionResultsPayload
+	var result *models.ExecutionResult
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -654,16 +654,16 @@ func TestExecutionService_FinalizeResult(t *testing.T) {
 	svc := NewExecutionService(cfg, logger)
 
 	startTime := time.Now().Add(-2 * time.Second)
-	result := &models.ExecutionResultsPayload{
+	result := &models.ExecutionResult{
 		ExecutionID: "test-req",
 		CaseID:      "test-case",
 		Command:     "echo",
 		Status:      operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-		StartTime:   &startTime,
+		StartTime:   startTime,
 	}
 
 	svc.finalizeResult(result)
 
-	assert.NotNil(t, result.EndTime)
+	assert.False(t, result.EndTime.IsZero())
 	assert.Greater(t, result.DurationSeconds, 1.0)
 }

@@ -53,7 +53,7 @@ func NewVaultWriter(
 type executionWriteParams struct {
 	id              string
 	command         string
-	exitCode        *int
+	exitCode        int
 	durationMs      int64
 	stdout          string
 	stderr          string

@@ -83,13 +83,13 @@ func reportEvents(ctx context.Context, outDir string, store *storage.SQLAuditSto
 				contentSize = intStr(len(e.ContentText))
 			}
 			rows = append(rows, EventRow{
-				ID:              int64Str(e.ID),
+				ID:              e.ID,
 				SessionID:       e.OperatorSessionID,
 				TimestampUTC:    utcRFC3339(e.Timestamp),
 				Type:            string(e.Type),
 				CommandRaw:      e.CommandRaw,
-				ExitCode:        optionalInt(e.CommandExitCode),
-				DurationMs:      int64Str(e.ExecutionDurationMs),
+				ExitCode:        e.CommandExitCode,
+				DurationMs:      e.ExecutionDurationMs,
 				ContentSHA256:   contentSHA256,
 				ContentSize:     contentSize,
 				ContentText:     e.ContentText,

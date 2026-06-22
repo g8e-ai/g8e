@@ -21,7 +21,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -104,7 +103,7 @@ func TestFetchRootCAFingerprint_Success(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -124,7 +123,7 @@ func TestFetchRootCAFingerprint_HTTPError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},

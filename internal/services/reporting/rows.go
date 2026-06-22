@@ -13,6 +13,12 @@
 
 package reporting
 
+import (
+	"fmt"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+)
+
 // Row is the contract for a typed CSV row.
 type Row interface {
 	Columns() []string
@@ -70,13 +76,13 @@ func (r SessionRow) Record() []string {
 
 // EventRow maps to events.csv.
 type EventRow struct {
-	ID              string
+	ID              int64
 	SessionID       string
 	TimestampUTC    string
 	Type            string
 	CommandRaw      string
-	ExitCode        string
-	DurationMs      string
+	ExitCode        int
+	DurationMs      int64
 	ContentSHA256   string
 	ContentSize     string
 	ContentText     string
@@ -93,17 +99,21 @@ func (EventRow) Columns() []string {
 }
 
 func (r EventRow) Record() []string {
+	exitCodeStr := ""
+	if r.ExitCode != constants.ExitCodeNone {
+		exitCodeStr = fmt.Sprintf("%d", r.ExitCode)
+	}
 	return []string{
-		r.ID, r.SessionID, r.TimestampUTC, r.Type, r.CommandRaw,
-		r.ExitCode, r.DurationMs, r.ContentSHA256, r.ContentSize, r.ContentText,
+		fmt.Sprintf("%d", r.ID), r.SessionID, r.TimestampUTC, r.Type, r.CommandRaw,
+		exitCodeStr, fmt.Sprintf("%d", r.DurationMs), r.ContentSHA256, r.ContentSize, r.ContentText,
 		r.StdoutTruncated, r.StderrTruncated,
 	}
 }
 
 // FileMutationRow maps to file_mutations.csv.
 type FileMutationRow struct {
-	ID               string
-	EventID          string
+	ID               int64
+	EventID          int64
 	Filepath         string
 	Operation        string
 	LedgerHashBefore string
@@ -120,7 +130,7 @@ func (FileMutationRow) Columns() []string {
 
 func (r FileMutationRow) Record() []string {
 	return []string{
-		r.ID, r.EventID, r.Filepath, r.Operation,
+		fmt.Sprintf("%d", r.ID), fmt.Sprintf("%d", r.EventID), r.Filepath, r.Operation,
 		r.LedgerHashBefore, r.LedgerHashAfter, r.DiffStat,
 	}
 }
@@ -130,8 +140,8 @@ type ExecutionRow struct {
 	ID           string
 	TimestampUTC string
 	Command      string
-	ExitCode     string
-	DurationMs   string
+	ExitCode     int
+	DurationMs   int64
 	StdoutHash   string
 	StdoutSize   string
 	StderrHash   string
@@ -150,8 +160,12 @@ func (ExecutionRow) Columns() []string {
 }
 
 func (r ExecutionRow) Record() []string {
+	exitCodeStr := ""
+	if r.ExitCode != constants.ExitCodeNone {
+		exitCodeStr = fmt.Sprintf("%d", r.ExitCode)
+	}
 	return []string{
-		r.ID, r.TimestampUTC, r.Command, r.ExitCode, r.DurationMs,
+		r.ID, r.TimestampUTC, r.Command, exitCodeStr, fmt.Sprintf("%d", r.DurationMs),
 		r.StdoutHash, r.StdoutSize, r.StderrHash, r.StderrSize,
 		r.CaseID, r.TaskID, r.OperatorID,
 	}
@@ -191,7 +205,7 @@ func (r FileDiffRow) Record() []string {
 
 // CommitmentRow maps to commitments.csv.
 type CommitmentRow struct {
-	Seq                 string
+	Seq                 int64
 	CommittedAtUTC      string
 	TransactionID       string
 	TransactionHash     string
@@ -214,7 +228,7 @@ func (CommitmentRow) Columns() []string {
 
 func (r CommitmentRow) Record() []string {
 	return []string{
-		r.Seq, r.CommittedAtUTC, r.TransactionID, r.TransactionHash,
+		fmt.Sprintf("%d", r.Seq), r.CommittedAtUTC, r.TransactionID, r.TransactionHash,
 		r.PriorCommitmentHash, r.Hash, r.StateRootAtCommit,
 		r.ActionType, r.TargetResource, r.AuditorKeyID, r.Signature,
 	}

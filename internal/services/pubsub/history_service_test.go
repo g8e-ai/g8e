@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -339,7 +338,7 @@ func TestHistoryService_publishFetchLogsResult(t *testing.T) {
 		record := &models.ExecutionRecord{
 			ID:               "exec-1",
 			Command:          "ls -la",
-			ExitCode:         func() *int { i := 0; return &i }(),
+			ExitCode:         0,
 			DurationMs:       1000,
 			StdoutCompressed: []byte("stdout data"),
 			StderrCompressed: []byte("stderr data"),

@@ -27,7 +27,6 @@ import (
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -122,7 +121,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	}
 
 	done := make(chan struct{})
-	var result *models.ExecutionResultsPayload
+	var result *models.ExecutionResult
 	var execErr error
 	startTime := time.Now().UTC()
 
@@ -138,25 +137,35 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	<-done
 
 	if execErr != nil {
-		result = &models.ExecutionResultsPayload{
-			ExecutionID:     execReq.ExecutionID,
-			CaseID:          execReq.CaseID,
-			TaskID:          execReq.TaskID,
+		result = &models.ExecutionResult{
+			ExecutionID: execReq.ExecutionID,
+			CaseID:      execReq.CaseID,
+			TaskID: func() string {
+				if execReq.TaskID != nil {
+					return *execReq.TaskID
+				}
+				return ""
+			}(),
 			InvestigationID: execReq.InvestigationID,
 			Command:         execReq.Command,
 			Args:            execReq.Args,
 			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    func() *string { s := execErr.Error(); return &s }(),
-			ErrorType:       func() *string { s := "execution_error"; return &s }(),
+			ErrorMessage:    execErr.Error(),
+			ErrorType:       "execution_error",
 		}
 	} else if result == nil {
-		result = &models.ExecutionResultsPayload{
-			ExecutionID:  execReq.ExecutionID,
-			CaseID:       execReq.CaseID,
-			TaskID:       execReq.TaskID,
+		result = &models.ExecutionResult{
+			ExecutionID: execReq.ExecutionID,
+			CaseID:      execReq.CaseID,
+			TaskID: func() string {
+				if execReq.TaskID != nil {
+					return *execReq.TaskID
+				}
+				return ""
+			}(),
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage: func() *string { s := "execution returned no result"; return &s }(),
-			ErrorType:    func() *string { s := "execution_error"; return &s }(),
+			ErrorMessage: "execution returned no result",
+			ErrorType:    "execution_error",
 		}
 	} else {
 		cs.logger.Info("Command execution completed",
@@ -174,10 +183,6 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	rawStderrSize := len(result.Stderr)
 
 	if cs.vaultWriter != nil {
-		taskID := ""
-		if result.TaskID != nil {
-			taskID = *result.TaskID
-		}
 		cs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         cs.execution.BuildCommandString(result.Command, result.Args),
@@ -188,7 +193,7 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 			stdoutSize:      rawStdoutSize,
 			stderrSize:      rawStderrSize,
 			caseID:          result.CaseID,
-			taskID:          taskID,
+			taskID:          result.TaskID,
 			investigationID: result.InvestigationID,
 			vaultMode:       vaultMode,
 		})
@@ -226,24 +231,26 @@ func (cs *CommandService) HandleExecutionRequest(ctx context.Context, msg *PubSu
 	}
 
 	if cs.results != nil {
+		// Convert domain result to wire payload for proto publishing
+		payload := models.PayloadFromDomainResult(result)
 		protoResult := &operatorv1.CommandResult{
-			ExecutionId:          result.ExecutionID,
-			Status:               result.Status,
-			Stdout:               result.Stdout,
-			Stderr:               result.Stderr,
-			ExecutionTimeSeconds: float32(result.DurationSeconds),
+			ExecutionId:          payload.ExecutionID,
+			Status:               payload.Status,
+			Stdout:               payload.Stdout,
+			Stderr:               payload.Stderr,
+			ExecutionTimeSeconds: float32(payload.DurationSeconds),
 		}
-		if result.ReturnCode != nil {
-			protoResult.ReturnCode = int32(*result.ReturnCode) //nolint:gosec // exit codes are 0-255
+		if payload.ReturnCode != nil {
+			protoResult.ReturnCode = int32(*payload.ReturnCode) //nolint:gosec // exit codes are 0-255
 		}
-		if result.ErrorMessage != nil {
-			protoResult.Error = *result.ErrorMessage
+		if payload.ErrorMessage != nil {
+			protoResult.Error = *payload.ErrorMessage
 		}
-		if result.StartTime != nil {
-			protoResult.StartTimeUnixMs = result.StartTime.UnixMilli()
+		if payload.StartTime != nil {
+			protoResult.StartTimeUnixMs = payload.StartTime.UnixMilli()
 		}
-		if result.EndTime != nil {
-			protoResult.EndTimeUnixMs = result.EndTime.UnixMilli()
+		if payload.EndTime != nil {
+			protoResult.EndTimeUnixMs = payload.EndTime.UnixMilli()
 		}
 
 		if err := cs.results.PublishExecutionResult(ctx, protoResult, msg); err != nil {
@@ -326,40 +333,42 @@ func (cs *CommandService) HandleCancelRequest(ctx context.Context, msg *PubSubCo
 	err := cs.execution.CancelExecution(executionID)
 
 	now := time.Now().UTC()
-	var result *models.ExecutionResultsPayload
+	var result *models.ExecutionResult
 
 	if err != nil {
 		cs.logger.Warn("Failed to cancel execution (may have already completed)", string(constants.ConnectionStateError), err)
-		result = &models.ExecutionResultsPayload{
+		result = &models.ExecutionResult{
 			ExecutionID:  executionID,
 			CaseID:       msg.CaseID,
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			StartTime:    &now,
-			ErrorMessage: func() *string { s := fmt.Sprintf("Cancel failed: %v", err); return &s }(),
-			ErrorType:    func() *string { s := "cancel_failed"; return &s }(),
+			StartTime:    now,
+			ErrorMessage: fmt.Sprintf("Cancel failed: %v", err),
+			ErrorType:    "cancel_failed",
 		}
 	} else {
 		cs.logger.Info("Command cancelled successfully", "execution_id", executionID)
-		result = &models.ExecutionResultsPayload{
+		result = &models.ExecutionResult{
 			ExecutionID:  executionID,
 			CaseID:       msg.CaseID,
 			Status:       operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED,
-			StartTime:    &now,
-			ErrorMessage: func() *string { s := "Command cancelled by user"; return &s }(),
-			ErrorType:    func() *string { s := "user_cancelled"; return &s }(),
+			StartTime:    now,
+			ErrorMessage: "Command cancelled by user",
+			ErrorType:    "user_cancelled",
 		}
 	}
 
 	if cs.results != nil {
+		// Convert domain result to wire payload for proto publishing
+		payload := models.PayloadFromDomainResult(result)
 		protoResult := &operatorv1.CommandResult{
 			ExecutionId: executionID,
-			Status:      result.Status,
+			Status:      payload.Status,
 		}
-		if result.ErrorMessage != nil {
-			protoResult.Error = *result.ErrorMessage
+		if payload.ErrorMessage != nil {
+			protoResult.Error = *payload.ErrorMessage
 		}
-		if result.StartTime != nil {
-			protoResult.StartTimeUnixMs = result.StartTime.UnixMilli()
+		if payload.StartTime != nil {
+			protoResult.StartTimeUnixMs = payload.StartTime.UnixMilli()
 		}
 
 		if err := cs.results.PublishCancellationResult(ctx, protoResult, msg); err != nil {

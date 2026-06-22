@@ -362,7 +362,7 @@ func TestHandleFetchHistory_Success(t *testing.T) {
 					Type:              constants.Event.Operator.Audit.Command,
 					ContentText:       "test command",
 					CommandRaw:        "echo test",
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 					CommandStdout:     "output",
 					CommandStderr:     "",
 					StoredLocally:     true,
@@ -445,7 +445,7 @@ func TestHandleFetchHistory_WithFileMutations(t *testing.T) {
 					OperatorSessionID: sessionID,
 					Timestamp:         time.Now().UTC(),
 					Type:              constants.Event.Operator.FileEdit.Completed,
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 				},
 			}, nil
 		},
@@ -497,7 +497,7 @@ func TestHandleFetchHistory_FileMutationError(t *testing.T) {
 					OperatorSessionID: sessionID,
 					Timestamp:         time.Now().UTC(),
 					Type:              constants.Event.Operator.FileEdit.Completed,
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 				},
 			}, nil
 		},
@@ -539,7 +539,7 @@ func TestHandleFetchHistory_NonFileEditEvent(t *testing.T) {
 					OperatorSessionID: sessionID,
 					Timestamp:         time.Now().UTC(),
 					Type:              constants.Event.Operator.Audit.Command,
-					CommandExitCode:   &exitCode,
+					CommandExitCode:   exitCode,
 				},
 			}, nil
 		},

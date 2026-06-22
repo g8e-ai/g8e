@@ -94,11 +94,3 @@ func boolStr(b bool) string {
 	}
 	return "false"
 }
-
-// optionalInt formats a pointer to int as string, empty if nil.
-func optionalInt(n *int) string {
-	if n == nil {
-		return ""
-	}
-	return intStr(*n)
-}

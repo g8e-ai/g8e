@@ -367,7 +367,7 @@ func auditEventsCmd() *cobra.Command {
 					Timestamp         string `json:"timestamp"`
 					Type              string `json:"type"`
 					CommandRaw        string `json:"command_raw"`
-					CommandExitCode   int   `json:"command_exit_code"`
+					CommandExitCode   int    `json:"command_exit_code"`
 				} `json:"events"`
 				Count int `json:"count"`
 			}

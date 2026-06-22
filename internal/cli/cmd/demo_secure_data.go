@@ -16,6 +16,8 @@ package cmd
 import (
 	"fmt"
 	"strings"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func runSecureDataScenario(demoDir, scenario string) error {

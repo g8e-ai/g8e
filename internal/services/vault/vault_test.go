@@ -820,7 +820,7 @@ func TestVaultUnlockAlreadyOpen(t *testing.T) {
 		defer v.Close()
 
 		err := v.Unlock(testPrivateKey1)
-		require.ErrorIs(t, err, ErrVaultAlreadyOpen)
+		require.ErrorIs(t, err, constants.ErrVaultAlreadyOpen)
 	})
 }
 

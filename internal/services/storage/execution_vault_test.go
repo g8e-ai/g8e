@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -203,7 +204,7 @@ func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 		ID:               "exec-update",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "echo hello",
-		ExitCode:         &exitCode1,
+		ExitCode:         exitCode1,
 		DurationMs:       10,
 		StdoutCompressed: []byte("hello\n"),
 		StdoutSize:       6,
@@ -218,7 +219,7 @@ func TestExecutionVault_StoreExecution_UpdateExisting(t *testing.T) {
 		ID:               "exec-update",
 		TimestampUTC:     time.Now().UTC(),
 		Command:          "echo world",
-		ExitCode:         &exitCode2,
+		ExitCode:         exitCode2,
 		DurationMs:       15,
 		StdoutCompressed: []byte("world\n"),
 		StdoutSize:       6,
@@ -267,7 +268,7 @@ func TestExecutionVault_GetExecution_Basic(t *testing.T) {
 	assert.Equal(t, "exec-get-123", retrieved.ID)
 	assert.Equal(t, "cat file.txt", retrieved.Command)
 	assert.Equal(t, int64(25), retrieved.DurationMs)
-	assert.Equal(t, 0, *retrieved.ExitCode)
+	assert.Equal(t, 0, retrieved.ExitCode)
 	assert.Equal(t, "user-xyz", retrieved.UserID)
 	assert.Equal(t, "case-xyz", retrieved.CaseID)
 	assert.Equal(t, "task-xyz", retrieved.TaskID)
@@ -1236,7 +1237,7 @@ func TestExecutionVault_NilExitCode(t *testing.T) {
 
 	retrieved, err := ev.GetExecution(context.Background(), "exec-nil-exit")
 	require.NoError(t, err)
-	assert.Nil(t, retrieved.ExitCode)
+	assert.Equal(t, constants.ExitCodeNone, retrieved.ExitCode)
 }
 
 func TestExecutionVault_ContextCancellation(t *testing.T) {

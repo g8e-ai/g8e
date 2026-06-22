@@ -290,4 +290,3 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
 }
-

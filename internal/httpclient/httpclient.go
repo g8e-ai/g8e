@@ -192,6 +192,27 @@ func WebSocketDialerWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serve
 	}, nil
 }
 
+// MustNew creates an HTTP client using global TLS state and panics on error.
+// Deprecated: Use NewWithTLSConfig for dependency injection. Only use this
+// in init-time contexts where panicking on misconfiguration is acceptable.
+func MustNew() *http.Client {
+	client, err := New()
+	if err != nil {
+		panic(fmt.Sprintf("httpclient: MustNew: %v", err))
+	}
+	return client
+}
+
+// MustWebSocketDialer creates a WebSocket dialer using global TLS state and
+// panics on error. Deprecated: Use WebSocketDialerWithTLSConfig instead.
+func MustWebSocketDialer() *websocket.Dialer {
+	dialer, err := WebSocketDialer()
+	if err != nil {
+		panic(fmt.Sprintf("httpclient: MustWebSocketDialer: %v", err))
+	}
+	return dialer
+}
+
 // ExtractErrorMessage returns a human-readable error string from a raw JSON
 // `error` field produced by client, accepting either:
 //   - a plain JSON string: "some error"

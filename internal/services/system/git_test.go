@@ -43,7 +43,7 @@ func TestValidateGitNodeBinary_Empty(t *testing.T) {
 	t.Parallel()
 	_, err := ValidateGitBinary("")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no git binary path provided")
+	assert.Contains(t, err.Error(), "git binary path required")
 }
 
 func TestIsExecutable_NotExist(t *testing.T) {

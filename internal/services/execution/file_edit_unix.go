@@ -40,7 +40,7 @@ func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *mo
 			"uid", uidStr,
 			"error", err)
 	} else {
-		stats.Owner = &u.Username
+		stats.Owner = u.Username
 	}
 
 	if g, err := user.LookupGroupId(gidStr); err != nil {
@@ -48,7 +48,7 @@ func (fes *FileEditService) collectFileOwnership(fileInfo os.FileInfo, stats *mo
 			"gid", gidStr,
 			"error", err)
 	} else {
-		stats.Group = &g.Name
+		stats.Group = g.Name
 	}
 
 	return nil

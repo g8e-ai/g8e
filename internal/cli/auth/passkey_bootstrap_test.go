@@ -283,7 +283,7 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -314,7 +314,7 @@ func TestRegisterPasskeyDirectly(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},

@@ -63,7 +63,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 		Pattern:         req.Pattern,
 		Matches:         []models.FsGrepMatch{},
 	}
-	result.StartTime = &startTime
+	result.StartTime = startTime
 
 	// Resolve path
 	path := req.Path
@@ -204,7 +204,7 @@ func (s *FsGrepService) ExecuteFsGrep(ctx context.Context, req *models.FsGrepReq
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 
 	endTime := time.Now().UTC()
-	result.EndTime = &endTime
+	result.EndTime = endTime
 	result.DurationSeconds = endTime.Sub(startTime).Seconds()
 
 	s.logger.Info("fs_grep operation completed",
@@ -250,14 +250,12 @@ func (s *FsGrepService) searchInFile(path string, re *regexp.Regexp, limit int) 
 
 func (s *FsGrepService) failResult(result *models.FsGrepResult, errType error, err error) (*models.FsGrepResult, error) {
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-	errorTypeStr := errType.Error()
-	result.ErrorType = &errorTypeStr
-	errorMsgStr := err.Error()
-	result.ErrorMessage = &errorMsgStr
+	result.ErrorType = errType.Error()
+	result.ErrorMessage = err.Error()
 	endTime := time.Now().UTC()
-	result.EndTime = &endTime
-	if result.StartTime != nil {
-		result.DurationSeconds = endTime.Sub(*result.StartTime).Seconds()
+	result.EndTime = endTime
+	if !result.StartTime.IsZero() {
+		result.DurationSeconds = endTime.Sub(result.StartTime).Seconds()
 	}
 	return result, err
 }

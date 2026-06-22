@@ -27,12 +27,11 @@ import (
 func TestSaveAndLoadCredentials(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PkiDir,
-		SecretsDir:     paths.Infra.SecretsDir,
+		RuntimeDir:     filepath.Join(tmpDir, ".g8e/run"),
+		PKIDir:         filepath.Join(tmpDir, ".g8e/pki"),
+		SecretsDir:     filepath.Join(tmpDir, ".g8e/secrets"),
 		CredentialsDir: tmpDir,
 	}
 
@@ -61,7 +60,7 @@ func TestLoadCredentials_NotFound(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 	}
@@ -77,7 +76,7 @@ func TestLoadCredentials_InvalidJSON(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 	}
@@ -98,7 +97,7 @@ func TestDeleteCredentials_Success(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths: &config.PathsConfig{
@@ -155,7 +154,7 @@ func TestDeleteCredentials_NonExistentFiles(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths: &config.PathsConfig{
@@ -189,7 +188,7 @@ func TestSaveCredentials_WriteError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -221,7 +220,7 @@ func TestLoadCredentials_ReadError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
@@ -250,7 +249,7 @@ func TestSaveCredentials_MkdirError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: blockingFile, // This is a file, not a directory
 		Paths:          &config.PathsConfig{},
@@ -275,7 +274,7 @@ func TestDeleteCredentials_RemoveError(t *testing.T) {
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
 		RuntimeDir:     paths.Infra.RuntimeDir,
-		PKIDir:         paths.Infra.PKIDir,
+		PKIDir:         paths.Infra.PkiDir,
 		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths: &config.PathsConfig{

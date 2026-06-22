@@ -37,7 +37,7 @@ func reportCommitments(ctx context.Context, outDir string, cl *storage.Commitmen
 	var rows []Row
 	for _, c := range records {
 		rows = append(rows, CommitmentRow{
-			Seq:                 int64Str(c.Seq),
+			Seq:                 c.Seq,
 			CommittedAtUTC:      utcRFC3339(c.CommittedAt),
 			TransactionID:       c.TransactionID,
 			TransactionHash:     c.TransactionHash,

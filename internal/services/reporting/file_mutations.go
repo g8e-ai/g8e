@@ -38,8 +38,8 @@ func reportFileMutations(ctx context.Context, outDir string, store *storage.SQLA
 		}
 		for _, m := range batch {
 			rows = append(rows, FileMutationRow{
-				ID:               int64Str(m.ID),
-				EventID:          int64Str(m.EventID),
+				ID:               m.ID,
+				EventID:          m.EventID,
 				Filepath:         m.Filepath,
 				Operation:        string(m.Operation),
 				LedgerHashBefore: m.LedgerHashBefore,
