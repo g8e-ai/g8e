@@ -63,7 +63,6 @@ func TestReadKeyFile(t *testing.T) {
 
 	t.Run("valid key", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		key := make([]byte, vault.KeySize)
 		_, err := rand.Read(key)
@@ -79,7 +78,6 @@ func TestReadKeyFile(t *testing.T) {
 
 	t.Run("invalid hex", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		keyPath := filepath.Join(tp.BaseDir, "test.key")
 		require.NoError(t, os.WriteFile(keyPath, []byte("invalid hex"), 0600))
@@ -91,7 +89,6 @@ func TestReadKeyFile(t *testing.T) {
 
 	t.Run("wrong size", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		keyPath := filepath.Join(tp.BaseDir, "test.key")
 		require.NoError(t, os.WriteFile(keyPath, []byte(hex.EncodeToString(make([]byte, 16))), 0600))
@@ -113,7 +110,6 @@ func TestVaultInitCmd(t *testing.T) {
 
 	t.Run("successful init", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -135,7 +131,6 @@ func TestVaultInitCmd(t *testing.T) {
 
 	t.Run("custom paths", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -156,7 +151,6 @@ func TestVaultInitCmd(t *testing.T) {
 
 	t.Run("already initialized", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -172,7 +166,6 @@ func TestVaultUnlockCmd(t *testing.T) {
 
 	t.Run("successful unlock", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -193,7 +186,6 @@ func TestVaultUnlockCmd(t *testing.T) {
 
 	t.Run("wrong key", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -215,7 +207,6 @@ func TestVaultRekeyCmd(t *testing.T) {
 
 	t.Run("successful rekey", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -243,7 +234,6 @@ func TestVaultStatusCmd(t *testing.T) {
 
 	t.Run("not initialized", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -257,7 +247,6 @@ func TestVaultStatusCmd(t *testing.T) {
 
 	t.Run("initialized", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -279,7 +268,6 @@ func TestVaultResetCmd(t *testing.T) {
 
 	t.Run("successful reset with confirm flag", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -301,7 +289,6 @@ func TestVaultResetCmd(t *testing.T) {
 
 	t.Run("interactive cancellation", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -326,7 +313,6 @@ func TestVaultExportImport(t *testing.T) {
 
 	t.Run("export success", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 
@@ -349,7 +335,6 @@ func TestVaultExportImport(t *testing.T) {
 
 	t.Run("import success", func(t *testing.T) {
 		tp := testutil.NewTestPathsFromTemp(t)
-		require.NoError(t, tp.EnsureDirs())
 
 		require.NoError(t, paths.InitWithBase(tp.BaseDir))
 

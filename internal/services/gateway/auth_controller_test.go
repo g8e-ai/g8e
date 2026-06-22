@@ -60,9 +60,9 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	backend, err := keystore.NewTestBackend()
+	keyring, err := keystore.NewMemoryKeyring()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())

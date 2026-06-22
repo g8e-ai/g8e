@@ -30,31 +30,8 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	// State endpoint (for envelope state root binding)
 	mux.HandleFunc(constants.APIPaths.State, h.handleState)
 
-	// MCP Ingress routes with rate limiting
-	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
-	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
-	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
-	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
-
-	// Wrap MCP/A2A with Rate Limiting
-	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
-
-	// Apply JWT middleware only when JWKS is configured (for external IdP auth)
-	// When JWKS is not configured, MCP/A2A routes go through main middleware which enforces mTLS + AppPolicy
-	var mcpHandler http.Handler
-	if h.auth != nil && h.auth.HasJWKS() {
-		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-	} else {
-		// When JWKS is not configured, MCP/A2A must use mTLS + AppPolicy via main middleware
-		// The main middleware (enforced at router level) handles mTLS, identity binding, and AppPolicy
-		mcpHandler = mcpRateLimited
-	}
+	// MCP/A2A ingress (rate-limited, JWT when JWKS is configured, else mTLS via main middleware)
+	mcpHandler := h.buildMCPHandler()
 
 	// Rate-limited mux for core governance envelope (uses mTLS via main middleware)
 	govEnvMux := http.NewServeMux()
@@ -76,15 +53,7 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 
 	// Register rate-limited MCP routes with full paths
 	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
-	mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
-	mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
+	registerMCPRoutes(mux, mcpHandler)
 
 	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
 	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
@@ -162,41 +131,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
-	// MCP/A2A Ingress routes with JWT authentication for remote clients
-	mcpMux := http.NewServeMux()
-	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
-	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
-	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
-	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
-
-	// Wrap MCP/A2A with Rate Limiting
-	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
-
-	// Apply JWT middleware when JWKS is configured (for external IdP auth)
-	// When JWKS is not configured, MCP/A2A routes use mTLS via main middleware
-	var mcpHandler http.Handler
-	if h.auth != nil && h.auth.HasJWKS() {
-		mcpHandler = h.auth.JWTAuthMiddleware(mcpRateLimited)
-	} else {
-		// When JWKS is not configured, MCP/A2A must use mTLS via main middleware
-		mcpHandler = mcpRateLimited
-	}
-
-	// Register MCP routes unconditionally - they are protected by auth.Middleware (mTLS) or JWTAuthMiddleware
-	mux.Handle(constants.APIPaths.MCPEndpoint, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPToolsList, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPToolsCall, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPToolsCallSSE, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPResourcesList, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPResourcesRead, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPPromptsList, mcpHandler)
-	mux.Handle(constants.APIPaths.MCPPromptsGet, mcpHandler)
-	mux.Handle(constants.APIPaths.A2ACall, mcpHandler)
+	// MCP/A2A ingress (rate-limited, JWT when JWKS is configured, else mTLS via main middleware)
+	mcpHandler := h.buildMCPHandler()
+	registerMCPRoutes(mux, mcpHandler)
 
 	// JIT passkey bootstrap: allow first-credential registration via JWT
 	// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
@@ -244,6 +181,42 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
 
+// buildMCPHandler creates the rate-limited, auth-wrapped handler for all MCP/A2A ingress routes.
+// When JWKS is configured, JWT middleware is applied for external IdP auth; otherwise MCP/A2A
+// routes rely on mTLS + AppPolicy enforced by the main middleware at the router level.
+func (h *HTTPHandler) buildMCPHandler() http.Handler {
+	mcpMux := http.NewServeMux()
+	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
+	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
+	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
+	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
+	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
+	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
+
+	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
+
+	if h.auth != nil && h.auth.HasJWKS() {
+		return h.auth.JWTAuthMiddleware(mcpRateLimited)
+	}
+	return mcpRateLimited
+}
+
+// registerMCPRoutes registers all MCP/A2A ingress paths on the given mux with the provided handler.
+func registerMCPRoutes(mux *http.ServeMux, handler http.Handler) {
+	mux.Handle(constants.APIPaths.MCPEndpoint, handler)
+	mux.Handle(constants.APIPaths.MCPToolsList, handler)
+	mux.Handle(constants.APIPaths.MCPToolsCall, handler)
+	mux.Handle(constants.APIPaths.MCPToolsCallSSE, handler)
+	mux.Handle(constants.APIPaths.MCPResourcesList, handler)
+	mux.Handle(constants.APIPaths.MCPResourcesRead, handler)
+	mux.Handle(constants.APIPaths.MCPPromptsList, handler)
+	mux.Handle(constants.APIPaths.MCPPromptsGet, handler)
+	mux.Handle(constants.APIPaths.A2ACall, handler)
+}
+
 func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux := http.NewServeMux()
 
@@ -289,30 +262,4 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
-}
-
-func (h *HTTPHandler) buildMCPHttpRouter() http.Handler {
-	mux := http.NewServeMux()
-
-	// Health endpoint
-	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
-
-	// Unified MCP Streamable HTTP endpoint for standard MCP clients (e.g.
-	// Claude Code custom connectors). This is the canonical single-URL
-	// JSON-RPC surface; the per-method routes below remain for compatibility.
-	mux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
-
-	// MCP-only routes on plain HTTP for HTTP MCP calls
-	mux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
-	mux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
-	mux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
-	mux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
-	mux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
-	mux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
-	mux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
-	mux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
-
-	// Wrap with Origin validation (DNS-rebinding protection per the MCP
-	// Streamable HTTP transport spec) and rate limiting.
-	return h.pathTraversalGuard(h.mcpOriginGuard(h.rateLimitMiddleware(mux)))
 }

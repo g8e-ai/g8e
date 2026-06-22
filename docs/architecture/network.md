@@ -1,5 +1,8 @@
 # Network Architecture
 
+Last Updated: 2026-06-22
+Version: v1.1.6
+
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
 ## Overview
@@ -161,7 +164,7 @@ Where `<gateway_id>` is a persistent identifier generated at gateway installatio
 
 #### Peer Endpoint Resolution
 
-When a gateway needs to communicate with a peer, it utilizes the `PeerConnectionManager` to perform resolution. If `g8e.local` does not resolve via system DNS, the system falls back to detected network IP addresses.
+When a gateway needs to resolve `g8e.local`, it uses the network identity detector in `internal/services/network/identity.go`. If `g8e.local` does not resolve via system DNS, the system falls back to detected network IP addresses.
 
 #### Certificate SAN Binding
 

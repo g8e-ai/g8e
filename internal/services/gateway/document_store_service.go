@@ -54,7 +54,7 @@ func (s *DocumentStoreService) DocGet(collection, id string) (*models.Document, 
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gateway: document store: get: %w", err)
 	}
 	return scanDocument(collection, id, dataJSON, createdAtStr, updatedAtStr)
 }
@@ -89,7 +89,10 @@ func (s *DocumentStoreService) DocCreate(collection, id string, data json.RawMes
 	if err != nil && sqliteutil.IsUniqueConstraintError(err) {
 		return constants.ErrAlreadyExists
 	}
-	return err
+	if err != nil {
+		return fmt.Errorf("gateway: document store: create: %w", err)
+	}
+	return nil
 }
 
 // DocSet creates or replaces a document. data must be valid JSON.
@@ -139,7 +142,10 @@ func (s *DocumentStoreService) DocSetWithTimestamps(collection, id string, data 
 		   updated_at = excluded.updated_at`,
 		collection, id, string(dataJSON), createdAtStr, updatedAtStr,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("gateway: document store: set with timestamps: %w", err)
+	}
+	return nil
 }
 
 // DocUpdate merges fields into an existing document. fields must be valid JSON.
@@ -160,7 +166,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 
 	var doc map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(existingJSON), &doc); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gateway: document store: update: unmarshal existing: %w", err)
 	}
 
 	var incoming map[string]json.RawMessage
@@ -182,7 +188,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 
 	dataJSON, err := json.Marshal(doc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gateway: document store: update: marshal: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -193,7 +199,7 @@ func (s *DocumentStoreService) DocUpdate(collection, id string, fields json.RawM
 		string(dataJSON), nowStr, collection, id,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gateway: document store: update: %w", err)
 	}
 
 	return scanDocument(collection, id, string(dataJSON), createdAtStr, nowStr)
@@ -206,11 +212,11 @@ func (s *DocumentStoreService) DocDelete(collection, id string) (bool, error) {
 		collection, id,
 	)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("gateway: document store: delete: %w", err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("gateway: document store: delete: rows affected: %w", err)
 	}
 	return n > 0, nil
 }
@@ -220,9 +226,13 @@ func (s *DocumentStoreService) DocDelete(collection, id string) (bool, error) {
 func (s *DocumentStoreService) DocDeleteNamespace(collection string) (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM documents WHERE collection = ?", collection)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("gateway: document store: delete namespace: %w", err)
 	}
-	return result.RowsAffected()
+	n, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("gateway: document store: delete namespace: rows affected: %w", err)
+	}
+	return n, nil
 }
 
 // GetField extracts a single field value from a document using dot notation.
@@ -345,19 +355,19 @@ func (s *DocumentStoreService) DocQuery(collection string, filters []models.DocF
 	rows, err := sqliteutil.MaterializeRows(s.db, query.String(), args, func(r *sql.Rows) (docRow, error) {
 		var row docRow
 		if err := r.Scan(&row.docID, &row.dataJSON, &row.createdAtStr, &row.updatedAtStr); err != nil {
-			return docRow{}, err
+			return docRow{}, fmt.Errorf("gateway: document store: query: scan: %w", err)
 		}
 		return row, nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gateway: document store: query: %w", err)
 	}
 
 	results := make([]*models.Document, 0, len(rows))
 	for _, row := range rows {
 		doc, err := scanDocument(collection, row.docID, row.dataJSON, row.createdAtStr, row.updatedAtStr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("gateway: document store: query: %w", err)
 		}
 		results = append(results, doc)
 	}

@@ -23,15 +23,72 @@ from urllib.parse import urlparse, parse_qs
 class FHIRHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed_path = urlparse(self.path)
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length)
         
-        # Handle FHIR ClaimResponse endpoint
+        # Handle MCP JSON-RPC requests (Production Governance Path)
+        try:
+            rpc_data = json.loads(post_data.decode('utf-8'))
+            if rpc_data.get('jsonrpc') == '2.0':
+                method = rpc_data.get('method')
+                if method == 'tools/list':
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": rpc_data.get('id'),
+                        "result": {
+                            "tools": [
+                                {
+                                    "name": "submit_pa",
+                                    "description": "Submit a FHIR R4 Prior Authorization request",
+                                    "inputSchema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "resourceType": {"type": "string", "enum": ["ClaimResponse"]},
+                                            "status": {"type": "string"},
+                                            "use": {"type": "string"}
+                                        },
+                                        "required": ["resourceType", "status", "use"]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
+                elif method == 'tools/call':
+                    params = rpc_data.get('params', {})
+                    if params.get('name') == 'submit_pa':
+                        # Forward to FHIR logic
+                        fhir_data = params.get('arguments', {})
+                        print(f"Received Governed FHIR Submission via MCP: {fhir_data}")
+                        response = {
+                            "jsonrpc": "2.0",
+                            "id": rpc_data.get('id'),
+                            "result": {
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": "PA-2026-0045: ClaimResponse received and queued via governed MCP endpoint."
+                                    }
+                                ]
+                            }
+                        }
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(response).encode('utf-8'))
+                        return
+        except:
+            pass
+
+        # Handle direct FHIR ClaimResponse endpoint (Fallback/Legacy Path)
         if parsed_path.path == '/fhir/ClaimResponse' or parsed_path.path == '/':
-            content_length = int(self.headers.get('Content-Length', 0))
-            post_data = self.rfile.read(content_length)
-            
             try:
                 data = json.loads(post_data.decode('utf-8'))
-                print(f"Received FHIR ClaimResponse: {data}")
+                print(f"Received Direct FHIR ClaimResponse: {data}")
                 
                 # Return success response
                 response = {

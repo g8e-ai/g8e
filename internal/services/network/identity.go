@@ -130,7 +130,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		if err != nil {
 			mu.Lock()
 			if firstErr == nil {
-				firstErr = fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectIPs, err)
+				firstErr = fmt.Errorf("network: detect IPs: %w", err)
 			}
 			mu.Unlock()
 			return
@@ -148,7 +148,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		if err != nil {
 			mu.Lock()
 			if firstErr == nil {
-				firstErr = fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectHostnames, err)
+				firstErr = fmt.Errorf("network: detect hostnames: %w", err)
 			}
 			mu.Unlock()
 			return
@@ -166,7 +166,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		if err != nil {
 			mu.Lock()
 			if firstErr == nil {
-				firstErr = fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectHostsAliases, err)
+				firstErr = fmt.Errorf("network: detect hosts file aliases: %w", err)
 			}
 			mu.Unlock()
 			return
@@ -184,7 +184,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		if err != nil {
 			mu.Lock()
 			if firstErr == nil {
-				firstErr = fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectMDNS, err)
+				firstErr = fmt.Errorf("network: detect mDNS names: %w", err)
 			}
 			mu.Unlock()
 			return
@@ -205,7 +205,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		if err != nil {
 			mu.Lock()
 			if firstErr == nil {
-				firstErr = fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectDNSPTR, err)
+				firstErr = fmt.Errorf("network: detect DNS PTR records: %w", err)
 			}
 			mu.Unlock()
 			return
@@ -223,7 +223,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 		if err != nil {
 			mu.Lock()
 			if firstErr == nil {
-				firstErr = fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectSSHKnownHosts, err)
+				firstErr = fmt.Errorf("network: detect SSH known hosts: %w", err)
 			}
 			mu.Unlock()
 			return
@@ -242,7 +242,7 @@ func (d *Detector) DetectAll(ctx context.Context) (*NetworkIdentity, error) {
 			if err != nil {
 				mu.Lock()
 				if firstErr == nil {
-					firstErr = fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectWindows, err)
+					firstErr = fmt.Errorf("network: detect Windows identity: %w", err)
 				}
 				mu.Unlock()
 				return
@@ -272,7 +272,7 @@ func (d *Detector) detectIPs() ([]string, error) {
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return nil, fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectInterfaces, err)
+		return nil, fmt.Errorf("network: detect interfaces: %w", err)
 	}
 
 	for _, iface := range interfaces {
@@ -370,7 +370,7 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 	hostsPath := getHostsFilePath()
 	file, err := os.Open(hostsPath)
 	if err != nil {
-		return nil, fmt.Errorf("network: %s: %w", constants.ErrNetworkOpenHostsFile, err)
+		return nil, fmt.Errorf("network: open hosts file: %w", err)
 	}
 	defer file.Close()
 
@@ -398,7 +398,7 @@ func (d *Detector) detectEtcHosts() ([]HostAlias, error) {
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("network: %s: %w", constants.ErrNetworkScanHostsFile, err)
+		return nil, fmt.Errorf("network: scan hosts file: %w", err)
 	}
 
 	return aliases, nil
@@ -411,7 +411,7 @@ func (d *Detector) detectMDNS(ctx context.Context) ([]string, error) {
 	// Get hostname and append .local
 	hostnames, err := d.detectHostnames()
 	if err != nil {
-		return nil, fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectMDNS, err)
+		return nil, fmt.Errorf("network: detect mDNS names: %w", err)
 	}
 
 	for _, hn := range hostnames {
@@ -512,7 +512,7 @@ func (d *Detector) detectSSHKnownHosts() ([]string, error) {
 	// Get local IPs
 	localIPs, err := d.detectIPs()
 	if err != nil {
-		return nil, fmt.Errorf("network: %s: %w", constants.ErrNetworkDetectSSHKnownHosts, err)
+		return nil, fmt.Errorf("network: detect IPs: %w", err)
 	}
 
 	localIPSet := make(map[string]bool)
@@ -614,14 +614,14 @@ func (d *Detector) detectWindowsIdentityWithExecutor(executor commandExecutor) (
 	// Try to get NetBIOS name using hostname command
 	hn, err := executor("hostname")
 	if err != nil {
-		return winID, fmt.Errorf("network: %s: %w", constants.ErrNetworkGetHostname, err)
+		return winID, fmt.Errorf("network: get hostname: %w", err)
 	}
 	winID.NetBIOSName = strings.TrimSpace(string(hn))
 
 	// Try to get AD FQDN using systeminfo
 	info, err := executor("systeminfo")
 	if err != nil {
-		return winID, fmt.Errorf("network: %s: %w", constants.ErrNetworkGetSysteminfo, err)
+		return winID, fmt.Errorf("network: get systeminfo: %w", err)
 	}
 	lines := strings.Split(string(info), "\n")
 	for _, line := range lines {
@@ -714,7 +714,7 @@ func (ni *NetworkIdentity) FormatForDisplay() string {
 		for _, alias := range ni.EtcHosts {
 			hostEntries = append(hostEntries, fmt.Sprintf("%s → %s", alias.IP, strings.Join(alias.Aliases, ", ")))
 		}
-		hostsLabel := "/etc/hosts"
+		hostsLabel := constants.PathEtcHosts
 		if runtime.GOOS == "windows" {
 			hostsLabel = "hosts"
 		}

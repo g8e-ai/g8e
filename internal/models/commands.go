@@ -39,6 +39,40 @@ type ExecutionRequestPayload struct {
 	VaultMode         string            `json:"vault_mode,omitempty"`
 }
 
+// ExecutionResult is the domain type for command execution results.
+// It uses value types (int, string, time.Time) with zero values representing "not set".
+// This is the type returned by ExecutionService.ExecuteCommand and used internally.
+type ExecutionResult struct {
+	ExecutionID       string
+	CaseID            string
+	TaskID            string
+	InvestigationID   string
+	Command           string
+	Args              []string
+	Status            operatorv1.ExecutionStatus
+	DurationSeconds   float64
+	OperatorID        string
+	OperatorSessionID string
+	Stdout            string
+	Stderr            string
+	StdoutSize        int
+	StderrSize        int
+	StdoutHash        string
+	StderrHash        string
+	StoredLocally     bool
+	ReturnCode        int
+	ErrorMessage      string
+	ErrorType         string
+	StartTime         time.Time
+	EndTime           time.Time
+	TerminalOutput    *TerminalOutput
+	SystemInfo        *ExecutionSystemInfo
+	EnvironmentInfo   *ExecutionEnvironmentInfo
+}
+
+// ExecutionResultsPayload is the wire type for JSON/protobuf serialization.
+// It uses pointer types (*int, *string, *time.Time) to represent optional fields.
+// This is used at the HTTP/pubsub boundary only.
 type ExecutionResultsPayload struct {
 	PayloadType       string                     `json:"payload_type"`
 	ExecutionID       string                     `json:"execution_id"`
@@ -66,6 +100,103 @@ type ExecutionResultsPayload struct {
 	TerminalOutput    *TerminalOutput            `json:"terminal_output,omitempty"`
 	SystemInfo        *ExecutionSystemInfo       `json:"system_info,omitempty"`
 	EnvironmentInfo   *ExecutionEnvironmentInfo  `json:"environment_info,omitempty"`
+}
+
+// DomainResultFromPayload converts a wire ExecutionResultsPayload to a domain ExecutionResult.
+// This is the conversion point at the pubsub/HTTP boundary.
+func DomainResultFromPayload(p *ExecutionResultsPayload) *ExecutionResult {
+	if p == nil {
+		return nil
+	}
+	result := &ExecutionResult{
+		ExecutionID:       p.ExecutionID,
+		CaseID:            p.CaseID,
+		InvestigationID:   p.InvestigationID,
+		Command:           p.Command,
+		Args:              p.Args,
+		Status:            p.Status,
+		DurationSeconds:   p.DurationSeconds,
+		OperatorID:        p.OperatorID,
+		OperatorSessionID: p.OperatorSessionID,
+		Stdout:            p.Stdout,
+		Stderr:            p.Stderr,
+		StdoutSize:        p.StdoutSize,
+		StderrSize:        p.StderrSize,
+		StdoutHash:        p.StdoutHash,
+		StderrHash:        p.StderrHash,
+		StoredLocally:     p.StoredLocally,
+		TerminalOutput:    p.TerminalOutput,
+		SystemInfo:        p.SystemInfo,
+		EnvironmentInfo:   p.EnvironmentInfo,
+	}
+	if p.TaskID != nil {
+		result.TaskID = *p.TaskID
+	}
+	if p.ReturnCode != nil {
+		result.ReturnCode = *p.ReturnCode
+	}
+	if p.ErrorMessage != nil {
+		result.ErrorMessage = *p.ErrorMessage
+	}
+	if p.ErrorType != nil {
+		result.ErrorType = *p.ErrorType
+	}
+	if p.StartTime != nil {
+		result.StartTime = *p.StartTime
+	}
+	if p.EndTime != nil {
+		result.EndTime = *p.EndTime
+	}
+	return result
+}
+
+// PayloadFromDomainResult converts a domain ExecutionResult to a wire ExecutionResultsPayload.
+// This is used when publishing results to the wire.
+func PayloadFromDomainResult(r *ExecutionResult) *ExecutionResultsPayload {
+	if r == nil {
+		return nil
+	}
+	payload := &ExecutionResultsPayload{
+		PayloadType:       "execution_result",
+		ExecutionID:       r.ExecutionID,
+		CaseID:            r.CaseID,
+		InvestigationID:   r.InvestigationID,
+		Command:           r.Command,
+		Args:              r.Args,
+		Status:            r.Status,
+		DurationSeconds:   r.DurationSeconds,
+		OperatorID:        r.OperatorID,
+		OperatorSessionID: r.OperatorSessionID,
+		Stdout:            r.Stdout,
+		Stderr:            r.Stderr,
+		StdoutSize:        r.StdoutSize,
+		StderrSize:        r.StderrSize,
+		StdoutHash:        r.StdoutHash,
+		StderrHash:        r.StderrHash,
+		StoredLocally:     r.StoredLocally,
+		TerminalOutput:    r.TerminalOutput,
+		SystemInfo:        r.SystemInfo,
+		EnvironmentInfo:   r.EnvironmentInfo,
+	}
+	if r.TaskID != "" {
+		payload.TaskID = &r.TaskID
+	}
+	if r.ReturnCode != 0 {
+		payload.ReturnCode = &r.ReturnCode
+	}
+	if r.ErrorMessage != "" {
+		payload.ErrorMessage = &r.ErrorMessage
+	}
+	if r.ErrorType != "" {
+		payload.ErrorType = &r.ErrorType
+	}
+	if !r.StartTime.IsZero() {
+		payload.StartTime = &r.StartTime
+	}
+	if !r.EndTime.IsZero() {
+		payload.EndTime = &r.EndTime
+	}
+	return payload
 }
 
 type CommandRequestPayload struct {

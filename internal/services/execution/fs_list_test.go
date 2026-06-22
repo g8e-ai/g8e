@@ -181,8 +181,8 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 		result, err := service.ExecuteFsList(context.Background(), req)
 		require.NoError(t, err) // Returns result with error, not Go error
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.NotNil(t, result.ErrorType)
-		assert.Equal(t, "path not found", *result.ErrorType)
+		assert.NotEmpty(t, result.ErrorType)
+		assert.Equal(t, "path not found", result.ErrorType)
 	})
 
 	t.Run("handles file path (not directory)", func(t *testing.T) {
@@ -203,7 +203,7 @@ func TestFsListService_ExecuteFsList(t *testing.T) {
 		result, err := service.ExecuteFsList(context.Background(), req)
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.NotNil(t, result.ErrorType)
-		assert.Equal(t, "path is not a directory", *result.ErrorType)
+		assert.NotEmpty(t, result.ErrorType)
+		assert.Equal(t, "path is not a directory", result.ErrorType)
 	})
 }

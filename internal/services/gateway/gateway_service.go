@@ -82,13 +82,13 @@ type GatewayModeService struct {
 func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayModeService, error) {
 	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize database: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
 	}
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	sm, err := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
 	if err != nil {
-		return nil, fmt.Errorf("initialize secret manager: %w", err)
+		return nil, fmt.Errorf("gateway: initialize secret manager: %w", err)
 	}
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
 	userSvc := NewUserService(db, logger)
@@ -104,11 +104,11 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	for _, persona := range DefaultPersonaDefinitions() {
 		existing, err := personaSvc.GetByID(persona.ID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to check existing persona %s: %w", persona.ID, err)
+			return nil, fmt.Errorf("gateway: failed to check existing persona %s: %w", persona.ID, err)
 		}
 		if existing == nil {
 			if err := personaSvc.CreatePersona(&persona); err != nil {
-				return nil, fmt.Errorf("failed to create persona %s: %w", persona.ID, err)
+				return nil, fmt.Errorf("gateway: failed to create persona %s: %w", persona.ID, err)
 			}
 		}
 	}
@@ -127,11 +127,11 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 	if len(extraDNSNames) > 0 {
 		if err := pki.InitializePKIWithNames(extraIPs, extraDNSNames); err != nil {
-			return nil, fmt.Errorf("failed to initialize PKI hierarchy: %w", err)
+			return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
 		}
 	} else {
 		if err := pki.InitializePKI(extraIPs); err != nil {
-			return nil, fmt.Errorf("failed to initialize PKI hierarchy: %w", err)
+			return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
 		}
 	}
 
@@ -144,7 +144,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize passkey service: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
 
 	// Initialize suspended transaction service for gateway mode
@@ -156,7 +156,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize suspended transaction service: %w", err)
 	}
 
 	// Initialize ScrubbingService for data scrubbing (enabled by default)
@@ -172,7 +172,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
 	ls := &GatewayModeService{
@@ -195,7 +195,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	if err := ls.initHandlersAndServers(); err != nil {
-		return nil, fmt.Errorf("failed to initialize handlers and servers: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize handlers and servers: %w", err)
 	}
 
 	return ls, nil
@@ -238,12 +238,12 @@ func resolveFullCertificateIdentity(identityFile string, detector networkIdentit
 		logger.Info("Using pre-detected network identity from file", "file", identityFile)
 		identityData, err := os.ReadFile(identityFile)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to read network identity file: %w", err)
+			return nil, nil, fmt.Errorf("gateway: failed to read network identity file: %w", err)
 		}
 
 		var netIdentity network.NetworkIdentity
 		if err := json.Unmarshal(identityData, &netIdentity); err != nil {
-			return nil, nil, fmt.Errorf("failed to unmarshal network identity: %w", err)
+			return nil, nil, fmt.Errorf("gateway: failed to unmarshal network identity: %w", err)
 		}
 
 		extraIPs := netIdentity.GetAllIPs()
@@ -322,7 +322,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	}
 	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize suspended transaction service: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize suspended transaction service: %w", err)
 	}
 
 	// Initialize ScrubbingService for data scrubbing (enabled by default)
@@ -338,7 +338,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		Posture:          string(cfg.Gateway.Posture),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize MCP gateway: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
 	ls := &GatewayModeService{
@@ -361,7 +361,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	}
 
 	if err := ls.initHandlersAndServers(); err != nil {
-		return nil, fmt.Errorf("failed to initialize handlers and servers: %w", err)
+		return nil, fmt.Errorf("gateway: failed to initialize handlers and servers: %w", err)
 	}
 
 	return ls, nil
@@ -434,7 +434,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 			continue
 		}
 		if len(usage) > 1 {
-			return fmt.Errorf("listen: port %d has multiple surface assignments %v; assign distinct ports", port, usage)
+			return fmt.Errorf("gateway: listen: port %d has multiple surface assignments %v; assign distinct ports", port, usage)
 		}
 	}
 
@@ -553,7 +553,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 	}
 	ready, err := ls.db.SignerStore.HasTrustedSigners()
 	if err != nil {
-		ls.logger.Error("Failed to check if governance is ready", string(constants.ConnectionStateError), err)
+		ls.logger.Error("Failed to check if governance is ready", "state", string(constants.ConnectionStateError), "error", err)
 		return false
 	}
 	return ready
@@ -637,7 +637,7 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 		// Use a temporary gateway to signal readiness before blocking on Serve
 		ln, err := net.Listen(string(constants.NetworkProtocolTCP), s.Addr)
 		if err != nil {
-			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, string(constants.ConnectionStateError), err)
+			ls.logger.Error("Failed to listen", "server", name, "addr", s.Addr, "state", string(constants.ConnectionStateError), "error", err)
 			errChan <- err
 			return
 		}
@@ -735,14 +735,14 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 			ls.logger.Error("HTTP server shutdown timeout - forcing exit to prevent zombie process")
 			return constants.ErrGatewayShutdownTimeout
 		}
-		ls.logger.Error("HTTP server shutdown error", string(constants.ConnectionStateError), err)
+		ls.logger.Error("HTTP server shutdown error", "state", string(constants.ConnectionStateError), "error", err)
 	}
 	if err := ls.publicServer.Shutdown(shutdownCtx); err != nil {
 		if shutdownCtx.Err() == context.DeadlineExceeded {
 			ls.logger.Error("HTTPS server shutdown timeout - forcing exit to prevent zombie process")
 			return constants.ErrGatewayShutdownTimeout
 		}
-		ls.logger.Error("HTTPS server shutdown error", string(constants.ConnectionStateError), err)
+		ls.logger.Error("HTTPS server shutdown error", "state", string(constants.ConnectionStateError), "error", err)
 	}
 
 	// Close pub/sub broker (disconnects all WebSocket clients)
@@ -751,13 +751,13 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	// Close suspended transaction service database
 	if ls.suspendedTxService != nil {
 		if err := ls.suspendedTxService.Close(); err != nil {
-			ls.logger.Error("Suspended transaction service close error", string(constants.ConnectionStateError), err)
+			ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
 		}
 	}
 
 	// Close database
 	if err := ls.db.Close(); err != nil {
-		ls.logger.Error("Database close error", string(constants.ConnectionStateError), err)
+		ls.logger.Error("Database close error", "state", string(constants.ConnectionStateError), "error", err)
 	}
 
 	ls.running = false
@@ -773,7 +773,7 @@ func (ls *GatewayModeService) runServiceCertRenewalLoop(ctx context.Context) {
 
 	// Check immediately on startup
 	if err := ls.renewServiceCertWithIdentity(ctx); err != nil {
-		ls.logger.Error("Failed to renew service certificate on startup", string(constants.ConnectionStateError), err)
+		ls.logger.Error("Failed to renew service certificate on startup", "state", string(constants.ConnectionStateError), "error", err)
 	}
 
 	for {
@@ -782,7 +782,7 @@ func (ls *GatewayModeService) runServiceCertRenewalLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := ls.renewServiceCertWithIdentity(ctx); err != nil {
-				ls.logger.Error("Failed to renew service certificate", string(constants.ConnectionStateError), err)
+				ls.logger.Error("Failed to renew service certificate", "state", string(constants.ConnectionStateError), "error", err)
 			}
 		}
 	}
@@ -835,7 +835,7 @@ func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte
 		return
 	}
 
-	if _, err := ls.db.DocStore.DocUpdate("operators", env.OperatorID, update); err != nil {
+	if _, err := ls.db.DocStore.DocUpdate(string(constants.CollectionOperators), env.OperatorID, update); err != nil {
 		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.OperatorID, "error", err)
 		return
 	}

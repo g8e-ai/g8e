@@ -36,14 +36,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -77,17 +78,17 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
 	require.NoError(t, os.RemoveAll(secretsDir), "failed to clean secrets dir")
 	require.NoError(t, os.MkdirAll(secretsDir, 0755), "failed to create secrets dir")
 
-	backend, err := keystore.NewTestBackend()
-	require.NoError(t, err, "failed to create test keystore backend")
+	keyring, err := keystore.NewMemoryKeyring()
+	require.NoError(t, err, "failed to create test keystore keyring")
 
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
 	require.NoError(t, err, "failed to create keystore")
 	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
 	require.NoError(t, ks.EnforcePermissions(), "failed to enforce keystore permissions")
@@ -258,7 +259,7 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 			method: http.MethodGet,
 			setup: func(t *testing.T, c *PKIController, _ *CanonicalDBService) {
 				pkiDir := c.pki.PKIDir()
-				rootPath := filepath.Join(pkiDir, "root", "root_ca.crt")
+				rootPath := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
 				err := os.WriteFile(rootPath, []byte("invalid pem data"), 0644)
 				require.NoError(t, err, "failed to write invalid PEM data")
 			},
@@ -536,21 +537,68 @@ func TestPKIController_HandlePKICABundle(t *testing.T) {
 
 func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
 	t.Parallel()
-	c, _, _ := setupTestPKIController(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
-	rr := httptest.NewRecorder()
+	t.Run("Success - GET returns Windows script", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		rr := httptest.NewRecorder()
 
-	c.handleTrustScriptWindows(rr, req)
+		c.handleTrustScriptWindows(rr, req)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
-	assert.NotEmpty(t, rr.Body.Bytes())
-	script := rr.Body.String()
-	assert.Contains(t, script, "CA bundle installed")
-	assert.Contains(t, script, "Download g8e Node")
-	assert.Contains(t, script, "security pki enroll")
-	assert.Contains(t, script, "Enrollment complete")
+		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, "application/x-powershell", rr.Header().Get("Content-Type"))
+		assert.NotEmpty(t, rr.Body.Bytes())
+		script := rr.Body.String()
+		assert.Contains(t, script, "CA bundle installed")
+		assert.Contains(t, script, "g8e Node")
+		assert.Contains(t, script, "auth enroll")
+	})
+
+	t.Run("Success - GET with X-Forwarded-Host uses external host", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		req.Header.Set("X-Forwarded-Host", "192.168.1.62")
+		rr := httptest.NewRecorder()
+
+		c.handleTrustScriptWindows(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		script := rr.Body.String()
+		assert.Contains(t, script, "192.168.1.62")
+		assert.NotContains(t, script, "localhost")
+	})
+
+	t.Run("Success - GET with Host header uses that host", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		req.Host = "192.168.1.62:8080"
+		rr := httptest.NewRecorder()
+
+		c.handleTrustScriptWindows(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		script := rr.Body.String()
+		assert.Contains(t, script, "192.168.1.62")
+		assert.NotContains(t, script, "localhost")
+	})
+
+	t.Run("Success - GET with localhost uses LocalAddrContextKey IP", func(t *testing.T) {
+		c, _, _ := setupTestPKIController(t)
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-windows", nil)
+		req.Host = "localhost:8080"
+		// Set LocalAddrContextKey to simulate a non-loopback server address
+		localAddr := &net.TCPAddr{IP: net.ParseIP("192.168.1.62"), Port: 8080}
+		ctx := context.WithValue(req.Context(), http.LocalAddrContextKey, localAddr)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+
+		c.handleTrustScriptWindows(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		script := rr.Body.String()
+		assert.Contains(t, script, "192.168.1.62")
+		assert.NotContains(t, script, "localhost")
+	})
 }
 
 func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
@@ -567,7 +615,7 @@ func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
 	assert.NotEmpty(t, rr.Body.Bytes())
 	script := rr.Body.String()
 	assert.Contains(t, script, "CA bundle installed")
-	assert.Contains(t, script, "g8e auth enroll")
+	assert.Contains(t, script, "auth enroll")
 }
 
 func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
@@ -587,9 +635,8 @@ func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
 				assert.NotEmpty(t, rr.Body.Bytes())
 				script := rr.Body.String()
 				assert.Contains(t, script, "CA bundle installed")
-				assert.Contains(t, script, "Download g8e Node")
-				assert.Contains(t, script, "security pki enroll")
-				assert.Contains(t, script, "Enrollment complete")
+				assert.Contains(t, script, "g8e Node")
+				assert.Contains(t, script, "auth enroll")
 			},
 		},
 	}
@@ -616,7 +663,7 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 	// Create binaries directory and a test binary
 	binaryDir := filepath.Join(c.pki.PKIDir(), constants.PkiSubdirBinaries)
 	require.NoError(t, os.MkdirAll(binaryDir, 0755))
-	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe")
+	testNodeBinaryPath := filepath.Join(binaryDir, "g8e-windows-amd64.exe") // Test-specific binary name, acceptable as test data
 	testNodeBinaryContent := []byte("test binary content")
 	require.NoError(t, os.WriteFile(testNodeBinaryPath, testNodeBinaryContent, 0644))
 

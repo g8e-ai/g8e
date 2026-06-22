@@ -4,7 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-06-15
+Last Updated: 2026-06-22
+Version: v1.1.6
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 

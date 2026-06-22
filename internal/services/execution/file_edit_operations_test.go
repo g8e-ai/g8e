@@ -51,7 +51,7 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
-				EndLine: &endLine,
+				EndLine: endLine,
 			},
 			RequestedBy: "test-user",
 		}
@@ -60,9 +60,9 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Contains(t, *result.Content, "Line 1")
-		assert.Contains(t, *result.Content, "Line 3")
-		assert.NotContains(t, *result.Content, "Line 4")
+		assert.Contains(t, result.Content, "Line 1")
+		assert.Contains(t, result.Content, "Line 3")
+		assert.NotContains(t, result.Content, "Line 4")
 	})
 
 	t.Run("read with max lines from middle", func(t *testing.T) {
@@ -84,8 +84,8 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
-				StartLine: &startLine,
-				MaxLines:  &maxLines,
+				StartLine: startLine,
+				MaxLines:  maxLines,
 			},
 			RequestedBy: "test-user",
 		}
@@ -95,9 +95,9 @@ func TestFileEditService_ReadOperations(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
 
-		readLines := strings.Split(*result.Content, "\n")
+		readLines := strings.Split(result.Content, "\n")
 		assert.LessOrEqual(t, len(readLines), maxLines)
-		assert.Contains(t, *result.Content, "Line 20")
+		assert.Contains(t, result.Content, "Line 20")
 	})
 
 	t.Run("read with complete file stats", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 			CaseID:          "test-case-write",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &newContent,
+			Content:         newContent,
 			CreateIfMissing: false,
 			RequestedBy:     "test-user",
 		}
@@ -212,7 +212,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 			CaseID:          "test-case-write",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			CreateBackup:    false,
 			RequestedBy:     "test-user",
@@ -222,7 +222,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Nil(t, result.BackupPath)
+		assert.Empty(t, result.BackupPath)
 	})
 
 	t.Run("write with nested directory creation", func(t *testing.T) {
@@ -236,7 +236,7 @@ func TestFileEditService_WriteOperations(t *testing.T) {
 			CaseID:          "test-case-write",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        nestedPath,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -270,8 +270,8 @@ func TestFileEditService_ReplaceOperations(t *testing.T) {
 			CaseID:       "test-case-replace",
 			Operation:    constants.FileOperationReplace,
 			FilePath:     testFile,
-			OldContent:   &oldContent,
-			NewContent:   &newContent,
+			OldContent:   oldContent,
+			NewContent:   newContent,
 			CreateBackup: true,
 			RequestedBy:  "test-user",
 		}
@@ -280,9 +280,9 @@ func TestFileEditService_ReplaceOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.NotNil(t, result.BackupPath)
+		assert.NotEmpty(t, result.BackupPath)
 
-		backupData, _ := os.ReadFile(*result.BackupPath)
+		backupData, _ := os.ReadFile(result.BackupPath)
 		assert.Equal(t, original, string(backupData))
 	})
 
@@ -301,8 +301,8 @@ func TestFileEditService_ReplaceOperations(t *testing.T) {
 			CaseID:      "test-case-replace",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -337,8 +337,8 @@ func TestFileEditService_InsertOperations(t *testing.T) {
 			CaseID:         "test-case-insert",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			CreateBackup:   true,
 			RequestedBy:    "test-user",
 		}
@@ -347,7 +347,7 @@ func TestFileEditService_InsertOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.NotNil(t, result.BackupPath)
+		assert.NotEmpty(t, result.BackupPath)
 	})
 
 	t.Run("insert multiline content", func(t *testing.T) {
@@ -365,8 +365,8 @@ func TestFileEditService_InsertOperations(t *testing.T) {
 			CaseID:         "test-case-insert",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -402,8 +402,8 @@ func TestFileEditService_DeleteOperations(t *testing.T) {
 			CaseID:       "test-case-delete",
 			Operation:    constants.FileOperationDelete,
 			FilePath:     testFile,
-			StartLine:    &startLine,
-			EndLine:      &endLine,
+			StartLine:    startLine,
+			EndLine:      endLine,
 			CreateBackup: true,
 			RequestedBy:  "test-user",
 		}
@@ -412,7 +412,7 @@ func TestFileEditService_DeleteOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.NotNil(t, result.BackupPath)
+		assert.NotEmpty(t, result.BackupPath)
 	})
 
 	t.Run("delete first line", func(t *testing.T) {
@@ -430,8 +430,8 @@ func TestFileEditService_DeleteOperations(t *testing.T) {
 			CaseID:      "test-case-delete",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    testFile,
-			StartLine:   &startLine,
-			EndLine:     &endLine,
+			StartLine:   startLine,
+			EndLine:     endLine,
 			RequestedBy: "test-user",
 		}
 
@@ -461,7 +461,7 @@ func TestFileEditService_ErrorHandling(t *testing.T) {
 			CaseID:       "test-case-error",
 			Operation:    constants.FileOperationPatch,
 			FilePath:     testFile,
-			PatchContent: &patchContent,
+			PatchContent: patchContent,
 			RequestedBy:  "test-user",
 		}
 
@@ -469,7 +469,7 @@ func TestFileEditService_ErrorHandling(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "not yet implemented")
+		assert.Contains(t, result.ErrorMessage, "not yet implemented")
 	})
 
 	t.Run("unsupported operation", func(t *testing.T) {

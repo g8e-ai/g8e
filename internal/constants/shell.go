@@ -27,6 +27,36 @@ const (
 
 	// LocalhostIP is the IP address for local execution
 	LocalhostIP = "127.0.0.1"
+
+	// RemoteEphemeralScriptTemplate is the bash script injected into remote hosts for Operator deployment.
+	// It handles graceful cleanup on session termination.
+	RemoteEphemeralScriptTemplate = `set -e
+B=$(mktemp)
+cat > "$B"
+chmod +x "$B"
+cleanup() {
+  sig=${1:-TERM}
+  if [ -n "${PID:-}" ] && kill -0 "$PID" 2>/dev/null; then
+    kill -"$sig" "-$PID" 2>/dev/null || kill -"$sig" "$PID" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      kill -0 "$PID" 2>/dev/null || break
+      sleep 0.2
+    done
+    kill -0 "$PID" 2>/dev/null && { kill -KILL "-$PID" 2>/dev/null || kill -KILL "$PID" 2>/dev/null || true; }
+  fi
+  rm -f "$B"
+}
+trap 'cleanup TERM; exit 143' HUP INT TERM
+trap 'rm -f "$B"' EXIT
+setsid "$B" %s < /dev/null &
+PID=$!
+wait "$PID"`
+
+	// RemoteInjectedBinaryMessage is shown when only the binary is injected without execution.
+	RemoteInjectedBinaryMessage = "[g8e]Node Binary injected into %s -- run it manually: %s -e <endpoint> [options]"
+
+	// RemoteInjectedScriptMinimal is the minimal script for binary injection.
+	RemoteInjectedScriptMinimal = `set -e; B=$(mktemp); cat > "$B"; chmod +x "$B"; trap 'rm -f "$B"' EXIT; echo "%s"`
 )
 
 // DangerousCommands is the list of commands that are blocked by safety policy

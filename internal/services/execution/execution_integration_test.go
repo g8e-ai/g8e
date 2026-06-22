@@ -64,7 +64,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		t.Parallel()
 		var wg sync.WaitGroup
 		numCommands := 5
-		results := make(chan *models.ExecutionResultsPayload, numCommands)
+		results := make(chan *models.ExecutionResult, numCommands)
 
 		for i := 0; i < numCommands; i++ {
 			wg.Add(1)
@@ -260,7 +260,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		}
 
 		// Start execution in background
-		done := make(chan *models.ExecutionResultsPayload)
+		done := make(chan *models.ExecutionResult)
 		go func() {
 			result, _ := svc.ExecuteCommand(context.Background(), req)
 			done <- result
@@ -348,7 +348,7 @@ func TestExecutionService_Integration(t *testing.T) {
 		}
 
 		// Process commands
-		results := make([]*models.ExecutionResultsPayload, 0, numCommands)
+		results := make([]*models.ExecutionResult, 0, numCommands)
 		for i := 0; i < numCommands; i++ {
 			req := &models.ExecutionRequestPayload{
 				ExecutionID:    requestIDs[i],
@@ -442,7 +442,7 @@ exit 0
 
 				require.NoError(t, err)
 				assert.Equal(t, tc.expectedStatus, result.Status)
-				assert.Equal(t, tc.exitCode, *result.ReturnCode)
+				assert.Equal(t, tc.exitCode, result.ReturnCode)
 
 			})
 		}

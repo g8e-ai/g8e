@@ -68,7 +68,7 @@ func TestSQLAuditStore_FileMutation(t *testing.T) {
 		Type:                constants.Event.Operator.FileEdit.Completed,
 		ContentText:         "Write config file",
 		CommandRaw:          "file_write /etc/nginx/nginx.conf",
-		CommandExitCode:     &exitCode,
+		CommandExitCode:     exitCode,
 		ExecutionDurationMs: 25,
 	}
 
@@ -137,7 +137,7 @@ func TestSQLAuditStore_MultipleFileMutationsPerEvent(t *testing.T) {
 		Timestamp:         time.Now().UTC(),
 		Type:              constants.Event.Operator.FileEdit.Completed,
 		ContentText:       "Batch file operation",
-		CommandExitCode:   &exitCode,
+		CommandExitCode:   exitCode,
 	}
 	eventID, err := avs.RecordEvent(event)
 	require.NoError(t, err)

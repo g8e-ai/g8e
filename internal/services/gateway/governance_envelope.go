@@ -43,12 +43,12 @@ func (ls *GatewayModeService) SetEnvelopeProcessor(p governance.EnvelopeProcesso
 func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	// Ensure mTLS is present
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-		return fmt.Errorf("verifyEnvelopeIdentityBinding: mTLS client certificate required")
+		return constants.ErrMTLSRequired
 	}
 
 	cert := r.TLS.PeerCertificates[0]
 	if len(cert.URIs) == 0 {
-		return fmt.Errorf("verifyEnvelopeIdentityBinding: client certificate missing URI SAN")
+		return constants.ErrCertURISANMissing
 	}
 
 	// Parse the envelope from its canonical protojson wire form to extract
@@ -107,8 +107,8 @@ func verifyEnvelopeIdentityBinding(r *http.Request, envelopeBody []byte) error {
 	}
 
 	// No matching URI SAN found
-	return fmt.Errorf("verifyEnvelopeIdentityBinding: certificate URI SAN does not match envelope identity claims (operator_id=%s, operator_session_id=%s, source_component=%s)",
-		operatorID, operatorSessionID, sourceComponent)
+	return fmt.Errorf("%w (operator_id=%s, operator_session_id=%s, source_component=%s)",
+		constants.ErrURISANMismatch, operatorID, operatorSessionID, sourceComponent)
 }
 
 // isAppComponent reports whether the envelope's source component is an app
@@ -136,21 +136,21 @@ func isAppComponent(c commonv1.Component) bool {
 //   - 405 Method Not Allowed: non-POST methods.
 func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 	if h.envProc == nil {
-		h.responder.Error(w, http.StatusServiceUnavailable, "envelope processor not initialized")
+		h.responder.Error(w, http.StatusServiceUnavailable, constants.ErrEnvelopeProcessorNotInit.Error())
 		return
 	}
 
 	body, err := h.readBody(r)
 	if err != nil {
-		h.responder.Error(w, http.StatusBadRequest, fmt.Sprintf("handleGovernanceEnvelope: failed to read request body: %v", err))
+		h.responder.Error(w, http.StatusBadRequest, fmt.Errorf("handleGovernanceEnvelope: failed to read request body: %w", err).Error())
 		return
 	}
 	if len(body) == 0 {
-		h.responder.Error(w, http.StatusBadRequest, "empty request body")
+		h.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -161,7 +161,7 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 	// Skip identity binding if no TLS is present (test mode)
 	if r.TLS != nil {
 		if err := verifyEnvelopeIdentityBinding(r, body); err != nil {
-			h.responder.Error(w, http.StatusForbidden, fmt.Sprintf("handleGovernanceEnvelope: identity binding failed: %v", err))
+			h.responder.Error(w, http.StatusForbidden, fmt.Errorf("handleGovernanceEnvelope: %w: %w", constants.ErrIdentityBindingFailed, err).Error())
 			return
 		}
 	}
@@ -175,7 +175,7 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 	if receipt == nil {
 		// Defensive: a nil receipt with nil error should never happen, but if
 		// the processor regresses, do not mask the failure.
-		h.responder.Error(w, http.StatusInternalServerError, "handleGovernanceEnvelope: envelope processor returned nil receipt without error")
+		h.responder.Error(w, http.StatusInternalServerError, constants.ErrNilReceipt.Error())
 		return
 	}
 

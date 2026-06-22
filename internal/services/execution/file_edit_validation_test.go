@@ -66,7 +66,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:          "test-case-validation",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         nil,
+			Content:         "",
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -75,7 +75,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "content is required")
+		assert.Contains(t, result.ErrorMessage, "content is required")
 	})
 
 	t.Run("write to non-existent file without create flag", func(t *testing.T) {
@@ -89,7 +89,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:          "test-case-validation",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: false,
 			RequestedBy:     "test-user",
 		}
@@ -113,8 +113,8 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:      "test-case-validation",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
-			OldContent:  nil,
-			NewContent:  &newContent,
+			OldContent:  "",
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -138,8 +138,8 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:      "test-case-validation",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -147,7 +147,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "old_content not found")
+		assert.Contains(t, result.ErrorMessage, "old_content not found")
 	})
 
 	t.Run("insert without position returns error", func(t *testing.T) {
@@ -162,8 +162,8 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:         "test-case-validation",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: nil,
+			InsertContent:  insertContent,
+			InsertPosition: 0,
 			RequestedBy:    "test-user",
 		}
 
@@ -187,8 +187,8 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:         "test-case-validation",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -196,7 +196,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "out of range")
+		assert.Contains(t, result.ErrorMessage, "out of range")
 	})
 
 	t.Run("delete without line range returns error", func(t *testing.T) {
@@ -210,8 +210,8 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:      "test-case-validation",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    testFile,
-			StartLine:   nil,
-			EndLine:     nil,
+			StartLine:   0,
+			EndLine:     0,
 			RequestedBy: "test-user",
 		}
 
@@ -219,7 +219,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "start_line and end_line are required")
+		assert.Contains(t, result.ErrorMessage, "start_line and end_line are required")
 	})
 
 	t.Run("delete invalid line range", func(t *testing.T) {
@@ -235,8 +235,8 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:      "test-case-validation",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    testFile,
-			StartLine:   &startLine,
-			EndLine:     &endLine,
+			StartLine:   startLine,
+			EndLine:     endLine,
 			RequestedBy: "test-user",
 		}
 
@@ -244,7 +244,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "invalid line range")
+		assert.Contains(t, result.ErrorMessage, "invalid line range")
 	})
 
 	t.Run("delete with start_line greater than end_line", func(t *testing.T) {
@@ -260,8 +260,8 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 			CaseID:      "test-case-validation",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    testFile,
-			StartLine:   &startLine,
-			EndLine:     &endLine,
+			StartLine:   startLine,
+			EndLine:     endLine,
 			RequestedBy: "test-user",
 		}
 
@@ -269,7 +269,7 @@ func TestFileEditService_ValidationErrors(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "invalid line range")
+		assert.Contains(t, result.ErrorMessage, "invalid line range")
 	})
 }
 
@@ -298,21 +298,20 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Empty(t, *result.Content)
+		assert.Empty(t, result.Content)
 	})
 
 	t.Run("write empty content", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
 		testFile := filepath.Join(tmpDir, "empty-write.txt")
-		content := ""
 
 		req := &models.FileEditRequest{
 			ExecutionID:     "write-empty-1",
 			CaseID:          "test-case-edge",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         "",
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -320,10 +319,8 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-
-		data, _ := os.ReadFile(testFile)
-		assert.Empty(t, string(data))
+		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
+		assert.Contains(t, result.ErrorMessage, "content is required")
 	})
 
 	t.Run("insert at beginning (position 1)", func(t *testing.T) {
@@ -339,8 +336,8 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 			CaseID:         "test-case-edge",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -367,8 +364,8 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 			CaseID:         "test-case-edge",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       testFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -394,8 +391,8 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 			CaseID:      "test-case-edge",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    testFile,
-			StartLine:   &startLine,
-			EndLine:     &endLine,
+			StartLine:   startLine,
+			EndLine:     endLine,
 			RequestedBy: "test-user",
 		}
 
@@ -418,7 +415,7 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 			Operation:   constants.FileOperationRead,
 			FilePath:    testFile,
 			ReadOptions: &models.FileReadOptions{
-				StartLine: &startLine,
+				StartLine: startLine,
 			},
 			RequestedBy: "test-user",
 		}
@@ -427,7 +424,7 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Empty(t, *result.Content)
+		assert.Empty(t, result.Content)
 	})
 
 	t.Run("replace with multiline content", func(t *testing.T) {
@@ -443,8 +440,8 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 			CaseID:      "test-case-edge",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    testFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -470,7 +467,7 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 			CaseID:          "test-case-edge",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -495,7 +492,7 @@ func TestFileEditService_EdgeCaseOperations(t *testing.T) {
 			CaseID:          "test-case-edge",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        nestedPath,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -560,7 +557,7 @@ func TestFileEditService_PermissionsAndStats(t *testing.T) {
 			CaseID:          "test-case-perms",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &newContent,
+			Content:         newContent,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -588,7 +585,7 @@ func TestFileEditService_PermissionsAndStats(t *testing.T) {
 			CaseID:          "test-case-large",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        testFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -597,6 +594,6 @@ func TestFileEditService_PermissionsAndStats(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Greater(t, *result.BytesWritten, int64(500000))
+		assert.Greater(t, result.BytesWritten, int64(500000))
 	})
 }

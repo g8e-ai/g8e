@@ -46,7 +46,7 @@ export PATH=$GOPATH/bin:$PATH
 | `./g8e` | Interactive Platform Manager |
 | `./g8e gw start` | Start the g8e Gateway |
 | `./g8e gw status` | Get g8e Gateway health and status |
-| `./g8e auth login` | Authenticate the local CLI |
+| `./g8e auth enroll` | Authenticate the local CLI |
 | `./g8e test` | Run Go host-native tests |
 
 The g8e Operator is the single entry point for all platform operations. Run `./g8e --help` for complete command reference.

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-06-15
-Version: v1.1.1
+Last Updated: 2026-06-22
+Version: v1.1.6
 
 ---
 
@@ -115,22 +115,22 @@ Refer to `protocol/proto/g8e/operator/v1/operator.proto` for the canonical schem
 Generate an mTLS client certificate from the Gateway (Operator in gateway mode):
 
 ```bash
-./g8e auth login
+./g8e auth enroll
 ```
 
-This stores the certificate in `.g8e/pki/client.crt` and key in `.g8e/pki/client.key`.
+This stores the certificate in `.g8e/cli.crt` and key in `.g8e/cli.key`.
 
 ### Step 2: Fetch State Root
 
 Query the Gateway health endpoint for the current state root:
 
 ```bash
-curl -X GET https://localhost:8443/api/v1/health \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key
+curl -X GET https://localhost:8443/api/v1/state \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key
 ```
 
-The response includes the `state_merkle_root` field.
+The response includes the `state_merkle_root` field. Alternatively, the `/api/v1/health` endpoint also returns state root information.
 
 ### Step 3: Construct Typed Payload
 
@@ -211,8 +211,8 @@ Submit the envelope to the g8e Gateway:
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/governance/envelopes \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
   -d @envelope.json
 ```
@@ -294,10 +294,10 @@ For MCP-based applications, the Gateway accepts JSON-RPC tool calls and translat
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell_execute","arguments":{"command":"ls -la"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
 ```
 
 The Gateway performs L1 Doctrine validation on the tool name before envelope construction.
@@ -308,10 +308,10 @@ For A2A-based applications, the Gateway accepts HTTP/JSON task invocations and t
 
 ```bash
 curl -X POST https://localhost:8443/api/v1/a2a/call \
-  --cert .g8e/pki/client.crt \
-  --key .g8e/pki/client.key \
+  --cert .g8e/cli.crt \
+  --key .g8e/cli.key \
   -H "Content-Type: application/json" \
-  -d '{"skill_name":"file_read","payload_json":"{\"path\":\"/etc/hosts\"}","execution_id":"task-1"}'
+  -d '{"skill_name":"read_file","payload":"{\"path\":\"/etc/hosts\"}","execution_id":"task-1"}'
 ```
 
 The Gateway performs L1 Doctrine validation on the skill name before envelope construction.
@@ -372,5 +372,4 @@ Refer to `protocol/examples/governance_envelope/` for example envelope construct
 ## Next Steps
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Secure Data Transfer & Governed Pipelines](secure_data_transfer.md)** — Use an enrolled app and a live human session to run a fully governed, audited data pipeline.
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a g8e Operator.

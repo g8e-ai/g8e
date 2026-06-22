@@ -275,9 +275,9 @@ func RequirePKIInitialized(t *testing.T, pkiDir string) {
 
 	// Check that critical directories exist
 	dirs := []string{
-		filepath.Join(pkiDir, "root"),
-		filepath.Join(pkiDir, "authorities"),
-		filepath.Join(pkiDir, "trust"),
+		filepath.Join(pkiDir, constants.PkiSubdirRoot),
+		filepath.Join(pkiDir, constants.PkiSubdirAuthorities),
+		filepath.Join(pkiDir, constants.PkiSubdirTrust),
 	}
 
 	for _, dir := range dirs {

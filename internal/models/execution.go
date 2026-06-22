@@ -20,7 +20,7 @@ type ExecutionRecord struct {
 	ID               string
 	TimestampUTC     time.Time
 	Command          string
-	ExitCode         *int
+	ExitCode         int
 	DurationMs       int64
 	StdoutCompressed []byte
 	StderrCompressed []byte

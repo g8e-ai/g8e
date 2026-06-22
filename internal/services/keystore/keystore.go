@@ -49,40 +49,28 @@ type EncryptedSecret struct {
 type Keystore struct {
 	logger     *slog.Logger
 	secretsDir string
-	backend    Backend
+	keyring    Keyring
 }
 
-// NewWithBackend creates a new Keystore instance with a custom backend.
-// This is primarily used for testing with the in-memory test backend.
-func NewWithBackend(secretsDir string, logger *slog.Logger, backend Backend) (*Keystore, error) {
+// NewWithKeyring creates a new Keystore instance with a custom keyring.
+// This is primarily used for testing with the in-memory memory keyring.
+func NewWithKeyring(secretsDir string, logger *slog.Logger, keyring Keyring) (*Keystore, error) {
 	if err := os.MkdirAll(secretsDir, 0700); err != nil {
 		return nil, fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 	return &Keystore{
 		logger:     logger,
 		secretsDir: secretsDir,
-		backend:    backend,
+		keyring:    keyring,
 	}, nil
-}
-
-// Backend defines the OS-specific key store interface.
-type Backend interface {
-	// RetrieveMasterKey retrieves the master encryption key from the OS key store.
-	RetrieveMasterKey() ([]byte, error)
-	// StoreMasterKey stores the master encryption key in the OS key store.
-	StoreMasterKey(key []byte) error
-	// DeleteMasterKey removes the master encryption key from the OS key store.
-	DeleteMasterKey() error
-	// Name returns the human-readable name of the backend.
-	Name() string
 }
 
 // Initialize creates or retrieves the master encryption key from the OS key store.
 func (k *Keystore) Initialize() error {
-	key, err := k.backend.RetrieveMasterKey()
+	key, err := k.keyring.RetrieveMasterKey()
 	if err != nil {
 		if errors.Is(err, constants.ErrKeyStoreKeyNotFound) {
-			k.logger.Info("[Keystore] Master key not found, generating new key", "backend", k.backend.Name())
+			k.logger.Info("[Keystore] Master key not found, generating new key", "keyring", k.keyring.Name())
 			return k.generateAndStoreMasterKey()
 		}
 		return fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
@@ -92,7 +80,7 @@ func (k *Keystore) Initialize() error {
 		return fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreInvalidKeyLength, len(key), keySize)
 	}
 
-	k.logger.Info("[Keystore] Master key retrieved from OS key store", "backend", k.backend.Name())
+	k.logger.Info("[Keystore] Master key retrieved from OS key store", "keyring", k.keyring.Name())
 	return nil
 }
 
@@ -103,17 +91,17 @@ func (k *Keystore) generateAndStoreMasterKey() error {
 		return fmt.Errorf("%w: %v", constants.ErrKeyStoreGenerateFailed, err)
 	}
 
-	if err := k.backend.StoreMasterKey(key); err != nil {
+	if err := k.keyring.StoreMasterKey(key); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrKeyStoreStoreFailed, err)
 	}
 
-	k.logger.Info("[Keystore] Master key generated and stored in OS key store", "backend", k.backend.Name())
+	k.logger.Info("[Keystore] Master key generated and stored in OS key store", "keyring", k.keyring.Name())
 	return nil
 }
 
 // encrypt performs AES-256-GCM encryption on plaintext and returns the EncryptedSecret structure.
 func (k *Keystore) encrypt(plaintext string) (*EncryptedSecret, error) {
-	key, err := k.backend.RetrieveMasterKey()
+	key, err := k.keyring.RetrieveMasterKey()
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
@@ -148,7 +136,7 @@ func (k *Keystore) decrypt(enc *EncryptedSecret) (string, error) {
 		return "", fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreUnsupportedVersion, enc.Version, keyVersion)
 	}
 
-	key, err := k.backend.RetrieveMasterKey()
+	key, err := k.keyring.RetrieveMasterKey()
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
@@ -263,7 +251,7 @@ func (k *Keystore) DeleteSecret(name string) error {
 
 // Purge removes all secrets from disk and deletes the master key from the OS key store.
 func (k *Keystore) Purge() error {
-	if err := k.backend.DeleteMasterKey(); err != nil {
+	if err := k.keyring.DeleteMasterKey(); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrKeyStoreDeleteFailed, err)
 	}
 
@@ -287,7 +275,7 @@ func (k *Keystore) Purge() error {
 		return fmt.Errorf("purge failed with %d errors: %w", len(purgeErrors), purgeErrors[0])
 	}
 
-	k.logger.Info("[Keystore] All secrets purged", "backend", k.backend.Name())
+	k.logger.Info("[Keystore] All secrets purged", "keyring", k.keyring.Name())
 	return nil
 }
 
@@ -316,7 +304,7 @@ func (k *Keystore) EnforcePermissions() error {
 	return nil
 }
 
-// BackendName returns the name of the OS key store backend.
-func (k *Keystore) BackendName() string {
-	return k.backend.Name()
+// KeyringName returns the name of the OS-native keyring.
+func (k *Keystore) KeyringName() string {
+	return k.keyring.Name()
 }

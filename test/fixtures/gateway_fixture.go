@@ -88,7 +88,7 @@ type GatewayFixtureOptions struct {
 func repoTestResultsDir() string {
 	_, thisFile, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
-	return filepath.Join(repoRoot, "test-results")
+	return filepath.Join(repoRoot, constants.TestResultsDirname)
 }
 
 // NewGatewayFixture creates a fully configured gateway fixture for testing.

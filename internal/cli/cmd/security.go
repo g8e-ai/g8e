@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/spf13/cobra"
 )
 
@@ -50,23 +51,28 @@ func securityValidateCmd() *cobra.Command {
 		Use:   "validate",
 		Short: "Run security validation checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if pkiDir == "" {
-				pkiDir = paths.Infra.PkiDir
-			}
-			if secretsDir == "" {
-				secretsDir = paths.Infra.SecretsDir
-			}
-
 			cmd.Println("Running platform security validation...")
 			failed := false
 
 			// Check PKI directory structure
 			cmd.Println("\n=== PKI Directory Structure ===")
-			pkiFiles := []string{
-				filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
-				filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCAKey),
-				filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
-				filepath.Join(pkiDir, constants.PkiFileWardenPub),
+			var pkiFiles []string
+			if pkiDir == "" {
+				// Use precomputed paths from paths.Infra
+				pkiFiles = []string{
+					paths.Infra.RootCAPath,
+					paths.Infra.RootCAKeyPath,
+					paths.Infra.CaCertPath,
+					paths.Infra.WardenPubPath,
+				}
+			} else {
+				// Use custom pkiDir from flag
+				pkiFiles = []string{
+					filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
+					filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCAKey),
+					filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle),
+					filepath.Join(pkiDir, constants.PkiFileWardenPub),
+				}
 			}
 			for _, file := range pkiFiles {
 				if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -79,9 +85,19 @@ func securityValidateCmd() *cobra.Command {
 
 			// Check secrets directory
 			cmd.Println("\n=== Secrets Directory ===")
-			secretFiles := []string{
-				filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey),
-				filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+			var secretFiles []string
+			if secretsDir == "" {
+				// Use precomputed paths from paths.Infra
+				secretFiles = []string{
+					paths.Infra.SessionEncKeyPath,
+					paths.Infra.BootstrapDigestPath,
+				}
+			} else {
+				// Use custom secretsDir from flag
+				secretFiles = []string{
+					filepath.Join(secretsDir, constants.SecretsFileSessionEncryptionKey),
+					filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
+				}
 			}
 			for _, file := range secretFiles {
 				if _, err := os.Stat(file); os.IsNotExist(err) {
@@ -94,7 +110,12 @@ func securityValidateCmd() *cobra.Command {
 
 			// Validate root CA certificate
 			cmd.Println("\n=== Certificate Validation ===")
-			rootCAPath := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+			var rootCAPath string
+			if pkiDir == "" {
+				rootCAPath = paths.Infra.RootCAPath
+			} else {
+				rootCAPath = filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+			}
 			if certData, err := os.ReadFile(rootCAPath); err == nil {
 				certPool := x509.NewCertPool()
 				if !certPool.AppendCertsFromPEM(certData) {
@@ -127,7 +148,12 @@ func securityValidateCmd() *cobra.Command {
 
 			// Check TLS configuration
 			cmd.Println("\n=== TLS Configuration ===")
-			trustBundlePath := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+			var trustBundlePath string
+			if pkiDir == "" {
+				trustBundlePath = paths.Infra.CaCertPath
+			} else {
+				trustBundlePath = filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+			}
 			if trustData, err := os.ReadFile(trustBundlePath); err == nil {
 				certPool := x509.NewCertPool()
 				if certPool.AppendCertsFromPEM(trustData) {
@@ -189,7 +215,8 @@ func securityPKIEnrollCmd() *cobra.Command {
 			// Use outputDir if specified, otherwise use project root
 			var pkiDir string
 			if outputDir != "" {
-				pkiDir = filepath.Join(outputDir, paths.Infra.PkiDir)
+				// Use pathutil.SafeJoin for cross-platform safety when joining with absolute paths.Infra.PkiDir
+				pkiDir = pathutil.SafeJoin(outputDir, paths.Infra.PkiDir)
 			} else {
 				pkiDir = paths.Infra.PkiDir
 			}

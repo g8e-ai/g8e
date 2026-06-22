@@ -31,7 +31,6 @@ import (
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	system "github.com/g8e-ai/g8e/internal/services/system"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -128,30 +127,15 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 
 	commandStr := fmt.Sprintf("file_%s: %s", operation, filePath)
 
-	var exitCode *int
-	if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-		zero := 0
-		exitCode = &zero
-	} else {
-		one := 1
-		exitCode = &one
+	exitCode := 0
+	if result.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+		exitCode = 1
 	}
 
-	var stdout string
-	if result.Content != nil {
-		stdout = *result.Content
-	}
-
-	var stderr string
-	if result.ErrorMessage != nil {
-		stderr = *result.ErrorMessage
-	}
+	stdout := result.Content
+	stderr := result.ErrorMessage
 
 	if fs.vaultWriter != nil {
-		taskID := ""
-		if result.TaskID != nil {
-			taskID = *result.TaskID
-		}
 		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
 			command:         commandStr,
@@ -162,7 +146,7 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			stdoutSize:      len(stdout),
 			stderrSize:      len(stderr),
 			caseID:          result.CaseID,
-			taskID:          taskID,
+			taskID:          result.TaskID,
 			investigationID: result.InvestigationID,
 			vaultMode:       vaultMode,
 		})
@@ -179,14 +163,10 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 		}
 
 		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-			zero := 0
-			event.CommandExitCode = &zero
+			event.CommandExitCode = 0
 		} else {
-			one := 1
-			event.CommandExitCode = &one
-			if result.ErrorMessage != nil {
-				event.CommandStderr = *result.ErrorMessage
-			}
+			event.CommandExitCode = 1
+			event.CommandStderr = result.ErrorMessage
 		}
 
 		eventID, err := fs.auditStore.RecordEvent(event)
@@ -227,13 +207,11 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 	}
 
 	if fs.scrubbing != nil && fs.scrubbing.IsEnabled() {
-		if result.Content != nil {
-			scrubbed := fs.scrubbing.ScrubText(*result.Content)
-			result.Content = &scrubbed
+		if result.Content != "" {
+			result.Content = fs.scrubbing.ScrubText(result.Content)
 		}
-		if result.ErrorMessage != nil {
-			scrubbed := fs.scrubbing.ScrubText(*result.ErrorMessage)
-			result.ErrorMessage = &scrubbed
+		if result.ErrorMessage != "" {
+			result.ErrorMessage = fs.scrubbing.ScrubText(result.ErrorMessage)
 		}
 	}
 
@@ -245,31 +223,31 @@ func (fs *FileOpsService) HandleFileEditRequest(ctx context.Context, msg *PubSub
 			Operation:       string(result.Operation),
 			DurationSeconds: float32(result.DurationSeconds),
 		}
-		if result.ErrorMessage != nil {
-			protoResult.ErrorMessage = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			protoResult.ErrorMessage = result.ErrorMessage
 		}
-		if result.ErrorType != nil {
-			protoResult.ErrorType = *result.ErrorType
+		if result.ErrorType != "" {
+			protoResult.ErrorType = result.ErrorType
 		}
-		if result.BytesWritten != nil {
-			protoResult.BytesWritten = *result.BytesWritten
+		if result.BytesWritten != 0 {
+			protoResult.BytesWritten = result.BytesWritten
 		}
-		if result.LinesChanged != nil {
-			linesChanged := *result.LinesChanged
+		if result.LinesChanged != 0 {
+			linesChanged := result.LinesChanged
 			if linesChanged > maxInt32Value {
 				linesChanged = maxInt32Value
 			}
 			protoResult.LinesChanged = int32(linesChanged) //nolint:gosec // bounds checked above
 		}
-		if result.BackupPath != nil {
-			protoResult.BackupPath = *result.BackupPath
+		if result.BackupPath != "" {
+			protoResult.BackupPath = result.BackupPath
 		}
-		if result.Content != nil {
-			protoResult.Content = *result.Content
-			protoResult.StdoutSize = int32(len(*result.Content)) //nolint:gosec // bounded by pub/sub payload limits
+		if result.Content != "" {
+			protoResult.Content = result.Content
+			protoResult.StdoutSize = int32(len(result.Content)) //nolint:gosec // bounded by pub/sub payload limits
 		}
-		if result.ErrorMessage != nil && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED {
-			protoResult.StderrSize = int32(len(*result.ErrorMessage)) //nolint:gosec // bounded by pub/sub payload limits
+		if result.ErrorMessage != "" && result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED {
+			protoResult.StderrSize = int32(len(result.ErrorMessage)) //nolint:gosec // bounded by pub/sub payload limits
 		}
 
 		if err := fs.results.PublishFileEditResult(ctx, protoResult, msg); err != nil {
@@ -313,21 +291,17 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 			InvestigationID: fsListReq.InvestigationID,
 			Path:            fsListReq.Path,
 			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr(err.Error()),
-			ErrorType:       system.StringPtr("execution_error"),
+			ErrorMessage:    err.Error(),
+			ErrorType:       "execution_error",
 		}
 	}
 
 	if fs.vaultWriter != nil {
 		commandStr := fmt.Sprintf("fs_list: %s", path)
 
-		var exitCode *int
-		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-			zero := 0
-			exitCode = &zero
-		} else {
-			one := 1
-			exitCode = &one
+		exitCode := 0
+		if result.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+			exitCode = 1
 		}
 
 		var stdout string
@@ -337,15 +311,8 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 			}
 		}
 
-		var stderr string
-		if result.ErrorMessage != nil {
-			stderr = *result.ErrorMessage
-		}
-
-		taskID := ""
-		if result.TaskID != nil {
-			taskID = *result.TaskID
-		}
+		stderr := result.ErrorMessage
+		taskID := result.TaskID
 
 		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
@@ -379,11 +346,11 @@ func (fs *FileOpsService) HandleFsListRequest(ctx context.Context, msg *PubSubCo
 			TotalCount:      int32(totalCount), //nolint:gosec // bounds checked above
 			DurationSeconds: float32(result.DurationSeconds),
 		}
-		if result.ErrorMessage != nil {
-			protoResult.ErrorMessage = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			protoResult.ErrorMessage = result.ErrorMessage
 		}
-		if result.ErrorType != nil {
-			protoResult.ErrorType = *result.ErrorType
+		if result.ErrorType != "" {
+			protoResult.ErrorType = result.ErrorType
 		}
 		if result.Entries != nil {
 			protoResult.Entries = make([]*operatorv1.FsEntry, len(result.Entries))
@@ -446,21 +413,17 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 			Path:            fsGrepReq.Path,
 			Pattern:         fsGrepReq.Pattern,
 			Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED,
-			ErrorMessage:    system.StringPtr(err.Error()),
-			ErrorType:       system.StringPtr("execution_error"),
+			ErrorMessage:    err.Error(),
+			ErrorType:       "execution_error",
 		}
 	}
 
 	if fs.vaultWriter != nil {
 		commandStr := fmt.Sprintf("fs_grep: %s (pattern: %s)", path, protoGrep.Pattern)
 
-		var exitCode *int
-		if result.Status == operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
-			zero := 0
-			exitCode = &zero
-		} else {
-			one := 1
-			exitCode = &one
+		exitCode := 0
+		if result.Status != operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED {
+			exitCode = 1
 		}
 
 		var stdout string
@@ -470,15 +433,8 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 			}
 		}
 
-		var stderr string
-		if result.ErrorMessage != nil {
-			stderr = *result.ErrorMessage
-		}
-
-		taskID := ""
-		if result.TaskID != nil {
-			taskID = *result.TaskID
-		}
+		stderr := result.ErrorMessage
+		taskID := result.TaskID
 
 		fs.vaultWriter.WriteExecution(ctx, executionWriteParams{
 			id:              result.ExecutionID,
@@ -512,11 +468,11 @@ func (fs *FileOpsService) HandleFsGrepRequest(ctx context.Context, msg *PubSubCo
 			Truncated:       result.Truncated,
 			DurationSeconds: float32(result.DurationSeconds),
 		}
-		if result.ErrorMessage != nil {
-			protoResult.ErrorMessage = *result.ErrorMessage
+		if result.ErrorMessage != "" {
+			protoResult.ErrorMessage = result.ErrorMessage
 		}
-		if result.ErrorType != nil {
-			protoResult.ErrorType = *result.ErrorType
+		if result.ErrorType != "" {
+			protoResult.ErrorType = result.ErrorType
 		}
 		if result.Matches != nil {
 			protoResult.Matches = make([]*operatorv1.FsGrepMatch, len(result.Matches))
@@ -685,9 +641,14 @@ func payloadToFileEditRequest(msg *PubSubCommandMessage) (*models.FileEditReques
 	}
 
 	req := &models.FileEditRequest{
-		ExecutionID:     requestID,
-		CaseID:          msg.CaseID,
-		TaskID:          msg.TaskID,
+		ExecutionID: requestID,
+		CaseID:      msg.CaseID,
+		TaskID: func() string {
+			if msg.TaskID != nil {
+				return *msg.TaskID
+			}
+			return ""
+		}(),
 		InvestigationID: msg.InvestigationID,
 		Operation:       operation,
 		FilePath:        p.FilePath,
@@ -698,28 +659,28 @@ func payloadToFileEditRequest(msg *PubSubCommandMessage) (*models.FileEditReques
 	}
 
 	if p.Content != "" {
-		req.Content = system.StringPtr(p.Content)
+		req.Content = p.Content
 	}
 	if p.OldContent != "" {
-		req.OldContent = system.StringPtr(p.OldContent)
+		req.OldContent = p.OldContent
 	}
 	if p.NewContent != "" {
-		req.NewContent = system.StringPtr(p.NewContent)
+		req.NewContent = p.NewContent
 	}
 	if p.InsertContent != "" {
-		req.InsertContent = system.StringPtr(p.InsertContent)
+		req.InsertContent = p.InsertContent
 	}
 	if p.InsertPosition != 0 {
-		req.InsertPosition = system.IntPtr(int(p.InsertPosition))
+		req.InsertPosition = int(p.InsertPosition)
 	}
 	if p.StartLine != 0 {
-		req.StartLine = system.IntPtr(int(p.StartLine))
+		req.StartLine = int(p.StartLine)
 	}
 	if p.EndLine != 0 {
-		req.EndLine = system.IntPtr(int(p.EndLine))
+		req.EndLine = int(p.EndLine)
 	}
 	if p.PatchContent != "" {
-		req.PatchContent = system.StringPtr(p.PatchContent)
+		req.PatchContent = p.PatchContent
 	}
 
 	return req, nil
@@ -748,9 +709,14 @@ func payloadToFsListRequest(msg *PubSubCommandMessage) (*models.FsListRequest, e
 	}
 
 	return &models.FsListRequest{
-		ExecutionID:     requestID,
-		CaseID:          msg.CaseID,
-		TaskID:          msg.TaskID,
+		ExecutionID: requestID,
+		CaseID:      msg.CaseID,
+		TaskID: func() string {
+			if msg.TaskID != nil {
+				return *msg.TaskID
+			}
+			return ""
+		}(),
 		InvestigationID: msg.InvestigationID,
 		Path:            path,
 		MaxDepth:        int(p.MaxDepth),
@@ -782,9 +748,14 @@ func payloadToFsGrepRequest(msg *PubSubCommandMessage) (*models.FsGrepRequest, e
 	}
 
 	return &models.FsGrepRequest{
-		ExecutionID:     requestID,
-		CaseID:          msg.CaseID,
-		TaskID:          msg.TaskID,
+		ExecutionID: requestID,
+		CaseID:      msg.CaseID,
+		TaskID: func() string {
+			if msg.TaskID != nil {
+				return *msg.TaskID
+			}
+			return ""
+		}(),
 		InvestigationID: msg.InvestigationID,
 		Path:            path,
 		Pattern:         p.Pattern,

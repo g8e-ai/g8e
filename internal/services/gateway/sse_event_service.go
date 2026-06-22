@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
@@ -62,11 +63,11 @@ func (r SSERoute) validate() error {
 	}
 	switch n {
 	case 0:
-		return fmt.Errorf("sse route requires exactly one of web_session_id, cli_session_id, user_id")
+		return constants.ErrGatewaySSERouteRequired
 	case 1:
 		return nil
 	default:
-		return fmt.Errorf("sse route is mutually-exclusive: set exactly one of web_session_id, cli_session_id, user_id")
+		return constants.ErrGatewaySSERouteMutuallyExclusive
 	}
 }
 
@@ -82,32 +83,42 @@ func (s *SSEEventService) SSEEventsAppend(route SSERoute, eventType, payload, pr
 		"INSERT INTO sse_events (web_session_id, cli_session_id, user_id, event_type, payload, producer_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		nullIfEmpty(route.WebSessionID), nullIfEmpty(route.CLISessionID), nullIfEmpty(route.UserID), eventType, payload, nullIfEmpty(producerID), now,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("sse_event_service: append: %w", err)
+	}
+	return nil
 }
 
-// nullIfEmpty returns sql.NullString{Valid: false} for empty strings so the
+// nullIfEmpty returns sql.NullString for empty strings so the
 // CHECK constraint on sse_events sees a NULL rather than an empty string.
-func nullIfEmpty(s string) interface{} {
+func nullIfEmpty(s string) sql.NullString {
 	if s == "" {
-		return nil
+		return sql.NullString{Valid: false}
 	}
-	return s
+	return sql.NullString{String: s, Valid: true}
 }
 
 // SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.
 func (s *SSEEventService) SSEEventsWipe() (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM sse_events")
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("sse_event_service: wipe: %w", err)
 	}
-	return result.RowsAffected()
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("sse_event_service: wipe: rows affected: %w", err)
+	}
+	return count, nil
 }
 
 // SSEEventsCount returns the total number of rows in the sse_events table.
 func (s *SSEEventService) SSEEventsCount() (int64, error) {
 	var count int64
 	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM sse_events").Scan(&count)
-	return count, err
+	if err != nil {
+		return 0, fmt.Errorf("sse_event_service: count: %w", err)
+	}
+	return count, nil
 }
 
 // SSEEventsListSince returns up to `limit` events with id > sinceID, ordered by
@@ -138,7 +149,7 @@ func (s *SSEEventService) SSEEventsListSince(route SSERoute, sinceID int64, limi
 		var row models.SSEEventRow
 		var web, cli, user sql.NullString
 		if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
-			return models.SSEEventRow{}, err
+			return models.SSEEventRow{}, fmt.Errorf("sse_event_service: list_since: scan: %w", err)
 		}
 		row.WebSessionID = web.String
 		row.CLISessionID = cli.String
@@ -156,12 +167,12 @@ func (s *SSEEventService) SSEEventsListAllSince(sinceID int64, limit int) ([]mod
 	}
 	return sqliteutil.MaterializeRows(s.db,
 		"SELECT id, web_session_id, cli_session_id, user_id, event_type, payload, created_at FROM sse_events WHERE id > ? ORDER BY id ASC LIMIT ?",
-		[]interface{}{sinceID, limit},
+		[]any{sinceID, limit},
 		func(r *sql.Rows) (models.SSEEventRow, error) {
 			var row models.SSEEventRow
 			var web, cli, user sql.NullString
 			if err := r.Scan(&row.ID, &web, &cli, &user, &row.EventType, &row.Payload, &row.CreatedAt); err != nil {
-				return models.SSEEventRow{}, err
+				return models.SSEEventRow{}, fmt.Errorf("sse_event_service: list_all_since: scan: %w", err)
 			}
 			row.WebSessionID = web.String
 			row.CLISessionID = cli.String

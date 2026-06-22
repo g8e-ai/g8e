@@ -72,4 +72,7 @@ const (
 
 	// ExitCodeKilled indicates process was killed (typically 137, 128+9)
 	ExitCodeKilled = 137
+
+	// ExitCodeNone indicates no exit code is available (e.g. non-command event)
+	ExitCodeNone = -1
 )

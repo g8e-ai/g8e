@@ -48,6 +48,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/mapping"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/storage"
@@ -488,7 +489,8 @@ func Run(cfg Config) error {
 	}
 
 	// Initialize Ledger (nil for chaos tester - no actual ledger needed)
-	ledgerBaseDir := filepath.Join(paths.Infra.RuntimeDir, constants.DataDirname, constants.LedgerDirname)
+	// Use pathutil.SafeJoin for cross-platform safety when joining with absolute paths.Infra.RuntimeDir
+	ledgerBaseDir := pathutil.SafeJoin(paths.Infra.RuntimeDir, constants.DataDirname, constants.LedgerDirname)
 	ledger, _ := storage.NewGitLedgerService(&storage.LedgerConfig{BaseDir: ledgerBaseDir, EncryptionVault: nil}, logger)
 
 	// Initialize L1 Doctrine for threat detection

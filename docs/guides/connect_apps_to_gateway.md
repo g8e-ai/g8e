@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-06-15
-Version: v1.1.1
+Last Updated: 2026-06-22
+Version: v1.1.6
 
 ---
 
@@ -374,7 +374,7 @@ The Gateway enforces strict session separation to prevent cross-tenant data leak
 Generate a client certificate for CLI operations:
 
 ```bash
-./g8e auth login
+./g8e auth enroll
 ```
 
 This:
@@ -405,7 +405,7 @@ or manual approval steps. The client then proves its identity on every subsequen
 signing with its private key (via mTLS). No shared secrets, no API keys to leak.
 
 All authentication to the Gateway uses CSR-based enrollment. The first human to
-authenticate via `./g8e auth login` becomes the Platform Owner. All other entities
+authenticate via `./g8e auth enroll` becomes the Platform Owner. All other entities
 (operators, MCP servers, AI clients, applications) enroll via the same CSR flow.
 
 #### Enrollment Flow
@@ -589,7 +589,7 @@ ls -la .g8e/pki/client.crt
 Re-run login if certificate is missing or expired:
 
 ```bash
-./g8e auth login
+./g8e auth enroll
 ```
 
 ### Operator Connection Issues
@@ -611,7 +611,6 @@ If downstream MCP/A2A server is unavailable, the Gateway circuit breaker activat
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a g8e Operator
 - **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
-- **[Secure Data Transfer & Governed Pipelines](secure_data_transfer.md)** - Enroll an app, bind it to a live human session, and run a fully governed data pipeline via the API
 - **[MCP Protocol](../protocols/mcp/mcp.md)** - Detailed MCP protocol specification
 - **[A2A Protocol](../protocols/a2a/a2a.md)** - Detailed A2A protocol specification
 - **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals

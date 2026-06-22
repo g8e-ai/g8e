@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2026-06-22
+
+### Overview
+
+v1.1.6 is a major reporting, compliance, and platform stability release. This version introduces a comprehensive reporting infrastructure for audit and compliance, standardizes cross-platform process management (specifically for Windows), and hardens network security by requiring HTTPS for critical operations. This release also features significant improvements to SSH error handling and retry logic, centralized architecture constants, and a massive expansion of test coverage for reporting and storage services.
+
+### Added
+
+* **Audit and Compliance Reporting** — Introduced a new reporting service suite in `internal/services/reporting/` capable of generating CSV exports for ledger commits, file diffs, and nonces to support governance audits.
+* **Reporting CLI Capabilities** — Added `ListCommits`, `ListFileDiffs`, and `ListNonces` methods to storage services to support the new reporting infrastructure.
+* **Network Error Patterns** — Added `TransientNetworkErrorPatterns` in `internal/constants/network.go` to provide more robust and intelligent retry logic for network-related operations.
+* **Platform Constants** — Centralized architecture and OS constants (`ArchAMD64`, `ArchARM64`, `OSLinux`, `OSWindows`, etc.) for better maintainability and cross-platform consistency.
+* **Standardized Path Constants** — Added standardized path constants for `/dev/null`, `/dev/zero`, and improved `/tmp` path handling.
+* **SSH Error Types** — Added specific SSH context error types (`ErrSSHContextCancelled`, `ErrSSHRetryBackoffCancelled`) for more granular error handling in remote operations.
+
+### Changed
+
+* **Standardized Command Exit Codes** — Systematically replaced `nil` exit code pointers with a new `constants.ExitCodeNone` sentinel value across the storage and auditing layers for better data consistency.
+* **Windows Process Management** — Refactored `ProcessManager` to use `uintptr` for Windows handles instead of `syscall.Handle`, improving abstraction and build compatibility.
+* **HTTPS Requirement** — Hardened the security posture by requiring HTTPS for critical operations and removing the insecure `LocalHttpStdioGateway` (port 18789).
+* **URL Constant Standardization** — Unified URL and endpoint constants into `GatewayHTTPBase` and `GatewayHTTPSBase` to reduce duplication.
+* **SSH Retry Logic** — Enhanced SSH execution with improved retry logic and more descriptive error reporting, including captured remote stderr.
+* **Gateway Code Quality** — Systematic refactoring of gateway components for better maintainability and performance.
+
+### Fixed
+
+* **Windows Builds** — Resolved critical build issues on Windows platform (#156).
+* **Process Manager** — Fixed various issues in process lifecycle management across platforms.
+* **Path Resolution** — Improved path handling and resolution in reporting and storage services.
+* **Reporting Accuracy** — Fixed issues with data truncation and timestamp parsing in audit reports.
+* **URL Cleanup** — Removed redundant and inconsistent URL definitions across the codebase.
+
+### Removed
+
+* **Local HTTP Stdio Gateway** — Removed the insecure `LocalHttpStdioGateway` (port 18789) as part of the move towards mandatory HTTPS.
+
 ## [1.1.5] - 2026-06-20
 
 ### Overview
@@ -44,7 +80,7 @@ v1.1.4 is a code quality and test coverage release that significantly improves t
 ### Breaking Changes
 
 * **`emulator` renamed to `agentic-tool-emulator`** - The emulator CLI command and internal package are renamed to `agentic-tool-emulator` for clarity. Directory renamed from `internal/emulator` to `internal/agentic_tool_emulator`, CLI command changed from `g8e emulator` to `g8e agentic-tool-emulator`, and all references in code, documentation, and configuration files are updated accordingly.
-* **`insecure_mcp` renamed to `local_http_stdio`** - The insecure MCP mode is renamed to `local_http_stdio` for clarity. Service directory, package names, constants, JSON keys, and all references are updated accordingly.
+* **`local_http_stdio` (formerly `insecure_mcp`) mode removed** - The ungoverned local MCP node mode is removed entirely. It connected to an MCP gateway over WebSocket and executed `system.run`/`system.which` with no L1/L2/L3 verification — an unconditional governance bypass. All local MCP traffic now goes exclusively through the governed mTLS/HTTPS gateway surface (`g8e mcp stdio`). The `--local-http-stdio*` flags, `LocalHttpStdioGateway` port (18789), service package, config loader, and related constants are deleted.
 
 ### Changed
 

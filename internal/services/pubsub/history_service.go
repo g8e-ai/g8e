@@ -109,7 +109,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg *PubSu
 		&operatorv1.FetchLogsResult{
 			ExecutionId: record.ID,
 			Command:     record.Command,
-			ReturnCode:  int32(*record.ExitCode), //nolint:gosec // exit codes are 0-255
+			ReturnCode:  int32(record.ExitCode), //nolint:gosec // exit codes are 0-255
 			DurationMs:  record.DurationMs,
 			Stdout:      string(record.StdoutCompressed),
 			Stderr:      string(record.StderrCompressed),

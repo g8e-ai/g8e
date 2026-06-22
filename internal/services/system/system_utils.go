@@ -62,7 +62,7 @@ func GetConnectivityStatus() []models.HeartbeatNetworkInterface {
 }
 
 func GetUptime() string {
-	data, err := os.ReadFile("/proc/uptime")
+	data, err := os.ReadFile(constants.PathProcUptime)
 	if err != nil {
 		return string(constants.SystemHealthUnknown)
 	}
@@ -90,7 +90,7 @@ func GetUptime() string {
 }
 
 func GetUptimeSeconds() int64 {
-	data, err := os.ReadFile("/proc/uptime")
+	data, err := os.ReadFile(constants.PathProcUptime)
 	if err != nil {
 		return 0
 	}
@@ -140,19 +140,19 @@ type cpuStat struct {
 }
 
 func readCPUStat() (*cpuStat, error) {
-	data, err := os.ReadFile("/proc/stat")
+	data, err := os.ReadFile(constants.PathProcStat)
 	if err != nil {
 		return nil, err
 	}
 
 	lines := strings.Split(string(data), "\n")
 	if len(lines) < 1 {
-		return nil, fmt.Errorf("invalid /proc/stat format")
+		return nil, constants.ErrSystemUtilsInvalidProcStatFormat
 	}
 
 	fields := strings.Fields(lines[0])
 	if len(fields) < 8 || fields[0] != "cpu" {
-		return nil, fmt.Errorf("invalid CPU line format")
+		return nil, constants.ErrSystemUtilsInvalidCPULineFormat
 	}
 
 	stat := &cpuStat{}
@@ -168,7 +168,7 @@ func readCPUStat() (*cpuStat, error) {
 }
 
 func GetMemoryPercent() float64 {
-	data, err := os.ReadFile("/proc/meminfo")
+	data, err := os.ReadFile(constants.PathProcMemInfo)
 	if err != nil {
 		return 0.0
 	}
@@ -214,7 +214,7 @@ func GetNetworkLatency() float64 {
 }
 
 func GetDiskPercent() float64 {
-	data, err := os.ReadFile("/proc/mounts")
+	data, err := os.ReadFile(constants.PathProcMounts)
 	if err != nil {
 		return 0.0
 	}
@@ -234,7 +234,7 @@ func GetDiskPercent() float64 {
 	}
 
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
+	if err := syscall.Statfs(constants.PathRoot, &stat); err != nil {
 		return 0.0
 	}
 
@@ -258,7 +258,7 @@ func GetOSDetails() models.HeartbeatOSDetails {
 }
 
 func getKernelVersion() string {
-	data, err := os.ReadFile("/proc/version")
+	data, err := os.ReadFile(constants.PathProcVersion)
 	if err != nil {
 		return string(constants.SystemHealthUnknown)
 	}
@@ -278,7 +278,7 @@ func getDistroVersion() string {
 }
 
 func readOSReleaseField(field string) string {
-	data, err := os.ReadFile("/etc/os-release")
+	data, err := os.ReadFile(constants.PathEtcOSRelease)
 	if err != nil {
 		return string(constants.SystemHealthUnknown)
 	}
@@ -294,7 +294,7 @@ func readOSReleaseField(field string) string {
 
 func GetUserDetails(shell string) models.HeartbeatUserDetails {
 	if shell == "" {
-		shell = "/bin/sh"
+		shell = constants.PathBinSh
 	}
 	currentUser, err := user.Current()
 	if err != nil {
@@ -327,7 +327,7 @@ func parseUserID(value string) int32 {
 
 func GetDiskDetails() models.HeartbeatDiskDetails {
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
+	if err := syscall.Statfs(constants.PathRoot, &stat); err != nil {
 		return models.HeartbeatDiskDetails{}
 	}
 
@@ -353,7 +353,7 @@ func GetDiskDetails() models.HeartbeatDiskDetails {
 
 func GetDiskUsedGB() float64 {
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
+	if err := syscall.Statfs(constants.PathRoot, &stat); err != nil {
 		return 0
 	}
 	total := stat.Blocks * uint64(stat.Bsize) //nolint:gosec // stat.Blocks bounded by filesystem
@@ -364,7 +364,7 @@ func GetDiskUsedGB() float64 {
 
 func GetDiskTotalGB() float64 {
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err != nil {
+	if err := syscall.Statfs(constants.PathRoot, &stat); err != nil {
 		return 0
 	}
 	total := stat.Blocks * uint64(stat.Bsize) //nolint:gosec // stat.Blocks bounded by filesystem
@@ -372,7 +372,7 @@ func GetDiskTotalGB() float64 {
 }
 
 func GetMemoryDetails() models.HeartbeatMemoryDetails {
-	data, err := os.ReadFile("/proc/meminfo")
+	data, err := os.ReadFile(constants.PathProcMemInfo)
 	if err != nil {
 		return models.HeartbeatMemoryDetails{}
 	}
@@ -442,7 +442,7 @@ type ContainerInfo struct {
 }
 
 func getInitProcessName() string {
-	data, err := os.ReadFile("/proc/1/cmdline")
+	data, err := os.ReadFile(constants.PathProcOneCmdline)
 	if err != nil {
 		return ""
 	}
@@ -482,7 +482,7 @@ func GetNumCPU() int {
 }
 
 func GetMemoryMB() int {
-	data, err := os.ReadFile("/proc/meminfo")
+	data, err := os.ReadFile(constants.PathProcMemInfo)
 	if err != nil {
 		return 0
 	}
@@ -537,11 +537,11 @@ func getTimezone(tz string) string {
 	if tz != "" {
 		return tz
 	}
-	data, err := os.ReadFile("/etc/timezone")
+	data, err := os.ReadFile(constants.PathEtcTimezone)
 	if err == nil {
 		return strings.TrimSpace(string(data))
 	}
-	link, err := os.Readlink("/etc/localtime")
+	link, err := os.Readlink(constants.PathEtcLocaltime)
 	if err == nil {
 		parts := strings.Split(link, "/zoneinfo/")
 		if len(parts) == 2 {

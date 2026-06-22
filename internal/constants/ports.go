@@ -16,11 +16,9 @@ package constants
 // Ports defines canonical G8E networking ports.
 // These values are generated from protocol/constants/ports.json (SSOT).
 var Ports = struct {
-	OperatorHttp          int `json:"OperatorHttp"`
-	OperatorHttps         int `json:"OperatorHttps"`
-	LocalHttpStdioGateway int `json:"LocalHttpStdioGateway"`
+	OperatorHttp  int `json:"OperatorHttp"`
+	OperatorHttps int `json:"OperatorHttps"`
 }{
-	OperatorHttp:          8080,
-	OperatorHttps:         8443,
-	LocalHttpStdioGateway: 18789,
+	OperatorHttp:  8080,
+	OperatorHttps: 8443,
 }

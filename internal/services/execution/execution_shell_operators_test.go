@@ -322,7 +322,7 @@ func TestExecutionService_ConcurrencyStress(t *testing.T) {
 		t.Parallel()
 		maxConcurrent := cfg.MaxConcurrentTasks
 		var wg sync.WaitGroup
-		results := make(chan *models.ExecutionResultsPayload, maxConcurrent)
+		results := make(chan *models.ExecutionResult, maxConcurrent)
 
 		for i := 0; i < maxConcurrent; i++ {
 			wg.Add(1)
@@ -525,11 +525,11 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 		// On Windows, permission denied may manifest differently
 		// On Unix systems, this should be exit code 126
 		if runtime.GOOS != "windows" {
-			assert.Equal(t, 1, *result.ReturnCode)
+			assert.Equal(t, 1, result.ReturnCode)
 		} else {
 			// On Windows, just verify it failed with some error
 			assert.NotNil(t, result.ReturnCode)
-			assert.NotEqual(t, 0, *result.ReturnCode)
+			assert.NotEqual(t, 0, result.ReturnCode)
 		}
 	})
 
@@ -548,8 +548,8 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Equal(t, 127, *result.ReturnCode)
-		assert.NotNil(t, result.ErrorMessage)
+		assert.Equal(t, 127, result.ReturnCode)
+		assert.NotEmpty(t, result.ErrorMessage)
 	})
 
 	t.Run("timeout exit code 124", func(t *testing.T) {
@@ -566,9 +566,9 @@ func TestExecutionService_ErrorPaths(t *testing.T) {
 		result, err := svc.ExecuteCommand(context.Background(), req)
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT, result.Status)
-		assert.Equal(t, 124, *result.ReturnCode)
-		assert.NotNil(t, result.ErrorMessage)
-		assert.Contains(t, *result.ErrorMessage, "timed out")
+		assert.Equal(t, 124, result.ReturnCode)
+		assert.NotEmpty(t, result.ErrorMessage)
+		assert.Contains(t, result.ErrorMessage, "timed out")
 	})
 
 	t.Run("large output truncation", func(t *testing.T) {

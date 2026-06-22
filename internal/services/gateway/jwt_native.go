@@ -20,10 +20,11 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 type JWTClaims struct {
@@ -79,7 +80,7 @@ func extractRoles(payloadBytes []byte, roleClaim string) []string {
 func ParseAndVerifyJWT(ctx context.Context, tokenString string, jwks *JWKSProvider, roleClaim string, expectedIssuer, expectedAudience string) (*NativeJWT, error) {
 	parts := strings.Split(tokenString, ".")
 	if len(parts) != 3 {
-		return nil, errors.New("invalid JWT format")
+		return nil, constants.ErrJWTInvalidFormat
 	}
 
 	headerB64, payloadB64, sigB64 := parts[0], parts[1], parts[2]
@@ -105,10 +106,10 @@ func ParseAndVerifyJWT(ctx context.Context, tokenString string, jwks *JWKSProvid
 	}
 
 	if header.Alg != "RS256" {
-		return nil, fmt.Errorf("unsupported signing algorithm: %s", header.Alg)
+		return nil, fmt.Errorf("jwt: unsupported algorithm %s: %w", header.Alg, constants.ErrJWTUnsupportedAlg)
 	}
 	if header.Kid == "" {
-		return nil, errors.New("missing kid in header")
+		return nil, constants.ErrJWTMissingKid
 	}
 
 	var claims JWTClaims
@@ -118,25 +119,25 @@ func ParseAndVerifyJWT(ctx context.Context, tokenString string, jwks *JWKSProvid
 
 	now := time.Now().Unix()
 	if claims.Exp != 0 && now > claims.Exp {
-		return nil, errors.New("token is expired")
+		return nil, constants.ErrExpired
 	}
 
 	// Validate not-before with clock skew allowance
 	if claims.Nbf != 0 {
 		nbfWithSkew := claims.Nbf - clockSkewAllowance
 		if now < nbfWithSkew {
-			return nil, errors.New("token is not yet valid (nbf)")
+			return nil, constants.ErrJWTNotYetValid
 		}
 	}
 
 	// Validate issuer if expected
 	if expectedIssuer != "" && claims.Iss != expectedIssuer {
-		return nil, fmt.Errorf("token issuer mismatch: expected %s, got %s", expectedIssuer, claims.Iss)
+		return nil, fmt.Errorf("jwt: issuer mismatch (expected %s, got %s): %w", expectedIssuer, claims.Iss, constants.ErrJWTIssuerMismatch)
 	}
 
 	// Validate audience if expected
 	if expectedAudience != "" && claims.Aud != expectedAudience {
-		return nil, fmt.Errorf("token audience mismatch: expected %s, got %s", expectedAudience, claims.Aud)
+		return nil, fmt.Errorf("jwt: audience mismatch (expected %s, got %s): %w", expectedAudience, claims.Aud, constants.ErrJWTAudienceMismatch)
 	}
 
 	pubKey, err := jwks.GetKey(ctx, header.Kid)

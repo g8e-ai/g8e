@@ -20,6 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestL1Doctrine_AnalyzeCommand_DestructiveCommands(t *testing.T) {
@@ -1460,6 +1462,31 @@ func buildDeepJSON(depth int) string {
 		return `"end"`
 	}
 	return fmt.Sprintf(`{"level":%d,"nested":%s}`, depth, buildDeepJSON(depth-1))
+}
+
+// TestL1Doctrine_ValidateIntent_Pinning locks the current behavior of
+// ValidateIntent. As of v1.1.6, Sentinel allowlist integration is not
+// implemented (SECURITY-DEBT) and all intents pass. This test will fail
+// when Sentinel is wired, ensuring the behavior change is intentional.
+func TestL1Doctrine_ValidateIntent_Pinning(t *testing.T) {
+	t.Parallel()
+	doctrine := NewL1Doctrine()
+
+	intents := []constants.CloudIntent{
+		constants.IntentEc2Discovery,
+		constants.IntentS3Read,
+		constants.IntentS3Write,
+		constants.IntentS3Delete,
+		constants.IntentSecretsRead,
+		constants.IntentLambdaInvoke,
+		constants.IntentKmsCrypto,
+		constants.IntentRdsManagement,
+	}
+
+	for _, intent := range intents {
+		assert.True(t, doctrine.ValidateIntent(intent),
+			"SECURITY-DEBT: ValidateIntent must return true for all intents until Sentinel is wired (intent=%s)", intent)
+	}
 }
 
 // FuzzAnalyzeMCPArguments fuzz tests the AnalyzeMCPArguments method

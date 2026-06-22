@@ -208,7 +208,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 ## Status
 
-**v1.1.1**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, and multi-platform support.
+**v1.1.6**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, and multi-platform support. Migration subsystem and federation/peer-connection code have been removed; WebSocket pub/sub now requires wss:// with mTLS.
 
 ## Documentation
 

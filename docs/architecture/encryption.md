@@ -1,5 +1,8 @@
 # Encryption Architecture
 
+Last Updated: 2026-06-22
+Version: v1.1.6
+
 ## Overview
 
 g8e uses mandatory encryption for all sensitive data at rest. The encryption system is built around a vault service that provides AES-256-GCM encryption with a master key hierarchy and wrapped Data Encryption Key (DEK).

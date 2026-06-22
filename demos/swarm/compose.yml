@@ -1,0 +1,756 @@
+name: swarm-demo
+
+networks:
+  net_untrusted:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.30.0.0/24
+  net_perimeter:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.31.0.0/24
+  net_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.32.0.0/24
+  net_secure:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.33.0.0/24
+  net_mgmt:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.34.0.0/24
+
+volumes:
+  gateway_state:
+  operator_1_state:
+  operator_2_state:
+  operator_3_state:
+  operator_4_state:
+  operator_5_state:
+  operator_6_state:
+  operator_7_state:
+  operator_8_state:
+  operator_9_state:
+  operator_10_state:
+  operator_11_state:
+  operator_12_state:
+  operator_13_state:
+  operator_14_state:
+  operator_15_state:
+  operator_16_state:
+  operator_17_state:
+  operator_18_state:
+  operator_19_state:
+  operator_20_state:
+
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-gateway
+    networks:
+      net_perimeter:
+        ipv4_address: 10.31.0.10
+      net_internal:
+        ipv4_address: 10.32.0.10
+    volumes:
+      - gateway_state:/root/.g8e
+      - ./doctrine:/etc/g8e/doctrine:ro
+    ports:
+      - "8085:8080"
+      - "8448:8443"
+    working_dir: /root
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["gw", "start", "-f"]
+
+  # Drone Operator 1 - Recon
+  operator-1:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-1
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.21
+      net_secure:
+        ipv4_address: 10.33.0.21
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_1_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-001
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 2 - Recon
+  operator-2:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-2
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.22
+      net_secure:
+        ipv4_address: 10.33.0.22
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_2_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-002
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 3 - Recon
+  operator-3:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-3
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.23
+      net_secure:
+        ipv4_address: 10.33.0.23
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_3_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-003
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 4 - Recon
+  operator-4:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-4
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.24
+      net_secure:
+        ipv4_address: 10.33.0.24
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_4_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-004
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 5 - Recon
+  operator-5:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-5
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.25
+      net_secure:
+        ipv4_address: 10.33.0.25
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_5_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-005
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 6 - Recon
+  operator-6:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-6
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.26
+      net_secure:
+        ipv4_address: 10.33.0.26
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_6_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-006
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 7 - Recon
+  operator-7:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-7
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.27
+      net_secure:
+        ipv4_address: 10.33.0.27
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_7_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-007
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 8 - Recon
+  operator-8:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-8
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.28
+      net_secure:
+        ipv4_address: 10.33.0.28
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_8_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-008
+      - DRONE_TYPE=recon
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 9 - Attack
+  operator-9:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-9
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.29
+      net_secure:
+        ipv4_address: 10.33.0.29
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_9_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-009
+      - DRONE_TYPE=attack
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 10 - Attack
+  operator-10:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-10
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.30
+      net_secure:
+        ipv4_address: 10.33.0.30
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_10_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-010
+      - DRONE_TYPE=attack
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 11 - Attack
+  operator-11:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-11
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.31
+      net_secure:
+        ipv4_address: 10.33.0.31
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_11_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-011
+      - DRONE_TYPE=attack
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 12 - Attack
+  operator-12:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-12
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.32
+      net_secure:
+        ipv4_address: 10.33.0.32
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_12_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-012
+      - DRONE_TYPE=attack
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 13 - Attack
+  operator-13:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-13
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.33
+      net_secure:
+        ipv4_address: 10.33.0.33
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_13_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-013
+      - DRONE_TYPE=attack
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 14 - Attack
+  operator-14:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-14
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.34
+      net_secure:
+        ipv4_address: 10.33.0.34
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_14_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-014
+      - DRONE_TYPE=attack
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 15 - Support
+  operator-15:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-15
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.35
+      net_secure:
+        ipv4_address: 10.33.0.35
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_15_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-015
+      - DRONE_TYPE=support
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 16 - Support
+  operator-16:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-16
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.36
+      net_secure:
+        ipv4_address: 10.33.0.36
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_16_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-016
+      - DRONE_TYPE=support
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 17 - Support
+  operator-17:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-17
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.37
+      net_secure:
+        ipv4_address: 10.33.0.37
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_17_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-017
+      - DRONE_TYPE=support
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 18 - Support
+  operator-18:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-18
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.38
+      net_secure:
+        ipv4_address: 10.33.0.38
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_18_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-018
+      - DRONE_TYPE=support
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 19 - Relay
+  operator-19:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-19
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.39
+      net_secure:
+        ipv4_address: 10.33.0.39
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_19_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-019
+      - DRONE_TYPE=relay
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Drone Operator 20 - Relay
+  operator-20:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-operator-20
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.40
+      net_secure:
+        ipv4_address: 10.33.0.40
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_20_state:/root/.g8e
+      - ./drone_simulator.py:/app/drone_simulator.py:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    environment:
+      - DRONE_ID=DRONE-020
+      - DRONE_TYPE=relay
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["-e", "10.32.0.10"]
+
+  # Command and Control Interface
+  command-interface:
+    image: python:3.11-slim
+    container_name: swarm-command-interface
+    networks:
+      net_internal:
+        ipv4_address: 10.32.0.50
+    volumes:
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    command: ["sh", "-c", "pip install flask -q && python -c 'from flask import Flask; app = Flask(__name__); @app.route(\"/\"); def index(): return \"Drone Swarm Command Interface - Fleet Status: ACTIVE\"; app.run(host=\"0.0.0.0\", port=5000)'"]
+    ports:
+      - "5005:5000"
+
+  # Simulated adversary attempting to compromise drone swarm
+  adversary:
+    image: alpine:latest
+    container_name: swarm-adversary
+    networks:
+      net_untrusted:
+    command: ["sh", "-c", "while true; do echo 'Attempting to intercept drone communications...'; sleep 30; done"]
+
+  # Observability and monitoring
+  observability:
+    image: alpine:latest
+    container_name: swarm-observability
+    networks:
+      net_mgmt:
+    volumes:
+      - gateway_state:/data/gateway:ro
+      - operator_1_state:/data/operator-1:ro
+      - operator_2_state:/data/operator-2:ro
+      - operator_3_state:/data/operator-3:ro
+      - operator_4_state:/data/operator-4:ro
+      - operator_5_state:/data/operator-5:ro
+    command: ["sh", "-c", "until [ -f /data/gateway/logs/operator.log ]; do sleep 2; done; tail -f /data/gateway/logs/operator.log"]

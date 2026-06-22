@@ -14,7 +14,6 @@
 package testutil
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -48,13 +47,13 @@ type TestPaths struct {
 // relative to the provided base directory. Does NOT mutate global state.
 func NewTestPaths(baseDir string) *TestPaths {
 	runtimeDir := filepath.Join(baseDir, constants.RuntimeDirname)
-	dataDir := filepath.Join(runtimeDir, "data")
-	pkiDir := filepath.Join(runtimeDir, "pki")
-	secretsDir := filepath.Join(runtimeDir, "secrets")
-	vaultDir := filepath.Join(runtimeDir, "vault")
-	testVaultDir := filepath.Join(runtimeDir, "test-vault")
-	protocolDir := filepath.Join(runtimeDir, "protocol")
-	docsDir := filepath.Join(runtimeDir, "docs")
+	dataDir := filepath.Join(runtimeDir, constants.DataDirname)
+	pkiDir := filepath.Join(runtimeDir, constants.PkiDirname)
+	secretsDir := filepath.Join(runtimeDir, constants.SecretsDirname)
+	vaultDir := filepath.Join(runtimeDir, constants.VaultDirname)
+	testVaultDir := filepath.Join(runtimeDir, constants.TestVaultDirname)
+	protocolDir := filepath.Join(runtimeDir, constants.TestProtocolDirname)
+	docsDir := filepath.Join(runtimeDir, constants.TestDocsDirname)
 
 	return &TestPaths{
 		BaseDir:           baseDir,
@@ -63,15 +62,15 @@ func NewTestPaths(baseDir string) *TestPaths {
 		PKIDir:            pkiDir,
 		SecretsDir:        secretsDir,
 		VaultDir:          vaultDir,
-		VaultKeyPath:      filepath.Join(vaultDir, "key"),
+		VaultKeyPath:      filepath.Join(vaultDir, constants.VaultKeyFilename),
 		TestVaultDir:      testVaultDir,
 		ProtocolDir:       protocolDir,
 		DocsDir:           docsDir,
 		SshConfigPath:     filepath.Join(runtimeDir, constants.SshConfigFilename),
-		DbPath:            filepath.Join(dataDir, "g8e.db"),
-		LocalStateDBPath:  filepath.Join(runtimeDir, "local_state.db"),
-		AuditVaultDBPath:  filepath.Join(dataDir, "audit_vault.db"),
-		SuspendedTxDBPath: filepath.Join(dataDir, "suspended_transactions.db"),
+		DbPath:            filepath.Join(dataDir, constants.DbFilename),
+		LocalStateDBPath:  filepath.Join(runtimeDir, constants.TestLocalStateDBFilename),
+		AuditVaultDBPath:  filepath.Join(dataDir, constants.TestAuditVaultDBFilename),
+		SuspendedTxDBPath: filepath.Join(dataDir, constants.SuspendedTxFilename),
 	}
 }
 
@@ -82,65 +81,7 @@ func NewTestPathsFromTemp(t *testing.T) *TestPaths {
 	return NewTestPaths(t.TempDir())
 }
 
-// EnsureDirs creates all directories required by the TestPaths.
-// Returns an error if any directory creation fails.
-func (tp *TestPaths) EnsureDirs() error {
-	dirs := []string{
-		tp.RuntimeDir,
-		tp.DataDir,
-		tp.PKIDir,
-		tp.SecretsDir,
-		tp.VaultDir,
-		tp.TestVaultDir,
-		tp.ProtocolDir,
-		tp.DocsDir,
-		filepath.Join(tp.PKIDir, "root"),
-		filepath.Join(tp.PKIDir, "authorities"),
-		filepath.Join(tp.PKIDir, "issued"),
-		filepath.Join(tp.PKIDir, "trust"),
-		filepath.Join(tp.PKIDir, "revocation"),
-	}
-
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("testpaths: failed to create directory %s: %w", dir, err)
-		}
-	}
-	return nil
-}
-
-// EnsureDirsWithPerms creates all directories with specified permissions.
-// Useful for directories that need stricter permissions (e.g., secrets).
-func (tp *TestPaths) EnsureDirsWithPerms(perms map[string]os.FileMode) error {
-	dirs := []string{
-		tp.RuntimeDir,
-		tp.DataDir,
-		tp.PKIDir,
-		tp.SecretsDir,
-		tp.VaultDir,
-		tp.TestVaultDir,
-		tp.ProtocolDir,
-		tp.DocsDir,
-		filepath.Join(tp.PKIDir, "root"),
-		filepath.Join(tp.PKIDir, "authorities"),
-		filepath.Join(tp.PKIDir, "issued"),
-		filepath.Join(tp.PKIDir, "trust"),
-		filepath.Join(tp.PKIDir, "revocation"),
-	}
-
-	for _, dir := range dirs {
-		perm := os.FileMode(0755)
-		if p, ok := perms[dir]; ok {
-			perm = p
-		}
-		if err := os.MkdirAll(dir, perm); err != nil {
-			return fmt.Errorf("testpaths: failed to create directory %s: %w", dir, err)
-		}
-	}
-	return nil
-}
-
-// Cleanup removes all directories created by EnsureDirs.
+// Cleanup removes the test base directory.
 // This is typically called via t.Cleanup().
 func (tp *TestPaths) Cleanup() error {
 	if tp.BaseDir == "" {

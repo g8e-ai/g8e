@@ -18,38 +18,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestStringPtr(t *testing.T) {
-	t.Parallel()
-	s := "test"
-	ptr := StringPtr(s)
-	require.NotNil(t, ptr)
-	assert.Equal(t, "test", *ptr)
-}
-
-func TestStringPtrValue(t *testing.T) {
-	t.Parallel()
-	s := "hello"
-	assert.Equal(t, "hello", StringPtrValue(&s))
-	assert.Equal(t, "<nil>", StringPtrValue(nil))
-}
-
-func TestIntPtr(t *testing.T) {
-	t.Parallel()
-	i := 42
-	ptr := IntPtr(i)
-	require.NotNil(t, ptr)
-	assert.Equal(t, 42, *ptr)
-}
-
-func TestIntPtrValue(t *testing.T) {
-	t.Parallel()
-	i := 7
-	assert.Equal(t, "7", IntPtrValue(&i))
-	assert.Equal(t, "<nil>", IntPtrValue(nil))
-}
 
 func TestRealClock_Now(t *testing.T) {
 	t.Parallel()

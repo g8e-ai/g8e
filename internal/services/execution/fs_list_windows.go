@@ -139,7 +139,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 
 	// Mark as successful
 	endTime := time.Now().UTC()
-	result.EndTime = &endTime
+	result.EndTime = endTime
 	result.DurationSeconds = endTime.Sub(startTime).Seconds()
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED
 
@@ -149,13 +149,12 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 // failResult creates a failed result with error information
 func (s *FsListService) failResult(result *models.FsListResult, err error, errorMessage string) (*models.FsListResult, error) {
 	endTime := time.Now().UTC()
-	result.EndTime = &endTime
-	if result.StartTime != nil {
-		result.DurationSeconds = endTime.Sub(*result.StartTime).Seconds()
+	result.EndTime = endTime
+	if !result.StartTime.IsZero() {
+		result.DurationSeconds = endTime.Sub(result.StartTime).Seconds()
 	}
 	result.Status = operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED
-	errorType := err.Error()
-	result.ErrorType = &errorType
-	result.ErrorMessage = &errorMessage
+	result.ErrorType = err.Error()
+	result.ErrorMessage = errorMessage
 	return result, nil
 }

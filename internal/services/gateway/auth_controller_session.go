@@ -25,13 +25,13 @@ import (
 
 func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -39,7 +39,7 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -63,13 +63,13 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
 
 	body, err := c.readBody(r)
 	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -78,14 +78,14 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 		AssertionResponse *AssertionResponse `json:"assertion_response"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
 	responseJSON, err := json.Marshal(req.AssertionResponse)
 	if err != nil {
 		c.logger.Warn("Failed to marshal assertion response", "error", err, "userID", req.UserID)
-		c.responder.Error(w, http.StatusBadRequest, "failed to marshal assertion response")
+		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
 	}
 
@@ -97,7 +97,7 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 
 	webSession, err := c.webSessionSvc.CreateWebSession(req.UserID)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to create web session")
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 		return
 	}
 
@@ -105,7 +105,7 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 	http.SetCookie(w, &http.Cookie{
 		Name:     "g8e_session",
 		Value:    webSession.ID,
-		Path:     "/",
+		Path:     constants.PathRoot,
 		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
 		HttpOnly: true,
 		Secure:   true,
@@ -132,7 +132,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	http.SetCookie(w, &http.Cookie{
 		Name:     "g8e_session",
 		Value:    "",
-		Path:     "/",
+		Path:     constants.PathRoot,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
@@ -145,17 +145,17 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
-		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
 		return
 	}
 
 	user, err := c.userSvc.GetByID(userID)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, "failed to get user")
+		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
 		return
 	}
 	if user == nil {
-		c.responder.Error(w, http.StatusNotFound, "user not found")
+		c.responder.Error(w, http.StatusNotFound, constants.ErrUserNotFound.Error())
 		return
 	}
 
@@ -168,7 +168,7 @@ func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 func (c *AuthController) handleWebSession(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
-		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		c.responder.Error(w, http.StatusUnauthorized, constants.ErrNotAuthenticated.Error())
 		return
 	}
 

@@ -166,6 +166,13 @@ type A2ADownstreamRequest struct {
 	ExecutionID string          `json:"execution_id,omitempty"`
 }
 
+// PayloadJSON uses the Go initialism convention (all-caps) for the field name,
+// while the JSON tag is "payload" to match the A2A protocol wire format.
+// The protobuf-generated operatorv1.A2ACallRequested equivalent uses
+// "PayloadJson" (camelCase per proto convention). All three refer to the
+// same logical field; the naming differences are intentional and follow
+// the respective language/style conventions.
+
 // FieldReadRequest is the params for the "read_field" tool.
 type FieldReadRequest struct {
 	Collection        string `json:"collection"`

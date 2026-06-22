@@ -252,9 +252,9 @@ func TestAutoRenewCertificate_NotExpiring(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PkiDir,
+		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -274,9 +274,9 @@ func TestAutoRenewCertificate_UnknownCertType(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PkiDir,
+		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 	}
 
@@ -292,9 +292,9 @@ func TestAutoRenewCertificate_ExpiringCert(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PkiDir,
+		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}
@@ -319,9 +319,9 @@ func TestAutoRenewCertificate_OperatorType(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{
 		ProjectRoot:    tmpDir,
-		RuntimeDir:     filepath.Join(tmpDir, paths.Infra.RuntimeDir),
-		PKIDir:         filepath.Join(tmpDir, paths.Infra.PkiDir),
-		SecretsDir:     filepath.Join(tmpDir, paths.Infra.SecretsDir),
+		RuntimeDir:     paths.Infra.RuntimeDir,
+		PKIDir:         paths.Infra.PkiDir,
+		SecretsDir:     paths.Infra.SecretsDir,
 		CredentialsDir: tmpDir,
 		Paths:          &config.PathsConfig{},
 	}

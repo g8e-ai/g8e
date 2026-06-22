@@ -17,9 +17,11 @@ package services
 
 import (
 	"context"
+	"crypto/tls"
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -32,7 +34,11 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	service, err := NewG8eoService(cfg, logger, nil)
+	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsCfg := certs.NewTLSConfig(trustStore, clientIdentity)
+
+	service, err := NewG8eoService(cfg, logger, tlsCfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -78,6 +84,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 			Logger:            logger,
 			Execution:         execSvc,
 			FileEdit:          fileEditSvc,
+			PubSubClient:      pubsub.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -93,7 +100,11 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
-		client, err := pubsub.NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger, nil)
+		subTrustStore := certs.NewTrustStore(certs.GetRawCA())
+		subClientIdentity := certs.NewClientIdentity(tls.Certificate{})
+		subTLSCfg := certs.NewTLSConfig(subTrustStore, subClientIdentity)
+
+		client, err := pubsub.NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger, subTLSCfg)
 		require.NoError(t, err)
 		t.Cleanup(func() { client.Close() })
 

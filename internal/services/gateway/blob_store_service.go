@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 )
 
@@ -68,7 +69,10 @@ func (s *BlobStoreService) BlobPut(namespace, id string, data []byte, contentTyp
 		   expires_at   = excluded.expires_at`,
 		namespace, id, int64(len(data)), contentType, data, now, expiresAt,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("blob_store: put %s/%s: %w", namespace, id, constants.ErrBlobStorePutFailed)
+	}
+	return nil
 }
 
 // BlobGet retrieves the raw bytes and content type for a blob.
@@ -100,6 +104,7 @@ func (s *BlobStoreService) BlobMeta(namespace, id string) (*BlobRecord, bool) {
 	}
 	t, err := sqliteutil.ParseTimestamp(createdAtStr)
 	if err != nil {
+		s.logger.Error("failed to parse blob creation time", "error", err, "timestamp", createdAtStr)
 		return nil, false
 	}
 	rec.CreatedAt = t
@@ -113,11 +118,11 @@ func (s *BlobStoreService) BlobDelete(namespace, id string) (bool, error) {
 		namespace, id,
 	)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("blob_store: delete %s/%s: %w", namespace, id, constants.ErrBlobStoreDeleteFailed)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("blob_store: rows affected: %w", constants.ErrInternal)
 	}
 	return n > 0, nil
 }
@@ -127,9 +132,13 @@ func (s *BlobStoreService) BlobDelete(namespace, id string) (bool, error) {
 func (s *BlobStoreService) BlobDeleteNamespace(namespace string) (int64, error) {
 	result, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE namespace = ?", namespace)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("blob_store: delete namespace %s: %w", namespace, constants.ErrBlobStoreDeleteFailed)
 	}
-	return result.RowsAffected()
+	n, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("blob_store: rows affected: %w", constants.ErrInternal)
+	}
+	return n, nil
 }
 
 // RunMaintenance removes expired blobs from the database.
@@ -137,7 +146,7 @@ func (s *BlobStoreService) RunMaintenance() error {
 	now := sqliteutil.NowTimestamp()
 	_, err := s.db.ExecWithRetry("DELETE FROM blobs WHERE expires_at IS NOT NULL AND expires_at < ?", now)
 	if err != nil {
-		return fmt.Errorf("failed to cleanup expired blobs: %w", err)
+		return fmt.Errorf("blob_store: cleanup: %w", constants.ErrBlobStoreCleanupFailed)
 	}
 	return nil
 }

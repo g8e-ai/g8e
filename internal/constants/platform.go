@@ -76,3 +76,17 @@ const (
 	BinaryNameLinux   = "g8e-linux-amd64"
 	BinaryNameDarwin  = "g8e-darwin-amd64"
 )
+
+// Supported architectures.
+const (
+	ArchAMD64 = "amd64"
+	ArchARM64 = "arm64"
+	Arch386   = "386"
+)
+
+// Supported operating systems.
+const (
+	OSLinux   = "linux"
+	OSDarwin  = "darwin"
+	OSWindows = "windows"
+)

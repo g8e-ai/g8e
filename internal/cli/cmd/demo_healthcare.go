@@ -17,10 +17,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 // PARequest represents a PA request from the healthcare demo
@@ -44,8 +43,7 @@ type PARequestsFile struct {
 
 // readPARequest reads a PA request from the target data
 func readPARequest(demoDir, requestID string) (*PARequest, error) {
-	paPath := filepath.Join(demoDir, "target-data", "pa_requests.json")
-	data, err := os.ReadFile(paPath)
+	data, err := os.ReadFile(paths.Infra.DemosHealthcarePARequestsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read PA requests file: %w", err)
 	}
@@ -99,13 +97,16 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		}
 
 		fmt.Println("  ── Step 2: Submit FHIR PA request through the gateway ───────")
-		fmt.Println("  Request path: agent-runtime → gateway (10.22.0.10:8080) → PA API")
+		fmt.Println("  Request path: agent-runtime → gateway (g8e.local:8443) [Governed MCP Tools Call]")
 		fmt.Println()
 		if err := demoStep(demoDir, "fhir request", true,
 			"docker", "compose", "exec", "-T", "agent-runtime",
-			"wget", "-qO-", "http://10.22.0.10:8080/fhir/ClaimResponse",
-			"--post-data={\"resourceType\":\"ClaimResponse\",\"status\":\"active\",\"use\":\"preauthorization\"}",
-			"--header=Content-Type: application/fhir+json",
+			"g8e", "agentic-tool-emulator", "run",
+			"--mtls-url", "https://g8e.local:8443",
+			"--cert", "/root/.g8e/pki/operator.crt",
+			"--key", "/root/.g8e/pki/operator.key",
+			"--ca", "/root/.g8e/pki/ca.crt",
+			"healthcare-success",
 		); err != nil {
 			// Fallback: direct to PA API if gateway proxy isn't wired yet
 			fmt.Println("  (gateway proxy path unavailable, sending direct to PA API)")
@@ -123,7 +124,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		fmt.Println("  Copy-paste to inspect doctrine decisions for this request:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + paths.Infra.DemosHealthcareComposePath + " logs observability --tail 20")
 		fmt.Println()
 		_ = demoStep(demoDir, "audit tail",
 			false,
@@ -170,7 +171,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("  ── Proof ─────────────────────────────────────────────────────")
 		fmt.Println("  Copy-paste to confirm AUTO_APPROVED in the audit log:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability | grep -i auto_approved")
+		fmt.Println("    docker compose -f " + paths.Infra.DemosHealthcareComposePath + " logs observability | grep -i auto_approved")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
@@ -250,47 +251,26 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		_ = demoStep(demoDir, "network isolation",
 			false,
 			"docker", "compose", "exec", "-T", "bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.22.0.30:8000/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'",
+			"sh", "-c", "wget -qO- -T 5 http://10.22.0.30:8000/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal (production network policy)'",
 		)
 
 		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
-		fmt.Println("  Confirming the gateway is live and doctrine is loaded:")
+		fmt.Println("  Submit a PHI exfiltration attempt through the production-ready")
+		fmt.Println("  governed endpoint (mTLS + Protocol Envelopes):")
 		fmt.Println()
-		_ = demoStep(demoDir, "gateway health",
+		_ = demoStep(demoDir, "phi exfiltration",
 			false,
-			"curl", "-s", "http://localhost:8081/api/v1/health",
+			"docker", "compose", "exec", "-T", "agent-runtime",
+			"g8e", "agentic-tool-emulator", "run",
+			"--mtls-url", "https://g8e.local:8443",
+			"--cert", "/root/.g8e/pki/operator.crt",
+			"--key", "/root/.g8e/pki/operator.key",
+			"--ca", "/root/.g8e/pki/ca.crt",
+			"healthcare-phi-blocked",
 		)
-
-		_ = demoStep(demoDir, "doctrine loaded",
-			false,
-			"docker", "compose", "exec", "-T", "gateway",
-			"sh", "-c", "ls /etc/g8e/doctrine/ && echo 'doctrine files mounted'",
-		)
-
-		fmt.Println("  Doctrine rule that would block a PHI exfiltration attempt:")
-		fmt.Println()
-		if rule, err := readDoctrineRule(demoDir, "phi_hipaa_doctrine.json", "phi_exfil_attempt"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/phi_hipaa_doctrine.json | grep -A 10 phi_exfil_attempt\n")
-			fmt.Printf("  id:         %s\n", rule.ID)
-			fmt.Printf("  severity:   %s\n", rule.Severity)
-			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
-			fmt.Printf("  pattern:    %s\n", rule.Pattern)
-			fmt.Println()
-		} else {
-			fmt.Printf("  (doctrine rule inspection failed: %v)\n", err)
-			fmt.Println()
-		}
-
-		fmt.Println("  Copy-paste to send a PHI exfiltration payload through the gateway")
-		fmt.Println("  (the doctrine engine evaluates this before any backend sees it):")
-		fmt.Println()
-		fmt.Println("    curl -s -X POST http://localhost:8081/api/v1/mcp/tools/call \\")
-		fmt.Println("      -H 'Content-Type: application/json' \\")
-		fmt.Println(`      -d '{"name":"query","arguments":{"action":"exfiltrate patient medical records"}}'`)
-		fmt.Println()
 		fmt.Println("  Then inspect the enforcement audit:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+		fmt.Println("    docker compose -f " + paths.Infra.DemosHealthcareComposePath + " logs observability --tail 20")
 		fmt.Println()
 
 		fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")

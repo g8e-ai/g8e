@@ -25,6 +25,9 @@ import (
 	"testing"
 	"time"
 
+	"crypto/tls"
+
+	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/httpclient"
@@ -34,12 +37,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func newTestTLSConfig(t *testing.T) *certs.TLSConfig {
+	t.Helper()
+	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	return certs.NewTLSConfig(trustStore, clientIdentity)
+}
+
 func TestNewBootstrapService(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 
 	require.NoError(t, err)
 	assert.NotNil(t, svc)
@@ -51,7 +61,7 @@ func TestNewBootstrapService_TLSPinning(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	transport, ok := svc.httpClient.Transport.(*http.Transport)
@@ -67,7 +77,7 @@ func TestNewBootstrapService_HasTimeout(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	assert.NotZero(t, svc.httpClient.Timeout)
@@ -89,7 +99,7 @@ func newTestBootstrapService(t *testing.T, server *httptest.Server) *BootstrapSe
 	cfg.Endpoint = host
 	cfg.HTTPSPort = port
 	logger := testutil.NewTestLogger()
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 	svc.httpClient = server.Client()
 	return svc
@@ -262,7 +272,7 @@ func TestRequestHTTPAuth_RuntimeConfigSent(t *testing.T) {
 
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 	svc.httpClient = server.Client()
 
@@ -283,7 +293,7 @@ func TestApplyBootstrapConfig_AppliesAllFields(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	bootCfg := &BootstrapConfig{
@@ -312,7 +322,7 @@ func TestApplyBootstrapConfig_ZeroValuesNotOverridden(t *testing.T) {
 	originalInterval := cfg.HeartbeatInterval
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	bootCfg := &BootstrapConfig{
@@ -342,7 +352,7 @@ func TestApplyBootstrapConfig_InvalidCertIsFatal(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	bootCfg := &BootstrapConfig{
@@ -554,7 +564,7 @@ func TestSetHTTPClient(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	customClient := &http.Client{Timeout: 30 * time.Second}
@@ -567,7 +577,7 @@ func TestRebuildTransportWithOperatorCert(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
-	svc, err := NewBootstrapService(cfg, logger, nil)
+	svc, err := NewBootstrapService(cfg, logger, newTestTLSConfig(t))
 	require.NoError(t, err)
 
 	t.Run("invalid cert/key pair", func(t *testing.T) {

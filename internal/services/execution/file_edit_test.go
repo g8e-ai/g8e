@@ -44,7 +44,7 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 			CaseID:          "test-case-1",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        tmpFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: true,
 			RequestedBy:     "test-user",
 		}
@@ -54,7 +54,7 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Equal(t, int64(12), *result.BytesWritten)
+		assert.Equal(t, int64(12), result.BytesWritten)
 
 		// Verify file was created
 		data, err := os.ReadFile(tmpFile)
@@ -76,7 +76,7 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 			CaseID:       "test-case-2",
 			Operation:    constants.FileOperationWrite,
 			FilePath:     tmpFile,
-			Content:      &newContent,
+			Content:      newContent,
 			CreateBackup: true,
 			RequestedBy:  "test-user",
 		}
@@ -84,11 +84,11 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 		result, err := svc.ExecuteFileEdit(context.Background(), req)
 
 		require.NoError(t, err)
-		assert.NotNil(t, result.BackupPath)
-		assert.FileExists(t, *result.BackupPath)
+		assert.NotEmpty(t, result.BackupPath)
+		assert.FileExists(t, result.BackupPath)
 
 		// Verify backup contains original content
-		backupData, err := os.ReadFile(*result.BackupPath)
+		backupData, err := os.ReadFile(result.BackupPath)
 		require.NoError(t, err)
 		assert.Equal(t, "original", string(backupData))
 
@@ -109,7 +109,7 @@ func TestFileEditService_ExecuteFileEdit_Write(t *testing.T) {
 			CaseID:          "test-case-3",
 			Operation:       constants.FileOperationWrite,
 			FilePath:        tmpFile,
-			Content:         &content,
+			Content:         content,
 			CreateIfMissing: false,
 			RequestedBy:     "test-user",
 		}
@@ -147,8 +147,8 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.NotNil(t, result.Content)
-		assert.Equal(t, content, *result.Content)
+		assert.NotEmpty(t, result.Content)
+		assert.Equal(t, content, result.Content)
 	})
 
 	t.Run("read specific lines", func(t *testing.T) {
@@ -165,8 +165,8 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 			Operation:   constants.FileOperationRead,
 			FilePath:    tmpFile,
 			ReadOptions: &models.FileReadOptions{
-				StartLine: &startLine,
-				EndLine:   &endLine,
+				StartLine: startLine,
+				EndLine:   endLine,
 			},
 			RequestedBy: "test-user",
 		}
@@ -175,9 +175,9 @@ func TestFileEditService_ExecuteFileEdit_Read(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, result.Status)
-		assert.Contains(t, *result.Content, "line2")
-		assert.Contains(t, *result.Content, "line3")
-		assert.Contains(t, *result.Content, "line4")
+		assert.Contains(t, result.Content, "line2")
+		assert.Contains(t, result.Content, "line3")
+		assert.Contains(t, result.Content, "line4")
 	})
 
 	t.Run("read non-existent file", func(t *testing.T) {
@@ -242,8 +242,8 @@ func TestFileEditService_ExecuteFileEdit_Replace(t *testing.T) {
 			CaseID:      "test-case-1",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    tmpFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -271,8 +271,8 @@ func TestFileEditService_ExecuteFileEdit_Replace(t *testing.T) {
 			CaseID:      "test-case-2",
 			Operation:   constants.FileOperationReplace,
 			FilePath:    tmpFile,
-			OldContent:  &oldContent,
-			NewContent:  &newContent,
+			OldContent:  oldContent,
+			NewContent:  newContent,
 			RequestedBy: "test-user",
 		}
 
@@ -280,7 +280,7 @@ func TestFileEditService_ExecuteFileEdit_Replace(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "not found")
+		assert.Contains(t, result.ErrorMessage, "not found")
 	})
 }
 
@@ -303,8 +303,8 @@ func TestFileEditService_ExecuteFileEdit_Insert(t *testing.T) {
 			CaseID:         "test-case-1",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       tmpFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -332,8 +332,8 @@ func TestFileEditService_ExecuteFileEdit_Insert(t *testing.T) {
 			CaseID:         "test-case-2",
 			Operation:      constants.FileOperationInsert,
 			FilePath:       tmpFile,
-			InsertContent:  &insertContent,
-			InsertPosition: &insertPos,
+			InsertContent:  insertContent,
+			InsertPosition: insertPos,
 			RequestedBy:    "test-user",
 		}
 
@@ -363,8 +363,8 @@ func TestFileEditService_ExecuteFileEdit_Delete(t *testing.T) {
 			CaseID:      "test-case-1",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    tmpFile,
-			StartLine:   &startLine,
-			EndLine:     &endLine,
+			StartLine:   startLine,
+			EndLine:     endLine,
 			RequestedBy: "test-user",
 		}
 
@@ -395,8 +395,8 @@ func TestFileEditService_ExecuteFileEdit_Delete(t *testing.T) {
 			CaseID:      "test-case-2",
 			Operation:   constants.FileOperationDelete,
 			FilePath:    tmpFile,
-			StartLine:   &startLine,
-			EndLine:     &endLine,
+			StartLine:   startLine,
+			EndLine:     endLine,
 			RequestedBy: "test-user",
 		}
 
@@ -425,7 +425,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 			CaseID:       "test-case-1",
 			Operation:    constants.FileOperationPatch,
 			FilePath:     tmpFile,
-			PatchContent: &patchContent,
+			PatchContent: patchContent,
 			RequestedBy:  "test-user",
 		}
 
@@ -433,7 +433,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "not yet implemented")
+		assert.Contains(t, result.ErrorMessage, "not yet implemented")
 	})
 
 	t.Run("missing patch content returns error", func(t *testing.T) {
@@ -455,7 +455,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "patch_content is required")
+		assert.Contains(t, result.ErrorMessage, "patch_content is required")
 	})
 
 	t.Run("backup creation attempted before patch", func(t *testing.T) {
@@ -470,7 +470,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 			CaseID:       "test-case-3",
 			Operation:    constants.FileOperationPatch,
 			FilePath:     tmpFile,
-			PatchContent: &patchContent,
+			PatchContent: patchContent,
 			CreateBackup: true,
 			RequestedBy:  "test-user",
 		}
@@ -480,12 +480,12 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
 		// Should still fail with not implemented, but backup should be created
-		assert.Contains(t, *result.ErrorMessage, "not yet implemented")
+		assert.Contains(t, result.ErrorMessage, "not yet implemented")
 		// Backup path should be set even though operation failed
-		if result.BackupPath != nil {
-			assert.NotEmpty(t, *result.BackupPath)
+		if result.BackupPath != "" {
+			assert.NotEmpty(t, result.BackupPath)
 			// Verify backup exists
-			_, err := os.Stat(*result.BackupPath)
+			_, err := os.Stat(result.BackupPath)
 			require.NoError(t, err)
 		}
 	})
@@ -501,7 +501,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 			CaseID:       "test-case-4",
 			Operation:    constants.FileOperationPatch,
 			FilePath:     nonExistentFile,
-			PatchContent: &patchContent,
+			PatchContent: patchContent,
 			CreateBackup: true,
 			RequestedBy:  "test-user",
 		}
@@ -510,7 +510,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, *result.ErrorMessage, "failed to create backup")
+		assert.Contains(t, result.ErrorMessage, "no such file or directory")
 	})
 }
 

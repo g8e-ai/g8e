@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-06-11
-Version: v1.0.11
+Last Updated: 2026-06-22
+Version: v1.1.6
 
 ---
 
@@ -58,7 +58,7 @@ The gateway provides CLI commands to deploy and manage operators on remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
 ```
 
-This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e auth login` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
+This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Stream operator binary to remote hosts:**
 
@@ -158,6 +158,10 @@ curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
 
+# Note: Documentation uses default ports: HTTP 8080, HTTPS 8443.
+
+...
+
 **For plain HTTP MCP (non-mTLS):**
 
 ```bash
@@ -221,7 +225,7 @@ Stop:
 When the mTLS certificate expires, re-authenticate using:
 
 ```bash
-./g8e auth login
+./g8e auth enroll
 ```
 
 This command automatically checks certificate expiry and performs auto-renewal if needed. For remote device enrollment, use CSR-based enrollment:
@@ -238,7 +242,7 @@ On Windows, enroll via the Windows Certificate Store:
 ./g8e auth enroll-windows
 ```
 
-Note: This is now handled automatically by `./g8e auth login` on Windows. This command is for advanced use cases or manual re-enrollment.
+Note: This is now handled automatically by `./g8e auth enroll` on Windows. This command is for advanced use cases or manual re-enrollment.
 
 ---
 
@@ -249,7 +253,7 @@ For custom g8e-compatible implementations, the gateway follows the same operatio
 1. **Enroll with Gateway**: Use CSR-based enrollment to obtain mTLS certificates via `./g8e gw security pki enroll`.
 2. **Configure Runtime**: Set up the data directory, PKI directory, and secrets directory.
 3. **Start Gateway**: Launch the gateway with `./g8e gw start`.
-4. **Authenticate CLI**: Run `./g8e auth login` to obtain client credentials.
+4. **Authenticate CLI**: Run `./g8e auth enroll` to obtain client credentials.
 5. **Verify Connection**: Confirm the gateway is running via `./g8e gw status`.
 6. **Monitor Health**: Implement health checks for the gateway process and audit vault.
 
@@ -309,13 +313,13 @@ ls -la .g8e/credentials/
 Re-enroll if certificates are missing or expired:
 
 ```bash
-./g8e auth login
+./g8e auth enroll
 ```
 
 If the trust bundle is stale after gateway PKI regeneration:
 
 ```bash
-./g8e auth logout && ./g8e auth login
+./g8e auth logout && ./g8e auth enroll
 ```
 
 ### Audit Vault Errors
@@ -356,7 +360,7 @@ ls -la .g8e/credentials/
 Re-authenticate if credentials are missing or invalid:
 
 ```bash
-./g8e auth login
+./g8e auth enroll
 ```
 
 ---

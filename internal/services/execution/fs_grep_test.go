@@ -132,8 +132,8 @@ func TestFsGrepService_ExecuteFsGrep(t *testing.T) {
 		}
 
 		result, err := service.ExecuteFsGrep(context.Background(), req)
-		require.NoError(t, err)
+		require.Error(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Equal(t, "invalid_pattern", *result.ErrorType)
+		assert.Equal(t, "fs_grep invalid pattern", result.ErrorType)
 	})
 }

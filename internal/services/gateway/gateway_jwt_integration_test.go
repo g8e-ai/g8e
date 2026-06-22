@@ -143,9 +143,9 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	backend, err := keystore.NewTestBackend()
+	keyring, err := keystore.NewMemoryKeyring()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
@@ -171,12 +171,8 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		}
 	}
 
-	// Create an invitation for JIT provisioning
-	_, err = userSvc.CreateInvitation("tenant-abc", "user-1234", "bootstrap", []string{"admin"}, 24*time.Hour)
-	require.NoError(t, err)
 	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
-	// Apply JWT configuration to AuthService's provider
 
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
@@ -303,9 +299,9 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	backend, err := keystore.NewTestBackend()
+	keyring, err := keystore.NewMemoryKeyring()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
@@ -331,9 +327,6 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		}
 	}
 
-	// Create an invitation for JIT provisioning
-	_, err = userSvc.CreateInvitation("tenant-abc", "jit-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
-	require.NoError(t, err)
 	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
@@ -477,9 +470,9 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	backend, err := keystore.NewTestBackend()
+	keyring, err := keystore.NewMemoryKeyring()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())
@@ -505,9 +498,6 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		}
 	}
 
-	// Create an invitation for JIT provisioning
-	_, err = userSvc.CreateInvitation("tenant-abc", "stepup-user-001", "bootstrap", []string{"admin"}, 24*time.Hour)
-	require.NoError(t, err)
 	resp := response.NewWriter(logger)
 	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, resp, secretsDir, NewJWKSProvider(cfg.Gateway.JWKSURL), cfg.Gateway.JWTRoleClaim, "", "")
 
@@ -572,18 +562,23 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 	token := generateSignedJWT(t, privKey, claims)
 
-	// Add a mock passkey credential directly to the user to simulate first credential already registered
+	// JIT-provision the user by making an initial challenge request with the JWT.
+	// On first request (no credentials), the gateway auto-provisions the user and returns 200.
+	{
+		provBody := `{"user_id":"stepup-user-001","user_name":"Stepup User"}`
+		provReq, err := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/auth/passkeys/jit-register/challenge", bytes.NewBufferString(provBody))
+		require.NoError(t, err)
+		provReq.Header.Set("Authorization", "Bearer "+token)
+		provReq.Header.Set("Content-Type", "application/json")
+		provRes, err := http.DefaultClient.Do(provReq)
+		require.NoError(t, err)
+		provRes.Body.Close()
+	}
+
+	// Retrieve the now-provisioned user
 	user, err := userSvc.GetBySub("stepup-user-001")
 	require.NoError(t, err)
-	if user == nil {
-		// Create user if doesn't exist
-		invitation, err := userSvc.FindActiveInvitationBySub("stepup-user-001")
-		require.NoError(t, err)
-		require.NotNil(t, invitation)
-		user, err = userSvc.CreateUserFromInvitation("stepup-user-001", invitation)
-		require.NoError(t, err)
-	}
-	require.NotNil(t, user)
+	require.NotNil(t, user, "user should be JIT-provisioned after initial challenge request")
 
 	// Manually add a credential to simulate having already registered one
 	credentials := []models.PasskeyCredential{
@@ -642,9 +637,9 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	os.RemoveAll(secretsDir)
 	os.MkdirAll(secretsDir, 0755)
 
-	backend, err := keystore.NewTestBackend()
+	keyring, err := keystore.NewMemoryKeyring()
 	require.NoError(t, err)
-	ks, err := keystore.NewWithBackend(t.TempDir(), logger, backend)
+	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 	require.NoError(t, ks.EnforcePermissions())

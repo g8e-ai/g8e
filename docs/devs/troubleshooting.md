@@ -104,7 +104,7 @@ For integration tests that require a running gateway, start the gateway and auth
 
 ```bash
 ./g8e gw start
-./g8e auth login
+./g8e auth enroll
 make test-integration
 ```
 
@@ -112,7 +112,7 @@ For gateway-specific tests that require mTLS authentication:
 
 ```bash
 ./g8e gw start
-./g8e auth login
+./g8e auth enroll
 make test-gateway
 ```
 
@@ -124,7 +124,7 @@ The gateway requires explicit authentication before it can be used. After starti
 
 ```bash
 ./g8e gw start
-./g8e auth login
+./g8e auth enroll
 ```
 
 If authentication fails, check the following:

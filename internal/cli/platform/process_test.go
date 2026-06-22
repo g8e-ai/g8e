@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -965,22 +964,5 @@ func TestReadPosturePublic(t *testing.T) {
 	}
 	if posture != "consensus" {
 		t.Errorf("expected posture consensus, got %s", posture)
-	}
-}
-
-func TestSetProcessGroup(t *testing.T) {
-	// Test that setProcessGroup sets the appropriate process group attributes
-	cmd := exec.Command("echo", "test")
-	setProcessGroup(cmd)
-
-	// On Unix, SysProcAttr should be set
-	// On Windows, it's a no-op
-	if runtime.GOOS != "windows" {
-		if cmd.SysProcAttr == nil {
-			t.Error("SysProcAttr should be set on Unix")
-		}
-		if !cmd.SysProcAttr.Setsid {
-			t.Error("Setsid should be true on Unix")
-		}
 	}
 }

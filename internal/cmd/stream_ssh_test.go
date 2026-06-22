@@ -270,7 +270,7 @@ func TestStreamToHost_DialFailure(t *testing.T) {
 
 	res := <-resultCh
 	assert.Equal(t, constants.StreamStatusFailed, res.Status)
-	assert.Contains(t, res.Error, "dial")
+	assert.ErrorContains(t, res.Error, "dial")
 }
 
 func TestIsTransientError(t *testing.T) {

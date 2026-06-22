@@ -18,9 +18,10 @@ package execution
 
 import (
 	"fmt"
-
 	"os"
 	"os/exec"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // setProcessGroup is a no-op on Windows
@@ -35,10 +36,10 @@ func killProcessGroup(pid int) error {
 	// Process tree termination requires different APIs
 	proc, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("execution: failed to find process %d: %w", pid, err)
+		return fmt.Errorf("execution: failed to find process %d: %w", pid, constants.ErrProcessFindFailed)
 	}
 	if err := proc.Kill(); err != nil {
-		return fmt.Errorf("execution: failed to kill process %d: %w", pid, err)
+		return fmt.Errorf("execution: failed to kill process %d: %w", pid, constants.ErrProcessStopFailed)
 	}
 	return nil
 }

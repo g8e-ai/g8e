@@ -65,17 +65,17 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 
 	var ks *keystore.Keystore
 	if resetKeystoreStorage {
-		backend, err := keystore.NewTestBackend()
+		keyring, err := keystore.NewMemoryKeyring()
 		require.NoError(t, err)
-		ks, err = keystore.NewWithBackend(secretsDir, logger, backend)
+		ks, err = keystore.NewWithKeyring(secretsDir, logger, keyring)
 		require.NoError(t, err)
 		require.NoError(t, ks.Initialize())
 		require.NoError(t, ks.EnforcePermissions())
 	} else {
 		// Reuse the keystore from shared test storage
-		backend, err := keystore.NewTestBackend()
+		keyring, err := keystore.NewMemoryKeyring()
 		require.NoError(t, err)
-		ks, err = keystore.NewWithBackend(secretsDir, logger, backend)
+		ks, err = keystore.NewWithKeyring(secretsDir, logger, keyring)
 		require.NoError(t, err)
 		// Initialize will retrieve the existing master key from shared test storage
 		require.NoError(t, ks.Initialize())

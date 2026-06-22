@@ -17,10 +17,8 @@ package gateway
 
 import (
 	"context"
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -30,100 +28,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestExtractRoles(t *testing.T) {
-	tests := []struct {
-		name      string
-		payload   map[string]interface{}
-		roleClaim string
-		expected  []string
-	}{
-		{
-			name: "Array of strings",
-			payload: map[string]interface{}{
-				"roles": []string{"admin", "user"},
-			},
-			roleClaim: "roles",
-			expected:  []string{"admin", "user"},
-		},
-		{
-			name: "Single string",
-			payload: map[string]interface{}{
-				"role": "admin",
-			},
-			roleClaim: "role",
-			expected:  []string{"admin"},
-		},
-		{
-			name: "Claim missing",
-			payload: map[string]interface{}{
-				"other": "value",
-			},
-			roleClaim: "roles",
-			expected:  nil,
-		},
-		{
-			name: "Wrong type (int)",
-			payload: map[string]interface{}{
-				"roles": 123,
-			},
-			roleClaim: "roles",
-			expected:  nil,
-		},
-		{
-			name: "Empty array",
-			payload: map[string]interface{}{
-				"roles": []string{},
-			},
-			roleClaim: "roles",
-			expected:  []string{},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			payloadBytes, _ := json.Marshal(tt.payload)
-			actual := extractRoles(payloadBytes, tt.roleClaim)
-			assert.Equal(t, tt.expected, actual)
-		})
-	}
-
-	t.Run("Invalid JSON", func(t *testing.T) {
-		actual := extractRoles([]byte("{invalid json}"), "roles")
-		assert.Nil(t, actual)
-	})
-}
-
-func generateTestJWT(t *testing.T, privKey *rsa.PrivateKey, kid string, header map[string]interface{}, claims map[string]interface{}) string {
-	t.Helper()
-	if header == nil {
-		header = map[string]interface{}{
-			"alg": "RS256",
-			"kid": kid,
-			"typ": "JWT",
-		}
-	}
-
-	headerBytes, _ := json.Marshal(header)
-	claimsBytes, _ := json.Marshal(claims)
-
-	headerB64 := base64.RawURLEncoding.EncodeToString(headerBytes)
-	claimsB64 := base64.RawURLEncoding.EncodeToString(claimsBytes)
-
-	signingString := headerB64 + "." + claimsB64
-	hasher := sha256.New()
-	hasher.Write([]byte(signingString))
-	hashed := hasher.Sum(nil)
-
-	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, hashed)
-	require.NoError(t, err)
-
-	sigB64 := base64.RawURLEncoding.EncodeToString(sigBytes)
-	return signingString + "." + sigB64
-}
 
 func TestParseAndVerifyJWT(t *testing.T) {
 	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -226,8 +134,7 @@ func TestParseAndVerifyJWT(t *testing.T) {
 		}
 		token := generateTestJWT(t, privKey, kid, nil, claims)
 		_, err := ParseAndVerifyJWT(context.Background(), token, jwks, "roles", "", "")
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "token is expired")
+		assert.ErrorIs(t, err, constants.ErrExpired)
 	})
 
 	t.Run("Not yet valid (nbf)", func(t *testing.T) {

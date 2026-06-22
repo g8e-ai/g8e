@@ -50,7 +50,6 @@ func auditCmd() *cobra.Command {
 func auditReceiptsCmd() *cobra.Command {
 	var operatorSessionID string
 	var txID string
-	var migrationID string
 	var jsonOutput bool
 
 	cmd := &cobra.Command{
@@ -84,8 +83,6 @@ func auditReceiptsCmd() *cobra.Command {
 			query := ""
 			if txID != "" {
 				query = "?tx_id=" + txID
-			} else if migrationID != "" {
-				query = "?migration_id=" + migrationID
 			} else if operatorSessionID != "" {
 				query = "?operator_session_id=" + operatorSessionID
 			}
@@ -156,7 +153,6 @@ func auditReceiptsCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID (auto-discovers if omitted)")
 	cmd.Flags().StringVar(&txID, "tx-id", "", "Get a single receipt by transaction ID")
-	cmd.Flags().StringVar(&migrationID, "migration-id", "", "Filter by migration ID")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Raw JSON output")
 
 	return cmd
@@ -367,7 +363,7 @@ func auditEventsCmd() *cobra.Command {
 					Timestamp         string `json:"timestamp"`
 					Type              string `json:"type"`
 					CommandRaw        string `json:"command_raw"`
-					CommandExitCode   *int   `json:"command_exit_code"`
+					CommandExitCode   int    `json:"command_exit_code"`
 				} `json:"events"`
 				Count int `json:"count"`
 			}
@@ -403,8 +399,8 @@ func auditEventsCmd() *cobra.Command {
 					command = command[:35] + "…"
 				}
 				exitCode := "-"
-				if e.CommandExitCode != nil {
-					exitCode = fmt.Sprintf("%d", *e.CommandExitCode)
+				if e.CommandExitCode != constants.ExitCodeNone {
+					exitCode = fmt.Sprintf("%d", e.CommandExitCode)
 				}
 				cmd.Printf("%-8d %-20s %-30s %-10s %s\n", e.ID, timestamp, eventType, exitCode, command)
 			}

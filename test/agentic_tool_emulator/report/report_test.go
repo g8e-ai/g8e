@@ -47,7 +47,9 @@ func TestWrite(t *testing.T) {
 		},
 	}
 
-	jsonPath, mdPath, err := Write(tmpDir, rep)
+	jsonPath := filepath.Join(tmpDir, "report.json")
+	mdPath := filepath.Join(tmpDir, "report.md")
+	_, _, err := Write(jsonPath, mdPath, rep)
 	if err != nil {
 		t.Fatalf("Write failed: %v", err)
 	}
@@ -88,7 +90,9 @@ func TestWrite_NestedDir(t *testing.T) {
 		Receipts:    []clientpkg.Receipt{},
 	}
 
-	jsonPath, mdPath, err := Write(nestedDir, rep)
+	jsonPath := filepath.Join(nestedDir, "report.json")
+	mdPath := filepath.Join(nestedDir, "report.md")
+	_, _, err := Write(jsonPath, mdPath, rep)
 	if err != nil {
 		t.Fatalf("Write failed with nested dir: %v", err)
 	}

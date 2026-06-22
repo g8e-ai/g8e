@@ -1145,7 +1145,8 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should not panic
-		svc.SendAutomaticHeartbeat()
+		err = svc.SendAutomaticHeartbeat()
+		assert.NoError(t, err)
 	})
 }
 

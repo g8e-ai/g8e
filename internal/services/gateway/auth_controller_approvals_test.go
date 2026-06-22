@@ -42,7 +42,7 @@ func TestHandleApprovalAction(t *testing.T) {
 		c.handleApprovalAction(rr, req)
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "unauthorized")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayUnauthorized.Error())
 	})
 
 	t.Run("Failure - transaction not found", func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestHandleApprovalAction(t *testing.T) {
 		c.handleApprovalAction(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "transaction not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
 	})
 }
 
@@ -87,7 +87,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 		c.handleApprovalChallenge(rr, req, "nonexistent", user.ID)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "transaction not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
 	})
 
 	t.Run("Failure - transaction belongs to another user", func(t *testing.T) {
@@ -116,7 +116,7 @@ func TestHandleApprovalChallenge(t *testing.T) {
 		c.handleApprovalChallenge(rr, req, txHash, user2.ID)
 
 		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), "transaction belongs to another user")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionBelongsToAnother.Error())
 	})
 }
 
@@ -145,7 +145,7 @@ func TestHandleApprovalVerify(t *testing.T) {
 		c.handleApprovalVerify(rr, req, "nonexistent", user.ID)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "transaction not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
 	})
 
 	t.Run("Failure - invalid JSON", func(t *testing.T) {
@@ -194,7 +194,7 @@ func TestHandleCLIApproval(t *testing.T) {
 		c.handleCLIApproval(rr, req, "nonexistent", user.ID)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "transaction not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
 	})
 
 	t.Run("Failure - missing cli_signature", func(t *testing.T) {
@@ -225,7 +225,7 @@ func TestHandleCLIApproval(t *testing.T) {
 		c.handleCLIApproval(rr, req, txHash, user.ID)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "cli_signature required")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayCLISignatureRequired.Error())
 	})
 
 	t.Run("Failure - missing mtls_cert_fingerprint", func(t *testing.T) {
@@ -256,7 +256,7 @@ func TestHandleCLIApproval(t *testing.T) {
 		c.handleCLIApproval(rr, req, txHash, user.ID)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "mtls_cert_fingerprint required")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayMTLSCertFingerprintRequired.Error())
 	})
 }
 
@@ -276,7 +276,7 @@ func TestHandleApprovalPage(t *testing.T) {
 		c.handleApprovalPage(rr, req)
 
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "transaction hash required")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionHashRequired.Error())
 	})
 
 	t.Run("Failure - transaction not found", func(t *testing.T) {
@@ -288,7 +288,7 @@ func TestHandleApprovalPage(t *testing.T) {
 		c.handleApprovalPage(rr, req)
 
 		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), "transaction not found")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
 	})
 
 	t.Run("Success - returns HTML page", func(t *testing.T) {
@@ -336,7 +336,7 @@ func TestHandleListSuspendedTransactions(t *testing.T) {
 		c.handleListSuspendedTransactions(rr, req)
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "unauthorized")
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayUnauthorized.Error())
 	})
 
 	t.Run("Success - empty list", func(t *testing.T) {

@@ -22,20 +22,22 @@ import (
 	"strings"
 
 	"golang.org/x/sys/windows/registry"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // getWindowsMachineID retrieves the MachineGuid from the Windows registry
 // The MachineGuid is a unique identifier for each Windows installation
 func getWindowsMachineID(logger *slog.Logger) (string, error) {
-	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Cryptography`, registry.READ)
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, constants.PathWindowsRegistryCryptography, registry.READ)
 	if err != nil {
-		return "", fmt.Errorf("failed to open registry key: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrWindowsRegistryOpenKey, err)
 	}
 	defer key.Close()
 
-	machineGuid, _, err := key.GetStringValue("MachineGuid")
+	machineGuid, _, err := key.GetStringValue(constants.PathWindowsRegistryMachineGuid)
 	if err != nil {
-		return "", fmt.Errorf("failed to read MachineGuid: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrWindowsRegistryReadValue, err)
 	}
 
 	// Clean up the GUID (remove braces and dashes for consistency)

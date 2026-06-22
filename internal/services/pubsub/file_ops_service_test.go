@@ -21,7 +21,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -64,7 +63,7 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 			ID:              "msg-1",
 			EventType:       constants.Event.Operator.FileEdit.Requested,
 			CaseID:          "case-1",
-			TaskID:          system.StringPtr("task-1"),
+			TaskID:          func() *string { s := "task-1"; return &s }(),
 			InvestigationID: "investigation-1",
 			Payload:         payload,
 		}
@@ -73,21 +72,21 @@ func TestPayloadToFileEditRequest(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "exec-1", editReq.ExecutionID)
 		assert.Equal(t, "case-1", editReq.CaseID)
-		assert.Equal(t, "task-1", *editReq.TaskID)
+		assert.Equal(t, "task-1", editReq.TaskID)
 		assert.Equal(t, "investigation-1", editReq.InvestigationID)
 		assert.Equal(t, constants.FileOperation("write"), editReq.Operation)
 		assert.Equal(t, filepath.Join(tmpDir, "test.txt"), editReq.FilePath)
 		assert.Equal(t, "test", editReq.Justification)
 		assert.True(t, editReq.CreateBackup)
 		assert.True(t, editReq.CreateIfMissing)
-		assert.Equal(t, "test content", *editReq.Content)
-		assert.Equal(t, "old content", *editReq.OldContent)
-		assert.Equal(t, "new content", *editReq.NewContent)
-		assert.Equal(t, "insert content", *editReq.InsertContent)
-		assert.Equal(t, 5, *editReq.InsertPosition)
-		assert.Equal(t, 10, *editReq.StartLine)
-		assert.Equal(t, 20, *editReq.EndLine)
-		assert.Equal(t, "patch content", *editReq.PatchContent)
+		assert.Equal(t, "test content", editReq.Content)
+		assert.Equal(t, "old content", editReq.OldContent)
+		assert.Equal(t, "new content", editReq.NewContent)
+		assert.Equal(t, "insert content", editReq.InsertContent)
+		assert.Equal(t, 5, editReq.InsertPosition)
+		assert.Equal(t, 10, editReq.StartLine)
+		assert.Equal(t, 20, editReq.EndLine)
+		assert.Equal(t, "patch content", editReq.PatchContent)
 	})
 
 	t.Run("rejects invalid protobuf", func(t *testing.T) {
@@ -182,7 +181,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 			ID:              "msg-1",
 			EventType:       constants.Event.Operator.FsList.Requested,
 			CaseID:          "case-1",
-			TaskID:          system.StringPtr("task-1"),
+			TaskID:          func() *string { s := "task-1"; return &s }(),
 			InvestigationID: "investigation-1",
 			Payload:         payload,
 		}
@@ -191,7 +190,7 @@ func TestPayloadToFsListRequest(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "exec-1", listReq.ExecutionID)
 		assert.Equal(t, "case-1", listReq.CaseID)
-		assert.Equal(t, "task-1", *listReq.TaskID)
+		assert.Equal(t, "task-1", listReq.TaskID)
 		assert.Equal(t, "investigation-1", listReq.InvestigationID)
 		assert.Equal(t, tmpDir, listReq.Path)
 		assert.Equal(t, 5, listReq.MaxDepth)
@@ -275,7 +274,7 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 			ID:              "msg-1",
 			EventType:       constants.Event.Operator.FsGrep.Requested,
 			CaseID:          "case-1",
-			TaskID:          system.StringPtr("task-1"),
+			TaskID:          func() *string { s := "task-1"; return &s }(),
 			InvestigationID: "investigation-1",
 			Payload:         payload,
 		}
@@ -284,7 +283,7 @@ func TestPayloadToFsGrepRequest(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "exec-1", grepReq.ExecutionID)
 		assert.Equal(t, "case-1", grepReq.CaseID)
-		assert.Equal(t, "task-1", *grepReq.TaskID)
+		assert.Equal(t, "task-1", grepReq.TaskID)
 		assert.Equal(t, "investigation-1", grepReq.InvestigationID)
 		assert.Equal(t, tmpDir, grepReq.Path)
 		assert.Equal(t, "test", grepReq.Pattern)

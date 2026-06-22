@@ -58,7 +58,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f"]
+    command: ["gw", "start", "-f", "--posture", "consensus", "--mcp-downstream-url", "http://healthcare-pa-api:8000"]
 
   operator:
     build:
@@ -84,7 +84,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.22.0.10"]
+    command: ["-e", "g8e.local"]
 
   # HB 3134 (2027 API Mandate): FHIR R4-compliant PA submission endpoint replacing fax-based workflows.
   # Bridges net_internal so the g8e gateway can enforce PHI doctrine on inbound requests.
@@ -238,8 +238,17 @@ services:
     container_name: healthcare-agent
     networks:
       net_internal:
+    extra_hosts:
+      - "g8e.local:10.22.0.10"
+    environment:
+      - G8E_GATEWAY_URL=https://g8e.local:8443/api/v1/mcp/tools/call
+    volumes:
+      - ../../g8e:/usr/local/bin/g8e:ro
+      - operator_state:/root/.g8e:ro
     depends_on:
       gateway:
+        condition: service_healthy
+      operator:
         condition: service_healthy
     command: ["sh", "-c", "while true; do sleep 3600; done"]
 

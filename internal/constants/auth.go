@@ -15,6 +15,8 @@
 // This includes WebAuthn/passkey constants, PKI leaf types, HTTP headers, and context keys.
 package constants
 
+import "time"
+
 // Passkey purpose constants define the intended use of a passkey credential.
 const (
 	// PasskeyPurposeRegister indicates the passkey is being created/registered.
@@ -95,15 +97,32 @@ const (
 	HeaderXForwardedHost                = "X-Forwarded-Host"
 	HeaderXForwardedProto               = "X-Forwarded-Proto"
 	HeaderXFrameOptions                 = "X-Frame-Options"
+	HeaderContentSecurityPolicy         = "Content-Security-Policy"
 	HeaderXProxyOrganizationID          = "X-Proxy-Organization-Id"
 	HeaderXProxyUserID                  = "X-Proxy-User-Id"
 	HeaderXRequestTimestamp             = "X-Request-Timestamp"
+)
+
+// JSON-RPC 2.0 protocol constants.
+const (
+	JSONRPCVersion           = "2.0"
+	JSONRPCFieldVersion      = "jsonrpc"
+	JSONRPCFieldMethod       = "method"
+	JSONRPCFieldParams       = "params"
+	JSONRPCFieldID           = "id"
+	JSONRPCFieldResult       = "result"
+	JSONRPCFieldError        = "error"
+	JSONRPCFieldCode         = "code"
+	JSONRPCFieldMessage      = "message"
+	JSONRPCFieldData         = "data"
+	JSONRPCErrorCodeInternal = -32603
 )
 
 // HTTP header value constants.
 const (
 	HeaderValueNoSniff         = "nosniff"
 	HeaderValueDeny            = "DENY"
+	HeaderValueCSPNone         = "default-src 'none'; frame-ancestors 'none'"
 	HeaderValueKeepAlive       = "keep-alive"
 	HeaderValueNoCache         = "no-cache"
 	HeaderValueTextEvent       = "text/event-stream"
@@ -151,8 +170,6 @@ const (
 	AuthErrorReasonJWTInvalid AuthErrorReason = "jwt_invalid"
 	// AuthErrorReasonJWTMissingSubject indicates the JWT is missing the subject claim.
 	AuthErrorReasonJWTMissingSubject AuthErrorReason = "jwt_missing_subject"
-	// AuthErrorReasonNoInvitation indicates no active invitation was found for JIT provisioning.
-	AuthErrorReasonNoInvitation AuthErrorReason = "no_invitation"
 )
 
 const (
@@ -168,4 +185,10 @@ const (
 	ContextKeyOperatorID ContextKey = "operator_id"
 	// ContextKeyOperatorSessionID stores the operator session ID in context.
 	ContextKeyOperatorSessionID ContextKey = "operator_session_id"
+)
+
+// Session constants
+const (
+	// WebSessionTTL defines the lifetime of a web session.
+	WebSessionTTL = 24 * time.Hour
 )

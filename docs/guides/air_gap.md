@@ -5,8 +5,8 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-06-15
-Version: v1.1.1
+Last Updated: 2026-06-22
+Version: v1.1.6
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies. The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -105,7 +105,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    ```
 3. **Establish Local Session**: Log in to establish local credentials:
    ```bash
-   ./g8e auth login
+   ./g8e auth enroll
    ```
 4. **Optional Remote Management**: Use operator remote management CLI commands (cp, scp, ssh, stream, deploy) to manage remote hosts within the air-gapped environment.
 
@@ -123,6 +123,5 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 ## See Also
 
-- **[Secure Data Transfer & Governed Pipelines](secure_data_transfer.md)** — Distribute the binary into the enclave with OS-native tools (scp/robocopy), then govern every subsequent data touch by AI agents and external applications through the API.
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Remote management commands (cp, scp, stream, deploy) for operators inside the air-gapped environment.
 

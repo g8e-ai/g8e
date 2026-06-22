@@ -16,6 +16,7 @@ package gateway
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -64,7 +65,7 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 	case http.MethodGet:
 		doc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings))
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleDataSettings: %w", err).Error())
 			return
 		}
 		if doc == nil {
@@ -89,7 +90,7 @@ func (c *DBController) handleDataSettings(w http.ResponseWriter, r *http.Request
 			_, err2 = c.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionSettings), marshaler.DocumentID(constants.DocIDPlatformSettings), json.RawMessage(body))
 		}
 		if err2 != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err2.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleDataSettings: %w", err2).Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
@@ -131,7 +132,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		doc, err := c.db.DocStore.DocGet(collection, id)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleDataDB: %w", err).Error())
 			return
 		}
 		if doc == nil {
@@ -158,7 +159,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrDatabaseLocked.Error())
 			} else {
-				c.responder.Error(w, http.StatusInternalServerError, err.Error())
+				c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleDataDB: %w", err).Error())
 			}
 			return
 		}
@@ -187,7 +188,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 			} else if errors.Is(err, constants.ErrDatabaseLocked) {
 				c.responder.Error(w, http.StatusServiceUnavailable, constants.ErrDatabaseLocked.Error())
 			} else {
-				c.responder.Error(w, http.StatusInternalServerError, err.Error())
+				c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleDataDB: %w", err).Error())
 			}
 			return
 		}
@@ -200,7 +201,7 @@ func (c *DBController) handleDataDB(w http.ResponseWriter, r *http.Request) {
 		}
 		deleted, err := c.db.DocStore.DocDelete(collection, id)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleDataDB: %w", err).Error())
 			return
 		}
 		if !deleted {
@@ -231,7 +232,7 @@ func (c *DBController) handleDBQuery(w http.ResponseWriter, r *http.Request, col
 
 	docs, err := c.db.DocStore.DocQuery(collection, req.Filters, req.OrderBy, req.Limit)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleDBQuery: %w", err).Error())
 		return
 	}
 	wire := make([]map[string]json.RawMessage, 0, len(docs))
@@ -245,7 +246,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 	if id == "count" && r.Method == http.MethodGet {
 		count, err := c.db.SSEStore.SSEEventsCount()
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleSSEEvents: %w", err).Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.SSEEventsCountResponse{Count: count})
@@ -255,7 +256,7 @@ func (c *DBController) handleSSEEvents(w http.ResponseWriter, r *http.Request, i
 	if id == "" && r.Method == http.MethodDelete {
 		deleted, err := c.db.SSEStore.SSEEventsWipe()
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleSSEEvents: %w", err).Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.SSEEventsWipeResponse{Deleted: deleted})
@@ -275,7 +276,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 	if txID != "" {
 		receipt, err := c.db.AuditStore.GetActionReceipt(txID)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditReceipts: %w", err).Error())
 			return
 		}
 		if receipt == nil {
@@ -305,7 +306,7 @@ func (c *DBController) handleAuditReceipts(w http.ResponseWriter, r *http.Reques
 
 	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, limit, offset)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditReceipts: %w", err).Error())
 		return
 	}
 
@@ -342,7 +343,7 @@ func (c *DBController) handleAuditReceiptsExport(w http.ResponseWriter, r *http.
 
 	receipts, err := c.db.AuditStore.ListActionReceiptsSince(since, limit)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditReceiptsExport: %w", err).Error())
 		return
 	}
 
@@ -382,7 +383,7 @@ func (c *DBController) handleAuditEvents(w http.ResponseWriter, r *http.Request)
 
 	events, err := c.db.AuditStore.GetEvents(operatorSessionID, limit, offset)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditEvents: %w", err).Error())
 		return
 	}
 
@@ -406,7 +407,7 @@ func (c *DBController) handleAuditSummary(w http.ResponseWriter, r *http.Request
 	// Query events summary
 	events, err := c.db.AuditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditSummary: %w", err).Error())
 		return
 	}
 
@@ -418,7 +419,7 @@ func (c *DBController) handleAuditSummary(w http.ResponseWriter, r *http.Request
 	// Query receipts summary
 	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditSummary: %w", err).Error())
 		return
 	}
 
@@ -449,14 +450,14 @@ func (c *DBController) handleAuditReport(w http.ResponseWriter, r *http.Request)
 	// Fetch events
 	events, err := c.db.AuditStore.GetEvents(operatorSessionID, maxAuditQueryLimit, 0)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditReport: %w", err).Error())
 		return
 	}
 
 	// Fetch receipts
 	receipts, err := c.db.AuditStore.ListActionReceipts(operatorSessionID, maxAuditQueryLimit, 0)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleAuditReport: %w", err).Error())
 		return
 	}
 
@@ -482,7 +483,7 @@ func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Re
 	case http.MethodGet:
 		signers, err := c.db.SignerStore.ListTrustedSigners()
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleGovernanceSigners: %w", err).Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.TrustedSignersResponse{
@@ -506,7 +507,7 @@ func (c *DBController) handleGovernanceSigners(w http.ResponseWriter, r *http.Re
 			return
 		}
 		if err := c.db.SignerStore.AddTrustedSigner(signer); err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleGovernanceSigners: %w", err).Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
@@ -527,7 +528,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 	case http.MethodGet:
 		pubKey, err := c.db.SignerStore.GetTrustedSigner(id)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleGovernanceSignerByID: %w", err).Error())
 			return
 		}
 		if pubKey == nil {
@@ -536,7 +537,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 		}
 		doc, err := c.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionTrustedSigners), id)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleGovernanceSignerByID: %w", err).Error())
 			return
 		}
 		if doc == nil {
@@ -548,7 +549,7 @@ func (c *DBController) handleGovernanceSignerByID(w http.ResponseWriter, r *http
 	case http.MethodDelete:
 		deleted, err := c.db.SignerStore.DeleteTrustedSigner(id)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleGovernanceSignerByID: %w", err).Error())
 			return
 		}
 		if !deleted {
@@ -636,14 +637,14 @@ func (c *DBController) handleKV(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := c.db.KVStore.KVSet(key, req.Value, req.TTL); err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleKV: %w", err).Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 
 	case http.MethodDelete:
 		if err := c.db.KVStore.KVDelete(key); err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleKV: %w", err).Error())
 			return
 		}
 		c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
@@ -671,7 +672,7 @@ func (c *DBController) handleKVKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	keys, err := c.db.KVStore.KVKeys(req.Pattern)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleKVKeys: %w", err).Error())
 		return
 	}
 	if keys == nil {
@@ -701,7 +702,7 @@ func (c *DBController) handleKVScan(w http.ResponseWriter, r *http.Request) {
 	}
 	nextCursor, keys, err := c.db.KVStore.KVScan(req.Pattern, req.Cursor, req.Count)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleKVScan: %w", err).Error())
 		return
 	}
 	if keys == nil {
@@ -727,7 +728,7 @@ func (c *DBController) handleKVDeletePattern(w http.ResponseWriter, r *http.Requ
 	}
 	count, err := c.db.KVStore.KVDeletePattern(req.Pattern)
 	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, err.Error())
+		c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleKVDeletePattern: %w", err).Error())
 		return
 	}
 	c.responder.JSON(w, http.StatusOK, models.KVDeletePatternResponse{Deleted: count})
@@ -868,7 +869,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		}
 		count, err := c.db.BlobStore.BlobDeleteNamespace(namespace)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleBlob: %w", err).Error())
 			return
 		}
 		c.logger.Info("Blob namespace deleted", "namespace", namespace, "count", count)
@@ -952,7 +953,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := c.db.BlobStore.BlobPut(namespace, blobID, body, contentType, ttl); err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleBlob: %w", err).Error())
 			return
 		}
 		c.logger.Info("Blob stored", "namespace", namespace, "blob_id", blobID, "size", len(body), "content_type", contentType)
@@ -1006,7 +1007,7 @@ func (c *DBController) handleBlob(w http.ResponseWriter, r *http.Request) {
 
 		deleted, err := c.db.BlobStore.BlobDelete(namespace, blobID)
 		if err != nil {
-			c.responder.Error(w, http.StatusInternalServerError, err.Error())
+			c.responder.Error(w, http.StatusInternalServerError, fmt.Errorf("db_controller: handleBlob: %w", err).Error())
 			return
 		}
 		if !deleted {
@@ -1056,7 +1057,7 @@ func (c *DBController) handlePubSubPublish(w http.ResponseWriter, r *http.Reques
 	c.responder.JSON(w, http.StatusOK, models.PubSubPublishResponse{Receivers: receivers})
 }
 
-var governanceEnvelopeRedirectError = "submit via POST " + constants.APIPaths.GovernanceEnvelopes
+var governanceEnvelopeRedirectError = fmt.Sprintf("submit via POST %s", constants.APIPaths.GovernanceEnvelopes)
 
 func isDirectDBMutationAllowed(collection string) bool {
 	switch constants.CollectionName(collection) {

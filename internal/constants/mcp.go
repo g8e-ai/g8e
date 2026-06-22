@@ -31,4 +31,13 @@ const (
 
 	// DefaultHTTPTimeout is the default timeout for HTTP operations
 	DefaultHTTPTimeout = 10 * time.Second
+
+	// SSHKeepaliveRequestType is the SSH request type for keepalive packets
+	SSHKeepaliveRequestType = "keepalive@g8e"
+
+	// SSHKeepaliveInterval is the interval between SSH keepalive packets
+	SSHKeepaliveInterval = 15 * time.Second
+
+	// SSHKeepaliveMaxMissed is the maximum number of missed keepalive responses before failure
+	SSHKeepaliveMaxMissed = 3
 )

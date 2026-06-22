@@ -108,9 +108,6 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	case constants.ActionTypeInvestigationCreate:
 		// INVESTIGATION_CREATE has no typed payload, uses raw bytes
 		return []byte(`{"test": "data"}`)
-	case constants.ActionTypeMigrationTransfer:
-		// MIGRATION_TRANSFER has no typed payload yet, uses raw bytes
-		return []byte(`{"test": "data"}`)
 	case constants.ActionTypeCancel:
 		msg = &operatorv1.CommandCancelRequested{ExecutionId: "exec-1"}
 	default:

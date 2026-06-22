@@ -1,0 +1,53 @@
+{
+  "mission_id": "OP-ALPHA-2026-0621",
+  "theater": "Eastern Front",
+  "timestamp": "2026-06-21T14:30:00Z",
+  "sectors": [
+    {
+      "sector_id": "A1",
+      "name": "Northern Ridge",
+      "status": "active",
+      "threat_level": "high",
+      "enemy_positions": [
+        {"id": "E1", "type": "armor", "count": 3, "coordinates": "34.5, 45.2"},
+        {"id": "E2", "type": "infantry", "count": 25, "coordinates": "34.6, 45.3"}
+      ],
+      "friendly_positions": [
+        {"id": "F1", "type": "infantry", "count": 40, "coordinates": "34.4, 45.1"}
+      ]
+    },
+    {
+      "sector_id": "B2",
+      "name": "Central Valley",
+      "status": "contested",
+      "threat_level": "critical",
+      "enemy_positions": [
+        {"id": "E3", "type": "artillery", "count": 2, "coordinates": "35.1, 46.0"},
+        {"id": "E4", "type": "aa_battery", "count": 1, "coordinates": "35.2, 46.1"}
+      ],
+      "friendly_positions": [
+        {"id": "F2", "type": "armor", "count": 5, "coordinates": "35.0, 45.9"}
+      ]
+    },
+    {
+      "sector_id": "C3",
+      "name": "Southern Plains",
+      "status": "secure",
+      "threat_level": "low",
+      "enemy_positions": [],
+      "friendly_positions": [
+        {"id": "F3", "type": "supply", "count": 1, "coordinates": "35.5, 46.5"}
+      ]
+    }
+  ],
+  "no_fly_zones": [
+    {"id": "NFZ1", "coordinates": "34.0-35.0, 45.0-46.0", "reason": "civilian_population_center"},
+    {"id": "NFZ2", "coordinates": "35.3-35.7, 46.2-46.8", "reason": "diplomatic_facility"}
+  ],
+  "rules_of_engagement": {
+    "positive_identification_required": true,
+    "civilian_protection_priority": "critical",
+    "coordination_clearance": "required_for_strikes",
+    "autonomous_weapons": "prohibited"
+  }
+}
