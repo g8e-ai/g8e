@@ -1,5 +1,8 @@
 # CLI Reference
 
+Last Updated: 2026-06-22
+Version: v1.1.6
+
 This reference documents the g8e CLI commands for managing the g8e Gateway, g8e Operator, and platform setup.
 
 ## g8e Root Help
@@ -16,7 +19,6 @@ Available Commands:
   mcp         MCP protocol operations (stdio transport)
   operator    Manage Operator instances
   vault       Manage the encryption vault
-  migration   Manage governed data migrations
   test        Run test suites (unit, integration, e2e, scenario, agentic-tool-emulator, chaos)
   demos       Manage g8e demo environments
   audit       Run audit reports for compliance
@@ -28,210 +30,6 @@ Flags:
   -v, --version   version for g8e
 
 Use "g8e [command] --help" for more information about a command.
-```
-
-
-## migration
-```
-Manage governed data migrations with cryptographic chain of custody. Supports bulk data transfers via rclone and SharePoint connectors with manifest signing and audit trails.
-
-Usage:
-  g8e migration [command]
-
-Available Commands:
-  manifest    Manage migration manifests
-  connector   Manage migration connectors
-  report      Generate chain-of-custody reports
-
-Flags:
-  -h, --help   help for migration
-
-Use "g8e migration [command] --help" for more information about a command.
-```
-
-### migration manifest
-```
-Manage migration manifests for governed bulk data transfers.
-
-Usage:
-  g8e migration manifest [command]
-
-Available Commands:
-  sign        Sign a migration manifest
-
-Flags:
-  -h, --help   help for manifest
-
-Use "g8e migration manifest [command] --help" for more information about a command.
-```
-
-#### migration manifest sign
-```
-Sign a migration manifest with cryptographic signature. The manifest is signed by the accountable party and includes the migration authorization details.
-
-Usage:
-  g8e migration manifest sign --manifest <path> [flags]
-
-Flags:
-      --manifest string   Path to the manifest JSON file (required)
-      --out string        Output path for the signed manifest
-  -h, --help             help for sign
-```
-
-### migration connector
-```
-Manage migration connectors for bulk data transfer tools.
-
-Usage:
-  g8e migration connector [command]
-
-Available Commands:
-  rclone      rclone connector (S3, Azure, Google Cloud, SMB, SFTP)
-  sharepoint  SharePoint connector (On-Prem to Online, S3, Azure)
-
-Flags:
-  -h, --help   help for connector
-
-Use "g8e migration connector [command] --help" for more information about a command.
-```
-
-#### migration connector rclone
-```
-rclone connector for cloud storage migrations. Supports S3, Azure, Google Cloud, SMB, and SFTP protocols.
-
-Usage:
-  g8e migration connector rclone [command]
-
-Available Commands:
-  configure   Configure rclone connector remotes
-  plan        Enumerate source tree and build migration manifest
-  run         Execute governed migration from manifest
-
-Flags:
-  -h, --help   help for rclone
-```
-
-##### migration connector rclone configure
-```
-Configure rclone connector remotes for source and destination.
-
-Usage:
-  g8e migration connector rclone configure [flags]
-
-Flags:
-      --destination string   Destination remote
-      --name string          Connector configuration name
-      --source string        Source remote
-  -h, --help                help for configure
-```
-
-##### migration connector rclone plan
-```
-Enumerate source tree and build migration manifest for rclone connector.
-
-Usage:
-  g8e migration connector rclone plan [flags]
-
-Flags:
-      --name string          Connector configuration name
-      --out string           Output manifest path (default "migration-manifest.json")
-  -h, --help                help for plan
-```
-
-##### migration connector rclone run
-```
-Execute governed migration from manifest using rclone connector.
-
-Usage:
-  g8e migration connector rclone run [flags]
-
-Flags:
-      --manifest string   Path to signed manifest
-  -h, --help             help for run
-```
-
-#### migration connector sharepoint
-```
-SharePoint connector for On-Prem to Online, S3, and Azure migrations.
-
-Usage:
-  g8e migration connector sharepoint [command]
-
-Available Commands:
-  configure   Configure SharePoint connector remotes
-  plan        Enumerate SharePoint library and build migration manifest
-  run         Execute governed SharePoint migration
-  enroll      Enroll SharePoint connector with a Gateway
-
-Flags:
-  -h, --help   help for sharepoint
-```
-
-##### migration connector sharepoint configure
-```
-Configure SharePoint connector remotes for source and destination.
-
-Usage:
-  g8e migration connector sharepoint configure [flags]
-
-Flags:
-      --destination string   Destination SharePoint site
-      --name string          Connector configuration name
-      --source string        Source SharePoint site
-      --tenant string        SharePoint Online tenant
-  -h, --help                help for configure
-```
-
-##### migration connector sharepoint plan
-```
-Enumerate SharePoint library and build migration manifest.
-
-Usage:
-  g8e migration connector sharepoint plan [flags]
-
-Flags:
-      --name string          Connector configuration name
-      --out string           Output manifest path (default "migration-manifest.json")
-  -h, --help                help for plan
-```
-
-##### migration connector sharepoint run
-```
-Execute governed SharePoint migration from manifest.
-
-Usage:
-  g8e migration connector sharepoint run [flags]
-
-Flags:
-      --manifest string   Path to signed manifest
-      --posture string   Enforcement posture (default "notary")
-  -h, --help             help for run
-```
-
-##### migration connector sharepoint enroll
-```
-Enroll SharePoint connector with a Gateway for governed operations.
-
-Usage:
-  g8e migration connector sharepoint enroll [flags]
-
-Flags:
-      --gateway string   Gateway endpoint URL
-      --name string      Connector name used as SPIFFE workload identity (default "sharepoint-connector")
-  -h, --help             help for enroll
-```
-
-### migration report
-```
-Generate a combined chain-of-custody report for migration audits.
-
-Usage:
-  g8e migration report [flags]
-
-Flags:
-      --migration-id string   Migration ID
-      --out string            Output directory (default "./migration-report/")
-  -h, --help                 help for report
 ```
 
 
@@ -390,7 +188,7 @@ Usage:
   g8e auth [command]
 
 Available Commands:
-  login           Authenticate CLI with the running Gateway
+  enroll          Enroll CLI with the running Gateway and register a passkey
   logout          Clear local Operator session and credentials
   enroll-windows  Enroll via Windows Certificate Store (Windows only - advanced)
   approve         Approve a suspended L3 transaction with CLI signature
@@ -401,15 +199,15 @@ Flags:
 Use "g8e auth [command] --help" for more information about a command.
 ```
 
-### auth login
+### auth enroll
 ```
-Authenticate CLI with the running Gateway via CSR-based enrollment. Generates client keypairs, submits CSRs to the Gateway's CA, and saves signed mTLS credentials. The Gateway must already be running (use './g8e gw start' first). On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.
+Enroll CLI with the running Gateway via CSR-based enrollment, then register a passkey for secure authentication. Generates client keypairs, submits CSRs to the Gateway's CA, saves signed mTLS credentials, and opens a browser to register a WebAuthn/FIDO2 passkey. The Gateway must already be running (use './g8e gw start' first). On Windows, this automatically enrolls via Windows Certificate Store for passkey authentication.
 
 Usage:
-  g8e auth login [flags]
+  g8e auth enroll [flags]
 
 Flags:
-  -h, --help   help for login
+  -h, --help   help for enroll
 ```
 
 ### auth logout
@@ -427,7 +225,7 @@ Flags:
 ```
 Enroll via Windows Certificate Store (Windows only - advanced). Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.
 
-NOTE: This is now handled automatically by 'g8e auth login' on Windows. This command is for advanced use cases or manual re-enrollment.
+NOTE: This is now handled automatically by 'g8e auth enroll' on Windows. This command is for advanced use cases or manual re-enrollment.
 
 Usage:
   g8e auth enroll-windows [flags]
@@ -903,7 +701,7 @@ Flags:
 
 ### operator deploy
 ```
-Deploy the operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires 'g8e auth login' first.
+Deploy the operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires 'g8e auth enroll' first.
 
 Usage:
   g8e operator deploy [flags]
@@ -918,7 +716,7 @@ Flags:
 
 ### operator stream
 ```
-Stream the operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires 'g8e auth login' first.
+Stream the operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires 'g8e auth enroll' first.
 
 Usage:
   g8e operator stream [flags]
@@ -1396,7 +1194,7 @@ Flags:
 
 2. Authenticate your CLI:
    ```bash
-   ./g8e auth login
+   ./g8e auth enroll
    ```
 
 3. List supported agent binaries:

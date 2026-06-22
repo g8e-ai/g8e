@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-15
-Version: v1.1.1
+Last Updated: 2026-06-22
+Version: v1.1.6
 
 ---
 
@@ -212,7 +212,7 @@ docker stop g8e-gateway && docker rm g8e-gateway
 After the gateway is running (locally or in Docker), authenticate the CLI to bootstrap the PKI hierarchy and issue mTLS credentials:
 
 ```bash
-./g8e auth login
+./g8e auth enroll
 ```
 
 ### Enroll a remote operator

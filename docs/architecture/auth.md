@@ -1,5 +1,8 @@
 # Authentication & Authorization
 
+Last Updated: 2026-06-22
+Version: v1.1.6
+
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
 ## Overview
