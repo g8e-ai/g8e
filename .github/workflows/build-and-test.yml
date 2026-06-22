@@ -72,3 +72,6 @@ jobs:
       - name: Integration Tests
         run: make test-integration
 
+      - name: Cross-Compile (Windows)
+        run: make build-windows
+

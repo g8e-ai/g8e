@@ -1490,7 +1490,6 @@ func TestL1Doctrine_ValidateIntent_Pinning(t *testing.T) {
 }
 
 // FuzzAnalyzeMCPArguments fuzz tests the AnalyzeMCPArguments method
-// This is migrated from sentinel_input_fuzz_test.go
 func FuzzAnalyzeMCPArguments(f *testing.F) {
 	doctrine := NewL1Doctrine()
 

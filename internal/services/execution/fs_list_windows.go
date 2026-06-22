@@ -66,7 +66,7 @@ func (s *FsListService) ExecuteFsList(ctx context.Context, req *models.FsListReq
 		Status:          operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING,
 		Entries:         []models.FsListEntry{},
 	}
-	result.StartTime = &startTime
+	result.StartTime = startTime
 
 	// Resolve path - default to operator's working directory when none is specified
 	path := req.Path
