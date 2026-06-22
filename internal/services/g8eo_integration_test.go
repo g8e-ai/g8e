@@ -84,6 +84,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 			Logger:            logger,
 			Execution:         execSvc,
 			FileEdit:          fileEditSvc,
+			PubSubClient:      pubsub.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
