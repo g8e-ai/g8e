@@ -181,6 +181,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		FieldReader:         govDeps.FieldReader,
 		SignerStore:         govDeps.SignerStore,
 		AppPolicyStore:      govDeps.AppPolicyStore,
+		TribunalStore:       govDeps.TribunalStore,
 		L3Notary:            govDeps.L3Notary,
 		ActuatorSigningKey:  ActuatorPriv,
 		ActuatorKeyID:       ActuatorKeyID,

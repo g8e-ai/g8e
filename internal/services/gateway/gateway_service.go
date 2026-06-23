@@ -569,6 +569,7 @@ type GovernanceDeps struct {
 	L3Notary          governance.L3Notary
 	SignerStore       governance.SignerStore
 	AppPolicyStore    governance.AppPolicyStore
+	TribunalStore     governance.TribunalStore
 	// FieldReader backs the MCP gateway's read_field operation. It is the same
 	// document store that satisfies TransactionAudit, but exposed with its
 	// field-read capability rather than only the audit DocSet method.
@@ -590,6 +591,7 @@ func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 		L3Notary:          compositeL3,
 		SignerStore:       ls.db.SignerStore,
 		AppPolicyStore:    ls.db.AppPolicyStore,
+		TribunalStore:     ls.db.TribunalStore,
 		FieldReader:       ls.db.DocStore,
 	}
 }

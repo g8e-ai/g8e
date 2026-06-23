@@ -109,6 +109,7 @@ type CommandServiceConfig struct {
 	TransactionAudit  governance.TransactionAuditStore
 	SignerStore       governance.SignerStore
 	AppPolicyStore    governance.AppPolicyStore
+	TribunalStore     governance.TribunalStore
 	// FieldReader backs the MCP gateway's read_field operation. Distinct from
 	// TransactionAudit so the read capability is not smuggled through the
 	// audit-store interface (which only exposes DocSet).
@@ -242,7 +243,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 		c.ReplayStore,
 		c.StateRootProvider,
 		rs.signerStore,
-		nil, // TribunalStore wired in Phase 5 when gateway config provides tribunal ID
+		c.TribunalStore,
 		c.AppPolicyStore,
 		c.L3Notary,
 		nil, // DoctrineValidator defaults to L1Doctrine
