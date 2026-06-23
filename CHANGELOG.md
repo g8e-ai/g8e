@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-06-23
+
+### Overview
+
+v1.1.8 is a maintenance and stability release focused on hardening the Tribunal consensus infrastructure, reorganizing development tooling for better maintainability, and improving the reliability of the end-to-end integration test suite.
+
+### Added
+
+* **Tribunal Store Hardening** — Expanded `TribunalStoreService` with additional validation logic and comprehensive unit test coverage to ensure robust policy management.
+* **Tooling Reorganization** — Centralized development and testing tools (Agentic Tool Emulator and Chaos Testing utilities) by moving them from `test/` to `internal/tools/`, improving repository structure.
+* **E2E Harness Enhancements** — Significantly improved the E2E test harness (`test/e2e/harness.go`) and added new gateway test fixtures to increase test stability and coverage.
+
+### Changed
+
+* **Governance Cleanup** — Removed redundant test implementations in `internal/services/governance/` and consolidated testing logic within the improved harness.
+* **Configuration Management** — Added new configuration options for gateway services to support improved testing and deployment scenarios.
+
+### Fixed
+
+* **Test Stability** — Resolved flakiness in several E2E and integration tests by improving fixture handling and harness reliability.
+* **Tool Integrity** — Fixed minor issues in the agentic tool emulator to ensure consistency across testing environments.
+
+---
+
 ## [1.1.7] - 2026-06-23
 
 ### Overview
