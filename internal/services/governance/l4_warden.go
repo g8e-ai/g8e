@@ -526,19 +526,21 @@ func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (tim
 	return time.Time{}, nil
 }
 
-// verifyPosture performs governance posture-aware checks for L3 and L2.
-// L3 (human-presence) is checked before L2 (consensus) so that a missing
-// human-approval proof is surfaced first — allowing the gateway to suspend
-// the transaction before L2 consensus is evaluated.
+// verifyPosture performs governance posture-aware checks for L2 and L3.
+// L2 (machine consensus) is verified first. Only if L2 passes does L3
+// (human-presence) run. This preserves the architectural invariant: the
+// human's approval bond is spent only on transactions that have already
+// cleared tribunal consensus. A human should never be asked to authorize
+// content the machines have not yet vetted.
 func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.GovernanceEnvelope, computedHash string) (bool, bool, error) {
-	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
+	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
 		return false, false, err
 	}
 
-	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
+	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
 	if err != nil {
-		return false, l3Valid, err
+		return l2Valid, false, err
 	}
 
 	return l2Valid, l3Valid, nil
