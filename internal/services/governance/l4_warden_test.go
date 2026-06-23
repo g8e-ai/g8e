@@ -19,8 +19,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log/slog"
-	"os"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -46,7 +44,7 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		t.Fatalf("failed to generate signer: %v", err)
 	}
 	return NewL4Warden(
-		slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		testutil.NewTestLogger(),
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
@@ -522,7 +520,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		t.Fatalf("failed to generate signer: %v", err)
 	}
 	return NewL4Warden(
-		slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		testutil.NewTestLogger(),
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
@@ -634,7 +632,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 
 	makeVerifier := func(signers map[string]ed25519.PublicKey, tribunals map[string]*models.TribunalPolicy) *L4Warden {
 		return NewL4Warden(
-			slog.New(slog.NewTextHandler(os.Stdout, nil)),
+			testutil.NewTestLogger(),
 			testutil.NewStatefulMockReplayStore(),
 			testutil.NewMockStateRootProvider("root-1"),
 			&SimpleSignerStore{Signers: signers},

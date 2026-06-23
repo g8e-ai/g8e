@@ -517,6 +517,7 @@ var (
 	ErrConfigPortsMustDiffer    = errors.New("httpPort and httpsPort must be different")
 	ErrConfigInvalidWorkingDir  = errors.New("invalid working directory")
 	ErrConfigTribunalIDRequired = errors.New("consensus posture requires --tribunal-id")
+	ErrConfigTribunalQuorumLow  = errors.New("consensus posture requires tribunal quorum >= 2")
 
 	// SSH config errors
 	ErrSSHOpenConfigFile = errors.New("failed to open SSH config file")
@@ -839,6 +840,8 @@ var (
 	ErrTxL2TribunalNotConfigured    = errors.New("TX_QUORUM_L2_TRIBUNAL_MISSING: tribunal policy not found or disabled")
 	ErrTxL2DuplicateSigner          = errors.New("TX_QUORUM_L2_DUP_SIGNER: duplicate signer key in vote set with require_distinct")
 	ErrTribunalHashMismatch         = errors.New("TRIBUNAL_HASH_MISMATCH: envelope id does not match recomputed transaction hash")
+	ErrTribunalInvalidID            = errors.New("TRIBUNAL_INVALID_ID: tribunal ID must contain only alphanumeric characters, hyphens, and underscores")
+	ErrTribunalMustBeEnabled        = errors.New("TRIBUNAL_MUST_BE_ENABLED: new tribunals must be created with enabled=true")
 	ErrTxL3ProofMissing             = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrTxL3ProofInvalid             = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrTxL3NotaryNotConfigured      = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")

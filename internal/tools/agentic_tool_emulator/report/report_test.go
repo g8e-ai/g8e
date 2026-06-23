@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/test/agentic_tool_emulator/client"
-	"github.com/g8e-ai/g8e/test/agentic_tool_emulator/scenarios"
+	clientpkg "github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/client"
+	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/scenarios"
 )
 
 func TestWrite(t *testing.T) {

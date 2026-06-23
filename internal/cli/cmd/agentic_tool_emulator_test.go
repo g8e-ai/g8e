@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/test/agentic_tool_emulator/config"
+	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -21,7 +21,7 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/g8e-ai/g8e/test/agentic_tool_emulator/config"
+	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/config"
 )
 
 func TestParseReceipts(t *testing.T) {

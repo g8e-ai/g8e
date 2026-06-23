@@ -36,6 +36,8 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 	require.NoError(t, err)
 	pubKey2, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
+	pubKey3, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
 
 	signer1 := models.TrustedSigner{
 		ID:        "member-1",
@@ -49,6 +51,12 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 		AddedAt:   time.Now().UTC(),
 		Enabled:   true,
 	}
+	disabledSigner := models.TrustedSigner{
+		ID:        "disabled-member",
+		PublicKey: hex.EncodeToString(pubKey3),
+		AddedAt:   time.Now().UTC(),
+		Enabled:   false,
+	}
 
 	// Register signers
 	err = infra.DB.SignerStore.AddTrustedSigner(signer1)
@@ -58,6 +66,10 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 	err = infra.DB.SignerStore.AddTrustedSigner(signer2)
 	require.NoError(t, err)
 	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("member-2") })
+
+	err = infra.DB.SignerStore.AddTrustedSigner(disabledSigner)
+	require.NoError(t, err)
+	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("disabled-member") })
 
 	tests := []struct {
 		name        string
@@ -159,6 +171,66 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 			},
 			expectError: true,
 			errorMsg:    "cannot contain empty strings",
+		},
+		{
+			name: "invalid tribunal ID with special characters",
+			policy: models.TribunalPolicy{
+				ID:              "test@tribunal",
+				MemberAppIDs:    []string{"member-1"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         true,
+			},
+			expectError: true,
+			errorMsg:    "TRIBUNAL_INVALID_ID",
+		},
+		{
+			name: "invalid tribunal ID with spaces",
+			policy: models.TribunalPolicy{
+				ID:              "test tribunal",
+				MemberAppIDs:    []string{"member-1"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         true,
+			},
+			expectError: true,
+			errorMsg:    "TRIBUNAL_INVALID_ID",
+		},
+		{
+			name: "invalid tribunal ID with path separator",
+			policy: models.TribunalPolicy{
+				ID:              "test/tribunal",
+				MemberAppIDs:    []string{"member-1"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         true,
+			},
+			expectError: true,
+			errorMsg:    "TRIBUNAL_INVALID_ID",
+		},
+		{
+			name: "disabled new tribunal rejected",
+			policy: models.TribunalPolicy{
+				ID:              "test-tribunal-disabled",
+				MemberAppIDs:    []string{"member-1"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         false,
+			},
+			expectError: true,
+			errorMsg:    "TRIBUNAL_MUST_BE_ENABLED",
+		},
+		{
+			name: "disabled signer as member rejected",
+			policy: models.TribunalPolicy{
+				ID:              "test-tribunal-disabled-signer",
+				MemberAppIDs:    []string{"disabled-member"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         true,
+			},
+			expectError: true,
+			errorMsg:    "not an enabled trusted signer",
 		},
 	}
 
@@ -334,4 +406,72 @@ func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
 	deleted, err = tribunalSvc.DeleteTribunal("non-existent")
 	require.NoError(t, err)
 	assert.False(t, deleted)
+}
+
+func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+
+	pubKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signer := models.TrustedSigner{
+		ID:        "update-member",
+		PublicKey: hex.EncodeToString(pubKey),
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
+	}
+	err = infra.DB.SignerStore.AddTrustedSigner(signer)
+	require.NoError(t, err)
+	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("update-member") })
+
+	// Create enabled tribunal
+	policy := models.TribunalPolicy{
+		ID:              "update-tribunal",
+		MemberAppIDs:    []string{"update-member"},
+		Quorum:          1,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	err = tribunalSvc.AddTribunal(policy)
+	require.NoError(t, err)
+	t.Cleanup(func() { tribunalSvc.DeleteTribunal("update-tribunal") })
+
+	// Update: disable the existing tribunal (should succeed)
+	policy.Enabled = false
+	err = tribunalSvc.AddTribunal(policy)
+	require.NoError(t, err)
+
+	// Verify it's stored as disabled
+	retrieved, err := tribunalSvc.GetTribunal("update-tribunal")
+	require.NoError(t, err)
+	require.NotNil(t, retrieved)
+	assert.False(t, retrieved.Enabled)
+}
+
+func TestIsValidTribunalID(t *testing.T) {
+	tests := []struct {
+		id   string
+		want bool
+	}{
+		{"valid-id", true},
+		{"valid_id", true},
+		{"ValidID123", true},
+		{"a", true},
+		{"", false},
+		{"test@tribunal", false},
+		{"test tribunal", false},
+		{"test/tribunal", false},
+		{"test\\tribunal", false},
+		{"test:tribunal", false},
+		{"test.tribunal", false},
+		{"test\ttribunal", false},
+		{"日本語", true}, // unicode letters are allowed
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.id, func(t *testing.T) {
+			got := isValidTribunalID(tt.id)
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

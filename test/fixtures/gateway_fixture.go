@@ -46,11 +46,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/netutil"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/gateway"
+	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
+	"github.com/g8e-ai/g8e/internal/services/tribunal"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
@@ -531,5 +534,78 @@ func CreateMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity)
 				Certificates: []tls.Certificate{enrolledCert},
 			},
 		},
+	}
+}
+
+// TribunalSetup holds the result of wiring a real TribunalService into a gateway fixture.
+type TribunalSetup struct {
+	TribunalID string
+	Members    []tribunal.TribunalMember
+	Service    *tribunal.TribunalService
+}
+
+// SetupTribunal wires a real TribunalService into the gateway fixture for consensus
+// posture integration tests. It generates nMembers Ed25519 key pairs, registers each
+// member's public key as a TrustedSigner, creates a TribunalPolicy in the TribunalStore,
+// constructs a TribunalService with all members holding private keys, and wires it into
+// both the gateway service (SetTribunal) and the MCP gateway (SetTribunalDeliberator).
+//
+// If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
+// in the TribunalService — the remaining policy members exist in the store but cannot
+// vote. This lets tests simulate quorum-not-reached by producing fewer votes than the
+// quorum threshold requires.
+//
+// This replicates the production bootstrapTribunal wiring from gateway_cmd.go:243-253
+// without importing package main.
+func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers, quorum, nServiceMembers int) *TribunalSetup {
+	t.Helper()
+
+	memberAppIDs := make([]string, nMembers)
+	members := make([]tribunal.TribunalMember, 0, nServiceMembers)
+
+	for i := 0; i < nMembers; i++ {
+		appID := fmt.Sprintf("%s-member-%d", tribunalID, i)
+		memberAppIDs[i] = appID
+
+		pub, priv, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+
+		err = f.Service.GetDB().SignerStore.AddTrustedSigner(models.TrustedSigner{
+			ID:        appID,
+			PublicKey: hex.EncodeToString(pub),
+			AddedAt:   time.Now().UTC(),
+			Enabled:   true,
+		})
+		require.NoError(t, err)
+
+		if i < nServiceMembers {
+			members = append(members, tribunal.TribunalMember{
+				AppID:      appID,
+				PrivateKey: priv,
+			})
+		}
+	}
+
+	policy := models.TribunalPolicy{
+		ID:              tribunalID,
+		MemberAppIDs:    memberAppIDs,
+		Quorum:          quorum,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	err := f.Service.GetDB().TribunalStore.AddTribunal(policy)
+	require.NoError(t, err)
+
+	doctrine := govsvc.NewL1Doctrine()
+	responder := response.NewWriter(testutil.NewTestLogger())
+	tribunalSvc := tribunal.NewTribunalService(tribunalID, members, doctrine, testutil.NewTestLogger(), responder)
+
+	f.Service.SetTribunal(tribunalSvc)
+	f.MCPGateway.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
+
+	return &TribunalSetup{
+		TribunalID: tribunalID,
+		Members:    members,
+		Service:    tribunalSvc,
 	}
 }

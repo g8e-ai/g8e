@@ -16,6 +16,7 @@
 package e2e
 
 import (
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ func TestDockerGateway_Health(t *testing.T) {
 
 	t.Run("gateway HTTP health", func(t *testing.T) {
 		health := f.GetHealth(t)
-		require.Equal(t, "running", health["status"], "health check failed")
+		require.Equal(t, "ok", health["status"], "health check failed")
 		t.Logf("Health status: %v", health)
 	})
 
@@ -42,7 +43,7 @@ func TestDockerGateway_Health(t *testing.T) {
 
 	t.Run("HTTPS port reachable (no mTLS)", func(t *testing.T) {
 		// TCP dial to verify port is reachable (we don't have mTLS certs for this test)
-		conn, err := net.DialTimeout("tcp", "localhost:8443", 5*time.Second)
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", f.HTTPSPort), 5*time.Second)
 		require.NoError(t, err, "HTTPS port not reachable")
 		conn.Close()
 		t.Log("HTTPS port is reachable")
