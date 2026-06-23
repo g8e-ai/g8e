@@ -26,14 +26,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: g8e-gateway
+    container_name: ${G8E_PREFIX:-g8e}-gateway
     networks:
       - g8e-net
     volumes:
       - g8e-gateway-data:/root/.g8e
     ports:
-      - "8080:8080"
-      - "8443:8443"
+      - "${G8E_HTTP_PORT:-8080}:8080"
+      - "${G8E_HTTPS_PORT:-8443}:8443"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
       interval: 10s
@@ -55,7 +55,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: g8e-operator
+    container_name: ${G8E_PREFIX:-g8e}-operator
     networks:
       - g8e-net
     volumes:
