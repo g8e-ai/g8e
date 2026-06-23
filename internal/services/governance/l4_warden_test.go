@@ -193,7 +193,6 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	return env
 }
 
-
 func TestL4Warden_AcceptsValidNonMutationGovernanceEnvelope(t *testing.T) {
 	t.Parallel()
 	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")

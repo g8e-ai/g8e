@@ -113,6 +113,9 @@ help:
 	@echo "  ci            Run full CI pipeline locally (mirrors GitHub Actions)"
 	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
 	@echo ""
+	@echo "Release:"
+	@echo "  release-protocol  Tag & push protocol/v<VERSION> (releases Go + Python protocol)"
+	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
 	@echo "  proto         Generate all Protobuf code (Go)"
@@ -599,3 +602,32 @@ _ci-test:
 		exit 1; \
 	fi; \
 	echo "Coverage $$COVERAGE% meets $(COVERAGE_THRESHOLD)% threshold"
+
+# =============================================================================
+# RELEASE
+# =============================================================================
+# The protocol library (Go + Python) is published purely via a `protocol/v*`
+# git tag — pushing the tag fires both release-go-protocol.yml and
+# release-python-protocol.yml. VERSION is the single source of truth; the root
+# binary always builds against ./protocol via the replace directive in go.mod,
+# so its `require ... v0.0.0` placeholder is intentional and never bumped.
+.PHONY: release-protocol
+release-protocol:
+	@VERSION=$$(cat VERSION | tr -d '\n' | sed 's/^v//'); \
+	TAG="protocol/v$$VERSION"; \
+	PY_VERSION=$$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	echo "=== release-protocol: $$TAG ==="; \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: working tree is dirty; commit or stash before tagging."; exit 1; \
+	fi; \
+	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
+		echo "Error: pyproject.toml version ($$PY_VERSION) != VERSION ($$VERSION)."; exit 1; \
+	fi; \
+	if git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null; then \
+		echo "Error: tag $$TAG already exists."; exit 1; \
+	fi; \
+	echo "Running protocol tests..."; \
+	(cd protocol && go test -race -count=1 ./...); \
+	git tag "$$TAG"; \
+	git push origin "$$TAG"; \
+	echo "Pushed $$TAG — Go + Python protocol releases will run in CI."
