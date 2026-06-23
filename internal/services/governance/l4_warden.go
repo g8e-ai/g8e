@@ -198,6 +198,22 @@ func (s *FilesystemSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKe
 	return pubKey, nil
 }
 
+// SimpleTribunalStore implements TribunalStore using a static map.
+type SimpleTribunalStore struct {
+	Tribunals map[string]*models.TribunalPolicy
+}
+
+func (s *SimpleTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
+	if s.Tribunals == nil {
+		return nil, nil
+	}
+	tribunal, ok := s.Tribunals[id]
+	if !ok {
+		return nil, nil
+	}
+	return tribunal, nil
+}
+
 // SimpleStateRootProvider returns a fixed root set at construction time.
 // Root must be non-empty; a missing root is a misconfiguration that returns an
 // error so callers fail closed rather than silently accepting any state root.
@@ -510,16 +526,19 @@ func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (tim
 	return time.Time{}, nil
 }
 
-// verifyPosture performs governance posture-aware checks for L2 and L3.
+// verifyPosture performs governance posture-aware checks for L3 and L2.
+// L3 (human-presence) is checked before L2 (consensus) so that a missing
+// human-approval proof is surfaced first — allowing the gateway to suspend
+// the transaction before L2 consensus is evaluated.
 func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.GovernanceEnvelope, computedHash string) (bool, bool, error) {
-	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
+	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
 	if err != nil {
 		return false, false, err
 	}
 
-	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
+	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
-		return l2Valid, false, err
+		return false, l3Valid, err
 	}
 
 	return l2Valid, l3Valid, nil
@@ -539,7 +558,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	if tv.signerStore == nil {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2TribunalNotConfigured
+			return false, constants.ErrTxL2SignerStoreNotConfigured
 		}
 		return false, nil
 	}

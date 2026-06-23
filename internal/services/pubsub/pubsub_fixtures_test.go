@@ -15,6 +15,8 @@ package pubsub
 
 import (
 	"context"
+	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -26,26 +28,27 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
-// simpleTribunalStore is an in-memory governance.TribunalStore for unit tests.
-type simpleTribunalStore struct {
-	tribunals map[string]*models.TribunalPolicy
-}
-
-func (s *simpleTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
-	if s.tribunals == nil {
-		return nil, nil
+// signL2Vote creates an L2Vote with a signature derived from the Decision field,
+// preventing decision/signature mismatch bugs where the signed string and the
+// Decision field diverge.
+func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *commonv1.L2Vote {
+	sig := ed25519.Sign(privKey, []byte(fmt.Sprintf("%s|%v", hash, decision)))
+	return &commonv1.L2Vote{
+		SignerKeyId:        keyID,
+		ConsensusSignature: hex.EncodeToString(sig),
+		Decision:           decision,
 	}
-	return s.tribunals[id], nil
 }
 
 // testTribunalStore returns a TribunalStore with a single 1-of-1 "test-tribunal"
 // policy whose sole member is "test-key". This mirrors the single trusted signer
 // registered by the pubsub test fixtures so L4 quorum verification can pass.
 func testTribunalStore() governance.TribunalStore {
-	return &simpleTribunalStore{
-		tribunals: map[string]*models.TribunalPolicy{
+	return &governance.SimpleTribunalStore{
+		Tribunals: map[string]*models.TribunalPolicy{
 			"test-tribunal": {
 				ID:              "test-tribunal",
 				MemberAppIDs:    []string{"test-key"},

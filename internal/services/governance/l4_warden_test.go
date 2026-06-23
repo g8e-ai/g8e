@@ -132,6 +132,18 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	return payload
 }
 
+// signL2Vote creates an L2Vote with a signature derived from the Decision field,
+// preventing decision/signature mismatch bugs where the signed string and the
+// Decision field diverge.
+func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *commonv1.L2Vote {
+	sig := ed25519.Sign(privKey, []byte(fmt.Sprintf("%s|%v", hash, decision)))
+	return &commonv1.L2Vote{
+		SignerKeyId:        keyID,
+		ConsensusSignature: hex.EncodeToString(sig),
+		Decision:           decision,
+	}
+}
+
 func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *governance.GovernanceEnvelope {
 	t.Helper()
 	// Generate a safe nonce from action type and payload (handle empty payloads)
@@ -166,16 +178,12 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		L2: &commonv1.L2Metadata{
 			TribunalId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
-				{
-					SignerKeyId:        "test-key",
-					ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
-					Decision:           true,
-				},
+				signL2Vote(privKey, "test-key", hash, true),
 			},
 		},
 	}
 	// Add L3 proof for mutation actions
-	if isMutationAction(actionType) {
+	if actionType.IsMutation() {
 		env.Governance.L3 = &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
 				Signature: "human-proof",
@@ -185,12 +193,6 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	return env
 }
 
-// isMutationAction returns true if the action type is a mutation.
-// This mirrors the logic in L4Warden.isMutation.
-func isMutationAction(actionType constants.ActionType) bool {
-	// Include all mutation actions that L4Warden expects L3 proof for
-	return actionType.IsMutation() || actionType == constants.ActionTypeMcpCall || actionType == constants.ActionTypeA2aCall || actionType == constants.ActionTypeEvalAnswer || actionType == constants.ActionTypeInvestigationCreate
-}
 
 func TestL4Warden_AcceptsValidNonMutationGovernanceEnvelope(t *testing.T) {
 	t.Parallel()
@@ -554,22 +556,6 @@ func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payl
 	return env
 }
 
-// SimpleTribunalStore implements TribunalStore using an in-memory map.
-type SimpleTribunalStore struct {
-	Tribunals map[string]*models.TribunalPolicy
-}
-
-func (s *SimpleTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
-	if s.Tribunals == nil {
-		return nil, nil
-	}
-	tribunal, ok := s.Tribunals[id]
-	if !ok {
-		return nil, nil
-	}
-	return tribunal, nil
-}
-
 func TestL4Warden_L2QuorumVerification(t *testing.T) {
 	t.Parallel()
 
@@ -647,15 +633,6 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		return env
 	}
 
-	signVote := func(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *commonv1.L2Vote {
-		sig := ed25519.Sign(privKey, []byte(fmt.Sprintf("%s|%v", hash, decision)))
-		return &commonv1.L2Vote{
-			SignerKeyId:        keyID,
-			ConsensusSignature: hex.EncodeToString(sig),
-			Decision:           decision,
-		}
-	}
-
 	makeVerifier := func(signers map[string]ed25519.PublicKey, tribunals map[string]*models.TribunalPolicy) *L4Warden {
 		return NewL4Warden(
 			slog.New(slog.NewTextHandler(os.Stdout, nil)),
@@ -686,8 +663,8 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				env := buildEnv("2of2pass", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signVote(priv1, "member-1", hash, true),
-					signVote(priv2, "member-2", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
 				}
 				return env
 			}(),
@@ -701,7 +678,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				env := buildEnv("1of2fail", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signVote(priv1, "member-1", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
 				}
 				return env
 			}(),
@@ -715,8 +692,8 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				env := buildEnv("dupsign", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signVote(priv1, "member-1", hash, true),
-					signVote(priv1, "member-1", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
 				}
 				return env
 			}(),
@@ -730,8 +707,8 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				env := buildEnv("falsevote", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signVote(priv1, "member-1", hash, true),
-					signVote(priv2, "member-2", hash, false),
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, false),
 				}
 				return env
 			}(),
@@ -745,8 +722,8 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				env := buildEnv("unknownsigner", "trib-2", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signVote(priv1, "member-1", hash, true),
-					signVote(priv2, "member-2", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
 				}
 				return env
 			}(),
@@ -767,8 +744,8 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				env := buildEnv("disabledtrib", "trib-disabled", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signVote(priv1, "member-1", hash, true),
-					signVote(priv2, "member-2", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
 				}
 				return env
 			}(),
@@ -782,8 +759,8 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 				env := buildEnv("unknowntrib", "nonexistent-trib", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signVote(priv1, "member-1", hash, true),
-					signVote(priv2, "member-2", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
 				}
 				return env
 			}(),
