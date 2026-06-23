@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	clientpkg "github.com/g8e-ai/g8e/test/agentic_tool_emulator/client"
+	clientpkg "github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/client"
 	"github.com/google/uuid"
 )
 
