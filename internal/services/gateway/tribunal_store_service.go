@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+	"unicode"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
@@ -55,12 +56,12 @@ func (s *TribunalStoreService) GetTribunal(id string) (*models.TribunalPolicy, e
 
 	data, err := json.Marshal(doc.Data)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	var policy models.TribunalPolicy
 	if err := json.Unmarshal(data, &policy); err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalData, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrDocumentStoreUnmarshalData, err)
 	}
 	policy.ID = doc.ID
 
@@ -69,13 +70,18 @@ func (s *TribunalStoreService) GetTribunal(id string) (*models.TribunalPolicy, e
 
 // AddTribunal adds or updates a TribunalPolicy in the database.
 // Validation at write time, fail-closed:
+// - Tribunal ID is non-empty and contains only alphanumeric, hyphens, underscores
 // - Quorum >= 1
 // - Quorum <= len(MemberAppIDs)
 // - Every MemberAppID resolves to an enabled TrustedSigner
 // - No duplicate member IDs
+// - New tribunals must be created with Enabled=true (updates may disable)
 func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 	if policy.ID == "" {
 		return fmt.Errorf("%w: tribunal ID", constants.ErrMissingRequiredField)
+	}
+	if !isValidTribunalID(policy.ID) {
+		return fmt.Errorf("%w: %s", constants.ErrTribunalInvalidID, policy.ID)
 	}
 	if len(policy.MemberAppIDs) == 0 {
 		return fmt.Errorf("%w: tribunal member_app_ids", constants.ErrMissingRequiredField)
@@ -110,6 +116,18 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 		}
 	}
 
+	// New tribunals must be created enabled. Updates to existing tribunals
+	// may set Enabled=false to deactivate without deleting the policy.
+	if !policy.Enabled {
+		existing, err := s.GetTribunal(policy.ID)
+		if err != nil {
+			return fmt.Errorf("%w: failed to check existing tribunal: %v", constants.ErrConstraintViolation, err)
+		}
+		if existing == nil {
+			return fmt.Errorf("%w", constants.ErrTribunalMustBeEnabled)
+		}
+	}
+
 	if policy.CreatedAt.IsZero() {
 		policy.CreatedAt = time.Now().UTC()
 	}
@@ -117,7 +135,7 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 
 	data, err := json.Marshal(policy)
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrDocumentStoreMarshalDocument, err)
+		return fmt.Errorf("%w: %w", constants.ErrDocumentStoreMarshalDocument, err)
 	}
 
 	return s.docSvc.DocSet(marshaler.CollectionName(constants.CollectionTribunals), policy.ID, data)
@@ -152,4 +170,18 @@ func (s *TribunalStoreService) ListTribunals() ([]models.TribunalPolicy, error) 
 // DeleteTribunal removes a TribunalPolicy from the database.
 func (s *TribunalStoreService) DeleteTribunal(id string) (bool, error) {
 	return s.docSvc.DocDelete(marshaler.CollectionName(constants.CollectionTribunals), id)
+}
+
+// isValidTribunalID validates that a tribunal ID contains only allowed characters.
+// Allowed: letters, digits, hyphens, and underscores. Must be non-empty.
+func isValidTribunalID(id string) bool {
+	if id == "" {
+		return false
+	}
+	for _, r := range id {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_' {
+			return false
+		}
+	}
+	return true
 }

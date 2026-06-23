@@ -134,6 +134,10 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 			logger.Error("Tribunal policy not found or disabled", "tribunal_id", tribunalID, string(constants.ConnectionStateError), constants.ErrTxL2TribunalNotConfigured)
 			os.Exit(constants.ExitConfigError)
 		}
+		if policy.Quorum < 2 {
+			logger.Error("Startup validation failed: tribunal quorum must be >= 2 for consensus posture", "tribunal_id", tribunalID, "quorum", policy.Quorum, string(constants.ConnectionStateError), constants.ErrConfigTribunalQuorumLow)
+			os.Exit(constants.ExitConfigError)
+		}
 		logger.Info("Tribunal policy validated", "tribunal_id", tribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
 	}
 

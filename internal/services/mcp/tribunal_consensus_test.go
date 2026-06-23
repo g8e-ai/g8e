@@ -373,31 +373,43 @@ func TestStartupValidation_ConsensusRequiresTribunalID(t *testing.T) {
 		name       string
 		posture    string
 		tribunalID string
-		expectErr  bool
+		quorum     int
+		expectErr  error
 	}{
 		{
 			name:       "consensus without tribunal_id fails",
 			posture:    "consensus",
 			tribunalID: "",
-			expectErr:  true,
+			quorum:     0,
+			expectErr:  constants.ErrConfigTribunalIDRequired,
 		},
 		{
-			name:       "consensus with tribunal_id passes",
+			name:       "consensus with tribunal_id and quorum >= 2 passes",
 			posture:    "consensus",
 			tribunalID: "test-tribunal",
-			expectErr:  false,
+			quorum:     2,
+			expectErr:  nil,
+		},
+		{
+			name:       "consensus with quorum-1 tribunal fails",
+			posture:    "consensus",
+			tribunalID: "test-tribunal",
+			quorum:     1,
+			expectErr:  constants.ErrConfigTribunalQuorumLow,
 		},
 		{
 			name:       "doctrine without tribunal_id passes",
 			posture:    "doctrine",
 			tribunalID: "",
-			expectErr:  false,
+			quorum:     0,
+			expectErr:  nil,
 		},
 		{
 			name:       "notary without tribunal_id passes",
 			posture:    "notary",
 			tribunalID: "",
-			expectErr:  false,
+			quorum:     0,
+			expectErr:  nil,
 		},
 	}
 
@@ -405,10 +417,10 @@ func TestStartupValidation_ConsensusRequiresTribunalID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := validateConsensusStartup(tc.posture, tc.tribunalID)
-			if tc.expectErr {
+			err := validateConsensusStartup(tc.posture, tc.tribunalID, tc.quorum)
+			if tc.expectErr != nil {
 				require.Error(t, err)
-				assert.ErrorIs(t, err, constants.ErrConfigTribunalIDRequired)
+				assert.ErrorIs(t, err, tc.expectErr)
 			} else {
 				require.NoError(t, err)
 			}
@@ -419,9 +431,15 @@ func TestStartupValidation_ConsensusRequiresTribunalID(t *testing.T) {
 // validateConsensusStartup checks the startup validation rules for the
 // consensus posture. This mirrors the logic in gateway_cmd.go but is
 // extracted as a pure function for testability.
-func validateConsensusStartup(posture string, tribunalID string) error {
-	if posture == "consensus" && tribunalID == "" {
+func validateConsensusStartup(posture string, tribunalID string, quorum int) error {
+	if posture != "consensus" {
+		return nil
+	}
+	if tribunalID == "" {
 		return constants.ErrConfigTribunalIDRequired
+	}
+	if quorum < 2 {
+		return constants.ErrConfigTribunalQuorumLow
 	}
 	return nil
 }
