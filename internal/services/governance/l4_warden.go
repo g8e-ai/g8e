@@ -62,9 +62,14 @@ type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
 }
 
-// SignerStore defines the interface for loading trusted L2Consensus signers.
+// SignerStore defines the interface for loading trusted L2 signers.
 type SignerStore interface {
 	GetTrustedSigner(keyID string) (ed25519.PublicKey, error)
+}
+
+// TribunalStore defines the interface for loading TribunalPolicy by ID.
+type TribunalStore interface {
+	GetTribunal(id string) (*models.TribunalPolicy, error)
 }
 
 // AppPolicyStore defines the interface for loading AppPolicies for external apps.
@@ -193,6 +198,22 @@ func (s *FilesystemSignerStore) GetTrustedSigner(keyID string) (ed25519.PublicKe
 	return pubKey, nil
 }
 
+// SimpleTribunalStore implements TribunalStore using a static map.
+type SimpleTribunalStore struct {
+	Tribunals map[string]*models.TribunalPolicy
+}
+
+func (s *SimpleTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
+	if s.Tribunals == nil {
+		return nil, nil
+	}
+	tribunal, ok := s.Tribunals[id]
+	if !ok {
+		return nil, nil
+	}
+	return tribunal, nil
+}
+
 // SimpleStateRootProvider returns a fixed root set at construction time.
 // Root must be non-empty; a missing root is a misconfiguration that returns an
 // error so callers fail closed rather than silently accepting any state root.
@@ -227,6 +248,7 @@ type L4Warden struct {
 	replayStore       ReplayStore
 	stateRootProvider StateRootProvider
 	signerStore       SignerStore
+	tribunalStore     TribunalStore
 	appPolicyStore    AppPolicyStore
 	l3Notary          L3Notary
 	doctrine          *L1Doctrine
@@ -243,6 +265,7 @@ func NewL4Warden(
 	replayStore ReplayStore,
 	stateRootProvider StateRootProvider,
 	signerStore SignerStore,
+	tribunalStore TribunalStore,
 	appPolicyStore AppPolicyStore,
 	l3Notary L3Notary,
 	doctrine *L1Doctrine,
@@ -270,6 +293,7 @@ func NewL4Warden(
 		replayStore:       replayStore,
 		stateRootProvider: stateRootProvider,
 		signerStore:       signerStore,
+		tribunalStore:     tribunalStore,
 		appPolicyStore:    appPolicyStore,
 		l3Notary:          l3Notary,
 		doctrine:          doctrine,
@@ -502,71 +526,114 @@ func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (tim
 	return time.Time{}, nil
 }
 
-// verifyPosture performs governance posture-aware checks for L2 and L3.
+// verifyPosture performs governance posture-aware checks for L3 and L2.
+// L3 (human-presence) is checked before L2 (consensus) so that a missing
+// human-approval proof is surfaced first — allowing the gateway to suspend
+// the transaction before L2 consensus is evaluated.
 func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.GovernanceEnvelope, computedHash string) (bool, bool, error) {
-	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
+	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
 	if err != nil {
 		return false, false, err
 	}
 
-	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
+	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
-		return l2Valid, false, err
+		return false, l3Valid, err
 	}
 
 	return l2Valid, l3Valid, nil
 }
 
 func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, computedHash string) (bool, error) {
-	if envelope.Governance == nil || envelope.Governance.L2 == nil || envelope.Governance.L2.ConsensusSignature == "" {
+	if envelope.Governance == nil || envelope.Governance.L2 == nil || len(envelope.Governance.L2.Votes) == 0 {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 signature missing but required by posture", "posture", tv.posture.Name())
+			tv.logger.Error("L2 votes missing but required by posture", "posture", tv.posture.Name())
 			return false, constants.ErrTxL2SignatureMissing
 		}
 		return false, nil
 	}
 
 	l2 := envelope.Governance.L2
-	if l2.KeyId == "" {
-		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("L2 key ID missing but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2KeyNotConfigured
-		}
-		return false, nil
-	}
 
 	if tv.signerStore == nil {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("Signer store not configured but required by posture", "posture", tv.posture.Name())
-			return false, constants.ErrTxL2KeyNotConfigured
+			return false, constants.ErrTxL2SignerStoreNotConfigured
 		}
 		return false, nil
 	}
 
-	pubKey, err := tv.signerStore.GetTrustedSigner(l2.KeyId)
+	if tv.tribunalStore == nil {
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("Tribunal store not configured but required by posture", "posture", tv.posture.Name())
+			return false, constants.ErrTxL2TribunalNotConfigured
+		}
+		return false, nil
+	}
+
+	policy, err := tv.tribunalStore.GetTribunal(l2.TribunalId)
 	if err != nil {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Failed to load trusted signer", "key_id", l2.KeyId, string(constants.ConnectionStateError), err)
-			return false, constants.ErrTxL2KeyNotConfigured
+			tv.logger.Error("Failed to load tribunal policy", "tribunal_id", l2.TribunalId, string(constants.ConnectionStateError), err)
+			return false, fmt.Errorf("l4 warden: verify L2 posture: %w", err)
 		}
 		return false, nil
 	}
-
-	if pubKey == nil {
+	if policy == nil || !policy.Enabled {
 		if tv.posture.RequiresL2Signature() {
-			tv.logger.Error("Consensus (L2Consensus) signer key not found in trusted signers", "key_id", l2.KeyId)
-			return false, constants.ErrTxL2KeyNotConfigured
+			tv.logger.Error("Tribunal policy not found or disabled", "tribunal_id", l2.TribunalId)
+			return false, constants.ErrTxL2TribunalNotConfigured
 		}
 		return false, nil
 	}
 
-	valid := tv.verifyL2Signature(pubKey, l2.ConsensusSignature, computedHash, true)
-	if !valid && tv.posture.RequiresL2Signature() {
-		tv.logger.Error("L2 signature verification failed but required by posture", "posture", tv.posture.Name())
-		return false, constants.ErrTxL2SignatureInvalid
+	members := make(map[string]bool, len(policy.MemberAppIDs))
+	for _, m := range policy.MemberAppIDs {
+		members[m] = true
 	}
 
-	return valid, nil
+	seen := make(map[string]bool)
+	affirmative := 0
+
+	for _, vote := range l2.Votes {
+		if !members[vote.SignerKeyId] {
+			continue
+		}
+		if seen[vote.SignerKeyId] {
+			if policy.RequireDistinct {
+				tv.logger.Error("Duplicate signer in vote set with require_distinct", "key_id", vote.SignerKeyId)
+				return false, constants.ErrTxL2DuplicateSigner
+			}
+			continue
+		}
+		pubKey, err := tv.signerStore.GetTrustedSigner(vote.SignerKeyId)
+		if err != nil {
+			tv.logger.Error("Failed to load trusted signer", "key_id", vote.SignerKeyId, string(constants.ConnectionStateError), err)
+			continue
+		}
+		if pubKey == nil {
+			tv.logger.Error("Consensus (L2) signer key not found in trusted signers", "key_id", vote.SignerKeyId)
+			continue
+		}
+		if !tv.verifyL2Signature(pubKey, vote.ConsensusSignature, computedHash, vote.Decision) {
+			tv.logger.Error("L2 signature verification failed", "key_id", vote.SignerKeyId)
+			continue
+		}
+		seen[vote.SignerKeyId] = true
+		if vote.Decision {
+			affirmative++
+		}
+	}
+
+	if affirmative < policy.Quorum {
+		if tv.posture.RequiresL2Signature() {
+			tv.logger.Error("L2 quorum not met", "affirmative", affirmative, "quorum", policy.Quorum, "posture", tv.posture.Name())
+			return false, constants.ErrTxL2QuorumNotMet
+		}
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {

@@ -18,6 +18,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -34,6 +35,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary, posture string) (*L4Warden, ed25519.PrivateKey) {
@@ -47,6 +50,15 @@ func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvid
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"test-key": pubKey}},
+		&SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+			"test-tribunal": {
+				ID:              "test-tribunal",
+				MemberAppIDs:    []string{"test-key"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         true,
+			},
+		}},
 		nil, // AppPolicyStore not used in tests
 		l3Notary,
 		nil,                      // doctrine defaults to L1Doctrine
@@ -120,6 +132,18 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 	return payload
 }
 
+// signL2Vote creates an L2Vote with a signature derived from the Decision field,
+// preventing decision/signature mismatch bugs where the signed string and the
+// Decision field diverge.
+func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *commonv1.L2Vote {
+	sig := ed25519.Sign(privKey, []byte(fmt.Sprintf("%s|%v", hash, decision)))
+	return &commonv1.L2Vote{
+		SignerKeyId:        keyID,
+		ConsensusSignature: hex.EncodeToString(sig),
+		Decision:           decision,
+	}
+}
+
 func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *governance.GovernanceEnvelope {
 	t.Helper()
 	// Generate a safe nonce from action type and payload (handle empty payloads)
@@ -152,12 +176,14 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			KeyId:              "test-key",
-			ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
+			TribunalId: "test-tribunal",
+			Votes: []*commonv1.L2Vote{
+				signL2Vote(privKey, "test-key", hash, true),
+			},
 		},
 	}
 	// Add L3 proof for mutation actions
-	if isMutationAction(actionType) {
+	if actionType.IsMutation() {
 		env.Governance.L3 = &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
 				Signature: "human-proof",
@@ -165,13 +191,6 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		}
 	}
 	return env
-}
-
-// isMutationAction returns true if the action type is a mutation.
-// This mirrors the logic in L4Warden.isMutation.
-func isMutationAction(actionType constants.ActionType) bool {
-	// Include all mutation actions that L4Warden expects L3 proof for
-	return actionType.IsMutation() || actionType == constants.ActionTypeMcpCall || actionType == constants.ActionTypeA2aCall || actionType == constants.ActionTypeEvalAnswer || actionType == constants.ActionTypeInvestigationCreate
 }
 
 func TestL4Warden_AcceptsValidNonMutationGovernanceEnvelope(t *testing.T) {
@@ -219,8 +238,8 @@ func TestL4Warden_FailClosedProofs(t *testing.T) {
 		{name: "missing nonce", mutate: func(env *governance.GovernanceEnvelope) { env.Nonce = ""; rehash(t, env) }, want: ErrNonceMissing},
 		{name: "missing state root", mutate: func(env *governance.GovernanceEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
 		{name: "missing l2", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
-		{name: "missing l2 key", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.KeyId = "" }, want: ErrL2KeyNotConfigured},
-		{name: "invalid l2 signature", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.ConsensusSignature = "deadbeef" }, want: ErrL2SignatureInvalid},
+		{name: "non-member signer", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].SignerKeyId = "" }, want: ErrL2QuorumNotMet},
+		{name: "invalid l2 signature", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].ConsensusSignature = "deadbeef" }, want: ErrL2QuorumNotMet},
 		{name: "missing l3", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L3 = nil }, want: ErrL3ProofMissing},
 	}
 
@@ -507,6 +526,15 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 		replayStore,
 		stateRootProvider,
 		&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{"spiffe://g8e.local/app/test-app-id": pubKey}},
+		&SimpleTribunalStore{Tribunals: map[string]*models.TribunalPolicy{
+			"test-tribunal": {
+				ID:              "test-tribunal",
+				MemberAppIDs:    []string{"spiffe://g8e.local/app/test-app-id"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         true,
+			},
+		}},
 		appPolicyStore,
 		l3Notary,
 		nil, // doctrine defaults to L1Doctrine
@@ -520,9 +548,238 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string) *governance.GovernanceEnvelope {
 	t.Helper()
 	env := signedEnvelope(t, actionType, payload, privKey)
-	if env.Governance != nil && env.Governance.L2 != nil {
-		env.Governance.L2.KeyId = appID
+	if env.Governance != nil && env.Governance.L2 != nil && len(env.Governance.L2.Votes) > 0 {
+		env.Governance.L2.Votes[0].SignerKeyId = appID
 	}
 	rehash(t, env)
 	return env
+}
+
+func TestL4Warden_L2QuorumVerification(t *testing.T) {
+	t.Parallel()
+
+	pub1, priv1, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	pub2, priv2, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
+	allSigners := map[string]ed25519.PublicKey{
+		"member-1": pub1,
+		"member-2": pub2,
+	}
+	partialSigners := map[string]ed25519.PublicKey{
+		"member-1": pub1,
+	}
+
+	enabledTribunal2of2 := &models.TribunalPolicy{
+		ID:              "trib-1",
+		MemberAppIDs:    []string{"member-1", "member-2"},
+		Quorum:          2,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	enabledTribunal1of2 := &models.TribunalPolicy{
+		ID:              "trib-2",
+		MemberAppIDs:    []string{"member-1", "member-2"},
+		Quorum:          1,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	disabledTribunal := &models.TribunalPolicy{
+		ID:              "trib-disabled",
+		MemberAppIDs:    []string{"member-1", "member-2"},
+		Quorum:          2,
+		RequireDistinct: true,
+		Enabled:         false,
+	}
+
+	payload := typedPayload(t, constants.ActionTypeFsList)
+
+	buildEnv := func(nonceTag, tribunalID string, votes []*commonv1.L2Vote) *governance.GovernanceEnvelope {
+		nonceSuffix := hex.EncodeToString(payload)
+		if len(nonceSuffix) > 8 {
+			nonceSuffix = nonceSuffix[:8]
+		}
+		env := &governance.GovernanceEnvelope{
+			ProtocolVersion:   "1.0",
+			Timestamp:         timestamppb.Now(),
+			ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
+			SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
+			OperatorId:        "operator-1",
+			OperatorSessionId: "operator-session-1",
+			ActionType:        string(constants.ActionTypeFsList),
+			TargetResource:    "localhost",
+			Payload:           payload,
+			StateMerkleRoot:   "root-1",
+			Nonce:             "nonce-quorum-" + nonceTag + "-" + nonceSuffix,
+		}
+		hash, err := governance.GenerateMessageID(env)
+		if err != nil {
+			t.Fatalf("failed to generate hash: %v", err)
+		}
+		env.Id = hash
+		env.TransactionHash = hash
+		env.Governance = &commonv1.GovernanceMetadata{
+			L2: &commonv1.L2Metadata{
+				TribunalId: tribunalID,
+				Votes:      votes,
+			},
+		}
+		return env
+	}
+
+	makeVerifier := func(signers map[string]ed25519.PublicKey, tribunals map[string]*models.TribunalPolicy) *L4Warden {
+		return NewL4Warden(
+			slog.New(slog.NewTextHandler(os.Stdout, nil)),
+			testutil.NewStatefulMockReplayStore(),
+			testutil.NewMockStateRootProvider("root-1"),
+			&SimpleSignerStore{Signers: signers},
+			&SimpleTribunalStore{Tribunals: tribunals},
+			nil,
+			testutil.NewConfigurableMockL3Notary(true),
+			nil,
+			constants.AllActionTypes,
+			"consensus",
+			nil,
+		)
+	}
+
+	tests := []struct {
+		name     string
+		verifier *L4Warden
+		env      *governance.GovernanceEnvelope
+		wantErr  error
+		wantL2   bool
+	}{
+		{
+			name:     "2-of-2 quorum pass",
+			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			env: func() *governance.GovernanceEnvelope {
+				env := buildEnv("2of2pass", "trib-1", nil)
+				hash := env.TransactionHash
+				env.Governance.L2.Votes = []*commonv1.L2Vote{
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
+				}
+				return env
+			}(),
+			wantErr: nil,
+			wantL2:  true,
+		},
+		{
+			name:     "1 valid of quorum-2 fails",
+			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			env: func() *governance.GovernanceEnvelope {
+				env := buildEnv("1of2fail", "trib-1", nil)
+				hash := env.TransactionHash
+				env.Governance.L2.Votes = []*commonv1.L2Vote{
+					signL2Vote(priv1, "member-1", hash, true),
+				}
+				return env
+			}(),
+			wantErr: ErrL2QuorumNotMet,
+			wantL2:  false,
+		},
+		{
+			name:     "duplicate signer with require_distinct",
+			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			env: func() *governance.GovernanceEnvelope {
+				env := buildEnv("dupsign", "trib-1", nil)
+				hash := env.TransactionHash
+				env.Governance.L2.Votes = []*commonv1.L2Vote{
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv1, "member-1", hash, true),
+				}
+				return env
+			}(),
+			wantErr: ErrL2DuplicateSigner,
+			wantL2:  false,
+		},
+		{
+			name:     "false vote does not count toward quorum",
+			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			env: func() *governance.GovernanceEnvelope {
+				env := buildEnv("falsevote", "trib-1", nil)
+				hash := env.TransactionHash
+				env.Governance.L2.Votes = []*commonv1.L2Vote{
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, false),
+				}
+				return env
+			}(),
+			wantErr: ErrL2QuorumNotMet,
+			wantL2:  false,
+		},
+		{
+			name:     "unknown signer ignored, quorum-1 passes",
+			verifier: makeVerifier(partialSigners, map[string]*models.TribunalPolicy{"trib-2": enabledTribunal1of2}),
+			env: func() *governance.GovernanceEnvelope {
+				env := buildEnv("unknownsigner", "trib-2", nil)
+				hash := env.TransactionHash
+				env.Governance.L2.Votes = []*commonv1.L2Vote{
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
+				}
+				return env
+			}(),
+			wantErr: nil,
+			wantL2:  true,
+		},
+		{
+			name:     "empty votes under consensus posture",
+			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			env:      buildEnv("emptyvotes", "trib-1", []*commonv1.L2Vote{}),
+			wantErr:  ErrL2SignatureMissing,
+			wantL2:   false,
+		},
+		{
+			name:     "disabled tribunal policy",
+			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-disabled": disabledTribunal}),
+			env: func() *governance.GovernanceEnvelope {
+				env := buildEnv("disabledtrib", "trib-disabled", nil)
+				hash := env.TransactionHash
+				env.Governance.L2.Votes = []*commonv1.L2Vote{
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
+				}
+				return env
+			}(),
+			wantErr: ErrL2TribunalNotConfigured,
+			wantL2:  false,
+		},
+		{
+			name:     "unknown tribunal ID",
+			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
+			env: func() *governance.GovernanceEnvelope {
+				env := buildEnv("unknowntrib", "nonexistent-trib", nil)
+				hash := env.TransactionHash
+				env.Governance.L2.Votes = []*commonv1.L2Vote{
+					signL2Vote(priv1, "member-1", hash, true),
+					signL2Vote(priv2, "member-2", hash, true),
+				}
+				return env
+			}(),
+			wantErr: ErrL2TribunalNotConfigured,
+			wantL2:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			verified, err := tc.verifier.VerifyEnvelope(context.Background(), tc.env)
+			if tc.wantErr != nil {
+				assert.ErrorIs(t, err, tc.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			if verified != nil {
+				assert.Equal(t, tc.wantL2, verified.L2Valid)
+			}
+		})
+	}
 }

@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
 // HTTPHandlerDependencies groups all dependencies for HTTPHandler to reduce constructor bloat.
@@ -49,6 +50,7 @@ type HTTPHandlerDependencies struct {
 	Responder          *response.Writer
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
+	Tribunal           *tribunal.TribunalService
 	SuspendedStore     storage.SuspendedTransactionStore
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
@@ -70,6 +72,7 @@ type HTTPHandler struct {
 	userSvc            *UserService
 	responder          *response.Writer
 	mcp                *mcp.GatewayService
+	tribunal           *tribunal.TribunalService
 	appEnrollment      *AppEnrollmentService
 	isReady            func() bool
 	isGovernanceReady  func() bool
@@ -111,6 +114,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		userSvc:            deps.UserSvc,
 		responder:          deps.Responder,
 		mcp:                deps.MCPGateway,
+		tribunal:           deps.Tribunal,
 		appEnrollment:      deps.AppEnrollment,
 		isReady:            deps.IsReady,
 		isGovernanceReady:  deps.IsGovernanceReady,
@@ -150,6 +154,14 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
 	return h.mcp
+}
+
+// SetTribunal sets the Tribunal service and rebuilds the router to register
+// the deliberate route on the mTLS mux. Called by the boot sequence after
+// the TribunalService is constructed.
+func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
+	h.tribunal = ts
+	h.router = h.buildRouter()
 }
 
 func (h *HTTPHandler) GetPasskeyService() *PasskeyService {

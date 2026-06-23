@@ -143,19 +143,79 @@ func (x *L1Metadata) GetViolations() []string {
 	return nil
 }
 
-// Consensus (L2Consensus) Governance: Multi-agent consensus verification
-type L2Metadata struct {
+// Consensus (L2) Governance: a vote from a single Tribunal member.
+type L2Vote struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
-	ConsensusSignature string                 `protobuf:"bytes,1,opt,name=consensus_signature,json=consensusSignature,proto3" json:"consensus_signature,omitempty"` // ED25519 signature over transaction_hash|decision
-	AgentIds           []string               `protobuf:"bytes,2,rep,name=agent_ids,json=agentIds,proto3" json:"agent_ids,omitempty"`                               // IDs of agents that voted
-	KeyId              string                 `protobuf:"bytes,3,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`                                        // ID of the key used for signature
+	SignerKeyId        string                 `protobuf:"bytes,1,opt,name=signer_key_id,json=signerKeyId,proto3" json:"signer_key_id,omitempty"`                    // member appID == TrustedSigner.ID
+	ConsensusSignature string                 `protobuf:"bytes,2,opt,name=consensus_signature,json=consensusSignature,proto3" json:"consensus_signature,omitempty"` // ed25519 over "<transaction_hash>|<decision>"
+	Decision           bool                   `protobuf:"varint,3,opt,name=decision,proto3" json:"decision,omitempty"`                                              // member's safe (true) / unsafe (false) vote
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
 
+func (x *L2Vote) Reset() {
+	*x = L2Vote{}
+	mi := &file_g8e_common_v1_common_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *L2Vote) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*L2Vote) ProtoMessage() {}
+
+func (x *L2Vote) ProtoReflect() protoreflect.Message {
+	mi := &file_g8e_common_v1_common_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use L2Vote.ProtoReflect.Descriptor instead.
+func (*L2Vote) Descriptor() ([]byte, []int) {
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *L2Vote) GetSignerKeyId() string {
+	if x != nil {
+		return x.SignerKeyId
+	}
+	return ""
+}
+
+func (x *L2Vote) GetConsensusSignature() string {
+	if x != nil {
+		return x.ConsensusSignature
+	}
+	return ""
+}
+
+func (x *L2Vote) GetDecision() bool {
+	if x != nil {
+		return x.Decision
+	}
+	return false
+}
+
+// Consensus (L2) Governance: a vote set from an enrolled Tribunal.
+type L2Metadata struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TribunalId    string                 `protobuf:"bytes,1,opt,name=tribunal_id,json=tribunalId,proto3" json:"tribunal_id,omitempty"` // TribunalPolicy.id that produced this set
+	Votes         []*L2Vote              `protobuf:"bytes,2,rep,name=votes,proto3" json:"votes,omitempty"`                             // independent member votes
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
 func (x *L2Metadata) Reset() {
 	*x = L2Metadata{}
-	mi := &file_g8e_common_v1_common_proto_msgTypes[1]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -167,7 +227,7 @@ func (x *L2Metadata) String() string {
 func (*L2Metadata) ProtoMessage() {}
 
 func (x *L2Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_common_v1_common_proto_msgTypes[1]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -180,28 +240,21 @@ func (x *L2Metadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use L2Metadata.ProtoReflect.Descriptor instead.
 func (*L2Metadata) Descriptor() ([]byte, []int) {
-	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{1}
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *L2Metadata) GetConsensusSignature() string {
+func (x *L2Metadata) GetTribunalId() string {
 	if x != nil {
-		return x.ConsensusSignature
+		return x.TribunalId
 	}
 	return ""
 }
 
-func (x *L2Metadata) GetAgentIds() []string {
+func (x *L2Metadata) GetVotes() []*L2Vote {
 	if x != nil {
-		return x.AgentIds
+		return x.Votes
 	}
 	return nil
-}
-
-func (x *L2Metadata) GetKeyId() string {
-	if x != nil {
-		return x.KeyId
-	}
-	return ""
 }
 
 // Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
@@ -222,7 +275,7 @@ type L3Proof struct {
 
 func (x *L3Proof) Reset() {
 	*x = L3Proof{}
-	mi := &file_g8e_common_v1_common_proto_msgTypes[2]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -234,7 +287,7 @@ func (x *L3Proof) String() string {
 func (*L3Proof) ProtoMessage() {}
 
 func (x *L3Proof) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_common_v1_common_proto_msgTypes[2]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -247,7 +300,7 @@ func (x *L3Proof) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use L3Proof.ProtoReflect.Descriptor instead.
 func (*L3Proof) Descriptor() ([]byte, []int) {
-	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{2}
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *L3Proof) GetClientDataJson() string {
@@ -302,7 +355,7 @@ type L3Metadata struct {
 
 func (x *L3Metadata) Reset() {
 	*x = L3Metadata{}
-	mi := &file_g8e_common_v1_common_proto_msgTypes[3]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -314,7 +367,7 @@ func (x *L3Metadata) String() string {
 func (*L3Metadata) ProtoMessage() {}
 
 func (x *L3Metadata) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_common_v1_common_proto_msgTypes[3]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -327,7 +380,7 @@ func (x *L3Metadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use L3Metadata.ProtoReflect.Descriptor instead.
 func (*L3Metadata) Descriptor() ([]byte, []int) {
-	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{3}
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *L3Metadata) GetProof() *L3Proof {
@@ -346,20 +399,17 @@ func (x *L3Metadata) GetAutoApproved() bool {
 
 // Unified Governance Metadata
 type GovernanceMetadata struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	L1    *L1Metadata            `protobuf:"bytes,1,opt,name=l1,proto3" json:"l1,omitempty"`
-	L2    *L2Metadata            `protobuf:"bytes,2,opt,name=l2,proto3" json:"l2,omitempty"`
-	L3    *L3Metadata            `protobuf:"bytes,3,opt,name=l3,proto3" json:"l3,omitempty"`
-	// Set to true if signed by the local gateway without full L2 consensus.
-	// This is used for single-agent MCP clients that bypass the L2 consensus layer.
-	GatewaySigned bool `protobuf:"varint,4,opt,name=gateway_signed,json=gatewaySigned,proto3" json:"gateway_signed,omitempty"`
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	L1            *L1Metadata            `protobuf:"bytes,1,opt,name=l1,proto3" json:"l1,omitempty"`
+	L2            *L2Metadata            `protobuf:"bytes,2,opt,name=l2,proto3" json:"l2,omitempty"`
+	L3            *L3Metadata            `protobuf:"bytes,3,opt,name=l3,proto3" json:"l3,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GovernanceMetadata) Reset() {
 	*x = GovernanceMetadata{}
-	mi := &file_g8e_common_v1_common_proto_msgTypes[4]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -371,7 +421,7 @@ func (x *GovernanceMetadata) String() string {
 func (*GovernanceMetadata) ProtoMessage() {}
 
 func (x *GovernanceMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_common_v1_common_proto_msgTypes[4]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -384,7 +434,7 @@ func (x *GovernanceMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GovernanceMetadata.ProtoReflect.Descriptor instead.
 func (*GovernanceMetadata) Descriptor() ([]byte, []int) {
-	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{4}
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GovernanceMetadata) GetL1() *L1Metadata {
@@ -406,13 +456,6 @@ func (x *GovernanceMetadata) GetL3() *L3Metadata {
 		return x.L3
 	}
 	return nil
-}
-
-func (x *GovernanceMetadata) GetGatewaySigned() bool {
-	if x != nil {
-		return x.GatewaySigned
-	}
-	return false
 }
 
 // GovernanceEnvelope is the single canonical container for all g8e mutations.
@@ -456,7 +499,7 @@ type GovernanceEnvelope struct {
 
 func (x *GovernanceEnvelope) Reset() {
 	*x = GovernanceEnvelope{}
-	mi := &file_g8e_common_v1_common_proto_msgTypes[5]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -468,7 +511,7 @@ func (x *GovernanceEnvelope) String() string {
 func (*GovernanceEnvelope) ProtoMessage() {}
 
 func (x *GovernanceEnvelope) ProtoReflect() protoreflect.Message {
-	mi := &file_g8e_common_v1_common_proto_msgTypes[5]
+	mi := &file_g8e_common_v1_common_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -481,7 +524,7 @@ func (x *GovernanceEnvelope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GovernanceEnvelope.ProtoReflect.Descriptor instead.
 func (*GovernanceEnvelope) Descriptor() ([]byte, []int) {
-	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{5}
+	return file_g8e_common_v1_common_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *GovernanceEnvelope) GetId() string {
@@ -695,12 +738,16 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\tvalidated\x18\x01 \x01(\bR\tvalidated\x12\x1e\n" +
 	"\n" +
 	"violations\x18\x02 \x03(\tR\n" +
-	"violations\"q\n" +
+	"violations\"y\n" +
+	"\x06L2Vote\x12\"\n" +
+	"\rsigner_key_id\x18\x01 \x01(\tR\vsignerKeyId\x12/\n" +
+	"\x13consensus_signature\x18\x02 \x01(\tR\x12consensusSignature\x12\x1a\n" +
+	"\bdecision\x18\x03 \x01(\bR\bdecision\"Z\n" +
 	"\n" +
-	"L2Metadata\x12/\n" +
-	"\x13consensus_signature\x18\x01 \x01(\tR\x12consensusSignature\x12\x1b\n" +
-	"\tagent_ids\x18\x02 \x03(\tR\bagentIds\x12\x15\n" +
-	"\x06key_id\x18\x03 \x01(\tR\x05keyId\"\xfe\x01\n" +
+	"L2Metadata\x12\x1f\n" +
+	"\vtribunal_id\x18\x01 \x01(\tR\n" +
+	"tribunalId\x12+\n" +
+	"\x05votes\x18\x02 \x03(\v2\x15.g8e.common.v1.L2VoteR\x05votes\"\xfe\x01\n" +
 	"\aL3Proof\x12(\n" +
 	"\x10client_data_json\x18\x01 \x01(\tR\x0eclientDataJSON\x12-\n" +
 	"\x12authenticator_data\x18\x02 \x01(\tR\x11authenticatorData\x12\x1c\n" +
@@ -711,12 +758,11 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\n" +
 	"L3Metadata\x12,\n" +
 	"\x05proof\x18\x01 \x01(\v2\x16.g8e.common.v1.L3ProofR\x05proof\x12#\n" +
-	"\rauto_approved\x18\x02 \x01(\bR\fautoApproved\"\xbc\x01\n" +
+	"\rauto_approved\x18\x02 \x01(\bR\fautoApproved\"\x95\x01\n" +
 	"\x12GovernanceMetadata\x12)\n" +
 	"\x02l1\x18\x01 \x01(\v2\x19.g8e.common.v1.L1MetadataR\x02l1\x12)\n" +
 	"\x02l2\x18\x02 \x01(\v2\x19.g8e.common.v1.L2MetadataR\x02l2\x12)\n" +
-	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\x12%\n" +
-	"\x0egateway_signed\x18\x04 \x01(\bR\rgatewaySigned\"\xb5\b\n" +
+	"\x02l3\x18\x03 \x01(\v2\x19.g8e.common.v1.L3MetadataR\x02l3\"\xb5\b\n" +
 	"\x12GovernanceEnvelope\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x128\n" +
 	"\ttimestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x129\n" +
@@ -772,35 +818,37 @@ func file_g8e_common_v1_common_proto_rawDescGZIP() []byte {
 }
 
 var file_g8e_common_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_g8e_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_g8e_common_v1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_g8e_common_v1_common_proto_goTypes = []any{
 	(Component)(0),                    // 0: g8e.common.v1.Component
 	(*L1Metadata)(nil),                // 1: g8e.common.v1.L1Metadata
-	(*L2Metadata)(nil),                // 2: g8e.common.v1.L2Metadata
-	(*L3Proof)(nil),                   // 3: g8e.common.v1.L3Proof
-	(*L3Metadata)(nil),                // 4: g8e.common.v1.L3Metadata
-	(*GovernanceMetadata)(nil),        // 5: g8e.common.v1.GovernanceMetadata
-	(*GovernanceEnvelope)(nil),        // 6: g8e.common.v1.GovernanceEnvelope
-	(*timestamppb.Timestamp)(nil),     // 7: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),           // 8: google.protobuf.Struct
-	(*descriptorpb.FieldOptions)(nil), // 9: google.protobuf.FieldOptions
+	(*L2Vote)(nil),                    // 2: g8e.common.v1.L2Vote
+	(*L2Metadata)(nil),                // 3: g8e.common.v1.L2Metadata
+	(*L3Proof)(nil),                   // 4: g8e.common.v1.L3Proof
+	(*L3Metadata)(nil),                // 5: g8e.common.v1.L3Metadata
+	(*GovernanceMetadata)(nil),        // 6: g8e.common.v1.GovernanceMetadata
+	(*GovernanceEnvelope)(nil),        // 7: g8e.common.v1.GovernanceEnvelope
+	(*timestamppb.Timestamp)(nil),     // 8: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),           // 9: google.protobuf.Struct
+	(*descriptorpb.FieldOptions)(nil), // 10: google.protobuf.FieldOptions
 }
 var file_g8e_common_v1_common_proto_depIdxs = []int32{
-	3,  // 0: g8e.common.v1.L3Metadata.proof:type_name -> g8e.common.v1.L3Proof
-	1,  // 1: g8e.common.v1.GovernanceMetadata.l1:type_name -> g8e.common.v1.L1Metadata
-	2,  // 2: g8e.common.v1.GovernanceMetadata.l2:type_name -> g8e.common.v1.L2Metadata
-	4,  // 3: g8e.common.v1.GovernanceMetadata.l3:type_name -> g8e.common.v1.L3Metadata
-	7,  // 4: g8e.common.v1.GovernanceEnvelope.timestamp:type_name -> google.protobuf.Timestamp
-	7,  // 5: g8e.common.v1.GovernanceEnvelope.expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 6: g8e.common.v1.GovernanceEnvelope.source_component:type_name -> g8e.common.v1.Component
-	8,  // 7: g8e.common.v1.GovernanceEnvelope.intent_data:type_name -> google.protobuf.Struct
-	5,  // 8: g8e.common.v1.GovernanceEnvelope.governance:type_name -> g8e.common.v1.GovernanceMetadata
-	9,  // 9: g8e.common.v1.forbidden_patterns:extendee -> google.protobuf.FieldOptions
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	9,  // [9:10] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	2,  // 0: g8e.common.v1.L2Metadata.votes:type_name -> g8e.common.v1.L2Vote
+	4,  // 1: g8e.common.v1.L3Metadata.proof:type_name -> g8e.common.v1.L3Proof
+	1,  // 2: g8e.common.v1.GovernanceMetadata.l1:type_name -> g8e.common.v1.L1Metadata
+	3,  // 3: g8e.common.v1.GovernanceMetadata.l2:type_name -> g8e.common.v1.L2Metadata
+	5,  // 4: g8e.common.v1.GovernanceMetadata.l3:type_name -> g8e.common.v1.L3Metadata
+	8,  // 5: g8e.common.v1.GovernanceEnvelope.timestamp:type_name -> google.protobuf.Timestamp
+	8,  // 6: g8e.common.v1.GovernanceEnvelope.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 7: g8e.common.v1.GovernanceEnvelope.source_component:type_name -> g8e.common.v1.Component
+	9,  // 8: g8e.common.v1.GovernanceEnvelope.intent_data:type_name -> google.protobuf.Struct
+	6,  // 9: g8e.common.v1.GovernanceEnvelope.governance:type_name -> g8e.common.v1.GovernanceMetadata
+	10, // 10: g8e.common.v1.forbidden_patterns:extendee -> google.protobuf.FieldOptions
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	10, // [10:11] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_g8e_common_v1_common_proto_init() }
@@ -814,7 +862,7 @@ func file_g8e_common_v1_common_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_g8e_common_v1_common_proto_rawDesc), len(file_g8e_common_v1_common_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 1,
 			NumServices:   0,
 		},

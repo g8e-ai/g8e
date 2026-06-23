@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,18 +27,21 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	gateway "github.com/g8e-ai/g8e/internal/services/gateway"
+	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
 // runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile string) {
+func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile, tribunalID, tribunalURL string) {
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
@@ -96,6 +100,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		NetworkIdentityFile: networkIdentityFile,
 		MCPDownstreamURL:    "",
 		A2ADownstreamURL:    "",
+		TribunalID:          tribunalID,
+		TribunalURL:         tribunalURL,
 		AllowTestPortZero:   false,
 	})
 	if err != nil {
@@ -108,6 +114,27 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	if err != nil {
 		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
+	}
+
+	// Startup validation for consensus posture (Phase 5.4):
+	// If posture is consensus, TribunalID must be set and the TribunalPolicy
+	// must exist and be enabled in the database. Fail fast before starting
+	// any services.
+	if posture == config.PostureConsensus {
+		if tribunalID == "" {
+			logger.Error("Startup validation failed", string(constants.ConnectionStateError), constants.ErrConfigTribunalIDRequired)
+			os.Exit(constants.ExitConfigError)
+		}
+		policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
+		if err != nil {
+			logger.Error("Failed to load Tribunal policy", "tribunal_id", tribunalID, string(constants.ConnectionStateError), err)
+			os.Exit(exitcode.FromError(err))
+		}
+		if policy == nil || !policy.Enabled {
+			logger.Error("Tribunal policy not found or disabled", "tribunal_id", tribunalID, string(constants.ConnectionStateError), constants.ErrTxL2TribunalNotConfigured)
+			os.Exit(constants.ExitConfigError)
+		}
+		logger.Info("Tribunal policy validated", "tribunal_id", tribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -139,13 +166,6 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		os.Exit(constants.ExitConfigError)
 	}
 
-	ConsensusPriv, err := sm.GetConsensusKey()
-	if err != nil {
-		logger.Error("Failed to load Consensus signing key - L2 consensus will fail", string(constants.ConnectionStateError), err)
-		cancel()
-		os.Exit(constants.ExitConfigError)
-	}
-
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", ActuatorKeyID)
@@ -171,28 +191,28 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	}
 
 	psConfig := pubsub.CommandServiceConfig{
-		Config:              cfg,
-		Logger:              logger,
-		Execution:           execSvc,
-		FileEdit:            fileSvc,
-		PubSubClient:        loopbackClient,
-		ResultsService:      nil, // Results handled via direct loopback publish if needed
-		ExecutionVault:      nil, // Not used in gateway mode
-		AuditStore:          auditStore,
-		Ledger:              nil, // P1: Ledger in gateway mode
-		HistoryHandler:      nil, // P1: History in gateway mode
-		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
-		ReplayStore:         govDeps.ReplayStore,
-		StateRootProvider:   govDeps.StateRootProvider,
-		TransactionAudit:    govDeps.TransactionAudit,
-		FieldReader:         govDeps.FieldReader,
-		SignerStore:         govDeps.SignerStore,
-		AppPolicyStore:      govDeps.AppPolicyStore,
-		L3Notary:            govDeps.L3Notary,
-		ActuatorSigningKey:  ActuatorPriv,
-		ActuatorKeyID:       ActuatorKeyID,
-		ConsensusSigningKey: ConsensusPriv,
-		MCPGateway:          mcpSvc,
+		Config:             cfg,
+		Logger:             logger,
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       loopbackClient,
+		ResultsService:     nil, // Results handled via direct loopback publish if needed
+		ExecutionVault:     nil, // Not used in gateway mode
+		AuditStore:         auditStore,
+		Ledger:             nil, // P1: Ledger in gateway mode
+		HistoryHandler:     nil, // P1: History in gateway mode
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+		ReplayStore:        govDeps.ReplayStore,
+		StateRootProvider:  govDeps.StateRootProvider,
+		TransactionAudit:   govDeps.TransactionAudit,
+		FieldReader:        govDeps.FieldReader,
+		SignerStore:        govDeps.SignerStore,
+		AppPolicyStore:     govDeps.AppPolicyStore,
+		TribunalStore:      govDeps.TribunalStore,
+		L3Notary:           govDeps.L3Notary,
+		ActuatorSigningKey: ActuatorPriv,
+		ActuatorKeyID:      ActuatorKeyID,
+		MCPGateway:         mcpSvc,
 	}
 
 	cmdSvc, err := pubsub.NewOperatorPubSubService(psConfig)
@@ -210,6 +230,23 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// signing identity, audit logger, etc.) are wired by NewOperatorPubSubService
 	// via initializeGovernance, which received mcpSvc through psConfig.MCPGateway.
 	// No additional gateway wiring is needed here.
+
+	// Bootstrap Tribunal service for consensus posture (Phase 5.2):
+	// Construct the TribunalService in-process and wire it both as the mTLS
+	// HTTP handler (for remote deliberation calls) and as the local deliberator
+	// (for in-process envelope processing). Under doctrine/notary posture,
+	// the Tribunal is not constructed.
+	if posture == config.PostureConsensus && tribunalID != "" {
+		tribunalSvc, err := bootstrapTribunal(svc, tribunalID, ActuatorPriv, ActuatorKeyID, logger)
+		if err != nil {
+			logger.Error("Failed to bootstrap Tribunal service", string(constants.ConnectionStateError), err)
+			cancel()
+			os.Exit(exitcode.FromError(err))
+		}
+		svc.SetTribunal(tribunalSvc)
+		mcpSvc.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
+		logger.Info("Tribunal service bootstrapped", "tribunal_id", tribunalID)
+	}
 
 	go func() {
 		if err := svc.Start(ctx); err != nil {
@@ -255,4 +292,43 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		logger.Error("Gateway shutdown error", string(constants.ConnectionStateError), err)
 	}
 	logger.Info("Gateway mode stopped")
+}
+
+// bootstrapTribunal constructs a TribunalService from the TribunalPolicy stored
+// in the database. For single-member tribunals, the gateway's actuator signing
+// key is used as the member private key (Option C from the design doc). Multi-
+// member tribunals require a separate key provisioning flow (not yet implemented).
+func bootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, logger *slog.Logger) (*tribunal.TribunalService, error) {
+	policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)
+	}
+	if policy == nil {
+		return nil, fmt.Errorf("bootstrap tribunal: %w: %s", constants.ErrTxL2TribunalNotConfigured, tribunalID)
+	}
+
+	// Option C: For single-member tribunal, use the gateway's actuator key.
+	// The actuator's public key must already be registered as a TrustedSigner
+	// with keyID = policy.MemberAppIDs[0].
+	var members []tribunal.TribunalMember
+	for _, appID := range policy.MemberAppIDs {
+		if appID == actuatorKeyID {
+			members = append(members, tribunal.TribunalMember{
+				AppID:      appID,
+				PrivateKey: actuatorPriv,
+			})
+		} else {
+			logger.Warn("Tribunal member lacks private key (multi-member not yet supported)",
+				"member_app_id", appID,
+				"actuator_key_id", actuatorKeyID)
+			members = append(members, tribunal.TribunalMember{
+				AppID: appID,
+			})
+		}
+	}
+
+	doctrine := govsvc.NewL1Doctrine()
+	responder := response.NewWriter(logger)
+
+	return tribunal.NewTribunalService(tribunalID, members, doctrine, logger, responder), nil
 }

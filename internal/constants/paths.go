@@ -174,7 +174,6 @@ const (
 	SecretsFileActuatorSigningKey   = "actuator_signing_key"
 	SecretsFileActuatorKeyID        = "actuator_key_id"
 	SecretsFileAuditorHMACKey       = "auditor_hmac_key"
-	SecretsFileConsensusSigningKey  = "consensus_signing_key"
 	SecretsFileNotarySigningKey     = "notary_signing_key"
 	SecretsFileOperatorPrivateKey   = "operator_private_key"
 	SecretsFileCLIPrivateKey        = "cli_private_key"

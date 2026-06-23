@@ -17,6 +17,10 @@ package constants
 type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
-// Currently empty - g8e uses ZERO environment variables.
 var EnvVar = struct {
-}{}
+	TribunalID  EnvVarKey
+	TribunalURL EnvVarKey
+}{
+	TribunalID:  EnvVarKey("G8E_TRIBUNAL_ID"),
+	TribunalURL: EnvVarKey("G8E_TRIBUNAL_URL"),
+}

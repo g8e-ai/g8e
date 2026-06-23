@@ -130,7 +130,7 @@ The Operator must implement a singular verification gate that enforces:
 - **Freshness**: Validate `expires_at` is not passed and `nonce` is not in the replay store.
 - **State Binding**: Verify `state_merkle_root` matches the host's current local ledger root.
 - **L1Doctrine (Hard Gates)**: Enforce technical bedrock threat detection rules, forbidden patterns, and MITRE ATT&CK heuristics on the typed payload.
-- **L2Consensus**: Verify 5-agent intent consensus signatures against a locally trusted SignerStore. In doctrine mode, the Gateway may sign locally with `gateway_signed=true` for single-agent MCP clients.
+- **L2Consensus**: Verify Tribunal deliberation votes (Ed25519 signatures) against a locally trusted SignerStore and the TribunalPolicy stored in the TribunalStoreService. Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing.
 - **L3Notary**: Validate authorization proofs (mTLS certificate fingerprints for CLI sessions, WebAuthn proofs for web sessions).
 - **L4Warden**: Pre-dispatch verification of all preceding proofs and state roots.
 
@@ -216,7 +216,7 @@ The GovernanceEnvelope schema is defined in the protocol protobuf files. Your im
 1. **Use the canonical protojson wire format** for all client-facing interactions.
 2. **Implement the typed payload validation** defined in the protocol schemas.
 3. **Support the canonical request payload mappings** for all first-class event types.
-4. **Handle the gateway_signed field** to distinguish between full L2 consensus and Gateway-signed transactions (single-agent MCP clients).
+4. **Handle L2 votes** from Tribunal deliberation, verifying the quorum of Ed25519 signatures against the TribunalPolicy.
 
 Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 

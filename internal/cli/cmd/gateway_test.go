@@ -67,6 +67,8 @@ func TestResolveStartConfig(t *testing.T) {
 			50,
 			"info",
 			"full",
+			"",
+			"",
 		)
 
 		assert.Equal(t, "doctrine", cfg.Posture)
@@ -113,6 +115,8 @@ func TestResolveStartConfig(t *testing.T) {
 			50,
 			"info",
 			"full",
+			"",
+			"",
 		)
 
 		assert.Equal(t, "/env/vault", cfg.VaultDir)
@@ -145,6 +149,8 @@ func TestResolveStartConfig(t *testing.T) {
 			50,
 			"info",
 			"full",
+			"",
+			"",
 		)
 
 		assert.Equal(t, "/env/vault/key", cfg.VaultKeyPath)
@@ -177,6 +183,8 @@ func TestResolveStartConfig(t *testing.T) {
 			50,
 			"info",
 			"full",
+			"",
+			"",
 		)
 
 		assert.True(t, cfg.VaultRequireUnlock)
@@ -209,6 +217,8 @@ func TestResolveStartConfig(t *testing.T) {
 			50,
 			"info",
 			"full",
+			"",
+			"",
 		)
 
 		assert.False(t, cfg.VaultRequireUnlock)
@@ -241,6 +251,8 @@ func TestResolveStartConfig(t *testing.T) {
 			50,
 			"info",
 			"full",
+			"",
+			"",
 		)
 
 		assert.Equal(t, "/cli/vault", cfg.VaultDir)

@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2026-06-23
+
+### Overview
+
+v1.1.7 introduces the Tribunal system, replacing the gateway's L2 self-signing mechanism with a proper deliberation-based consensus model. The gateway now delegates L2 deliberation to an enrolled Tribunal service rather than signing L2 votes locally. This release also removes the deprecated `gateway_signed` field from the protocol and updates all documentation to reflect the Tribunal architecture.
+
+### Added
+
+* **Tribunal Service** — New `internal/services/tribunal/` package providing `TribunalService` with `Deliberate`/`HandleDeliberate` methods, `LocalDeliberator` for in-process deliberation, and `HTTPTribunalDeliberator` for remote tribunal communication over mTLS.
+* **Tribunal Store Service** — New `internal/services/gateway/tribunal_store_service.go` providing `TribunalPolicy` CRUD operations with validation (quorum, member verification, duplicate detection).
+* **Tribunal Admin Endpoints** — Admin-only REST endpoints for managing tribunal policies: `POST/GET /api/v1/admin/tribunals` and `DELETE /api/v1/admin/tribunals/{id}`.
+* **Tribunal Deliberate Route** — mTLS-protected `POST /tribunal/v1/deliberate` route on the gateway for remote tribunal deliberation.
+* **L2Vote/L2Metadata Protocol** — New protocol types replacing the old `gateway_signed` boolean with typed L2 vote structures containing `tribunal_id` and `votes` fields.
+* **TribunalStore Interface** — New `TribunalStore` interface in `l4_warden.go` for loading `TribunalPolicy` by ID during L4 quorum verification.
+* **CLI Flags & Env Vars** — `--tribunal-id` / `--tribunal-url` flags and `G8E_TRIBUNAL_ID` / `G8E_TRIBUNAL_URL` environment variables for configuring the gateway's tribunal integration.
+* **Startup Validation** — Gateway validates that `--consensus` posture requires a non-empty `--tribunal-id`; `bootstrapTribunal` returns error if `TribunalPolicy` not found in DB.
+* **Comprehensive Test Coverage** — 18 tribunal service unit tests, 11 MCP consensus integration tests, and 4 local deliberator tests covering all deliberation paths, error scenarios, and cryptographic signature verification.
+
+### Changed
+
+* **L2 Consensus Architecture** — Replaced `internal/services/governance/l2_consensus.go` with `internal/services/tribunal/service.go`. The gateway no longer self-signs L2 votes; instead, it calls the Tribunal's `Deliberate` method and attaches returned L2 votes to the envelope.
+* **L4 Warden Quorum Verification** — `verifyL2Posture` in `l4_warden.go` now uses the `TribunalStore` interface to load the `TribunalPolicy` and verify the quorum of valid L2 votes against the policy's member list and quorum threshold.
+* **Documentation** — Updated `README.md`, `docs/architecture/gateway.md`, `docs/architecture/protocol.md`, `docs/devs/codemap.md`, `docs/core/position_paper.md`, `docs/guides/build_apps.md`, `docs/guides/build_operator.md`, and `docs/protocols/mcp/mcp.md` to reflect the Tribunal architecture.
+
+### Removed
+
+* **`gateway_signed` Field** — Removed the `gateway_signed` boolean from `GovernanceMetadata` proto and all references in code, documentation, and examples.
+* **`l2_consensus.go`** — Deleted `internal/services/governance/l2_consensus.go` and all dead `L2Consensus` wiring from `pubsub_commands.go` and `secret_manager.go`.
+* **`ErrTxL2KeyNotConfigured`** — Replaced with tribunal-specific error handling.
+
+---
+
 ## [1.1.6] - 2026-06-22
 
 ### Overview

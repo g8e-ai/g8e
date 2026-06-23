@@ -41,11 +41,17 @@ message L1Metadata {
   repeated string violations = 2;
 }
 
-// Consensus (L2Consensus) Governance: Multi-agent consensus verification
+// Consensus (L2) Governance: a vote from a single Tribunal member.
+message L2Vote {
+  string signer_key_id       = 1; // member appID == TrustedSigner.ID
+  string consensus_signature = 2; // ed25519 over "<transaction_hash>|<decision>"
+  bool   decision            = 3; // member's safe (true) / unsafe (false) vote
+}
+
+// Consensus (L2) Governance: a vote set from an enrolled Tribunal.
 message L2Metadata {
-  string consensus_signature = 1; // ED25519 signature over transaction_hash|decision
-  repeated string agent_ids = 2; // IDs of agents that voted
-  string key_id = 3;             // ID of the key used for signature
+  string tribunal_id    = 1;      // TribunalPolicy.id that produced this set
+  repeated L2Vote votes = 2;      // independent member votes
 }
 
 // Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
@@ -71,9 +77,6 @@ message GovernanceMetadata {
   L1Metadata l1 = 1;
   L2Metadata l2 = 2;
   L3Metadata l3 = 3;
-  // Set to true if signed by the local gateway without full L2 consensus.
-  // This is used for single-agent MCP clients that bypass the L2 consensus layer.
-  bool gateway_signed = 4;
 }
 
 // GovernanceEnvelope is the single canonical container for all g8e mutations.

@@ -203,9 +203,14 @@ func signedEnvelope(
 	l2Sig := hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true")))
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			KeyId:              keyID,
-			ConsensusSignature: l2Sig,
-			AgentIds:           []string{"chaos-tribunal-agent"},
+			TribunalId: "chaos-tribunal",
+			Votes: []*commonv1.L2Vote{
+				{
+					SignerKeyId:        keyID,
+					ConsensusSignature: l2Sig,
+					Decision:           true,
+				},
+			},
 		},
 	}
 
@@ -502,6 +507,7 @@ func Run(cfg Config) error {
 		replayStore,
 		stateRootProvider,
 		&governance.SimpleSignerStore{Signers: trustedSigners},
+		nil, // TribunalStore not used in chaos tester
 		nil, // AppPolicyStore not used in chaos tester
 		l3Notary,
 		doctrine,

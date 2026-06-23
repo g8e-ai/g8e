@@ -112,6 +112,11 @@ var APIPaths = struct {
 	AdminAppPoliciesBySigner string `json:"admin_app_policies_by_signer"`
 	AdminAppsRevoke          string `json:"admin_apps_revoke"`
 	AdminAppPoliciesPrefix   string `json:"admin_app_policies_prefix"`
+	AdminTribunals           string `json:"admin_tribunals"`
+	AdminTribunalsByID       string `json:"admin_tribunals_by_id"`
+	AdminTribunalsPrefix     string `json:"admin_tribunals_prefix"`
+	// Tribunal routes
+	TribunalDeliberate string `json:"tribunal_deliberate"`
 	// Well-known routes
 	WellKnownPKICABundle    string `json:"well_known_pki_ca_bundle"`
 	WellKnownPKIFingerprint string `json:"well_known_pki_fingerprint"`
@@ -234,6 +239,11 @@ var APIPaths = struct {
 	AdminAppPoliciesBySigner: "/api/v1/admin/app-policies/",
 	AdminAppsRevoke:          "/api/v1/admin/apps/revoke",
 	AdminAppPoliciesPrefix:   "/api/v1/admin/app-policies/",
+	AdminTribunals:           "/api/v1/admin/tribunals",
+	AdminTribunalsByID:       "/api/v1/admin/tribunals/",
+	AdminTribunalsPrefix:     "/api/v1/admin/tribunals/",
+	// Tribunal routes
+	TribunalDeliberate: "/tribunal/v1/deliberate",
 	// Well-known routes
 	WellKnownPKICABundle:    "/.well-known/g8e/pki/ca-bundle",
 	WellKnownPKIFingerprint: "/.well-known/g8e/pki/fingerprint",

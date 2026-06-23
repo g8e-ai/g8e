@@ -833,10 +833,15 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 		EventType:       string(constants.EventOperatorMcpCallRequested),
 		Payload:         buildToolCallPayload(toolName, arguments),
 		Governance: &commonv1.GovernanceMetadata{
-			GatewaySigned: true,
 			L2: &commonv1.L2Metadata{
-				KeyId:    "gateway-local-signer",
-				AgentIds: []string{"gateway-local-signer"},
+				TribunalId: "test-tribunal",
+				Votes: []*commonv1.L2Vote{
+					{
+						SignerKeyId:        "gateway-local-signer",
+						ConsensusSignature: "test-sig",
+						Decision:           true,
+					},
+				},
 			},
 			L3: &commonv1.L3Metadata{
 				AutoApproved: true,

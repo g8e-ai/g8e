@@ -38,7 +38,6 @@ var requiredBootstrapSecrets = []string{
 	constants.SecretsFileActuatorSigningKey,
 	constants.SecretsFileActuatorKeyID,
 	constants.SecretsFileAuditorHMACKey,
-	constants.SecretsFileConsensusSigningKey,
 }
 
 // SecretManager handles generation and validation of platform security secrets.
@@ -196,13 +195,6 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	ActuatorKeyID := hex.EncodeToString(ActuatorPub)
 
-	// Generate consensus signing key for L2 consensus
-	ConsensusSeedBytes, err := m.generateSecureTokenBytes(ed25519.SeedSize)
-	if err != nil {
-		return fmt.Errorf("secret_manager: create app settings: %w", err)
-	}
-	ConsensusSeed := hex.EncodeToString(ConsensusSeedBytes)
-
 	sessionEncryptionKey, err := m.generateSecureToken(32)
 	if err != nil {
 		return fmt.Errorf("secret_manager: create app settings: %w", err)
@@ -217,7 +209,6 @@ func (m *SecretManager) createAppSettings(now time.Time) error {
 		constants.SecretsFileActuatorSigningKey:   ActuatorSeed, // Seed for ED25519
 		constants.SecretsFileActuatorKeyID:        ActuatorKeyID,
 		constants.SecretsFileAuditorHMACKey:       auditorHMACKey,
-		constants.SecretsFileConsensusSigningKey:  ConsensusSeed, // Seed for ED25519
 	}
 
 	platformSettings := models.SettingsDocument{
@@ -506,29 +497,6 @@ func (m *SecretManager) GetCAPrivateKey(caType string) ([]byte, error) {
 		return nil, err
 	}
 	return hex.DecodeString(plaintext)
-}
-
-// StoreConsensusKey stores a consensus signing key in the keystore.
-func (m *SecretManager) StoreConsensusKey(seedHex string) error {
-	return m.keystore.EncryptSecret(constants.SecretsFileConsensusSigningKey, seedHex)
-}
-
-// GetConsensusKey retrieves the consensus ED25519 signing key from the keystore.
-func (m *SecretManager) GetConsensusKey() (ed25519.PrivateKey, error) {
-	seedHex, err := m.keystore.DecryptSecret(constants.SecretsFileConsensusSigningKey)
-	if err != nil {
-		return nil, fmt.Errorf("secret_manager: get consensus key: decrypt: %w", err)
-	}
-
-	seed, err := hex.DecodeString(seedHex)
-	if err != nil {
-		return nil, fmt.Errorf("secret_manager: get consensus key: decode: %w", err)
-	}
-	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("secret_manager: get consensus key: %w", constants.ErrValidationFailed)
-	}
-
-	return ed25519.NewKeyFromSeed(seed), nil
 }
 
 // StoreNotaryKey stores an L3 Notary signing key in the keystore.

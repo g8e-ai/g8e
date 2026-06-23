@@ -136,6 +136,8 @@ func main() {
 	var gatewayRateLimitBurst int
 	var gatewayCertIdentityMode string
 	var gatewayNetworkIdentityFile string
+	var gatewayTribunalID string
+	var gatewayTribunalURL string
 
 	var heartbeatInterval time.Duration
 
@@ -181,6 +183,8 @@ func main() {
 	flag.IntVar(&gatewayRateLimitBurst, "rate-limit-burst", 10, "Gateway rate limit burst size")
 	flag.StringVar(&gatewayCertIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
 	flag.StringVar(&gatewayNetworkIdentityFile, "network-identity-file", "", "Path to JSON file containing pre-detected network identity")
+	flag.StringVar(&gatewayTribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
+	flag.StringVar(&gatewayTribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
 	flag.BoolVar(&rekeyVault, "rekey-vault", false, "Re-encrypt vault with new private key (requires --old-key)")
 	flag.StringVar(&oldPrivateKeyStr, "old-key", "", "Old private key for vault re-keying")
 	flag.BoolVar(&verifyVault, "verify-vault", false, "Verify vault integrity")
@@ -291,7 +295,13 @@ func main() {
 		if !gatewayVaultRequireUnlock {
 			gatewayVaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
 		}
-		runGatewayMode(posture, gatewayHTTPPort, gatewayHTTPSPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayVaultDir, gatewayVaultKeyPath, gatewayVaultRequireUnlock, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile)
+		if gatewayTribunalID == "" {
+			gatewayTribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
+		}
+		if gatewayTribunalURL == "" {
+			gatewayTribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
+		}
+		runGatewayMode(posture, gatewayHTTPPort, gatewayHTTPSPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayVaultDir, gatewayVaultKeyPath, gatewayVaultRequireUnlock, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile, gatewayTribunalID, gatewayTribunalURL)
 		return
 	}
 

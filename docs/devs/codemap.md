@@ -20,13 +20,12 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── pubsub.AuditService
 │   ├── pubsub.HistoryService
 │   ├── governance.L1Doctrine
-│   ├── governance.L2Consensus
-│   │   └── governance.L1Doctrine
 │   ├── governance.L4Warden
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
 │   │   ├── governance.StateRootProvider (gateway.CanonicalDBService) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.AppPolicyStore (gateway.CanonicalDBService) [SHARED]
+│   │   ├── governance.TribunalStore (gateway.TribunalStoreService) [SHARED]
 │   │   └── governance.L3Notary (governance.outboundL3Notary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
@@ -67,6 +66,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
     ├── gateway.DocumentStoreService
     ├── gateway.AppPolicyStoreService
     ├── gateway.SignerStoreService
+    ├── gateway.TribunalStoreService
     ├── gateway.StateRootService
     ├── gateway.ReplayStoreService
     ├── gateway.KVStoreService
@@ -125,6 +125,8 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.PKIAuthority
 ├── gateway.SignerStoreService (implements governance.SignerStore)
 │   └── sqliteutil.DB
+├── gateway.TribunalStoreService (implements governance.TribunalStore)
+│   └── sqliteutil.DB
 ├── gateway.AppPolicyStoreService (implements governance.AppPolicyStore)
 │   └── sqliteutil.DB
 ├── gateway.ReplayStoreService (implements governance.ReplayStore)
@@ -154,6 +156,10 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── mcp.GatewayService [SHARED]
 │   ├── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
 │   └── response.Writer
+├── tribunal.TribunalService
+│   ├── gateway.TribunalStoreService [SHARED]
+│   ├── governance.SignerStore (gateway.SignerStoreService) [SHARED]
+│   └── tribunal.LocalDeliberator (in-process deliberation)
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
 │   ├── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
@@ -191,13 +197,14 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
-- **L2**: `governance.L2Consensus` (multi-agent consensus signature verification using Ed25519 cryptography)
+- **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator` or `HTTPTribunalDeliberator`). The `TribunalStore` interface in `governance.L4Warden` loads `TribunalPolicy` for quorum verification.
 - **L3**: `governance.L3Notary` (gateway mode uses `gateway.CompositeL3Verifier` combining WebAuthn passkey and mTLS CLI proofs; outbound mode uses `governance.outboundL3Notary` for CLI-based approval via suspended transactions)
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging)
 
 ### Shared Interface Implementations
 - `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).
+- `gateway.TribunalStoreService` implements: `governance.TribunalStore` (gateway mode dedicated implementation, provides TribunalPolicy lookup for L4 Warden quorum verification).
 - `gateway.AppPolicyStoreService` implements: `governance.AppPolicyStore` (gateway mode dedicated implementation).
 - `gateway.ReplayStoreService` implements: `governance.ReplayStore` (gateway mode dedicated implementation).
 - `gateway.StateRootService` implements: `governance.StateRootProvider` (gateway mode dedicated implementation).

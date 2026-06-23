@@ -16,7 +16,7 @@ package pubsub
 import (
 	"context"
 	"crypto/ed25519"
-	"encoding/hex"
+	"errors"
 	"testing"
 	"time"
 
@@ -64,21 +64,21 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 
 	// Create command service with rejecting L3 notary
 	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:              cfg,
-		Logger:              logger,
-		Execution:           execSvc,
-		FileEdit:            fileSvc,
-		PubSubClient:        NewInProcessPubSubClient(nil),
-		ResultsService:      nil, // ResultsPublisher is optional for L3 verification test
-		L3Notary:            rejectingL3,
-		ReplayStore:         replayStore,
-		StateRootProvider:   stateRootProvider,
-		TransactionAudit:    &testutil.MockTransactionAudit{},
-		SignerStore:         signerStore,
-		ActuatorSigningKey:  privKey,
-		ActuatorKeyID:       "test-key",
-		ConsensusSigningKey: privKey,
-		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+		Config:             cfg,
+		Logger:             logger,
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       NewInProcessPubSubClient(nil),
+		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+		L3Notary:           rejectingL3,
+		ReplayStore:        replayStore,
+		StateRootProvider:  stateRootProvider,
+		TransactionAudit:   &testutil.MockTransactionAudit{},
+		SignerStore:        signerStore,
+		TribunalStore:      testTribunalStore(),
+		ActuatorSigningKey: privKey,
+		ActuatorKeyID:      "test-key",
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -118,14 +118,13 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	envelope.TransactionHash = txHash
 
 	// Add L2 signature
-	sigPayload := txHash + "|true"
-	sig := ed25519.Sign(privKey, []byte(sigPayload))
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			KeyId:              "test-key",
-			ConsensusSignature: hex.EncodeToString(sig),
-			AgentIds:           []string{"test-key"},
+			TribunalId: "test-tribunal",
+			Votes: []*commonv1.L2Vote{
+				signL2Vote(privKey, "test-key", txHash, true),
+			},
 		},
 		L3: &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
@@ -188,21 +187,21 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 
 	// Create command service with accepting L3 notary
 	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:              cfg,
-		Logger:              logger,
-		Execution:           execSvc,
-		FileEdit:            fileSvc,
-		PubSubClient:        NewInProcessPubSubClient(nil),
-		ResultsService:      nil, // ResultsPublisher is optional for L3 verification test
-		L3Notary:            acceptingL3,
-		ReplayStore:         replayStore,
-		StateRootProvider:   stateRootProvider,
-		TransactionAudit:    &testutil.MockTransactionAudit{},
-		SignerStore:         signerStore,
-		ActuatorSigningKey:  privKey,
-		ActuatorKeyID:       "test-key",
-		ConsensusSigningKey: privKey,
-		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+		Config:             cfg,
+		Logger:             logger,
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       NewInProcessPubSubClient(nil),
+		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+		L3Notary:           acceptingL3,
+		ReplayStore:        replayStore,
+		StateRootProvider:  stateRootProvider,
+		TransactionAudit:   &testutil.MockTransactionAudit{},
+		SignerStore:        signerStore,
+		TribunalStore:      testTribunalStore(),
+		ActuatorSigningKey: privKey,
+		ActuatorKeyID:      "test-key",
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -242,14 +241,13 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	envelope.TransactionHash = txHash
 
 	// Add L2 signature
-	sigPayload := txHash + "|true"
-	sig := ed25519.Sign(privKey, []byte(sigPayload))
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			KeyId:              "test-key",
-			ConsensusSignature: hex.EncodeToString(sig),
-			AgentIds:           []string{"test-key"},
+			TribunalId: "test-tribunal",
+			Votes: []*commonv1.L2Vote{
+				signL2Vote(privKey, "test-key", txHash, true),
+			},
 		},
 		L3: &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
@@ -313,21 +311,21 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 
 	// Create command service with nil L3 notary (should fail-closed)
 	cmdSvc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:              cfg,
-		Logger:              logger,
-		Execution:           execSvc,
-		FileEdit:            fileSvc,
-		PubSubClient:        NewInProcessPubSubClient(nil),
-		ResultsService:      nil, // ResultsPublisher is optional for L3 verification test
-		L3Notary:            nil, // Explicitly nil to test fail-closed
-		ReplayStore:         replayStore,
-		StateRootProvider:   stateRootProvider,
-		TransactionAudit:    &testutil.MockTransactionAudit{},
-		SignerStore:         signerStore,
-		ActuatorSigningKey:  privKey,
-		ActuatorKeyID:       "test-key",
-		ConsensusSigningKey: privKey,
-		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+		Config:             cfg,
+		Logger:             logger,
+		Execution:          execSvc,
+		FileEdit:           fileSvc,
+		PubSubClient:       NewInProcessPubSubClient(nil),
+		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+		L3Notary:           nil, // Explicitly nil to test fail-closed
+		ReplayStore:        replayStore,
+		StateRootProvider:  stateRootProvider,
+		TransactionAudit:   &testutil.MockTransactionAudit{},
+		SignerStore:        signerStore,
+		TribunalStore:      testTribunalStore(),
+		ActuatorSigningKey: privKey,
+		ActuatorKeyID:      "test-key",
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -367,14 +365,13 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	envelope.TransactionHash = txHash
 
 	// Add L2 signature
-	sigPayload := txHash + "|true"
-	sig := ed25519.Sign(privKey, []byte(sigPayload))
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			KeyId:              "test-key",
-			ConsensusSignature: hex.EncodeToString(sig),
-			AgentIds:           []string{"test-key"},
+			TribunalId: "test-tribunal",
+			Votes: []*commonv1.L2Vote{
+				signL2Vote(privKey, "test-key", txHash, true),
+			},
 		},
 		L3: &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
@@ -392,9 +389,12 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	// Process envelope through command service
 	receipt, err := cmdSvc.ProcessEnvelope(context.Background(), envelopeBytes)
 
-	// Verify fail-closed behavior: nil L3 notary should return error
+	// Verify fail-closed behavior: nil L3 notary should return ErrL3NotaryNotConfigured
 	if err == nil {
-		t.Error("Expected error with nil L3 notary, got nil")
+		t.Fatal("Expected error with nil L3 notary, got nil")
+	}
+	if !errors.Is(err, governance.ErrL3NotaryNotConfigured) {
+		t.Fatalf("Expected ErrL3NotaryNotConfigured, got: %v", err)
 	}
 	if receipt != nil {
 		t.Error("Expected nil receipt with nil L3 notary, got receipt")
@@ -406,7 +406,7 @@ func isL3Error(err error) bool {
 	if err == nil {
 		return false
 	}
-	return err == governance.ErrL3ProofInvalid ||
-		err == governance.ErrL3ProofMissing ||
-		err == governance.ErrL3NotaryNotConfigured
+	return errors.Is(err, governance.ErrL3ProofInvalid) ||
+		errors.Is(err, governance.ErrL3ProofMissing) ||
+		errors.Is(err, governance.ErrL3NotaryNotConfigured)
 }

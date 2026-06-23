@@ -40,7 +40,6 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type fakeEnvelopeProcessor struct {
@@ -528,32 +527,6 @@ func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
 		require.Contains(t, body, "error")
 	})
 
-}
-
-func TestGatewayService_EnvelopeGatewaySigned(t *testing.T) {
-	t.Parallel()
-	// Test that MCP gateway sets GatewaySigned=true in envelope
-	g := newTestGatewayService(t)
-
-	opts := processGatewayOptions{
-		actionType:     constants.ActionTypeMcpCall,
-		targetResource: "test-tool",
-		payloadBytes:   []byte("{}"),
-	}
-
-	hash, envelopeBytes, err := g.processGatewayTransaction(context.Background(), opts)
-	require.NoError(t, err)
-	require.NotEmpty(t, hash)
-	require.NotEmpty(t, envelopeBytes)
-
-	// Parse the envelope to verify GatewaySigned is set
-	var envelope commonv1.GovernanceEnvelope
-	err = protojson.Unmarshal(envelopeBytes, &envelope)
-	require.NoError(t, err)
-
-	// Verify GatewaySigned is set to true
-	require.NotNil(t, envelope.Governance)
-	require.True(t, envelope.Governance.GatewaySigned, "MCP gateway should set GatewaySigned=true for single-agent clients")
 }
 
 func TestGatewayService_CircuitBreaker(t *testing.T) {

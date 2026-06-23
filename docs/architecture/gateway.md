@@ -18,7 +18,7 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers sequentially:
     - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `internal/services/governance/l1_doctrine.go`.
-    - **L2 Consensus**: Multi-agent consensus signature verification using Ed25519 cryptography defined in `internal/services/governance/l2_consensus.go`.
+    - **L2 Consensus**: Tribunal-based deliberation producing L2 votes (Ed25519 signatures) over the transaction hash, defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal rather than self-signing.
     - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`.
     - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
     - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
@@ -241,8 +241,8 @@ Every transaction submitted to `POST /api/v1/governance/envelopes` must pass thr
 ### L1 Doctrine (Technical Bedrock)
 Defined in `internal/services/governance/l1_doctrine.go`. Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
-### L2 Consensus (Consensus Verification)
-Defined in `internal/services/governance/l2_consensus.go`. Verifies multi-agent consensus signature using Ed25519 cryptography. In Gateway mode, this requires Ed25519 signatures from trusted consensus agents.
+### L2 Consensus (Tribunal Deliberation)
+Defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` posture, the gateway calls the Tribunal's `Deliberate` endpoint (via `LocalDeliberator` for in-process deliberation or `HTTPTribunalDeliberator` for remote tribunals) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the `TribunalStoreService`.
 
 ### L3 Notary (Human Authorization)
 Defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
@@ -343,7 +343,8 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Suspended Transaction Store | `internal/services/storage/suspended_transaction_store.go` |
 | Pub/Sub broker | `internal/services/gateway/gateway_pubsub.go` |
 | L1 Doctrine | `internal/services/governance/l1_doctrine.go` |
-| L2 Consensus | `internal/services/governance/l2_consensus.go` |
+| L2 Consensus (Tribunal) | `internal/services/tribunal/service.go` |
+| Tribunal Store | `internal/services/gateway/tribunal_store_service.go` |
 | L3 Notary | `internal/services/governance/l3_notary.go` |
 | L3 Notary (Composite) | `internal/services/gateway/composite_l3_verifier.go` |
 | L4 Warden | `internal/services/governance/l4_warden.go` |

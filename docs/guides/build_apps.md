@@ -199,8 +199,7 @@ Construct the GovernanceEnvelope:
       "violations": []
     },
     "l2": {},
-    "l3": {},
-    "gateway_signed": false
+    "l3": {}
   }
 }
 ```
@@ -272,8 +271,7 @@ Add the L2Consensus signatures to the envelope:
       "agent_ids": ["<agent_1_id>", "<agent_2_id>"],
       "key_id": "<key_id>"
     },
-    "l3": {},
-    "gateway_signed": false
+    "l3": {}
   }
 }
 ```

@@ -57,9 +57,14 @@ func main() {
 				Violations: []string{},
 			},
 			L2: &commonv1.L2Metadata{
-				ConsensusSignature: "sig-abc",
-				AgentIds:           []string{"agent-1", "agent-2", "agent-3"},
-				KeyId:              "key-123",
+				TribunalId: "tribunal-1",
+				Votes: []*commonv1.L2Vote{
+					{
+						SignerKeyId:        "key-123",
+						ConsensusSignature: "sig-abc",
+						Decision:           true,
+					},
+				},
 			},
 			L3: &commonv1.L3Metadata{
 				Proof: &commonv1.L3Proof{
@@ -72,7 +77,6 @@ func main() {
 				},
 				AutoApproved: false,
 			},
-			GatewaySigned: false,
 		},
 	}
 

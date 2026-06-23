@@ -71,6 +71,7 @@ type CanonicalDBService struct {
 	DocStore       *DocumentStoreService
 	AppPolicyStore *AppPolicyStoreService
 	SignerStore    *SignerStoreService
+	TribunalStore  *TribunalStoreService
 	StateRootSvc   *StateRootService
 	ReplayStore    *ReplayStoreService
 	KVStore        *KVStoreService
@@ -175,6 +176,7 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 	svc.DocStore = NewDocumentStoreService(db, logger)
 	svc.AppPolicyStore = NewAppPolicyStoreService(db, logger)
 	svc.SignerStore = NewSignerStoreService(db, logger)
+	svc.TribunalStore = NewTribunalStoreService(db, logger, svc.SignerStore)
 	svc.StateRootSvc = NewStateRootService(db, logger)
 	svc.ReplayStore = NewReplayStoreService(db, logger)
 	svc.KVStore = NewKVStoreService(db, logger)

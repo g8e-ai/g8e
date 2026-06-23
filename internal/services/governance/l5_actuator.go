@@ -102,13 +102,6 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		"action_type", vt.ActionType,
 		"event_type", eventType)
 
-	// 1. Prepare initial receipt
-	// Receipt is signed by the L5Actuator (Authorized Dispatch) identity.
-	gatewaySigned := false
-	if vt.Envelope.Governance != nil {
-		gatewaySigned = vt.Envelope.Governance.GatewaySigned
-	}
-
 	// Determine L2 status based on posture and verification result
 	l2Status := operatorv1.L2Status_L2_STATUS_NOT_REQUIRED
 	if vt.Posture != nil && vt.Posture.RequiresL2Signature() {
@@ -137,7 +130,6 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		StateRootBefore:  stateBefore,
 		ExecutedAtUnixMs: time.Now().UnixMilli(),
 		SignerKeyId:      w.KeyID,
-		GatewaySigned:    gatewaySigned,
 		L2Status:         l2Status,
 		L3Status:         l3Status,
 	}
@@ -232,7 +224,6 @@ type canonicalReceipt struct {
 	StateRootAfter   string `json:"state_root_after"`
 	ExecutedAtUnixMs int64  `json:"executed_at_unix_ms"`
 	SignerKeyID      string `json:"signer_key_id"`
-	GatewaySigned    bool   `json:"gateway_signed"`
 	L2Status         int32  `json:"l2_status"`
 	L3Status         int32  `json:"l3_status"`
 }
@@ -240,7 +231,7 @@ type canonicalReceipt struct {
 // CanonicalizeActionReceipt produces a deterministic byte representation for signing/verification.
 // This function must be used by both signing and verification to ensure consistency.
 // Field order: transaction_id, transaction_hash, status, result_summary, state_root_before,
-// state_root_after, executed_at_unix_ms, signer_key_id, gateway_signed, l2_status, l3_status.
+// state_root_after, executed_at_unix_ms, signer_key_id, l2_status, l3_status.
 // All fields are included in the canonical form.
 func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 	canonical := canonicalReceipt{
@@ -252,7 +243,6 @@ func CanonicalizeActionReceipt(r *operatorv1.ActionReceipt) ([]byte, error) {
 		StateRootAfter:   r.StateRootAfter,
 		ExecutedAtUnixMs: r.ExecutedAtUnixMs,
 		SignerKeyID:      r.SignerKeyId,
-		GatewaySigned:    r.GatewaySigned,
 		L2Status:         int32(r.L2Status),
 		L3Status:         int32(r.L3Status),
 	}
@@ -300,7 +290,6 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 		ExecutedAt:        time.UnixMilli(r.ExecutedAtUnixMs),
 		SignerKeyID:       r.SignerKeyId,
 		Signature:         r.Signature,
-		GatewaySigned:     r.GatewaySigned,
 		L2Valid:           r.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
 		L3Valid:           r.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		Timestamp:         time.Now().UTC(),
@@ -338,7 +327,6 @@ func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *o
 		ExecutedAt:        time.UnixMilli(r.ExecutedAtUnixMs),
 		SignerKeyID:       r.SignerKeyId,
 		Signature:         r.Signature,
-		GatewaySigned:     r.GatewaySigned,
 		L2Valid:           r.L2Status == operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
 		L3Valid:           r.L3Status == operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		Timestamp:         time.Now().UTC(),

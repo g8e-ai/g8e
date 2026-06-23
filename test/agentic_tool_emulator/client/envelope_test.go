@@ -171,22 +171,22 @@ func TestEnsemble_Vote(t *testing.T) {
 				t.Fatal("Vote() returned nil L2Metadata")
 			}
 
-			if l2.KeyId != ensemble.KeyID {
-				t.Errorf("KeyId = %s, want %s", l2.KeyId, ensemble.KeyID)
+			if len(l2.Votes) == 0 {
+				t.Fatal("Vote() returned empty Votes array")
 			}
 
-			if len(l2.AgentIds) != ensemble.AgentCount() {
-				t.Errorf("AgentIds length = %d, want %d", len(l2.AgentIds), ensemble.AgentCount())
+			if l2.Votes[0].SignerKeyId != ensemble.KeyID {
+				t.Errorf("Votes[0].SignerKeyId = %s, want %s", l2.Votes[0].SignerKeyId, ensemble.KeyID)
 			}
 
-			if l2.ConsensusSignature == "" {
-				t.Error("ConsensusSignature should not be empty")
+			if l2.Votes[0].ConsensusSignature == "" {
+				t.Error("Votes[0].ConsensusSignature should not be empty")
 			}
 
 			// Verify signature is valid hex
-			_, err := hex.DecodeString(l2.ConsensusSignature)
+			_, err := hex.DecodeString(l2.Votes[0].ConsensusSignature)
 			if err != nil {
-				t.Errorf("ConsensusSignature is invalid hex: %v", err)
+				t.Errorf("Votes[0].ConsensusSignature is invalid hex: %v", err)
 			}
 		})
 	}
@@ -204,16 +204,16 @@ func TestEnsemble_Vote_Deterministic(t *testing.T) {
 	l2a := ensemble.Vote(txHash, decision)
 	l2b := ensemble.Vote(txHash, decision)
 
-	if l2a.ConsensusSignature != l2b.ConsensusSignature {
+	if l2a.Votes[0].ConsensusSignature != l2b.Votes[0].ConsensusSignature {
 		t.Error("Vote() should produce deterministic signatures for same input")
 	}
 
-	if l2a.KeyId != l2b.KeyId {
-		t.Error("KeyId should be the same")
+	if l2a.Votes[0].SignerKeyId != l2b.Votes[0].SignerKeyId {
+		t.Error("Votes[0].SignerKeyId should be the same")
 	}
 
-	if len(l2a.AgentIds) != len(l2b.AgentIds) {
-		t.Error("AgentIds should have same length")
+	if len(l2a.Votes) != len(l2b.Votes) {
+		t.Error("Votes should have same length")
 	}
 }
 

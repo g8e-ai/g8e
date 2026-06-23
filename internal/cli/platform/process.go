@@ -72,6 +72,8 @@ type OperatorStartOptions struct {
 	LogLevel           string
 	CertIdentityMode   string
 	IdentityData       []byte
+	TribunalID         string
+	TribunalURL        string
 }
 
 type ProcessManager struct {
@@ -358,6 +360,12 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	if opts.CertIdentityMode != "" {
 		args = append(args, "--cert-mode", opts.CertIdentityMode)
+	}
+	if opts.TribunalID != "" {
+		args = append(args, "--tribunal-id", opts.TribunalID)
+	}
+	if opts.TribunalURL != "" {
+		args = append(args, "--tribunal-url", opts.TribunalURL)
 	}
 
 	if effectivePasskeyRpID != "" {

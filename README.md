@@ -154,7 +154,7 @@ graph TD
 ```
 
 1. **L1 Doctrine**: Deterministic static analysis. It enforces rules against forbidden patterns and MITRE ATT&CK indicators. This layer is active for every action. See [Doctrine Configuration](docs/guides/cli.md#doctrine-configuration).
-2. **L2 Consensus**: Multi-model consensus. It requires Ed25519 signing over the canonical SHA-256 transaction hash. See [Consensus Layer](docs/architecture/protocol.md#l2-consensus).
+2. **L2 Consensus**: Tribunal deliberation. An enrolled agentic application evaluates the envelope and produces signed L2 votes over the canonical SHA-256 transaction hash. The gateway never self-signs; under `consensus` posture it calls the Tribunal's `/tribunal/v1/deliberate` endpoint before dispatch. See [Consensus Layer](docs/architecture/protocol.md#l2-consensus).
 3. **L3 Notary**: Hardware-bound human authorization. It utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
 4. **L4 Warden**: Fail-closed verification authority. It re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](docs/architecture/protocol.md#l4-warden).
 5. **L5 Actuator**: Single dispatch path. It handles tool invocation and enforces data sovereignty. See [Actuator Layer](docs/architecture/protocol.md#l5-actuator).
