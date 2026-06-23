@@ -120,11 +120,11 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// If posture is consensus, TribunalID must be set and the TribunalPolicy
 	// must exist and be enabled in the database. Fail fast before starting
 	// any services.
+	if err := config.ValidateConsensusStartup(string(posture), tribunalID, 0); err != nil {
+		logger.Error("Startup validation failed", string(constants.ConnectionStateError), err)
+		os.Exit(constants.ExitConfigError)
+	}
 	if posture == config.PostureConsensus {
-		if tribunalID == "" {
-			logger.Error("Startup validation failed", string(constants.ConnectionStateError), constants.ErrConfigTribunalIDRequired)
-			os.Exit(constants.ExitConfigError)
-		}
 		policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
 		if err != nil {
 			logger.Error("Failed to load Tribunal policy", "tribunal_id", tribunalID, string(constants.ConnectionStateError), err)
@@ -134,8 +134,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 			logger.Error("Tribunal policy not found or disabled", "tribunal_id", tribunalID, string(constants.ConnectionStateError), constants.ErrTxL2TribunalNotConfigured)
 			os.Exit(constants.ExitConfigError)
 		}
-		if policy.Quorum < 2 {
-			logger.Error("Startup validation failed: tribunal quorum must be >= 2 for consensus posture", "tribunal_id", tribunalID, "quorum", policy.Quorum, string(constants.ConnectionStateError), constants.ErrConfigTribunalQuorumLow)
+		if err := config.ValidateConsensusStartup(string(posture), tribunalID, policy.Quorum); err != nil {
+			logger.Error("Startup validation failed", "tribunal_id", tribunalID, "quorum", policy.Quorum, string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitConfigError)
 		}
 		logger.Info("Tribunal policy validated", "tribunal_id", tribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)

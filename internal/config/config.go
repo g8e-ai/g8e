@@ -277,6 +277,27 @@ func isPortAvailable(port int) bool {
 	return true
 }
 
+// ValidateConsensusStartup checks the startup validation rules for the
+// consensus posture. If posture is not "consensus", it returns nil
+// (no validation needed). For consensus posture, the tribunalID must be
+// non-empty and the quorum must be >= 2.
+//
+// This is a pure function extracted from the gateway startup path so it
+// can be tested without os.Exit. The gateway startup calls this after
+// loading the tribunal policy from the database to validate the quorum.
+func ValidateConsensusStartup(posture string, tribunalID string, quorum int) error {
+	if posture != string(PostureConsensus) {
+		return nil
+	}
+	if tribunalID == "" {
+		return constants.ErrConfigTribunalIDRequired
+	}
+	if quorum < 2 {
+		return constants.ErrConfigTribunalQuorumLow
+	}
+	return nil
+}
+
 // validateAndResolveGatewayPorts validates and resolves gateway port configuration.
 // It handles:
 // - Port zero validation (rejects explicit zero in production unless all ports are zero)
