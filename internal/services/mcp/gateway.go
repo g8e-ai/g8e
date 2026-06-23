@@ -1266,9 +1266,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		ProtocolVersion: "1.0",
 		Nonce:           uuid.New().String(),
 		StateMerkleRoot: stateRoot,
-		Governance: &commonv1.GovernanceMetadata{
-			GatewaySigned: true,
-		},
+		Governance: &commonv1.GovernanceMetadata{},
 	}
 
 	// In doctrine and consensus postures, L3 is audited not enforced, so we auto-approve
@@ -1315,19 +1313,6 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	}
 	env.Id = hash
 	env.TransactionHash = hash
-
-	if len(g.signingKey) > 0 {
-		l2Payload := fmt.Sprintf("%s|true", hash)
-		sig := ed25519.Sign(g.signingKey, []byte(l2Payload))
-		if env.Governance == nil {
-			env.Governance = &commonv1.GovernanceMetadata{}
-		}
-		env.Governance.L2 = &commonv1.L2Metadata{
-			ConsensusSignature: hex.EncodeToString(sig),
-			KeyId:              g.keyID,
-			AgentIds:           []string{"gateway-local-signer"},
-		}
-	}
 
 	envelopeBytes, err = (protojson.MarshalOptions{Multiline: false}).Marshal(env)
 	if err != nil {
@@ -1455,7 +1440,9 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 
 	case errors.Is(err, governance.ErrL2SignatureMissing),
 		errors.Is(err, governance.ErrL2SignatureInvalid),
-		errors.Is(err, governance.ErrL2KeyNotConfigured):
+		errors.Is(err, governance.ErrL2TribunalNotConfigured),
+		errors.Is(err, governance.ErrL2QuorumNotMet),
+		errors.Is(err, governance.ErrL2DuplicateSigner):
 		return constants.ErrCodeL2SignatureInvalid, msg
 
 	case errors.Is(err, governance.ErrL3ProofInvalid),

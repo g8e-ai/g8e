@@ -77,7 +77,6 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		SignerStore:         signerStore,
 		ActuatorSigningKey:  privKey,
 		ActuatorKeyID:       "test-key",
-		ConsensusSigningKey: privKey,
 		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
@@ -123,9 +122,13 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			KeyId:              "test-key",
-			ConsensusSignature: hex.EncodeToString(sig),
-			AgentIds:           []string{"test-key"},
+			Votes: []*commonv1.L2Vote{
+				{
+					SignerKeyId:       "test-key",
+					ConsensusSignature: hex.EncodeToString(sig),
+					Decision:          true,
+				},
+			},
 		},
 		L3: &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
@@ -201,7 +204,6 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		SignerStore:         signerStore,
 		ActuatorSigningKey:  privKey,
 		ActuatorKeyID:       "test-key",
-		ConsensusSigningKey: privKey,
 		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
@@ -247,9 +249,13 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			KeyId:              "test-key",
-			ConsensusSignature: hex.EncodeToString(sig),
-			AgentIds:           []string{"test-key"},
+			Votes: []*commonv1.L2Vote{
+				{
+					SignerKeyId:       "test-key",
+					ConsensusSignature: hex.EncodeToString(sig),
+					Decision:          true,
+				},
+			},
 		},
 		L3: &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
@@ -326,7 +332,6 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		SignerStore:         signerStore,
 		ActuatorSigningKey:  privKey,
 		ActuatorKeyID:       "test-key",
-		ConsensusSigningKey: privKey,
 		Scrubbing:           scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
@@ -372,9 +377,13 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
-			KeyId:              "test-key",
-			ConsensusSignature: hex.EncodeToString(sig),
-			AgentIds:           []string{"test-key"},
+			Votes: []*commonv1.L2Vote{
+				{
+					SignerKeyId:       "test-key",
+					ConsensusSignature: hex.EncodeToString(sig),
+					Decision:          true,
+				},
+			},
 		},
 		L3: &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{

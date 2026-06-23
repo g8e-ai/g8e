@@ -158,7 +158,6 @@ type ActionReceiptRecord struct {
 	ExecutedAt        time.Time                  `json:"executed_at"`
 	SignerKeyID       string                     `json:"signer_key_id"`
 	Signature         string                     `json:"signature"`
-	GatewaySigned     bool                       `json:"gateway_signed"`
 	L2Valid           bool                       `json:"l2_valid"`
 	L3Valid           bool                       `json:"l3_valid"`
 	Timestamp         time.Time                  `json:"timestamp"`

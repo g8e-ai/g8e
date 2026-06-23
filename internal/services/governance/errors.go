@@ -35,7 +35,9 @@ var (
 	ErrL1ValidationFailed      = constants.ErrTxL1ValidationFailed
 	ErrL2SignatureMissing      = constants.ErrTxL2SignatureMissing
 	ErrL2SignatureInvalid      = constants.ErrTxL2SignatureInvalid
-	ErrL2KeyNotConfigured      = constants.ErrTxL2KeyNotConfigured
+	ErrL2TribunalNotConfigured = constants.ErrTxL2TribunalNotConfigured
+	ErrL2QuorumNotMet          = constants.ErrTxL2QuorumNotMet
+	ErrL2DuplicateSigner       = constants.ErrTxL2DuplicateSigner
 	ErrL3ProofMissing          = constants.ErrTxL3ProofMissing
 	ErrL3ProofInvalid          = constants.ErrTxL3ProofInvalid
 	ErrL3NotaryNotConfigured   = constants.ErrTxL3NotaryNotConfigured

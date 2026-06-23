@@ -139,13 +139,6 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		os.Exit(constants.ExitConfigError)
 	}
 
-	ConsensusPriv, err := sm.GetConsensusKey()
-	if err != nil {
-		logger.Error("Failed to load Consensus signing key - L2 consensus will fail", string(constants.ConnectionStateError), err)
-		cancel()
-		os.Exit(constants.ExitConfigError)
-	}
-
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", ActuatorKeyID)
@@ -191,7 +184,6 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		L3Notary:            govDeps.L3Notary,
 		ActuatorSigningKey:  ActuatorPriv,
 		ActuatorKeyID:       ActuatorKeyID,
-		ConsensusSigningKey: ConsensusPriv,
 		MCPGateway:          mcpSvc,
 	}
 

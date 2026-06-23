@@ -594,7 +594,8 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	cfg := testutil.NewTestConfig(t)
 	resp := response.NewWriter(logger)
-	adminController := newAdminController(cfg, logger, db, userSvc, resp)
+	tribunalSvc := NewTribunalStoreService(db.GetDB(), logger, db.SignerStore)
+	adminController := newAdminController(cfg, logger, db, userSvc, resp, tribunalSvc)
 
 	bootstrapUser, err := userSvc.CreateBootstrapUser()
 	require.NoError(t, err)

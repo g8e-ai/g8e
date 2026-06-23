@@ -827,13 +827,16 @@ var (
 	ErrTxTransactionReplay       = errors.New("TX_REPLAY: nonce already used")
 	ErrTxStateRootMissing        = errors.New("TX_STATE_MISSING: state_merkle_root required but missing")
 	ErrTxStateRootMismatch       = errors.New("TX_STATE_MISMATCH: state_merkle_root does not match current state")
-	ErrTxL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Consensus (L2Consensus) consensus_signature required but missing")
+	ErrTxL2SignatureMissing      = errors.New("TX_QUORUM_L2_SIG_MISSING: Tribunal L2 votes required but missing")
 
 	// Governance L1 doctrine errors
 	ErrGovernanceJSONDepthExceeded = errors.New("JSON recursion depth exceeded maximum limit")
 
-	ErrTxL2SignatureInvalid     = errors.New("TX_QUORUM_L2_SIG_INVALID: Consensus (L2Consensus) consensus_signature failed verification")
-	ErrTxL2KeyNotConfigured     = errors.New("TX_QUORUM_L2_KEY_MISSING: trusted Consensus (L2Consensus) signer key not configured")
+	ErrTxL2SignatureInvalid     = errors.New("TX_QUORUM_L2_SIG_INVALID: Tribunal L2 consensus_signature failed verification")
+	ErrTxL2QuorumNotMet         = errors.New("TX_QUORUM_L2_NOT_MET: affirmative distinct signer count below tribunal quorum")
+	ErrTxL2TribunalNotConfigured = errors.New("TX_QUORUM_L2_TRIBUNAL_MISSING: tribunal policy not found or disabled")
+	ErrTxL2DuplicateSigner      = errors.New("TX_QUORUM_L2_DUP_SIGNER: duplicate signer key in vote set with require_distinct")
+	ErrTribunalHashMismatch     = errors.New("TRIBUNAL_HASH_MISMATCH: envelope id does not match recomputed transaction hash")
 	ErrTxL3ProofMissing         = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrTxL3ProofInvalid         = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrTxL3NotaryNotConfigured  = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")

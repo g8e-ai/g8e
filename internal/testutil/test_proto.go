@@ -353,8 +353,14 @@ func MustMarshalGovernanceEnvelopeWithVotes(t *testing.T, messageID string, prot
 		Payload:         []byte(dataBlob),
 		Governance: &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				AgentIds:           agentIDs,
-				ConsensusSignature: consensusSig,
+				TribunalId: "test-tribunal",
+				Votes: []*commonv1.L2Vote{
+					{
+						SignerKeyId:       agentIDs[0],
+						ConsensusSignature: consensusSig,
+						Decision:          true,
+					},
+				},
 			},
 		},
 	}

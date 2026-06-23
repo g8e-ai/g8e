@@ -37,15 +37,17 @@ type AdminController struct {
 	db        *CanonicalDBService
 	userSvc   *UserService
 	responder *response.Writer
+	tribunalSvc *TribunalStoreService
 }
 
-func newAdminController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, userSvc *UserService, responder *response.Writer) *AdminController {
+func newAdminController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, userSvc *UserService, responder *response.Writer, tribunalSvc *TribunalStoreService) *AdminController {
 	return &AdminController{
 		cfg:       cfg,
 		logger:    logger,
 		db:        db,
 		userSvc:   userSvc,
 		responder: responder,
+		tribunalSvc: tribunalSvc,
 	}
 }
 
@@ -191,5 +193,104 @@ func (c *AdminController) handleRevokeApp(w http.ResponseWriter, r *http.Request
 	}
 
 	c.logger.Info("External app revoked by admin", "app_id", req.AppID)
+	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
+}
+
+// POST /api/v1/admin/tribunals
+// GET /api/v1/admin/tribunals
+func (c *AdminController) handleTribunals(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	user, err := c.userSvc.GetByID(userID)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
+		return
+	}
+	if user == nil || !user.IsBootstrap {
+		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPost:
+		body, err := c.readBody(w, r)
+		if err != nil {
+			c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+			return
+		}
+
+		var policy models.TribunalPolicy
+		if err := json.Unmarshal(body, &policy); err != nil {
+			c.responder.Error(w, http.StatusBadRequest, "invalid JSON")
+			return
+		}
+
+		if err := c.db.TribunalStore.AddTribunal(policy); err != nil {
+			c.logger.Error("failed to add tribunal", "error", err)
+			c.responder.Error(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		c.logger.Info("Tribunal created by admin", "tribunal_id", policy.ID)
+		c.responder.JSON(w, http.StatusCreated, models.StatusResponse{Status: constants.GatewayModeStatusOK})
+
+	case http.MethodGet:
+		tribunals, err := c.db.TribunalStore.ListTribunals()
+		if err != nil {
+			c.logger.Error("failed to list tribunals", "error", err)
+			c.responder.Error(w, http.StatusInternalServerError, "failed to list tribunals")
+			return
+		}
+
+		c.responder.JSON(w, http.StatusOK, tribunals)
+
+	default:
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+// DELETE /api/v1/admin/tribunals/{id}
+func (c *AdminController) handleDeleteTribunal(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	tribunalID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.AdminTribunalsPrefix)
+	if tribunalID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "tribunal_id required")
+		return
+	}
+
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	user, err := c.userSvc.GetByID(userID)
+	if err != nil {
+		c.responder.Error(w, http.StatusInternalServerError, "failed to verify user")
+		return
+	}
+	if user == nil || !user.IsBootstrap {
+		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+		return
+	}
+
+	deleted, err := c.db.TribunalStore.DeleteTribunal(tribunalID)
+	if err != nil {
+		c.logger.Error("failed to delete tribunal", "error", err)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to delete tribunal")
+		return
+	}
+	if !deleted {
+		c.responder.Error(w, http.StatusNotFound, "tribunal not found")
+		return
+	}
+
+	c.logger.Info("Tribunal deleted by admin", "tribunal_id", tribunalID)
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }

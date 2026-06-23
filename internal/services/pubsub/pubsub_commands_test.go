@@ -86,7 +86,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 
 	_, err = svc.l4warden.VerifyEnvelope(context.Background(), env)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, governance.ErrL2KeyNotConfigured, "expected missing L2 key error, got %v", err)
+	assert.ErrorIs(t, err, governance.ErrL2TribunalNotConfigured, "expected tribunal not configured error, got %v", err)
 }
 
 func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg.GovernanceEnvelope {
@@ -113,8 +113,14 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
-			KeyId:              "missing-key",
-			ConsensusSignature: hex.EncodeToString(ed25519.Sign(signerPriv, []byte(hash+"|true"))),
+			TribunalId: "test-tribunal",
+			Votes: []*commonv1.L2Vote{
+				{
+					SignerKeyId:       "missing-key",
+					ConsensusSignature: hex.EncodeToString(ed25519.Sign(signerPriv, []byte(hash+"|true"))),
+					Decision:          true,
+				},
+			},
 		},
 	}
 	return env
@@ -272,7 +278,13 @@ func TestOperatorPubSubService_ReceiptCoverage(t *testing.T) {
 					Nonce:           "nonce-" + tc.name,
 					Governance: &commonv1.GovernanceMetadata{
 						L2: &commonv1.L2Metadata{
-							KeyId: "test-key",
+							TribunalId: "test-tribunal",
+							Votes: []*commonv1.L2Vote{
+								{
+									SignerKeyId: "test-key",
+									Decision:    true,
+								},
+							},
 						},
 					},
 				}
@@ -284,7 +296,7 @@ func TestOperatorPubSubService_ReceiptCoverage(t *testing.T) {
 				// Sign for verifier
 				l2Payload := fmt.Sprintf("%s|true", env.TransactionHash)
 				sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
-				env.Governance.L2.ConsensusSignature = hex.EncodeToString(sig)
+				env.Governance.L2.Votes[0].ConsensusSignature = hex.EncodeToString(sig)
 
 				envelopeBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
 
@@ -328,7 +340,11 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			Nonce:           "nonce-cancel",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					KeyId: "test-key",
+					Votes: []*commonv1.L2Vote{
+						{
+							SignerKeyId: "test-key",
+						},
+					},
 				},
 				// CANCEL is a mutation — L3 proof required by notary posture
 				L3: &commonv1.L3Metadata{
@@ -346,7 +362,7 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 		// Sign for verifier
 		l2Payload := fmt.Sprintf("%s|true", env.TransactionHash)
 		sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
-		env.Governance.L2.ConsensusSignature = hex.EncodeToString(sig)
+		env.Governance.L2.Votes[0].ConsensusSignature = hex.EncodeToString(sig)
 
 		envelopeBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
 
@@ -609,7 +625,11 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Nonce:           "nonce-sync",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
-					KeyId: "test-key",
+					Votes: []*commonv1.L2Vote{
+						{
+							SignerKeyId: "test-key",
+						},
+					},
 				},
 			},
 		}
@@ -621,7 +641,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		// Sign for verifier
 		l2Payload := fmt.Sprintf("%s|true", env.TransactionHash)
 		sig := ed25519.Sign(f.SignerPriv, []byte(l2Payload))
-		env.Governance.L2.ConsensusSignature = hex.EncodeToString(sig)
+		env.Governance.L2.Votes[0].ConsensusSignature = hex.EncodeToString(sig)
 
 		envelopeBytes, _ := (protojson.MarshalOptions{}).Marshal(env)
 

@@ -130,7 +130,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// Initialize actuator key reader for device enrollment
 	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
 	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.SuspendedStore, deps.MCPGateway, deps.Responder, actuatorKeyReader)
-	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
+	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder, deps.DB.TribunalStore)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
 	// Build router once to avoid per-request overhead

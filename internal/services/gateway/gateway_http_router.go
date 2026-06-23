@@ -50,6 +50,8 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.dbController.handleGovernanceSignerByID))
 	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
 	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
+	mux.HandleFunc(constants.APIPaths.AdminTribunals, h.adminController.handleTribunals)
+	mux.Handle(constants.APIPaths.AdminTribunalsByID, http.HandlerFunc(h.adminController.handleDeleteTribunal))
 
 	// Register rate-limited MCP routes with full paths
 	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)

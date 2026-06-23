@@ -280,16 +280,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Mutations requiring L3 are suspended and must be approved via CLI command
 	cliL3Notary := governance.NewOutboundL3Notary(vs.suspendedTxStore, vs.logger)
 
-	// Load signing keys for Actuator and Consensus (fail-closed if missing)
+	// Load signing keys for Actuator (fail-closed if missing)
 	actuatorPriv, actuatorKeyID, err := vs.secretManager.GetActuatorKey()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
-	consensusPriv, err := vs.secretManager.GetConsensusKey()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
-	}
-	vs.logger.Info("Consensus signing key loaded successfully")
 
 	// Load trusted L2 signers from filesystem (create directory if it doesn't exist)
 	trustedSignersDir := paths.Infra.TrustedSignersDir
@@ -326,7 +321,6 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		AppPolicyStore:      vs.gatewayDB.AppPolicyStore,
 		ActuatorSigningKey:  actuatorPriv,
 		ActuatorKeyID:       actuatorKeyID,
-		ConsensusSigningKey: consensusPriv,
 		L3Notary:            cliL3Notary,
 	}
 

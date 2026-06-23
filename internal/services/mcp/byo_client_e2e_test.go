@@ -56,7 +56,6 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 			TransactionId:    "tx-byo-1",
 			Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary:    "file edited successfully",
-			GatewaySigned:    true,
 			StateRootBefore:  "root-before",
 			StateRootAfter:   "root-after",
 			ExecutedAtUnixMs: time.Now().UnixMilli(),
@@ -150,12 +149,11 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	require.Equal(t, "op-byo-456", suspendedTx.OperatorID)
 	require.NotEmpty(t, suspendedTx.Envelope)
 
-	// Verify envelope has GatewaySigned=true
+	// Verify envelope governance metadata is present
 	var envelope commonv1.GovernanceEnvelope
 	err = protojson.Unmarshal(suspendedTx.Envelope, &envelope)
 	require.NoError(t, err)
 	require.NotNil(t, envelope.Governance)
-	require.True(t, envelope.Governance.GatewaySigned, "Suspended envelope should have GatewaySigned=true")
 
 	// Step 3: Simulate WebAuthn approval (challenge + verify)
 	// In a real flow, this would involve browser WebAuthn API
@@ -186,7 +184,6 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 	require.Equal(t, "tx-byo-1", receipt.TransactionId)
 	require.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED, receipt.Status)
 	require.Equal(t, "file edited successfully", receipt.ResultSummary)
-	require.True(t, receipt.GatewaySigned)
 	require.Equal(t, operatorv1.L2Status_L2_STATUS_REQUIRED_VALID, receipt.L2Status)
 	require.Equal(t, operatorv1.L3Status_L3_STATUS_REQUIRED_VALID, receipt.L3Status)
 
@@ -215,7 +212,6 @@ func TestBYOClientEndToEndProof(t *testing.T) {
 			TransactionId: "tx-byo-2",
 			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary: "file edited successfully",
-			GatewaySigned: true,
 			L2Status:      operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
 			L3Status:      operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		},
@@ -262,7 +258,6 @@ func TestBYOClientA2AEndToEndProof(t *testing.T) {
 			TransactionId: "tx-a2a-1",
 			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary: "A2A skill executed successfully",
-			GatewaySigned: true,
 			L2Status:      operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
 			L3Status:      operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 		},

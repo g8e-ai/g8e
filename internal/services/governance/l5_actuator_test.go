@@ -30,8 +30,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
-	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
-
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -343,73 +341,3 @@ func TestCanonicalizeActionReceipt(t *testing.T) {
 	require.Equal(t, "test-key-id", parsed["signer_key_id"])
 }
 
-func TestL5ActuatorGatewaySignedPropagation(t *testing.T) {
-	t.Parallel()
-	actuator, _ := newTestActuator(t)
-
-	// Create envelope with GatewaySigned=true
-	envelope := &governance.GovernanceEnvelope{
-		Id:                uuid.New().String(),
-		TransactionHash:   "test-hash-1234567890abcdef",
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-operator-session",
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Governance: &commonv1.GovernanceMetadata{
-			GatewaySigned: true,
-		},
-	}
-
-	vt := &VerifiedTransaction{
-		Envelope:   envelope,
-		ActionType: constants.ActionTypeExecuteBash,
-	}
-
-	// Execute
-	receipt, err := actuator.Execute(context.Background(), vt, nil)
-	require.NoError(t, err)
-	require.NotNil(t, receipt)
-
-	// Verify GatewaySigned is propagated to receipt
-	require.True(t, receipt.GatewaySigned, "GatewaySigned should be propagated from envelope to receipt")
-
-	// Verify audit record also has GatewaySigned
-	consoleAuditStore := actuator.ConsoleAuditStore.(*testutil.ConfigurableMockAuditStore)
-	require.Len(t, consoleAuditStore.Calls, 2)
-
-	var finalRecord models.ActionReceiptRecord
-	err = json.Unmarshal(consoleAuditStore.Calls[1].Data, &finalRecord)
-	require.NoError(t, err)
-	require.True(t, finalRecord.GatewaySigned, "Audit record should have GatewaySigned=true")
-}
-
-func TestL5ActuatorGatewaySignedFalse(t *testing.T) {
-	t.Parallel()
-	actuator, _ := newTestActuator(t)
-
-	// Create envelope with GatewaySigned=false (normal L2Consensus path)
-	envelope := &governance.GovernanceEnvelope{
-		Id:                uuid.New().String(),
-		TransactionHash:   "test-hash-1234567890abcdef",
-		OperatorId:        "test-operator",
-		OperatorSessionId: "test-operator-session",
-		ActionType:        string(constants.ActionTypeExecuteBash),
-		TargetResource:    "localhost",
-		Governance: &commonv1.GovernanceMetadata{
-			GatewaySigned: false,
-		},
-	}
-
-	vt := &VerifiedTransaction{
-		Envelope:   envelope,
-		ActionType: constants.ActionTypeExecuteBash,
-	}
-
-	// Execute
-	receipt, err := actuator.Execute(context.Background(), vt, nil)
-	require.NoError(t, err)
-	require.NotNil(t, receipt)
-
-	// Verify GatewaySigned is false in receipt
-	require.False(t, receipt.GatewaySigned, "GatewaySigned should be false for L2Consensus-signed transactions")
-}
