@@ -43,6 +43,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
 // GatewayModeService is the top-level orchestrator for gateway mode (operator).
@@ -65,6 +66,7 @@ type GatewayModeService struct {
 	webSessionSvc      *WebSessionService
 	suspendedTxService *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
+	tribunal           *tribunal.TribunalService
 	responder          *response.Writer
 	server             *http.Server
 	publicServer       *http.Server
@@ -406,6 +408,7 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		Responder:          ls.responder,
 		MCPGateway:         ls.mcpGateway,
 		AppEnrollment:      appEnrollment,
+		Tribunal:           ls.tribunal,
 		SuspendedStore:     ls.suspendedTxService,
 		IsReady:            ls.IsReady,
 		IsGovernanceReady:  ls.IsGovernanceReady,
@@ -495,6 +498,17 @@ func (ls *GatewayModeService) GetPKIAuthority() *PKIAuthority {
 // GetHTTPHandler returns the HTTP handler.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
+}
+
+// SetTribunal sets the Tribunal service for L2 consensus deliberation.
+// This is called by the boot sequence after the TribunalService is constructed.
+// The Tribunal is registered on the mTLS mux and the HTTP deliberator is wired
+// into the MCP gateway for consensus posture.
+func (ls *GatewayModeService) SetTribunal(ts *tribunal.TribunalService) {
+	ls.tribunal = ts
+	if ls.handler != nil {
+		ls.handler.SetTribunal(ts)
+	}
 }
 
 // GetHTTPSPort returns the actual bound HTTPS port (useful when AllowTestPortZero is true).

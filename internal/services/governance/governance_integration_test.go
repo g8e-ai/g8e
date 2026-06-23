@@ -65,9 +65,9 @@ func TestGovernanceFlow(t *testing.T) {
 			TribunalId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				{
-					SignerKeyId:       nodeID,
+					SignerKeyId:        nodeID,
 					ConsensusSignature: "test-sig",
-					Decision:          true,
+					Decision:           true,
 				},
 			},
 		},

@@ -750,9 +750,9 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 				L2: &commonv1.L2Metadata{
 					Votes: []*commonv1.L2Vote{
 						{
-							SignerKeyId:       "test-key",
+							SignerKeyId:        "test-key",
 							ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
-							Decision:          true,
+							Decision:           true,
 						},
 					},
 				},
@@ -847,9 +847,9 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 				L2: &commonv1.L2Metadata{
 					Votes: []*commonv1.L2Vote{
 						{
-							SignerKeyId:       "test-key",
+							SignerKeyId:        "test-key",
 							ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
-							Decision:          true,
+							Decision:           true,
 						},
 					},
 				},
@@ -1024,9 +1024,17 @@ func TestReadFieldGovernanceIntegration(t *testing.T) {
 	// Verify nonce is present (replay protection)
 	require.NotEmpty(t, receivedEnvelope.Nonce)
 
-	// Verify L2 is populated (no GatewaySigned - that concept is deleted)
+	// Under doctrine posture the gateway constructs the envelope but never
+	// self-signs L2 (gateway self-signing was deleted with the Tribunal cut).
+	// L3 is auto-approved (audited, not enforced) and L2 carries no gateway votes.
 	require.NotNil(t, receivedEnvelope.Governance)
-	require.NotNil(t, receivedEnvelope.Governance.L2)
+	require.NotNil(t, receivedEnvelope.Governance.L3)
+	require.True(t, receivedEnvelope.Governance.L3.AutoApproved,
+		"doctrine posture must auto-approve L3")
+	if receivedEnvelope.Governance.L2 != nil {
+		require.Empty(t, receivedEnvelope.Governance.L2.Votes,
+			"gateway must not self-sign L2 votes under doctrine posture")
+	}
 }
 
 // TestNativeToolSingleAudit verifies that native tool calls produce exactly one

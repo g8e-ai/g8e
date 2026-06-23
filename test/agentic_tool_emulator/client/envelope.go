@@ -74,9 +74,9 @@ func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 		TribunalId: "test-tribunal",
 		Votes: []*commonv1.L2Vote{
 			{
-				SignerKeyId:       e.KeyID,
+				SignerKeyId:        e.KeyID,
 				ConsensusSignature: hex.EncodeToString(sig),
-				Decision:          decision,
+				Decision:           decision,
 			},
 		},
 	}

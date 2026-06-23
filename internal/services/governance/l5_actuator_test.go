@@ -340,4 +340,3 @@ func TestCanonicalizeActionReceipt(t *testing.T) {
 	require.InEpsilon(t, float64(1234567890), parsed["executed_at_unix_ms"], 0.0)
 	require.Equal(t, "test-key-id", parsed["signer_key_id"])
 }
-

@@ -14,6 +14,7 @@
 package tribunal
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -165,4 +166,35 @@ func (s *TribunalService) HandleDeliberate(w http.ResponseWriter, r *http.Reques
 	if _, err := w.Write(signedBytes); err != nil {
 		s.logger.Error("tribunal: write response", "error", err)
 	}
+}
+
+// LocalDeliberator is an in-process adapter that satisfies the
+// mcp.TribunalDeliberator interface by calling TribunalService.Deliberate
+// directly, without an HTTP round-trip. This is used when the Tribunal runs
+// in the same process as the gateway (single-binary deployment).
+type LocalDeliberator struct {
+	service *TribunalService
+}
+
+// NewLocalDeliberator creates a local (in-process) Tribunal deliberator.
+func NewLocalDeliberator(s *TribunalService) *LocalDeliberator {
+	return &LocalDeliberator{service: s}
+}
+
+// Deliberate unmarshals the envelope bytes, runs deliberation, and returns
+// the marshaled envelope with L2 votes populated.
+func (d *LocalDeliberator) Deliberate(_ context.Context, envelopeBytes []byte) ([]byte, error) {
+	var env governance.GovernanceEnvelope
+	if err := protojson.Unmarshal(envelopeBytes, &env); err != nil {
+		return nil, fmt.Errorf("tribunal local deliberator: unmarshal: %w", err)
+	}
+	result, err := d.service.Deliberate(&env)
+	if err != nil {
+		return nil, fmt.Errorf("tribunal local deliberator: %w", err)
+	}
+	out, err := (protojson.MarshalOptions{Multiline: false}).Marshal(result.Envelope)
+	if err != nil {
+		return nil, fmt.Errorf("tribunal local deliberator: marshal: %w", err)
+	}
+	return out, nil
 }

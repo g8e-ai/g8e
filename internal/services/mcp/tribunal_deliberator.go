@@ -14,7 +14,9 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,11 +36,17 @@ type HTTPTribunalDeliberator struct {
 // NewHTTPTribunalDeliberator creates a new HTTP Tribunal deliberation client.
 // The url should point to the Tribunal's deliberate endpoint
 // (e.g. https://localhost:8443/tribunal/v1/deliberate).
-func NewHTTPTribunalDeliberator(url string) *HTTPTribunalDeliberator {
+// If tlsConfig is non-nil, it is used for mTLS authentication to the Tribunal.
+func NewHTTPTribunalDeliberator(url string, tlsConfig *tls.Config) *HTTPTribunalDeliberator {
+	transport := &http.Transport{}
+	if tlsConfig != nil {
+		transport.TLSClientConfig = tlsConfig
+	}
 	return &HTTPTribunalDeliberator{
 		url: url,
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: transport,
 		},
 	}
 }
@@ -46,7 +54,7 @@ func NewHTTPTribunalDeliberator(url string) *HTTPTribunalDeliberator {
 // Deliberate sends the envelope bytes to the Tribunal service and returns
 // the deliberated envelope with L2 votes populated.
 func (d *HTTPTribunalDeliberator) Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.url, bytesReader(envelopeBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.url, bytes.NewReader(envelopeBytes))
 	if err != nil {
 		return nil, fmt.Errorf("tribunal deliberator: %w", err)
 	}
@@ -70,23 +78,4 @@ func (d *HTTPTribunalDeliberator) Deliberate(ctx context.Context, envelopeBytes 
 	}
 
 	return body, nil
-}
-
-// bytesReader returns an io.Reader from a byte slice.
-func bytesReader(b []byte) io.Reader {
-	return &byteReader{data: b}
-}
-
-type byteReader struct {
-	data []byte
-	off  int
-}
-
-func (r *byteReader) Read(p []byte) (int, error) {
-	if r.off >= len(r.data) {
-		return 0, io.EOF
-	}
-	n := copy(p, r.data[r.off:])
-	r.off += n
-	return n, nil
 }

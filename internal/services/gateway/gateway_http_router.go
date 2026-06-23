@@ -53,6 +53,11 @@ func (h *HTTPHandler) buildRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AdminTribunals, h.adminController.handleTribunals)
 	mux.Handle(constants.APIPaths.AdminTribunalsByID, http.HandlerFunc(h.adminController.handleDeleteTribunal))
 
+	// Tribunal deliberate endpoint (mTLS-guarded, enrolled principal)
+	if h.tribunal != nil {
+		mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.tribunal.HandleDeliberate)
+	}
+
 	// Register rate-limited MCP routes with full paths
 	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
 	registerMCPRoutes(mux, mcpHandler)

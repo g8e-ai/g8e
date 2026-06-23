@@ -1284,7 +1284,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		ProtocolVersion: "1.0",
 		Nonce:           uuid.New().String(),
 		StateMerkleRoot: stateRoot,
-		Governance: &commonv1.GovernanceMetadata{},
+		Governance:      &commonv1.GovernanceMetadata{},
 	}
 
 	// In doctrine and consensus postures, L3 is audited not enforced, so we auto-approve

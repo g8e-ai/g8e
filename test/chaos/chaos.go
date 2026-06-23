@@ -206,9 +206,9 @@ func signedEnvelope(
 			TribunalId: "chaos-tribunal",
 			Votes: []*commonv1.L2Vote{
 				{
-					SignerKeyId:       keyID,
+					SignerKeyId:        keyID,
 					ConsensusSignature: l2Sig,
-					Decision:          true,
+					Decision:           true,
 				},
 			},
 		},

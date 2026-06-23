@@ -116,9 +116,9 @@ func unsignedSignerEnvelope(t *testing.T, signerPriv ed25519.PrivateKey) *govpkg
 			TribunalId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				{
-					SignerKeyId:       "missing-key",
+					SignerKeyId:        "missing-key",
 					ConsensusSignature: hex.EncodeToString(ed25519.Sign(signerPriv, []byte(hash+"|true"))),
-					Decision:          true,
+					Decision:           true,
 				},
 			},
 		},
@@ -340,9 +340,11 @@ func TestOperatorPubSubService_CancellationReceipt(t *testing.T) {
 			Nonce:           "nonce-cancel",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
+					TribunalId: "test-tribunal",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",
+							Decision:    true,
 						},
 					},
 				},
@@ -625,9 +627,11 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 			Nonce:           "nonce-sync",
 			Governance: &commonv1.GovernanceMetadata{
 				L2: &commonv1.L2Metadata{
+					TribunalId: "test-tribunal",
 					Votes: []*commonv1.L2Vote{
 						{
 							SignerKeyId: "test-key",
+							Decision:    true,
 						},
 					},
 				},

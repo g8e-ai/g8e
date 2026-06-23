@@ -47,9 +47,9 @@ func (m *MockTribunal) EvaluatePayload(env *governance.GovernanceEnvelope) error
 
 	env.Governance.L2.TribunalId = "mock-tribunal"
 	env.Governance.L2.Votes = append(env.Governance.L2.Votes, &commonv1.L2Vote{
-		SignerKeyId:       m.NodeID,
+		SignerKeyId:        m.NodeID,
 		ConsensusSignature: "mock-signature",
-		Decision:          true,
+		Decision:           true,
 	})
 
 	if !m.ShouldPass {

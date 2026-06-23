@@ -60,9 +60,9 @@ func main() {
 				TribunalId: "tribunal-1",
 				Votes: []*commonv1.L2Vote{
 					{
-						SignerKeyId:       "key-123",
+						SignerKeyId:        "key-123",
 						ConsensusSignature: "sig-abc",
-						Decision:          true,
+						Decision:           true,
 					},
 				},
 			},

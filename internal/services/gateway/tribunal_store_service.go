@@ -27,9 +27,9 @@ import (
 
 // TribunalStoreService provides TribunalPolicy CRUD operations.
 type TribunalStoreService struct {
-	db     *sqliteutil.DB
-	logger *slog.Logger
-	docSvc *DocumentStoreService
+	db        *sqliteutil.DB
+	logger    *slog.Logger
+	docSvc    *DocumentStoreService
 	signerSvc *SignerStoreService
 }
 
@@ -47,7 +47,7 @@ func NewTribunalStoreService(db *sqliteutil.DB, logger *slog.Logger, signerSvc *
 func (s *TribunalStoreService) GetTribunal(id string) (*models.TribunalPolicy, error) {
 	doc, err := s.docSvc.DocGet(marshaler.CollectionName(constants.CollectionTribunals), id)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", constants.ErrDocumentStoreUnmarshalData, id)
+		return nil, fmt.Errorf("tribunal store: get: %w", err)
 	}
 	if doc == nil {
 		return nil, nil
@@ -127,7 +127,7 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 func (s *TribunalStoreService) ListTribunals() ([]models.TribunalPolicy, error) {
 	docs, err := s.docSvc.DocQuery(marshaler.CollectionName(constants.CollectionTribunals), nil, "id", 0)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrDocumentStoreUnmarshalData, err)
+		return nil, fmt.Errorf("tribunal store: list: %w", err)
 	}
 
 	results := make([]models.TribunalPolicy, 0, len(docs))

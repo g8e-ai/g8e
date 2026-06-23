@@ -479,7 +479,7 @@ MCP gateway and native tool integration tests:
 - `byo_client_e2e_test.go` - BYO client E2E tests
 - `config_test.go` - MCP configuration tests
 - `field_parser_test.go` - Field parser tests
-- `gateway_integration_test.go` - Gateway integration tests with real envelope processing, GatewaySigned propagation, SSE streaming, circuit breaker, error code mapping, native tool execution, read_field tool with L3 validation, and real L3 verification
+- `gateway_integration_test.go` - Gateway integration tests with real envelope processing, SSE streaming, circuit breaker, error code mapping, native tool execution, read_field tool with L3 validation, and real L3 verification
 - `gateway_test.go` - Gateway service tests
 - `mcp_endpoint_test.go` - MCP endpoint tests
 - `native_handlers_test.go` - Native handler tests

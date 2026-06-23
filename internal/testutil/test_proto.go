@@ -356,9 +356,9 @@ func MustMarshalGovernanceEnvelopeWithVotes(t *testing.T, messageID string, prot
 				TribunalId: "test-tribunal",
 				Votes: []*commonv1.L2Vote{
 					{
-						SignerKeyId:       agentIDs[0],
+						SignerKeyId:        agentIDs[0],
 						ConsensusSignature: consensusSig,
-						Decision:          true,
+						Decision:           true,
 					},
 				},
 			},

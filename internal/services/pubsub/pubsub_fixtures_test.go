@@ -23,9 +23,39 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
+
+// simpleTribunalStore is an in-memory governance.TribunalStore for unit tests.
+type simpleTribunalStore struct {
+	tribunals map[string]*models.TribunalPolicy
+}
+
+func (s *simpleTribunalStore) GetTribunal(id string) (*models.TribunalPolicy, error) {
+	if s.tribunals == nil {
+		return nil, nil
+	}
+	return s.tribunals[id], nil
+}
+
+// testTribunalStore returns a TribunalStore with a single 1-of-1 "test-tribunal"
+// policy whose sole member is "test-key". This mirrors the single trusted signer
+// registered by the pubsub test fixtures so L4 quorum verification can pass.
+func testTribunalStore() governance.TribunalStore {
+	return &simpleTribunalStore{
+		tribunals: map[string]*models.TribunalPolicy{
+			"test-tribunal": {
+				ID:              "test-tribunal",
+				MemberAppIDs:    []string{"test-key"},
+				Quorum:          1,
+				RequireDistinct: true,
+				Enabled:         true,
+			},
+		},
+	}
+}
 
 type pubsubFixture struct {
 	Cfg        *config.Config
@@ -57,6 +87,7 @@ func newPubsubFixture(t *testing.T) *pubsubFixture {
 		TransactionAudit:   &testutil.MockTransactionAudit{},
 		L3Notary:           &testutil.MockL3Notary{},
 		SignerStore:        signerStore,
+		TribunalStore:      testTribunalStore(),
 		ActuatorSigningKey: priv,
 		ActuatorKeyID:      "Actuator-key",
 	})

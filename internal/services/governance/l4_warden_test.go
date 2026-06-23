@@ -167,9 +167,9 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 			TribunalId: "test-tribunal",
 			Votes: []*commonv1.L2Vote{
 				{
-					SignerKeyId:       "test-key",
+					SignerKeyId:        "test-key",
 					ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte(hash+"|true"))),
-					Decision:          true,
+					Decision:           true,
 				},
 			},
 		},
@@ -650,9 +650,9 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 	signVote := func(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *commonv1.L2Vote {
 		sig := ed25519.Sign(privKey, []byte(fmt.Sprintf("%s|%v", hash, decision)))
 		return &commonv1.L2Vote{
-			SignerKeyId:       keyID,
+			SignerKeyId:        keyID,
 			ConsensusSignature: hex.EncodeToString(sig),
-			Decision:          decision,
+			Decision:           decision,
 		}
 	}
 

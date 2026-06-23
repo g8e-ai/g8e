@@ -79,9 +79,8 @@ The `governance` field encapsulates all three governance layers:
 | Field | Type | Description |
 |---|---|---|
 | `l1` | L1Metadata | L1 Doctrine status (validated flag, violations list) |
-| `l2` | L2Metadata | L2 Consensus signature, agent IDs, and key ID |
+| `l2` | L2Metadata | L2 Consensus votes (tribunal_id, signed L2Vote list) |
 | `l3` | L3Metadata | L3 Notary proof and auto-approval flag |
-| `gateway_signed` | bool | True if signed by local gateway without full L2 consensus |
 
 ### L3Proof
 
@@ -155,11 +154,13 @@ Static, deterministic checks enforced before any code executes. Validated using 
 - **Critical System File Protection**: Blocks modifications to critical system paths including `/etc/passwd`, `/etc/shadow`, `/etc/sudoers`, `/etc/ssh/`, `/etc/pam.d/`, `/etc/ld.so.*`, system binaries in `/bin/`, `/sbin/`, `/usr/bin/`, `/usr/sbin/`, and boot configurations.
 - **Allow/Deny Lists**: Enforces per-host policy and user settings.
 
-### L2 Consensus: Distributed Agreement
-A cryptographic proof that an independent ensemble agreed on the instruction. Signature verification using Ed25519 cryptography is defined in `../../internal/services/governance/l2_consensus.go`.
-- An Ed25519 signature is generated over `transaction_hash | decision`.
-- Verified against the Operator-owned `SignerStore`.
-- Gateway mode may sign locally (`gateway_signed=true`) for single-agent MCP clients.
+### L2 Consensus: Tribunal Deliberation
+A cryptographic proof that an independent Tribunal (enrolled agentic application) deliberated on the instruction and produced signed votes. Tribunal service logic is defined in `../../internal/services/tribunal/service.go`.
+- Each Tribunal member independently evaluates the payload and signs an `L2Vote` over `transaction_hash | decision` using Ed25519.
+- The `L2Metadata` contains the `tribunal_id` and a list of `L2Vote` entries (signer key ID, signature, decision).
+- The gateway never self-signs L2 votes. Under `consensus` posture, the gateway calls the Tribunal's `/tribunal/v1/deliberate` endpoint before dispatch.
+- L4 Warden verifies quorum: at least `K` affirmative distinct signatures from the TribunalPolicy's member set, checked against the `SignerStore`.
+- For single-member tribunals (degenerate case), the gateway's actuator signing key may be used as the member key. Multi-member tribunals require a separate key provisioning flow.
 
 ### L3 Notary: Human Authorization
 Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) is defined in `../../internal/services/governance/l3_notary.go`.
@@ -348,7 +349,12 @@ See [Network Architecture](./network.md) for detailed port topology, authenticat
 
 ### Configuration
 
-The g8e platform uses **ZERO environment variables** for production configuration. All paths are computed relative to project root, and all configuration is via CLI flags:
+The g8e platform uses CLI flags for production configuration. All paths are computed relative to project root. The following environment variables are supported for Tribunal configuration:
+
+- `G8E_TRIBUNAL_ID`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture)
+- `G8E_TRIBUNAL_URL`: URL of the Tribunal service for L2 deliberation (e.g. `https://localhost:8443/tribunal/v1/deliberate`)
+
+CLI flags:
 
 - `--posture <mode>`: Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced) (default: doctrine)
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
@@ -365,6 +371,8 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 - `--rate-limit-burst <n>`: Gateway rate limit burst size
 - `--log <level>`: Log level: info, error, debug (default: info)
 - `--cert-mode <mode>`: Certificate mode: full (all hostnames/IPs), localhost (only localhost)
+- `--tribunal-id <id>`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture, env: `G8E_TRIBUNAL_ID`)
+- `--tribunal-url <url>`: URL of the Tribunal service for L2 deliberation (env: `G8E_TRIBUNAL_URL`)
 - `--follow`: Follow log output after starting (like tail -f)
 
 ---
@@ -493,8 +501,7 @@ These items do not impact protocol correctness or security posture and are track
         "credentialId": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
       },
       "autoApproved": false
-    },
-    "gatewaySigned": false
+    }
   },
   "caseId": "case-deploy-456",
   "taskId": "task-readme-789",
@@ -544,8 +551,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
     "l3": {
       "proof": null,
       "autoApproved": true
-    },
-    "gatewaySigned": true
+    }
   },
   "caseId": "",
   "taskId": "task-health-345",
@@ -554,7 +560,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
 }
 ```
 
-This example shows a benign diagnostic query with `autoApproved: true` and `gatewaySigned: true`, bypassing the L3 human authorization while still passing L1 and L2 checks.
+This example shows a benign diagnostic query with `autoApproved: true`, bypassing the L3 human authorization while still passing L1 and L2 checks.
 
 ### Example 3: MCP Resource List Call
 
@@ -597,8 +603,7 @@ This example shows a benign diagnostic query with `autoApproved: true` and `gate
         "credentialId": "def456abc123def456abc123def456abc123def456abc123def456abc123def4"
       },
       "autoApproved": false
-    },
-    "gatewaySigned": false
+    }
   },
   "caseId": "case-discovery-789",
   "taskId": "task-resources-456",

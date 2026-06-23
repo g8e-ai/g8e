@@ -37,17 +37,15 @@ type AdminController struct {
 	db        *CanonicalDBService
 	userSvc   *UserService
 	responder *response.Writer
-	tribunalSvc *TribunalStoreService
 }
 
-func newAdminController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, userSvc *UserService, responder *response.Writer, tribunalSvc *TribunalStoreService) *AdminController {
+func newAdminController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, userSvc *UserService, responder *response.Writer) *AdminController {
 	return &AdminController{
 		cfg:       cfg,
 		logger:    logger,
 		db:        db,
 		userSvc:   userSvc,
 		responder: responder,
-		tribunalSvc: tribunalSvc,
 	}
 }
 
@@ -254,17 +252,6 @@ func (c *AdminController) handleTribunals(w http.ResponseWriter, r *http.Request
 
 // DELETE /api/v1/admin/tribunals/{id}
 func (c *AdminController) handleDeleteTribunal(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	tribunalID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.AdminTribunalsPrefix)
-	if tribunalID == "" {
-		c.responder.Error(w, http.StatusBadRequest, "tribunal_id required")
-		return
-	}
-
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
@@ -277,6 +264,17 @@ func (c *AdminController) handleDeleteTribunal(w http.ResponseWriter, r *http.Re
 	}
 	if user == nil || !user.IsBootstrap {
 		c.responder.Error(w, http.StatusForbidden, "admin-only: bootstrap user required")
+		return
+	}
+
+	if r.Method != http.MethodDelete {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	tribunalID := strings.TrimPrefix(r.URL.Path, constants.APIPaths.AdminTribunalsPrefix)
+	if tribunalID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "tribunal_id required")
 		return
 	}
 

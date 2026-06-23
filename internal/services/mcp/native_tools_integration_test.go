@@ -837,9 +837,9 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 				TribunalId: "test-tribunal",
 				Votes: []*commonv1.L2Vote{
 					{
-						SignerKeyId:       "gateway-local-signer",
+						SignerKeyId:        "gateway-local-signer",
 						ConsensusSignature: "test-sig",
-						Decision:          true,
+						Decision:           true,
 					},
 				},
 			},

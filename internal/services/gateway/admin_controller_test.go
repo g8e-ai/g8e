@@ -36,7 +36,7 @@ import (
 func setupTestAdminController(t *testing.T) *AdminController {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
-	return newAdminController(infra.Cfg, infra.Logger, infra.DB, infra.UserSvc, infra.Responder, infra.DB.TribunalStore)
+	return newAdminController(infra.Cfg, infra.Logger, infra.DB, infra.UserSvc, infra.Responder)
 }
 
 func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
@@ -327,6 +327,22 @@ func TestAdminControllerHandleTribunals(t *testing.T) {
 		adminController.handleTribunals(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
+
+	t.Run("MethodNotAllowed - PUT", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/tribunals", nil).WithContext(ctx)
+		rr := httptest.NewRecorder()
+		adminController.handleTribunals(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("MethodNotAllowed - DELETE", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals", nil).WithContext(ctx)
+		rr := httptest.NewRecorder()
+		adminController.handleTribunals(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
 }
 
 func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
@@ -411,5 +427,21 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 		rr := httptest.NewRecorder()
 		adminController.handleDeleteTribunal(rr, req)
 		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
+
+	t.Run("MethodNotAllowed - GET", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/tribunals/delete-test-tribunal", nil).WithContext(ctx)
+		rr := httptest.NewRecorder()
+		adminController.handleDeleteTribunal(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("MethodNotAllowed - POST", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/tribunals/delete-test-tribunal", nil).WithContext(ctx)
+		rr := httptest.NewRecorder()
+		adminController.handleDeleteTribunal(rr, req)
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 	})
 }
