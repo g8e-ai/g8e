@@ -17,7 +17,9 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -35,14 +37,20 @@ import (
 // It tests ONLY what is observable from outside the container — HTTP health, CA bundle
 // discovery, and port reachability. mTLS protocol tests belong in tier 2.
 type DockerE2EFixture struct {
-	GatewayHTTPURL  string // http://localhost:8080
-	GatewayHTTPSURL string // https://localhost:8443 (no client cert for these tests)
+	GatewayHTTPURL  string // http://localhost:<httpPort>
+	GatewayHTTPSURL string // https://localhost:<httpsPort> (no client cert for these tests)
 	ComposeFile     string
 	ProjectDir      string
+	ProjectName     string // unique docker compose project name
+	ContainerPrefix string // unique container name prefix
+	HTTPPort        int    // allocated host HTTP port
+	HTTPSPort       int    // allocated host HTTPS port
 }
 
 // NewDockerE2EFixture creates a Docker E2E fixture for testing.
 // It spins up docker-compose, waits for health, and registers cleanup.
+// Ports are allocated sequentially starting from 8080/8443 to avoid
+// conflicts with other running instances.
 func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 	t.Helper()
 
@@ -67,10 +75,46 @@ func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 		t.Fatalf("Compose file not found: %s", composePath)
 	}
 
-	// Spin up docker-compose
-	t.Logf("Starting docker-compose with file: %s", composePath)
-	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d", "--build")
+	// Allocate available ports sequentially starting from 8080/8443
+	httpPort, httpsPort := 8080, 8443
+	for offset := 0; offset < 1000; offset++ {
+		candidateHTTP := 8080 + offset
+		candidateHTTPS := 8443 + offset
+		lnHTTP, errHTTP := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", candidateHTTP))
+		if errHTTP == nil {
+			lnHTTP.Close()
+			lnHTTPS, errHTTPS := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", candidateHTTPS))
+			if errHTTPS == nil {
+				lnHTTPS.Close()
+				httpPort, httpsPort = candidateHTTP, candidateHTTPS
+				break
+			}
+		}
+	}
+	if httpPort == 8080 {
+		ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", httpPort))
+		if err != nil {
+			t.Fatalf("No available port pair found in range 8080-9080")
+		}
+		ln.Close()
+	}
+	containerPrefix := fmt.Sprintf("g8e-%d", httpPort)
+	projectName := containerPrefix
+
+	t.Logf("Allocated ports: HTTP=%d HTTPS=%d (prefix=%s)", httpPort, httpsPort, containerPrefix)
+
+	// Build env for docker-compose (overrides defaults in compose file)
+	composeEnv := []string{
+		fmt.Sprintf("G8E_HTTP_PORT=%d", httpPort),
+		fmt.Sprintf("G8E_HTTPS_PORT=%d", httpsPort),
+		fmt.Sprintf("G8E_PREFIX=%s", containerPrefix),
+	}
+
+	// Spin up docker-compose with unique project name and env
+	t.Logf("Starting docker-compose with file: %s (project: %s)", composePath, projectName)
+	cmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "up", "-d", "--build")
 	cmd.Dir = repoRoot
+	cmd.Env = append(os.Environ(), composeEnv...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to start docker-compose: %v\nOutput: %s", err, string(output))
@@ -78,8 +122,8 @@ func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 	t.Logf("Docker compose started: %s", string(output))
 
 	// Wait for health endpoint
-	httpURL := "http://localhost:8080"
-	httpsURL := "https://localhost:8443"
+	httpURL := fmt.Sprintf("http://localhost:%d", httpPort)
+	httpsURL := fmt.Sprintf("https://localhost:%d", httpsPort)
 	t.Logf("Waiting for gateway health at %s...", httpURL)
 	client := &http.Client{Timeout: 2 * time.Second}
 	require.Eventually(t, func() bool {
@@ -93,9 +137,10 @@ func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 
 	// Register cleanup
 	t.Cleanup(func() {
-		t.Logf("Stopping docker-compose...")
-		downCmd := exec.Command("docker", "compose", "-f", composePath, "down", "-v", "--remove-orphans")
+		t.Logf("Stopping docker-compose (project: %s)...", projectName)
+		downCmd := exec.Command("docker", "compose", "-p", projectName, "-f", composePath, "down", "-v", "--remove-orphans")
 		downCmd.Dir = repoRoot
+		downCmd.Env = append(os.Environ(), composeEnv...)
 		downOutput, err := downCmd.CombinedOutput()
 		if err != nil {
 			t.Logf("Warning: failed to stop docker-compose: %v\nOutput: %s", err, string(downOutput))
@@ -109,6 +154,10 @@ func NewDockerE2EFixture(t *testing.T, composeFile string) *DockerE2EFixture {
 		GatewayHTTPSURL: httpsURL,
 		ComposeFile:     composePath,
 		ProjectDir:      repoRoot,
+		ProjectName:     projectName,
+		ContainerPrefix: containerPrefix,
+		HTTPPort:        httpPort,
+		HTTPSPort:       httpsPort,
 	}
 }
 
@@ -132,7 +181,7 @@ func (f *DockerE2EFixture) GetCABundle(t *testing.T) string {
 	t.Helper()
 
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(f.GatewayHTTPURL + "/api/v1/.well-known/pki/ca-bundle")
+	resp, err := client.Get(f.GatewayHTTPURL + "/.well-known/g8e/pki/ca-bundle")
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -146,17 +195,19 @@ func (f *DockerE2EFixture) GetCABundle(t *testing.T) string {
 func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	t.Helper()
 
+	opContainerName := f.ContainerPrefix + "-operator"
+
 	// Check container status
-	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Status}}", "g8e-operator")
+	cmd := exec.Command("docker", "inspect", "-f", "{{.State.Status}}", opContainerName)
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, "Failed to inspect operator container")
 	status := strings.TrimSpace(string(output))
 	require.Equal(t, "running", status, "Operator container is not running")
 
 	// Check logs for connection success marker
-	logsCmd := exec.Command("docker", "logs", "g8e-operator")
+	logsCmd := exec.Command("docker", "logs", opContainerName)
 	logsOutput, err := logsCmd.CombinedOutput()
 	require.NoError(t, err, "Failed to get operator logs")
 	logs := string(logsOutput)
-	require.Contains(t, logs, "connected", "Operator logs do not contain connection success marker")
+	require.Contains(t, logs, "Authentication successful", "Operator logs do not contain authentication success marker")
 }
