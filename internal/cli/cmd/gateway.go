@@ -57,6 +57,8 @@ type startConfig struct {
 	LogLevel           string
 	CertIdentityMode   string
 	IdentityData       []byte
+	TribunalID         string
+	TribunalURL        string
 }
 
 // resolveStartConfig resolves environment variable overrides and defaults for gateway start.
@@ -68,7 +70,7 @@ func resolveStartConfig(
 	passkeyRpID, passkeyRpName string,
 	rateLimitRPS float64,
 	rateLimitBurst int,
-	logLevel, certIdentityMode string,
+	logLevel, certIdentityMode, tribunalID, tribunalURL string,
 ) startConfig {
 	// Environment variables override CLI flags
 	if vaultDir == "" {
@@ -79,6 +81,13 @@ func resolveStartConfig(
 	}
 	if !vaultRequireUnlock {
 		vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
+	}
+
+	if tribunalID == "" {
+		tribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
+	}
+	if tribunalURL == "" {
+		tribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
 	}
 
 	return startConfig{
@@ -97,6 +106,8 @@ func resolveStartConfig(
 		RateLimitBurst:     rateLimitBurst,
 		LogLevel:           logLevel,
 		CertIdentityMode:   certIdentityMode,
+		TribunalID:         tribunalID,
+		TribunalURL:        tribunalURL,
 	}
 }
 
@@ -183,6 +194,8 @@ func gatewayStartCmd() *cobra.Command {
 	var rateLimitBurst int
 	var logLevel string
 	var certIdentityMode string
+	var tribunalID string
+	var tribunalURL string
 	var follow bool
 
 	cmd := &cobra.Command{
@@ -225,6 +238,8 @@ func gatewayStartCmd() *cobra.Command {
 				rateLimitBurst,
 				logLevel,
 				certIdentityMode,
+				tribunalID,
+				tribunalURL,
 			)
 
 			// Detect and display network identity before prompting
@@ -263,6 +278,8 @@ func gatewayStartCmd() *cobra.Command {
 				LogLevel:           startCfg.LogLevel,
 				CertIdentityMode:   identityResult.CertMode,
 				IdentityData:       identityResult.IdentityData,
+				TribunalID:         startCfg.TribunalID,
+				TribunalURL:        startCfg.TribunalURL,
 			}); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
@@ -342,6 +359,8 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
 	cmd.Flags().StringVar(&certIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
+	cmd.Flags().StringVar(&tribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
+	cmd.Flags().StringVar(&tribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output after starting (like tail -f)")
 
 	return cmd

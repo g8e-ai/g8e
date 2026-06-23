@@ -321,9 +321,10 @@ Validation failures are rejected before envelope construction, ensuring maliciou
 
 ### L2 Consensus
 
-- **Ed25519 signatures**: Consensus agents sign envelopes with their private keys
+- **Ed25519 signatures**: Tribunal member agents sign envelopes with their private keys
 - **Signer verification**: Gateway verifies signatures against trusted signers in SQLite store
-- **Gateway signing**: In doctrine mode, Gateway signs envelopes locally (single-agent consensus) with `gateway_signed=true` flag
+- **Tribunal deliberation**: Under `consensus` posture, the gateway delegates L2 deliberation to an enrolled Tribunal service, which produces L2 votes (Ed25519 signatures over the transaction hash). The gateway does not self-sign L2 votes.
+- **Quorum verification**: L4 Warden verifies the quorum of valid L2 votes against the TribunalPolicy
 - **Reputation staking**: Signers stake reputation on their decisions
 
 ### L3 Notary (Authorization)

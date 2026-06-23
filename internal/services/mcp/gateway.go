@@ -73,6 +73,14 @@ func approvalPausedMessage(approvalURL string) string {
 		approvalURL, int(ApprovalRequestTTL.Minutes()))
 }
 
+// TribunalDeliberator sends an envelope to the Tribunal service for L2 deliberation.
+// The Tribunal collects signed votes from its members and returns the envelope with
+// L2 metadata populated. This interface is implemented by an HTTP client that calls
+// the Tribunal's /tribunal/v1/deliberate endpoint.
+type TribunalDeliberator interface {
+	Deliberate(ctx context.Context, envelopeBytes []byte) ([]byte, error)
+}
+
 // StateRootProvider defines the interface for obtaining the current state root.
 type StateRootProvider interface {
 	GetCurrentStateRoot() (string, error)
@@ -103,6 +111,10 @@ type GatewayService struct {
 	nativeToolHandler *NativeToolHandler
 	scrubbingService  *scrubbing.ScrubbingService
 	posture           string // Gateway posture: doctrine, consensus, or notary
+
+	// tribunalDeliberator calls the Tribunal service for L2 votes under consensus posture.
+	// nil when not configured (doctrine/notary posture or no Tribunal URL).
+	tribunalDeliberator TribunalDeliberator
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -259,6 +271,12 @@ func (g *GatewayService) SetA2ADependencies(downstreamURL string) {
 
 func (g *GatewayService) SetPublicBaseURL(baseURL string) {
 	g.publicBaseURL = baseURL
+}
+
+// SetTribunalDeliberator sets the Tribunal deliberation client for L2 consensus votes.
+// This is wired only under consensus posture when a Tribunal URL is configured.
+func (g *GatewayService) SetTribunalDeliberator(td TribunalDeliberator) {
+	g.tribunalDeliberator = td
 }
 
 func (g *GatewayService) SetDBService(dbService FieldReader) {
@@ -1266,9 +1284,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		ProtocolVersion: "1.0",
 		Nonce:           uuid.New().String(),
 		StateMerkleRoot: stateRoot,
-		Governance: &commonv1.GovernanceMetadata{
-			GatewaySigned: true,
-		},
+		Governance:      &commonv1.GovernanceMetadata{},
 	}
 
 	// In doctrine and consensus postures, L3 is audited not enforced, so we auto-approve
@@ -1316,22 +1332,22 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	env.Id = hash
 	env.TransactionHash = hash
 
-	if len(g.signingKey) > 0 {
-		l2Payload := fmt.Sprintf("%s|true", hash)
-		sig := ed25519.Sign(g.signingKey, []byte(l2Payload))
-		if env.Governance == nil {
-			env.Governance = &commonv1.GovernanceMetadata{}
-		}
-		env.Governance.L2 = &commonv1.L2Metadata{
-			ConsensusSignature: hex.EncodeToString(sig),
-			KeyId:              g.keyID,
-			AgentIds:           []string{"gateway-local-signer"},
-		}
-	}
-
 	envelopeBytes, err = (protojson.MarshalOptions{Multiline: false}).Marshal(env)
 	if err != nil {
 		return "", nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
+	}
+
+	// Under consensus posture, send the envelope to the Tribunal for L2 deliberation
+	// before dispatch. The Tribunal collects signed votes from its members and returns
+	// the envelope with L2 metadata populated. If the deliberator is not configured,
+	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
+	if g.posture == "consensus" && g.tribunalDeliberator != nil {
+		deliberatedBytes, err := g.tribunalDeliberator.Deliberate(ctx, envelopeBytes)
+		if err != nil {
+			g.logger.Error("Tribunal deliberation failed", "tx_hash", hash, "error", err)
+			return "", nil, fmt.Errorf("gateway: tribunal deliberation: %w", err)
+		}
+		envelopeBytes = deliberatedBytes
 	}
 
 	return hash, envelopeBytes, nil
@@ -1455,7 +1471,9 @@ func (g *GatewayService) mapGatewayError(err error) (int, string) {
 
 	case errors.Is(err, governance.ErrL2SignatureMissing),
 		errors.Is(err, governance.ErrL2SignatureInvalid),
-		errors.Is(err, governance.ErrL2KeyNotConfigured):
+		errors.Is(err, governance.ErrL2TribunalNotConfigured),
+		errors.Is(err, governance.ErrL2QuorumNotMet),
+		errors.Is(err, governance.ErrL2DuplicateSigner):
 		return constants.ErrCodeL2SignatureInvalid, msg
 
 	case errors.Is(err, governance.ErrL3ProofInvalid),

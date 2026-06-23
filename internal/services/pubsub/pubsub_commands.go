@@ -81,8 +81,7 @@ type OperatorPubSubService struct {
 
 	reconnectBaseDelay time.Duration
 
-	// governance services for Phase 3 integration
-	consensus   *governance.L2Consensus
+	// governance services
 	actuator    *governance.L5Actuator
 	l4warden    *governance.L4Warden
 	signerStore governance.SignerStore
@@ -110,6 +109,7 @@ type CommandServiceConfig struct {
 	TransactionAudit  governance.TransactionAuditStore
 	SignerStore       governance.SignerStore
 	AppPolicyStore    governance.AppPolicyStore
+	TribunalStore     governance.TribunalStore
 	// FieldReader backs the MCP gateway's read_field operation. Distinct from
 	// TransactionAudit so the read capability is not smuggled through the
 	// audit-store interface (which only exposes DocSet).
@@ -118,9 +118,6 @@ type CommandServiceConfig struct {
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
 	ActuatorKeyID      string
-
-	// Consensus configuration
-	ConsensusSigningKey ed25519.PrivateKey
 
 	// MCP gateway for protocol translation egress
 	MCPGateway *mcp.GatewayService
@@ -214,15 +211,6 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 }
 
 func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, serviceCtx context.Context) {
-	// Initialize L2Consensus with L1Doctrine for threat detection and private key for L2 signing
-	// L1Doctrine is the canonical L1 (Technical Bedrock) validator - it replaces Sentinel's threat detection
-	l1Doctrine := governance.NewL1Doctrine()
-	rs.consensus = governance.NewL2Consensus(
-		c.Config.OperatorID,
-		l1Doctrine,
-		c.ConsensusSigningKey,
-	)
-
 	// Initialize L5Actuator with trusted nodes and audit store
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
@@ -255,6 +243,7 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 		c.ReplayStore,
 		c.StateRootProvider,
 		rs.signerStore,
+		c.TribunalStore,
 		c.AppPolicyStore,
 		c.L3Notary,
 		nil, // DoctrineValidator defaults to L1Doctrine
@@ -262,11 +251,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 		posture,
 		nil, // Clock defaults to RealClock
 	)
-
-	// Inject the concrete L1Doctrine and L2Consensus into each other if needed
-	if rs.l4warden != nil && rs.consensus != nil {
-		rs.consensus.Doctrine = rs.l4warden.Doctrine()
-	}
 
 	// Wire the MCP gateway's runtime governance dependencies. This is the single
 	// owner of runtime-phase wiring; config-phase fields (A2A downstream and the
@@ -300,9 +284,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 	c.Logger.Info("governance services initialized",
 		"signer_store", signerStoreType,
 		"transaction_verifier", l4wardenType)
-	if c.Config.OperatorID != "" {
-		c.Logger.Info("Consensus node identity", "node_id", c.Config.OperatorID)
-	}
 }
 
 func (rs *OperatorPubSubService) buildHandlers() {

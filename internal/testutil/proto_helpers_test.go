@@ -323,8 +323,10 @@ func TestMustMarshalGovernanceEnvelopeWithVotes(t *testing.T) {
 	require.Equal(t, "msg-002", env.Id)
 	require.NotNil(t, env.Governance)
 	require.NotNil(t, env.Governance.L2)
-	require.Equal(t, agentIDs, env.Governance.L2.AgentIds)
-	require.Equal(t, consensusSig, env.Governance.L2.ConsensusSignature)
+	require.Len(t, env.Governance.L2.Votes, 1)
+	require.Equal(t, agentIDs[0], env.Governance.L2.Votes[0].SignerKeyId)
+	require.Equal(t, consensusSig, env.Governance.L2.Votes[0].ConsensusSignature)
+	require.True(t, env.Governance.L2.Votes[0].Decision)
 }
 
 func TestMustUnmarshalGovernanceEnvelope(t *testing.T) {

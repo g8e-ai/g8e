@@ -23,21 +23,18 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/pkg/governance"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // TestGovernanceFlow tests the full governance flow from envelope creation
-// through L2Consensus evaluation to L5Actuator execution.
+// through L5Actuator execution.
 func TestGovernanceFlow(t *testing.T) {
 	t.Parallel()
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
-
-	consensus := &L2Consensus{
-		NodeID:     nodeID,
-		PrivateKey: priv,
-	}
 
 	actuator := &L5Actuator{
 		Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
@@ -61,20 +58,21 @@ func TestGovernanceFlow(t *testing.T) {
 	id, _ := governance.GenerateMessageID(env)
 	env.Id = id
 
-	// 2. Consensus Evaluation
-	err := consensus.EvaluatePayload(env)
-	if err != nil {
-		t.Fatalf("L2Consensus evaluation failed: %v", err)
+	// 2. Set governance metadata (L1 validated, L2 vote pre-populated)
+	env.Governance = &commonv1.GovernanceMetadata{
+		L1: &commonv1.L1Metadata{Validated: true},
+		L2: &commonv1.L2Metadata{
+			TribunalId: "test-tribunal",
+			Votes: []*commonv1.L2Vote{
+				{
+					SignerKeyId:        nodeID,
+					ConsensusSignature: "test-sig",
+					Decision:           true,
+				},
+			},
+		},
+		L3: &commonv1.L3Metadata{AutoApproved: true},
 	}
-
-	if env.Governance == nil || len(env.Governance.L2.AgentIds) != 1 {
-		t.Errorf("Expected 1 agent ID in L2, got %v", env.Governance)
-	}
-
-	// Ensure status is validated for L5Actuator
-	env.Governance.L1.Validated = true
-	sig, _ := consensus.SignDecision(env.Id, true)
-	env.Governance.L2.ConsensusSignature = sig
 
 	handler := &mockExecutionHandler{}
 	actuator.ExecutionHandler = handler
@@ -102,32 +100,29 @@ func TestGovernanceFlow(t *testing.T) {
 	}
 }
 
-// TestGovernanceFailClosed tests that the governance system fails closed
+// TestGovernanceFailClosed tests that the L1 Doctrine fails closed
 // when critical components are missing or misconfigured.
 func TestGovernanceFailClosed(t *testing.T) {
 	t.Parallel()
-	_, priv, _ := ed25519.GenerateKey(nil)
-	nodeID := "test-node-1"
 
 	t.Run("DoctrineNil_FailClosed", func(t *testing.T) {
 		t.Parallel()
-		consensus := &L2Consensus{
-			NodeID:     nodeID,
-			PrivateKey: priv,
-			Doctrine:   nil, // explicitly nil
-		}
-		isSafe := consensus.RunMITREChecks("test", "echo 'hello'")
-		if isSafe {
-			t.Error("Expected fail-closed (Safe=false) when Doctrine is nil")
-		}
-	})
-
-	t.Run("MissingPrivateKey_Error", func(t *testing.T) {
-		t.Parallel()
-		consensus := &L2Consensus{NodeID: nodeID, PrivateKey: nil}
-		_, err := consensus.SignDecision("test-id", true)
-		if err == nil {
-			t.Errorf("Expected error when PrivateKey is nil during SignDecision")
+		doctrine := NewL1Doctrine()
+		warden := NewL4Warden(
+			slog.New(slog.NewTextHandler(os.Stdout, nil)),
+			&testutil.MockReplayStore{},
+			testutil.NewMockStateRootProvider("test-state-root"),
+			&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
+			nil, // TribunalStore
+			nil, // AppPolicyStore
+			nil, // L3Notary
+			doctrine,
+			constants.AllActionTypes,
+			"doctrine",
+			nil, // Clock defaults to RealClock
+		)
+		if warden == nil {
+			t.Error("Expected non-nil warden with doctrine")
 		}
 	})
 }

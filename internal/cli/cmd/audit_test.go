@@ -202,7 +202,6 @@ func TestAuditReceiptsResponseParsing(t *testing.T) {
 					"executed_at": "2024-01-01T00:00:00Z",
 					"signer_key_id": "key-1",
 					"signature": "sig1",
-					"gateway_signed": true,
 					"l2_valid": true,
 					"l3_valid": true,
 					"timestamp": "2024-01-01T00:00:00Z"

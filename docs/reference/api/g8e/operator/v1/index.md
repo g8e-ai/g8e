@@ -166,7 +166,6 @@ It is emitted by the Warden after execution.
 | executed_at_unix_ms | [int64](#int64) |  | Timestamp when execution finished |
 | signer_key_id | [string](#string) |  | ID of the Warden&#39;s signing key |
 | signature | [string](#string) |  | ED25519 signature over canonical serialization of fields 1-8 |
-| gateway_signed | [bool](#bool) |  | Flag indicating if the transaction was signed by the local gateway without full L2 consensus. This is used for single-agent MCP clients that bypass the L2 consensus layer. |
 | l2_status | [L2Status](#g8e-operator-v1-L2Status) |  | Status of L2 (Consensus) signature verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 | l3_status | [L3Status](#g8e-operator-v1-L3Status) |  | Status of L3 (Notary/Human) proof verification. Distinguishes between &#34;not required&#34; vs &#34;required but failed&#34; for compliance. |
 

@@ -563,47 +563,6 @@ func TestSecretManager_GetAuditorHMACKey_NotInitialized(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestSecretManager_ConsensusKey(t *testing.T) {
-	t.Parallel()
-	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
-	sm := newTestSecretManager(t, db, secretsDir)
-
-	// Generate and store consensus key
-	seed := make([]byte, ed25519.SeedSize)
-	for i := range seed {
-		seed[i] = byte(i + 2)
-	}
-	seedHex := hex.EncodeToString(seed)
-
-	err := sm.StoreConsensusKey(seedHex)
-	require.NoError(t, err)
-
-	// Retrieve and validate
-	retrieved, err := sm.GetConsensusKey()
-	require.NoError(t, err)
-	assert.NotNil(t, retrieved)
-	assert.Len(t, retrieved, ed25519.PrivateKeySize)
-
-	// Verify it matches the original seed
-	retrievedSeed := retrieved.Seed()
-	assert.Equal(t, seed, retrievedSeed)
-}
-
-func TestSecretManager_GetConsensusKey_RejectsInvalidSeed(t *testing.T) {
-	t.Parallel()
-	db := newSecretManagerTestDB(t)
-	secretsDir := t.TempDir()
-	sm := newTestSecretManager(t, db, secretsDir)
-
-	// Store invalid seed length
-	err := sm.keystore.EncryptSecret("consensus_signing_key", "deadbeef")
-	require.NoError(t, err)
-
-	_, err = sm.GetConsensusKey()
-	require.Error(t, err)
-}
-
 func TestSecretManager_NotaryKey(t *testing.T) {
 	t.Parallel()
 	db := newSecretManagerTestDB(t)

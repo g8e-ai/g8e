@@ -139,8 +139,11 @@ func TestSignedEnvelope(t *testing.T) {
 				if env.Governance.L2 == nil {
 					t.Error("L2 metadata is nil")
 				}
-				if env.Governance.L2.KeyId != keyID {
-					t.Errorf("L2 KeyId = %s, want %s", env.Governance.L2.KeyId, keyID)
+				if len(env.Governance.L2.Votes) == 0 {
+					t.Error("L2.Votes is empty")
+				}
+				if env.Governance.L2.Votes[0].SignerKeyId != keyID {
+					t.Errorf("L2.Votes[0].SignerKeyId = %s, want %s", env.Governance.L2.Votes[0].SignerKeyId, keyID)
 				}
 				if env.Governance.L3 != nil {
 					t.Error("L3 metadata should be nil for non-mutations")
@@ -1000,20 +1003,16 @@ func TestSignedEnvelopeL2Signature(t *testing.T) {
 		t.Fatal("L2 metadata is nil")
 	}
 
-	if env.Governance.L2.KeyId != keyID {
-		t.Errorf("L2 KeyId = %s, want %s", env.Governance.L2.KeyId, keyID)
+	if len(env.Governance.L2.Votes) == 0 {
+		t.Error("L2.Votes is empty")
 	}
 
-	if env.Governance.L2.ConsensusSignature == "" {
-		t.Error("ConsensusSignature is empty")
+	if env.Governance.L2.Votes[0].SignerKeyId != keyID {
+		t.Errorf("L2.Votes[0].SignerKeyId = %s, want %s", env.Governance.L2.Votes[0].SignerKeyId, keyID)
 	}
 
-	if len(env.Governance.L2.AgentIds) == 0 {
-		t.Error("AgentIds is empty")
-	}
-
-	if env.Governance.L2.AgentIds[0] != "chaos-tribunal-agent" {
-		t.Errorf("AgentIds[0] = %s, want chaos-tribunal-agent", env.Governance.L2.AgentIds[0])
+	if env.Governance.L2.Votes[0].ConsensusSignature == "" {
+		t.Error("L2.Votes[0].ConsensusSignature is empty")
 	}
 }
 

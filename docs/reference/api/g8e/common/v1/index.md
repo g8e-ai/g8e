@@ -8,6 +8,7 @@
     - [GovernanceMetadata](#g8e-common-v1-GovernanceMetadata)
     - [L1Metadata](#g8e-common-v1-L1Metadata)
     - [L2Metadata](#g8e-common-v1-L2Metadata)
+    - [L2Vote](#g8e-common-v1-L2Vote)
     - [L3Metadata](#g8e-common-v1-L3Metadata)
     - [L3Proof](#g8e-common-v1-L3Proof)
   
@@ -78,7 +79,6 @@ Unified Governance Metadata
 | l1 | [L1Metadata](#g8e-common-v1-L1Metadata) |  |  |
 | l2 | [L2Metadata](#g8e-common-v1-L2Metadata) |  |  |
 | l3 | [L3Metadata](#g8e-common-v1-L3Metadata) |  |  |
-| gateway_signed | [bool](#bool) |  | Set to true if signed by the local gateway without full L2 consensus. This is used for single-agent MCP clients that bypass the L2 consensus layer. |
 
 
 
@@ -104,14 +104,30 @@ Doctrine (L1Doctrine) Governance: Technical Bedrock (Hard Gates)
 <a name="g8e-common-v1-L2Metadata"></a>
 
 ### L2Metadata
-Consensus (L2Consensus) Governance: Multi-agent consensus verification
+Consensus (L2) Governance: a vote set from an enrolled Tribunal.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| consensus_signature | [string](#string) |  | ED25519 signature over transaction_hash|decision |
-| agent_ids | [string](#string) | repeated | IDs of agents that voted |
-| key_id | [string](#string) |  | ID of the key used for signature |
+| tribunal_id | [string](#string) |  | TribunalPolicy.id that produced this set |
+| votes | [L2Vote](#g8e-common-v1-L2Vote) | repeated | independent member votes |
+
+
+
+
+
+
+<a name="g8e-common-v1-L2Vote"></a>
+
+### L2Vote
+Consensus (L2) Governance: a vote from a single Tribunal member.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| signer_key_id | [string](#string) |  | member appID == TrustedSigner.ID |
+| consensus_signature | [string](#string) |  | ed25519 over &#34;&lt;transaction_hash&gt;|&lt;decision&gt;&#34; |
+| decision | [bool](#bool) |  | member&#39;s safe (true) / unsafe (false) vote |
 
 
 

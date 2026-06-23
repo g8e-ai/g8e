@@ -21,7 +21,7 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
-// MockTribunal is a basic mock for the L2 Consensus layer (Tribunal).
+// MockTribunal is a basic mock for the Tribunal (L2 consensus) layer.
 // It allows tests to control consensus evaluation behavior.
 type MockTribunal struct {
 	NodeID            string
@@ -30,7 +30,7 @@ type MockTribunal struct {
 	EvaluateCallCount int
 }
 
-// EvaluatePayload mimics L2Consensus.EvaluatePayload for testing.
+// EvaluatePayload mimics Tribunal evaluation for testing.
 func (m *MockTribunal) EvaluatePayload(env *governance.GovernanceEnvelope) error {
 	m.EvaluateCallCount++
 	if m.ReturnError != nil {
@@ -45,8 +45,12 @@ func (m *MockTribunal) EvaluatePayload(env *governance.GovernanceEnvelope) error
 		}
 	}
 
-	env.Governance.L2.AgentIds = append(env.Governance.L2.AgentIds, m.NodeID)
-	env.Governance.L2.ConsensusSignature = "mock-signature"
+	env.Governance.L2.TribunalId = "mock-tribunal"
+	env.Governance.L2.Votes = append(env.Governance.L2.Votes, &commonv1.L2Vote{
+		SignerKeyId:        m.NodeID,
+		ConsensusSignature: "mock-signature",
+		Decision:           true,
+	})
 
 	if !m.ShouldPass {
 		env.Governance.L1.Validated = false

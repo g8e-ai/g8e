@@ -213,7 +213,11 @@ func TestMTLSServerClient_Handshake(t *testing.T) {
 		Payload:         []byte("test payload"),
 		Governance: &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				KeyId: "test-key",
+				Votes: []*commonv1.L2Vote{
+					{
+						SignerKeyId: "test-key",
+					},
+				},
 			},
 		},
 	}
@@ -307,7 +311,11 @@ func TestGovernanceEnvelope_Integration(t *testing.T) {
 		Payload:         []byte("echo test"),
 		Governance: &commonv1.GovernanceMetadata{
 			L2: &commonv1.L2Metadata{
-				KeyId: "test-key",
+				Votes: []*commonv1.L2Vote{
+					{
+						SignerKeyId: "test-key",
+					},
+				},
 			},
 		},
 	}

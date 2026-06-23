@@ -42,12 +42,12 @@ import (
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
-// TestGatewaySignedEndToEndIntegration tests the full flow from MCP gateway
-// through envelope processing to receipt generation, verifying that GatewaySigned
-// is properly propagated through the entire chain.
-func TestGatewaySignedEndToEndIntegration(t *testing.T) {
+// TestMCPGatewayEndToEndIntegration tests the full flow from MCP gateway
+// through envelope processing to receipt generation, verifying that the
+// envelope is properly constructed and processed.
+func TestMCPGatewayEndToEndIntegration(t *testing.T) {
 	t.Parallel()
-	// Setup: Create a real envelope processor that will verify GatewaySigned
+	// Setup: Create a real envelope processor that will verify the envelope
 	processorCalled := false
 	var receivedEnvelope *commonv1.GovernanceEnvelope
 
@@ -98,14 +98,9 @@ func TestGatewaySignedEndToEndIntegration(t *testing.T) {
 	require.True(t, processorCalled, "Envelope processor should have been called")
 	require.NotNil(t, receivedEnvelope)
 
-	// Verify GatewaySigned is set in the envelope
+	// Verify governance metadata is present (no GatewaySigned — that concept is deleted)
 	require.NotNil(t, receivedEnvelope.Governance)
-	require.True(t, receivedEnvelope.Governance.GatewaySigned, "Envelope should have GatewaySigned=true for MCP gateway")
-
-	// Verify L2 metadata is present (gateway-local signer)
-	require.NotNil(t, receivedEnvelope.Governance.L2)
-	require.Equal(t, "test-key", receivedEnvelope.Governance.L2.KeyId)
-	require.Contains(t, receivedEnvelope.Governance.L2.AgentIds, "gateway-local-signer")
+	// L2 is empty — the gateway no longer self-signs; Tribunal deliberation is a separate step
 }
 
 // envelopeCaptureProcessor wraps an EnvelopeProcessor to capture envelopes for verification
@@ -124,9 +119,9 @@ func (e *envelopeCaptureProcessor) ProcessEnvelope(ctx context.Context, payload 
 	return e.delegate.ProcessEnvelope(ctx, payload)
 }
 
-// TestGatewaySignedReceiptIntegration tests that GatewaySigned is properly
-// set in the receipt returned by the envelope processor.
-func TestGatewaySignedReceiptIntegration(t *testing.T) {
+// TestReceiptIntegration tests that a receipt is properly returned by the
+// envelope processor after MCP gateway processing.
+func TestReceiptIntegration(t *testing.T) {
 	t.Parallel()
 	processor := &fakeEnvelopeProcessor{
 		receipt: &operatorv1.ActionReceipt{
@@ -134,7 +129,6 @@ func TestGatewaySignedReceiptIntegration(t *testing.T) {
 			TransactionHash:  "hash-1",
 			Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary:    "test result",
-			GatewaySigned:    true,
 			StateRootBefore:  "root-before",
 			StateRootAfter:   "root-after",
 			ExecutedAtUnixMs: 1234567890,
@@ -171,13 +165,14 @@ func TestGatewaySignedReceiptIntegration(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, resp.Error)
 
-	// Verify the receipt has GatewaySigned=true
-	require.True(t, processor.receipt.GatewaySigned, "Receipt should have GatewaySigned=true")
+	// Verify the receipt was returned successfully
+	require.NotNil(t, processor.receipt)
+	require.Equal(t, "tx-1", processor.receipt.TransactionId)
 }
 
-// TestGatewaySignedCanonicalizationIntegration tests that GatewaySigned is included
-// in the canonical form used for receipt signing.
-func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
+// TestCanonicalizationIntegration tests that the canonical form used for receipt
+// signing is deterministic and does not include gateway_signed (deleted concept).
+func TestCanonicalizationIntegration(t *testing.T) {
 	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId:    "tx-1",
@@ -188,7 +183,6 @@ func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
 		StateRootAfter:   "root-after",
 		ExecutedAtUnixMs: 1234567890,
 		SignerKeyId:      "test-key",
-		GatewaySigned:    true,
 		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
 		L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 	}
@@ -197,60 +191,18 @@ func TestGatewaySignedCanonicalizationIntegration(t *testing.T) {
 	canonical, err := governance.CanonicalizeActionReceipt(receipt)
 	require.NoError(t, err)
 
-	// Parse the canonical form to verify GatewaySigned is included
+	// Parse the canonical form to verify gateway_signed is NOT present
 	var parsed map[string]interface{}
 	err = json.Unmarshal(canonical, &parsed)
 	require.NoError(t, err)
 
-	// Verify gateway_signed field is present and true
-	gatewaySigned, ok := parsed["gateway_signed"]
-	require.True(t, ok, "gateway_signed should be in canonical form")
-	require.True(t, gatewaySigned.(bool), "gateway_signed should be true")
+	_, ok := parsed["gateway_signed"]
+	require.False(t, ok, "gateway_signed should not be in canonical form")
 
 	// Verify it's deterministic
 	canonical2, err := governance.CanonicalizeActionReceipt(receipt)
 	require.NoError(t, err)
 	require.Equal(t, canonical, canonical2, "Canonicalization should be deterministic")
-}
-
-// TestGatewaySignedFalseIntegration tests the Consensus path where GatewaySigned=false
-func TestGatewaySignedFalseIntegration(t *testing.T) {
-	t.Parallel()
-	processor := &fakeEnvelopeProcessor{
-		receipt: &operatorv1.ActionReceipt{
-			TransactionId: "tx-1",
-			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-			ResultSummary: "test result",
-			GatewaySigned: false,
-		},
-	}
-
-	// Simulate a Consensus-signed envelope (not from MCP gateway)
-	envelope := &commonv1.GovernanceEnvelope{
-		Id:              "tx-1",
-		TransactionHash: "hash-1",
-		ActionType:      string(constants.ActionTypeExecuteBash),
-		Governance: &commonv1.GovernanceMetadata{
-			GatewaySigned: false,
-			L2: &commonv1.L2Metadata{
-				ConsensusSignature: "consensus-sig",
-				KeyId:              "consensus-key",
-				AgentIds:           []string{"agent-1", "agent-2", "agent-3"},
-			},
-		},
-	}
-
-	// Marshal the envelope
-	envelopeBytes, err := protojson.Marshal(envelope)
-	require.NoError(t, err)
-
-	// Process through the envelope processor
-	receipt, err := processor.ProcessEnvelope(context.Background(), envelopeBytes)
-	require.NoError(t, err)
-	require.NotNil(t, receipt)
-
-	// Verify GatewaySigned is false
-	require.False(t, receipt.GatewaySigned, "Consensus-signed transactions should have GatewaySigned=false")
 }
 
 // TestSSEStreamingIntegration tests the SSE streaming endpoint for tools/call
@@ -262,7 +214,6 @@ func TestSSEStreamingIntegration(t *testing.T) {
 			TransactionId:    "tx-sse-1",
 			Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary:    "streaming result",
-			GatewaySigned:    true,
 			StateRootBefore:  "root-before",
 			StateRootAfter:   "root-after",
 			ExecutedAtUnixMs: 1234567890,
@@ -458,7 +409,6 @@ func TestNativeToolExecutionIntegration(t *testing.T) {
 			TransactionId: "tx-native-1",
 			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
 			ResultSummary: "native tool executed",
-			GatewaySigned: true,
 		},
 	}
 
@@ -758,6 +708,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			replayStore,
 			stateRootProvider,
 			signerStore,
+			nil, // TribunalStore not used in this test
 			nil, // AppPolicyStore not used in this test
 			acceptingL3,
 			nil, // Doctrine defaults to L1Doctrine
@@ -796,11 +747,14 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			Nonce:             "nonce-test-1",
 			Payload:           payloadBytes,
 			Governance: &commonv1.GovernanceMetadata{
-				GatewaySigned: true,
 				L2: &commonv1.L2Metadata{
-					KeyId:              "test-key",
-					ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
-					AgentIds:           []string{"test-key"},
+					Votes: []*commonv1.L2Vote{
+						{
+							SignerKeyId:        "test-key",
+							ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
+							Decision:           true,
+						},
+					},
 				},
 				L3: &commonv1.L3Metadata{
 					AutoApproved: true, // For testing: simulate gateway auto-approval
@@ -851,6 +805,7 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			replayStore,
 			stateRootProvider,
 			signerStore,
+			nil, // TribunalStore not used in this test
 			nil, // AppPolicyStore not used in this test
 			rejectingL3,
 			nil, // Doctrine defaults to L1Doctrine
@@ -889,11 +844,14 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 			Nonce:             "nonce-test-2",
 			Payload:           payloadBytes,
 			Governance: &commonv1.GovernanceMetadata{
-				GatewaySigned: true,
 				L2: &commonv1.L2Metadata{
-					KeyId:              "test-key",
-					ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
-					AgentIds:           []string{"test-key"},
+					Votes: []*commonv1.L2Vote{
+						{
+							SignerKeyId:        "test-key",
+							ConsensusSignature: hex.EncodeToString(ed25519.Sign(privKey, []byte("test"))),
+							Decision:           true,
+						},
+					},
 				},
 				L3: &commonv1.L3Metadata{
 					AutoApproved: true, // For testing: simulate gateway auto-approval
@@ -988,7 +946,6 @@ func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload [
 		StateRootAfter:   "root-after",
 		ExecutedAtUnixMs: time.Now().UnixMilli(),
 		SignerKeyId:      p.keyID,
-		GatewaySigned:    true,
 		L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
 		L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
 	}
@@ -1067,9 +1024,17 @@ func TestReadFieldGovernanceIntegration(t *testing.T) {
 	// Verify nonce is present (replay protection)
 	require.NotEmpty(t, receivedEnvelope.Nonce)
 
-	// Verify GatewaySigned is set
+	// Under doctrine posture the gateway constructs the envelope but never
+	// self-signs L2 (gateway self-signing was deleted with the Tribunal cut).
+	// L3 is auto-approved (audited, not enforced) and L2 carries no gateway votes.
 	require.NotNil(t, receivedEnvelope.Governance)
-	require.True(t, receivedEnvelope.Governance.GatewaySigned)
+	require.NotNil(t, receivedEnvelope.Governance.L3)
+	require.True(t, receivedEnvelope.Governance.L3.AutoApproved,
+		"doctrine posture must auto-approve L3")
+	if receivedEnvelope.Governance.L2 != nil {
+		require.Empty(t, receivedEnvelope.Governance.L2.Votes,
+			"gateway must not self-sign L2 votes under doctrine posture")
+	}
 }
 
 // TestNativeToolSingleAudit verifies that native tool calls produce exactly one
