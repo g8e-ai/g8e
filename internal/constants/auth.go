@@ -185,6 +185,8 @@ const (
 	ContextKeyOperatorID ContextKey = "operator_id"
 	// ContextKeyOperatorSessionID stores the operator session ID in context.
 	ContextKeyOperatorSessionID ContextKey = "operator_session_id"
+	// ContextKeyCapability stores the JIT-minted execution capability in context.
+	ContextKeyCapability ContextKey = "execution_capability"
 )
 
 // Session constants

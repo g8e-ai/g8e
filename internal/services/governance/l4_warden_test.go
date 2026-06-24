@@ -94,10 +94,6 @@ func typedPayload(t *testing.T, actionType constants.ActionType) []byte {
 		msg = &operatorv1.HeartbeatRequested{}
 	case constants.ActionTypeEvalAnswer:
 		msg = &operatorv1.EvalAnswerRequested{PromptId: "test", Benchmark: "test", Model: "test", Answer: "test"}
-	case constants.ActionTypeGrantIntent:
-		msg = &operatorv1.GrantIntentRequested{IntentName: "test", ExecutionId: "exec-1"}
-	case constants.ActionTypeRevokeIntent:
-		msg = &operatorv1.RevokeIntentRequested{IntentName: "test", ExecutionId: "exec-1"}
 	case constants.ActionTypeMcpCall:
 		msg = &operatorv1.McpCallRequested{ToolName: "test", ArgumentsJson: "{}", ExecutionId: "exec-1"}
 	case constants.ActionTypeA2aCall:

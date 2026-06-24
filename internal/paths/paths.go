@@ -88,7 +88,6 @@ var Infra struct {
 
 	// Storage DB paths
 	ExecutionVaultDBPath string
-	TokenStoreDBPath     string
 	ReplayStoreDBPath    string
 	LedgerDir            string
 
@@ -158,7 +157,6 @@ var Infra struct {
 	OperatorLogFile string
 
 	ExecutionVaultDBPath string
-	TokenStoreDBPath     string
 	ReplayStoreDBPath    string
 	LedgerDir            string
 
@@ -224,7 +222,6 @@ var Infra struct {
 	OperatorLogFile: ".g8e/logs/operator.log",
 
 	ExecutionVaultDBPath: ".g8e/data/execution_vault.db",
-	TokenStoreDBPath:     ".g8e/data/token_store.db",
 	ReplayStoreDBPath:    ".g8e/data/replay_store.db",
 	LedgerDir:            ".g8e/data/ledger",
 
@@ -325,7 +322,6 @@ func InitWithBase(baseDir string) error {
 	Infra.OperatorLogFile = pathutil.SafeJoin(Infra.LogDir, OperatorLogPath)
 
 	Infra.ExecutionVaultDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)
-	Infra.TokenStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.TokenStoreDBFilename)
 	Infra.ReplayStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)
 	Infra.LedgerDir = pathutil.SafeJoin(Infra.DataDir, constants.LedgerDirname)
 

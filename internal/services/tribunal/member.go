@@ -68,12 +68,6 @@ func extractCommandData(env *governance.GovernanceEnvelope) (string, constants.C
 		}
 		cmdData = string(jsonBytes)
 
-		actionType := constants.ActionType(env.ActionType)
-		if actionType == constants.ActionTypeGrantIntent || actionType == constants.ActionTypeRevokeIntent {
-			if v, ok := env.IntentData.Fields[string(constants.ApprovalTypeIntent)]; ok {
-				intent = constants.CloudIntent(v.GetStringValue())
-			}
-		}
 	} else {
 		cmdData = string(env.Payload)
 	}

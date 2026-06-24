@@ -716,10 +716,6 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		msg = &operatorv1.McpResourceListRequested{}
 	case constants.ActionTypeMcpPromptList:
 		msg = &operatorv1.McpPromptListRequested{}
-	case constants.ActionTypeGrantIntent:
-		msg = &operatorv1.GrantIntentRequested{}
-	case constants.ActionTypeRevokeIntent:
-		msg = &operatorv1.RevokeIntentRequested{}
 	case constants.ActionTypeHeartbeat:
 		msg = &operatorv1.HeartbeatRequested{}
 	case constants.ActionTypeCancel:

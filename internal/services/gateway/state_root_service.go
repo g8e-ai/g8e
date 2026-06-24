@@ -38,6 +38,10 @@ import (
 // This tiering implements §8 of the position paper: conflating observed and
 // bound state causes the binding root to churn continuously, making every
 // in-flight envelope stale and degrading fail-closed into fail-always.
+//
+// The bound root also incorporates the token keymap hash from the ScrubbingService
+// (§9): this binds the token→value mapping into the state Merkle root so that a
+// rehydration substitution is a broken transaction, not silent corruption.
 type StateRootService struct {
 	db     *sqliteutil.DB
 	logger *slog.Logger
@@ -50,6 +54,15 @@ type StateRootService struct {
 	// Caching (observed root)
 	cachedObservedRoot    string
 	cachedObservedVersion int64
+
+	// Optional keymap hash provider for token binding (§9)
+	keymapHashProvider KeymapHashProvider
+}
+
+// KeymapHashProvider returns a deterministic hash of the token keymap.
+// Implemented by ScrubbingService to bind token→value mappings into the state root.
+type KeymapHashProvider interface {
+	TokenKeymapHash() string
 }
 
 // NewStateRootService creates a new state root service.
@@ -58,6 +71,14 @@ func NewStateRootService(db *sqliteutil.DB, logger *slog.Logger) *StateRootServi
 		db:     db,
 		logger: logger,
 	}
+}
+
+// SetKeymapHashProvider injects the token keymap hash provider.
+// When set, the keymap hash is incorporated into the bound state root.
+func (s *StateRootService) SetKeymapHashProvider(p KeymapHashProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keymapHashProvider = p
 }
 
 // GetCurrentStateRoot returns the current state merkle root.
@@ -208,6 +229,20 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
 	// 5. Observed-state rows (state_tier = 'observed') are EXCLUDED from the bound
 	//    root — they are hashed separately in calculateObservedStateRoot().
+
+	// 6. Token keymap hash (§9 binding)
+	// The token→value mapping is bound into the state root so that a rehydration
+	// substitution (altering the keymap after a transaction hash was computed)
+	// produces a broken transaction, not silent corruption.
+	if s.keymapHashProvider != nil {
+		keymapHash := s.keymapHashProvider.TokenKeymapHash()
+		if keymapHash != "" {
+			h.Write([]byte(`{"table":"token_keymap","values":["`))
+			h.Write([]byte(keymapHash))
+			h.Write([]byte(`"]}`))
+			h.Write([]byte("\n"))
+		}
+	}
 
 	sum := h.Sum(nil)
 	return hex.EncodeToString(sum), nil

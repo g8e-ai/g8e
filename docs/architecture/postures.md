@@ -209,8 +209,6 @@ L3 fail-closed enforcement applies **only to mutation action types** (`l4_warden
 | `MCP_RESOURCE_READ` | No |
 | `MCP_PROMPT_LIST` | No |
 | `MCP_PROMPT_GET` | No |
-| `GRANT_INTENT` | No |
-| `REVOKE_INTENT` | No |
 | `HEARTBEAT` | No |
 | `INVESTIGATION_CREATE` | No |
 

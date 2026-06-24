@@ -743,6 +743,8 @@ var (
 	ErrL5ActuatorMarshalReceipt         = errors.New("failed to marshal receipt for canonicalization")
 	ErrL5ActuatorCanonicalizeReceipt    = errors.New("failed to canonicalize receipt for signing")
 	ErrL5ActuatorAuditStore             = errors.New("audit store error")
+	ErrL5ActuatorCapabilityMint         = errors.New("L5Actuator: failed to mint execution capability")
+	ErrL5ActuatorCapabilityDissolve     = errors.New("L5Actuator: failed to dissolve execution capability")
 	ErrPKICSRSignatureCheck             = errors.New("pki: CSR signature check failed")
 	ErrPKIInvalidCurve                  = errors.New("pki: CSR public key must use P-256 curve")
 	ErrPKIGenerateSerial                = errors.New("pki: failed to generate serial")
