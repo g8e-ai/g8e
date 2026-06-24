@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
@@ -51,6 +52,15 @@ func main() {
 		SystemFingerprint: "fp-123",
 		TenantId:          "tenant-xyz",
 		BindingPersona:    "default",
+		RequestorUserId:   "user-abc",
+		ActingAppId:       "app-cursor",
+		IntentData: &structpb.Struct{
+			Fields: map[string]*structpb.Value{
+				"goal":        structpb.NewStringValue("Inspect filesystem"),
+				"risk_level":  structpb.NewStringValue("low"),
+				"auto_approve": structpb.NewBoolValue(false),
+			},
+		},
 		Governance: &commonv1.GovernanceMetadata{
 			L1: &commonv1.L1Metadata{
 				Validated:  true,
@@ -128,4 +138,6 @@ func main() {
 	fmt.Printf("\nParsed Command: %s\n", parsedCmd.Command)
 	fmt.Printf("Execution ID: %s\n", parsedCmd.ExecutionId)
 	fmt.Printf("Justification: %s\n", parsedCmd.Justification)
+	fmt.Printf("Requestor User ID: %s\n", parsedEnvelope.RequestorUserId)
+	fmt.Printf("Acting App ID: %s\n", parsedEnvelope.ActingAppId)
 }

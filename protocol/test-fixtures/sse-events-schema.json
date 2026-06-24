@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "description": "Schema for SSE event fixtures. Validates the structure of shared SSE event test fixtures to ensure field name consistency across components.",
+  "description": "Schema for SSE event fixtures. Validates the structure of shared SSE event test fixtures to ensure field name consistency across components. The data payload may include routing fields (web_session_id, cli_session_id, user_id) and event-specific fields defined by the Python wire models in protocol/python/g8e/models/events.py.",
   "type": "object",
   "additionalProperties": {
     "type": "object",
@@ -16,10 +16,27 @@
       "data": {
         "type": "object",
         "description": "Event payload data",
+        "additionalProperties": true,
         "required": [
           "web_session_id"
         ],
         "properties": {
+          "web_session_id": {
+            "type": "string",
+            "description": "Web UI session identifier (routing field)"
+          },
+          "cli_session_id": {
+            "type": "string",
+            "description": "CLI / BYO session identifier (routing field, mutually exclusive with web_session_id and user_id)"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User identifier for background fan-out events (routing field)"
+          },
+          "agent_mode": {
+            "type": "string",
+            "description": "Agent mode for chat events (e.g., g8e.operator.bound, g8e.not.bound)"
+          },
           "timestamp": {
             "type": [
               "string",
@@ -94,6 +111,10 @@
                 },
                 "url": {
                   "type": "string"
+                },
+                "link": {
+                  "type": "string",
+                  "description": "Result URL (alternative to url field)"
                 },
                 "snippet": {
                   "type": "string"
@@ -190,7 +211,55 @@
             ]
           },
           "action_type": {
-            "type": "string"
+            "type": "string",
+            "description": "Thinking action type (started, update, end)"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Stop reason for AI processing stopped events"
+          },
+          "attempt": {
+            "type": "number",
+            "description": "Retry attempt number for chat retry events"
+          },
+          "max_attempts": {
+            "type": "number",
+            "description": "Maximum retry attempts for chat retry events"
+          },
+          "questions": {
+            "type": "array",
+            "description": "Clarification questions for triage events",
+            "items": {
+              "type": "string"
+            }
+          },
+          "complexity": {
+            "type": "string",
+            "description": "Complexity assessment for triage clarification"
+          },
+          "complexity_confidence": {
+            "type": "string",
+            "description": "Confidence score for complexity assessment"
+          },
+          "intent": {
+            "type": "string",
+            "description": "Detected intent for triage clarification"
+          },
+          "intent_confidence": {
+            "type": "string",
+            "description": "Confidence score for intent detection"
+          },
+          "intent_summary": {
+            "type": "string",
+            "description": "Summary of detected intent"
+          },
+          "request_posture": {
+            "type": "string",
+            "description": "Request posture assessment for triage"
+          },
+          "posture_confidence": {
+            "type": "string",
+            "description": "Confidence score for posture assessment"
           }
         }
       }

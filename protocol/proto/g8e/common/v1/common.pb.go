@@ -258,16 +258,22 @@ func (x *L2Metadata) GetVotes() []*L2Vote {
 }
 
 // Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
+// L3Proof is a union: fields 1-4 are populated for WebAuthn (web sessions),
+// fields 5-6 for CLI/mTLS (operator sessions). Exactly one proof type
+// should be populated per instance.
 type L3Proof struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	ClientDataJson    string                 `protobuf:"bytes,1,opt,name=client_data_json,json=clientDataJSON,proto3" json:"client_data_json,omitempty"`
-	AuthenticatorData string                 `protobuf:"bytes,2,opt,name=authenticator_data,json=authenticatorData,proto3" json:"authenticator_data,omitempty"`
-	Signature         string                 `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
-	CredentialId      string                 `protobuf:"bytes,4,opt,name=credential_id,json=credentialId,proto3" json:"credential_id,omitempty"`
-	// CLI mTLS proof: fingerprint of the CLI certificate used for authentication
-	// Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// WebAuthn: client data JSON from the authenticator assertion
+	ClientDataJson string `protobuf:"bytes,1,opt,name=client_data_json,json=clientDataJSON,proto3" json:"client_data_json,omitempty"`
+	// WebAuthn: authenticator data bytes (base64)
+	AuthenticatorData string `protobuf:"bytes,2,opt,name=authenticator_data,json=authenticatorData,proto3" json:"authenticator_data,omitempty"`
+	// WebAuthn: signature over the authenticator assertion
+	Signature string `protobuf:"bytes,3,opt,name=signature,proto3" json:"signature,omitempty"`
+	// WebAuthn: credential ID used for the assertion
+	CredentialId string `protobuf:"bytes,4,opt,name=credential_id,json=credentialId,proto3" json:"credential_id,omitempty"`
+	// CLI/mTLS: SHA-256 fingerprint of the CLI certificate used for authentication
 	MtlsCertFingerprint string `protobuf:"bytes,5,opt,name=mtls_cert_fingerprint,json=mtlsCertFingerprint,proto3" json:"mtls_cert_fingerprint,omitempty"`
-	// CLI signature: signature over transaction_hash using the CLI/operator private key
+	// CLI/mTLS: Ed25519 signature over transaction_hash using the operator private key
 	CliSignature  string `protobuf:"bytes,6,opt,name=cli_signature,json=cliSignature,proto3" json:"cli_signature,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -347,7 +353,7 @@ func (x *L3Proof) GetCliSignature() string {
 
 type L3Metadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Proof         *L3Proof               `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"` // Real WebAuthn proof
+	Proof         *L3Proof               `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"` // WebAuthn or CLI/mTLS proof
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -466,11 +472,16 @@ type GovernanceEnvelope struct {
 	RequestorUserId   string                 `protobuf:"bytes,25,opt,name=requestor_user_id,json=requestorUserId,proto3" json:"requestor_user_id,omitempty"` // The human user who authorized the action (delegator)
 	ActingAppId       string                 `protobuf:"bytes,26,opt,name=acting_app_id,json=actingAppId,proto3" json:"acting_app_id,omitempty"`             // The app/tool acting on behalf of the user (delegate)
 	// Intent & Payload
-	EventType      string           `protobuf:"bytes,8,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
-	Payload        []byte           `protobuf:"bytes,9,opt,name=payload,proto3" json:"payload,omitempty"`                                      // Raw protobuf payload
-	IntentData     *structpb.Struct `protobuf:"bytes,10,opt,name=intent_data,json=intentData,proto3" json:"intent_data,omitempty"`             // Structured JSON-first view
-	ActionType     string           `protobuf:"bytes,19,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"`             // UAP-compatible action type (e.g., EXECUTE_BASH)
-	TargetResource string           `protobuf:"bytes,20,opt,name=target_resource,json=targetResource,proto3" json:"target_resource,omitempty"` // UAP-compatible target resource
+	// event_type is the canonical pub/sub routing key from protocol/constants/events.json
+	// (e.g., "operator.command.requested", "operator.heartbeat").
+	// Distinct from action_type: event_type routes the message, action_type classifies the intent.
+	EventType  string           `protobuf:"bytes,8,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"`
+	Payload    []byte           `protobuf:"bytes,9,opt,name=payload,proto3" json:"payload,omitempty"`                          // Raw protobuf payload
+	IntentData *structpb.Struct `protobuf:"bytes,10,opt,name=intent_data,json=intentData,proto3" json:"intent_data,omitempty"` // Structured JSON-first view
+	// action_type is the UAP-compatible action classification (e.g., EXECUTE_BASH, FILE_EDIT).
+	// Included in the transaction hash canonicalization.
+	ActionType     string `protobuf:"bytes,19,opt,name=action_type,json=actionType,proto3" json:"action_type,omitempty"`
+	TargetResource string `protobuf:"bytes,20,opt,name=target_resource,json=targetResource,proto3" json:"target_resource,omitempty"` // UAP-compatible target resource
 	// State & Replay Protection
 	StateMerkleRoot string `protobuf:"bytes,11,opt,name=state_merkle_root,json=stateMerkleRoot,proto3" json:"state_merkle_root,omitempty"`
 	Nonce           string `protobuf:"bytes,12,opt,name=nonce,proto3" json:"nonce,omitempty"`
@@ -714,7 +725,8 @@ var file_g8e_common_v1_common_proto_extTypes = []protoimpl.ExtensionInfo{
 
 // Extension fields to descriptorpb.FieldOptions.
 var (
-	// Comma-separated list of forbidden regex patterns
+	// Comma-separated list of forbidden regex patterns evaluated against the
+	// field value at L1 Doctrine verification time.
 	//
 	// optional string forbidden_patterns = 50001;
 	E_ForbiddenPatterns = &file_g8e_common_v1_common_proto_extTypes[0]

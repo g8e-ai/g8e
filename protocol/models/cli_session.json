@@ -1,0 +1,96 @@
+{
+  "_comment": "Canonical CLISession document shape. client is the authority - it creates and stores this document when a CLI/BYO client authenticates via mTLS. CLI sessions are strictly disjoint from operator sessions - they represent the routing namespace for BYO/CLI clients to receive SSE events. A field mismatch breaks CLI session routing and event delivery.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (SSE routing, auth)", "agent (reads via client API)"],
+  "_collection": "cli_sessions",
+
+  "cli_session": {
+    "_description": "Authenticated CLI/BYO session. Created when a CLI client successfully authenticates with the client via mTLS. Strictly disjoint from operator_session_id namespace.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Session identifier (UUID v4). Primary key. Never conflated with operator_session_id."
+      },
+      "session_type": {
+        "type": "string",
+        "required": true,
+        "default": "cli",
+        "description": "Session type discriminator. See status.json session.type."
+      }
+    },
+
+    "ownership": {
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "User ID who owns this CLI session."
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator session ID that created this CLI session. Binds the CLI session to a specific Operator for authorization."
+      }
+    },
+
+    "lifecycle": {
+      "is_active": {
+        "type": "boolean",
+        "required": true,
+        "default": true,
+        "description": "Whether the session is currently active."
+      },
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the session was created."
+      },
+      "expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "Session expiry timestamp."
+      },
+      "absolute_expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "Absolute expiry timestamp. Session is invalid after this time regardless of activity."
+      },
+      "idle_expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "Idle expiry timestamp. Session is invalid if no activity occurs before this time."
+      }
+    },
+
+    "mtls_binding": {
+      "system_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "SHA-256 fingerprint of the client system. Used for identification."
+      },
+      "cert_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "SHA-256 fingerprint of the mTLS client certificate."
+      },
+      "cert_serial": {
+        "type": "string",
+        "required": false,
+        "description": "Serial number of the mTLS client certificate. Used for revocation checking."
+      }
+    },
+
+    "auth_metadata": {
+      "login_method": {
+        "type": "string",
+        "required": true,
+        "description": "Authentication method used to create this session. See status.json auth.login_method."
+      }
+    }
+  }
+}

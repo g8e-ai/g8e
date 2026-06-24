@@ -1,3 +1,80 @@
 {
-  "env_vars": {}
+  "description": "Environment variable names consumed by the g8e Operator and CLI.",
+  "env_vars": {
+    "TribunalID": {
+      "_go_const": "EnvVar.TribunalID",
+      "value": "G8E_TRIBUNAL_ID",
+      "description": "Tribunal ID for governance posture (doctrine, consensus, notary)"
+    },
+    "TribunalURL": {
+      "_go_const": "EnvVar.TribunalURL",
+      "value": "G8E_TRIBUNAL_URL",
+      "description": "Tribunal URL for governance posture (doctrine, consensus, notary)"
+    },
+    "VaultDir": {
+      "_go_const": "",
+      "value": "G8E_VAULT_DIR",
+      "description": "Override for the vault directory path"
+    },
+    "VaultKey": {
+      "_go_const": "",
+      "value": "G8E_VAULT_KEY",
+      "description": "Override for the vault key file path"
+    },
+    "VaultRequireUnlock": {
+      "_go_const": "",
+      "value": "G8E_VAULT_REQUIRE_UNLOCK",
+      "description": "When set to 'true', requires vault unlock before gateway start"
+    },
+    "OperatorSessionID": {
+      "_go_const": "",
+      "value": "G8E_OPERATOR_SESSION_ID",
+      "description": "In-memory operator session ID set by deploy script after enrollment; never persisted to config"
+    },
+    "ClientCert": {
+      "_go_const": "envG8EClientCert",
+      "value": "G8E_CLIENT_CERT",
+      "description": "Path to the operator client certificate for MCP stdio connections"
+    },
+    "ClientKey": {
+      "_go_const": "envG8EClientKey",
+      "value": "G8E_CLIENT_KEY",
+      "description": "Path to the operator client key for MCP stdio connections"
+    },
+    "CABundle": {
+      "_go_const": "envG8ECABundle",
+      "value": "G8E_CA_BUNDLE",
+      "description": "Path to the CA trust bundle for MCP stdio connections"
+    },
+    "GatewayURL": {
+      "_go_const": "envG8EGatewayURL",
+      "value": "G8E_GATEWAY_URL",
+      "description": "Override for the gateway URL used by MCP stdio; defaults to https://g8e.local:8443/mcp"
+    },
+    "AppID": {
+      "_go_const": "envG8EAppID",
+      "value": "G8E_APP_ID",
+      "description": "Application SPIFFE ID for delegated agent runs"
+    },
+    "AppCert": {
+      "_go_const": "envG8EAppCert",
+      "value": "G8E_APP_CERT",
+      "description": "Path to the delegated application certificate for agent runs"
+    },
+    "AppKey": {
+      "_go_const": "envG8EAppKey",
+      "value": "G8E_APP_KEY",
+      "description": "Path to the delegated application key for agent runs"
+    },
+    "DataDir": {
+      "_go_const": "",
+      "value": "G8E_DATA_DIR",
+      "description": "Override for the data directory; used in test configurations"
+    },
+    "ProjectRoot": {
+      "_go_const": "",
+      "value": "G8E_PROJECT_ROOT",
+      "description": "Override for project root directory; deprecated, paths now resolved by walking up from CWD"
+    }
+  }
 }

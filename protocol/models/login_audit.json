@@ -1,0 +1,69 @@
+{
+  "_comment": "Canonical LoginAudit document shape. client is the authority - it appends a record for every authentication attempt (success or failure). Used for security monitoring, rate-limiting, and brute-force detection. A field mismatch breaks audit trails and security analytics.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (auth, rate-limiting)", "admin dashboard"],
+  "_collection": "login_audit",
+
+  "login_audit": {
+    "_description": "Single authentication attempt record. Append-only. One row per login attempt (success or failure).",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique audit record identifier (UUID v4)."
+      }
+    },
+
+    "attempt_context": {
+      "user_id": {
+        "type": "string",
+        "required": false,
+        "description": "User ID the login attempt was for. Null if the user could not be identified."
+      },
+      "login_method": {
+        "type": "string",
+        "required": true,
+        "description": "Authentication method attempted. See status.json auth.login_method."
+      },
+      "success": {
+        "type": "boolean",
+        "required": true,
+        "description": "Whether the authentication attempt succeeded."
+      },
+      "error_reason": {
+        "type": "string",
+        "required": false,
+        "description": "Failure reason code. See status.json auth.error_reason. Null on success."
+      }
+    },
+
+    "client_metadata": {
+      "ip_address": {
+        "type": "string",
+        "required": false,
+        "description": "Client IP address at time of attempt."
+      },
+      "user_agent": {
+        "type": "string",
+        "required": false,
+        "description": "Client user agent string."
+      },
+      "cert_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "mTLS certificate fingerprint, if authenticated via certificate."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the login attempt occurred (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

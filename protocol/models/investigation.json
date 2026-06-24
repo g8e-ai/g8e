@@ -3,6 +3,8 @@
 
   "_authority": "operator",
   "_consumers": ["client", "agent", "g8eo (receives investigation_id in command envelopes, does not read the document directly)"],
+  "_collection": "investigations",
+  "_governed": true,
 
   "investigation": {
     "_description": "Full investigation document.",

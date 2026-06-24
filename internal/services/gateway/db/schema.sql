@@ -21,6 +21,18 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents(collection);
 CREATE INDEX IF NOT EXISTS idx_documents_updated ON documents(collection, updated_at);
 
+-- KV store with TTL
+-- Must be defined before document triggers that reference it.
+CREATE TABLE IF NOT EXISTS kv_store (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT,
+    state_tier TEXT NOT NULL DEFAULT 'bound'
+);
+CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
+CREATE INDEX IF NOT EXISTS idx_kv_tier ON kv_store(state_tier);
+
 -- Trigger to invalidate KV cache when a document is inserted
 CREATE TRIGGER IF NOT EXISTS trg_documents_insert_kv
 AFTER INSERT ON documents
@@ -29,9 +41,10 @@ BEGIN
     DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*';
 END;
 
--- Trigger to invalidate KV cache when a document is updated
+-- Trigger to invalidate KV cache when a document is updated (only when data changes)
 CREATE TRIGGER IF NOT EXISTS trg_documents_update_kv
 AFTER UPDATE ON documents
+WHEN OLD.data IS NOT NEW.data
 BEGIN
     DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || NEW.collection || ':' || NEW.id;
     DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || NEW.collection || ':*';
@@ -44,17 +57,6 @@ BEGIN
     DELETE FROM kv_store WHERE key = 'g8e:cache:doc:' || OLD.collection || ':' || OLD.id;
     DELETE FROM kv_store WHERE key GLOB 'g8e:cache:query:' || OLD.collection || ':*';
 END;
-
--- KV store with TTL
-CREATE TABLE IF NOT EXISTS kv_store (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    expires_at TEXT,
-    state_tier TEXT NOT NULL DEFAULT 'bound'
-);
-CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
-CREATE INDEX IF NOT EXISTS idx_kv_tier ON kv_store(state_tier);
 
 -- SSE event buffer: per-routing-target ring buffer for reconnection replay.
 -- Each row carries exactly one of three first-class routing keys, expressed as
@@ -125,9 +127,10 @@ BEGIN
     UPDATE state_version SET version = version + 1 WHERE id = 1;
 END;
 
--- Trigger to increment state_version on document update
+-- Trigger to increment state_version on document update (only when data changes)
 CREATE TRIGGER IF NOT EXISTS trg_documents_update_version
 AFTER UPDATE ON documents
+WHEN OLD.data IS NOT NEW.data
 BEGIN
     UPDATE state_version SET version = version + 1 WHERE id = 1;
 END;
@@ -198,12 +201,11 @@ CREATE TABLE IF NOT EXISTS suspended_transactions (
     tool_arguments TEXT,
     user_id TEXT,
     operator_id TEXT,
-    approved INTEGER DEFAULT 0,
+    approved INTEGER DEFAULT 0 CHECK (approved IN (0, 1)),
     approved_at TEXT,
     approved_by TEXT,
     approval_signature TEXT,
     expected_cert_fingerprint TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_suspended_expires ON suspended_transactions(expires_at);
-
-
+CREATE INDEX IF NOT EXISTS idx_suspended_pending ON suspended_transactions(approved, created_at);

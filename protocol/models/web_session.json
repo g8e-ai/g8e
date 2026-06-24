@@ -1,0 +1,68 @@
+{
+  "_comment": "Canonical WebSession document shape. client is the authority - it creates and stores this document in SQLite. Web sessions authenticate browser UI connections via passkey or mTLS certificate. A field mismatch breaks session validation, SSE routing, and Operator binding.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (auth, SSE routing, Operator binding)", "agent (reads via client API)"],
+  "_collection": "web_sessions",
+
+  "web_session": {
+    "_description": "Authenticated web session for a browser UI connection. Created on successful passkey verification or mTLS certificate enrollment. One session per browser tab.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Session identifier (UUID v4). Primary key."
+      },
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "User ID this session belongs to."
+      }
+    },
+
+    "lifecycle": {
+      "created_at_unix_ms": {
+        "type": "integer",
+        "required": true,
+        "description": "Creation timestamp (Unix milliseconds)."
+      },
+      "expires_at_unix_ms": {
+        "type": "integer",
+        "required": true,
+        "description": "Absolute expiry timestamp (Unix milliseconds). Session is invalid after this time."
+      }
+    },
+
+    "mtls_binding": {
+      "operator_session_id": {
+        "type": "string",
+        "required": false,
+        "description": "Bound Operator session ID for mTLS certificate auth. Set when session was created via certificate enrollment."
+      },
+      "cert_fingerprint": {
+        "type": "string",
+        "required": false,
+        "description": "SHA-256 fingerprint of the mTLS client certificate. Used for revocation checking."
+      },
+      "cert_serial": {
+        "type": "string",
+        "required": false,
+        "description": "Serial number of the mTLS client certificate. Used for revocation checking."
+      }
+    },
+
+    "client_metadata": {
+      "user_agent": {
+        "type": "string",
+        "required": false,
+        "description": "Browser user agent string for session tracking."
+      },
+      "login_method": {
+        "type": "string",
+        "required": false,
+        "values": ["passkey", "windows_cert_store", "p12_import"],
+        "description": "Authentication method used to create this session. See status.json auth.login_method."
+      }
+    }
+  }
+}

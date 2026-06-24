@@ -1,0 +1,64 @@
+{
+  "_comment": "Canonical BoundSessions document shape. client is the authority - it creates and updates this document to persist the bidirectional binding between a web session and one or more Operator sessions. A field mismatch breaks session binding, SSE routing, and Operator command dispatch.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (session binding, SSE routing)", "agent (reads via client API)"],
+  "_collection": "bound_sessions",
+
+  "bound_sessions": {
+    "_description": "Persisted record of the bidirectional binding between a web session and one or more Operator sessions. Created when operators are bound to a web session via the registration service.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Document ID. Equals the web_session_id."
+      }
+    },
+
+    "binding": {
+      "web_session_id": {
+        "type": "string",
+        "required": true,
+        "description": "Browser session ID that operators are bound to."
+      },
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "User ID who owns the web session."
+      },
+      "operator_session_ids": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "description": "Operator session IDs bound to this web session. Used for SSE event routing."
+      },
+      "operator_ids": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "description": "Operator document IDs bound to this web session."
+      }
+    },
+
+    "lifecycle": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "default": "active",
+        "description": "Binding status. See status.json operator.status."
+      },
+      "bound_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the binding was first created."
+      },
+      "last_updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the binding was last updated (operator added or removed)."
+      }
+    }
+  }
+}

@@ -291,6 +291,9 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 			if err := s.ReplayStore.CleanupExpiredNonces(); err != nil {
 				s.logger.Warn("Replay store maintenance error", "error", err)
 			}
+			if _, err := s.SSEStore.SSEEventsCleanup(time.Hour); err != nil {
+				s.logger.Warn("SSE event cleanup error", "error", err)
+			}
 		}
 	}
 }

@@ -1,4 +1,5 @@
 {
+  "description": "Pub/Sub field name constants for event/message handling.",
   "pubsub": {
     "FieldAction": {
       "_go_const": "PubSubFieldAction",

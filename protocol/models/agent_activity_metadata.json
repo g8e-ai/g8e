@@ -3,6 +3,8 @@
 
   "_authority": "agent",
   "_consumers": ["agent"],
+  "_collection": "agent_activity_metadata",
+  "_governed": true,
 
   "agent_activity_metadata": {
     "_description": "Metadata record for a single AI agent chat turn. Captures comprehensive telemetry for data science analysis including model usage, token consumption, tool execution patterns, triage classification, and performance metrics.",
