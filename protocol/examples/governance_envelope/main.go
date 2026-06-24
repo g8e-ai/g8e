@@ -56,8 +56,8 @@ func main() {
 		ActingAppId:       "app-cursor",
 		IntentData: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-				"goal":        structpb.NewStringValue("Inspect filesystem"),
-				"risk_level":  structpb.NewStringValue("low"),
+				"goal":         structpb.NewStringValue("Inspect filesystem"),
+				"risk_level":   structpb.NewStringValue("low"),
 				"auto_approve": structpb.NewBoolValue(false),
 			},
 		},

@@ -35,7 +35,6 @@ protocol/
   models/                 JSON model schemas and Python Pydantic models
   python/                 Python package (g8e-protocol)
   examples/               Go example programs
-  test-fixtures/          Shared SSE event and ledger hash fixtures
   docs/                   Protocol reference documentation (placeholder)
 ```
 
@@ -115,15 +114,6 @@ The Python package is in `python/` and installs as `g8e-protocol`. The import na
   - `g8e.models.events`: SSE event wire models (`SessionEventWire`, `BackgroundEventWire`, chat payload models, tool lifecycle payload, triage clarification payload)
   - `g8e.models.internal_api`: `ChatMessageRequest`, `ChatStartedResponse`, `ResourceCreationRequest`
   - `g8e.models.settings`: `PlatformSettings`, `G8eeUserSettings`, `LLMSettings`, `SearchSettings`, `EvalJudgeSettings`, `CommandValidationSettings`, `BatchExecutionSettings`
-
-### Test Fixtures
-
-The `test-fixtures/` directory contains shared fixtures for cross-component contract testing:
-
-- `sse-events.json`: SSE event payload fixtures
-- `sse-events-schema.json`: JSON schema for SSE event validation
-- `ledger-hash-fixtures.json`: Cross-language fixtures for the ledger hash chain, consumed by both Python and JavaScript hash chain verifiers to enforce byte-exact agreement
-- `gold-set-schema.json`: JSON schema for gold-set validation
 
 ### Examples
 

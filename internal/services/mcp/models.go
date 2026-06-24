@@ -101,10 +101,10 @@ type PromptArgument struct {
 
 // ResourceTemplate represents an MCP resource template with a URI pattern.
 type ResourceTemplate struct {
-	URITemplate  string `json:"uriTemplate"`
-	Name         string `json:"name"`
-	Description  string `json:"description,omitempty"`
-	MIMEType     string `json:"mimeType,omitempty"`
+	URITemplate string `json:"uriTemplate"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	MIMEType    string `json:"mimeType,omitempty"`
 }
 
 // Metadata represents typed metadata for MCP resources and prompts.
