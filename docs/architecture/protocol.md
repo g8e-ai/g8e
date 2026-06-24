@@ -499,8 +499,7 @@ These items do not impact protocol correctness or security posture and are track
         "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
         "signature": "MEUCIQDWn3x4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IgE5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
         "credentialId": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
-      },
-      "autoApproved": false
+      }
     }
   },
   "caseId": "case-deploy-456",
@@ -515,7 +514,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
 - `arguments_json`: "{\"path\":\"/home/user/readme.md\"}"
 - `execution_id`: "exec-2035"
 
-### Example 2: MCP Database Query Tool Call (Auto-Approved)
+### Example 2: MCP Resource Read Under Doctrine (Non-Mutation)
 
 ```json
 {
@@ -525,14 +524,14 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
   "sourceComponent": "COMPONENT_AGENT",
   "operatorId": "op-prod-67890",
   "operatorSessionId": "sess-def-012",
-  "eventType": "g8e.v1.operator.mcp.call.requested",
+  "eventType": "g8e.v1.operator.mcp.resource.read.requested",
   "payload": "CgZxdWVyeRIXZXhlYy1idWlsZC0zNDU2EgoJCXNFTEVDVCBjb3VudCgqKSBGUk9NIHVzZXJzGgZzY3J1Yg==",
   "intentData": {
     "tool": "postgres_query",
     "query": "SELECT count(*) FROM users",
     "reason": "Check user count for health check"
   },
-  "actionType": "MCP_CALL",
+  "actionType": "MCP_RESOURCE_READ",
   "targetResource": "postgres://prod-db.internal/users",
   "stateMerkleRoot": "def456abc123def456abc123def456abc123def456abc123def456abc123def4",
   "nonce": "nonce-1717358880000-def456",
@@ -549,8 +548,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
       "keyId": "key-ensemble-prod-def456"
     },
     "l3": {
-      "proof": null,
-      "autoApproved": true
+      "proof": null
     }
   },
   "caseId": "",
@@ -560,7 +558,7 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
 }
 ```
 
-This example shows a benign diagnostic query with `autoApproved: true`, bypassing the L3 human authorization while still passing L1 and L2 checks.
+This example shows a non-mutation read under doctrine posture. L3 is not required for non-mutations under any posture, so no proof is carried. L3 is satisfied only by a verified proof; there is no bypass field.
 
 ### Example 3: MCP Resource List Call
 
@@ -601,8 +599,7 @@ This example shows a benign diagnostic query with `autoApproved: true`, bypassin
         "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
         "signature": "MEYCIQCd4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IhAOf6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
         "credentialId": "def456abc123def456abc123def456abc123def456abc123def456abc123def4"
-      },
-      "autoApproved": false
+      }
     }
   },
   "caseId": "case-discovery-789",

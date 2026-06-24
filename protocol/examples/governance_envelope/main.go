@@ -75,7 +75,6 @@ func main() {
 					MtlsCertFingerprint: "fp-456",
 					CliSignature:        "cli-sig",
 				},
-				AutoApproved: false,
 			},
 		},
 	}

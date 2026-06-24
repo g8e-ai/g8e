@@ -347,8 +347,7 @@ func (x *L3Proof) GetCliSignature() string {
 
 type L3Metadata struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Proof         *L3Proof               `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"`                                    // Real WebAuthn proof
-	AutoApproved  bool                   `protobuf:"varint,2,opt,name=auto_approved,json=autoApproved,proto3" json:"auto_approved,omitempty"` // True if skipped via auto-approval policy
+	Proof         *L3Proof               `protobuf:"bytes,1,opt,name=proof,proto3" json:"proof,omitempty"` // Real WebAuthn proof
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -388,13 +387,6 @@ func (x *L3Metadata) GetProof() *L3Proof {
 		return x.Proof
 	}
 	return nil
-}
-
-func (x *L3Metadata) GetAutoApproved() bool {
-	if x != nil {
-		return x.AutoApproved
-	}
-	return false
 }
 
 // Unified Governance Metadata
@@ -754,11 +746,10 @@ const file_g8e_common_v1_common_proto_rawDesc = "" +
 	"\tsignature\x18\x03 \x01(\tR\tsignature\x12#\n" +
 	"\rcredential_id\x18\x04 \x01(\tR\fcredentialId\x122\n" +
 	"\x15mtls_cert_fingerprint\x18\x05 \x01(\tR\x13mtlsCertFingerprint\x12#\n" +
-	"\rcli_signature\x18\x06 \x01(\tR\fcliSignature\"_\n" +
+	"\rcli_signature\x18\x06 \x01(\tR\fcliSignature\":\n" +
 	"\n" +
 	"L3Metadata\x12,\n" +
-	"\x05proof\x18\x01 \x01(\v2\x16.g8e.common.v1.L3ProofR\x05proof\x12#\n" +
-	"\rauto_approved\x18\x02 \x01(\bR\fautoApproved\"\x95\x01\n" +
+	"\x05proof\x18\x01 \x01(\v2\x16.g8e.common.v1.L3ProofR\x05proof\"\x95\x01\n" +
 	"\x12GovernanceMetadata\x12)\n" +
 	"\x02l1\x18\x01 \x01(\v2\x19.g8e.common.v1.L1MetadataR\x02l1\x12)\n" +
 	"\x02l2\x18\x02 \x01(\v2\x19.g8e.common.v1.L2MetadataR\x02l2\x12)\n" +

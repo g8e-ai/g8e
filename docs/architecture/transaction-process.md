@@ -1,7 +1,7 @@
 # Transaction Process: End-to-End Flow
 
 Last Updated: 2026-06-23
-Version: v1.1.8
+Version: v1.1.9
 
 This document walks through the complete transaction process in the g8e governance system, explaining each step from initial intent to final execution and audit. The process is designed to ensure security, accountability, and sovereignty throughout.
 
@@ -183,6 +183,8 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 - **notary**: L3 proof is a fail-closed gate for mutation actions.
 
 **Mutation enforcement**: The `isMutation` check determines whether an action type is state-changing. Only mutations require L3 proof under the notary posture.
+
+**No bypass field**: L3 is satisfied only by a verified proof. There is no `AutoApproved` or equivalent bypass — the Warden re-derives whether L3 is required from the action type and posture, and if required, demands a real proof. Out-of-band approvals use the `outboundL3Notary` + `SuspendedTransactionStore` path with a verifiable CLI signature, not a producer-supplied flag.
 
 **Outcome**:
 - **Authorized**: Proceeds to L5 (Actuator)

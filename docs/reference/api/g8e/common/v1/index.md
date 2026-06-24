@@ -143,7 +143,6 @@ Consensus (L2) Governance: a vote from a single Tribunal member.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | proof | [L3Proof](#g8e-common-v1-L3Proof) |  | Real WebAuthn proof |
-| auto_approved | [bool](#bool) |  | True if skipped via auto-approval policy |
 
 
 

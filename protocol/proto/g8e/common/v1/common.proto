@@ -69,7 +69,6 @@ message L3Proof {
 
 message L3Metadata {
   L3Proof proof = 1;             // Real WebAuthn proof
-  bool auto_approved = 2;        // True if skipped via auto-approval policy
 }
 
 // Unified Governance Metadata

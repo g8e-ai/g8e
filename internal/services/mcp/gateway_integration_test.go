@@ -756,9 +756,6 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 						},
 					},
 				},
-				L3: &commonv1.L3Metadata{
-					AutoApproved: true, // For testing: simulate gateway auto-approval
-				},
 			},
 		}
 
@@ -853,9 +850,6 @@ func TestGatewayL3Verification_RealNotary(t *testing.T) {
 						},
 					},
 				},
-				L3: &commonv1.L3Metadata{
-					AutoApproved: true, // For testing: simulate gateway auto-approval
-				},
 			},
 		}
 
@@ -898,17 +892,6 @@ func (p *realL3EnvelopeProcessor) ProcessEnvelope(ctx context.Context, payload [
 	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(payload, envelope); err != nil {
 		p.lastError = err
 		return nil, err
-	}
-
-	// Add L3 metadata with AutoApproved for testing (simulates gateway mode)
-	// This allows us to test L3 verification without requiring actual WebAuthn proof
-	if envelope.Governance == nil {
-		envelope.Governance = &commonv1.GovernanceMetadata{}
-	}
-	if envelope.Governance.L3 == nil {
-		envelope.Governance.L3 = &commonv1.L3Metadata{
-			AutoApproved: true, // For testing: simulate gateway auto-approval
-		}
 	}
 
 	// Verify through L4Warden (stateless validation, L1, L2)
@@ -1026,11 +1009,8 @@ func TestReadFieldGovernanceIntegration(t *testing.T) {
 
 	// Under doctrine posture the gateway constructs the envelope but never
 	// self-signs L2 (gateway self-signing was deleted with the Tribunal cut).
-	// L3 is auto-approved (audited, not enforced) and L2 carries no gateway votes.
+	// L3 is not required under doctrine and the gateway does not set it.
 	require.NotNil(t, receivedEnvelope.Governance)
-	require.NotNil(t, receivedEnvelope.Governance.L3)
-	require.True(t, receivedEnvelope.Governance.L3.AutoApproved,
-		"doctrine posture must auto-approve L3")
 	if receivedEnvelope.Governance.L2 != nil {
 		require.Empty(t, receivedEnvelope.Governance.L2.Votes,
 			"gateway must not self-sign L2 votes under doctrine posture")

@@ -641,14 +641,6 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
-	// Check if L3 is auto-approved (for doctrine/consensus postures in gateway mode)
-	autoApproved := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.AutoApproved
-	if autoApproved {
-		tv.logger.Debug("L3 auto-approved by envelope metadata", "posture", tv.posture.Name())
-		return true, nil
-	}
-
-	// If not bypassed by app policy, check if proof is present
 	hasProof := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.Proof != nil
 
 	if !hasProof {

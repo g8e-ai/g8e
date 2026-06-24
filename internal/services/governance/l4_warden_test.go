@@ -450,6 +450,39 @@ func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
 	}
 }
 
+// TestNotary_MutationRequiresRealL3Proof guards the AutoApproved removal:
+// a mutation under notary with no L3 proof must fail closed. There is no
+// bypass field to set. This pairs with TestNoSelfSign_ConsensusWithoutDeliberator
+// as a trust-boundary regression guard.
+func TestNotary_MutationRequiresRealL3Proof(t *testing.T) {
+	t.Parallel()
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "notary")
+	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
+
+	// Strip the L3 proof entirely — no bypass field exists to waive the human bond
+	env.Governance.L3 = nil
+
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
+	if !errors.Is(err, constants.ErrTxL3ProofMissing) {
+		t.Fatalf("expected ErrTxL3ProofMissing for mutation under notary with no L3 proof, got: %v", err)
+	}
+}
+
+// TestNotary_NonMutationDoesNotRequireL3Proof verifies that non-mutation
+// actions under notary posture pass without L3 proof. The Warden re-derives
+// that the action is not a mutation, so no human proof is needed.
+func TestNotary_NonMutationDoesNotRequireL3Proof(t *testing.T) {
+	t.Parallel()
+	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "notary")
+	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+
+	// Non-mutation actions don't carry L3 proof — signedEnvelope doesn't set one for non-mutations
+	_, err := verifier.VerifyEnvelope(context.Background(), env)
+	if err != nil {
+		t.Fatalf("expected non-mutation under notary to pass without L3 proof, got: %v", err)
+	}
+}
+
 // TestL4Warden_AppPolicyStore_L3Required_Mutation verifies that mutating
 // intents NOT in AutoApproveIntents require L3 human presence verification.
 func TestL4Warden_AppPolicyStore_L3Required_Mutation(t *testing.T) {

@@ -1287,18 +1287,6 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		Governance:      &commonv1.GovernanceMetadata{},
 	}
 
-	// In doctrine and consensus postures, L3 is audited not enforced, so we auto-approve
-	// to avoid WebAuthn prompts for local MCP agents. In notary posture, L3 is strictly
-	// enforced and requires human authorization.
-	if g.posture == "doctrine" || g.posture == "consensus" {
-		if env.Governance == nil {
-			env.Governance = &commonv1.GovernanceMetadata{}
-		}
-		env.Governance.L3 = &commonv1.L3Metadata{
-			AutoApproved: true,
-		}
-	}
-
 	// Enrich from context if present
 	if tenantID, ok := ctx.Value(constants.ContextKeyTenantID).(string); ok {
 		env.TenantId = tenantID
