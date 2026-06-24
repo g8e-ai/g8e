@@ -1,6 +1,6 @@
 # Encryption Architecture
 
-Last Updated: 2026-06-23
+Last Updated: 2026-06-24
 Version: v1.1.9
 
 ## Overview
@@ -18,15 +18,15 @@ g8e uses mandatory encryption for all sensitive data at rest. The encryption sys
 
 ### Test Coverage
 
-- **Vault service**: Comprehensive test coverage in `../../internal/services/vault/vault_test.go`
+- **Vault service**: Comprehensive test coverage in `internal/services/vault/vault_test.go`
   - Tests cover KEK derivation, DEK generation, AES Key Wrap/Unwrap, AES-GCM encryption/decryption, vault lifecycle (init, unlock, rekey, lock, reset), concurrent access, and integrity verification.
   - All cryptographic primitives have dedicated test cases.
   - Error paths are tested, including invalid keys, tampered ciphertext, and locked vaults.
 - **Storage integration**: Nil vault rejection tests across storage services:
-  - `../../internal/services/storage/audit_store_unit_test.go`: `TestSQLAuditStore_NilEncryptionVault` verifies `NewSQLAuditStore` rejects nil vault.
-  - `../../internal/services/storage/execution_vault_test.go`: `TestExecutionVault_NewExecutionVaultService_NilVault` verifies `NewExecutionVaultService` rejects nil vault.
-  - `../../internal/services/storage/ledger_test.go`: `TestLedgerService_RestoreFileFromCommit_DisabledVault` verifies `NewGitLedgerService` rejects nil vault.
-- **Integration tests**: Storage service tests in `../../internal/services/storage/storagetest/` use vault fixtures for end-to-end encryption validation.
+  - `internal/services/storage/audit_store_unit_test.go`: `TestSQLAuditStore_NilEncryptionVault` verifies `NewSQLAuditStore` rejects nil vault.
+  - `internal/services/storage/execution_vault_test.go`: `TestExecutionVault_NewExecutionVaultService_NilVault` verifies `NewExecutionVaultService` rejects nil vault.
+  - `internal/services/storage/ledger_test.go`: `TestLedgerService_RestoreFileFromCommit_DisabledVault` verifies `NewGitLedgerService` rejects nil vault.
+- **Integration tests**: Storage service tests in `internal/services/storage/storagetest/` use vault fixtures for end-to-end encryption validation.
 
 ## Vault Architecture
 
@@ -55,7 +55,7 @@ Master Key (32-byte hex-encoded, user-provided or generated)
    - Derive Key Encryption Key (KEK) from master key using HKDF-SHA256 with info string "g8e-lfaa-kek-v1".
    - Generate Data Encryption Key (DEK) (32-byte random).
    - Wrap DEK with KEK using AES Key Wrap (RFC 3394).
-   - Compute key fingerprint using Argon2id (RFC 9106) with pepper "g8e-vault-fingerprint-v1".
+   - Compute key fingerprint using SHA-256 with pepper "g8e-vault-fingerprint-v1" (16-byte output).
    - Save vault header with wrapped DEK and key fingerprint to disk.
 
 2. **Data Encryption**:
@@ -176,7 +176,7 @@ export G8E_VAULT_KEY=/path/to/vault/key
 
 ### Configuration File
 
-Vault paths are configured in the embedded paths configuration in `../../internal/constants/paths.go`. The default paths are:
+Vault paths are configured in the embedded paths configuration in `internal/constants/paths.go`. The default paths are:
 
 - Vault directory: `.g8e/vault`
 - Vault header file: `.g8e/vault/vault.header`
@@ -196,7 +196,7 @@ These paths are resolved relative to the current working directory.
 ### Key Management
 
 - Master keys are 32-byte hex-encoded values.
-- Key fingerprints are computed using Argon2id with pepper "g8e-vault-fingerprint-v1" (16-byte output).
+- Key fingerprints are computed using SHA-256 with pepper "g8e-vault-fingerprint-v1" (16-byte output). The key material (256-bit) provides sufficient entropy; a fast hash is appropriate for identification purposes.
 - Keys can be imported or exported for backup via `g8e vault export` and `g8e vault import`.
 - Re-keying rotates the DEK wrapper without data loss (only the DEK wrapper changes).
 - Vault reset destroys all data irrecoverably.
@@ -212,7 +212,7 @@ These paths are resolved relative to the current working directory.
 
 ### Vault Service
 
-The vault service (`../../internal/services/vault/vault.go`) provides:
+The vault service (`internal/services/vault/vault.go`) provides:
 
 - `NewVault()`: Create new vault instance with `VaultConfig`.
 - `Unlock()`: Unwrap DEK with master key.
@@ -224,8 +224,8 @@ The vault service (`../../internal/services/vault/vault.go`) provides:
 - `GetDEK()`: Return Data Encryption Key for database operations.
 - `IsUnlocked()`: Check vault lock state.
 - `IsInitialized()`: Check if vault header exists.
-- `VerifyIntegrity()`: Verify vault integrity by attempting to unwrap DEK.
-- `Reset()`: Destroy vault and all data (requires confirmation).
+- `VerifyIntegrity(privateKey []byte)`: Verify vault integrity by attempting to unwrap DEK with the provided key.
+- `Reset(confirmDestroy bool)`: Destroy vault and all data (requires explicit confirmation).
 - `GetDataDir()`: Return vault data directory path.
 
 ### Storage Integration
@@ -238,7 +238,7 @@ Storage services integrate with the vault via:
 
 ### CLI Commands
 
-Vault management commands (`../../internal/cli/cmd/vault.go`):
+Vault management commands (`internal/cli/cmd/vault.go`):
 
 - `init`: Initialize new vault with generated key.
 - `unlock`: Unlock vault with key.
@@ -274,7 +274,7 @@ To rotate vault keys:
 - AES-256-GCM (NIST-approved) for data encryption.
 - HKDF-SHA256 for Key Encryption Key derivation.
 - AES Key Wrap (RFC 3394) for DEK wrapping.
-- Argon2id for key fingerprinting (RFC 9106).
+- SHA-256 for key fingerprinting with domain-separation pepper.
 
 ### Data Protection
 
@@ -326,8 +326,8 @@ If services fail with "vault not initialized":
 
 ## References
 
-- Vault Service: `../../internal/services/vault/vault.go`
-- Vault Header: `../../internal/services/vault/vault_header.go`
-- Vault Cryptography: `../../internal/services/vault/vault_crypto.go`
-- CLI Commands: `../../internal/cli/cmd/vault.go`
-- Storage Services: `../../internal/services/storage/`
+- Vault Service: `internal/services/vault/vault.go`
+- Vault Header: `internal/services/vault/vault_header.go`
+- Vault Cryptography: `internal/services/vault/vault_crypto.go`
+- CLI Commands: `internal/cli/cmd/vault.go`
+- Storage Services: `internal/services/storage/`
