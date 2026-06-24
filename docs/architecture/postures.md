@@ -223,7 +223,7 @@ Non-mutation actions never require L3 proof, even under notary posture.
 | Gateway mode | `doctrine` | `--posture` flag; defaults to `PostureDoctrine` (`config.go:398`) |
 | Outbound (operator) mode | `notary` | Defaults to `PostureNotary` (`config.go:534`) |
 
-**Posture selection**: The `doctrine` and `consensus` postures allow mutations to execute without human authorization (L3 proof) or multi-party consensus, below the floor defined in the position paper (§12). Choosing such a posture is itself an act of human intent; the gateway logs a warning at startup and proceeds. The `--doctrine` or `--consensus` flag is the authorization.
+**Posture selection**: The `doctrine` and `consensus` postures allow mutations to execute without human authorization (L3 proof) or multi-party consensus, below the floor defined in the position paper (§12). Choosing such a posture is itself an act of human intent; the gateway logs a warning at startup and proceeds. The `--posture doctrine` or `--posture consensus` flag is the authorization.
 
 **Invalid posture handling**: `NewGovernancePosture()` panics on unrecognized posture names (`posture.go:75-80`). This is intentional; misconfigured deployments fail at startup rather than silently running under a weaker posture. `ParseGovernancePosture()` returns an error for CLI flag validation (`posture.go:86-97`).
 

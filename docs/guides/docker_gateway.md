@@ -26,7 +26,7 @@ docker run -d \
   -p 8443:8443 \
   -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  --doctrine
+  gw start --posture doctrine
 ```
 
 ## Docker Compose Deployment
@@ -36,7 +36,7 @@ The repository includes a root `docker-compose.yml` that deploys both the Gatewa
 ### Core Services
 
 - **g8e-gateway**: Provides the persistence layer and governance enforcement. Starts via the `gw start -f` CLI subcommand, which defaults to `doctrine` posture.
-- **g8e-operator**: Connects to the gateway to provide execution capabilities. Uses the `-e g8e.local` flag with `extra_hosts` mapping `g8e.local` to the host gateway, ensuring the operator resolves the gateway by the hostname matching its certificate SANs.
+- **g8e-operator**: Connects to the gateway to provide execution capabilities. Uses the `operator run -e g8e.local` command with `extra_hosts` mapping `g8e.local` to the host gateway, ensuring the operator resolves the gateway by the hostname matching its certificate SANs.
 
 The operator service depends on the gateway health check passing before starting (`depends_on` with `condition: service_healthy`).
 
@@ -102,7 +102,7 @@ Custom ports are configured via CLI flags or environment variables:
 ```bash
 docker run -d \
   g8e-gateway:latest \
-  --doctrine --http-port 3000 --https-port 3443
+  gw start --posture doctrine --http-port 3000 --https-port 3443
 ```
 
 **Compose Example:**
@@ -128,16 +128,16 @@ The gateway maintains state in `/root/.g8e` within the container. This directory
 Mount a persistent volume to preserve state across container lifecycles:
 
 ```bash
-docker run -v g8e-data:/root/.g8e g8e-gateway:latest --doctrine
+docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw start --posture doctrine
 ```
 
 ### Governance Posture
 
 Specify the security posture at startup using a mutually exclusive flag:
 
-- **`--doctrine`**: L1 enforced; L2/L3 audited.
-- **`--consensus`**: L1/L2 enforced; L3 audited.
-- **`--notary`**: L1/L2/L3 strictly enforced.
+- **`--posture doctrine`**: L1 enforced; L2/L3 audited.
+- **`--posture consensus`**: L1/L2 enforced; L3 audited.
+- **`--posture notary`**: L1/L2/L3 strictly enforced.
 
 ## Architecture
 

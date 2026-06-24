@@ -334,8 +334,8 @@ func TestFindOperatorProcessWithExecutor(t *testing.T) {
 				if name != "pgrep" {
 					t.Errorf("expected command 'pgrep', got '%s'", name)
 				}
-				if len(args) != 2 || args[0] != "-f" || args[1] != "g8e --doctrine" {
-					t.Errorf("expected args ['-f', 'g8e --doctrine'], got %v", args)
+				if len(args) != 2 || args[0] != "-f" || args[1] != "g8e gateway serve" {
+					t.Errorf("expected args ['-f', 'g8e gateway serve'], got %v", args)
 				}
 				return exec.Command(name, args...)
 			},

@@ -82,7 +82,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.22.0.10"]
+    command: ["operator", "run", "-e", "10.22.0.10"]
 
   target-system:
     image: alpine:latest

@@ -480,11 +480,11 @@ Storage service tests and test-only audit storage implementations separated from
 - `cmd/operator/actuator_pub_export_test.go` - Operator actuator export tests
 - `cmd/operator/main_subprocess_test.go` - Operator subprocess tests
 - `cmd/operator/main_test.go` - Operator main tests
-- `cmd/operator/terminal_linux_test.go` - Linux terminal tests
-- `internal/cmd/stream_ssh_test.go` - SSH stream tests
-- `internal/cmd/stream_ssh_utils_test.go` - SSH stream utility tests
-- `internal/cmd/stream_subprocess_test.go` - Subprocess stream tests
-- `internal/cmd/stream_test.go` - General stream tests
+- `internal/cli/serve/terminal_linux_test.go` - Linux terminal tests
+- `internal/cli/stream/stream_ssh_test.go` - SSH stream tests
+- `internal/cli/stream/stream_ssh_utils_test.go` - SSH stream utility tests
+- `internal/cli/stream/stream_subprocess_test.go` - Subprocess stream tests
+- `internal/cli/stream/stream_test.go` - General stream tests
 
 #### MCP Service Tests (`internal/services/mcp/`)
 

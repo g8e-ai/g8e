@@ -530,6 +530,8 @@ clean:
 	@rm -rf bin/
 	@rm -f *.sha256 *.test coverage.out coverage_filtered.out buf
 	@rm -rf .g8e-harness-*/
+	@go clean -cache
+	@go clean -modcache
 	@echo "Clean complete."
 
 .PHONY: clean-harness

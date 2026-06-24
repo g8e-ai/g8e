@@ -48,11 +48,12 @@ func TestBuildOperatorArgs_Empty(t *testing.T) {
 
 func TestBuildOperatorArgs_EndpointOnly(t *testing.T) {
 	got := buildOperatorArgs("10.0.0.1", false)
-	assert.Equal(t, "-e '10.0.0.1'", got)
+	assert.Equal(t, "operator run -e '10.0.0.1'", got)
 }
 
 func TestBuildOperatorArgs_NoGit(t *testing.T) {
 	got := buildOperatorArgs("10.0.0.1", true)
+	assert.Contains(t, got, "operator run")
 	assert.Contains(t, got, "-e '10.0.0.1'")
 	assert.Contains(t, got, "--no-git")
 	assert.NotContains(t, got, "-k")

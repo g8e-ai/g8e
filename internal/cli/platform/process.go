@@ -267,6 +267,60 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	return "./g8e", nil
 }
 
+func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, error) {
+	args := []string{
+		"gateway", "serve",
+		"--posture", opts.Posture,
+		"--data-dir", opts.DataDir,
+		"--pki-dir", opts.PKIDir,
+		"--secrets-dir", opts.SecretsDir,
+		"--http-port", strconv.Itoa(opts.HTTPPort),
+		"--https-port", strconv.Itoa(opts.HTTPSPort),
+		"--log", opts.LogLevel,
+	}
+
+	if opts.VaultDir != "" {
+		args = append(args, "--vault-dir", opts.VaultDir)
+	}
+	if opts.VaultKeyPath != "" {
+		args = append(args, "--vault-key", opts.VaultKeyPath)
+	}
+	if opts.VaultRequireUnlock {
+		args = append(args, "--vault-require-unlock")
+	}
+
+	if opts.CertIdentityMode != "" {
+		args = append(args, "--cert-mode", opts.CertIdentityMode)
+	}
+	if opts.TribunalID != "" {
+		args = append(args, "--tribunal-id", opts.TribunalID)
+	}
+	if opts.TribunalURL != "" {
+		args = append(args, "--tribunal-url", opts.TribunalURL)
+	}
+
+	if opts.PasskeyRpID != "" {
+		args = append(args, "--passkey-rp-id", opts.PasskeyRpID)
+	}
+	if opts.PasskeyRpName != "" {
+		args = append(args, "--passkey-rp-name", opts.PasskeyRpName)
+	}
+	if opts.RateLimitRPS > 0 {
+		args = append(args, "--rate-limit-rps", fmt.Sprintf("%.1f", opts.RateLimitRPS))
+	}
+	if opts.RateLimitBurst > 0 {
+		args = append(args, "--rate-limit-burst", strconv.Itoa(opts.RateLimitBurst))
+	}
+
+	identityArgs, err := pm.networkIdentityArgs(opts.IdentityData)
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, identityArgs...)
+
+	return args, nil
+}
+
 func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	if err := pm.ensureDirectories(); err != nil {
 		return err
@@ -337,56 +391,26 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 
-	args := []string{
-		"gateway", "serve",
-		"--posture", opts.Posture,
-		"--working-dir", pm.projectRoot,
-		"--data-dir", effectiveDataDir,
-		"--pki-dir", effectivePKIDir,
-		"--secrets-dir", effectiveSecretsDir,
-		"--http-port", strconv.Itoa(availableHTTPPort),
-		"--https-port", strconv.Itoa(availableHTTPSPort),
-		"--log", effectiveLogLevel,
-	}
+	opts.HTTPPort = availableHTTPPort
+	opts.HTTPSPort = availableHTTPSPort
+	opts.DataDir = effectiveDataDir
+	opts.PKIDir = effectivePKIDir
+	opts.SecretsDir = effectiveSecretsDir
+	opts.VaultDir = effectiveVaultDir
+	opts.VaultKeyPath = effectiveVaultKeyPath
+	opts.PasskeyRpID = effectivePasskeyRpID
+	opts.PasskeyRpName = effectivePasskeyRpName
+	opts.RateLimitRPS = effectiveRateLimitRPS
+	opts.RateLimitBurst = effectiveRateLimitBurst
+	opts.LogLevel = effectiveLogLevel
 
-	if effectiveVaultDir != "" {
-		args = append(args, "--vault-dir", effectiveVaultDir)
-	}
-	if effectiveVaultKeyPath != "" {
-		args = append(args, "--vault-key", effectiveVaultKeyPath)
-	}
-	if opts.VaultRequireUnlock {
-		args = append(args, "--vault-require-unlock")
-	}
-
-	if opts.CertIdentityMode != "" {
-		args = append(args, "--cert-mode", opts.CertIdentityMode)
-	}
-	if opts.TribunalID != "" {
-		args = append(args, "--tribunal-id", opts.TribunalID)
-	}
-	if opts.TribunalURL != "" {
-		args = append(args, "--tribunal-url", opts.TribunalURL)
-	}
-
-	if effectivePasskeyRpID != "" {
-		args = append(args, "--passkey-rp-id", effectivePasskeyRpID)
-	}
-	if effectivePasskeyRpName != "" {
-		args = append(args, "--passkey-rp-name", effectivePasskeyRpName)
-	}
-	if effectiveRateLimitRPS > 0 {
-		args = append(args, "--rate-limit-rps", fmt.Sprintf("%.1f", effectiveRateLimitRPS))
-	}
-	if effectiveRateLimitBurst > 0 {
-		args = append(args, "--rate-limit-burst", strconv.Itoa(effectiveRateLimitBurst))
-	}
-
-	identityArgs, err := pm.networkIdentityArgs(opts.IdentityData)
+	args, err := pm.BuildReExecArgs(opts)
 	if err != nil {
+		if closeErr := logHandle.Close(); closeErr != nil {
+			return fmt.Errorf("%w: %v (additionally failed to close log file: %v)", constants.ErrPathValidation, err, closeErr)
+		}
 		return err
 	}
-	args = append(args, identityArgs...)
 
 	cmd := exec.Command(binPath, args...)
 	cmd.Stdout = logHandle

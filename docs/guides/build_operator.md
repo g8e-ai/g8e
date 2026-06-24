@@ -14,30 +14,30 @@ Version: v1.1.9
 
 A g8e-compatible g8e Operator implements the host-side Policy Execution Point (PEP) of the platform. It receives transactions, enforces the 5-layer verification sequence, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation is a single Go codebase that compiles into the g8e binary. The same binary serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via command-line flags. Custom Operator implementations must implement the same protocol contracts and invariants.
+The reference implementation is a single Go codebase that compiles into the g8e binary. The same binary serves both g8e Gateway (PDP) and g8e Operator (PEP) roles, selected via subcommands. Custom Operator implementations must implement the same protocol contracts and invariants.
 
 ### Role Selection
 
-The g8e binary operates in either Gateway or Operator mode depending on the provided flags.
+The g8e binary uses a single cobra command tree. Gateway and Operator modes are invoked via subcommands.
 
 #### Gateway Mode (PDP)
-A Gateway enforces governance postures across all connected Operators. Enable Gateway mode by specifying one of the following posture flags:
-- `--doctrine`, Enforces L1 hard gates; audits L2/L3.
-- `--consensus`, Enforces L1/L2; audits L3. Requires `--tribunal-id` and `--tribunal-url` to connect to an enrolled Tribunal service for L2 deliberation.
-- `--notary`, Enforces L1/L2/L3 strictly.
+A Gateway enforces governance postures across all connected Operators. Start a gateway worker with `gw start` (managed) or `gateway serve` (foreground), specifying a posture via `--posture`:
+- `--posture doctrine`, Enforces L1 hard gates; audits L2/L3.
+- `--posture consensus`, Enforces L1/L2; audits L3. Requires `--tribunal-id` and `--tribunal-url` to connect to an enrolled Tribunal service for L2 deliberation.
+- `--posture notary`, Enforces L1/L2/L3 strictly.
 
 Additional Gateway mode flags for consensus posture:
 - `--tribunal-id <id>`, ID of the TribunalPolicy for L2 consensus.
 - `--tribunal-url <url>`, URL of the Tribunal service for L2 deliberation.
 
 #### Operator Mode (PEP)
-An Operator executes tools on a host and connects back to a Gateway. Enable Operator mode by specifying a Gateway endpoint:
-- `-e, --endpoint <host>`, Connects to the specified Gateway.
-- `-k, --key <path>`, Specifies the Operator private key.
-- `--cert <path>`, Specifies the Operator certificate.
-- `--trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
+An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator run`:
+- `operator run -e, --endpoint <host>`, Connects to the specified Gateway.
+- `operator run -k, --key <path>`, Specifies the Operator private key.
+- `operator run --cert <path>`, Specifies the Operator certificate.
+- `operator run --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
 
-If no role flags are provided, the binary defaults to CLI mode and executes subcommands.
+The binary always starts in CLI mode. Use `gw start` or `operator run` subcommands to launch worker processes.
 
 ---
 
