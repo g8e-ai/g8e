@@ -263,6 +263,18 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	// NewOperatorPubSubService via initializeGovernance (mcpGateway was passed in
 	// through CommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
+	// Auto-wire a Tribunal for postures that require L2 signatures (consensus, notary).
+	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
+	if posture == config.PostureConsensus || posture == config.PostureNotary {
+		SetupTribunal(t, &GatewayFixture{
+			Config:      cfg,
+			Service:     ls,
+			MCPGateway:  mcpGateway,
+			ActuatorPriv: ActuatorPriv,
+			ActuatorKeyID: ActuatorKeyID,
+		}, "test-tribunal", 1, 1, 1)
+	}
+
 	// Seed platform_settings required for health check
 	err = ls.GetDB().DocStore.DocSet(string(constants.CollectionSettings), "platform_settings", json.RawMessage(`{"session_encryption_key":"test-key"}`))
 	require.NoError(t, err)

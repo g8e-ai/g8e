@@ -112,8 +112,8 @@ type GatewayService struct {
 	scrubbingService  *scrubbing.ScrubbingService
 	posture           string // Gateway posture: doctrine, consensus, or notary
 
-	// tribunalDeliberator calls the Tribunal service for L2 votes under consensus posture.
-	// nil when not configured (doctrine/notary posture or no Tribunal URL).
+	// tribunalDeliberator calls the Tribunal service for L2 votes under consensus and notary postures.
+	// nil when not configured (doctrine posture or no Tribunal URL).
 	tribunalDeliberator TribunalDeliberator
 
 	// Circuit breaker state
@@ -1325,11 +1325,12 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		return "", nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	// Under consensus posture, send the envelope to the Tribunal for L2 deliberation
-	// before dispatch. The Tribunal collects signed votes from its members and returns
-	// the envelope with L2 metadata populated. If the deliberator is not configured,
+	// Under any posture that requires L2 signatures (consensus and notary),
+	// send the envelope to the Tribunal for L2 deliberation before dispatch.
+	// The Tribunal collects signed votes from its members and returns the
+	// envelope with L2 metadata populated. If the deliberator is not configured,
 	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
-	if g.posture == "consensus" && g.tribunalDeliberator != nil {
+	if (g.posture == "consensus" || g.posture == "notary") && g.tribunalDeliberator != nil {
 		deliberatedBytes, err := g.tribunalDeliberator.Deliberate(ctx, envelopeBytes)
 		if err != nil {
 			g.logger.Error("Tribunal deliberation failed", "tx_hash", hash, "error", err)
