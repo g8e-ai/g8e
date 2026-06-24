@@ -1,6 +1,6 @@
 # Authentication & Authorization
 
-Last Updated: 2026-06-23
+Last Updated: 2026-06-24
 Version: v1.1.9
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
@@ -181,9 +181,9 @@ The platform enforces mandatory encryption for all sensitive data at rest. See [
 ### Vault-Based Encryption
 
 All storage services require an unlocked vault at initialization:
-- **SQLAuditStore**: Encrypts audit records, governance envelopes, audit trail, and compliance records
+- **SQLAuditStore**: Encrypts event content fields (`content_text`, `command_stdout`, `command_stderr`) at rest and records action receipts and file mutations
 - **ExecutionVaultService**: Encrypts execution results (stdout, stderr) and file diffs
-- **TokenStoreService**: Encrypts authentication tokens and session data
+- **TokenStore** (`EncryptedKVAdapter`): Encrypts scrubbing tokens (UEI placeholders) managed by the `ScrubbingService`, stored in the shared `kv_store` table of the canonical gateway database
 
 ### Encryption Guarantees
 

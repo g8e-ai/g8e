@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-24
+Version: v1.1.9
 
 ---
 
@@ -23,14 +23,19 @@ The g8e binary operates in either Gateway or Operator mode depending on the prov
 #### Gateway Mode (PDP)
 A Gateway enforces governance postures across all connected Operators. Enable Gateway mode by specifying one of the following posture flags:
 - `--doctrine`, Enforces L1 hard gates; audits L2/L3.
-- `--consensus`, Enforces L1/L2; audits L3.
+- `--consensus`, Enforces L1/L2; audits L3. Requires `--tribunal-id` and `--tribunal-url` to connect to an enrolled Tribunal service for L2 deliberation.
 - `--notary`, Enforces L1/L2/L3 strictly.
+
+Additional Gateway mode flags for consensus posture:
+- `--tribunal-id <id>`, ID of the TribunalPolicy for L2 consensus.
+- `--tribunal-url <url>`, URL of the Tribunal service for L2 deliberation.
 
 #### Operator Mode (PEP)
 An Operator executes tools on a host and connects back to a Gateway. Enable Operator mode by specifying a Gateway endpoint:
 - `-e, --endpoint <host>`, Connects to the specified Gateway.
 - `-k, --key <path>`, Specifies the Operator private key.
 - `--cert <path>`, Specifies the Operator certificate.
+- `--trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
 
 If no role flags are provided, the binary defaults to CLI mode and executes subcommands.
 
@@ -65,6 +70,9 @@ The Makefile provides several build targets:
 - `make build-windows`, Builds the g8e binary for Windows (amd64, arm64).
 - `make build-darwin`, Builds the g8e binary for Darwin (amd64, arm64).
 - `make build-docker`, Builds the g8e binary for linux/amd64 inside a Docker container.
+- `make build-linux-docker`, Builds the g8e binary for Linux (amd64, arm64, 386) inside a Docker container.
+- `make build-windows-docker`, Builds the g8e binary for Windows (amd64, arm64) inside a Docker container.
+- `make build-darwin-docker`, Builds the g8e binary for Darwin (amd64, arm64) inside a Docker container.
 - `make build-all-docker`, Builds all platform binaries using Docker.
 - `make clean`, Removes compiled binaries and test artifacts.
 
@@ -100,10 +108,10 @@ This builds for both amd64 and arm64 architectures. On Windows hosts, use the sa
 The `operator` subcommand provides tools for managing remote Operator instances:
 
 - `./g8e operator list`, Lists all Operators currently connected to the Gateway.
-- `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH.
-- `./g8e operator stream --hosts <hosts>`, Streams the binary to remote hosts without saving to disk.
+- `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH and optionally starts it. Requires `./g8e auth enroll` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`), `--background`.
+- `./g8e operator stream --hosts <hosts>`, Streams the binary to remote hosts via SSH pipe and makes it executable on the remote host. Requires `./g8e auth enroll` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`).
 - `./g8e operator cp <target>`, Copies the binary to a local path.
-- `./g8e operator scp <user@host:path>`, Copies the binary to a remote host.
+- `./g8e operator scp <user@host:path>`, Copies the binary to a remote host. Flags: `--port` (`-P`), `--identity` (`-i`), `--recursive` (`-r`), `--preserve` (`-p`), `--verbose` (`-v`), `--compression` (`-C`), `--prompt`.
 
 ---
 
@@ -160,8 +168,8 @@ The Operator must establish workload identity via mTLS:
 The Operator must maintain the host as the authoritative source of truth:
 
 - **SQLAuditStore**: Append-only, encrypted SQLite log of every event and signed ActionReceipt. Fail-closed: reject events missing a valid operator_session_id. Requires encryption vault for data-at-rest protection (encryption is mandatory).
-- **LedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session.
-- **LocalStoreService**: SQLite storage for command execution results, file diffs, and suspended transactions. Provides token persistence for sovereignty scrubbing. Requires encryption vault (encryption is mandatory).
+- **GitLedgerService**: Git-backed version control for file mutations. Implements two-phase commit (LedgerHashBefore / LedgerHashAfter) and supports restoration to any prior state within the session. Requires encryption vault (encryption is mandatory).
+- **ExecutionVaultService**: SQLite storage for command execution results and file diffs. Requires encryption vault (encryption is mandatory).
 - **CanonicalDBService**: (Gateway mode only) Unified SQLite persistence for state roots, nonces, trusted signers, app policies, and suspended transactions. Requires encryption vault (encryption is mandatory).
 
 #### 6. Outbound-Only Connectivity
@@ -271,7 +279,7 @@ Environment variables:
 
 Additional vault management commands:
 
-- `init`, Initializes a new vault and saves the key to `~/.g8e/vault/key`.
+- `init`, Initializes a new vault and saves the key to `.g8e/vault/key` (relative to the current working directory).
 - `unlock`, Unlocks the vault using the private key.
 - `rekey`, Re-encrypts the vault with a new key.
 - `status`, Displays initialization and lock state.
