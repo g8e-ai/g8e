@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 ## Overview
 
@@ -22,10 +22,11 @@ g8e uses mandatory encryption for all sensitive data at rest. The encryption sys
   - Tests cover KEK derivation, DEK generation, AES Key Wrap/Unwrap, AES-GCM encryption/decryption, vault lifecycle (init, unlock, rekey, lock, reset), concurrent access, and integrity verification.
   - All cryptographic primitives have dedicated test cases.
   - Error paths are tested, including invalid keys, tampered ciphertext, and locked vaults.
-- **Storage integration**: Vault requirement tests in `../../internal/services/storage/vault_requirement_test.go`
-  - Verifies that `NewExecutionVaultService`, `NewTokenStoreService`, and `NewSQLAuditStore` reject nil vault parameters.
-  - Tests that locked vault operations fail appropriately.
-- **Integration tests**: Storage service tests use vault fixtures for end-to-end encryption validation.
+- **Storage integration**: Nil vault rejection tests across storage services:
+  - `../../internal/services/storage/audit_store_unit_test.go`: `TestSQLAuditStore_NilEncryptionVault` verifies `NewSQLAuditStore` rejects nil vault.
+  - `../../internal/services/storage/execution_vault_test.go`: `TestExecutionVault_NewExecutionVaultService_NilVault` verifies `NewExecutionVaultService` rejects nil vault.
+  - `../../internal/services/storage/ledger_test.go`: `TestLedgerService_RestoreFileFromCommit_DisabledVault` verifies `NewGitLedgerService` rejects nil vault.
+- **Integration tests**: Storage service tests in `../../internal/services/storage/storagetest/` use vault fixtures for end-to-end encryption validation.
 
 ## Vault Architecture
 
@@ -77,7 +78,6 @@ All storage services require an unlocked vault at initialization:
 |---------|---------------|----------------|-------------------------|
 | `SQLAuditStore` | Yes | `content_text`, `command_stdout`, `command_stderr` fields in audit records | Config struct (`AuditStoreConfig.EncryptionVault`) |
 | `ExecutionVaultService` | Yes | Execution results, command outputs, file diffs | Constructor parameter |
-| `TokenStoreService` | Yes | Authentication tokens, session data | Constructor parameter |
 | `GitLedgerService` | Yes | File content in ledger (stored with `.enc` suffix) | Config struct (`LedgerConfig.EncryptionVault`) |
 
 ## Vault Lifecycle
@@ -172,6 +172,7 @@ export G8E_VAULT_KEY=/path/to/vault/key
 
 - `G8E_VAULT_DIR`: Override vault directory.
 - `G8E_VAULT_KEY`: Override vault key path.
+- `G8E_VAULT_REQUIRE_UNLOCK`: Set to `true` to require the vault to be unlocked at gateway startup (fail if vault cannot be unlocked).
 
 ### Configuration File
 

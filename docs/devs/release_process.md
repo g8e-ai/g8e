@@ -299,6 +299,19 @@ Update any documentation that references version numbers:
 - **API Reference**: Update if API changes are included
 - **Architecture Docs**: Update if architectural changes are included
 
+**Documentation Version Sync**: Every markdown file in `docs/` that contains a `Version: vX.Y.Z` header must be updated to match the release version in the `VERSION` file. This ensures users can identify which release a document corresponds to. To find all docs with stale version headers:
+
+```bash
+# List all docs with a Version header and their current version
+grep -rn '^Version: v' docs/ --include='*.md'
+
+# Find docs whose version does not match the VERSION file
+RELEASE_VERSION=$(cat VERSION)
+grep -rn '^Version: v' docs/ --include='*.md' | grep -v "$RELEASE_VERSION"
+```
+
+Update each stale `Version:` header to the current release version and update the `Last Updated:` date accordingly.
+
 ### 5. Post-Release Verification
 
 After the release is published:

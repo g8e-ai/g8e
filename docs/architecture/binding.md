@@ -5,7 +5,7 @@ title: Session & Identity Binding
 # Session & Identity Binding
 
 Last Updated: 2026-06-23
-Version: v1.1.6
+Version: v1.1.9
 
 Binding is the cryptographic and stateful linkage between platform sessions (web, CLI, operator) and the identities, agents, and Operator instances they authorize. It is the mechanism that answers: *"Which Operator is allowed to act on behalf of which session?"* and *"Which app is allowed to push events to which target?"*
 
@@ -243,14 +243,14 @@ The `handlePKIAppsDelegated` handler:
 
 1. Requires mTLS authentication from a human CLI session (not an app cert).
 2. Extracts the user ID from the CLI certificate.
-3. Mints a short-lived (1-hour) certificate with:
-   - A SPIFFE URI SAN for the app: `spiffe://g8e.local/app/<agent-name>`
-   - The requestor's human identity bound at issuance time
+3. Mints a short-lived (1-hour) certificate with dual URI SANs (`internal/services/gateway/gateway_certs.go:818-828`):
+   - App identity: `spiffe://g8e.local/app/<app_name>`
+   - Requestor identity: `spiffe://g8e.local/user/<user_id>`
 4. The resulting credential is injected into the agent subprocess via `G8E_APP_CERT` / `G8E_APP_KEY` environment variables.
 
 ### 4.3 Envelope Binding
 
-Location: `internal/services/mcp/gateway.go:1297-1314`
+Location: `internal/services/mcp/gateway.go:1290-1314`
 
 The governance envelope builder binds both identities to the envelope:
 
@@ -267,7 +267,7 @@ This ensures every governance envelope carries the full identity chain: who requ
 
 ### 5.1 Push Authorization (App → Target)
 
-Location: `internal/services/gateway/gateway_http_sse.go:126-199`
+Location: `internal/services/gateway/gateway_http_sse.go:126-224`
 
 When an app workload pushes an SSE event to a target session, the Gateway verifies the app is authorized for that target by checking the binding:
 
@@ -280,12 +280,12 @@ When an app workload pushes an SSE event to a target session, the Gateway verifi
 1. Load the CLI session document.
 2. Get the `OperatorSessionID` from the CLI session.
 3. Load the Operator document for that session.
-4. Verify `WorklengthIdentity.MatchesApp(appID, operatorID)`.
+4. Verify `WorkloadIdentity.MatchesApp(appID, operatorID)`.
 5. If no match, return `403 Forbidden`.
 
 ### 5.2 Stream Authorization (Consumer → Events)
 
-Location: `internal/services/gateway/gateway_http_sse.go:285-329`
+Location: `internal/services/gateway/gateway_http_sse.go:285-336`
 
 When a consumer connects to the SSE stream, the Gateway verifies the Operator session is bound to the declared routing target:
 
@@ -312,41 +312,37 @@ Defined in `protocol/constants/kv_keys.json`:
 | :--- | :--- | :--- |
 | `HeaderBoundOperators` | `X-G8E-Bound-Operators` | Communicates bound operator info in HTTP responses |
 
-### 6.3 Audit Events
+### 6.3 Operator Events
 
-| Event Type | Value | Description |
+Defined in `internal/constants/events.go` and `protocol/constants/events.json`:
+
+| Constant | Value | Description |
 | :--- | :--- | :--- |
-| `AuditEventTypeG8eBound` | `g8e.bound` | Audit event recording a binding action |
-| `SessionEventTypeG8eBound` | `g8e.bound` | Session event for binding |
-| `SessionEventTypeG8eUnbound` | `g8e.unbound` | Session event for unbinding |
 | `EventOperatorBound` | `g8e.v1.operator.bound` | Operator bound event |
+| `EventOperatorUnbound` | `g8e.v1.operator.unbound` | Operator unbound event |
 | `EventOperatorStatusUpdatedBound` | `g8e.v1.operator.status.updated.bound` | Operator status changed to bound |
-| `HistoryEventTypeBound` | `bound` | History event type for binding |
+| `HistoryEventTypeBound` | `bound` | History event type for binding (`internal/constants/status.go`) |
 
-### 6.4 Workflow Types
+### 6.4 Agent Modes
 
-| Constant | Value | Description |
-| :--- | :--- | :--- |
-| `WorkflowTypeG8eBound` | `g8e.bound` | Operator is bound |
-| `WorkflowTypeG8eCloudBound` | `g8e.cloud.bound` | Cloud operator is bound |
-| `WorkflowTypeG8eNotBound` | `g8e.not.bound` | Operator is not bound |
-
-### 6.5 Command Error Type
+Defined in `internal/constants/prompts.go`:
 
 | Constant | Value | Description |
 | :--- | :--- | :--- |
-| `CommandErrorTypeBindingViolation` | `binding.violation` | A binding violation occurred during command execution |
+| `AgentModeG8eBound` | `g8e.bound` | Operator is bound |
+| `AgentModeCloudOperatorBound` | `g8e.cloud.bound` | Cloud operator is bound |
+| `AgentModeG8eNotBound` | `g8e.not.bound` | Operator is not bound |
 
-### 6.6 Agent Activity Metadata
+### 6.5 Agent Activity Metadata
 
 Defined in `protocol/models/agent_activity_metadata.json`:
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `operators_bound` | boolean | Whether operators were bound |
+| `operator_bound` | boolean | Whether operators were bound |
 | `bound_operator_count` | integer | Number of bound operators |
 
-### 6.7 Reputation & Stake Binding
+### 6.6 Reputation & Stake Binding
 
 Both `protocol/models/reputation_commitment.json` and `protocol/models/stake_resolution.json` contain a `binding` object that links the record to a specific `investigation_id`, ensuring reputation and stake data are cryptographically bound to the investigation context.
 
@@ -360,8 +356,10 @@ All binding-related errors are defined in `internal/constants/errors.go`:
 | :--- | :--- |
 | `ErrIdentityBindingFailed` | Identity binding failed |
 | `ErrRegistrationFailedToSetKVBinding` | Failed to set KV binding |
+| `ErrRegistrationFailedToMarshalSessionIDs` | Failed to marshal session IDs |
 | `ErrRegistrationFailedToGetBoundSessions` | Failed to get bound sessions document |
 | `ErrRegistrationFailedToMarshalBoundSessions` | Failed to marshal bound sessions document |
+| `ErrRegistrationFailedToMarshalExistingDocument` | Failed to marshal existing document |
 | `ErrRegistrationFailedToSetBoundSessions` | Failed to set bound sessions document |
 | `ErrRegistrationFailedToUnmarshalBoundSessions` | Failed to unmarshal bound sessions document |
 | `ErrRegistrationFailedToUpdateBoundSessions` | Failed to update bound sessions document |
@@ -421,7 +419,7 @@ All binding-related errors are defined in `internal/constants/errors.go`:
 
 ## 9. Security Properties
 
-1. **Bidirectional consistency**: Both KV directions (web→operator and operator→web) are updated atomically during bind/unbind. If one direction fails, the operation is rolled back for that operator.
+1. **Bidirectional updates**: Both KV directions (web→operator and operator→web) are updated during bind/unbind. During bind, if the operator→web KV write succeeds but the web→operator write fails, the operator→web binding is not rolled back; the operator is added to the failed list. During unbind, KV deletion failures are logged as warnings and do not prevent the operator from being unbound.
 
 2. **Ownership enforcement**: Bind/unbind operations verify that the Operator belongs to the requesting user (`op.UserID == req.UserID`), preventing cross-user binding attacks.
 

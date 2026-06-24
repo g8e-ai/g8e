@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -35,8 +35,25 @@ The repository includes a root `docker-compose.yml` that deploys both the Gatewa
 
 ### Core Services
 
-- **g8e-gateway**: Provides the persistence layer and governance enforcement.
-- **g8e-operator**: Connects to the gateway to provide execution capabilities.
+- **g8e-gateway**: Provides the persistence layer and governance enforcement. Starts via the `gw start -f` CLI subcommand, which defaults to `doctrine` posture.
+- **g8e-operator**: Connects to the gateway to provide execution capabilities. Uses the `-e g8e.local` flag with `extra_hosts` mapping `g8e.local` to the host gateway, ensuring the operator resolves the gateway by the hostname matching its certificate SANs.
+
+The operator service depends on the gateway health check passing before starting (`depends_on` with `condition: service_healthy`).
+
+### Environment Variables
+
+The compose file supports the following environment variable overrides:
+
+- **`G8E_PREFIX`**: Prefix for container names (default: `g8e`). Containers are named `${G8E_PREFIX}-gateway` and `${G8E_PREFIX}-operator`.
+- **`G8E_HTTP_PORT`**: Host port mapped to the gateway HTTP port 8080 (default: `8080`).
+- **`G8E_HTTPS_PORT`**: Host port mapped to the gateway HTTPS port 8443 (default: `8443`).
+
+### Resource Limits
+
+Both services define CPU and memory constraints in the compose file:
+
+- **Limits**: 2 CPUs, 1G memory per service.
+- **Reservations**: 0.5 CPUs, 256M memory per service.
 
 ### Execution
 
@@ -46,6 +63,12 @@ Start the services from the repository root:
 docker compose up -d
 ```
 
+To use custom ports or a container name prefix:
+
+```bash
+G8E_HTTP_PORT=3000 G8E_HTTPS_PORT=3443 G8E_PREFIX=myg8e docker compose up -d
+```
+
 ### Demo Environments
 
 Functional demo environments are located in the `demos/` directory. These configurations demonstrate multi-network isolation and specialized doctrine enforcement:
@@ -53,6 +76,8 @@ Functional demo environments are located in the `demos/` directory. These config
 - **Healthcare**: FHIR R4 compliance and PHI protection.
 - **Government**: Public sector data residency and access control.
 - **Finance**: High-integrity ledger and audit requirements.
+- **Secure Data**: Governed data migration with a two-operator pipeline and chain-of-custody receipts.
+- **Swarm**: Drone swarm simulation with 20 autonomous operators, battlefield intelligence, and doctrine-based weapons control.
 
 To run a demo:
 
@@ -60,6 +85,8 @@ To run a demo:
 cd demos/healthcare
 docker compose up -d
 ```
+
+Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. See `demos/README.md` for the full demo environment guide.
 
 ## Configuration
 
@@ -83,10 +110,12 @@ docker run -d \
 services:
   gateway:
     ports:
-      - "3000:3000"
-      - "3443:3443"
-    command: ["--doctrine", "--http-port", "3000", "--https-port", "3443"]
+      - "3000:8080"
+      - "3443:8443"
+    command: ["gw", "start", "--posture", "doctrine", "--http-port", "8080", "--https-port", "8443", "-f"]
 ```
+
+The `gw start` subcommand accepts the same `--posture`, `--http-port`, and `--https-port` flags as the direct binary invocation. The `-f` flag follows log output. Container ports remain 8080 and 8443; only the host-side mapping changes.
 
 ### Data Persistence
 
@@ -126,7 +155,7 @@ The image includes:
 
 ### Health Monitoring
 
-The container defines a health check that queries the `/api/v1/health` endpoint:
+The container defines a health check that queries the `/api/v1/health` endpoint. The `Dockerfile` uses `curl` for this check; the root `docker-compose.yml` overrides this with `wget`.
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' g8e-gateway
@@ -155,6 +184,7 @@ docker exec g8e-gateway /g8e gw status
 ## Production Considerations
 
 - **Base Image**: The image uses Debian Bookworm. Maintain regular updates to the base image for security patches.
-- **Resource Constraints**: Define CPU and memory limits in production compose files to prevent resource exhaustion.
+- **Resource Constraints**: The root `docker-compose.yml` defines CPU and memory limits (2 CPUs / 1G per service with 0.5 CPU / 256M reservations). Adjust these for production workloads.
 - **Vault Management**: The vault must be initialized for production operations. Use `G8E_VAULT_REQUIRE_UNLOCK=true` to ensure the gateway only starts when the vault is available.
 - **Certificates**: By default, the gateway generates self-signed certificates. For production, provide valid certificates via the `--pki-dir` volume or use `--cert-mode full` with appropriate hostnames.
+- **Operator Connectivity**: The operator connects to the gateway via `g8e.local`, resolved through Docker `extra_hosts` mapping to `host-gateway`. Ensure this hostname matches the gateway certificate SANs in production deployments.

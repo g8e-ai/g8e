@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -80,20 +80,30 @@ The `governance` field encapsulates all three governance layers:
 |---|---|---|
 | `l1` | L1Metadata | L1 Doctrine status (validated flag, violations list) |
 | `l2` | L2Metadata | L2 Consensus votes (tribunal_id, signed L2Vote list) |
-| `l3` | L3Metadata | L3 Notary proof and auto-approval flag |
+| `l3` | L3Metadata | L3 Notary proof (WebAuthn or CLI signature) |
+
+### L2Vote
+
+Each Tribunal member produces a signed vote over the transaction hash:
+
+| Field | Type | JSON Name | Description |
+|---|---|---|---|
+| `signer_key_id` | string | `signerKeyId` | Member app ID; must match a trusted signer in the SignerStore |
+| `consensus_signature` | string | `consensusSignature` | Ed25519 signature over `<transaction_hash>|<decision>` |
+| `decision` | bool | `decision` | Member vote: true (safe) or false (unsafe) |
 
 ### L3Proof
 
 The L3 proof structure supports both WebAuthn and CLI-based authentication:
 
-| Field | Type | Description |
-|---|---|---|
-| `client_data_json` | string | WebAuthn client data JSON (for web sessions) |
-| `authenticator_data` | string | WebAuthn authenticator data (for web sessions) |
-| `signature` | string | WebAuthn signature (for web sessions) |
-| `credential_id` | string | WebAuthn credential ID (for web sessions) |
-| `mtls_cert_fingerprint` | string | SHA-256 fingerprint of mTLS certificate (for CLI sessions) |
-| `cli_signature` | string | Ed25519 signature over transaction_hash (for CLI sessions) |
+| Field | Type | JSON Name | Description |
+|---|---|---|---|
+| `client_data_json` | string | `clientDataJSON` | WebAuthn client data JSON (for web sessions) |
+| `authenticator_data` | string | `authenticatorData` | WebAuthn authenticator data (for web sessions) |
+| `signature` | string | `signature` | WebAuthn signature (for web sessions) |
+| `credential_id` | string | `credentialId` | WebAuthn credential ID (for web sessions) |
+| `mtls_cert_fingerprint` | string | `mtlsCertFingerprint` | SHA-256 fingerprint of mTLS certificate (for CLI sessions) |
+| `cli_signature` | string | `cliSignature` | Ed25519 signature over transaction_hash (for CLI sessions) |
 
 ### Canonical JSON Wire Format
 
@@ -104,7 +114,7 @@ All envelopes use canonical JSON (protojson) encoding for client-facing surfaces
 - **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields in proto field order
 - **Internal storage**: protobuf bytes (implementation detail)
 
-The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC RFC3339Nano), and `intent_data` (canonicalized map with sorted keys). The result is hashed with SHA-256 and hex-encoded.
+The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC RFC3339Nano), `intent_data` (canonicalized map with sorted keys), `requestor_user_id`, and `acting_app_id`. The result is hashed with SHA-256 and hex-encoded. The L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked to authorize.
 
 This ensures compatibility with JSON-based ecosystems while maintaining typed schema validation.
 
@@ -127,12 +137,12 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 
 The `L4Warden` operates as the primary pre-dispatch validation gate, executing the following checks sequentially:
 
-1. **Integrity**: Enforces `id == transaction_hash == SHA256(canonical_fields)`.
-2. **Freshness**: Verifies `expires_at` and ensures the `nonce` is not in the replay store.
-3. **State Binding**: Validates that the `state_merkle_root` matches the local ledger root.
-4. **L1 Doctrine**: Scans the decoded typed payload against reflected `forbidden_patterns` and threat rules.
-5. **L2 Consensus**: Verifies the Ed25519 signature against the Operator's trusted `SignerStore`.
-6. **L3 Notary**: Validates the WebAuthn proof or applies explicit auto-approval policy for the action.
+1. **Freshness**: Verifies `expires_at` and durably reserves the `nonce` in the replay store to prevent concurrent double-processing.
+2. **Integrity**: Decodes the typed payload, enforces `id == transaction_hash == SHA256(canonical_fields)`, and validates the action type.
+3. **L1 Doctrine**: Scans the decoded typed payload against reflected `forbidden_patterns` and threat rules.
+4. **State Binding**: Validates that the `state_merkle_root` matches the local ledger root.
+5. **L2 Consensus**: Verifies Ed25519 signatures against the Operator's trusted `SignerStore` and checks quorum against the TribunalPolicy.
+6. **L3 Notary**: Validates the WebAuthn or CLI proof, or applies explicit auto-approval policy for the action.
 
 ### Execution & Receipt Phase (L5Actuator)
 
@@ -170,11 +180,10 @@ Hardware-bound proof of human presence. Human-in-the-loop authorization (utilizi
 
 ### L4 Warden: Pre-dispatch Verification
 The central Policy Execution Point (PEP) that validates the entire transaction proof before dispatch. Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) is defined in `../../internal/services/governance/l4_warden.go`.
-- **Stateless Validation**: Verifies structural integrity, payload decoding, and L1Doctrine compliance.
-- **Cryptographic Integrity**: Validates `transaction_hash` and signatures.
-- **Freshness & Replay**: Verifies `expires_at` and the `nonce` replay store with early durable reservation.
+- **Freshness & Replay**: Verifies `expires_at` and durably reserves the `nonce` in the replay store with early durable reservation to prevent concurrent double-processing.
+- **Stateless Validation**: Decodes the typed payload, verifies structural integrity, enforces `id == transaction_hash`, and validates L1 Doctrine compliance.
 - **State Binding**: Compares `state_merkle_root` against the host ledger.
-- **Posture-Aware Validation**: Enforces L2 and L3 requirements based on governance posture (doctrine, consensus, or notary).
+- **Posture-Aware Validation**: Enforces L2 (Ed25519 signature verification against `SignerStore` with TribunalPolicy quorum) and L3 (WebAuthn or CLI proof) requirements based on governance posture (doctrine, consensus, or notary).
 
 ### L5 Actuator: Execution Boundary
 The single fail-closed execution target that dispatches the verified payload and issues signed receipts. Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production are defined in `../../internal/services/governance/l5_actuator.go`.
@@ -233,8 +242,6 @@ The protocol defines canonical event types in `../../protocol/constants/events.j
 - `OperatorAuditCommandRecorded`, `OperatorAuditUserRecorded`, `OperatorAuditAiRecorded`
 - `OperatorAuditDirectCommandRecorded`, `OperatorAuditDirectCommandResultRecorded`
 - `OperatorBootstrapRequested`, `OperatorBootstrapReceived`, `OperatorBootstrapConfigReceived`, `OperatorBootstrapCompleted`, `OperatorBootstrapFailed`
-- `OperatorReputationCommitmentCreated`, `OperatorReputationCommitmentFailed`, `OperatorReputationCommitmentVerified`
-- `OperatorReputationSlashTier1`, `OperatorReputationSlashTier2`, `OperatorReputationSlashTier3`, `OperatorReputationStateUpdated`
 
 ### MCP/A2A Events
 - `OperatorMcpCallRequested`
@@ -404,21 +411,13 @@ Output scrubbing is performed directly at the `L5Actuator` boundary to redact to
 
 The codebase maintains comprehensive test coverage across all layers:
 
-- **Governance Layer**: Unit tests for L1 Doctrine (`l1_doctrine_test.go`), L2 Consensus (`l2_consensus_test.go`), L3 Notary (`l3_notary_integration_test.go`), L4 Warden (`l4_warden_test.go`), and L5 Actuator (`l5_actuator_test.go`, `l5_actuator_integration_test.go`)
+- **Governance Layer**: Unit tests for L1 Doctrine (`l1_doctrine_test.go`), L2 Consensus (`l4_warden_consensus_test.go`), L3 Notary (`l3_notary_test.go`, `l3_notary_integration_test.go`), L4 Warden (`l4_warden_test.go`), and L5 Actuator (`l5_actuator_test.go`, `l5_actuator_integration_test.go`)
 - **Storage Layer**: Extensive test suites for SQLAuditStore (in `storagetest/`), GitLedgerService (`ledger_test.go`, `ledger_git_test.go`), ExecutionVaultService (`execution_vault_test.go`), and supporting stores (replay, token, suspended transaction)
 - **Gateway Layer**: Comprehensive tests for envelope construction (`governance_envelope_test.go`, `governance_envelope_quality_test.go`), authentication (`gateway_auth_test.go`, `auth_controller_test.go`), and session management
 - **MCP/A2A Layer**: Integration tests for MCP gateway translation and native tools
 - **E2E Tests**: Docker-based end-to-end tests supporting both root and demo environments via `G8E_TEST_ENV` environment variable
 
 All tests follow a Tier 1 philosophy where possible (no external network/DB requirements) to ensure fast, reliable CI/CD execution.
-
-### Refactoring Notes
-
-Minor technical debt items identified for future cleanup:
-
-- **CLI TLS Configuration**: Some CLI commands still use legacy global TLS state. Migration to dependency injection-based TLS config is planned for `pubsub_commands.go` (line 136).
-
-These items do not impact protocol correctness or security posture and are tracked for incremental improvement.
 
 ## Implementation Reference
 
@@ -429,10 +428,10 @@ These items do not impact protocol correctness or security posture and are track
 | Channel prefixes | `../../protocol/constants/channels.json` |
 | Envelope types | `../../pkg/governance/types.go` |
 | L1 Doctrine logic | `../../internal/services/governance/l1_doctrine.go` |
-| L2 Consensus logic | `../../internal/services/governance/l2_consensus.go` |
 | L3 Notary logic | `../../internal/services/governance/l3_notary.go` |
 | L4 Warden logic | `../../internal/services/governance/l4_warden.go` |
 | L5 Actuator logic | `../../internal/services/governance/l5_actuator.go` |
+| Tribunal service | `../../internal/services/tribunal/service.go` |
 | Audit storage | `../../internal/services/storage/audit_store.go` |
 | Git ledger storage | `../../internal/services/storage/ledger.go` |
 | Execution vault storage | `../../internal/services/storage/execution_vault.go` |
@@ -440,6 +439,7 @@ These items do not impact protocol correctness or security posture and are track
 | Replay store | `../../internal/services/storage/replay_store.go` |
 | Token store | `../../internal/services/storage/token_store.go` |
 | Suspended transaction store | `../../internal/services/storage/suspended_transaction_store.go` |
+| Network identity detector | `../../internal/services/network/identity.go` |
 | Network architecture | `./network.md` |
 | Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
 | Gateway HTTP routing | `../../internal/services/gateway/gateway_http.go` |
@@ -453,6 +453,8 @@ These items do not impact protocol correctness or security posture and are track
 | MCP vectors doctrine | `../../protocol/constants/doctrine/mcp_vectors_doctrine.json` |
 | Gitleaks doctrine | `../../protocol/constants/doctrine/gitleaks_doctrine.json` |
 | OWASP CRS doctrine | `../../protocol/constants/doctrine/owasp_crs_doctrine.json` |
+| RPC error codes | `../../internal/constants/rpc_errors.go` |
+| Governance posture | `../../internal/services/governance/posture.go` |
 
 ---
 
@@ -488,13 +490,28 @@ These items do not impact protocol correctness or security posture and are track
       "violations": []
     },
     "l2": {
-      "consensusSignature": "4a5b6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
-      "agentIds": ["agent-ensemble-1", "agent-ensemble-2", "agent-ensemble-3"],
-      "keyId": "key-ensemble-prod-abc123"
+      "tribunalId": "tribunal-prod-abc123",
+      "votes": [
+        {
+          "signerKeyId": "agent-ensemble-1",
+          "consensusSignature": "4a5b6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+          "decision": true
+        },
+        {
+          "signerKeyId": "agent-ensemble-2",
+          "consensusSignature": "5b6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+          "decision": true
+        },
+        {
+          "signerKeyId": "agent-ensemble-3",
+          "consensusSignature": "6c7d8e9f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+          "decision": true
+        }
+      ]
     },
     "l3": {
       "proof": {
-        "clientDataJson": "{\"challenge\":\"a1b2c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
+        "clientDataJSON": "{\"challenge\":\"a1b2c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
         "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
         "signature": "MEUCIQDWn3x4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IgE5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
         "credentialId": "abc123def456abc123def456abc123def456abc123def456abc123def456abc1"
@@ -542,9 +559,14 @@ The `payload` field contains base64-encoded protobuf bytes of `McpCallRequested`
       "violations": []
     },
     "l2": {
-      "consensusSignature": "5c6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
-      "agentIds": ["agent-ensemble-1"],
-      "keyId": "key-ensemble-prod-def456"
+      "tribunalId": "tribunal-prod-def456",
+      "votes": [
+        {
+          "signerKeyId": "agent-ensemble-1",
+          "consensusSignature": "5c6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+          "decision": true
+        }
+      ]
     },
     "l3": {
       "proof": null
@@ -588,13 +610,23 @@ This example shows a non-mutation read under doctrine posture. L3 is not require
       "violations": []
     },
     "l2": {
-      "consensusSignature": "6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
-      "agentIds": ["agent-ensemble-1", "agent-ensemble-2"],
-      "keyId": "key-ensemble-prod-efg789"
+      "tribunalId": "tribunal-prod-efg789",
+      "votes": [
+        {
+          "signerKeyId": "agent-ensemble-1",
+          "consensusSignature": "6d7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+          "decision": true
+        },
+        {
+          "signerKeyId": "agent-ensemble-2",
+          "consensusSignature": "7e8f0a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2...f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+          "decision": true
+        }
+      ]
     },
     "l3": {
       "proof": {
-        "clientDataJson": "{\"challenge\":\"c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
+        "clientDataJSON": "{\"challenge\":\"c3d4e5f6\",\"origin\":\"https://g8e.ai\",\"type\":\"webauthn.get\"}",
         "authenticatorData": "SZYN5YgOjGh0NBcPZHZgW4_krrmihjLHmVzzuoMdl2NFAAAAAQ",
         "signature": "MEYCIQCd4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2IhAOf6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
         "credentialId": "def456abc123def456abc123def456abc123def456abc123def456abc123def4"

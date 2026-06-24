@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 ---
 
@@ -225,11 +225,15 @@ To connect an operator on a remote host to the gateway:
 
 See [Connect Operator to Gateway](./connect_operator_to_gateway.md) for full enrollment steps.
 
-### Connect a Docker operator to a local gateway
+### Run the gateway and operator in Docker
 
-The root `docker-compose.yml` configures a Dockerized g8e Operator that dials out to a gateway running on the host machine (or a remote IP). This is useful for testing the operator in an isolated container while the gateway runs locally.
+The root `docker-compose.yml` defines both a `g8e-gateway` service and a `g8e-operator` service on a shared bridge network (`g8e-net`). The operator enrolls with the gateway over `g8e.local`, which resolves to the host gateway IP via `extra_hosts`. The gateway health check must pass before the operator starts, enforced by `depends_on` with `condition: service_healthy`.
 
-The operator connects to the gateway over `host` networking. The gateway must be running and reachable at the specified IP before the operator starts. The `restart: "no"` policy prevents enrollment loops if the gateway is not yet available.
+```bash
+docker compose up -d
+```
+
+Both services use the root `Dockerfile` for image builds. The gateway exposes ports 8080 (HTTP) and 8443 (HTTPS/mTLS) on the host. The `restart: "no"` policy prevents enrollment loops if the gateway is not yet available.
 
 ---
 
@@ -249,6 +253,14 @@ Launch an agent with native tools disabled, forcing all I/O through the g8e MCP 
 ./g8e mcp agent run cursor
 ```
 
+### List supported agents
+
+Print all supported AI agent binaries:
+
+```bash
+./g8e mcp agent list
+```
+
 ### Show agent configurations
 
 Print MCP client configurations for connecting to the g8e Gateway from local coding tools:
@@ -263,7 +275,7 @@ The CLI displays configurations for `g8e.local` (mTLS), Direct IP (mTLS), and St
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for three industry scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), and **Government** (CUI/CMMC). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for five scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), and **Swarm** (drone swarm with 20 autonomous operators). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
 
 ### What the demos use Docker for
 
@@ -275,9 +287,9 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-The healthcare demo uses Alpine images with binary bind-mounts. The gov and finance demos build dedicated gateway and operator images using the root `Dockerfile`.
+All demos build the gateway and operator images from the root `Dockerfile`. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The swarm demo deploys a single gateway with 20 operator containers.
 
-Note: The healthcare demo uses the `/api/v1/health` endpoint for health checks, while the gov and finance demos use `/healthz`. Both endpoints are valid for gateway health verification.
+All demos use the `/api/v1/health` endpoint for gateway health checks.
 
 The `g8e` binary must be built before running demos. The demos CLI checks for the binary at `demos/bin/g8e` and provides a warning if it is not found. Build the binary and copy it to the demos directory:
 
@@ -322,6 +334,12 @@ Use the `g8e` CLI to manage demo environments:
 
 # Remove containers, volumes, and networks
 ./g8e demos clean healthcare
+
+# Clean and restart in one step
+./g8e demos reset healthcare
+
+# View audit logs and ledger history
+./g8e demos audit healthcare
 ```
 
 Or use Docker Compose directly:
@@ -343,6 +361,12 @@ docker compose down -v
 | healthcare | 4 | Bad actor PHI exfiltration blocked |
 | gov | 1 | CUI exfiltration attempt blocked |
 | finance | 1 | Unauthorized trade blocked |
+| secure-data | 1 | Governed migration with chain-of-custody receipts |
+| secure-data | 2 | Connector bypass attempt blocked |
+| secure-data | 3 | Cross-tenant leak doctrine triggered |
+| swarm | 1 | Normal operations within doctrine rules |
+| swarm | 2 | Adversary interception attempt blocked |
+| swarm | 3 | Safety violation detection (no-fly zone breach) |
 
 ### Demo port mappings
 
@@ -353,6 +377,9 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 | gov | 8080 | 8443 | 3000 |
 | healthcare | 8081 | 8444 | 3001 |
 | finance | 8082 | 8445 | 3002 |
+| secure-data (src) | 8083 | 8446 | 3003 |
+| secure-data (dst) | 8084 | 8447 | - |
+| swarm | 8085 | 8448 | 5005 |
 
 ---
 
@@ -387,6 +414,7 @@ After the gateway is running and the CLI is authenticated:
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**, Enrollment, mTLS configuration, and session management
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)**, Integrate application-layer adapters
 - **[Docker Gateway Guide](docker_gateway.md)**, Docker-specific configuration, volumes, and production considerations
+- **[CLI Reference](cli.md)**, Full command-line interface reference
 - **[Architecture](../architecture/gateway.md)**, Platform architecture and 5-layer verification sequence
 - **[MCP Protocol](../protocols/mcp/mcp.md)**, Connect AI clients via Model Context Protocol
 - **[A2A Protocol](../protocols/a2a/a2a.md)**, Agent-to-agent communication patterns

@@ -1,7 +1,7 @@
 # CLI Reference
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 This reference documents the g8e CLI commands for managing the g8e Gateway, g8e Operator, and platform setup.
 
@@ -14,16 +14,18 @@ Usage:
   g8e [command]
 
 Available Commands:
-  auth        Authentication and session management
-  gateway     Manage the g8e Gateway lifecycle (alias: gw)
-  mcp         MCP protocol operations (stdio transport)
-  operator    Manage Operator instances
-  vault       Manage the encryption vault
-  test        Run test suites (unit, integration, e2e, scenario, agentic-tool-emulator, chaos)
-  demos       Manage g8e demo environments
-  audit       Run audit reports for compliance
-  swagger     Manage Swagger/OpenAPI documentation
-  help        Help about any command
+  auth                   Authentication and session management
+  gateway                Manage the g8e Gateway lifecycle (alias: gw)
+  mcp                    MCP protocol operations (stdio transport with full governance)
+  operator               Manage Operator instances
+  vault                  Manage the encryption vault
+  test                   Run test suites (unit, integration, e2e, lint, agentic-tool-emulator, chaos)
+  demos                  Manage g8e demo environments
+  audit                  Run audit reports for compliance
+  report                 Generate CSV evidence reports from all persistent stores
+  swagger                Manage Swagger/OpenAPI documentation
+  agentic-tool-emulator  Universal agentic tool emulator for a real g8e Gateway/Operator
+  help                   Help about any command
 
 Flags:
   -h, --help      help for g8e
@@ -413,48 +415,9 @@ Flags:
       --output-dir string   Output directory for certificates (default: project root)
 ```
 
-### gateway setup
-```
-Auto-discover and configure agentic coding tools for g8e integration
-
-Usage:
-  g8e gateway setup [command]
-
-Available Commands:
-  discover    Discover installed agentic coding tools
-  configure   Configure a specific tool for g8e integration
-
-Flags:
-  -h, --help   help for setup
-
-Use "g8e gateway setup [command] --help" for more information about a command.
-```
-
-#### gateway setup discover
-```
-Discover installed agentic coding tools
-
-Usage:
-  g8e gateway setup discover [flags]
-
-Flags:
-  -h, --help   help for discover
-```
-
-#### gateway setup configure
-```
-Configure a specific tool for g8e integration
-
-Usage:
-  g8e gateway setup configure [tool-name] [flags]
-
-Flags:
-  -h, --help   help for configure
-```
-
 ## test
 ```
-Run test suites (unit, integration, e2e, scenario, coverage, lint, agentic-tool-emulator, chaos, summary)
+Run test suites (unit, integration, e2e, lint, agentic-tool-emulator, chaos)
 
 Usage:
   g8e test [command]
@@ -553,6 +516,8 @@ Flags:
 
 Use "g8e test agentic-tool-emulator [command] --help" for more information about a command.
 ```
+
+The `agentic-tool-emulator` command is also available as a top-level command (`g8e agentic-tool-emulator`) with identical subcommands and flags.
 
 #### test agentic-tool-emulator list
 ```

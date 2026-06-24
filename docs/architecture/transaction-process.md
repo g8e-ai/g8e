@@ -1,7 +1,7 @@
 # Transaction Process: End-to-End Flow
 
 Last Updated: 2026-06-23
-Version: v1.1.6
+Version: v1.1.9
 
 This document walks through the complete transaction process in the g8e governance system, explaining each step from initial intent to final execution and audit. The process is designed to ensure security, accountability, and sovereignty throughout.
 
@@ -113,7 +113,7 @@ The **L4 Warden** (`internal/services/governance/l4_warden.go`) is the primary o
 
 1. **In-flight tracking** (stage 0): Prevents the same nonce from being processed concurrently using a `sync.Map`.
 2. **Nonce reservation and expiry** (stage 1): Atomically reserves the nonce in the **Replay Store** (durable SQLite storage) to prevent replay attacks even if the operator crashes mid-execution. Checks expiry relative to an injectable clock.
-3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison. The hash basis includes L3 proof presence and identity (via `GenerateMessageID` in `pkg/governance/types.go`), so adding, removing, or changing an L3 proof breaks the hash.
+3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison. The hash is computed by `GenerateMessageID` in `pkg/governance/types.go` over the following fields in proto definition order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC RFC3339Nano), `intent_data` (canonicalized), `requestor_user_id`, and `acting_app_id`. L3 proof is intentionally NOT included in the transaction hash so that L2 (machine consensus) can sign the hash before L3 (human notary) is asked. Tamper-evidence for L3 is provided by `verifyL3Posture`, which checks the proof against `envelope.TransactionHash` at verification time.
 4. **Stateful validation** (stage 3): State Merkle root validation against the operator's current state root.
 5. **Posture validation** (stage 4): L2 and L3 checks gated by the configured `GovernancePosture`.
 
@@ -202,18 +202,19 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 1. **Initial Receipt**: The Actuator signs an initial receipt with `EXECUTION_STATUS_EXECUTING` using Ed25519 and logs it to the **Local Audit Vault** *before* starting execution. The receipt is canonicalized using `CanonicalizeActionReceipt` (deterministic JSON with fixed field order) before signing. This ensures evidence of the attempt is preserved even if execution crashes. If signing or logging fails, execution does NOT proceed (fail-closed).
 2. **L2/L3 Status Recording**: The receipt includes `L2Status` and `L3Status` fields reflecting whether each layer was required by the posture and whether it passed validation.
 3. **Sovereignty Rehydration**: If the payload was scrubbed for sovereignty, the **Scrubbing Service** rehydrates it using local tokens before execution.
-4. **Execution**: The Actuator dispatches the action through the `ExecutionHandler` interface (implemented by `OperatorPubSubService`), which routes to the appropriate handler based on event type:
+4. **JIT Capability Minting**: The Actuator mints a just-in-time, single-action, self-dissolving **Capability** (`MintCapability` in `internal/services/governance/capability.go`) scoped to the transaction hash, action type, and target resource. The capability is injected into the execution context for downstream handlers. No standing credentials exist outside the lifetime of a single `Execute` call. The capability is dissolved immediately after execution completes or fails (zero standing privileges).
+5. **Execution**: The Actuator dispatches the action through the `ExecutionHandler` interface (implemented by `OperatorPubSubService`), which routes to the appropriate handler based on event type:
    - **Command Execution**: Bash/Shell commands via `ExecutionService`.
    - **File Operations**: Scoped reads, writes, and edits via `FileEditService`.
    - **Protocol Egress**: MCP or A2A tool calls via the **MCP Gateway**.
    - **Synchronous handlers**: `EVAL_ANSWER`, `MCP_CALL`, and `A2A_CALL` return results directly as the receipt summary.
-5. **Result Capture**: Output, errors, and updated Merkle roots are captured.
-6. **Final Receipt**: A final `ActionReceipt` is generated, containing:
+6. **Result Capture**: Output, errors, and updated Merkle roots are captured.
+7. **Final Receipt**: A final `ActionReceipt` is generated, containing:
    - Execution results (or failure summary)
    - `StateRootBefore` and `StateRootAfter`
    - Operator signature (Ed25519 over canonical receipt JSON)
    - `L2Status` and `L3Status` reflecting posture enforcement
-7. **Sovereignty Scrubbing**: Sensitive host data is scrubbed from the result before returning it to the gateway.
+8. **Sovereignty Scrubbing**: Sensitive host data is scrubbed from the result before returning it to the gateway.
 
 **Outcome**: Signed final receipt is generated and anchored to the local ledger.
 
@@ -289,7 +290,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 - **L2 Consensus**: Multi-signature tribunal verification with quorum and distinct-signer checks.
 - **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey, CLI mTLS certificate, or outbound CLI approval.
 - **L4 Warden**: Replay protection, state root consistency, and posture-gated L2/L3 verification.
-- **L5 Actuator**: Fail-closed signed execution boundary with canonical receipt production.
+- **L5 Actuator**: Fail-closed signed execution boundary with canonical receipt production and zero standing privileges via JIT capability minting.
 
 ### Accountability
 - Every transaction is logged with a unique `TransactionHash`.
@@ -306,11 +307,11 @@ Every verification layer fails closed: if any check fails, the transaction is re
 | **Producer** | Wraps intent in envelope | Reaches L2 consensus via TribunalService, creates GovernanceEnvelope with L2 votes and L3 proof. |
 | **Governance Gateway** | Policy Decision Point | PKI authority, mTLS admission control, identity binding, replay store, universal endpoint. |
 | **GovernancePosture** | Verification Policy | Configures which layers are enforced vs audited (doctrine, consensus, notary). |
-| **L4 Warden** | Verification Orchestrator | Four-stage verification: in-flight tracking, nonce reservation, stateless/stateful validation, posture-gated L2/L3. |
+| **L4 Warden** | Verification Orchestrator | Five-stage verification: in-flight tracking, nonce reservation, stateless validation (L1 Doctrine + hash), stateful validation (state root), posture-gated L2/L3. |
 | **L1 Doctrine** | Technical Bedrock | Protobuf `forbidden_patterns` field option validation, MITRE-based threat detection with `ThreatDetector` regex patterns. |
 | **L2 Consensus** | Tribunal Verification | Ed25519 vote signatures, quorum and distinct-signer checks, TribunalPolicy enforcement. |
 | **L3 Notary** | Authorization Engine | CompositeL3Verifier delegates to PasskeyService (WebAuthn), CLIL3Notary (mTLS), or outboundL3Notary (CLI approval). |
-| **L5 Actuator** | Execution Gateway | Fail-closed dual receipt signing with canonical JSON, rehydration, execution dispatch via ExecutionHandler. |
+| **L5 Actuator** | Execution Gateway | Fail-closed dual receipt signing with canonical JSON, JIT capability minting/dissolving, rehydration, execution dispatch via ExecutionHandler. |
 | **Local Audit Vault** | Immutable Ledger | SQLAuditStore (encrypted SQLite) and GitLedgerService (git-backed, two-phase commit, optional encryption). |
 
 ---
@@ -321,8 +322,8 @@ Every verification layer fails closed: if any check fails, the transaction is re
 2. **Producer** reaches L2 consensus via TribunalService and creates GovernanceEnvelope with L2 votes and L3 proof
 3. **Gateway** admits envelope after mTLS, PKI, identity binding, and replay protection
 4. **Operator** fetches envelope via outbound mTLS or processes synchronously via `ProcessEnvelope`
-5. **Warden (L4)** performs four-stage verification: in-flight tracking, nonce reservation, stateless (L1 doctrine + hash), stateful (state root), and posture-gated L2/L3
-6. **Actuator (L5)** signs initial receipt (fail-closed), rehydrates payload, executes via ExecutionHandler, signs final receipt
+5. **Warden (L4)** performs five-stage verification: in-flight tracking, nonce reservation, stateless (L1 doctrine + hash), stateful (state root), and posture-gated L2/L3
+6. **Actuator (L5)** signs initial receipt (fail-closed), rehydrates payload, mints JIT capability, executes via ExecutionHandler, dissolves capability, signs final receipt
 7. **Local Audit Vault** (LFAA) logs complete transaction to SQLAuditStore and GitLedgerService
 8. **Operator** returns signed receipt to gateway (scrubbed of sensitive host data)
 9. **Gateway** returns final output to principal

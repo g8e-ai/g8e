@@ -1,7 +1,7 @@
 # Storage Architecture
 
 Last Updated: 2026-06-23
-Version: v1.1.6
+Version: v1.1.9
 
 ## Overview
 
@@ -12,7 +12,7 @@ Mandatory [encryption at rest](./encryption.md) is enforced across the storage l
 - **Audit Store**: Append-only audit logging with encryption at rest
 - **Ledger**: git-backed version control for file modifications, session-isolated
 - **Execution Vault**: Compressed and encrypted storage for command execution results and file diffs
-- **Token Store**: Key-value storage for Sentinel token persistence with TTL support
+- **Token Store**: Interface for encrypted Sentinel token persistence, implemented by `gateway.EncryptedKVAdapter` on the shared gateway KV store
 - **Replay Store**: Nonce-based replay protection
 - **Suspended Transaction Store**: [L3 approval workflow](./auth.md#layer-3-notary-l3notary) transaction persistence
 - **Commitment Ledger**: Commitment attestations with chain integrity verification
@@ -83,6 +83,11 @@ Default values (`DefaultAuditStoreConfig`): `DataDir: ".g8e/data"`, `DBPath: "g8
 - `GetActionReceipt(transactionID)`: Retrieve a single action receipt.
 - `ListActionReceipts(sessionID, limit, offset)`: List action receipts with optional session filter and pagination.
 - `ListActionReceiptsSince(since, limit)`: List action receipts newer than a timestamp.
+- `ListSessions(limit, offset)`: Retrieve all sessions with pagination, ordered by `created_at` ASC.
+- `ListEvents(sessionID, limit, offset)`: Retrieve events with optional session filter and pagination, ordered by timestamp ASC.
+- `ListFileMutations(limit, offset)`: Retrieve file mutations with pagination, ordered by `id` ASC.
+- `GetDataDir()`: Return the configured data directory.
+- `GetEncryptionVault()`: Return the encryption vault instance.
 - `Wait()`: Block until all in-flight writes complete.
 - `Close()`: Stop the pruner and close the database. Idempotent.
 
@@ -148,6 +153,7 @@ err = ledger.CompleteMirrorCreate(result, sessionID)
 - `GetStateMerkleRoot()`: Return the HEAD commit hash of the global files ledger.
 - `GetDiffContent(hashBefore, hashAfter, sessionID)`: Return the full patch string between two commits.
 - `GetDiffStat(hashBefore, hashAfter, sessionID)`: Return a summary stat string between two commits.
+- `ListCommits(sessionID, limit)`: List commits from the session ledger (or global files ledger if sessionID is empty), ordered oldest-first.
 
 ---
 
@@ -191,54 +197,47 @@ Default values (`DefaultExecutionVaultConfig`): `DBPath: ".g8e/execution_vault.d
 - `StoreFileDiff(ctx, record)`: Encrypt and compress diff content, then insert into `file_diff_log`.
 - `GetFileDiff(ctx, diffID)`: Retrieve, decompress, and decrypt a file diff record.
 - `GetFileDiffsBySession(ctx, sessionID, limit)`: Retrieve all diff metadata (without compressed blob) for a session.
+- `ListExecutions(ctx, limit, offset)`: Retrieve execution log records with pagination (no blobs), ordered by `timestamp_utc` ASC.
+- `ListFileDiffs(ctx, limit, offset)`: Retrieve file diff log records with pagination (no blobs), ordered by `timestamp_utc` ASC.
 - `Wait()`: Block until all in-flight writes complete.
 - `Close()`: Stop the pruner and close the database.
 
-`ExecutionVaultService` implements `interfaces.ExecutionVault`.
+`ExecutionVaultService` implements the `storage.ExecutionVault` interface.
 
 ---
 
 ### Token Store (`../../internal/services/storage/token_store.go`)
 
-`TokenStoreService` provides key-value persistence for Sentinel tokens. All values are encrypted at rest; the vault must be unlocked for all read and write operations.
+`TokenStore` is an interface defining encrypted key-value persistence for Sentinel tokens. The interface is consumed by `ScrubbingService` and implemented by `gateway.EncryptedKVAdapter` (`../../internal/services/gateway/encrypted_kv_adapter.go`).
 
-**Schema Tables:**
-
-- `kv`: Key-value pairs with optional expiration (`key`, `value`, `expires_at`)
-
-**Key Features:**
-
-- **TTL support**: Keys may be set with a `ttlSeconds` value; expiry is stored as a timestamp and checked on read.
-- **Encryption at rest**: All values are encrypted with AES-256-GCM before storage. The vault must be unlocked; `KVSet` returns an error if it is locked.
-- **Prefix scanning**: `KVScanPrefix` retrieves all non-expired keys matching a prefix, decrypting each value. Decryption failures are logged and skipped rather than returning an error.
-- **Automatic expiry pruning**: The background pruner deletes expired keys, then prunes the oldest 10% when the database exceeds the size limit.
-
-**Configuration:**
+**Interface Definition:**
 
 ```go
-type TokenStoreConfig struct {
-    DBPath               string
-    MaxDBSizeMB          int64
-    RetentionDays        int
-    PruneIntervalMinutes int
+type TokenStore interface {
+    KVSet(ctx context.Context, key, value string, ttlSeconds int) error
+    KVGet(ctx context.Context, key string) (string, error)
+    KVScanPrefix(ctx context.Context, prefix string) (map[string]string, error)
 }
 ```
 
-`vault.Vault` is passed as a constructor argument and is required.
+**Canonical Implementation: `EncryptedKVAdapter`**
 
-Default values (`DefaultTokenStoreConfig`): `DBPath: ".g8e/token_store.db"` (from `constants.TokenStoreDBPath`), `MaxDBSizeMB: 512`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
+`EncryptedKVAdapter` bridges `KVStoreService` (in the canonical gateway database, `g8e.db`) to the `TokenStore` interface. Values are encrypted at rest via `vault.Vault`. Entries are written with `state_tier='observed'` so they do not participate in the bound state root hash. Sentinel keys are namespaced with the `g8e:sentinel:` prefix to avoid collisions with cache and document invalidation entries in the same `kv_store` table.
 
-**Key Methods (from `interfaces.TokenStore`):**
+**Key Features:**
 
-- `KVSet(ctx, key, value, ttlSeconds)`: Encrypt and upsert a key-value pair with optional TTL.
-- `KVGet(ctx, key)`: Retrieve and decrypt a value, honoring TTL.
-- `KVScanPrefix(ctx, prefix)`: Retrieve and decrypt all non-expired key-value pairs matching a prefix.
+- **Encryption at rest**: All values are encrypted with AES-256-GCM via the vault before being written to `kv_store`. `KVSet` returns an error if the vault is locked. `KVGet` returns an error if the vault is locked. `KVScanPrefix` silently skips entries that cannot be decrypted.
+- **TTL support**: TTL is delegated to `KVStoreService.KVSetObserved`, which stores the expiration timestamp.
+- **Prefix scanning**: `KVScanPrefix` retrieves all keys matching the prefix, decrypting each value. Decryption failures are silently skipped.
+- **No standalone database**: The adapter uses the shared `CanonicalDBService` database connection; no separate SQLite database or background pruner is required.
 
-Additional method on `TokenStoreService`:
+**Constructor:**
 
-- `KVDelete(key)`: Delete a key-value pair.
+```go
+func NewEncryptedKVAdapter(kv *KVStoreService, v *vault.Vault) *EncryptedKVAdapter
+```
 
-`TokenStoreService` implements `interfaces.TokenStore`.
+`EncryptedKVAdapter` implements `storage.TokenStore`.
 
 ---
 
@@ -276,6 +275,7 @@ No background pruner is started; callers invoke `Prune` and `CleanupStaleReserve
 - `ReserveNonce(nonce, expiresAt)`: Atomically reserve a nonce. Returns `true` if replay is detected.
 - `FinalizeNonce(nonce)`: Transition a reserved nonce to `used` status.
 - `ReleaseNonce(nonce)`: Delete a reserved nonce on transaction failure.
+- `ListNonces(limit, offset)`: Retrieve nonce records with pagination, ordered by `reserved_at` ASC.
 - `CleanupStaleReserved(maxReservedDuration)`: Remove stale reservations older than the given duration.
 - `Prune(retentionDays)`: Delete used nonce records older than the retention period.
 - `Close()`: Close the database connection.
@@ -324,7 +324,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_t
 - `Wait()`: Block until all in-flight writes complete.
 - `Close()`: Stop the pruner and close the database.
 
-`SuspendedTransactionService` implements `interfaces.SuspendedTransactionStore`.
+`SuspendedTransactionService` implements the `storage.SuspendedTransactionStore` interface.
 
 ---
 
@@ -353,6 +353,7 @@ func NewCommitmentLedger(db *sqliteutil.DB, logger *slog.Logger) *CommitmentLedg
 **Key Methods:**
 
 - `GetLatestCommitmentJSON()`: Return the most recent attestation as raw JSON, ordered by `committed_at_unix_ms`. Returns `(nil, nil)` when the ledger is empty.
+- `ListCommitments()`: Retrieve all commitments ordered by `committed_at_unix_ms` ASC (chain order), returning structured `CommitmentRow` records.
 - `AppendCommitmentJSON(attestationJSON, priorHash, hash)`: Atomically append a new commitment with chain verification.
 
 ---
@@ -396,7 +397,7 @@ Behavior when the vault is locked varies by service:
 
 - **Audit Store**: Stores plaintext and sets `encrypted = 0`. Audit continuity takes precedence over encryption (fail-open).
 - **Execution Vault**: Returns an error if the vault is locked. No plaintext fallback (fail-closed).
-- **Token Store**: Returns an error if the vault is locked on `KVSet`, `KVGet`, or `KVScanPrefix`. No plaintext fallback (fail-closed).
+- **Token Store (`EncryptedKVAdapter`)**: `KVSet` and `KVGet` return an error if the vault is locked. `KVScanPrefix` silently skips entries that cannot be decrypted. No plaintext fallback (fail-closed).
 - **Ledger**: `GetFileAtCommit` and `RestoreFileFromCommit` return an error if the vault is locked.
 - **Replay Store**: No encryption required as nonces contain no sensitive content.
 - **Suspended Transaction Store**: No encryption required for governance envelopes.
@@ -439,7 +440,7 @@ Prune functions typically:
 The `storagetest` subdirectory (`../../internal/services/storage/storagetest/`) contains test-only implementations:
 
 - `audit_vault.go`: `TestSQLAuditStore`, a monolithic test implementation that integrates audit storage with a git ledger in a single struct. It includes an additional `chaos_events` table and `RecordChaosEvent`/`RecordChaosEvents` methods not present in production code.
-- `helpers.go`: `createTestVault` helper for initializing an unlocked `vault.Vault` in tests.
+- `helpers.go`: `CreateTestVault` helper for initializing an unlocked `vault.Vault` in tests.
 
 These implementations are kept separate from production code to avoid import cycles.
 

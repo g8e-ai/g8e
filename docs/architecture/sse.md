@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
 
@@ -89,11 +89,12 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 
 **Behavior**:
 1. Validates mTLS peer certificate for app workload identity (SPIFFE ID with `/app/` prefix, excluding `g8eo` and `g8eg`).
-2. Validates route (exactly one routing target set).
-3. Enforces producer-to-target ownership. The app identity must be associated with the target session or user.
-4. Appends event to `sse_events` table with auto-increment ID and `producer_id`.
-5. Publishes event to Pub/Sub channel for real-time fan-out (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`).
-6. Returns success confirmation with delivered count.
+2. Reads and parses the JSON body; validates that the `event` field is present.
+3. Extracts `event.type` for indexing; defaults to `unknown` if absent.
+4. Appends the full request body as `payload` to the `sse_events` table with auto-increment ID, `event_type`, and `producer_id` (the caller SPIFFE ID).
+5. Enforces producer-to-target ownership. The app identity must be associated with the target session or user. Ownership is verified via `protocol.WorkloadIdentity.MatchesApp` against bound Operator sessions.
+6. Publishes the full request body to the Pub/Sub channel for real-time fan-out (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`).
+7. Returns success confirmation with delivered count.
 
 ---
 
@@ -143,7 +144,7 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 - `user_id`: Filter by user
 - `since_id`: Start from event ID (supports `Last-Event-ID` header)
 
-**Response**: SSE stream with format:
+**Response**: SSE stream. Replayed historical events include the `id:` field:
 ```
 id: 1
 event: g8e.v1.operator.audit.command.recorded
@@ -154,12 +155,19 @@ event: g8e.v1.operator.audit.ai.recorded
 data: {"type":"...","data":{...}}
 ```
 
+Real-time events from Pub/Sub omit the `id:` field:
+```
+event: g8e.v1.operator.audit.command.recorded
+data: {"type":"...","data":{...}}
+```
+
 **Behavior**:
 1. Validates Operator session authorization for requested route.
-2. Subscribes to Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`).
-3. Flushes historical events since `since_id` in SSE format.
-4. Streams new events as they arrive from Pub/Sub.
-5. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
+2. Sets SSE response headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no` (for Nginx), and permissive CORS headers based on the request `Origin`.
+3. Subscribes to the Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`) using a buffered channel of 100 entries. If the buffer is full, incoming events are dropped with a back-pressure warning log.
+4. Replays historical events from the `sse_events` table since `since_id` (up to 1000 rows) in SSE format, including the `id:` field for each row.
+5. Streams new events as they arrive from Pub/Sub. Real-time events are emitted without an `id:` field; the `event:` field carries the extracted type and the `data:` field carries the full push payload.
+6. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
 
 ---
 
@@ -226,7 +234,7 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 - Certificate must have SPIFFE URI SAN with `/app/` prefix.
 - Gateway identities (`g8eo`, `g8eg`) are explicitly blocked from pushing.
 - Producer identity is recorded in `producer_id` for attribution.
-- The app identity must be associated with the target session or user. Ownership is verified against session bindings or ownership documents.
+- The app identity must be associated with the target session or user. Ownership is verified via `protocol.WorkloadIdentity.MatchesApp` against bound Operator sessions. The event is appended to the database before the ownership check; if ownership verification fails, the handler returns 403 but the row remains persisted.
 
 ### Consumer Authorization
 - Only authenticated Operator sessions can consume events.
@@ -300,14 +308,14 @@ POST /api/v1/sse/push
 ## Implementation Details
 
 ### Core Files
-- `@/home/bob/g8e/internal/services/gateway/gateway_http.go`: HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`).
-- `@/home/bob/g8e/internal/services/gateway/sse_event_service.go`: SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsWipe`, `SSEEventsCount`).
-- `@/home/bob/g8e/internal/services/gateway/gateway_pubsub.go`: Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`).
-- `@/home/bob/g8e/internal/services/gateway/db_controller.go`: Admin endpoints for SSE event management (`handleSSEEvents`).
-- `@/home/bob/g8e/internal/services/gateway/db/schema.sql`: Database schema for `sse_events` table.
-- `@/home/bob/g8e/internal/constants/api_paths.go`: API path constants.
-- `@/home/bob/g8e/protocol/constants/events.json`: Event type catalog.
-- `@/home/bob/g8e/internal/models/gateway.go`: SSE event row models (`SSEEventRow`).
+- `internal/services/gateway/gateway_http_sse.go`: HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`).
+- `internal/services/gateway/sse_event_service.go`: SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsListAllSince`, `SSEEventsWipe`, `SSEEventsCount`).
+- `internal/services/gateway/gateway_pubsub.go`: Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`).
+- `internal/services/gateway/db_controller.go`: Admin endpoints for SSE event management (`handleSSEEvents`).
+- `internal/services/gateway/db/schema.sql`: Database schema for `sse_events` table.
+- `internal/constants/api_paths.go`: API path constants.
+- `protocol/constants/events.json`: Event type catalog.
+- `internal/models/gateway.go`: SSE event row models (`SSEEventRow`, `SSEPushResponse`, `SSEEventsResponse`).
 
 ### State Root Impact
 SSE event inserts are deliberately excluded from state root calculation. The `sse_events` table has no triggers to increment `state_version`, allowing high-frequency event streaming without triggering governance consensus rounds. Events are considered ephemeral telemetry, not governance state.
