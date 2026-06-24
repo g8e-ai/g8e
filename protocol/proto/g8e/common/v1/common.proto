@@ -21,9 +21,12 @@ import "google/protobuf/descriptor.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/struct.proto";
 
-// Custom options for governance
+// Custom field options for L1 Doctrine governance.
+// Applied to payload fields in operator.proto to declare regex patterns
+// that, if matched, cause immediate L1 rejection (hard gate).
 extend google.protobuf.FieldOptions {
-  // Comma-separated list of forbidden regex patterns
+  // Comma-separated list of forbidden regex patterns evaluated against the
+  // field value at L1 Doctrine verification time.
   string forbidden_patterns = 50001;
 }
 
@@ -55,21 +58,26 @@ message L2Metadata {
 }
 
 // Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
+// L3Proof is a union: fields 1-4 are populated for WebAuthn (web sessions),
+// fields 5-6 for CLI/mTLS (operator sessions). Exactly one proof type
+// should be populated per instance.
 message L3Proof {
+  // WebAuthn: client data JSON from the authenticator assertion
   string client_data_json = 1 [json_name = "clientDataJSON"];
+  // WebAuthn: authenticator data bytes (base64)
   string authenticator_data = 2 [json_name = "authenticatorData"];
+  // WebAuthn: signature over the authenticator assertion
   string signature = 3;
+  // WebAuthn: credential ID used for the assertion
   string credential_id = 4 [json_name = "credentialId"];
-  // CLI mTLS proof: fingerprint of the CLI certificate used for authentication
-  // Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn
+  // CLI/mTLS: SHA-256 fingerprint of the CLI certificate used for authentication
   string mtls_cert_fingerprint = 5 [json_name = "mtlsCertFingerprint"];
-  // CLI signature: signature over transaction_hash using the CLI/operator private key
+  // CLI/mTLS: Ed25519 signature over transaction_hash using the operator private key
   string cli_signature = 6 [json_name = "cliSignature"];
 }
 
 message L3Metadata {
-  L3Proof proof = 1;             // Real WebAuthn proof
-  bool auto_approved = 2;        // True if skipped via auto-approval policy
+  L3Proof proof = 1;             // WebAuthn or CLI/mTLS proof
 }
 
 // Unified Governance Metadata
@@ -95,10 +103,15 @@ message GovernanceEnvelope {
   string acting_app_id = 26;      // The app/tool acting on behalf of the user (delegate)
 
   // Intent & Payload
+  // event_type is the canonical pub/sub routing key from protocol/constants/events.json
+  // (e.g., "operator.command.requested", "operator.heartbeat").
+  // Distinct from action_type: event_type routes the message, action_type classifies the intent.
   string event_type = 8;
   bytes payload = 9;                       // Raw protobuf payload
   google.protobuf.Struct intent_data = 10; // Structured JSON-first view
-  string action_type = 19;                 // UAP-compatible action type (e.g., EXECUTE_BASH)
+  // action_type is the UAP-compatible action classification (e.g., EXECUTE_BASH, FILE_EDIT).
+  // Included in the transaction hash canonicalization.
+  string action_type = 19;
   string target_resource = 20;             // UAP-compatible target resource
 
   // State & Replay Protection
@@ -118,4 +131,3 @@ message GovernanceEnvelope {
   string tenant_id = 23;
   string binding_persona = 24;
 }
-

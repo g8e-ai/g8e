@@ -32,9 +32,11 @@ const (
 
 // PubSub wire protocol event type strings (used in PubSubEvent.Type).
 const (
-	PubSubEventMessage    = "message"
-	PubSubEventPMessage   = "pmessage"
-	PubSubEventSubscribed = "subscribed"
+	PubSubEventMessage      = "message"
+	PubSubEventPMessage     = "pmessage"
+	PubSubEventSubscribed   = "subscribed"
+	PubSubEventUnsubscribed = "unsubscribed"
+	PubSubEventError        = "error"
 )
 
 // Storage and governance channel prefixes (for pubsub-based data operations).

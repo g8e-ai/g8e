@@ -93,9 +93,9 @@ reports/
 reports/*
 
 # Binaries
-g8e
-buf
-./operator
+*g8e
+*buf
+*operator
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding
@@ -121,14 +121,6 @@ ENV/
 __pypackages__/
 .Python
 
-
-# --- Protocol Generation ---
-# Generated code is committed to avoid tool dependencies in air-gap
-# protocol/python/g8e/
-# protocol/go/g8e/
-# Auto-generated protobuf documentation
-protocol/docs/reference/api/
-protocol/proto/docs/reference/api/
 
 # --- Deployment ---
 .dockerignore

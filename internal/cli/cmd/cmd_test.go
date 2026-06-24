@@ -37,8 +37,6 @@ func TestCommandRegistration(t *testing.T) {
 		expectedCommands := []string{
 			"gw",
 			"auth",
-			"data",
-			"security",
 		}
 
 		for _, cmdName := range expectedCommands {
@@ -53,14 +51,6 @@ func TestCommandRegistration(t *testing.T) {
 					cmd := authCmd()
 					assert.NotNil(t, cmd)
 					assert.Equal(t, "auth", cmd.Use)
-				case "data":
-					cmd := dataCmd()
-					assert.NotNil(t, cmd)
-					assert.Equal(t, "data", cmd.Use)
-				case "security":
-					cmd := securityCmd()
-					assert.NotNil(t, cmd)
-					assert.Equal(t, "security", cmd.Use)
 				}
 			})
 		}
@@ -74,6 +64,7 @@ func TestGatewayCommandSubcommands(t *testing.T) {
 
 		expectedSubcommands := []string{
 			"start",
+			"serve",
 			"stop",
 			"status",
 			"restart",
@@ -162,6 +153,33 @@ func TestSecurityCommandSubcommands(t *testing.T) {
 	})
 }
 
+func TestOperatorCommandSubcommands(t *testing.T) {
+	t.Run("operator command has expected subcommands", func(t *testing.T) {
+		cmd := operatorCmd()
+		require.NotNil(t, cmd)
+
+		expectedSubcommands := []string{
+			"list",
+			"run",
+			"cp",
+			"scp",
+			"deploy",
+			"stream",
+		}
+
+		for _, subcmd := range expectedSubcommands {
+			found := false
+			for _, c := range cmd.Commands() {
+				if c.Name() == subcmd {
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "operator command should have %s subcommand", subcmd)
+		}
+	})
+}
+
 func TestCommandHelpText(t *testing.T) {
 	t.Run("commands have non-empty help text", func(t *testing.T) {
 		commands := []struct {
@@ -170,8 +188,7 @@ func TestCommandHelpText(t *testing.T) {
 		}{
 			{"gw", gatewayCmd()},
 			{"auth", authCmd()},
-			{"data", dataCmd()},
-			{"security", securityCmd()},
+			{"operator", operatorCmd()},
 		}
 
 		for _, tc := range commands {

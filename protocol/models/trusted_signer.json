@@ -1,0 +1,44 @@
+{
+  "_comment": "Canonical TrustedSigner document shape. client is the authority - it stores external L2 signer public keys for governance envelope signature verification. Used by the L4 Warden to verify multi-sig quorum on governed actions. A field mismatch breaks L2 governance and tribunal quorum verification.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (L4 Warden, governance verification)", "agent (reads for governance replay)"],
+  "_collection": "trusted_signers",
+
+  "trusted_signer": {
+    "_description": "External L2 signer public key record. Each signer represents an enrolled agentic app that can participate in tribunal consensus. Signer IDs correspond to TribunalPolicy.MemberAppIDs.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique signer identifier (e.g. agent ID or app name). Referenced by TribunalPolicy.MemberAppIDs."
+      }
+    },
+
+    "key_material": {
+      "public_key_hex": {
+        "type": "string",
+        "required": true,
+        "description": "ED25519 public key in hex encoding. Used to verify governance envelope signatures."
+      }
+    },
+
+    "lifecycle": {
+      "enabled": {
+        "type": "boolean",
+        "required": true,
+        "default": true,
+        "description": "Whether this signer is currently enabled for governance participation."
+      }
+    },
+
+    "timestamps": {
+      "added_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the signer was enrolled (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

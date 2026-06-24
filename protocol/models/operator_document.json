@@ -5,6 +5,7 @@
 
   "_authority": "client (SQLite)",
   "_consumers": ["agent", "g8eo (identity fields at auth time)"],
+  "_collection": "operators",
   "_cache_aside": "operator KV - keyed by g8e:doc:operators:{id}. Cache-aside pattern. SQLite is source of truth.",
 
   "operator_document": {

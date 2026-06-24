@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.1  
-**Last Updated:** 2026-06-12  
-**Platform:** g8e v1.1.1  
+**Document Version:** 1.1.9  
+**Last Updated:** 2026-06-23  
+**Platform:** g8e v1.1.9  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -238,7 +238,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **AC-8** | System use notification | Session identifiers in envelopes |
 | **AC-11** | Session lock | Session-based isolation |
 | **AC-12** | Session termination | Configurable session timeouts |
-| **AC-14** | Permitted actions without identification | Auto-approval for benign diagnostics only |
+| **AC-14** | Permitted actions without identification | No auto-approval; all transactions require posture-appropriate verification |
 | **AC-17** | Remote access | mTLS required for all remote connections |
 | **AC-18** | Wireless access | Customer-controlled infrastructure |
 | **AC-19** | Access control for mobile devices | Windows/macOS/Linux support parity |
@@ -309,7 +309,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | Requirement | g8e Implementation | Evidence |
 |-------------|-------------------|----------|
 | **1.2.1** | Business need justification | Outbound-only operator connections |
-| **1.2.3** | Secure configuration | Default security posture (Notary mode) |
+| **1.2.3** | Secure configuration | Configurable governance postures (doctrine, consensus, notary); outbound mode defaults to notary |
 | **1.3** | Secure data flows | mTLS for all platform communication |
 | **2.1** | Change control processes | Git-based version control |
 | **2.2** | Configuration standards | Documented in architecture docs |
@@ -362,7 +362,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 ### Overview
 
-The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach to achieving Target-level Zero Trust maturity, aligned with the Department of War (DoW) Zero Trust Framework and NIST guidance. g8e demonstrates strong alignment with the Discovery, Phase One, and Phase Two guidelines.
+The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach to achieving Target-level Zero Trust maturity, aligned with the Department of Defense (DoD) Zero Trust Reference Architecture and NIST guidance. g8e demonstrates strong alignment with the Discovery, Phase One, and Phase Two guidelines.
 
 **ZIG Phases:**
 - **Discovery Phase:** Identify critical data, applications, assets, and services (DAAS)
@@ -419,7 +419,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 
 ### ZIG Pillars Alignment
 
-The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements these pillars as follows:
+The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements these pillars as follows:
 
 | Pillar | ZIG Focus | g8e Implementation |
 |--------|-----------|-------------------|
@@ -447,7 +447,7 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 |---------|-----------|---------|----------------|
 | **Certificate Authority** | ECDSA P-256 | PKI hierarchy | `internal/services/gateway/pki_controller.go` |
 | **Workload Identity** | SPIFFE URI SAN | Identity binding | `protocol/workload_identity.go` |
-| **Transaction Signatures** | Ed25519 | L2 Consensus, L5 Actuator | `internal/services/governance/l2_consensus.go` |
+| **Transaction Signatures** | Ed25519 | L2 Consensus (Tribunal), L5 Actuator | `internal/services/tribunal/service.go`, `internal/services/governance/l4_warden.go` |
 | **Hash Functions** | SHA-256 | Transaction hash, state roots | `protocol/proto/g8e/operator/v1/operator.proto` |
 | **Transport Security** | TLS 1.3 | mTLS for all communication | `docs/architecture/auth.md` |
 | **Human Authentication** | WebAuthn/FIDO2 | L3 Notary | `internal/services/governance/l3_notary.go` |
@@ -515,36 +515,36 @@ The NSA ZIG framework aligns with the DoW Zero Trust pillars. g8e implements the
 
 | Document | Location | Purpose |
 |---------|----------|---------|
-| **Security Policy** | `/.github/SECURITY.md` | Security posture and vulnerability reporting |
-| **Architecture: Protocol** | `/docs/architecture/protocol.md` | Protocol specification and verification layers |
-| **Architecture: Auth** | `/docs/architecture/auth.md` | Authentication and authorization architecture |
-| **Architecture: Operator** | `/docs/architecture/operator.md` | Operator execution boundary |
-| **Architecture: Gateway** | `/docs/architecture/gateway.md` | Gateway policy decision point |
-| **Position Paper** | `/docs/core/position_paper.md` | Platform philosophy and security model |
+| **Security Policy** | `.github/SECURITY.md` | Security posture and vulnerability reporting |
+| **Architecture: Protocol** | `docs/architecture/protocol.md` | Protocol specification and verification layers |
+| **Architecture: Auth** | `docs/architecture/auth.md` | Authentication and authorization architecture |
+| **Architecture: Operator** | `docs/architecture/operator.md` | Operator execution boundary |
+| **Architecture: Gateway** | `docs/architecture/gateway.md` | Gateway policy decision point |
+| **Position Paper** | `docs/core/position_paper.md` | Platform philosophy and security model |
 
 ### Code Evidence
 
 | Component | Location | Compliance Relevance |
 |-----------|----------|---------------------|
-| **PKI Controller** | `/internal/services/gateway/pki_controller.go` | Certificate issuance, revocation, CRL |
-| **Audit Store** | `/internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
-| **Sovereign Execution Boundary** | `/internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
-| **L1 Doctrine** | `/internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
-| **L2 Consensus** | `/internal/services/governance/l2_consensus.go` | Cryptographic verification |
-| **L3 Notary** | `/internal/services/governance/l3_notary.go` | Human authorization |
-| **L4 Warden** | `/internal/services/governance/l4_warden.go` | Pre-dispatch verification |
-| **L5 Actuator** | `/internal/services/governance/l5_actuator.go` | Execution boundary, signed receipts |
-| **Workload Identity** | `/protocol/workload_identity.go` | SPIFFE identity specification |
+| **PKI Controller** | `internal/services/gateway/pki_controller.go` | Certificate issuance, revocation, CRL |
+| **Audit Store** | `internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
+| **Sovereign Execution Boundary** | `internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
+| **L1 Doctrine** | `internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
+| **Tribunal Consensus** | `internal/services/tribunal/service.go` | L2 deliberation and Ed25519 consensus signing |
+| **L3 Notary** | `internal/services/governance/l3_notary.go` | Human authorization |
+| **L4 Warden** | `internal/services/governance/l4_warden.go` | Pre-dispatch verification |
+| **L5 Actuator** | `internal/services/governance/l5_actuator.go` | Execution boundary, signed receipts |
+| **Workload Identity** | `protocol/workload_identity.go` | SPIFFE identity specification |
 
 ### Test Evidence
 
 | Test Suite | Location | Coverage |
 |------------|----------|----------|
-| **PKI Tests** | `/internal/services/gateway/pki_controller_test.go` | Certificate issuance, revocation |
-| **Audit Store Tests** | `/internal/services/storage/storagetest/audit_store_test.go` | Audit logging, encryption |
-| **Sovereignty Tests** | `/internal/services/scrubbing/boundary_test.go` | PII scrubbing, rehydration |
-| **Governance Tests** | `/internal/services/governance/*_test.go` | L1-L5 verification |
-| **Integration Tests** | `/test/*_test.go` | End-to-end security flows |
+| **PKI Tests** | `internal/services/gateway/pki_controller_test.go` | Certificate issuance, revocation |
+| **Audit Store Tests** | `internal/services/storage/storagetest/audit_store_test.go` | Audit logging, encryption |
+| **Sovereignty Tests** | `internal/services/scrubbing/boundary_test.go` | PII scrubbing, rehydration |
+| **Governance Tests** | `internal/services/governance/*_test.go` | L1-L5 verification |
+| **Integration Tests** | `test/*_test.go` | End-to-end security flows |
 
 ---
 
@@ -574,13 +574,15 @@ For specific compliance questions or audit support, contact:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-06-02 | Lateralus Labs | Initial compliance alignment report |
-| 1.1 | 2026-06-12 | Lateralus Labs | Corrected Sovereign Execution Boundary evidence path (`internal/services/scrubbing/boundary.go`); updated platform version to v1.1.0 |
+| 1.1 | 2026-06-12 | Lateralus Labs | Corrected Sovereign Execution Boundary evidence path (`internal/services/scrubbing/boundary.go`); updated platform version to v1.1.1 |
+| 1.1.9 | 2026-06-23 | Lateralus Labs | Updated platform version to v1.1.9; replaced L2 Consensus references with Tribunal system (`internal/services/tribunal/service.go`); corrected DoD Zero Trust Reference Architecture naming; removed auto-approval references (removed in v1.1.9); corrected default posture configuration; fixed evidence repository paths to repository-relative format |
 
 ---
 
 ## Appendix A: Glossary
 
 - **L1-L5:** 5-layer verification sequence (Doctrine, Consensus, Notary, Warden, Actuator)
+- **Tribunal:** Enrolled agentic service responsible for L2 consensus deliberation and Ed25519 vote signing
 - **mTLS:** Mutual Transport Layer Security
 - **SPIFFE:** Secure Production Identity Framework For Everyone
 - **SAN:** Subject Alternative Name
@@ -598,6 +600,8 @@ For specific compliance questions or audit support, contact:
 - **NIST:** National Institute of Standards and Technology
 - **PCI DSS:** Payment Card Industry Data Security Standard
 - **ISO:** International Organization for Standardization
+- **DoD:** Department of Defense
+- **ZIG:** Zero Trust Implementation Guidelines
 
 ---
 

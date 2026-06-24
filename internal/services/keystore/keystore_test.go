@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,7 @@ func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
 
 	key, err := keyring.RetrieveMasterKey()
 	require.NoError(t, err)
-	assert.Len(t, key, keySize)
+	assert.Len(t, key, vault.KeySize)
 }
 
 func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
@@ -79,7 +80,7 @@ func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
 	keyring, err := NewMemoryKeyring()
 	require.NoError(t, err)
 
-	testKey := make([]byte, keySize)
+	testKey := make([]byte, vault.KeySize)
 	for i := range testKey {
 		testKey[i] = byte(i)
 	}
@@ -423,7 +424,7 @@ func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
 
 	enc := EncryptedSecret{
 		Version:    999,
-		Nonce:      make([]byte, nonceSize),
+		Nonce:      make([]byte, vault.NonceSize),
 		Ciphertext: []byte("fake"),
 	}
 	data, err := json.Marshal(enc)
@@ -447,7 +448,7 @@ func TestKeystore_Decrypt_InvalidCiphertext(t *testing.T) {
 
 	enc := EncryptedSecret{
 		Version:    keyVersion,
-		Nonce:      make([]byte, nonceSize),
+		Nonce:      make([]byte, vault.NonceSize),
 		Ciphertext: []byte("invalid ciphertext that will fail GCM"),
 	}
 	data, err := json.Marshal(enc)
@@ -533,7 +534,7 @@ func TestKeystore_DecryptSecret_UnsupportedVersion(t *testing.T) {
 
 	enc := EncryptedSecret{
 		Version:    999,
-		Nonce:      make([]byte, nonceSize),
+		Nonce:      make([]byte, vault.NonceSize),
 		Ciphertext: []byte("fake"),
 	}
 	data, err := json.Marshal(enc)
@@ -545,11 +546,4 @@ func TestKeystore_DecryptSecret_UnsupportedVersion(t *testing.T) {
 	_, err = ks.DecryptSecret("test-secret")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported secret version")
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

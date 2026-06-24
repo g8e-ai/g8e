@@ -417,3 +417,31 @@ func TestBuildPubSubURL(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateConsensusStartup(t *testing.T) {
+	tests := []struct {
+		name       string
+		posture    string
+		tribunalID string
+		quorum     int
+		wantErr    bool
+		errIs      error
+	}{
+		{"not consensus — no validation", "doctrine", "", 0, false, nil},
+		{"consensus with tribunal and quorum", "consensus", "trib-1", 3, false, nil},
+		{"consensus without tribunal id", "consensus", "", 3, true, constants.ErrConfigTribunalIDRequired},
+		{"consensus with quorum < 2", "consensus", "trib-1", 1, true, constants.ErrConfigTribunalQuorumLow},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateConsensusStartup(tt.posture, tt.tribunalID, tt.quorum)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tt.errIs)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

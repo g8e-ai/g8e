@@ -1,0 +1,32 @@
+{
+  "_comment": "Canonical RevokedCertificate document shape. The PKI Authority (client) is the authority - it writes revocation records when certificates are revoked. Used to build Certificate Revocation Lists (CRLs) and check revocation status for mTLS authentication. A field mismatch breaks revocation checking and mTLS auth.",
+  "_authority": "client (PKI Authority)",
+  "_consumers": ["client internal services (PKI, mTLS auth)", "agent (reads via client API for cert validation)"],
+  "_collection": "revoked_certificates",
+
+  "revoked_certificate": {
+    "_description": "Certificate revocation record. Created when a certificate is revoked via the PKI Authority. The document ID is the certificate serial number. Used to generate CRLs and check revocation status during mTLS handshake.",
+
+    "core_identity": {
+      "serial": {
+        "type": "string",
+        "required": true,
+        "description": "Certificate serial number (hex string). Used as the document ID."
+      }
+    },
+
+    "revocation": {
+      "reason": {
+        "type": "string",
+        "required": true,
+        "description": "Revocation reason. E.g. 'key_compromise', 'ca_compromise', 'affiliation_changed', 'superseded', 'cessation_of_operation'."
+      },
+      "revoked_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the certificate was revoked (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

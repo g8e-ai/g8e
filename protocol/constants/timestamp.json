@@ -1,5 +1,15 @@
 {
+  "description": "Timestamp format constants used throughout the platform for consistent time representation.",
   "timestamp": {
-    "FormatRFC3339": "2006-01-02T15:04:05Z07:00"
+    "FormatRFC3339": {
+      "_go_const": "FormatRFC3339",
+      "value": "2006-01-02T15:04:05Z07:00",
+      "description": "Canonical RFC3339 timestamp format with timezone offset"
+    },
+    "TimestampFormat": {
+      "_go_const": "TimestampFormat",
+      "value": "2006-01-02T15:04:05.999999999Z07:00",
+      "description": "Canonical RFC3339 timestamp format with nanosecond precision (Go time.RFC3339Nano)"
+    }
   }
 }

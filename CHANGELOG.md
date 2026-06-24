@@ -5,6 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-06-23
+
+### Overview
+
+v1.1.9 is a core architecture realignment release that corrects the governance verification ordering, eliminates auto-approval theater, introduces just-in-time execution capabilities, and separates bound vs observed state in the canonical database. This release also hardens CLI L3 notary verification with cryptographic proof binding, consolidates token persistence into the canonical KV store, and removes the deprecated intent grant/revoke subsystem.
+
+### Breaking Changes
+
+* **`auto_approved` field removed from `L3Metadata` proto** — The `bool auto_approved` field has been removed from `L3Metadata` in `common.proto`. Deployments that relied on auto-approval for doctrine/consensus postures must now configure posture-appropriate L3 verification instead. The gateway no longer auto-sets L3 metadata for any posture.
+* **`GRANT_INTENT` and `REVOKE_INTENT` action types removed** — The intent grant/revoke subsystem (action types, events, proto messages, tool result models) has been fully removed. Any code referencing these action types or events will fail to compile.
+* **`TokenStoreService` replaced by `EncryptedKVAdapter`** — The standalone `token_store.db` and `TokenStoreService` have been removed. Token persistence now routes through `gateway.EncryptedKVAdapter` backed by the canonical gateway DB (`g8e.db`) KV store. Existing `token_store.db` files are no longer used.
+
+### Added
+
+* **JIT Execution Capabilities** — New `internal/services/governance/capability.go` providing `Capability`, `MintCapability`, and `ContextWithCapability`. The L5 Actuator now mints a scoped, single-action, self-dissolving capability before execution and dissolves it immediately after — enforcing zero standing privileges.
+* **Bound vs Observed State Tiering** — Added `state_tier` column to `kv_store` and `blobs` tables in the canonical gateway DB. Bound-state rows are included in the transaction freshness root; observed-state rows are hashed separately in `GetObservedStateRoot()` for audit ledger chaining without churning in-flight envelopes.
+* **Observed-State Root** — `StateRootService` now computes a separate `calculateObservedStateRoot()` for observed-tier KV and blob entries, chained into the audit ledger.
+* **Token Keymap Hash Binding** — The UEI token keymap hash is now bound into the bound state root (§9 binding), ensuring rehydration substitution after a transaction hash was computed produces a broken transaction rather than silent corruption.
+* **Cryptographic CLI L3 Verification** — CLI L3 notary now verifies the approver's Ed25519 signature against a stored public key, not just the mTLS certificate fingerprint. `ApprovalPublicKey` field added to `SuspendedTransaction` model and `handleCLIApproval` endpoint.
+* **Posture-Specific Warden Tests** — Decomposed monolithic `l4_warden_test.go` into `l4_warden_consensus_test.go`, `l4_warden_doctrine_test.go`, and `l4_warden_notary_test.go` with posture-specific coverage.
+* **Capability Unit Tests** — New `internal/services/governance/capability_test.go` with comprehensive coverage of minting, verification, dissolution, and expiry.
+* **L3 Notary Unit Tests** — New `internal/services/governance/l3_notary_test.go` with 241 lines covering CLI L3 verification paths.
+* **L3 Proof Hash Exclusion Test** — New `TestGenerateMessageID_L3ProofNotInHash` in `pkg/governance/types_test.go` verifying L3 proof does not affect the transaction hash.
+* **Architecture Documentation** — New `docs/architecture/binding.md` and `docs/architecture/postures.md`; updated `docs/architecture/transaction-process.md` with detailed layer descriptions and transaction flow.
+
+### Changed
+
+* **Warden Verification Order** — `verifyPosture` in `l4_warden.go` now verifies L2 (machine consensus) before L3 (human-presence). This preserves the invariant that the human's approval bond is spent only on transactions that have already cleared tribunal consensus.
+* **Tribunal Deliberation Under Notary Posture** — The gateway now sends envelopes to the Tribunal for L2 deliberation under both consensus and notary postures (previously consensus only).
+* **Gateway Start Config Refactor** — `resolveStartConfig` and `runGatewayMode` refactored to accept struct parameters (`startConfig` / `GatewayStartConfig`) instead of long parameter lists.
+* **Token Persistence Consolidation** — `G8eoService` now uses `gateway.NewEncryptedKVAdapter` for token storage instead of a separate `TokenStoreService` with its own SQLite DB.
+* **Scrubbing Test Simplification** — Scrubbing service tests replaced real vault/tokenstore setup with `fakeTokenStore` in-memory implementation.
+
+### Fixed
+
+* **Warden Order Bug** — Fixed verification ordering where L3 (human-presence) was checked before L2 (consensus), causing humans to be asked to authorize content the machines had not yet vetted.
+* **Proof Binding Circularity** — L3 proof is now intentionally excluded from `GenerateMessageID` transaction hash computation, resolving a circular dependency where L2 couldn't sign until the human had already acted.
+
+### Removed
+
+* **Auto-Approval (`acktheater`)** — Removed `auto_approved` field from `L3Metadata` proto, auto-approval logic from gateway `processGatewayTransaction`, and auto-approval bypass in `verifyL3Posture`.
+* **Intent Grant/Revoke Subsystem** — Removed `ActionTypeGrantIntent`, `ActionTypeRevokeIntent`, all intent-related events (`EventOperatorIntent*`), `GrantIntentRequested/Result` and `RevokeIntentRequested/Result` proto messages, intent tool result models, and intent validation from `TribunalMember.evaluateSafety` and `L1Doctrine`.
+* **Standalone Token Store** — Removed `TokenStoreService` implementation, `TokenStoreConfig`, `TokenStoreDBFilename`, `TokenStoreDBPath`, and `token_store.db` references.
+* **Deprecated Integration Tests** — Removed `byo_client_e2e_test.go`, `gateway_integration_test.go`, and `tribunal_consensus_test.go` to be replaced with proper Tier 1/2 tests.
+
+---
+
+## [1.1.8] - 2026-06-23
+
+### Overview
+
+v1.1.8 is a maintenance and stability release focused on hardening the Tribunal consensus infrastructure, reorganizing development tooling for better maintainability, and improving the reliability of the end-to-end integration test suite.
+
+### Added
+
+* **Tribunal Store Hardening** — Expanded `TribunalStoreService` with additional validation logic and comprehensive unit test coverage to ensure robust policy management.
+* **Tooling Reorganization** — Centralized development and testing tools (Agentic Tool Emulator and Chaos Testing utilities) by moving them from `test/` to `internal/tools/`, improving repository structure.
+* **E2E Harness Enhancements** — Significantly improved the E2E test harness (`test/e2e/harness.go`) and added new gateway test fixtures to increase test stability and coverage.
+
+### Changed
+
+* **Governance Cleanup** — Removed redundant test implementations in `internal/services/governance/` and consolidated testing logic within the improved harness.
+* **Configuration Management** — Added new configuration options for gateway services to support improved testing and deployment scenarios.
+
+### Fixed
+
+* **Test Stability** — Resolved flakiness in several E2E and integration tests by improving fixture handling and harness reliability.
+* **Tool Integrity** — Fixed minor issues in the agentic tool emulator to ensure consistency across testing environments.
+
+---
+
 ## [1.1.7] - 2026-06-23
 
 ### Overview

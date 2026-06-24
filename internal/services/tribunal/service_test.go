@@ -195,7 +195,7 @@ func TestTribunalService_Deliberate_WithIntentData(t *testing.T) {
 		ProtocolVersion: "1.0",
 		OperatorId:      "agent-1",
 		Timestamp:       timestamppb.Now(),
-		ActionType:      string(constants.ActionTypeGrantIntent),
+		ActionType:      string(constants.ActionTypeExecuteBash),
 		TargetResource:  "localhost",
 		IntentData:      intentData,
 		Nonce:           "nonce-123",

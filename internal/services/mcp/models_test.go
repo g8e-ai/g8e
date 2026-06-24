@@ -1413,8 +1413,8 @@ func TestA2AModelsJSON(t *testing.T) {
 
 	t.Run("A2ADownstreamRequest marshalling", func(t *testing.T) {
 		req := A2ADownstreamRequest{
-			SkillName:   "test-skill",
-			PayloadJSON: json.RawMessage(`{"data":1}`),
+			SkillName: "test-skill",
+			Payload:   json.RawMessage(`{"data":1}`),
 		}
 		data, err := json.Marshal(req)
 		require.NoError(t, err)

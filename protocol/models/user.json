@@ -3,6 +3,7 @@
 
   "_authority": "client (SQLite)",
   "_consumers": ["agent", "client internal services (auth, web session, API key validation)"],
+  "_collection": "users",
   "_cache_aside": "operator KV - keyed by g8e:doc:users:{user_id}. Write-through on every user write. SQLite is source of truth.",
 
   "user": {

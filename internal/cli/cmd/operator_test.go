@@ -268,7 +268,7 @@ func TestOperatorStreamCmd(t *testing.T) {
 	}{
 		{
 			name:  "stream command has correct use and description",
-			use:   "stream",
+			use:   "stream [host...] [flags]",
 			short: "Stream and execute",
 			long:  "SSH",
 		},
@@ -292,8 +292,9 @@ func TestOperatorStreamCmd(t *testing.T) {
 			shorthand string
 		}{
 			{"hosts", ""},
-			{"port", "P"},
-			{"identity", "i"},
+			{"arch", ""},
+			{"endpoint", ""},
+			{"ssh-identity-file", ""},
 		}
 
 		for _, ef := range expectedFlags {

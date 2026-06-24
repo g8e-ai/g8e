@@ -4,6 +4,10 @@
       "_go_const": "ChannelGovernance",
       "value": "governance"
     },
+    "Error": {
+      "_go_const": "PubSubEventError",
+      "value": "error"
+    },
     "Message": {
       "_go_const": "PubSubEventMessage",
       "value": "message"
@@ -51,6 +55,10 @@
     "Subscribed": {
       "_go_const": "PubSubEventSubscribed",
       "value": "subscribed"
+    },
+    "Unsubscribed": {
+      "_go_const": "PubSubEventUnsubscribed",
+      "value": "unsubscribed"
     },
     "Unsubscribe": {
       "_go_const": "PubSubActionUnsubscribe",

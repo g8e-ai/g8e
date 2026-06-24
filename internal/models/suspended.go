@@ -33,4 +33,5 @@ type SuspendedTransaction struct {
 	ApprovedBy              string // CLI session ID or user ID of approver
 	ApprovalSignature       string // Signature over transaction_hash by approver
 	ExpectedCertFingerprint string // Expected mTLS cert fingerprint for verification
+	ApprovalPublicKey       string // Hex-encoded Ed25519 public key of the approver
 }

@@ -261,6 +261,15 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
+	_, wrongPrivKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	wrongSig := hex.EncodeToString(ed25519.Sign(wrongPrivKey, []byte(txHash)))
+
+	// Store a different public key so ed25519.Verify fails
+	_, otherPrivKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	otherPubKeyHex := hex.EncodeToString(otherPrivKey.Public().(ed25519.PublicKey))
+
 	tx := &models.SuspendedTransaction{
 		TransactionHash:   txHash,
 		Envelope:          []byte("{}"),
@@ -272,15 +281,12 @@ func TestOutboundL3Notary_VerifyL3Proof_SignatureMismatch(t *testing.T) {
 		Approved:          true,
 		ApprovedAt:        &now,
 		ApprovedBy:        "approver-123",
-		ApprovalSignature: "signature-123",
+		ApprovalSignature: wrongSig,
+		ApprovalPublicKey: otherPubKeyHex,
 	}
 
 	err = store.StoreSuspendedTransaction(context.Background(), tx)
 	require.NoError(t, err)
-
-	_, wrongPrivKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	wrongSig := hex.EncodeToString(ed25519.Sign(wrongPrivKey, []byte(txHash)))
 
 	proof := &commonv1.L3Proof{
 		CliSignature: wrongSig,
@@ -311,6 +317,7 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 	_, sigPrivKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	signature := hex.EncodeToString(ed25519.Sign(sigPrivKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(sigPrivKey.Public().(ed25519.PublicKey))
 
 	tx := &models.SuspendedTransaction{
 		TransactionHash:         txHash,
@@ -325,6 +332,7 @@ func TestOutboundL3Notary_VerifyL3Proof_FingerprintMismatch(t *testing.T) {
 		ApprovedBy:              "approver-123",
 		ApprovalSignature:       signature,
 		ExpectedCertFingerprint: "cert-fingerprint-abc",
+		ApprovalPublicKey:       pubKeyHex,
 	}
 
 	err = store.StoreSuspendedTransaction(context.Background(), tx)
@@ -357,9 +365,10 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	_, sigPrivKey, err := ed25519.GenerateKey(nil)
+	pubKey, sigPrivKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	signature := hex.EncodeToString(ed25519.Sign(sigPrivKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
 
 	tx := &models.SuspendedTransaction{
 		TransactionHash:         txHash,
@@ -374,6 +383,7 @@ func TestOutboundL3Notary_VerifyL3Proof_ValidProof(t *testing.T) {
 		ApprovedBy:              "approver-123",
 		ApprovalSignature:       signature,
 		ExpectedCertFingerprint: "cert-fingerprint-abc",
+		ApprovalPublicKey:       pubKeyHex,
 	}
 
 	err = store.StoreSuspendedTransaction(context.Background(), tx)
@@ -474,9 +484,10 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 	cliSessionID := "cli-session-456"
 
 	now := time.Now().UTC()
-	_, sigPrivKey, err := ed25519.GenerateKey(nil)
+	pubKey, sigPrivKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
 	signature := hex.EncodeToString(ed25519.Sign(sigPrivKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
 
 	tx := &models.SuspendedTransaction{
 		TransactionHash:         txHash,
@@ -491,6 +502,7 @@ func TestOutboundL3Notary_VerifyL3Proof_NoFingerprintCheckWhenNotSet(t *testing.
 		ApprovedBy:              "approver-123",
 		ApprovalSignature:       signature,
 		ExpectedCertFingerprint: "",
+		ApprovalPublicKey:       pubKeyHex,
 	}
 
 	err = store.StoreSuspendedTransaction(context.Background(), tx)

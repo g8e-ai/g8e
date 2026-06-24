@@ -1,0 +1,71 @@
+{
+  "_comment": "Canonical AccountLock document shape. client is the authority - it creates a lock record when an account is locked due to repeated failed authentication attempts. Used for brute-force protection and account lockout enforcement. A field mismatch breaks lockout enforcement and security monitoring.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (auth, rate-limiting)"],
+  "_collection": "account_locks",
+
+  "account_lock": {
+    "_description": "Account lock record. Created when failed login attempts exceed the configured threshold. The account is unlocked either by timeout or by admin action.",
+
+    "core_identity": {
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "User ID whose account is locked. Primary key."
+      }
+    },
+
+    "lock_context": {
+      "reason": {
+        "type": "string",
+        "required": true,
+        "description": "Lock reason. E.g. 'brute_force', 'admin_action'."
+      },
+      "failed_attempts": {
+        "type": "integer",
+        "required": true,
+        "description": "Number of consecutive failed login attempts that triggered the lock."
+      },
+      "locked_by": {
+        "type": "string",
+        "required": false,
+        "description": "Admin user ID who manually locked the account, if applicable."
+      }
+    },
+
+    "lifecycle": {
+      "is_locked": {
+        "type": "boolean",
+        "required": true,
+        "default": true,
+        "description": "Whether the account is currently locked."
+      },
+      "unlocked_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the account was unlocked. Null if still locked."
+      },
+      "unlocked_by": {
+        "type": "string",
+        "required": false,
+        "description": "Admin user ID who unlocked the account, if applicable."
+      }
+    },
+
+    "timestamps": {
+      "locked_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the account was locked (UTC, ISO 8601 with Z suffix)."
+      },
+      "expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the lock auto-expires. Null for indefinite locks."
+      }
+    }
+  }
+}

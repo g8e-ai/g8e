@@ -1,0 +1,100 @@
+{
+  "_comment": "Canonical OperatorUsage document shape. client is the authority - it tracks per-Operator resource usage for billing, quotas, and capacity planning. A field mismatch breaks usage reporting and quota enforcement.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (quota, billing)", "admin dashboard"],
+  "_collection": "operator_usage",
+
+  "operator_usage": {
+    "_description": "Per-Operator resource usage record. Updated periodically from heartbeat telemetry. Used for billing, quota enforcement, and capacity planning.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Document ID. Composite of {operator_id}:{period} or just {operator_id} for rolling totals."
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator document ID this usage record tracks."
+      },
+      "organization_id": {
+        "type": "string",
+        "required": true,
+        "description": "Organization ID for multi-tenant usage aggregation."
+      }
+    },
+
+    "compute_usage": {
+      "cpu_seconds": {
+        "type": "number",
+        "required": false,
+        "description": "Total CPU seconds consumed in the billing period."
+      },
+      "memory_mb_hours": {
+        "type": "number",
+        "required": false,
+        "description": "Total memory MB-hours consumed in the billing period."
+      },
+      "execution_count": {
+        "type": "integer",
+        "required": false,
+        "description": "Number of command executions in the billing period."
+      }
+    },
+
+    "network_usage": {
+      "ingress_bytes": {
+        "type": "integer",
+        "required": false,
+        "description": "Total ingress bytes in the billing period."
+      },
+      "egress_bytes": {
+        "type": "integer",
+        "required": false,
+        "description": "Total egress bytes in the billing period."
+      }
+    },
+
+    "session_usage": {
+      "active_sessions": {
+        "type": "integer",
+        "required": false,
+        "description": "Number of active sessions at the end of the billing period."
+      },
+      "session_hours": {
+        "type": "number",
+        "required": false,
+        "description": "Total session-hours in the billing period."
+      }
+    },
+
+    "billing_period": {
+      "period_start": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "Start of the billing period this usage record covers."
+      },
+      "period_end": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "End of the billing period this usage record covers."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      }
+    }
+  }
+}

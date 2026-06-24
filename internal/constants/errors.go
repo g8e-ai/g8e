@@ -522,6 +522,21 @@ var (
 	// SSH config errors
 	ErrSSHOpenConfigFile = errors.New("failed to open SSH config file")
 	ErrSSHExpandTilde    = errors.New("failed to expand tilde in path")
+
+	// Operator main initialization errors
+	ErrPathsInitFailed        = errors.New("failed to initialize paths")
+	ErrWorkingDirFailed       = errors.New("failed to determine working directory")
+	ErrUnrecognizedCommand    = errors.New("unrecognized command or flag")
+	ErrMutuallyExclusiveFlags = errors.New("only one of --doctrine, --consensus, or --notary may be specified")
+	ErrFetchTrustBundle       = errors.New("failed to fetch trust bundle from Operator")
+	ErrNoTrustBundle          = errors.New("no trust bundle available")
+	ErrPrivateKeyRequired     = errors.New("private key is required")
+	ErrClientCertRequired     = errors.New("client certificate is required")
+	ErrReadClientCert         = errors.New("failed to read client certificate")
+	ErrReadPrivateKey         = errors.New("failed to read private key")
+	ErrLoadCertKeyPair        = errors.New("failed to load client certificate/key pair")
+
+	// SSH config errors
 	ErrSSHScanConfigFile = errors.New("failed to scan SSH config file")
 	ErrSSHResolveHomeDir = errors.New("failed to resolve home directory")
 
@@ -632,6 +647,9 @@ var (
 	ErrCLIL3NoSPIFFEURI                   = errors.New("no SPIFFE URI found in certificate")
 	ErrCLIL3GetSuspendedTransactionFailed = errors.New("failed to get suspended transaction")
 	ErrCLIL3SignatureEncodingFailed       = errors.New("invalid signature encoding")
+	ErrCLIL3SignatureVerificationFailed   = errors.New("cryptographic signature verification failed")
+	ErrCLIL3PublicKeyMissing              = errors.New("approval public key missing")
+	ErrCLIL3PublicKeyInvalid              = errors.New("invalid approval public key")
 
 	// File edit service errors
 	ErrFileEditUnsupportedOperation   = errors.New("unsupported file operation")
@@ -740,6 +758,8 @@ var (
 	ErrL5ActuatorMarshalReceipt         = errors.New("failed to marshal receipt for canonicalization")
 	ErrL5ActuatorCanonicalizeReceipt    = errors.New("failed to canonicalize receipt for signing")
 	ErrL5ActuatorAuditStore             = errors.New("audit store error")
+	ErrL5ActuatorCapabilityMint         = errors.New("L5Actuator: failed to mint execution capability")
+	ErrL5ActuatorCapabilityDissolve     = errors.New("L5Actuator: failed to dissolve execution capability")
 	ErrPKICSRSignatureCheck             = errors.New("pki: CSR signature check failed")
 	ErrPKIInvalidCurve                  = errors.New("pki: CSR public key must use P-256 curve")
 	ErrPKIGenerateSerial                = errors.New("pki: failed to generate serial")

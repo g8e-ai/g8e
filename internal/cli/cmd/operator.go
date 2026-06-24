@@ -22,10 +22,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/cli/serve"
+	"github.com/g8e-ai/g8e/internal/cli/stream"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
@@ -39,6 +42,7 @@ func operatorCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		operatorListCmd(),
+		operatorRunCmd(),
 		operatorCpCmd(),
 		operatorScpCmd(),
 		operatorDeployCmd(),
@@ -90,6 +94,60 @@ func operatorListCmd() *cobra.Command {
 			return nil
 		},
 	}
+	return cmd
+}
+
+func operatorRunCmd() *cobra.Command {
+	var endpoint string
+	var key string
+	var clientCert string
+	var trustBundle string
+	var workingDir string
+	var cloud bool
+	var provider string
+	var executionVault bool
+	var noGit bool
+	var logLevel string
+	var heartbeatInterval int
+
+	cmd := &cobra.Command{
+		Use:   "run",
+		Short: "Run the g8e Operator in foreground (worker mode)",
+		Long:  `Run the g8e Operator in foreground as a worker. This connects to the Gateway and executes commands. This is the re-exec target for remote deployment and can also be run directly for debugging.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts := serve.ServeOperatorOptions{
+				LogLevel:          logLevel,
+				Endpoint:          endpoint,
+				TrustBundlePath:   trustBundle,
+				PrivateKey:        key,
+				ClientCert:        clientCert,
+				WorkingDir:        workingDir,
+				LaunchDir:         workingDir,
+				CloudMode:         cloud,
+				CloudProvider:     provider,
+				ExecutionVault:    executionVault,
+				NoGit:             noGit,
+				HeartbeatInterval: time.Duration(heartbeatInterval) * time.Second,
+			}
+
+			// Run operator (this blocks until shutdown)
+			serve.RunOperator(opts, versionInfo)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "Gateway endpoint (e.g., 192.168.1.100:8080)")
+	cmd.Flags().StringVarP(&key, "key", "k", "", "Path to operator private key")
+	cmd.Flags().StringVar(&clientCert, "cert", "", "Path to operator client certificate")
+	cmd.Flags().StringVar(&trustBundle, "trust-bundle", "", "Path to CA trust bundle")
+	cmd.Flags().StringVar(&workingDir, "working-dir", "", "Working directory for command execution")
+	cmd.Flags().BoolVarP(&cloud, "cloud", "c", false, "Cloud operator mode")
+	cmd.Flags().StringVarP(&provider, "provider", "p", "", "Cloud provider (aws, gcp, azure)")
+	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", false, "Enable execution vault (data stays in working directory)")
+	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
+	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
+	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat interval in seconds")
+
 	return cmd
 }
 
@@ -434,102 +492,32 @@ func operatorDeployCmd() *cobra.Command {
 }
 
 func operatorStreamCmd() *cobra.Command {
-	var hosts string
-	var port int
-	var identityFile string
-
 	cmd := &cobra.Command{
-		Use:   "stream",
+		Use:   "stream [host...] [flags]",
 		Short: "Stream and execute the operator on remote hosts via SSH",
-		Long:  `Stream the g8e operator binary via SSH and execute it directly on remote hosts without copying. This is useful for quick deployments or air-gapped scenarios. Requires './g8e auth enroll' first.`,
+		Long:  `Stream the g8e operator binary via native Go crypto/ssh and execute it directly on remote hosts. Supports concurrent streaming, structured JSON output, and advanced SSH configuration. This is the canonical stream implementation (replaces the old exec.Command version).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
-			}
-
-			creds, err := auth.LoadCredentials(cfg)
-			if err != nil || creds == nil {
-				return fmt.Errorf("%w: Please run './g8e auth enroll' first", constants.ErrNotAuthenticated)
-			}
-
-			if hosts == "" {
-				return fmt.Errorf("%w: --hosts flag is required (comma-separated list of hosts)", constants.ErrMissingRequiredField)
-			}
-
-			hostList := strings.Split(hosts, ",")
-			for i := range hostList {
-				hostList[i] = strings.TrimSpace(hostList[i])
-			}
-
-			sourceBinary, err := os.Executable()
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
-			}
-
-			if _, err := os.Stat(sourceBinary); os.IsNotExist(err) {
-				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, sourceBinary)
-			}
-
-			cmd.Printf("Streaming operator to %d hosts: %s\n", len(hostList), strings.Join(hostList, ", "))
-
-			binaryData, err := os.ReadFile(sourceBinary)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
-			}
-
-			for _, host := range hostList {
-				cmd.Printf("\nStreaming to %s...\n", host)
-
-				sshArgs := []string{}
-				if port != 0 {
-					sshArgs = append(sshArgs, "-p", fmt.Sprintf("%d", port))
-				}
-				if identityFile != "" {
-					sshArgs = append(sshArgs, "-i", identityFile)
-				}
-				sshArgs = append(sshArgs, host, "cat > ~/g8e && chmod +x ~/g8e")
-
-				sshCmd := exec.Command("ssh", sshArgs...)
-				stdin, err := sshCmd.StdinPipe()
-				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
-				}
-
-				sshCmd.Stdout = cmd.OutOrStdout()
-				sshCmd.Stderr = cmd.ErrOrStderr()
-
-				if err := sshCmd.Start(); err != nil {
-					cmd.Printf("Failed to start SSH to %s: %v\n", host, err)
-					continue
-				}
-
-				if _, err := stdin.Write(binaryData); err != nil {
-					cmd.Printf("Failed to write binary to %s: %v\n", host, err)
-					_ = sshCmd.Process.Kill()
-					continue
-				}
-
-				stdin.Close()
-
-				if err := sshCmd.Wait(); err != nil {
-					cmd.Printf("Failed to stream to %s: %v\n", host, err)
-					continue
-				}
-
-				cmd.Printf("Streamed operator to %s\n", host)
-			}
-
-			cmd.Println("\nStreaming complete")
-			cmd.Println("To start the operator on remote hosts, run:")
-			cmd.Println("  ./g8e operator deploy --hosts <hosts> --background")
+			// Convert cobra args to the format expected by RunStream
+			// RunStream expects args like ["host1", "host2", "--arch", "amd64", "--endpoint", "..."]
+			stream.RunStream(args)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&hosts, "hosts", "", "Comma-separated list of hosts to stream to (required)")
-	cmd.Flags().IntVarP(&port, "port", "P", 0, "SSH port to connect to on remote hosts")
-	cmd.Flags().StringVarP(&identityFile, "identity", "i", "", "SSH identity file (private key)")
+	// Flags that match the native stream implementation
+	cmd.Flags().String("arch", "amd64", "Target architecture: amd64, arm64, 386")
+	cmd.Flags().String("hosts", "", "File of hosts (one per line) or - for stdin")
+	cmd.Flags().Int("concurrency", 50, "Max parallel SSH sessions")
+	cmd.Flags().Int("timeout", 60, "Per-host dial+inject timeout in seconds")
+	cmd.Flags().String("endpoint", "", "Platform endpoint - if set, starts Operator on each remote host")
+	cmd.Flags().Bool("no-git", false, "Disable ledger")
+	cmd.Flags().String("ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
+	cmd.Flags().String("known-hosts", "", "Path to SSH known_hosts file (default: ~/.ssh/known_hosts)")
+	cmd.Flags().String("binary-dir", "", "Directory containing arch-specific Operator builds")
+	cmd.Flags().String("ssh-identity-file", "", "SSH identity file path")
+	cmd.Flags().String("ssh-user", "", "SSH username")
+	cmd.Flags().String("ssh-passphrase", "", "Passphrase for encrypted SSH private keys")
+	cmd.Flags().Bool("preflight", false, "Enable pre-flight SSH connectivity check before binary transfer")
 
 	return cmd
 }

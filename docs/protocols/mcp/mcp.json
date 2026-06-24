@@ -82,6 +82,27 @@
         }
       },
       "required": ["name"]
+    },
+    "A2aCallRequested": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "A2aCallRequested",
+      "type": "object",
+      "description": "Payload for g8e.v1.operator.a2a.call.requested. Mirrors McpCallRequested for the Agent-to-Agent JSON protocol. Carries the target agent skill name and its JSON-encoded task payload so the Gateway can verify L1 forbidden patterns against the skill name before dispatching to the A2A peer.",
+      "properties": {
+        "skill_name": {
+          "type": "string",
+          "description": "The target agent skill or capability name. Forbidden patterns here block verification at L1 before any signature or state check."
+        },
+        "payload_json": {
+          "type": "string",
+          "description": "JSON-encoded A2A task payload exactly as the client supplied it. Stored as a string so the canonical hash is computed over the bytes the client signed, with no normalization ambiguity."
+        },
+        "execution_id": {
+          "type": "string",
+          "description": "Optional client-supplied invocation id surfaced back in the result."
+        }
+      },
+      "required": ["skill_name", "payload_json"]
     }
   }
 }

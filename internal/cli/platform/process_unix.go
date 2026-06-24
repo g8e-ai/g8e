@@ -169,7 +169,7 @@ func (pm *ProcessManager) findOperatorProcess() int {
 
 // findOperatorProcessWithExecutor finds the PID using a provided CommandExecutor (for testing)
 func (pm *ProcessManager) findOperatorProcessWithExecutor(executor CommandExecutor) int {
-	cmd := executor.Command("pgrep", "-f", "g8e --doctrine")
+	cmd := executor.Command("pgrep", "-f", "g8e gateway serve")
 	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0
@@ -186,11 +186,11 @@ func (pm *ProcessManager) findOperatorProcessWithExecutor(executor CommandExecut
 // stopProcess stops a process with the given PID on Unix systems.
 // It sends SIGTERM first, then SIGKILL if the process doesn't exit within the timeout.
 func (pm *ProcessManager) stopProcess(pid int, name string) error {
-	return pm.stopProcessWithDeps(pid, name, osProcessFinder{}, timeSleeper{}, timeTickerFactory{})
+	return pm.stopProcessWithDeps(pid, name, osProcessFinder{}, timeSleeper{}, timeTickerFactory{}, 10*time.Second)
 }
 
 // stopProcessWithDeps stops a process using injected dependencies (for testing)
-func (pm *ProcessManager) stopProcessWithDeps(pid int, name string, finder processFinder, sleep sleeper, tickerFactory tickerFactory) error {
+func (pm *ProcessManager) stopProcessWithDeps(pid int, name string, finder processFinder, sleep sleeper, tickerFactory tickerFactory, timeoutDur time.Duration) error {
 	if pid == 0 {
 		return nil
 	}
@@ -208,7 +208,7 @@ func (pm *ProcessManager) stopProcessWithDeps(pid int, name string, finder proce
 		return fmt.Errorf("failed to send SIGTERM: %w", err)
 	}
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.After(timeoutDur)
 	ticker := tickerFactory.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 

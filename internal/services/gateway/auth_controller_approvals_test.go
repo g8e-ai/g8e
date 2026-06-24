@@ -258,6 +258,38 @@ func TestHandleCLIApproval(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rr.Code)
 		assert.Contains(t, rr.Body.String(), constants.ErrGatewayMTLSCertFingerprintRequired.Error())
 	})
+
+	t.Run("Failure - missing approval_public_key", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		txHash := "txhash123"
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			UserID:          user.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte("{}"),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+		}
+		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
+
+		body := map[string]string{
+			"cli_signature":         "sig123",
+			"mtls_cert_fingerprint": "fp123",
+		}
+		b, err := json.Marshal(body)
+		require.NoError(t, err)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIApproval(rr, req, txHash, user.ID)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "approval_public_key required")
+	})
 }
 
 func TestHandleApprovalPage(t *testing.T) {

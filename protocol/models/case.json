@@ -3,6 +3,8 @@
 
   "_authority": "agent",
   "_consumers": ["client"],
+  "_collection": "cases",
+  "_governed": true,
 
   "case": {
     "_description": "Full case document.",

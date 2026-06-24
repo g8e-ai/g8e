@@ -14,6 +14,24 @@
 // Package constants provides shell command execution constants.
 package constants
 
+// Terminal control character constants
+const (
+	// CtrlC is the ETX (End of Text) control character, sent by Ctrl+C.
+	CtrlC = 3
+
+	// Backspace is the BS (Backspace) control character.
+	Backspace = 8
+
+	// Delete is the DEL (Delete) control character.
+	Delete = 127
+
+	// PrintableASCIIStart is the first printable ASCII character (space).
+	PrintableASCIIStart = 32
+
+	// PrintableASCIIEnd is the last printable ASCII character (tilde).
+	PrintableASCIIEnd = 126
+)
+
 // Shell command execution constants
 const (
 	// DefaultShellCommandTimeout is the default timeout for shell command execution in seconds
@@ -21,6 +39,9 @@ const (
 
 	// MaxShellCommandTimeout is the maximum allowed timeout for shell command execution in seconds
 	MaxShellCommandTimeout = 300
+
+	// ShutdownTimeout is the timeout for graceful shutdown in seconds
+	ShutdownTimeout = 15
 
 	// LocalhostHostname is the hostname for local execution
 	LocalhostHostname = "localhost"
@@ -53,7 +74,7 @@ PID=$!
 wait "$PID"`
 
 	// RemoteInjectedBinaryMessage is shown when only the binary is injected without execution.
-	RemoteInjectedBinaryMessage = "[g8e]Node Binary injected into %s -- run it manually: %s -e <endpoint> [options]"
+	RemoteInjectedBinaryMessage = "[g8e]Node Binary injected into %s -- run it manually: %s operator run -e <endpoint> [options]"
 
 	// RemoteInjectedScriptMinimal is the minimal script for binary injection.
 	RemoteInjectedScriptMinimal = `set -e; B=$(mktemp); cat > "$B"; chmod +x "$B"; trap 'rm -f "$B"' EXIT; echo "%s"`

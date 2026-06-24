@@ -12,22 +12,24 @@ pwd
 ls README.md g8e Makefile
 ```
 
-Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The root
-`./g8e` launcher and `Makefile` use Bash, `find`, `sed`, and `curl`.
+Use a POSIX shell such as Linux, macOS Terminal, WSL, or Git Bash. The
+`Makefile` uses Bash, `sed`, and `curl`. The `g8e` binary at the repository
+root is a compiled Go executable; it does not depend on shell utilities beyond
+the system libc.
 
 At minimum, install the tools for the component you are touching:
 
-- Go for `g8eo` and protocol work.
-- Python for optional g8e-compatible agentic ensembles and evals.
+- Go 1.26.4 or later for the g8e Operator and protocol work.
+- Python 3.14 or later for protocol generation and demo scripts.
 
-## `./g8e` fails with missing `curl`
+## `make` targets fail with missing `curl`
 
-The launcher performs a dependency check before dispatching subcommands. Install
-the missing command and retry from the repository root.
+The `Makefile` uses `curl` to download Buf during `make buf-install` and in
+demo scripts. If `curl` is not installed, install it and retry:
 
 ```bash
 command -v curl
-./g8e gw status
+make proto
 ```
 
 If the command exists in one terminal but not another, fix the shell `PATH`
@@ -35,30 +37,34 @@ before changing project files.
 
 > Note: To support sovereign, agnostic, and air-gapped deployments, `jq` is
 > completely eliminated as a host dependency. All JSON parsing and request
-> assembly are handled internally by the unified Go CLI, allowing g8e to run on
+> assembly are handled internally by the Go CLI, allowing g8e to run on
 > virtually any modern Linux environment without extra system package requirements.
 
 ## `make proto` fails before generating files
 
-`make proto` runs `make buf-install`, then calls Buf to generate Go Protobuf code from the schema definitions.
+`make proto` runs `make buf-install`, then calls Buf to generate Go Protobuf
+code from the schema definitions in `protocol/proto/`.
 
 Check the local prerequisites first:
 
 ```bash
-command -v curl
 command -v go
+command -v buf
 ```
 
-For air-gapped and sovereign setups, the Makefile is highly resilient:
-1. If Go is present on the host, `make proto` natively compiles Buf from source
-   on your machine to ensure a flawless, host-agnostic binary fit.
-2. If Go is absent, it attempts to download the pre-compiled binary from Buf releases.
-3. If both are absent or if the network is offline, the build gracefully succeeds
-   and utilizes the pre-generated protocol files already committed under
-   `protocol/proto/` rather than failing the compilation.
+The `buf-install` target attempts to provision Buf in the following order:
 
-If you are modifying `.proto` files in an offline environment and need to recompile,
-ensure that `buf` is installed globally on your path.
+1. If Go is present on the host, it installs Buf via
+   `go install github.com/bufbuild/buf/cmd/buf@v1.70.0`.
+2. If Go is absent, it attempts to download the pre-compiled binary from Buf
+   releases using `curl`.
+3. If neither succeeds, `make proto` exits with an error. The pre-generated
+   `.pb.go` files committed under `protocol/proto/` allow `go build` to
+   succeed without running `make proto`, but schema changes require a working
+   Buf installation.
+
+If you are modifying `.proto` files in an offline environment, ensure that
+`buf` is installed globally on your path before running `make proto`.
 
 For Python protocol generation, use the separate target:
 
@@ -68,7 +74,7 @@ make proto-python
 
 ## `./g8e gw start` does not become healthy
 
-The gateway start path builds and launches the g8e Gateway, then waits for the
+The `gw start` command builds and launches the g8e Gateway, then waits for the
 health endpoint. Start with the status command and the log:
 
 ```bash
@@ -78,8 +84,8 @@ health endpoint. Start with the status command and the log:
 
 Common causes:
 
-- One of the local ports from `protocol/constants/ports.json` is already in use (the startup script performs an automatic preflight check and reports conflicting PIDs).
-- The Go toolchain is missing or below the version expected by the current Developer Guidelines.
+- One of the local ports from `protocol/constants/ports.json` (HTTP 8080, HTTPS 8443) is already in use. The process manager in `internal/cli/platform/process.go` performs a preflight port check and reports conflicting PIDs.
+- The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.4).
 - Runtime PKI or secrets were created by an older incompatible checkout.
 
 Stop the managed process before retrying:
@@ -96,31 +102,25 @@ state. They intentionally remove runtime data under `.g8e/`.
 
 The test suite uses a tiered structure with different infrastructure requirements:
 
-- **Tier 1 (Unit tests)**: Run immediately without external dependencies via `make test-unit`
-- **Tier 2 (In-Process Integration)**: No external dependencies via `make test-integration`
-- **Tier 3 (Docker E2E)**: Requires Docker via `make test-docker` or `make test-gov`
+- **Tier 1 (Unit tests)**: Run immediately without external dependencies via `make test-unit`.
+- **Tier 2 (In-Process Integration)**: No external dependencies. Integration tests use in-process gateway fixtures (`test/fixtures/gateway_fixture.go`) that spin up the gateway within the test process. Run via `make test-integration`.
+- **Tier 3 (Docker E2E)**: Requires Docker. Run via `make test-docker`.
 
-For integration tests that require a running gateway, start the gateway and authenticate first:
+Tier 2 integration tests and `make test-gateway` do not require a running
+external gateway. They construct the gateway in-process via
+`GatewayFixture`, which handles PKI enrollment and mTLS configuration
+automatically. If these tests fail, the cause is typically a port conflict or
+missing build dependencies, not a missing gateway process.
 
-```bash
-./g8e gw start
-./g8e auth enroll
-make test-integration
-```
-
-For gateway-specific tests that require mTLS authentication:
-
-```bash
-./g8e gw start
-./g8e auth enroll
-make test-gateway
-```
-
-If a test failure mentions missing trust bundles or client certificates, confirm that `.g8e/pki/` exists and that `./g8e gw status` reports the g8e Gateway as running.
+If a test failure mentions missing trust bundles or client certificates,
+confirm that the test fixture has not been modified to skip enrollment. The
+`EnrollClientIdentity` helper in `test/fixtures/gateway_fixture.go` generates
+test PKI material at runtime.
 
 ## Authentication failures after gateway start
 
-The gateway requires explicit authentication before it can be used. After starting the gateway, you must authenticate to bootstrap your credentials:
+The gateway requires explicit authentication before it can be used. After
+starting the gateway, enroll to bootstrap your credentials:
 
 ```bash
 ./g8e gw start
@@ -128,26 +128,28 @@ The gateway requires explicit authentication before it can be used. After starti
 ```
 
 If authentication fails, check the following:
-- Ensure the gateway is running via `./g8e gw status`
-- Verify the external IP displayed during gateway start matches your network interface
-- For passkey authentication, ensure your hardware security key or platform authenticator is available
-- For certificate-based authentication, ensure `.g8e/pki/operator.*` or `.g8e/pki/client.*` certificates exist
+- Ensure the gateway is running via `./g8e gw status`.
+- Verify the external IP displayed during gateway start matches your network interface.
+- For passkey authentication, ensure your hardware security key or platform authenticator is available.
+- For certificate-based authentication, ensure `.g8e/cli.crt` and `.g8e/cli.key` exist. The `auth enroll` command generates these files via CSR-based enrollment with the gateway CA. On Windows, enrollment uses the Windows Certificate Store automatically.
 
 ## Path resolution problems
 
-Scripts resolve the project root by walking up from the current working directory to find the `.git` directory or `protocol/` directory. Avoid invoking subscripts directly until the root launcher works:
+The CLI resolves the project root using `config.FindProjectRoot()` in
+`internal/config/config.go`, which returns the current working directory
+(`os.Getwd()`). Run commands from the project root directory to ensure
+correct path resolution:
 
 ```bash
+cd /path/to/g8e
 ./g8e gw status
 ```
 
-Run commands from the project root directory to ensure correct path resolution.
-
 ## `./g8e` command not found
 
-The root `./g8e` launcher is a Bash script at the repository root. If you receive
-"command not found", ensure you are running from the repository root and the script
-has execute permissions:
+The `g8e` file at the repository root is a compiled Go binary. If you receive
+"command not found", ensure you are running from the repository root and the
+binary has execute permissions:
 
 ```bash
 ls -l g8e
@@ -155,9 +157,12 @@ chmod +x g8e
 ./g8e gw status
 ```
 
-The launcher delegates to the compiled binary in `./bin/g8e`. If the binary is missing,
-run:
+If the binary is missing or outdated, rebuild it:
 
 ```bash
 make build
 ```
+
+The `make build` target compiles `cmd/operator` and copies the resulting
+binary to the repository root as `g8e`. On Windows, use `build.ps1` instead
+of `make`.

@@ -1,0 +1,50 @@
+{
+  "_comment": "Canonical Persona document shape. client is the authority - it creates and stores persona manifests for role-based access control. Personas map JWT roles to binding personas used in GovernanceEnvelope. A field mismatch breaks RBAC enforcement and governed action authorization.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["agent (reads for governance envelope binding)", "client internal services (auth, RBAC)"],
+  "_collection": "personas",
+
+  "persona": {
+    "_description": "Declarative persona manifest for role-based access control. Personas map JWT roles to binding personas used in GovernanceEnvelope authorization.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Unique persona identifier. Stable string handle (e.g. 'sage', 'triage', 'auditor')."
+      },
+      "name": {
+        "type": "string",
+        "required": true,
+        "description": "Human-readable persona name."
+      },
+      "description": {
+        "type": "string",
+        "required": true,
+        "description": "Description of the persona's role and responsibilities."
+      }
+    },
+
+    "rbac": {
+      "roles": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "description": "JWT roles mapped to this persona. See status.json user.role."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      }
+    }
+  }
+}

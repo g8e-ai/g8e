@@ -843,9 +843,6 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 					},
 				},
 			},
-			L3: &commonv1.L3Metadata{
-				AutoApproved: true,
-			},
 		},
 		StateMerkleRoot: "test-state-root",
 		SourceComponent: commonv1.Component_COMPONENT_CLIENT,

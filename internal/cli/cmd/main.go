@@ -18,7 +18,12 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/g8e-ai/g8e/internal/cli/serve"
 )
+
+// versionInfo holds build-time version metadata for serve commands
+var versionInfo serve.VersionInfo
 
 func NewRootCmd(version string) *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -50,7 +55,20 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 }
 
 func Execute(version string) {
+	ExecuteWithVersionInfo(version, "", "", "")
+}
+
+func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
 	rootCmd := NewRootCmd(version)
+	rootCmd.SetVersionTemplate(`{{with .Version}}{{printf "g8e version %s\n" .}}{{end}}`)
+
+	// Store version info globally for serve commands
+	versionInfo = serve.VersionInfo{
+		Version:   version,
+		BuildID:   buildID,
+		BuildTime: buildTime,
+		Platform:  platform,
+	}
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

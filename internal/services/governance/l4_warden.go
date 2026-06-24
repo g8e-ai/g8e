@@ -526,19 +526,21 @@ func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (tim
 	return time.Time{}, nil
 }
 
-// verifyPosture performs governance posture-aware checks for L3 and L2.
-// L3 (human-presence) is checked before L2 (consensus) so that a missing
-// human-approval proof is surfaced first — allowing the gateway to suspend
-// the transaction before L2 consensus is evaluated.
+// verifyPosture performs governance posture-aware checks for L2 and L3.
+// L2 (machine consensus) is verified first. Only if L2 passes does L3
+// (human-presence) run. This preserves the architectural invariant: the
+// human's approval bond is spent only on transactions that have already
+// cleared tribunal consensus. A human should never be asked to authorize
+// content the machines have not yet vetted.
 func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.GovernanceEnvelope, computedHash string) (bool, bool, error) {
-	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
+	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
 		return false, false, err
 	}
 
-	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
+	l3Valid, err := tv.verifyL3Posture(ctx, envelope)
 	if err != nil {
-		return false, l3Valid, err
+		return l2Valid, false, err
 	}
 
 	return l2Valid, l3Valid, nil
@@ -639,14 +641,6 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
-	// Check if L3 is auto-approved (for doctrine/consensus postures in gateway mode)
-	autoApproved := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.AutoApproved
-	if autoApproved {
-		tv.logger.Debug("L3 auto-approved by envelope metadata", "posture", tv.posture.Name())
-		return true, nil
-	}
-
-	// If not bypassed by app policy, check if proof is present
 	hasProof := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.Proof != nil
 
 	if !hasProof {
@@ -722,10 +716,6 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 		msg = &operatorv1.McpResourceListRequested{}
 	case constants.ActionTypeMcpPromptList:
 		msg = &operatorv1.McpPromptListRequested{}
-	case constants.ActionTypeGrantIntent:
-		msg = &operatorv1.GrantIntentRequested{}
-	case constants.ActionTypeRevokeIntent:
-		msg = &operatorv1.RevokeIntentRequested{}
 	case constants.ActionTypeHeartbeat:
 		msg = &operatorv1.HeartbeatRequested{}
 	case constants.ActionTypeCancel:

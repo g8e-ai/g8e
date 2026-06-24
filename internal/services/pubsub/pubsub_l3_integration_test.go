@@ -109,7 +109,8 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		Nonce:             "nonce-test-1",
 	}
 
-	// Generate transaction hash
+	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
+	// is added. Protocol ordering: L1 → L2 → L3 → L4.
 	txHash, err := govpkg.GenerateMessageID(envelope)
 	if err != nil {
 		t.Fatalf("failed to generate transaction hash: %v", err)
@@ -117,7 +118,7 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 	envelope.Id = txHash
 	envelope.TransactionHash = txHash
 
-	// Add L2 signature
+	// L2 signs the hash (machine consensus before human notary)
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
@@ -232,7 +233,8 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		Nonce:             "nonce-test-2",
 	}
 
-	// Generate transaction hash
+	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
+	// is added. Protocol ordering: L1 → L2 → L3 → L4.
 	txHash, err := govpkg.GenerateMessageID(envelope)
 	if err != nil {
 		t.Fatalf("failed to generate transaction hash: %v", err)
@@ -240,7 +242,7 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 	envelope.Id = txHash
 	envelope.TransactionHash = txHash
 
-	// Add L2 signature
+	// L2 signs the hash (machine consensus before human notary)
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{
@@ -356,7 +358,8 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		Nonce:             "nonce-test-3",
 	}
 
-	// Generate transaction hash
+	// Generate transaction hash BEFORE L2/L3 — L2 signs the hash, then L3
+	// is added. Protocol ordering: L1 → L2 → L3 → L4.
 	txHash, err := govpkg.GenerateMessageID(envelope)
 	if err != nil {
 		t.Fatalf("failed to generate transaction hash: %v", err)
@@ -364,7 +367,7 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 	envelope.Id = txHash
 	envelope.TransactionHash = txHash
 
-	// Add L2 signature
+	// L2 signs the hash (machine consensus before human notary)
 	envelope.Governance = &commonv1.GovernanceMetadata{
 		L1: &commonv1.L1Metadata{Validated: true},
 		L2: &commonv1.L2Metadata{

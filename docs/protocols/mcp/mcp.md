@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-06-13
+Last Updated: 2026-06-23
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -35,7 +35,7 @@ The gateway translates MCP tool invocations into governance envelopes:
 
 The gateway handles certain tools locally without downstream proxy:
 
-- **read_field**: JIT field resolution from governed collections with L1 field path validation, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
+- **read_field**: JIT field resolution from governed collections with L1 field path validation, L1 forbidden pattern scanning on returned values, L3 session validation, and audit vault logging. Requires `collection`, `document_id`, `field_path`, and `operator_session_id` parameters.
 - **Native tools**: The Operator includes 30 native tools that execute within the Operator's execution boundary without proxying to downstream MCP servers:
   - `db_discover_topology`: Automatically scans database schemas, tables, and column data types, returning a highly compressed JSON map
   - `db_query_validate`: Validates SQL queries using EXPLAIN QUERY PLAN to detect full table scans and performance issues
@@ -211,12 +211,14 @@ codex mcp add --transport http g8e http://localhost:8080/mcp
 Replace `8080` with your configured `--http-port` if different from the default.
 
 The unified `/mcp` endpoint supports:
-- **Initialize handshake**: Protocol version negotiation and capability exchange
-- **Method dispatch**: All MCP methods (tools/list, tools/call, resources/list, prompts/list, etc.)
+- **Initialize handshake**: Protocol version negotiation (default `2025-06-18`) and capability exchange
+- **Ping**: Returns an empty result for connection health checks
+- **Method dispatch**: All MCP methods (`tools/list`, `tools/call`, `resources/list`, `resources/templates/list`, `resources/read`, `prompts/list`, `prompts/get`) and `a2a/call`
+- **Batch rejection**: Rejects JSON-RPC batch requests (array payloads) with a `-32600` error
+- **Payload size limits**: Enforces `maxPayloadBytes` on all requests, returning a `-32600` error when exceeded
 - **ID echoing**: Preserves client request IDs for request-response correlation
 - **Notification handling**: Accepts notifications (e.g., `notifications/initialized`) with 202 Accepted
-- **SSE support**: GET requests for server-sent events streaming
-- **Origin validation**: DNS-rebinding protection via Origin header validation (rejects non-loopback origins)
+- **SSE support**: GET requests for server-sent events streaming with 30-second heartbeat keepalives
 
 **Note**: The `/mcp` endpoint is available on both gateway surfaces (mTLS port 8443 and plain HTTP port 8080). For Claude Code, use the plain HTTP port (8080) for development or the public TLS port (8443) with JWT authentication for production.
 
@@ -253,7 +255,7 @@ MCP clients connect to the gateway via:
 
 ### Tool Invocation
 
-Invoke MCP tools via JSON-RPC POST to the unified `/mcp` endpoint or via `/api/v1/mcp/tools/call` for direct tool invocation. The `/api/v1/mcp/tools/call/sse` endpoint provides server-sent events for real-time streaming responses.
+Invoke MCP tools via JSON-RPC POST to the unified `/mcp` endpoint or via `/api/v1/mcp/tools/call` for direct tool invocation. The `/api/v1/mcp/tools/call/sse` endpoint provides server-sent events for real-time streaming responses. A2A skill invocations are available via `/api/v1/a2a/call`.
 
 ```json
 {
@@ -296,7 +298,7 @@ Tools are defined by the downstream MCP server with schemas that include:
 - **description**: Human-readable description
 - **inputSchema**: JSON Schema for input validation
 
-The Gateway applies L1 forbidden pattern checks to tool names before forwarding requests.
+The Gateway applies L1 forbidden pattern checks to tool names before forwarding requests. Native tool output is scrubbed via the `ScrubbingService` to prevent sensitive data leakage before returning results to the client.
 
 ---
 
@@ -497,7 +499,7 @@ To add a new native tool to the Operator, follow this sequence:
 2. **Implement interface**: Replace the template with your tool's logic by implementing the `NativeTool` interface methods:
    - `Name() string`: Returns the unique tool identifier (snake_case, lowercase letters, digits, underscores only)
    - `Description() string`: Returns a human-readable description of the tool's purpose
-   - `InputSchema() map[string]interface{}`: Returns the JSON Schema for input validation
+   - `InputSchema() *InputSchema`: Returns the JSON Schema for input validation
    - `Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error)`: Implements the tool logic
 3. **Add input validation**: If the tool accepts user input, add validation logic in `internal/services/mcp/validation.go` following the fail-closed security principles. The validation framework enforces SQL query validation, URL validation, protocol validation, and request forgery protection.
 4. **Register tool**: Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`. The registry validates tool name format and input schema at registration time.

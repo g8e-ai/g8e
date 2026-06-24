@@ -26,7 +26,6 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/hkdf"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -77,14 +76,15 @@ func GenerateNonce() ([]byte, error) {
 	return nonce, nil
 }
 
-// KeyFingerprint returns the first KeyFingerprintSize bytes of a secure hash of the key.
-// It uses Argon2id to ensure the fingerprint is computationally expensive to derive,
-// preventing offline brute-force attacks if fingerprints are leaked.
+// KeyFingerprint returns the first KeyFingerprintSize bytes of a SHA-256 hash
+// of the key combined with a domain-separation pepper. Fingerprints are
+// identifiers for key comparison, not secrets — the key material itself
+// (256-bit ed25519) provides the entropy, so a fast hash is appropriate.
 func KeyFingerprint(key []byte) []byte {
-	// 2026 security standard: Argon2id with salt/pepper.
-	// Using a fixed salt (pepper) as these are fingerprints for lookup, not unique salts per key.
-	pepper := []byte(KeyFingerprintPepper)
-	return argon2.IDKey(key, pepper, 1, 64*1024, 4, uint32(KeyFingerprintSize))
+	h := sha256.New()
+	h.Write([]byte(KeyFingerprintPepper))
+	h.Write(key)
+	return h.Sum(nil)[:KeyFingerprintSize]
 }
 
 // PrivateKeyFingerprint returns the fingerprint of a private key.

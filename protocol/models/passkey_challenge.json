@@ -1,0 +1,69 @@
+{
+  "_comment": "Canonical PasskeyChallenge document shape. client is the authority - it stores ephemeral WebAuthn/FIDO2 challenge data in this collection during passkey authentication ceremonies. Challenges are short-lived and cleared on completion or expiry. A field mismatch breaks passkey authentication flows.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (passkey auth controller)"],
+  "_collection": "passkey_challenges",
+
+  "passkey_challenge": {
+    "_description": "Ephemeral WebAuthn challenge document. Created at the start of a passkey authentication ceremony and deleted on completion or expiry. Used to store the challenge bytes and associated user context between the challenge and verification steps.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Challenge identifier. Typically a UUID v4 or the base64url-encoded challenge string."
+      }
+    },
+
+    "auth_context": {
+      "user_id": {
+        "type": "string",
+        "required": false,
+        "description": "User ID the challenge is for. Null for registration ceremonies where the user may not exist yet."
+      },
+      "challenge": {
+        "type": "string",
+        "required": true,
+        "description": "Base64url-encoded WebAuthn challenge bytes."
+      },
+      "ceremony_type": {
+        "type": "string",
+        "required": true,
+        "values": ["registration", "authentication"],
+        "description": "WebAuthn ceremony type. See status.json auth.ceremony."
+      }
+    },
+
+    "webauthn_options": {
+      "options": {
+        "type": "object",
+        "required": true,
+        "description": "Serialized WebAuthn CredentialCreationOptions or CredentialRequestOptions. Shape matches the go-webauthn protocol types."
+      }
+    },
+
+    "lifecycle": {
+      "expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the challenge expires. Challenges are invalid after this time."
+      },
+      "completed": {
+        "type": "boolean",
+        "required": false,
+        "default": false,
+        "description": "Whether the ceremony was completed. Set to true on successful verification."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the challenge was created (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

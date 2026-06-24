@@ -1,8 +1,49 @@
 {
+  "description": "Network-related constants for the g8e Operator: default endpoints, gateway hostnames, and transient error patterns.",
   "network": {
     "DefaultEndpoint": {
       "_go_const": "DefaultEndpoint",
-      "value": "localhost"
+      "value": "localhost",
+      "description": "Default g8e Operator endpoint hostname; also the TLS ServerName for raw IP connections"
+    },
+    "GatewayInternalHostname": {
+      "_go_const": "GatewayInternalHostname",
+      "value": "g8e.local",
+      "description": "Internal hostname for Gateway TLS connections; certificate is issued to this name"
+    },
+    "GatewayHTTPPort": {
+      "_go_const": "GatewayHTTPPort",
+      "value": "8080",
+      "description": "Gateway HTTP port (plaintext, for health checks and redirects)"
+    },
+    "GatewayHTTPSPort": {
+      "_go_const": "GatewayHTTPSPort",
+      "value": "8443",
+      "description": "Gateway HTTPS port (mTLS, for all operator traffic)"
+    },
+    "GatewayHTTPBase": {
+      "_go_const": "GatewayHTTPBase",
+      "value": "http://localhost:8080",
+      "description": "Base URL for gateway HTTP endpoint"
+    },
+    "GatewayHTTPSBase": {
+      "_go_const": "GatewayHTTPSBase",
+      "value": "https://localhost:8443",
+      "description": "Base URL for gateway HTTPS endpoint"
+    },
+    "TransientNetworkErrorPatterns": {
+      "_go_const": "TransientNetworkErrorPatterns",
+      "value": [
+        "timeout",
+        "connection refused",
+        "temporary failure",
+        "network is unreachable",
+        "no route to host",
+        "i/o timeout",
+        "broken pipe",
+        "connection reset"
+      ],
+      "description": "Substring patterns identifying transient network errors suitable for retry logic"
     }
   }
 }

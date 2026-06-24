@@ -1,0 +1,113 @@
+{
+  "_comment": "Canonical ConsoleAudit document shape. The L5 Actuator is the authority - it writes ActionReceiptRecord documents to this collection after executing governed actions. Console audit records provide a tamper-evident trail of all governed mutations. A field mismatch breaks audit trails and compliance reporting.",
+  "_authority": "actuator (L5)",
+  "_consumers": ["admin dashboard", "compliance tooling", "agent (reads for governance replay)"],
+  "_collection": "console_audit",
+
+  "console_audit": {
+    "_description": "Action receipt record written by the L5 Actuator after executing a governed action. Provides a tamper-evident audit trail. The document ID is the transaction_id from the GovernanceEnvelope. Serialized from ActionReceiptRecord (internal/models/gateway.go).",
+
+    "core_identity": {
+      "transaction_id": {
+        "type": "string",
+        "required": true,
+        "description": "Transaction ID from the originating GovernanceEnvelope. Used as the document ID."
+      },
+      "transaction_hash": {
+        "type": "string",
+        "required": true,
+        "description": "Hash of the governance transaction. Computed from the envelope canonical form."
+      }
+    },
+
+    "operator_context": {
+      "operator_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator ID from the GovernanceEnvelope that submitted the action."
+      },
+      "operator_session_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator session ID from the GovernanceEnvelope. Binds the action to a specific authenticated session."
+      }
+    },
+
+    "action": {
+      "action_type": {
+        "type": "string",
+        "required": true,
+        "description": "Type of governed action executed. See constants.ActionType enum (e.g. 'execute_bash', 'kv_set', 'doc_set')."
+      },
+      "target_resource": {
+        "type": "string",
+        "required": true,
+        "description": "Target resource of the action (e.g. 'localhost', collection name, KV key)."
+      }
+    },
+
+    "execution_result": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "description": "Execution status. Values: 'EXECUTION_STATUS_EXECUTING', 'EXECUTION_STATUS_COMPLETED', 'EXECUTION_STATUS_FAILED'. Written twice per action: once before execution (EXECUTING) and once after (COMPLETED or FAILED)."
+      },
+      "result_summary": {
+        "type": "string",
+        "required": true,
+        "description": "Human-readable result summary. 'executing' for initial receipt, 'completed' or 'failed: {error}' for final receipt."
+      },
+      "state_root_before": {
+        "type": "string",
+        "required": false,
+        "description": "State root hash before execution. Empty if StateRootProvider is unavailable."
+      },
+      "state_root_after": {
+        "type": "string",
+        "required": false,
+        "description": "State root hash after execution. Empty if StateRootProvider is unavailable or for initial EXECUTING receipt."
+      }
+    },
+
+    "governance_verification": {
+      "l2_valid": {
+        "type": "boolean",
+        "required": true,
+        "description": "Whether L2 (multi-sig tribunal) verification passed. True when L2 was required and valid; false when required and failed; false when not required."
+      },
+      "l3_valid": {
+        "type": "boolean",
+        "required": true,
+        "description": "Whether L3 (human approval) verification passed. True when L3 was required and valid; false when required and failed; false when not required."
+      }
+    },
+
+    "receipt": {
+      "signature": {
+        "type": "string",
+        "required": true,
+        "description": "ED25519 signature over the canonicalized ActionReceipt payload from the Actuator signing key."
+      },
+      "signer_key_id": {
+        "type": "string",
+        "required": true,
+        "description": "Key ID of the Actuator signing key used to sign the receipt."
+      }
+    },
+
+    "timestamps": {
+      "executed_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the action was executed by the Actuator (UTC, ISO 8601). Derived from ExecutedAtUnixMs."
+      },
+      "timestamp": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the receipt record was written to the audit store (UTC, ISO 8601). Set by LogReceipt at write time."
+      }
+    }
+  }
+}

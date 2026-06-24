@@ -84,7 +84,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "g8e.local"]
+    command: ["operator", "run", "-e", "g8e.local"]
 
   # HB 3134 (2027 API Mandate): FHIR R4-compliant PA submission endpoint replacing fax-based workflows.
   # Bridges net_internal so the g8e gateway can enforce PHI doctrine on inbound requests.

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-24
+Version: v1.1.9
 
 ---
 
@@ -267,9 +267,14 @@ Add the L2Consensus signatures to the envelope:
       "violations": []
     },
     "l2": {
-      "consensus_signature": "<signature>",
-      "agent_ids": ["<agent_1_id>", "<agent_2_id>"],
-      "key_id": "<key_id>"
+      "tribunal_id": "<tribunal_id>",
+      "votes": [
+        {
+          "signer_key_id": "<key_id>",
+          "consensus_signature": "<ed25519_signature>",
+          "decision": true
+        }
+      ]
     },
     "l3": {}
   }
@@ -298,7 +303,7 @@ curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run_shell_command","arguments":{"command":"ls -la"}}}'
 ```
 
-The Gateway performs L1 Doctrine validation on the tool name before envelope construction.
+The Gateway translates the tool call into a GovernanceEnvelope and processes it through the full governance pipeline, including L1 Doctrine validation.
 
 ### A2A Integration
 
@@ -309,10 +314,10 @@ curl -X POST https://localhost:8443/api/v1/a2a/call \
   --cert .g8e/cli.crt \
   --key .g8e/cli.key \
   -H "Content-Type: application/json" \
-  -d '{"skill_name":"read_file","payload":"{\"path\":\"/etc/hosts\"}","execution_id":"task-1"}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"read_file","payload":{"path":"/etc/hosts"},"execution_id":"task-1"}}'
 ```
 
-The Gateway performs L1 Doctrine validation on the skill name before envelope construction.
+The Gateway translates the skill invocation into a GovernanceEnvelope and processes it through the full governance pipeline, including L1 Doctrine validation.
 
 ---
 
@@ -369,5 +374,5 @@ Refer to `protocol/examples/governance_envelope/` for example envelope construct
 
 ## Next Steps
 
-- **[Connect Apps to Gateway](connect_apps_to_gateway.md)** — Connect to, authenticate, use, maintain, and pull reports from a Gateway.
-- **[Connect Operator to Gateway](connect_operator_to_gateway.md)** — Deploy and use a g8e Operator.
+- **[Connect Apps to Gateway](connect_apps_to_gateway.md)**: Connect to, authenticate, use, maintain, and pull reports from a Gateway.
+- **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Deploy and use a g8e Operator.

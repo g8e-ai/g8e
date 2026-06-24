@@ -49,7 +49,7 @@ type G8eoService struct {
 	pubSubCommands   *pubsub.OperatorPubSubService
 	pubSubResults    *pubsub.PubSubResultsService
 	executionVault   *storage.ExecutionVaultService
-	tokenStore       *storage.TokenStoreService
+	tokenStore       storage.TokenStore
 	suspendedTxStore *storage.SuspendedTransactionService
 	gatewayDB        *gateway.CanonicalDBService
 
@@ -174,14 +174,10 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	}
 	vs.logger.Info("Execution vault initialized")
 
-	// Initialize TokenStoreService for Sentinel token persistence
-	tokenStoreConfig := storage.DefaultTokenStoreConfig()
-	tokenStoreConfig.DBPath = paths.Infra.TokenStoreDBPath
-	vs.tokenStore, err = storage.NewTokenStoreService(tokenStoreConfig, vs.logger, encryptionVault)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-	vs.logger.Info("Token store initialized")
+	// Token persistence for Sentinel UEI tokens routes through the canonical gateway
+	// DB (g8e.db) via EncryptedKVAdapter — no separate token_store.db.
+	vs.tokenStore = gateway.NewEncryptedKVAdapter(vs.gatewayDB.KVStore, encryptionVault)
+	vs.logger.Info("Token store initialized (canonical KV store)")
 
 	// Initialize SuspendedTransactionService for L3 approval workflow
 	suspendedTxConfig := storage.DefaultSuspendedTransactionConfig()
@@ -414,12 +410,6 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	if vs.executionVault != nil {
 		if err := vs.executionVault.Close(); err != nil {
 			vs.logger.Error("g8eo: failed to close execution vault", "error", err)
-		}
-	}
-
-	if vs.tokenStore != nil {
-		if err := vs.tokenStore.Close(); err != nil {
-			vs.logger.Error("g8eo: failed to close token store", "error", err)
 		}
 	}
 

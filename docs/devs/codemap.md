@@ -25,25 +25,27 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.StateRootProvider (gateway.CanonicalDBService) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.AppPolicyStore (gateway.CanonicalDBService) [SHARED]
-│   │   ├── governance.TribunalStore (gateway.TribunalStoreService) [SHARED]
+│   │   ├── governance.TribunalStore (nil in outbound mode, gateway.TribunalStoreService in gateway mode)
 │   │   └── governance.L3Notary (governance.outboundL3Notary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
 │   │   ├── storage.SQLAuditStore
 │   │   ├── governance.TransactionAuditStore (auditStoreTransactionStore wrapper)
+│   │   ├── governance.L3Notary
 │   │   ├── scrubbing.ScrubbingService
 │   │   ├── governance.StateRootProvider
-│   │   └── governance.SignerStore
-│   └── mcp.GatewayService [SHARED]
+│   │   ├── governance.SignerStore
+│   │   └── governance.GovernancePosture
+│   └── mcp.GatewayService [SHARED] (declared in CommandServiceConfig but not wired in g8eo.go; subtree is potential wiring only)
 │       ├── response.Writer
-│       └── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
+│       └── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
 ├── pubsub.PubSubResultsService
 ├── storage.ExecutionVaultService
 │   ├── sqliteutil.DB
 │   └── vault.Vault (shared with CanonicalDBService)
-├── storage.TokenStoreService
-│   ├── sqliteutil.DB
+├── gateway.EncryptedKVAdapter (implements storage.TokenStore)
+│   ├── gateway.KVStoreService (from CanonicalDBService) [SHARED]
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.SuspendedTransactionService
 │   └── sqliteutil.DB
@@ -58,7 +60,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 ├── governance.ReplayStore (storage.SQLReplayStore)
 │   └── sqliteutil.DB
 ├── scrubbing.ScrubbingService
-│   └── storage.TokenStoreService
+│   └── storage.TokenStore (gateway.EncryptedKVAdapter)
 └── gateway.CanonicalDBService [SHARED]
     ├── sqliteutil.DB
     ├── storage.SQLAuditStore
@@ -81,6 +83,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.DocumentStoreService (extracted field)
 │   ├── gateway.AppPolicyStoreService (extracted field)
 │   ├── gateway.SignerStoreService (extracted field)
+│   ├── gateway.TribunalStoreService (extracted field)
 │   ├── gateway.StateRootService (extracted field)
 │   ├── gateway.ReplayStoreService (extracted field)
 │   ├── gateway.KVStoreService (extracted field)
@@ -95,6 +98,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   ├── gateway.PersonaService
+│   ├── gateway.JWKSProvider (optional, for external IdP JWT auth)
 │   └── response.Writer
 ├── gateway.PKIAuthority
 │   ├── gateway.CanonicalDBService [SHARED]
@@ -112,7 +116,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
-├── gateway.PersonaService (embedded in gateway.UserService)
+├── gateway.PersonaService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
 │   └── gateway.CanonicalDBService [SHARED]
@@ -154,16 +158,32 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
 │   ├── mcp.GatewayService [SHARED]
-│   ├── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
+│   ├── tribunal.TribunalService [SHARED]
+│   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
+│   ├── governance.EnvelopeProcessor (set post-construction by boot sequence)
 │   └── response.Writer
+├── gateway.CompositeL3Verifier (implements governance.L3Notary)
+│   ├── gateway.PasskeyService
+│   └── gateway.CLIL3Notary
+│       ├── gateway.CanonicalDBService [SHARED]
+│       ├── gateway.PKIAuthority
+│       ├── gateway.UserService
+│       └── gateway.CLISessionService
 ├── tribunal.TribunalService
-│   ├── gateway.TribunalStoreService [SHARED]
-│   ├── governance.SignerStore (gateway.SignerStoreService) [SHARED]
+│   ├── governance.L1Doctrine
+│   ├── tribunal.TribunalMember (one or more enrolled members with Ed25519 keys)
+│   ├── response.Writer
 │   └── tribunal.LocalDeliberator (in-process deliberation)
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
-│   ├── storage.SuspendedTransactionService (as interfaces.SuspendedTransactionStore) [SHARED]
-│   └── scrubbing.ScrubbingService
+│   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
+│   ├── scrubbing.ScrubbingService
+│   ├── mcp.FieldPathRegistry
+│   ├── mcp.NativeToolHandler
+│   ├── mcp.FieldReader (gateway.DocumentStoreService) [SHARED]
+│   ├── mcp.SessionValidator (OperatorPubSubService in outbound mode)
+│   ├── mcp.AuditLogger (pubsubAuditLogger in outbound mode)
+│   └── tribunal.TribunalDeliberator (tribunal.LocalDeliberator in gateway mode, nil in outbound)
 └── response.Writer
 ```
 
@@ -171,7 +191,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Mode Bifurcation
 - **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only)
-- **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
+- **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling; note: in outbound mode, `MCPGateway` is declared in `CommandServiceConfig` but not wired in `g8eo.go` Start), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it now contains only lifecycle code (Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop). All domain logic has been extracted to dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
@@ -183,16 +203,16 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`gateway.KVStoreService`** provides TTL-aware ephemeral state with GLOB pattern scanning for gateway mode. Callers access it directly via the `KVStore` field on CanonicalDBService - no delegation wrappers.
 - **`gateway.SSEEventService`** provides Server-Sent Events fan-out for gateway mode. Callers access it directly via the `SSEStore` field on CanonicalDBService - no delegation wrappers.
 - **`gateway.BlobStoreService`** provides binary persistence for attachments and certificate material for gateway mode. Callers access it directly via the `BlobStore` field on CanonicalDBService - no delegation wrappers.
-- **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements interfaces.SuspendedTransactionStore).
+- **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`).
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
-- **`storage.TokenStoreService`** is the Sentinel token persistence store for outbound mode.
+- **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from CanonicalDBService) and encrypts values at rest via `vault.Vault`.
 - **`storage.SQLAuditStore`** is embedded in CanonicalDBService as the `AuditStore` field and provides the SQL-based audit storage foundation for gateway mode. In outbound mode, a separate SQLAuditStore instance is used for the Local-First Audit Architecture (LFAA).
 - **`vault.Vault`** is shared across all storage services in outbound mode (reused from CanonicalDBService).
 
 ### Dependency Flow
-- `scrubbing.ScrubbingService` depends on `storage.TokenStoreService` (as `TokenStore`).
-- `storage.TokenStoreService` has no dependency on `scrubbing.ScrubbingService` (circular dependency removed).
-- All outbound storage services (ExecutionVaultService, TokenStoreService, SQLAuditStore, GitLedgerService) share the same `vault.Vault` instance from CanonicalDBService.
+- `scrubbing.ScrubbingService` depends on `storage.TokenStore` (interface). The outbound mode implementation is `gateway.EncryptedKVAdapter`.
+- `gateway.EncryptedKVAdapter` has no dependency on `scrubbing.ScrubbingService` (circular dependency removed).
+- All outbound storage services (ExecutionVaultService, EncryptedKVAdapter, SQLAuditStore, GitLedgerService) share the same `vault.Vault` instance from CanonicalDBService.
 - `gateway.SecretManager` depends on `gateway.CanonicalDBService` for keystore access.
 
 ### Governance Stack (L1-L5)
@@ -209,10 +229,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `gateway.ReplayStoreService` implements: `governance.ReplayStore` (gateway mode dedicated implementation).
 - `gateway.StateRootService` implements: `governance.StateRootProvider` (gateway mode dedicated implementation).
 - `gateway.DocumentStoreService` implements: `governance.TransactionAuditStore` (gateway mode dedicated implementation).
-- `storage.TokenStoreService` implements: `interfaces.TokenStore`.
-- `storage.SuspendedTransactionService` implements: `interfaces.SuspendedTransactionStore` (used in both gateway and outbound modes).
+- `gateway.EncryptedKVAdapter` implements: `storage.TokenStore` (outbound mode).
+- `storage.SuspendedTransactionService` implements: `storage.SuspendedTransactionStore` (used in both gateway and outbound modes).
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
 - `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode).
+- `gateway.CompositeL3Verifier` implements: `governance.L3Notary` (used in gateway mode, delegates to `PasskeyService` for WebAuthn proofs and `CLIL3Notary` for mTLS proofs).
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).

@@ -49,8 +49,10 @@ type SuspendedTransactionStore interface {
 	ListSuspendedTransactions(ctx context.Context, userID string) ([]*models.SuspendedTransaction, error)
 
 	// ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
+	// The approvalPublicKey is the hex-encoded Ed25519 public key of the approver, used for
+	// cryptographic signature verification at L3 notary verification time.
 	// Returns an error if approval fails, wrapping the underlying error with context.
-	ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error
+	ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey string) error
 
 	// DeleteSuspendedTransaction removes a suspended transaction after approval/rejection.
 	// Returns an error if deletion fails, wrapping the underlying error with context.
@@ -146,7 +148,8 @@ CREATE TABLE IF NOT EXISTS suspended_transactions (
 	approved_at TEXT,
 	approved_by TEXT,
 	approval_signature TEXT,
-	expected_cert_fingerprint TEXT
+	expected_cert_fingerprint TEXT,
+	approval_public_key TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_suspended_expires_at ON suspended_transactions(expires_at);
@@ -161,8 +164,8 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 	INSERT INTO suspended_transactions (
 		transaction_hash, envelope, created_at, expires_at,
 		tool_name, tool_arguments, user_id, operator_id,
-		approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(transaction_hash) DO UPDATE SET
 		envelope = excluded.envelope,
 		expires_at = excluded.expires_at,
@@ -170,7 +173,8 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 		approved_at = excluded.approved_at,
 		approved_by = excluded.approved_by,
 		approval_signature = excluded.approval_signature,
-		expected_cert_fingerprint = excluded.expected_cert_fingerprint
+		expected_cert_fingerprint = excluded.expected_cert_fingerprint,
+		approval_public_key = excluded.approval_public_key
 	`
 
 	var approvedAtStr *string
@@ -194,6 +198,7 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 		tx.ApprovedBy,
 		tx.ApprovalSignature,
 		tx.ExpectedCertFingerprint,
+		tx.ApprovalPublicKey,
 	)
 	if err != nil {
 		return fmt.Errorf("suspended_transaction_store: store transaction: %w", err)
@@ -207,13 +212,13 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 	if sts == nil || sts.db == nil {
 		return nil, false, fmt.Errorf("suspended_transaction_store: get transaction: store not initialized")
 	}
-	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint sql.NullString
+	var envelopeStr, createdAtStr, expiresAtStr, toolName, toolArgsStr, userID, operatorID, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey sql.NullString
 	var approved int
 	var approvedAtStr sql.NullString
 	err := sts.db.QueryRowWithRetry(
-		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
+		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
 		txHash, sqliteutil.NowTimestamp(),
-	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint)
+	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint, &approvalPublicKey)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, false, nil
@@ -250,6 +255,7 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 		ApprovedBy:              approvedBy.String,
 		ApprovalSignature:       approvalSignature.String,
 		ExpectedCertFingerprint: expectedCertFingerprint.String,
+		ApprovalPublicKey:       approvalPublicKey.String,
 	}, true, nil
 }
 
@@ -264,10 +270,10 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 	var args []interface{}
 
 	if userID != "" {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
 		args = []interface{}{userID, sqliteutil.NowTimestamp()}
 	} else {
-		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
+		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
 		args = []interface{}{sqliteutil.NowTimestamp()}
 	}
 
@@ -285,11 +291,12 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 		approvedBy              sql.NullString
 		approvalSignature       sql.NullString
 		expectedCertFingerprint sql.NullString
+		approvalPublicKey       sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(sts.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
-		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint)
+		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey)
 		return row, err
 	})
 	if err != nil {
@@ -326,6 +333,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 			ApprovedBy:              row.approvedBy.String,
 			ApprovalSignature:       row.approvalSignature.String,
 			ExpectedCertFingerprint: row.expectedCertFingerprint.String,
+			ApprovalPublicKey:       row.approvalPublicKey.String,
 		})
 	}
 
@@ -334,7 +342,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 
 // ApproveSuspendedTransaction marks a suspended transaction as approved with cryptographic signature.
 // This is called by the CLI approval command when a human approves a transaction.
-func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(ctx context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey string) error {
 	if sts == nil || sts.db == nil {
 		return fmt.Errorf("suspended_transaction_store: approve transaction: store not initialized")
 	}
@@ -346,9 +354,9 @@ func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(ctx context.
 
 	result, err := sts.db.ExecWithRetry(
 		`UPDATE suspended_transactions 
-		 SET approved = 1, approved_at = ?, approved_by = ?, approval_signature = ?, expected_cert_fingerprint = ?
+		 SET approved = 1, approved_at = ?, approved_by = ?, approval_signature = ?, expected_cert_fingerprint = ?, approval_public_key = ?
 		 WHERE transaction_hash = ? AND expires_at > ?`,
-		nowStr, approvedBy, approvalSignature, expectedCertFingerprint, txHash, sqliteutil.NowTimestamp(),
+		nowStr, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey, txHash, sqliteutil.NowTimestamp(),
 	)
 	if err != nil {
 		return fmt.Errorf("suspended_transaction_store: approve transaction: %w", err)
@@ -398,7 +406,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 		return nil, fmt.Errorf("suspended_transaction_store: get expired transactions: store not initialized")
 	}
 
-	query := "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint FROM suspended_transactions WHERE expires_at < ? ORDER BY expires_at ASC"
+	query := "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key FROM suspended_transactions WHERE expires_at < ? ORDER BY expires_at ASC"
 
 	type suspendedTxRow struct {
 		txHash                  sql.NullString
@@ -414,11 +422,12 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 		approvedBy              sql.NullString
 		approvalSignature       sql.NullString
 		expectedCertFingerprint sql.NullString
+		approvalPublicKey       sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(sts.db, query, []interface{}{sqliteutil.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
-		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint)
+		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey)
 		return row, err
 	})
 	if err != nil {
@@ -455,6 +464,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 			ApprovedBy:              row.approvedBy.String,
 			ApprovalSignature:       row.approvalSignature.String,
 			ExpectedCertFingerprint: row.expectedCertFingerprint.String,
+			ApprovalPublicKey:       row.approvalPublicKey.String,
 		})
 	}
 

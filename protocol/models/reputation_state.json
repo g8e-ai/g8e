@@ -4,6 +4,8 @@
   "_consumers": [
     "agent"
   ],
+  "_collection": "reputation_state",
+  "_governed": true,
 
   "reputation_state": {
     "_description": "Per-agent scalar reputation maintained as an exponential moving average across conversations. Scalar only; never history (GDD §5). Sybil resistance: zero-rep agents have no influence. One row per persona id (axiom, concord, variance, pragma, nemesis, sage, triage, auditor).",

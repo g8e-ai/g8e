@@ -4,7 +4,7 @@ modules:
     name: buf.build/g8e/platform
 lint:
   use:
-    - DEFAULT
+    - STANDARD
 breaking:
   use:
     - FILE

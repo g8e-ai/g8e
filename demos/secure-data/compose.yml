@@ -92,7 +92,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.20.0.10"]
+    command: ["operator", "run", "-e", "10.20.0.10"]
 
   # ── Destination domain ─────────────────────────────────────────────────────
 
@@ -145,7 +145,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.21.0.10"]
+    command: ["operator", "run", "-e", "10.21.0.10"]
 
   # ── Connectors: enrolled apps that produce GovernanceEnvelopes ─────────────
   # Each connector holds an mTLS identity issued by src-gateway.

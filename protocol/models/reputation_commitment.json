@@ -2,6 +2,8 @@
   "_comment": "Canonical ReputationCommitment document shape. Per-verdict cryptographic commitment to the reputation_state scoreboard, written exclusively by the Auditor inside its verdict step (GDD §14.4 Artifact B). Forms the cross-chain spine: each commitment links to the previous via prev_root, producing a verifiable hash chain over the entire reputation history. A field mismatch here breaks falsifiable citation (GDD §7) and peer-auditor replay (GDD §14.7).",
   "_authority": "agent",
   "_consumers": ["agent"],
+  "_collection": "reputation_commitments",
+  "_governed": true,
 
   "reputation_commitment": {
     "_description": "Auditor-signed Merkle commitment binding a consensus verdict to the reputation scoreboard at verdict time. Append-only; commitments are never revised. Genesis commitment uses the deployment-scoped sentinel prev_root '0' * 64.",

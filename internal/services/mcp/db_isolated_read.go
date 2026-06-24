@@ -71,10 +71,10 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	queryUpper := strings.ToUpper(strings.TrimSpace(req.Query))
 	if !strings.HasPrefix(queryUpper, "SELECT") {
-		result := map[string]interface{}{
-			"rows":    []DBRow{},
-			"columns": []string{},
-			"error":   "Only SELECT queries are allowed in isolated read mode",
+		result := DBIsolatedReadResult{
+			Rows:    []DBRow{},
+			Columns: []string{},
+			Error:   "Only SELECT queries are allowed in isolated read mode",
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -86,10 +86,10 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 	}
 
 	if err := validateSQLQuery(req.Query); err != nil {
-		result := map[string]interface{}{
-			"rows":    []DBRow{},
-			"columns": []string{},
-			"error":   fmt.Sprintf("Query validation failed: %v", err),
+		result := DBIsolatedReadResult{
+			Rows:    []DBRow{},
+			Columns: []string{},
+			Error:   fmt.Sprintf("Query validation failed: %v", err),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -110,10 +110,10 @@ func (t *DBIsolatedReadTool) Execute(ctx context.Context, args json.RawMessage) 
 	// Query is validated by validateSQLQuery to satisfy CodeQL sql-injection rule.
 	rows, err := db.Query(req.Query)
 	if err != nil {
-		result := map[string]interface{}{
-			"rows":    []DBRow{},
-			"columns": []string{},
-			"error":   fmt.Sprintf("Query execution failed: %v", err),
+		result := DBIsolatedReadResult{
+			Rows:    []DBRow{},
+			Columns: []string{},
+			Error:   fmt.Sprintf("Query execution failed: %v", err),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {

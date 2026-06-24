@@ -71,7 +71,6 @@ func TestGovernanceFlow(t *testing.T) {
 				},
 			},
 		},
-		L3: &commonv1.L3Metadata{AutoApproved: true},
 	}
 
 	handler := &mockExecutionHandler{}

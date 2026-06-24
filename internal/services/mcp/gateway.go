@@ -112,8 +112,8 @@ type GatewayService struct {
 	scrubbingService  *scrubbing.ScrubbingService
 	posture           string // Gateway posture: doctrine, consensus, or notary
 
-	// tribunalDeliberator calls the Tribunal service for L2 votes under consensus posture.
-	// nil when not configured (doctrine/notary posture or no Tribunal URL).
+	// tribunalDeliberator calls the Tribunal service for L2 votes under consensus and notary postures.
+	// nil when not configured (doctrine posture or no Tribunal URL).
 	tribunalDeliberator TribunalDeliberator
 
 	// Circuit breaker state
@@ -361,39 +361,13 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	}
 
 	if g.downstreamURL == "" {
-		// Return native tools if no downstream configured
-		var nativeTools []NativeTool
-		if g.nativeToolHandler != nil {
-			nativeTools = g.nativeToolHandler.registry.List()
-		}
-		tools := make([]Tool, 0, len(nativeTools))
-		for _, nt := range nativeTools {
-			tools = append(tools, Tool{
-				Name:        nt.Name(),
-				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
-			})
-		}
-		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: g.nativeToolsAsTools()})
 		return
 	}
 
 	if g.isCircuitOpen() {
 		g.logger.Warn("MCP downstream circuit is open, returning native tools only", "url", g.downstreamURL)
-		// Return native tools when downstream is unavailable
-		var nativeTools []NativeTool
-		if g.nativeToolHandler != nil {
-			nativeTools = g.nativeToolHandler.registry.List()
-		}
-		tools := make([]Tool, 0, len(nativeTools))
-		for _, nt := range nativeTools {
-			tools = append(tools, Tool{
-				Name:        nt.Name(),
-				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
-			})
-		}
-		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: g.nativeToolsAsTools()})
 		return
 	}
 
@@ -426,20 +400,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		g.recordFailure()
 		g.logger.Error("Failed to query downstream MCP server, returning native tools only", "url", g.downstreamURL, "error", err)
-		// Return native tools when downstream is unavailable
-		var nativeTools []NativeTool
-		if g.nativeToolHandler != nil {
-			nativeTools = g.nativeToolHandler.registry.List()
-		}
-		tools := make([]Tool, 0, len(nativeTools))
-		for _, nt := range nativeTools {
-			tools = append(tools, Tool{
-				Name:        nt.Name(),
-				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
-			})
-		}
-		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: g.nativeToolsAsTools()})
 		return
 	}
 	defer func() {
@@ -450,20 +411,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 
 	if resp.StatusCode >= 500 {
 		g.recordFailure()
-		// Return native tools as fallback when downstream returns error
-		var nativeTools []NativeTool
-		if g.nativeToolHandler != nil {
-			nativeTools = g.nativeToolHandler.registry.List()
-		}
-		tools := make([]Tool, 0, len(nativeTools))
-		for _, nt := range nativeTools {
-			tools = append(tools, Tool{
-				Name:        nt.Name(),
-				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
-			})
-		}
-		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: g.nativeToolsAsTools()})
 		return
 	} else {
 		g.recordSuccess()
@@ -473,20 +421,7 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 	var downstreamJSONRPC JSONRPCResponse
 	if err := json.NewDecoder(resp.Body).Decode(&downstreamJSONRPC); err != nil {
 		g.logger.Error("Failed to decode downstream tools/list response, returning native tools only", "error", err)
-		// Return native tools as fallback when response is invalid
-		var nativeTools []NativeTool
-		if g.nativeToolHandler != nil {
-			nativeTools = g.nativeToolHandler.registry.List()
-		}
-		tools := make([]Tool, 0, len(nativeTools))
-		for _, nt := range nativeTools {
-			tools = append(tools, Tool{
-				Name:        nt.Name(),
-				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
-			})
-		}
-		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+		g.responder.RPCResponse(w, 1, ToolsListResult{Tools: g.nativeToolsAsTools()})
 		return
 	}
 
@@ -496,45 +431,18 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 		resultBytes, err := json.Marshal(downstreamJSONRPC.Result)
 		if err != nil {
 			g.logger.Error("Failed to marshal downstream result, returning native tools only", "error", err)
-			var nativeTools []NativeTool
-			if g.nativeToolHandler != nil {
-				nativeTools = g.nativeToolHandler.registry.List()
-			}
-			tools := make([]Tool, 0, len(nativeTools))
-			for _, nt := range nativeTools {
-				tools = append(tools, Tool{
-					Name:        nt.Name(),
-					Description: nt.Description(),
-					InputSchema: nt.InputSchema(),
-				})
-			}
-			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: g.nativeToolsAsTools()})
 			return
 		}
 		if err := json.Unmarshal(resultBytes, &downstreamResult); err != nil {
 			g.logger.Error("Failed to unmarshal downstream result, returning native tools only", "error", err)
-			var nativeTools []NativeTool
-			if g.nativeToolHandler != nil {
-				nativeTools = g.nativeToolHandler.registry.List()
-			}
-			tools := make([]Tool, 0, len(nativeTools))
-			for _, nt := range nativeTools {
-				tools = append(tools, Tool{
-					Name:        nt.Name(),
-					Description: nt.Description(),
-					InputSchema: nt.InputSchema(),
-				})
-			}
-			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: tools})
+			g.responder.RPCResponse(w, 1, ToolsListResult{Tools: g.nativeToolsAsTools()})
 			return
 		}
 	}
 
 	// Merge native tools with downstream tools
-	var nativeTools []NativeTool
-	if g.nativeToolHandler != nil {
-		nativeTools = g.nativeToolHandler.registry.List()
-	}
+	nativeTools := g.nativeToolsAsTools()
 
 	// Create a map of downstream tool names for deduplication
 	downstreamToolNames := make(map[string]bool)
@@ -544,16 +452,30 @@ func (g *GatewayService) HandleToolsList(w http.ResponseWriter, r *http.Request)
 
 	// Add native tools that aren't in downstream
 	for _, nt := range nativeTools {
-		if !downstreamToolNames[nt.Name()] {
-			downstreamResult.Tools = append(downstreamResult.Tools, Tool{
-				Name:        nt.Name(),
-				Description: nt.Description(),
-				InputSchema: nt.InputSchema(),
-			})
+		if !downstreamToolNames[nt.Name] {
+			downstreamResult.Tools = append(downstreamResult.Tools, nt)
 		}
 	}
 
 	g.responder.RPCResponse(w, 1, downstreamResult)
+}
+
+// nativeToolsAsTools converts all registered native tools into a slice of Tool
+// suitable for inclusion in a ToolsListResult.
+func (g *GatewayService) nativeToolsAsTools() []Tool {
+	if g.nativeToolHandler == nil {
+		return []Tool{}
+	}
+	nativeTools := g.nativeToolHandler.registry.List()
+	tools := make([]Tool, 0, len(nativeTools))
+	for _, nt := range nativeTools {
+		tools = append(tools, Tool{
+			Name:        nt.Name(),
+			Description: nt.Description(),
+			InputSchema: nt.InputSchema(),
+		})
+	}
+	return tools
 }
 
 // @Summary		List MCP resources
@@ -1287,18 +1209,6 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		Governance:      &commonv1.GovernanceMetadata{},
 	}
 
-	// In doctrine and consensus postures, L3 is audited not enforced, so we auto-approve
-	// to avoid WebAuthn prompts for local MCP agents. In notary posture, L3 is strictly
-	// enforced and requires human authorization.
-	if g.posture == "doctrine" || g.posture == "consensus" {
-		if env.Governance == nil {
-			env.Governance = &commonv1.GovernanceMetadata{}
-		}
-		env.Governance.L3 = &commonv1.L3Metadata{
-			AutoApproved: true,
-		}
-	}
-
 	// Enrich from context if present
 	if tenantID, ok := ctx.Value(constants.ContextKeyTenantID).(string); ok {
 		env.TenantId = tenantID
@@ -1337,11 +1247,12 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		return "", nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	// Under consensus posture, send the envelope to the Tribunal for L2 deliberation
-	// before dispatch. The Tribunal collects signed votes from its members and returns
-	// the envelope with L2 metadata populated. If the deliberator is not configured,
+	// Under any posture that requires L2 signatures (consensus and notary),
+	// send the envelope to the Tribunal for L2 deliberation before dispatch.
+	// The Tribunal collects signed votes from its members and returns the
+	// envelope with L2 metadata populated. If the deliberator is not configured,
 	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
-	if g.posture == "consensus" && g.tribunalDeliberator != nil {
+	if (g.posture == "consensus" || g.posture == "notary") && g.tribunalDeliberator != nil {
 		deliberatedBytes, err := g.tribunalDeliberator.Deliberate(ctx, envelopeBytes)
 		if err != nil {
 			g.logger.Error("Tribunal deliberation failed", "tx_hash", hash, "error", err)
@@ -1369,11 +1280,7 @@ func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
 // a2aCall executes a governed A2A skill invocation. Shared by the per-method
 // REST handler (HandleA2aCall) and the unified dispatcher (HandleMCP).
 func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params json.RawMessage) (interface{}, error) {
-	var req struct {
-		SkillName   string          `json:"skill_name"`
-		PayloadJSON json.RawMessage `json:"payload"`
-		ExecutionID string          `json:"execution_id,omitempty"`
-	}
+	var req A2ACallRequest
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInvalidJSONBody)
 	}
@@ -1383,8 +1290,8 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 	}
 
 	payloadStr := "{}"
-	if len(req.PayloadJSON) > 0 {
-		payloadStr = string(req.PayloadJSON)
+	if len(req.Payload) > 0 {
+		payloadStr = string(req.Payload)
 	}
 
 	a2aPayload := &operatorv1.A2ACallRequested{
@@ -1413,7 +1320,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 			operatorID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 			certFingerprint := extractCertFingerprint(r)
 
-			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, req.SkillName, req.PayloadJSON, userID, operatorID, certFingerprint)
+			g.StoreSuspendedTransaction(ctx, hash, envelopeBytes, req.SkillName, req.Payload, userID, operatorID, certFingerprint)
 
 			approvalURL := fmt.Sprintf("%s/approve/%s", g.publicBaseURL, hash)
 			return A2ASuspensionResponse{
@@ -1775,8 +1682,8 @@ func (g *GatewayService) DispatchToA2ADownstream(ctx context.Context, skillName 
 
 	// Construct A2A request
 	a2aReq := A2ADownstreamRequest{
-		SkillName:   skillName,
-		PayloadJSON: payload,
+		SkillName: skillName,
+		Payload:   payload,
 	}
 
 	reqBody, err := json.Marshal(a2aReq)

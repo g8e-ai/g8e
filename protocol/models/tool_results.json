@@ -349,35 +349,6 @@
     }
   },
 
-  "intent_permission_result": {
-    "_description": "Result returned by grant_intent_permission and revoke_intent_permission tool calls. Extends operation_error_base.",
-    "_authority": "agent",
-    "_consumers": ["agent"],
-    "_tool_names": ["grant_intent_permission", "revoke_intent_permission"],
-    "extends": "operation_error_base",
-    "fields": {
-      "approved": { "type": "boolean", "required": false, "description": "Whether the user approved the intent request" },
-      "intent_name": { "type": "string", "required": false, "description": "Single intent name or comma-separated list that was requested" },
-      "all_intents": { "type": "array", "required": true, "default": [], "description": "Expanded list of all intents (including dependencies) that were processed" },
-      "operation_context": { "type": "string", "required": false, "description": "High-level operation context shown to the user during approval" },
-      "message": { "type": "string", "required": false, "description": "Human-readable result message" },
-      "approval_id": { "type": "string", "required": false, "description": "Unique approval tracking identifier" },
-      "feedback": { "type": "boolean", "required": true, "default": false, "description": "True when the user provided feedback/clarification rather than approve/deny" },
-      "requested_intents": { "type": "array", "required": false, "description": "Intents that were originally requested" },
-      "invalid_intents": { "type": "array", "required": false, "description": "Intents that were not recognized as valid" },
-      "successful_intents": { "type": "array", "required": false, "description": "Intents that were successfully granted or revoked" },
-      "failed_intents": { "type": "array", "required": false, "description": "Intents that failed during IAM policy attachment/detachment" },
-      "iam_results": { "type": "array", "required": false, "description": "Per-intent IAM operation results" },
-      "stderr": { "type": "string", "required": false, "description": "Stderr from the IAM attach/detach command if run" },
-      "output": { "type": "string", "required": false, "description": "Stdout from the IAM attach/detach command if run" },
-      "exit_code": { "type": "integer", "required": false, "description": "Exit code from the IAM attach/detach command if run" },
-      "pending_command": { "type": "string", "required": false, "description": "AWS CLI command that was executed automatically after approval" },
-      "pending_command_result": { "type": "object", "required": false, "description": "Result of the pending_command execution" },
-      "timestamp": { "type": "string", "format": "iso8601", "required": false, "description": "When the permission grant/revoke was processed" },
-      "revoked_intents": { "type": "array", "required": false, "description": "Intents that were successfully revoked (revoke_intent_permission only)" }
-    }
-  },
-
   "web_search_result_item": {
     "_description": "A single result item from the Google Custom Search API. Embedded as items in search_web_result.results.",
     "_authority": "agent",

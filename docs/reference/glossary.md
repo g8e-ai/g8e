@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-06-15
-Version: v1.1.1
+Last Updated: 2026-06-24
+Version: v1.1.9
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -29,9 +29,21 @@ A field in the **GovernanceEnvelope** (`acting_app_id`) that identifies the appl
 
 ---
 
+## Capability
+
+A just-in-time, single-action, self-dissolving permission derived from a verified governance envelope. The L5 Actuator mints a capability before execution and dissolves it immediately after, enforcing zero standing privileges. The capability binds the action type, target resource, transaction hash, and expiry. Downstream handlers can extract and verify the capability via `CapabilityFromContext(ctx)`. Implemented in `internal/services/governance/capability.go`.
+
+---
+
 ## Coordination Store
 
-The embedded SQLite database used by the g8e Gateway for durable storage of users, operators, and platform data. The g8e Gateway running in gateway mode is the single source of truth - a single SQLite database in WAL mode shared by all components via the g8e Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the g8e Gateway's HTTP API. Collections include users, operators, operator_sessions, cli_sessions, web_sessions, cases, investigations, tasks, app_policies, trusted_signers, revoked_certificates, reputation_state, reputation_commitments, and others.
+The embedded SQLite database used by the g8e Gateway for durable storage of users, operators, and platform data. The g8e Gateway running in gateway mode is the single source of truth, a single SQLite database in WAL mode shared by all components via the g8e Gateway's document store, KV, and pub/sub APIs. BYO agentic clients and other components are stateless with respect to persistence and access all data through the g8e Gateway's HTTP API. Collections include users, operators, organizations, operator_sessions, cli_sessions, web_sessions, bound_sessions, cases, investigations, tasks, memories, personas, app_policies, trusted_signers, tribunals, revoked_certificates, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, and others. The database includes a `state_tier` column to distinguish bound-state from observed-state entries.
+
+---
+
+## Encrypted KV Adapter
+
+A bridge between the canonical gateway DB's KVStoreService and the storage.TokenStore interface expected by ScrubbingService. Values are encrypted at rest via the vault. Entries are written as `state_tier='observed'` so they do not participate in the bound state root hash. This replaced the standalone TokenStoreService and its separate `token_store.db` file. Implemented in `internal/services/gateway/encrypted_kv_adapter.go`.
 
 ---
 
@@ -115,7 +127,7 @@ The third layer of g8e governance (Authorization), focusing on human oversight. 
 - **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web sessions only.
 - **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI private key (mTLS certificate fingerprint binding) for CLI sessions.
 - **Operator mTLS**: mTLS certificate fingerprint validation for operator sessions (passkey auth is not available for operators).
-- **CLI Approval**: In outbound mode, mutations requiring L3 are suspended and must be approved via CLI command with cryptographic signature verification.
+- **CLI Approval**: In outbound mode, mutations requiring L3 are suspended and must be approved via CLI command with cryptographic signature verification. CLI L3 notary now verifies the approver's Ed25519 signature against a stored public key (ApprovalPublicKey field) rather than just the mTLS certificate fingerprint.
 The L4 Warden verifies these proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
@@ -131,7 +143,7 @@ The fail-closed transaction verification gate in the g8e Operator that enforces 
 - State root matching
 - L2 signature verification (when required by posture)
 - L3 Notary proof verification (when required by posture)
-- App policy auto-approval checks for external apps
+- App policy enforcement for external apps (fail-closed: apps without an active policy receive deny-all)
 The Warden rejects transactions that fail any check; only verified transactions proceed to the L5 Actuator for execution.
 
 ---
@@ -186,7 +198,7 @@ The cryptographic infrastructure managed by the g8e Gateway for issuing and revo
 
 ## Replay Protection
 
-Security mechanisms that prevent captured requests from being replayed by attackers. Implemented through nonce tracking in the g8e Gateway's replay store, timestamp validation (expiry), and transaction hash verification. The L4 Warden checks nonce uniqueness before accepting any transaction.
+Security mechanisms that prevent captured requests from being replayed by attackers. Implemented through nonce tracking in the g8e Operator's replay store, timestamp validation (expiry), and transaction hash verification. The L4 Warden checks nonce uniqueness before accepting any transaction.
 
 ---
 
@@ -202,6 +214,12 @@ A field in the **GovernanceEnvelope** (`requestor_user_id`) that identifies the 
 
 ---
 
+## Observed-State Root
+
+A separate Merkle root commitment computed over observed-tier KV and blob entries in the canonical gateway DB. Observed-state rows (those with `state_tier='observed'`) are excluded from the bound state root to prevent churning in-flight envelopes. The observed-state root does not gate transaction admission but is chained into the audit ledger so observed evidence is tamper-evident without breaking the bound root. Computed by `StateRootService.calculateObservedStateRoot()` in `internal/services/gateway/state_root_service.go`.
+
+---
+
 ## Scrubbed Vault
 
 The local SQLite database on the g8e Operator managed by the **Sovereign Execution Boundary**. It stores command outputs where sensitive data (credentials, PII, network identifiers) has been replaced with safe placeholders like `{{UEI_N}}`. This ensures that raw sensitive data never leaves the sovereign host. The vault mode is controlled by `VaultModeScrubbed` and `VaultModeRaw` constants.
@@ -212,8 +230,8 @@ The local SQLite database on the g8e Operator managed by the **Sovereign Executi
 
 The data sovereignty and scrubbing system running within the g8e Operator (PEP), implemented as the `ScrubbingService`. It provides:
 - **Egress Scrubbing**: Removes sensitive data (PII, credentials) from command output before transmission to the cloud.
-- **Local Rehydration**: Restores original tokens just before execution at the L5 Actuator, ensuring the host shell receives the actual required values while the cloud only see placeholders.
-- **Token Persistence**: Maintains consistent mapping of placeholders across sessions via the TokenStoreService.
+- **Local Rehydration**: Restores original tokens just before execution at the L5 Actuator, ensuring the host shell receives the actual required values while the cloud only sees placeholders.
+- **Token Persistence**: Maintains consistent mapping of placeholders across sessions via the `storage.TokenStore` interface, implemented by `gateway.EncryptedKVAdapter` against the canonical gateway DB.
 
 ---
 
@@ -225,7 +243,7 @@ The streaming protocol used to push real-time events from the g8e Gateway to cli
 
 ## State Root
 
-A Merkle root representing the current state of the g8e Operator's data stores (Execution Vault, Ledger, etc.). The GovernanceEnvelope includes `state_merkle_root` for state binding. The L4 Warden verifies that the transaction's state root matches the current state root before accepting the transaction, ensuring the transaction is based on the correct state.
+A Merkle root representing the current bound state of the g8e Gateway's canonical database (documents, kv_store, blobs). The GovernanceEnvelope includes `state_merkle_root` for state binding. The L4 Warden verifies that the transaction's state root matches the current state root before accepting the transaction, ensuring the transaction is based on the correct state. Only bound-state rows (those with `state_tier='bound'`) are included in the state root computation. Observed-state rows are hashed separately in the observed-state root. The bound root also incorporates the token keymap hash from the ScrubbingService to bind rehydration mappings into the state.
 
 ---
 
@@ -253,11 +271,21 @@ A deterministic SHA-256 hash computed from normalized GovernanceEnvelope fields.
 
 ---
 
+## State Tier
+
+A classification for database entries in the canonical gateway DB that determines whether they participate in the bound state root. Two tiers exist:
+- **Bound State** (`state_tier='bound'`): Entries that affect transaction freshness and are included in the bound state root. In-flight envelopes depend on this root.
+- **Observed State** (`state_tier='observed'`): Entries that are evidence or telemetry data, excluded from the bound state root to prevent churning. These are hashed separately in the observed-state root for audit ledger chaining.
+The `state_tier` column was added to `kv_store` and `blobs` tables in v1.1.9.
+
+---
+
 ## Workload Identity
 
 The identity of a g8e Operator as encoded in its TLS certificate via URI SAN (Subject Alternative Name). The workload identity is used for authentication and authorization in the mTLS connection between the g8e Operator and the g8e Gateway. The SPIFFE trust domain is `g8e.local`. Supported identity formats include:
 - Operator: `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>`
 - CLI: `spiffe://g8e.local/cli/<user_id>/<cli_session_id>`
 - App: `spiffe://g8e.local/app/<operator_id>`
+- User: `spiffe://g8e.local/user/<user_id>`
 - Hub: `spiffe://g8e.local/hub/operator-listen`
 - Gateway Peer: `spiffe://g8e.local/gateway/<gateway_id>`

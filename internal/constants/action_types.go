@@ -40,7 +40,6 @@ const (
 	ActionTypeFsGrep              ActionType = "FS_GREP"
 	ActionTypeFsList              ActionType = "FS_LIST"
 	ActionTypeFsRead              ActionType = "FS_READ"
-	ActionTypeGrantIntent         ActionType = "GRANT_INTENT"
 	ActionTypeHeartbeat           ActionType = "HEARTBEAT"
 	ActionTypeInvestigationCreate ActionType = "INVESTIGATION_CREATE"
 	ActionTypeMcpCall             ActionType = "MCP_CALL"
@@ -50,7 +49,6 @@ const (
 	ActionTypeMcpResourceRead     ActionType = "MCP_RESOURCE_READ"
 	ActionTypePortCheck           ActionType = "PORT_CHECK"
 	ActionTypeRestoreFile         ActionType = "RESTORE_FILE"
-	ActionTypeRevokeIntent        ActionType = "REVOKE_INTENT"
 	ActionTypeShutdown            ActionType = "SHUTDOWN"
 )
 
@@ -69,7 +67,6 @@ var AllActionTypes = []ActionType{
 	ActionTypeFsGrep,
 	ActionTypeFsList,
 	ActionTypeFsRead,
-	ActionTypeGrantIntent,
 	ActionTypeHeartbeat,
 	ActionTypeInvestigationCreate,
 	ActionTypeMcpCall,
@@ -79,7 +76,6 @@ var AllActionTypes = []ActionType{
 	ActionTypeMcpResourceRead,
 	ActionTypePortCheck,
 	ActionTypeRestoreFile,
-	ActionTypeRevokeIntent,
 	ActionTypeShutdown,
 }
 

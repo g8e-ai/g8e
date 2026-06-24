@@ -244,3 +244,93 @@ func TestGovernanceEnvelope_GenerateMessageID_IDHashMismatch(t *testing.T) {
 		t.Error("Id should match computed hash when set correctly")
 	}
 }
+
+func TestGenerateMessageID_L3ProofNotInHash(t *testing.T) {
+	expiresAt := timestamppb.New(time.Now().Add(5 * time.Minute))
+
+	base := &GovernanceEnvelope{
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Payload:         []byte("echo test"),
+		ExpiresAt:       expiresAt,
+		Nonce:           "nonce-123",
+		StateMerkleRoot: "root-abc",
+	}
+
+	idNoL3, err := GenerateMessageID(base)
+	if err != nil {
+		t.Fatalf("Failed to generate base hash: %v", err)
+	}
+
+	// Adding an L3 proof must NOT change the hash — L2 signs before L3 exists.
+	// Tamper-evidence for L3 is provided by verifyL3Posture at verification time,
+	// not by the transaction hash.
+	withProof := &GovernanceEnvelope{
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Payload:         []byte("echo test"),
+		ExpiresAt:       expiresAt,
+		Nonce:           "nonce-123",
+		StateMerkleRoot: "root-abc",
+		Governance: &commonv1.GovernanceMetadata{
+			L3: &commonv1.L3Metadata{
+				Proof: &commonv1.L3Proof{
+					CliSignature:        "sig-abc",
+					MtlsCertFingerprint: "fp-xyz",
+				},
+			},
+		},
+	}
+	idWithProof, err := GenerateMessageID(withProof)
+	if err != nil {
+		t.Fatalf("Failed to generate hash with proof: %v", err)
+	}
+	if idNoL3 != idWithProof {
+		t.Error("L3 proof must NOT affect the transaction hash (L2 signs before L3)")
+	}
+
+	// Changing the proof identity must NOT change the hash
+	withDiffProof := &GovernanceEnvelope{
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Payload:         []byte("echo test"),
+		ExpiresAt:       expiresAt,
+		Nonce:           "nonce-123",
+		StateMerkleRoot: "root-abc",
+		Governance: &commonv1.GovernanceMetadata{
+			L3: &commonv1.L3Metadata{
+				Proof: &commonv1.L3Proof{
+					CliSignature:        "sig-different",
+					MtlsCertFingerprint: "fp-xyz",
+				},
+			},
+		},
+	}
+	idDiffProof, err := GenerateMessageID(withDiffProof)
+	if err != nil {
+		t.Fatalf("Failed to generate hash with different proof: %v", err)
+	}
+	if idWithProof != idDiffProof {
+		t.Error("Changing L3 proof identity must NOT change the hash")
+	}
+
+	// L1-only Governance (no L3) must not change the hash vs no Governance at all
+	withL1Only := &GovernanceEnvelope{
+		ActionType:      "EXECUTE_BASH",
+		TargetResource:  "localhost",
+		Payload:         []byte("echo test"),
+		ExpiresAt:       expiresAt,
+		Nonce:           "nonce-123",
+		StateMerkleRoot: "root-abc",
+		Governance: &commonv1.GovernanceMetadata{
+			L1: &commonv1.L1Metadata{Validated: true},
+		},
+	}
+	idL1Only, err := GenerateMessageID(withL1Only)
+	if err != nil {
+		t.Fatalf("Failed to generate hash with L1 only: %v", err)
+	}
+	if idNoL3 != idL1Only {
+		t.Error("L1-only Governance (no L3) must not change the hash vs no Governance")
+	}
+}

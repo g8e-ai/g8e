@@ -1,7 +1,7 @@
 # CLI Reference
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 This reference documents the g8e CLI commands for managing the g8e Gateway, g8e Operator, and platform setup.
 
@@ -14,16 +14,18 @@ Usage:
   g8e [command]
 
 Available Commands:
-  auth        Authentication and session management
-  gateway     Manage the g8e Gateway lifecycle (alias: gw)
-  mcp         MCP protocol operations (stdio transport)
-  operator    Manage Operator instances
-  vault       Manage the encryption vault
-  test        Run test suites (unit, integration, e2e, scenario, agentic-tool-emulator, chaos)
-  demos       Manage g8e demo environments
-  audit       Run audit reports for compliance
-  swagger     Manage Swagger/OpenAPI documentation
-  help        Help about any command
+  auth                   Authentication and session management
+  gateway                Manage the g8e Gateway lifecycle (alias: gw)
+  mcp                    MCP protocol operations (stdio transport with full governance)
+  operator               Manage Operator instances
+  vault                  Manage the encryption vault
+  test                   Run test suites (unit, integration, e2e, lint, agentic-tool-emulator, chaos)
+  demos                  Manage g8e demo environments
+  audit                  Run audit reports for compliance
+  report                 Generate CSV evidence reports from all persistent stores
+  swagger                Manage Swagger/OpenAPI documentation
+  agentic-tool-emulator  Universal agentic tool emulator for a real g8e Gateway/Operator
+  help                   Help about any command
 
 Flags:
   -h, --help      help for g8e
@@ -413,48 +415,9 @@ Flags:
       --output-dir string   Output directory for certificates (default: project root)
 ```
 
-### gateway setup
-```
-Auto-discover and configure agentic coding tools for g8e integration
-
-Usage:
-  g8e gateway setup [command]
-
-Available Commands:
-  discover    Discover installed agentic coding tools
-  configure   Configure a specific tool for g8e integration
-
-Flags:
-  -h, --help   help for setup
-
-Use "g8e gateway setup [command] --help" for more information about a command.
-```
-
-#### gateway setup discover
-```
-Discover installed agentic coding tools
-
-Usage:
-  g8e gateway setup discover [flags]
-
-Flags:
-  -h, --help   help for discover
-```
-
-#### gateway setup configure
-```
-Configure a specific tool for g8e integration
-
-Usage:
-  g8e gateway setup configure [tool-name] [flags]
-
-Flags:
-  -h, --help   help for configure
-```
-
 ## test
 ```
-Run test suites (unit, integration, e2e, scenario, coverage, lint, agentic-tool-emulator, chaos, summary)
+Run test suites (unit, integration, e2e, lint, agentic-tool-emulator, chaos)
 
 Usage:
   g8e test [command]
@@ -554,6 +517,8 @@ Flags:
 Use "g8e test agentic-tool-emulator [command] --help" for more information about a command.
 ```
 
+The `agentic-tool-emulator` command is also available as a top-level command (`g8e agentic-tool-emulator`) with identical subcommands and flags.
+
 #### test agentic-tool-emulator list
 ```
 List available scenarios
@@ -581,6 +546,7 @@ Flags:
       --ca string                gateway CA bundle PEM
       --api-key string           operator API key for MCP/A2A surface
       --operator-session string   scope audit to a specific Operator session
+      --insecure                 skip TLS verify (local dev only)
       --out string               report output dir
       --l3-mode string           mock|suspend
       --ensemble int             mock consensus voters (default 3)
@@ -605,6 +571,7 @@ Flags:
       --ca string                gateway CA bundle PEM
       --api-key string           operator API key
       --operator-session string   operator session id
+      --insecure                 skip TLS verify
       --out string               report output dir
   -h, --help                     help for audit
 ```
@@ -1030,6 +997,10 @@ Available scenarios:
     1 - CUI Exfiltration Attempt Blocked
   finance: 1
     1 - Unauthorized Trade Blocked
+  secure-data: 1-3
+    1 - Governed Migration with Chain-of-Custody Receipts
+    2 - Connector Bypass Attempt Blocked
+    3 - Cross-Tenant Leak Doctrine Triggered
 
 Usage:
   g8e demos run <org> [scenario] [flags]
@@ -1062,7 +1033,7 @@ Flags:
 
 ## mcp
 ```
-MCP protocol operations (stdio transport). Run g8e as an MCP server using stdio transport for local agent integration.
+MCP protocol operations (stdio transport with full governance). Run g8e as an MCP server using stdio transport for local agent integration. All MCP calls are proxied through the gateway with full L1-L5 governance enforcement.
 
 Usage:
   g8e mcp [command]
@@ -1079,7 +1050,9 @@ Use "g8e mcp [command] --help" for more information about a command.
 
 ### mcp stdio
 ```
-Proxy stdio MCP requests to gateway with full L1-L5 governance. Run as an MCP stdio server that proxies all requests to the running gateway's HTTP endpoint. All MCP calls are converted to GovernanceEnvelopes and pass through L1-L5 governance layers. This is the only supported stdio mode - all tool execution is fully governed and audited.
+Run MCP stdio server with full L1-L5 governance (proxies to gateway). Run as an MCP stdio server that proxies all requests to the running gateway over mTLS with a bound CLI session. Every tool call passes through the L1-L5 governance pipeline. HTTP is never used for proxy traffic; it is reserved for CA bundle discovery and health checks only.
+
+This command is launched automatically by 'g8e mcp agent run'. When invoked directly the CLI session is loaded from disk (bootstrapping enrollment if needed).
 
 Usage:
   g8e mcp stdio [flags]
@@ -1097,8 +1070,8 @@ Usage:
 
 Available Commands:
   list        List supported agent binaries
-  run         Govern any MCP server via g8e reverse proxy
   show        Print MCP client configuration for the Gateway
+  run         Govern any MCP server via g8e reverse proxy
 
 Flags:
   -h, --help   help for agent
@@ -1115,22 +1088,42 @@ Flags:
   -h, --help   help for list
 ```
 
+#### mcp agent show
+```
+Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), and Stdio Transport.
+
+Usage:
+  g8e mcp agent show <agent> [flags]
+
+Flags:
+  -h, --help   help for show
+```
+
 #### mcp agent run
 ```
 Launch an AI agent or wrap an MCP server with g8e governance.
 
 LAUNCH AN AGENT (one command does everything):
 
-  g8e mcp agent run claude       Start Claude with g8e as its governed MCP provider.
-                                  Uses 'mcp stdio' with full L1-L5 governance
-                                  (gateway must be running).
-                                  All MCP tool calls are routed exclusively through
-                                  g8e; no other MCP servers are reachable.
-                                  Agent is automatically enrolled as an app identity
-                                  for audit trail purposes.
+  g8e mcp agent run claude       Start the g8e gateway (if not already running),
+                                  perform CLI auth, then launch Claude with native
+                                  tools disabled so ALL I/O must go through g8e MCP.
+                                  Every action is audited at L1-L5. No other MCP
+                                  servers are reachable.
+
+  g8e mcp agent run cursor        Launch Cursor IDE with g8e MCP config written
+                                  to ~/.cursor/mcp.json
+
+  g8e mcp agent run devin         Launch Devin IDE with g8e MCP config written
+                                  to ~/.codeium/windsurf/mcp_config.json
+
+  g8e mcp agent run aider         Launch Aider with g8e MCP config written to
+                                  .aider.conf.yml in the current directory
+
+  g8e mcp agent run continue      Launch Continue CLI with g8e MCP config
 
   Extra args are forwarded to the agent:
-    g8e mcp agent run claude -p "fix the failing tests"
+    g8e mcp agent run claude -- -p "fix the failing tests"
 
 WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
 
@@ -1172,17 +1165,6 @@ Flags:
       --url string   URL of the downstream HTTP MCP server
 ```
 
-#### mcp agent show
-```
-Print MCP client configuration for the Gateway. Displays configurations side-by-side for g8e.local (mTLS), IP Address (mTLS), and Stdio Transport.
-
-Usage:
-  g8e mcp agent show <agent> [flags]
-
-Flags:
-  -h, --help   help for show
-```
-
 ## Agent Integration
 
 ### Quick Start
@@ -1218,7 +1200,7 @@ Flags:
 - **cursor** - Cursor AI IDE
 - **devin** - Devin AI IDE (formerly Windsurf)
 - **vscode** - Visual Studio Code with MCP extension
-- **continue** - Continue.dev AI coding assistant
+- **continue** - Continue.dev AI coding assistant (alias: cn)
 - **aider** - Aider AI pair programmer
 - **codeium** - Codeium AI assistant
 - **tabby** - Tabby AI autocomplete
@@ -1290,7 +1272,7 @@ Usage:
   g8e swagger init [flags]
 
 Flags:
-      --dir string      Directory to search for Swagger annotations (default: internal/services/gateway)
+      --dir string      Directory to search for Swagger annotations (default: cmd/operator,internal/services/gateway)
       --output string   Output directory for generated docs (default: internal/services/gateway/docs)
   -h, --help            help for init
 ```
@@ -1332,3 +1314,126 @@ If no validation tool is installed, the command will suggest installing one of:
 - `npm install -g @apidevtools/swagger-cli`
 - `go install github.com/go-swagger/go-swagger/cmd/swagger@latest`
 
+## report
+```
+Generate CSV evidence reports from all persistent stores. Generate flat, deterministic CSV files from every g8e persistent store. Each file contains one record type with cryptographic proof fields. A verification pass independently re-validates receipt signatures, the commitment hash chain, and the git merkle root.
+
+Usage:
+  g8e report [command]
+
+Available Commands:
+  all         Export all stores to CSV and run verification
+  verify      Run verification checks and write verification_summary.csv
+
+Flags:
+  -h, --help   help for report
+
+Use "g8e report [command] --help" for more information about a command.
+```
+
+### report all
+```
+Export all stores to CSV and run verification.
+
+Usage:
+  g8e report all [flags]
+
+Flags:
+      --data-dir string     Data directory (default: .g8e/data)
+  -h, --help                help for all
+      --ledger-dir string   Ledger base directory (default: <runtime-dir>/ledger)
+      --out string          Output directory (default: reports/<timestamp>)
+      --runtime-dir string  Runtime directory (default: .g8e)
+```
+
+### report verify
+```
+Run verification checks and write verification_summary.csv.
+
+Usage:
+  g8e report verify [flags]
+
+Flags:
+      --data-dir string     Data directory (default: .g8e/data)
+  -h, --help                help for verify
+      --ledger-dir string   Ledger base directory (default: <runtime-dir>/ledger)
+      --out string          Output directory (default: reports/<timestamp>)
+      --runtime-dir string  Runtime directory (default: .g8e)
+```
+
+## agentic-tool-emulator
+```
+Universal agentic tool emulator for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
+
+Usage:
+  g8e agentic-tool-emulator [command]
+
+Available Commands:
+  list        List available scenarios
+  run         Run scenarios against a real Gateway/Operator
+  audit       Audit signed receipts from the Operator
+
+Flags:
+  -h, --help   help for agentic-tool-emulator
+
+Use "g8e agentic-tool-emulator [command] --help" for more information about a command.
+```
+
+The `agentic-tool-emulator` command is also available as a subcommand of `test` (`g8e test agentic-tool-emulator`) with identical subcommands and flags.
+
+### agentic-tool-emulator list
+```
+List available scenarios
+
+Usage:
+  g8e agentic-tool-emulator list [flags]
+
+Flags:
+  -h, --help   help for list
+```
+
+### agentic-tool-emulator run
+```
+Run scenarios against a real Gateway/Operator
+
+Usage:
+  g8e agentic-tool-emulator run [flags] [scenario ...]
+
+Flags:
+      --config string            JSON config overlay
+      --mtls-url string          Gateway mTLS surface
+      --public-url string        Gateway public surface for OOB approve
+      --cert string              client cert PEM
+      --key string               client key PEM
+      --ca string                gateway CA bundle PEM
+      --api-key string           operator API key for MCP/A2A surface
+      --operator-session string   scope audit to a specific Operator session
+      --insecure                 skip TLS verify (local dev only)
+      --out string               report output dir
+      --l3-mode string           mock|suspend
+      --ensemble int             mock consensus voters (default 3)
+      --verbose                  echo each request/response
+      --phase string             doctrine|notary|all (default "all")
+  -h, --help                     help for run
+```
+
+### agentic-tool-emulator audit
+```
+Audit signed receipts from the Operator
+
+Usage:
+  g8e agentic-tool-emulator audit [flags]
+
+Flags:
+      --config string            JSON config overlay
+      --mtls-url string          Gateway mTLS surface
+      --public-url string        Gateway public surface
+      --cert string              client cert PEM
+      --key string               client key PEM
+      --ca string                gateway CA bundle PEM
+      --api-key string           operator API key
+      --operator-session string   operator session id
+      --insecure                 skip TLS verify
+      --out string               report output dir
+  -h, --help                     help for audit
+```

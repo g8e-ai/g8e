@@ -6,7 +6,8 @@ This directory contains Docker Compose demo environments for org-specific g8e de
 
 ```
 demos/
-├── ../g8e                      # single static binary at repository root, bind-mounted into every container
+├── bin/                        # built g8e binary, used by g8e demos CLI commands
+│   └── g8e
 ├── gov/                        # Government/CUI demo
 │   ├── compose.yml
 │   ├── config/
@@ -18,21 +19,29 @@ demos/
 │   ├── compose.yml
 │   ├── config/
 │   ├── doctrine/               # PHI/HIPAA scrub patterns
-│   └── target-data/            # Simulated EHR/PA records
+│   ├── target-data/            # Simulated EHR/PA records
+│   ├── healthcare.md           # Demo narrative and scenario walkthrough
+│   ├── init.sql                # PostgreSQL schema for reporting-db
+│   ├── pa_api_server.py        # FHIR R4 PA submission API server
+│   └── setup_metabase.py       # Metabase compliance dashboard setup script
 ├── finance/                    # Finance/trading demo
 │   ├── compose.yml
 │   ├── config/
 │   ├── doctrine/               # Trading controls and dual-control triggers
 │   └── target-data/            # Simulated ledger/positions
-└── secure-data/                # Governed data migration / two-operator pipeline demo
+├── secure-data/                # Governed data migration / two-operator pipeline demo
+│   ├── compose.yml
+│   ├── config/
+│   ├── doctrine/               # Migration-screening L1 rules (bypass, exfil, cross-tenant)
+│   └── target-data/            # Simulated SharePoint migration manifest
+└── swarm/                      # Drone swarm battlefield demo
     ├── compose.yml
     ├── config/
-    ├── doctrine/               # Migration-screening L1 rules (bypass, exfil, cross-tenant)
-    └── target-data/            # Simulated SharePoint migration manifest
+    ├── doctrine/               # Drone operations doctrine (weapons, safety, navigation)
+    ├── target-data/            # Battlefield intelligence and fleet manifest
+    ├── drone_simulator.py      # Per-drone telemetry simulation script
+    └── README.md               # Swarm-specific documentation
 ```
-
-See the [Secure Data Transfer guide](../docs/guides/secure_data_transfer.md) for the
-full transport-plane vs. governed-data-plane model this demo illustrates.
 
 ## Network Topology
 
@@ -59,25 +68,27 @@ Each org deploys five isolated networks:
 
 * Operator appears on net_internal only for its outbound mTLS tunnel to the Gateway. It accepts no inbound connections from net_internal.
 
+The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal.
+
 ## Org Differentiation
 
 Each org demonstrates different compliance requirements and use cases:
 
-| Dimension | Gov | Healthcare | Finance |
-|---|---|---|---|
-| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers |
-| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions |
-| L2 consensus seat count | 3-of-5 | 2-of-3 | 3-of-3 |
-| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent |
-| Target system mock | Classified doc API | EHR / PA processor | Trade execution API |
-| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked |
+| Dimension | Gov | Healthcare | Finance | Secure-Data | Swarm |
+|---|---|---|---|---|---|
+| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | Weapons control, safety, navigation, command integrity |
+| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | Battlefield intelligence and drone fleet manifest |
+| Gateway posture | notary | consensus | notary | notary | consensus |
+| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Autonomous drone operator (recon, attack, support, relay) |
+| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Drone fleet with telemetry simulation |
+| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | Adversary interception and safety violation detection |
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- g8e binary built at repository root
+- g8e binary built and copied to `demos/bin/`
 
 ### Build the g8e binary
 
@@ -85,6 +96,7 @@ From the repository root:
 
 ```bash
 make build
+cp g8e demos/bin/g8e
 ```
 
 ### Using the g8e CLI (recommended)
@@ -112,6 +124,18 @@ g8e demos reset <org>
 
 # Run a specific demo scenario
 g8e demos run <org> <scenario>
+
+# View audit logs and ledger history for a running demo
+g8e demos audit <org>
+
+# Tail the observability log stream
+g8e demos audit <org> logs
+
+# Open the gateway audit database (SQLite)
+g8e demos audit <org> gateway-db
+
+# View the git ledger log
+g8e demos audit <org> ledger-log
 ```
 
 ### Demo Scenarios
@@ -135,7 +159,9 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run secure-data 2` - Connector Bypass Attempt Blocked
 - `g8e demos run secure-data 3` - Cross-Tenant Leak Doctrine Triggered
 
-Note: The demo environment must be started before running scenarios. Use `g8e demos start <org>` first.
+The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
+
+Note: The `g8e demos run` command automatically starts the demo environment if it is not already running.
 
 ### Manual Docker Compose commands
 
@@ -184,7 +210,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-No images to rebuild. No base files to modify. No other org affected.
+The Dockerfile at the repository root is shared across all org directories. Docker Compose builds the g8e binary from source inside each container. No pre-built image is required.
 
 ## Invariants
 
@@ -194,19 +220,20 @@ The following must hold in every org environment:
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The binary is the only artifact shared across org directories. `../g8e` (at repository root) is a bind mount path, not a copied file per org.
+5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted.
 
 ## Port Mappings
 
 Each org uses different host ports to allow simultaneous deployment:
 
-| Org | HTTP Port | HTTPS Port | Demo UI Port |
+| Org | HTTP Port | HTTPS Port | Additional Ports |
 |---|---|---|---|
-| gov | 8080 | 8443 | 3000 |
-| healthcare | 8081 | 8444 | 3001 |
-| finance | 8082 | 8445 | 3002 |
-| secure-data (src) | 8083 | 8446 | 3003 |
-| secure-data (dst) | 8084 | 8447 | -    |
+| gov | 8080 | 8443 | Demo UI: 3000 |
+| healthcare | 8081 | 8444 | Metabase: 3001, RabbitMQ Mgmt: 15673, PostgreSQL: 5433 |
+| finance | 8082 | 8445 | Demo UI: 3002 |
+| secure-data (src) | 8083 | 8446 | |
+| secure-data (dst) | 8084 | 8447 | |
+| swarm | 8085 | 8448 | Command Interface: 5005 |
 
 ## PKI and Enrollment
 

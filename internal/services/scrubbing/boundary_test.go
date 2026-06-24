@@ -15,22 +15,73 @@ package scrubbing
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// fakeTokenStore is an in-memory storage.TokenStore for use in unit tests.
+type fakeTokenStore struct {
+	mu   sync.RWMutex
+	data map[string]fakeEntry
+}
+
+type fakeEntry struct {
+	value     string
+	expiresAt time.Time // zero means no expiry
+}
+
+func newFakeTokenStore() *fakeTokenStore {
+	return &fakeTokenStore{data: make(map[string]fakeEntry)}
+}
+
+func (f *fakeTokenStore) KVSet(_ context.Context, key, value string, ttlSeconds int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var exp time.Time
+	if ttlSeconds > 0 {
+		exp = time.Now().Add(time.Duration(ttlSeconds) * time.Second)
+	}
+	f.data[key] = fakeEntry{value: value, expiresAt: exp}
+	return nil
+}
+
+func (f *fakeTokenStore) KVGet(_ context.Context, key string) (string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	e, ok := f.data[key]
+	if !ok {
+		return "", fmt.Errorf("key not found: %s", key)
+	}
+	if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
+		return "", fmt.Errorf("key expired: %s", key)
+	}
+	return e.value, nil
+}
+
+func (f *fakeTokenStore) KVScanPrefix(_ context.Context, prefix string) (map[string]string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	result := make(map[string]string)
+	for k, e := range f.data {
+		if !strings.HasPrefix(k, prefix) {
+			continue
+		}
+		if !e.expiresAt.IsZero() && time.Now().After(e.expiresAt) {
+			continue
+		}
+		result[k] = e.value
+	}
+	return result, nil
+}
 
 func TestDefaultConfig(t *testing.T) {
 	t.Parallel()
@@ -654,39 +705,14 @@ func TestScrubbingService_ScrubText_JWT(t *testing.T) {
 func TestScrubbingService_TokenPersistence(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	tempDir := t.TempDir()
+	tokenStore := newFakeTokenStore()
 
-	// Create vault
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
-	vHeader, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
-	require.NoError(t, err)
-	require.NoError(t, testVault.Unlock(privKey))
-	defer testVault.Close()
-
-	// Create TokenStore
-	storageConfig := &storage.TokenStoreConfig{
-		DBPath:        filepath.Join(tempDir, "test_tokens.db"),
-		RetentionDays: 30,
-	}
-	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
-	require.NoError(t, err)
-	require.NotNil(t, tokenStore)
-	defer tokenStore.Close()
-
-	// Create ScrubbingService with persistence
 	config := &Config{
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
 	service := NewScrubbingService(config, logger, tokenStore)
 
-	// Test token creation and persistence
 	sensitiveValue := "my-secret-api-key-12345"
 	token := service.GetTokenForValue(sensitiveValue)
 	assert.NotEmpty(t, token)
@@ -696,13 +722,13 @@ func TestScrubbingService_TokenPersistence(t *testing.T) {
 	rehydrated := service.RehydrateText(token)
 	assert.Equal(t, sensitiveValue, rehydrated)
 
-	// Verify token is persisted in TokenStore
+	// Verify token is persisted in the store
 	key := fmt.Sprintf("uei_token_%s", token)
 	storedValue, err := tokenStore.KVGet(context.Background(), key)
 	require.NoError(t, err)
 	assert.Equal(t, sensitiveValue, storedValue)
 
-	// Test loading persisted tokens on new SovereigntyService instance
+	// A fresh ScrubbingService backed by the same store must rehydrate from persistence.
 	service2 := NewScrubbingService(config, logger, tokenStore)
 	rehydrated2 := service2.RehydrateText(token)
 	assert.Equal(t, sensitiveValue, rehydrated2, "Should rehydrate from persisted storage")
@@ -728,52 +754,25 @@ func TestScrubbingService_TokenPersistence_FailClosed(t *testing.T) {
 func TestScrubbingService_TokenPersistence_TTL(t *testing.T) {
 	t.Parallel()
 	logger := testutil.NewTestLogger()
-	tempDir := t.TempDir()
+	tokenStore := newFakeTokenStore()
 
-	// Create vault
-	_, privKey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
-	require.NoError(t, os.MkdirAll(vaultDir, 0700))
-	vHeader, _, err := vault.NewVaultHeader(privKey)
-	require.NoError(t, err)
-	require.NoError(t, vHeader.Save(vaultDir))
-	testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
-	require.NoError(t, err)
-	require.NoError(t, testVault.Unlock(privKey))
-	defer testVault.Close()
-
-	// Create TokenStore
-	storageConfig := &storage.TokenStoreConfig{
-		DBPath:        filepath.Join(tempDir, "test_ttl.db"),
-		RetentionDays: 30,
-	}
-	tokenStore, err := storage.NewTokenStoreService(storageConfig, logger, testVault)
-	require.NoError(t, err)
-	require.NotNil(t, tokenStore)
-	defer tokenStore.Close()
-
-	// Create ScrubbingService with persistence
 	config := &Config{
 		StrictMode:         false,
 		RequirePersistence: true,
 	}
 	service := NewScrubbingService(config, logger, tokenStore)
 
-	// Create a token
 	sensitiveValue := "my-secret-api-key-12345"
 	token := service.GetTokenForValue(sensitiveValue)
 	assert.NotEmpty(t, token)
 
-	// Manually set a very short TTL in TokenStore to test expiration
+	// Write an additional key with a 1s TTL to verify expiry behaviour.
 	key := fmt.Sprintf("sentinel_token_%s", token)
-	err = tokenStore.KVSet(context.Background(), key, sensitiveValue, 1) // 1 second TTL
+	err := tokenStore.KVSet(context.Background(), key, sensitiveValue, 1)
 	require.NoError(t, err)
 
-	// Wait for expiration
 	time.Sleep(2 * time.Second)
 
-	// Token should no longer be retrievable from storage
 	_, err = tokenStore.KVGet(context.Background(), key)
 	require.Error(t, err, "Token should expire after TTL")
 }

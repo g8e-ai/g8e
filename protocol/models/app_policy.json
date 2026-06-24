@@ -1,0 +1,76 @@
+{
+  "_comment": "Canonical AppPolicy document shape. client is the authority - it stores authorization rules for external application identities. Under the Phase 1 fail-closed model, any app lacking an active policy gets deny-all. A field mismatch breaks external app authorization and governance enforcement.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (L4 Warden, governance verification)", "agent (reads for governance replay)"],
+  "_collection": "app_policies",
+
+  "app_policy": {
+    "_description": "Authorization rules for an external application identity. Defines what collections, event types, and intents an app can access, along with rate limits and payload constraints. Under Phase 1 fail-closed, apps without an active policy receive deny-all.",
+
+    "core_identity": {
+      "app_id": {
+        "type": "string",
+        "required": true,
+        "description": "External application identifier. Used as the document ID."
+      }
+    },
+
+    "permissions": {
+      "allowed_collections": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "description": "Collections this app is allowed to mutate. See collections.json."
+      },
+      "allowed_event_types": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "description": "Event types this app is allowed to publish. See events.json."
+      },
+      "allowed_intents": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "description": "Cloud intents this app is allowed to request. See intents.json."
+      }
+    },
+
+    "limits": {
+      "rate_limit_rps": {
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "description": "Maximum requests per second. 0 means no allowance (deny-all)."
+      },
+      "max_payload_bytes": {
+        "type": "integer",
+        "required": true,
+        "default": 0,
+        "description": "Maximum payload size in bytes. 0 means no allowance."
+      }
+    },
+
+    "governance": {
+      "require_l3_approval": {
+        "type": "boolean",
+        "required": true,
+        "default": false,
+        "description": "Whether L3 (human) approval is required for governed actions from this app."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      }
+    }
+  }
+}

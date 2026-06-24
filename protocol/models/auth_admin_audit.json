@@ -1,0 +1,69 @@
+{
+  "_comment": "Canonical AdminAuditEntry document shape. client is the authority - it appends a record for every admin-side state change (retire, disable, role mutation, etc.) so the lifecycle is auditable from the protocol Gateway. A field mismatch breaks admin audit trails and compliance reporting.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["admin dashboard", "compliance tooling"],
+  "_collection": "auth_admin_audit",
+
+  "admin_audit_entry": {
+    "_description": "Single admin action audit record. Append-only. New admin-side state changes MUST append a row here.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique audit entry identifier (UUID v4)."
+      }
+    },
+
+    "action_context": {
+      "action": {
+        "type": "string",
+        "required": true,
+        "description": "Admin action type. Stable string value - downstream tooling joins on this. E.g. 'retire_local_owner'."
+      },
+      "actor": {
+        "type": "string",
+        "required": false,
+        "description": "User ID of the admin who performed the action."
+      },
+      "target": {
+        "type": "string",
+        "required": false,
+        "description": "User ID or resource ID that was the target of the action."
+      },
+      "operator_id": {
+        "type": "string",
+        "required": false,
+        "description": "Operator ID involved in the action, if applicable."
+      }
+    },
+
+    "details": {
+      "reason": {
+        "type": "string",
+        "required": false,
+        "description": "Human-readable reason for the action."
+      },
+      "noop": {
+        "type": "boolean",
+        "required": false,
+        "description": "True when the action was a no-op (target was already in the desired state)."
+      },
+      "comment": {
+        "type": "string",
+        "required": false,
+        "description": "Free-form admin comment."
+      }
+    },
+
+    "timestamps": {
+      "at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the admin action occurred (UTC, ISO 8601 with Z suffix)."
+      }
+    }
+  }
+}

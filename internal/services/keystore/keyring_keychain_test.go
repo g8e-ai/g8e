@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -48,7 +49,7 @@ func TestKeychainKeyring_StoreRetrieveDelete(t *testing.T) {
 	keyring, err := newKeychainKeyring()
 	require.NoError(t, err)
 
-	testKey := make([]byte, keySize)
+	testKey := make([]byte, vault.KeySize)
 	for i := range testKey {
 		testKey[i] = byte(i)
 	}
