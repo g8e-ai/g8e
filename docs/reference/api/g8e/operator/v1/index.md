@@ -54,8 +54,6 @@
     - [FsReadResult](#g8e-operator-v1-FsReadResult)
     - [GetRevocationBundleRequested](#g8e-operator-v1-GetRevocationBundleRequested)
     - [GetRevocationBundleResult](#g8e-operator-v1-GetRevocationBundleResult)
-    - [GrantIntentRequested](#g8e-operator-v1-GrantIntentRequested)
-    - [GrantIntentResult](#g8e-operator-v1-GrantIntentResult)
     - [HeartbeatRequested](#g8e-operator-v1-HeartbeatRequested)
     - [HeartbeatResult](#g8e-operator-v1-HeartbeatResult)
     - [ListDeviceLinksRequested](#g8e-operator-v1-ListDeviceLinksRequested)
@@ -94,8 +92,6 @@
     - [RestoreFileResult](#g8e-operator-v1-RestoreFileResult)
     - [RevokeCertificateRequested](#g8e-operator-v1-RevokeCertificateRequested)
     - [RevokeCertificateResult](#g8e-operator-v1-RevokeCertificateResult)
-    - [RevokeIntentRequested](#g8e-operator-v1-RevokeIntentRequested)
-    - [RevokeIntentResult](#g8e-operator-v1-RevokeIntentResult)
     - [RevokePasskeyCredentialRequested](#g8e-operator-v1-RevokePasskeyCredentialRequested)
     - [RevokePasskeyCredentialResult](#g8e-operator-v1-RevokePasskeyCredentialResult)
     - [SetTargetContextRequested](#g8e-operator-v1-SetTargetContextRequested)
@@ -1137,43 +1133,6 @@ authorized to be executed.
 
 
 
-<a name="g8e-operator-v1-GrantIntentRequested"></a>
-
-### GrantIntentRequested
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| intent_name | [string](#string) |  | Canonical intent name (e.g. &#34;s3_read&#34;, &#34;ec2_management&#34;) |
-| target_resource | [string](#string) |  | Optional target resource scope (e.g. &#34;arn:aws:s3:::my-bucket/*&#34;) |
-| execution_id | [string](#string) |  | Unique execution identifier |
-| justification | [string](#string) |  | Justification for the grant |
-
-
-
-
-
-
-<a name="g8e-operator-v1-GrantIntentResult"></a>
-
-### GrantIntentResult
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| success | [bool](#bool) |  |  |
-| execution_id | [string](#string) |  |  |
-| intent_name | [string](#string) |  |  |
-| message | [string](#string) |  |  |
-| error | [string](#string) |  |  |
-
-
-
-
-
-
 <a name="g8e-operator-v1-HeartbeatRequested"></a>
 
 ### HeartbeatRequested
@@ -1857,41 +1816,6 @@ A stored passkey credential for a user
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | success | [bool](#bool) |  |  |
-| error | [string](#string) |  |  |
-
-
-
-
-
-
-<a name="g8e-operator-v1-RevokeIntentRequested"></a>
-
-### RevokeIntentRequested
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| intent_name | [string](#string) |  |  |
-| execution_id | [string](#string) |  |  |
-| justification | [string](#string) |  |  |
-
-
-
-
-
-
-<a name="g8e-operator-v1-RevokeIntentResult"></a>
-
-### RevokeIntentResult
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| success | [bool](#bool) |  |  |
-| execution_id | [string](#string) |  |  |
-| intent_name | [string](#string) |  |  |
 | error | [string](#string) |  |  |
 
 

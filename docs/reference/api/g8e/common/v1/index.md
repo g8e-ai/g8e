@@ -46,10 +46,10 @@ It binds identity, intent, state, and governance proofs into one transaction.
 | cli_session_id | [string](#string) |  |  |
 | requestor_user_id | [string](#string) |  | The human user who authorized the action (delegator) |
 | acting_app_id | [string](#string) |  | The app/tool acting on behalf of the user (delegate) |
-| event_type | [string](#string) |  | Intent &amp; Payload |
+| event_type | [string](#string) |  | Intent &amp; Payload event_type is the canonical pub/sub routing key from protocol/constants/events.json (e.g., &#34;operator.command.requested&#34;, &#34;operator.heartbeat&#34;). Distinct from action_type: event_type routes the message, action_type classifies the intent. |
 | payload | [bytes](#bytes) |  | Raw protobuf payload |
 | intent_data | [google.protobuf.Struct](#google-protobuf-Struct) |  | Structured JSON-first view |
-| action_type | [string](#string) |  | UAP-compatible action type (e.g., EXECUTE_BASH) |
+| action_type | [string](#string) |  | action_type is the UAP-compatible action classification (e.g., EXECUTE_BASH, FILE_EDIT). Included in the transaction hash canonicalization. |
 | target_resource | [string](#string) |  | UAP-compatible target resource |
 | state_merkle_root | [string](#string) |  | State &amp; Replay Protection |
 | nonce | [string](#string) |  |  |
@@ -142,7 +142,7 @@ Consensus (L2) Governance: a vote from a single Tribunal member.
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| proof | [L3Proof](#g8e-common-v1-L3Proof) |  | Real WebAuthn proof |
+| proof | [L3Proof](#g8e-common-v1-L3Proof) |  | WebAuthn or CLI/mTLS proof |
 
 
 
@@ -153,16 +153,19 @@ Consensus (L2) Governance: a vote from a single Tribunal member.
 
 ### L3Proof
 Notary (L3Notary) Governance: Authorization (Human-in-the-loop)
+L3Proof is a union: fields 1-4 are populated for WebAuthn (web sessions),
+fields 5-6 for CLI/mTLS (operator sessions). Exactly one proof type
+should be populated per instance.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| client_data_json | [string](#string) |  |  |
-| authenticator_data | [string](#string) |  |  |
-| signature | [string](#string) |  |  |
-| credential_id | [string](#string) |  |  |
-| mtls_cert_fingerprint | [string](#string) |  | CLI mTLS proof: fingerprint of the CLI certificate used for authentication Used when the L3Notary proof is based on mTLS certificate validation rather than WebAuthn |
-| cli_signature | [string](#string) |  | CLI signature: signature over transaction_hash using the CLI/operator private key |
+| client_data_json | [string](#string) |  | WebAuthn: client data JSON from the authenticator assertion |
+| authenticator_data | [string](#string) |  | WebAuthn: authenticator data bytes (base64) |
+| signature | [string](#string) |  | WebAuthn: signature over the authenticator assertion |
+| credential_id | [string](#string) |  | WebAuthn: credential ID used for the assertion |
+| mtls_cert_fingerprint | [string](#string) |  | CLI/mTLS: SHA-256 fingerprint of the CLI certificate used for authentication |
+| cli_signature | [string](#string) |  | CLI/mTLS: Ed25519 signature over transaction_hash using the operator private key |
 
 
 
@@ -192,7 +195,7 @@ Source component identifier
 ### File-level Extensions
 | Extension | Type | Base | Number | Description |
 | --------- | ---- | ---- | ------ | ----------- |
-| forbidden_patterns | string | .google.protobuf.FieldOptions | 50001 | Comma-separated list of forbidden regex patterns |
+| forbidden_patterns | string | .google.protobuf.FieldOptions | 50001 | Comma-separated list of forbidden regex patterns evaluated against the field value at L1 Doctrine verification time. |
 
  
 
