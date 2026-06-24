@@ -104,35 +104,14 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 		canonical.WriteByte('|')
 	}
 
-	// 10. L3 proof presence/identity — binds the human authorization into the
-	// transaction hash so an in-flight party cannot strip or swap the proof
-	// without breaking the hash (§7: "every proof is computed over that hash").
-	if env.Governance != nil && env.Governance.L3 != nil && env.Governance.L3.Proof != nil {
-		proof := env.Governance.L3.Proof
-		canonical.WriteString("l3:present|")
-		if proof.CliSignature != "" {
-			canonical.WriteString("cli_sig=")
-			canonical.WriteString(proof.CliSignature)
-			canonical.WriteByte('|')
-		}
-		if proof.MtlsCertFingerprint != "" {
-			canonical.WriteString("mtls_fp=")
-			canonical.WriteString(proof.MtlsCertFingerprint)
-			canonical.WriteByte('|')
-		}
-		if proof.Signature != "" {
-			canonical.WriteString("sig=")
-			canonical.WriteString(proof.Signature)
-			canonical.WriteByte('|')
-		}
-		if proof.CredentialId != "" {
-			canonical.WriteString("cred=")
-			canonical.WriteString(proof.CredentialId)
-			canonical.WriteByte('|')
-		}
-	} else {
-		canonical.WriteString("l3:absent|")
-	}
+	// NOTE: L3 proof is intentionally NOT included in the transaction hash.
+	// The protocol ordering is L1 → L2 → L3 → L4: L2 (machine consensus) signs
+	// the transaction hash before L3 (human notary) is asked. Including L3 in
+	// the hash would create a circular dependency — L2 couldn't sign until the
+	// human had already acted, violating the invariant that the human is never
+	// bothered until all machine-checkable layers pass.
+	// Tamper-evidence for L3 is provided by verifyL3Posture, which checks the
+	// proof against envelope.TransactionHash at verification time.
 
 	canonicalStr := canonical.String()
 	hash := sha256.Sum256([]byte(canonicalStr))

@@ -56,7 +56,6 @@ func TestL4Warden_Consensus_ValidMutationPassesWithoutL3(t *testing.T) {
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
 	env.Governance.L3 = nil
-	rehashAndResign(t, env, privKey)
 
 	verified, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err != nil {
@@ -121,7 +120,6 @@ func TestL4Warden_Consensus_MissingL3DoesNotReject(t *testing.T) {
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
 	env.Governance.L3 = nil
-	rehashAndResign(t, env, privKey)
 
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err != nil {

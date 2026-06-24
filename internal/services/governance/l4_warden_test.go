@@ -161,29 +161,32 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		StateMerkleRoot:   "root-1",
 		Nonce:             "nonce-" + string(actionType) + "-" + nonceSuffix,
 	}
-	env.Governance = &commonv1.GovernanceMetadata{
-		L2: &commonv1.L2Metadata{
-			TribunalId: "test-tribunal",
-		},
-	}
-	// L3 proof must be set before hash — GenerateMessageID binds L3 proof
-	// presence into the hash basis (l3:present / l3:absent)
-	if actionType.IsMutation() {
-		env.Governance.L3 = &commonv1.L3Metadata{
-			Proof: &commonv1.L3Proof{
-				Signature: "human-proof",
-			},
-		}
-	}
+	// Compute transaction hash before any governance metadata.
+	// Protocol ordering: L1 → L2 → L3 → L4. L2 signs the hash, then L3 is added.
 	hash, err := governance.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("failed to generate transaction hash: %v", err)
 	}
 	env.Id = hash
 	env.TransactionHash = hash
-	// L2 vote signs the final hash (L2 before L3, but both are in the hash)
-	env.Governance.L2.Votes = []*commonv1.L2Vote{
-		signL2Vote(privKey, "test-key", hash, true),
+
+	// L2 signs the hash (machine consensus before human notary)
+	env.Governance = &commonv1.GovernanceMetadata{
+		L2: &commonv1.L2Metadata{
+			TribunalId: "test-tribunal",
+			Votes: []*commonv1.L2Vote{
+				signL2Vote(privKey, "test-key", hash, true),
+			},
+		},
+	}
+
+	// L3 proof added after L2 signs (human notary after machine consensus)
+	if actionType.IsMutation() {
+		env.Governance.L3 = &commonv1.L3Metadata{
+			Proof: &commonv1.L3Proof{
+				Signature: "human-proof",
+			},
+		}
 	}
 	return env
 }
@@ -196,24 +199,6 @@ func rehash(t *testing.T, env *governance.GovernanceEnvelope) {
 	}
 	env.Id = hash
 	env.TransactionHash = hash
-}
-
-// rehashAndResign recomputes the transaction hash after mutating governance
-// metadata (e.g. stripping L3) and re-signs the L2 vote against the new hash.
-// This is necessary because GenerateMessageID binds L3 proof presence into the
-// hash basis, so any L3 change invalidates the existing L2 signature.
-func rehashAndResign(t *testing.T, env *governance.GovernanceEnvelope, privKey ed25519.PrivateKey) {
-	t.Helper()
-	hash, err := governance.GenerateMessageID(env)
-	if err != nil {
-		t.Fatalf("failed to regenerate transaction hash: %v", err)
-	}
-	env.Id = hash
-	env.TransactionHash = hash
-	if env.Governance != nil && env.Governance.L2 != nil && len(env.Governance.L2.Votes) > 0 {
-		vote := env.Governance.L2.Votes[0]
-		env.Governance.L2.Votes[0] = signL2Vote(privKey, vote.SignerKeyId, hash, vote.Decision)
-	}
 }
 
 // TestNewGovernancePosture_PanicsOnInvalidPosture verifies that invalid posture

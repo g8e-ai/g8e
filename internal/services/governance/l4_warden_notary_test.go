@@ -136,7 +136,6 @@ func TestNotary_MutationRequiresRealL3Proof(t *testing.T) {
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
 	env.Governance.L3 = nil
-	rehashAndResign(t, env, privKey)
 
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
 	if !errors.Is(err, constants.ErrTxL3ProofMissing) {

@@ -119,7 +119,6 @@ func TestL4Warden_Doctrine_MissingL3DoesNotReject(t *testing.T) {
 	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
 
 	env.Governance.L3 = nil
-	rehashAndResign(t, env, privKey)
 
 	verified, err := verifier.VerifyEnvelope(context.Background(), env)
 	if err != nil {
