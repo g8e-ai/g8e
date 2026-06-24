@@ -154,10 +154,9 @@ The `TribunalService` (`internal/services/tribunal/service.go`) is the enrolled 
 **Deliberation flow** (`tribunal/service.go:78-122`):
 1. Recompute the transaction hash and verify it matches `envelope.id`. Mismatch → `ErrTribunalHashMismatch`.
 2. Extract command data and intent from the envelope payload.
-3. Each member independently evaluates safety via `evaluateSafety()` (`tribunal/member.go:39-49`):
-   - **MITRE checks**: `L1Doctrine.AnalyzeCommand()` — if any signal has `BlockRecommended = true`, the payload is unsafe (`tribunal/member.go:53-64`).
-   - **Intent validation**: `L1Doctrine.ValidateIntent()` — if the intent fails validation, the payload is unsafe.
-   - **Fail-closed on nil doctrine**: If doctrine is nil, `runMITREChecks` returns `false` (unsafe) (`tribunal/member.go:54-56`).
+3. Each member independently evaluates safety via `evaluateSafety()` (`tribunal/member.go:39-41`):
+   - **MITRE checks**: `L1Doctrine.AnalyzeCommand()` — if any signal has `BlockRecommended = true`, the payload is unsafe (`tribunal/member.go:43-55`).
+   - **Fail-closed on nil doctrine**: If doctrine is nil, `runMITREChecks` returns `false` (unsafe) (`tribunal/member.go:44-46`).
 4. Each member signs `<transaction_hash>|<decision>` with Ed25519 (`tribunal/member.go:95-101`).
 5. Votes are collected into `L2Metadata.Votes` with `tribunal_id` set.
 
@@ -170,10 +169,6 @@ The `TribunalService` (`internal/services/tribunal/service.go`) is the enrolled 
 The L4 Warden verifies L2 votes in `verifyL2Posture` (`l4_warden.go:549-639`). The verification is identical regardless of posture — the posture only determines whether a failure rejects the transaction or is merely recorded.
 
 **Signature format**: Ed25519 over `<transaction_hash>|<decision>` (boolean string). Verified by `verifyL2Signature` in the L4 Warden.
-
-### Known Gap: Intent Validation
-
-`L1Doctrine.ValidateIntent()` always returns `true` as of v1.1.8 (`l1_doctrine.go:146-148`). Sentinel allowlist integration is not yet implemented. This is a tracked security debt item, not silent behavior. The function is called during tribunal deliberation but does not currently gate any vote decision.
 
 ---
 

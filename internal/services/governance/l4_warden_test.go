@@ -166,27 +166,29 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		StateMerkleRoot:   "root-1",
 		Nonce:             "nonce-" + string(actionType) + "-" + nonceSuffix,
 	}
-	hash, err := governance.GenerateMessageID(env)
-	if err != nil {
-		t.Fatalf("failed to generate transaction hash: %v", err)
-	}
-	env.Id = hash
-	env.TransactionHash = hash
 	env.Governance = &commonv1.GovernanceMetadata{
 		L2: &commonv1.L2Metadata{
 			TribunalId: "test-tribunal",
-			Votes: []*commonv1.L2Vote{
-				signL2Vote(privKey, "test-key", hash, true),
-			},
 		},
 	}
-	// Add L3 proof for mutation actions
+	// L3 proof must be set before hash — GenerateMessageID binds L3 proof
+	// presence into the hash basis (l3:present / l3:absent)
 	if actionType.IsMutation() {
 		env.Governance.L3 = &commonv1.L3Metadata{
 			Proof: &commonv1.L3Proof{
 				Signature: "human-proof",
 			},
 		}
+	}
+	hash, err := governance.GenerateMessageID(env)
+	if err != nil {
+		t.Fatalf("failed to generate transaction hash: %v", err)
+	}
+	env.Id = hash
+	env.TransactionHash = hash
+	// L2 vote signs the final hash (L2 before L3, but both are in the hash)
+	env.Governance.L2.Votes = []*commonv1.L2Vote{
+		signL2Vote(privKey, "test-key", hash, true),
 	}
 	return env
 }
@@ -238,7 +240,7 @@ func TestL4Warden_FailClosedProofs(t *testing.T) {
 		{name: "missing l2", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
 		{name: "non-member signer", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].SignerKeyId = "" }, want: ErrL2QuorumNotMet},
 		{name: "invalid l2 signature", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].ConsensusSignature = "deadbeef" }, want: ErrL2QuorumNotMet},
-		{name: "missing l3", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L3 = nil }, want: ErrL3ProofMissing},
+		{name: "missing l3", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L3 = nil; rehash(t, env) }, want: ErrL3ProofMissing},
 	}
 
 	for _, tc := range tests {
@@ -461,6 +463,7 @@ func TestNotary_MutationRequiresRealL3Proof(t *testing.T) {
 
 	// Strip the L3 proof entirely — no bypass field exists to waive the human bond
 	env.Governance.L3 = nil
+	rehash(t, env)
 
 	_, err := verifier.VerifyEnvelope(context.Background(), env)
 	if !errors.Is(err, constants.ErrTxL3ProofMissing) {

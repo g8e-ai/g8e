@@ -416,7 +416,6 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 
 Minor technical debt items identified for future cleanup:
 
-- **L1 Doctrine Intent Validation**: The `ValidateIntent` method in `l1_doctrine.go` currently allows all intents as a temporary bridge. Integration with Sentinel's intent allowlist is planned for a follow-up (line 144).
 - **CLI TLS Configuration**: Some CLI commands still use legacy global TLS state. Migration to dependency injection-based TLS config is planned for `pubsub_commands.go` (line 136).
 
 These items do not impact protocol correctness or security posture and are tracked for incremental improvement.

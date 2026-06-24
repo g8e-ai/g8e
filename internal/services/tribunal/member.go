@@ -31,21 +31,13 @@ type TribunalMember struct {
 	PrivateKey ed25519.PrivateKey
 }
 
-// evaluateSafety runs MITRE checks and doctrine intent validation.
-// This is the deterministic L1-doctrine + intent check relocated from
+// evaluateSafety runs MITRE checks via L1Doctrine.
+// This is the deterministic L1-doctrine check relocated from
 // l2_consensus.go. The pluggable heterogeneous-reasoner backend is a
 // later extension point and is not stubbed in (devs.md: do not build
 // things that should not yet exist).
 func (s *TribunalService) evaluateSafety(doctrine *govsvc.L1Doctrine, resource string, cmdData string, intent constants.CloudIntent) bool {
-	isSafe := s.runMITREChecks(doctrine, resource, cmdData)
-
-	if intent != "" && doctrine != nil {
-		if !doctrine.ValidateIntent(intent) {
-			isSafe = false
-		}
-	}
-
-	return isSafe
+	return s.runMITREChecks(doctrine, resource, cmdData)
 }
 
 // runMITREChecks leverages L1Doctrine to identify malicious activity patterns.
