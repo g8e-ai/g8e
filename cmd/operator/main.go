@@ -271,11 +271,7 @@ func main() {
 	}
 
 	if rekeyVault || verifyVault || resetVault {
-		vaultWorkDir := launchDir
-		if workingDir != "" {
-			vaultWorkDir = workingDir
-		}
-		handleVaultCommand(rekeyVault, verifyVault, resetVault, privateKey, oldPrivateKeyStr, logLevel, vaultWorkDir)
+		handleVaultCommand(rekeyVault, verifyVault, resetVault, privateKey, oldPrivateKeyStr, logLevel)
 		return
 	}
 

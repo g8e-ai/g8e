@@ -14,6 +14,24 @@
 // Package constants provides shell command execution constants.
 package constants
 
+// Terminal control character constants
+const (
+	// CtrlC is the ETX (End of Text) control character, sent by Ctrl+C.
+	CtrlC = 3
+
+	// Backspace is the BS (Backspace) control character.
+	Backspace = 8
+
+	// Delete is the DEL (Delete) control character.
+	Delete = 127
+
+	// PrintableASCIIStart is the first printable ASCII character (space).
+	PrintableASCIIStart = 32
+
+	// PrintableASCIIEnd is the last printable ASCII character (tilde).
+	PrintableASCIIEnd = 126
+)
+
 // Shell command execution constants
 const (
 	// DefaultShellCommandTimeout is the default timeout for shell command execution in seconds

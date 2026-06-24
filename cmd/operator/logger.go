@@ -35,7 +35,7 @@ func configureLogger(level string) (*slog.Logger, error) {
 func configureLoggerWithOutput(level string, output io.Writer) (*slog.Logger, error) {
 	parsedLevel, err := parseLogLevel(level)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("logger: configure: %w", err)
 	}
 
 	handler := newOperatorHandler(output, parsedLevel)
@@ -49,7 +49,7 @@ func parseLogLevel(level string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(level)) {
 	case "info":
 		return slog.LevelInfo, nil
-	case string(constants.ConnectionStateError):
+	case "error":
 		return slog.LevelError, nil
 	case "debug":
 		return slog.LevelDebug, nil
@@ -98,7 +98,10 @@ func (h *operatorHandler) Handle(_ context.Context, r slog.Record) error {
 
 	msg += "\n"
 	_, err := h.output.Write([]byte(msg))
-	return err
+	if err != nil {
+		return fmt.Errorf("operator handler: write: %w", err)
+	}
+	return nil
 }
 
 func (h *operatorHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

@@ -19,12 +19,13 @@ import (
 	"os"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/paths"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 )
 
 // handleVaultCommand processes vault management CLI commands
-func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyStr, oldPrivateKeyStr, logLevel, workDir string) {
+func handleVaultCommand(rekeyVault, verifyVault, resetVault bool, newPrivateKeyStr, oldPrivateKeyStr, logLevel string) {
 	logger, err := configureLogger(logLevel)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid log level: %v\n", err)
@@ -75,7 +76,7 @@ func handleRekeyVault(v *vault.Vault, oldPrivateKey, newPrivateKey []byte, logge
 
 	if err := v.Rekey(oldPrivateKey, newPrivateKey); err != nil {
 		logger.Error("Failed to rekey vault", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitGeneralError)
+		os.Exit(exitcode.FromError(err))
 	}
 
 	logger.Info("Vault successfully rekeyed")
@@ -98,7 +99,7 @@ func handleVerifyVault(v *vault.Vault, privateKey []byte, logger *slog.Logger) {
 
 	if err := v.VerifyIntegrity(privateKey); err != nil {
 		logger.Error("Vault verification failed", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitGeneralError)
+		os.Exit(exitcode.FromError(err))
 	}
 
 	logger.Info("Vault verification passed")
@@ -115,7 +116,10 @@ func handleResetVault(v *vault.Vault, logger *slog.Logger) {
 	fmt.Fprint(os.Stderr, "WARNING: This will PERMANENTLY DESTROY all encrypted vault data. Type 'DESTROY' to confirm: ")
 
 	var confirmation string
-	_, _ = fmt.Fscan(os.Stdin, &confirmation)
+	if _, err := fmt.Fscan(os.Stdin, &confirmation); err != nil {
+		logger.Info("Reset cancelled")
+		os.Exit(constants.ExitSuccess)
+	}
 
 	if confirmation != "DESTROY" {
 		logger.Info("Reset cancelled")
@@ -124,7 +128,7 @@ func handleResetVault(v *vault.Vault, logger *slog.Logger) {
 
 	if err := v.Reset(true); err != nil {
 		logger.Error("Failed to reset vault", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitGeneralError)
+		os.Exit(exitcode.FromError(err))
 	}
 
 	logger.Info("Vault has been reset, all encrypted data has been destroyed")

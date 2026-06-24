@@ -34,7 +34,7 @@ func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 		n, err := r.Read(buf)
 		if err != nil {
 			fmt.Fprintln(w)
-			return "", err
+			return "", fmt.Errorf("readObfuscatedInput: read: %w", err)
 		}
 		if n == 0 {
 			continue
@@ -47,12 +47,12 @@ func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 			break
 		}
 
-		if char == 3 {
+		if char == constants.CtrlC {
 			fmt.Fprintln(w)
 			return "", constants.ErrProcessInterrupted
 		}
 
-		if char == 127 || char == 8 {
+		if char == constants.Delete || char == constants.Backspace {
 			if len(input) > 0 {
 				input = input[:len(input)-1]
 				fmt.Fprint(w, "\b \b")
@@ -60,7 +60,7 @@ func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 			continue
 		}
 
-		if char >= 32 && char <= 126 {
+		if char >= constants.PrintableASCIIStart && char <= constants.PrintableASCIIEnd {
 			input = append(input, char)
 			fmt.Fprint(w, "*")
 		}
