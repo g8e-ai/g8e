@@ -38,10 +38,32 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
+// GatewayStartConfig holds configuration for starting the gateway in gateway mode.
+type GatewayStartConfig struct {
+	Posture             config.GatewayPosture
+	HTTPPort            int
+	HTTPSPort           int
+	DataDir             string
+	PKIDir              string
+	SecretsDir          string
+	VaultDir            string
+	VaultKeyPath        string
+	VaultRequireUnlock  bool
+	PasskeyRpID         string
+	PasskeyRpName       string
+	RateLimitRPS        float64
+	RateLimitBurst      int
+	LogLevel            string
+	CertIdentityMode    string
+	NetworkIdentityFile string
+	TribunalID          string
+	TribunalURL         string
+}
+
 // runGatewayMode starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string, vaultRequireUnlock bool, passkeyRpID, passkeyRpName string, rateLimitRPS float64, rateLimitBurst int, logLevel, certIdentityMode, networkIdentityFile, tribunalID, tribunalURL string) {
+func runGatewayMode(cfg GatewayStartConfig) {
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
@@ -61,56 +83,56 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	}
 	defer logHandle.Close()
 
-	logger, err := configureLoggerWithOutput(logLevel, logHandle)
+	logger, err := configureLoggerWithOutput(cfg.LogLevel, logHandle)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", logLevel, err)
+		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", cfg.LogLevel, err)
 		os.Exit(constants.ExitConfigError)
 	}
 
 	// Apply defaults for empty directory flags (constants are now absolute)
-	if dataDir == "" {
-		dataDir = paths.Infra.DataDir
+	if cfg.DataDir == "" {
+		cfg.DataDir = paths.Infra.DataDir
 	}
-	if pkiDir == "" {
-		pkiDir = paths.Infra.PkiDir
+	if cfg.PKIDir == "" {
+		cfg.PKIDir = paths.Infra.PkiDir
 	}
-	if secretsDir == "" {
-		secretsDir = paths.Infra.SecretsDir
+	if cfg.SecretsDir == "" {
+		cfg.SecretsDir = paths.Infra.SecretsDir
 	}
 
-	logger.Info("Gateway paths configured", "data_dir", dataDir, "pki_dir", pkiDir, "secrets_dir", secretsDir)
+	logger.Info("Gateway paths configured", "data_dir", cfg.DataDir, "pki_dir", cfg.PKIDir, "secrets_dir", cfg.SecretsDir)
 
 	logger.Info("g8e - Gateway Mode",
-		"posture", posture,
+		"posture", cfg.Posture,
 		"version", version,
 		"build", buildID)
 
-	cfg, err := config.LoadGateway(config.GatewayOptions{
-		Posture:             posture,
-		HTTPPort:            httpPort,
-		HTTPSPort:           httpsPort,
-		DataDir:             dataDir,
-		PKIDir:              pkiDir,
-		SecretsDir:          secretsDir,
-		PasskeyRpID:         passkeyRpID,
-		PasskeyRpName:       passkeyRpName,
-		RateLimitRPS:        rateLimitRPS,
-		RateLimitBurst:      rateLimitBurst,
-		CertMode:            certIdentityMode,
-		NetworkIdentityFile: networkIdentityFile,
+	gatewayCfg, err := config.LoadGateway(config.GatewayOptions{
+		Posture:             cfg.Posture,
+		HTTPPort:            cfg.HTTPPort,
+		HTTPSPort:           cfg.HTTPSPort,
+		DataDir:             cfg.DataDir,
+		PKIDir:              cfg.PKIDir,
+		SecretsDir:          cfg.SecretsDir,
+		PasskeyRpID:         cfg.PasskeyRpID,
+		PasskeyRpName:       cfg.PasskeyRpName,
+		RateLimitRPS:        cfg.RateLimitRPS,
+		RateLimitBurst:      cfg.RateLimitBurst,
+		CertMode:            cfg.CertIdentityMode,
+		NetworkIdentityFile: cfg.NetworkIdentityFile,
 		MCPDownstreamURL:    "",
 		A2ADownstreamURL:    "",
-		TribunalID:          tribunalID,
-		TribunalURL:         tribunalURL,
+		TribunalID:          cfg.TribunalID,
+		TribunalURL:         cfg.TribunalURL,
 		AllowTestPortZero:   false,
 	})
 	if err != nil {
 		logger.Error("Failed to load gateway configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
-	cfg.Version = version
+	gatewayCfg.Version = version
 
-	svc, err := gateway.NewGatewayModeService(cfg, logger)
+	svc, err := gateway.NewGatewayModeService(gatewayCfg, logger)
 	if err != nil {
 		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
 		os.Exit(exitcode.FromError(err))
@@ -120,25 +142,25 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// If posture is consensus, TribunalID must be set and the TribunalPolicy
 	// must exist and be enabled in the database. Fail fast before starting
 	// any services.
-	if err := config.ValidateConsensusStartup(string(posture), tribunalID, 0); err != nil {
+	if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, 0); err != nil {
 		logger.Error("Startup validation failed", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
-	if posture == config.PostureConsensus {
-		policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
+	if cfg.Posture == config.PostureConsensus {
+		policy, err := svc.GetDB().TribunalStore.GetTribunal(cfg.TribunalID)
 		if err != nil {
-			logger.Error("Failed to load Tribunal policy", "tribunal_id", tribunalID, string(constants.ConnectionStateError), err)
+			logger.Error("Failed to load Tribunal policy", "tribunal_id", cfg.TribunalID, string(constants.ConnectionStateError), err)
 			os.Exit(exitcode.FromError(err))
 		}
 		if policy == nil || !policy.Enabled {
-			logger.Error("Tribunal policy not found or disabled", "tribunal_id", tribunalID, string(constants.ConnectionStateError), constants.ErrTxL2TribunalNotConfigured)
+			logger.Error("Tribunal policy not found or disabled", "tribunal_id", cfg.TribunalID, string(constants.ConnectionStateError), constants.ErrTxL2TribunalNotConfigured)
 			os.Exit(constants.ExitConfigError)
 		}
-		if err := config.ValidateConsensusStartup(string(posture), tribunalID, policy.Quorum); err != nil {
-			logger.Error("Startup validation failed", "tribunal_id", tribunalID, "quorum", policy.Quorum, string(constants.ConnectionStateError), err)
+		if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, policy.Quorum); err != nil {
+			logger.Error("Startup validation failed", "tribunal_id", cfg.TribunalID, "quorum", policy.Quorum, string(constants.ConnectionStateError), err)
 			os.Exit(constants.ExitConfigError)
 		}
-		logger.Info("Tribunal policy validated", "tribunal_id", tribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
+		logger.Info("Tribunal policy validated", "tribunal_id", cfg.TribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -146,13 +168,13 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 
 	// Initialize In-Process Execution Gateway
 	logger.Info("Initializing in-process execution Gateway...")
-	execSvc := execution.NewExecutionService(cfg, logger)
-	fileSvc := execution.NewFileEditService(cfg, logger)
+	execSvc := execution.NewExecutionService(gatewayCfg, logger)
+	fileSvc := execution.NewFileEditService(gatewayCfg, logger)
 
 	// Resolve Git for ledger
 	gitPath := system.ResolveGitBinary(logger)
-	cfg.GitPath = gitPath
-	cfg.GitAvailable = gitPath != ""
+	gatewayCfg.GitPath = gitPath
+	gatewayCfg.GitAvailable = gitPath != ""
 
 	// Use the gateway-mode database for everything
 	govDeps := svc.GetGovernanceDeps()
@@ -195,7 +217,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	}
 
 	psConfig := pubsub.CommandServiceConfig{
-		Config:             cfg,
+		Config:             gatewayCfg,
 		Logger:             logger,
 		Execution:          execSvc,
 		FileEdit:           fileSvc,
@@ -240,8 +262,8 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 	// HTTP handler (for remote deliberation calls) and as the local deliberator
 	// (for in-process envelope processing). Under doctrine/notary posture,
 	// the Tribunal is not constructed.
-	if posture == config.PostureConsensus && tribunalID != "" {
-		tribunalSvc, err := bootstrapTribunal(svc, tribunalID, ActuatorPriv, ActuatorKeyID, logger)
+	if cfg.Posture == config.PostureConsensus && cfg.TribunalID != "" {
+		tribunalSvc, err := bootstrapTribunal(svc, cfg.TribunalID, ActuatorPriv, ActuatorKeyID, logger)
 		if err != nil {
 			logger.Error("Failed to bootstrap Tribunal service", string(constants.ConnectionStateError), err)
 			cancel()
@@ -249,7 +271,7 @@ func runGatewayMode(posture config.GatewayPosture, httpPort, httpsPort int, data
 		}
 		svc.SetTribunal(tribunalSvc)
 		mcpSvc.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
-		logger.Info("Tribunal service bootstrapped", "tribunal_id", tribunalID)
+		logger.Info("Tribunal service bootstrapped", "tribunal_id", cfg.TribunalID)
 	}
 
 	go func() {

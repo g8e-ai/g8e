@@ -301,7 +301,26 @@ func main() {
 		if gatewayTribunalURL == "" {
 			gatewayTribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
 		}
-		runGatewayMode(posture, gatewayHTTPPort, gatewayHTTPSPort, gatewayDataDir, gatewayPKIDir, gatewaySecretsDir, gatewayVaultDir, gatewayVaultKeyPath, gatewayVaultRequireUnlock, gatewayPasskeyRpID, gatewayPasskeyRpName, gatewayRateLimitRPS, gatewayRateLimitBurst, logLevel, gatewayCertIdentityMode, gatewayNetworkIdentityFile, gatewayTribunalID, gatewayTribunalURL)
+		runGatewayMode(GatewayStartConfig{
+			Posture:             posture,
+			HTTPPort:            gatewayHTTPPort,
+			HTTPSPort:           gatewayHTTPSPort,
+			DataDir:             gatewayDataDir,
+			PKIDir:              gatewayPKIDir,
+			SecretsDir:          gatewaySecretsDir,
+			VaultDir:            gatewayVaultDir,
+			VaultKeyPath:        gatewayVaultKeyPath,
+			VaultRequireUnlock:  gatewayVaultRequireUnlock,
+			PasskeyRpID:         gatewayPasskeyRpID,
+			PasskeyRpName:       gatewayPasskeyRpName,
+			RateLimitRPS:        gatewayRateLimitRPS,
+			RateLimitBurst:      gatewayRateLimitBurst,
+			LogLevel:            logLevel,
+			CertIdentityMode:    gatewayCertIdentityMode,
+			NetworkIdentityFile: gatewayNetworkIdentityFile,
+			TribunalID:          gatewayTribunalID,
+			TribunalURL:         gatewayTribunalURL,
+		})
 		return
 	}
 

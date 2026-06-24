@@ -51,25 +51,25 @@ func TestResolveStartConfig(t *testing.T) {
 			})
 		}
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "doctrine", cfg.Posture)
 		assert.Equal(t, 8080, cfg.HTTPPort)
@@ -99,25 +99,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"", // empty vault dir
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "", // empty vault dir
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "/env/vault", cfg.VaultDir)
 	})
@@ -133,25 +133,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"", // empty vault key
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "", // empty vault key
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "/env/vault/key", cfg.VaultKeyPath)
 	})
@@ -167,25 +167,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"/vault/key",
-			false, // CLI flag false
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false, // CLI flag false
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.True(t, cfg.VaultRequireUnlock)
 	})
@@ -201,25 +201,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.False(t, cfg.VaultRequireUnlock)
 	})
@@ -235,25 +235,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/cli/vault", // CLI flag set
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/cli/vault", // CLI flag set
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "/cli/vault", cfg.VaultDir)
 	})

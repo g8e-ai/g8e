@@ -62,53 +62,26 @@ type startConfig struct {
 }
 
 // resolveStartConfig resolves environment variable overrides and defaults for gateway start.
-func resolveStartConfig(
-	posture string,
-	httpPort, httpsPort int,
-	dataDir, pkiDir, secretsDir, vaultDir, vaultKeyPath string,
-	vaultRequireUnlock bool,
-	passkeyRpID, passkeyRpName string,
-	rateLimitRPS float64,
-	rateLimitBurst int,
-	logLevel, certIdentityMode, tribunalID, tribunalURL string,
-) startConfig {
+func resolveStartConfig(cfg startConfig) startConfig {
 	// Environment variables override CLI flags
-	if vaultDir == "" {
-		vaultDir = os.Getenv("G8E_VAULT_DIR")
+	if cfg.VaultDir == "" {
+		cfg.VaultDir = os.Getenv("G8E_VAULT_DIR")
 	}
-	if vaultKeyPath == "" {
-		vaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+	if cfg.VaultKeyPath == "" {
+		cfg.VaultKeyPath = os.Getenv("G8E_VAULT_KEY")
 	}
-	if !vaultRequireUnlock {
-		vaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
-	}
-
-	if tribunalID == "" {
-		tribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
-	}
-	if tribunalURL == "" {
-		tribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
+	if !cfg.VaultRequireUnlock {
+		cfg.VaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
 	}
 
-	return startConfig{
-		VaultDir:           vaultDir,
-		VaultKeyPath:       vaultKeyPath,
-		VaultRequireUnlock: vaultRequireUnlock,
-		Posture:            posture,
-		HTTPPort:           httpPort,
-		HTTPSPort:          httpsPort,
-		DataDir:            dataDir,
-		PKIDir:             pkiDir,
-		SecretsDir:         secretsDir,
-		PasskeyRpID:        passkeyRpID,
-		PasskeyRpName:      passkeyRpName,
-		RateLimitRPS:       rateLimitRPS,
-		RateLimitBurst:     rateLimitBurst,
-		LogLevel:           logLevel,
-		CertIdentityMode:   certIdentityMode,
-		TribunalID:         tribunalID,
-		TribunalURL:        tribunalURL,
+	if cfg.TribunalID == "" {
+		cfg.TribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
 	}
+	if cfg.TribunalURL == "" {
+		cfg.TribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
+	}
+
+	return cfg
 }
 
 // detectIdentityResult holds the result of network identity detection.
@@ -222,25 +195,25 @@ func gatewayStartCmd() *cobra.Command {
 			}
 
 			// Resolve configuration from flags and environment variables
-			startCfg := resolveStartConfig(
-				posture,
-				httpPort,
-				httpsPort,
-				dataDir,
-				pkiDir,
-				secretsDir,
-				vaultDir,
-				vaultKeyPath,
-				vaultRequireUnlock,
-				passkeyRpID,
-				passkeyRpName,
-				rateLimitRPS,
-				rateLimitBurst,
-				logLevel,
-				certIdentityMode,
-				tribunalID,
-				tribunalURL,
-			)
+			startCfg := resolveStartConfig(startConfig{
+				VaultDir:           vaultDir,
+				VaultKeyPath:       vaultKeyPath,
+				VaultRequireUnlock: vaultRequireUnlock,
+				Posture:            posture,
+				HTTPPort:           httpPort,
+				HTTPSPort:          httpsPort,
+				DataDir:            dataDir,
+				PKIDir:             pkiDir,
+				SecretsDir:         secretsDir,
+				PasskeyRpID:        passkeyRpID,
+				PasskeyRpName:      passkeyRpName,
+				RateLimitRPS:       rateLimitRPS,
+				RateLimitBurst:     rateLimitBurst,
+				LogLevel:           logLevel,
+				CertIdentityMode:   certIdentityMode,
+				TribunalID:         tribunalID,
+				TribunalURL:        tribunalURL,
+			})
 
 			// Detect and display network identity before prompting
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))

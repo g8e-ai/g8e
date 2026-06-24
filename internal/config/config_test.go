@@ -417,4 +417,3 @@ func TestBuildPubSubURL(t *testing.T) {
 		})
 	}
 }
-
