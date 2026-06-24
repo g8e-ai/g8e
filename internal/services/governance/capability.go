@@ -46,7 +46,7 @@ type Capability struct {
 	Token           string // random single-use token
 	KeyID           string // L5 actuator key ID that minted this capability
 
-	mu       sync.Mutex
+	mu        sync.Mutex
 	dissolved bool
 }
 

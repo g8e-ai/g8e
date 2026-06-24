@@ -99,6 +99,14 @@ type PromptArgument struct {
 	Required    bool   `json:"required,omitempty"`
 }
 
+// ResourceTemplate represents an MCP resource template with a URI pattern.
+type ResourceTemplate struct {
+	URITemplate  string `json:"uriTemplate"`
+	Name         string `json:"name"`
+	Description  string `json:"description,omitempty"`
+	MIMEType     string `json:"mimeType,omitempty"`
+}
+
 // Metadata represents typed metadata for MCP resources and prompts.
 type Metadata struct {
 	Custom map[string]string `json:"custom,omitempty"`
@@ -159,19 +167,19 @@ type A2ASuccessResponse struct {
 	Result *operatorv1.ActionReceipt `json:"result"`
 }
 
-// A2ADownstreamRequest is the request sent to a downstream A2A server.
-type A2ADownstreamRequest struct {
+// A2ACallRequest is the params for the "a2a/call" method.
+type A2ACallRequest struct {
 	SkillName   string          `json:"skill_name"`
-	PayloadJSON json.RawMessage `json:"payload"`
+	Payload     json.RawMessage `json:"payload"`
 	ExecutionID string          `json:"execution_id,omitempty"`
 }
 
-// PayloadJSON uses the Go initialism convention (all-caps) for the field name,
-// while the JSON tag is "payload" to match the A2A protocol wire format.
-// The protobuf-generated operatorv1.A2ACallRequested equivalent uses
-// "PayloadJson" (camelCase per proto convention). All three refer to the
-// same logical field; the naming differences are intentional and follow
-// the respective language/style conventions.
+// A2ADownstreamRequest is the request sent to a downstream A2A server.
+type A2ADownstreamRequest struct {
+	SkillName   string          `json:"skill_name"`
+	Payload     json.RawMessage `json:"payload"`
+	ExecutionID string          `json:"execution_id,omitempty"`
+}
 
 // FieldReadRequest is the params for the "read_field" tool.
 type FieldReadRequest struct {
@@ -258,6 +266,7 @@ type DBIsolatedReadRequest struct {
 type DBIsolatedReadResult struct {
 	Rows    []DBRow  `json:"rows"`
 	Columns []string `json:"columns"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // DBRow represents a single database row with typed values.

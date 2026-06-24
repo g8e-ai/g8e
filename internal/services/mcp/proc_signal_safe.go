@@ -72,11 +72,11 @@ func (t *ProcSignalSafeTool) Execute(ctx context.Context, args json.RawMessage) 
 	denylist := []int{1, 2}
 	for _, deniedPID := range denylist {
 		if req.PID == deniedPID {
-			result := map[string]interface{}{
-				"sent":   false,
-				"pid":    req.PID,
-				"signal": req.Signal,
-				"error":  "PID is protected by denylist",
+			result := ProcSignalSafeResult{
+				Sent:   false,
+				PID:    req.PID,
+				Signal: req.Signal,
+				Error:  "PID is protected by denylist",
 			}
 			resultJSON, err := json.Marshal(result)
 			if err != nil {
@@ -102,11 +102,11 @@ func (t *ProcSignalSafeTool) Execute(ctx context.Context, args json.RawMessage) 
 	case "SIGINT":
 		sig = syscall.SIGINT
 	default:
-		result := map[string]interface{}{
-			"sent":   false,
-			"pid":    req.PID,
-			"signal": req.Signal,
-			"error":  "unsupported signal",
+		result := ProcSignalSafeResult{
+			Sent:   false,
+			PID:    req.PID,
+			Signal: req.Signal,
+			Error:  "unsupported signal",
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -124,11 +124,11 @@ func (t *ProcSignalSafeTool) Execute(ctx context.Context, args json.RawMessage) 
 
 	process, err := os.FindProcess(req.PID)
 	if err != nil {
-		result := map[string]interface{}{
-			"sent":   false,
-			"pid":    req.PID,
-			"signal": req.Signal,
-			"error":  err.Error(),
+		result := ProcSignalSafeResult{
+			Sent:   false,
+			PID:    req.PID,
+			Signal: req.Signal,
+			Error:  err.Error(),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -145,11 +145,11 @@ func (t *ProcSignalSafeTool) Execute(ctx context.Context, args json.RawMessage) 
 	}
 
 	if err := process.Signal(sig); err != nil {
-		result := map[string]interface{}{
-			"sent":   false,
-			"pid":    req.PID,
-			"signal": req.Signal,
-			"error":  err.Error(),
+		result := ProcSignalSafeResult{
+			Sent:   false,
+			PID:    req.PID,
+			Signal: req.Signal,
+			Error:  err.Error(),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -165,10 +165,10 @@ func (t *ProcSignalSafeTool) Execute(ctx context.Context, args json.RawMessage) 
 		}, nil
 	}
 
-	result := map[string]interface{}{
-		"sent":   true,
-		"pid":    req.PID,
-		"signal": req.Signal,
+	result := ProcSignalSafeResult{
+		Sent:   true,
+		PID:    req.PID,
+		Signal: req.Signal,
 	}
 	resultJSON, err := json.Marshal(result)
 	if err != nil {

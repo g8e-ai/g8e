@@ -267,10 +267,10 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
 	if posture == config.PostureConsensus || posture == config.PostureNotary {
 		SetupTribunal(t, &GatewayFixture{
-			Config:      cfg,
-			Service:     ls,
-			MCPGateway:  mcpGateway,
-			ActuatorPriv: ActuatorPriv,
+			Config:        cfg,
+			Service:       ls,
+			MCPGateway:    mcpGateway,
+			ActuatorPriv:  ActuatorPriv,
 			ActuatorKeyID: ActuatorKeyID,
 		}, "test-tribunal", 1, 1, 1)
 	}
