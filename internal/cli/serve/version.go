@@ -11,21 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package serve
 
-import (
-	clicmd "github.com/g8e-ai/g8e/internal/cli/cmd"
-	"github.com/g8e-ai/g8e/internal/constants"
-)
-
-// Version information (set via ldflags during build)
-var (
-	version   string = string(constants.VersionStabilityDev)
-	buildID   string = string(constants.SystemHealthUnknown)
-	buildTime string = string(constants.SystemHealthUnknown)
-	platform  string = string(constants.SystemHealthUnknown)
-)
-
-func main() {
-	clicmd.Execute(version)
+// VersionInfo holds build-time version metadata (set via ldflags in cmd/operator/main.go).
+type VersionInfo struct {
+	Version   string
+	BuildID   string
+	BuildTime string
+	Platform  string
 }

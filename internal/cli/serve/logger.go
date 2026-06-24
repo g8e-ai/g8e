@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package serve
 
 import (
 	"context"
@@ -25,14 +25,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// configureLogger returns a slog logger configured with operator-friendly formatting
-func configureLogger(level string) (*slog.Logger, error) {
-	return configureLoggerWithOutput(level, os.Stdout)
+// ConfigureLogger returns a slog logger configured with operator-friendly formatting
+func ConfigureLogger(level string) (*slog.Logger, error) {
+	return ConfigureLoggerWithOutput(level, os.Stdout)
 }
 
-// configureLoggerWithOutput returns a slog logger configured with operator-friendly formatting
+// ConfigureLoggerWithOutput returns a slog logger configured with operator-friendly formatting
 // that writes to the specified output writer
-func configureLoggerWithOutput(level string, output io.Writer) (*slog.Logger, error) {
+func ConfigureLoggerWithOutput(level string, output io.Writer) (*slog.Logger, error) {
 	parsedLevel, err := parseLogLevel(level)
 	if err != nil {
 		return nil, fmt.Errorf("logger: configure: %w", err)

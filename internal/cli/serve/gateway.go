@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package serve
 
 import (
 	"context"
@@ -38,8 +38,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
-// GatewayStartConfig holds configuration for starting the gateway in gateway mode.
-type GatewayStartConfig struct {
+// GatewayConfig holds configuration for starting the gateway in gateway mode.
+type GatewayConfig struct {
 	Posture             config.GatewayPosture
 	HTTPPort            int
 	HTTPSPort           int
@@ -60,10 +60,10 @@ type GatewayStartConfig struct {
 	TribunalURL         string
 }
 
-// runGatewayMode starts the Operator in gateway mode - the platform's central
+// RunGateway starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func runGatewayMode(cfg GatewayStartConfig) {
+func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
@@ -83,7 +83,7 @@ func runGatewayMode(cfg GatewayStartConfig) {
 	}
 	defer logHandle.Close()
 
-	logger, err := configureLoggerWithOutput(cfg.LogLevel, logHandle)
+	logger, err := ConfigureLoggerWithOutput(cfg.LogLevel, logHandle)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", cfg.LogLevel, err)
 		os.Exit(constants.ExitConfigError)
@@ -104,8 +104,8 @@ func runGatewayMode(cfg GatewayStartConfig) {
 
 	logger.Info("g8e - Gateway Mode",
 		"posture", cfg.Posture,
-		"version", version,
-		"build", buildID)
+		"version", vi.Version,
+		"build", vi.BuildID)
 
 	gatewayCfg, err := config.LoadGateway(config.GatewayOptions{
 		Posture:             cfg.Posture,
@@ -130,7 +130,7 @@ func runGatewayMode(cfg GatewayStartConfig) {
 		logger.Error("Failed to load gateway configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
-	gatewayCfg.Version = version
+	gatewayCfg.Version = vi.Version
 
 	svc, err := gateway.NewGatewayModeService(gatewayCfg, logger)
 	if err != nil {
@@ -195,7 +195,7 @@ func runGatewayMode(cfg GatewayStartConfig) {
 	// Export Actuator public key for receipt verification by evals harness
 	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
 	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", ActuatorKeyID)
-	if err := exportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
+	if err := ExportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
 		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}
 
@@ -263,7 +263,7 @@ func runGatewayMode(cfg GatewayStartConfig) {
 	// (for in-process envelope processing). Under doctrine/notary posture,
 	// the Tribunal is not constructed.
 	if cfg.Posture == config.PostureConsensus && cfg.TribunalID != "" {
-		tribunalSvc, err := bootstrapTribunal(svc, cfg.TribunalID, ActuatorPriv, ActuatorKeyID, logger)
+		tribunalSvc, err := BootstrapTribunal(svc, cfg.TribunalID, ActuatorPriv, ActuatorKeyID, logger)
 		if err != nil {
 			logger.Error("Failed to bootstrap Tribunal service", string(constants.ConnectionStateError), err)
 			cancel()
@@ -320,11 +320,11 @@ func runGatewayMode(cfg GatewayStartConfig) {
 	logger.Info("Gateway mode stopped")
 }
 
-// bootstrapTribunal constructs a TribunalService from the TribunalPolicy stored
+// BootstrapTribunal constructs a TribunalService from the TribunalPolicy stored
 // in the database. For single-member tribunals, the gateway's actuator signing
 // key is used as the member private key (Option C from the design doc). Multi-
 // member tribunals require a separate key provisioning flow (not yet implemented).
-func bootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, logger *slog.Logger) (*tribunal.TribunalService, error) {
+func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, logger *slog.Logger) (*tribunal.TribunalService, error) {
 	policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)

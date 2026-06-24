@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package serve
 
 import (
 	"fmt"
@@ -23,10 +23,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// readObfuscatedInput reads a password-style input from r, writing masked feedback
+// ReadObfuscatedInput reads a password-style input from r, writing masked feedback
 // to w. Each printable character echoes as '*'. Backspace/Delete removes the last
 // character. Enter (\r or \n) submits. Ctrl+C returns an error.
-func readObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
+func ReadObfuscatedInput(r io.Reader, w io.Writer) (string, error) {
 	var input []byte
 	buf := make([]byte, 1)
 

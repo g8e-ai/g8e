@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package serve
 
 import (
 	"bytes"
@@ -42,8 +42,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/auth"
 )
 
-// parseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
-func parseCertPEM(certFile string) (*x509.Certificate, error) {
+// ParseCertPEM parses a PEM-encoded certificate file and returns the x509 certificate.
+func ParseCertPEM(certFile string) (*x509.Certificate, error) {
 	certPEM, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrCertReadFailed, err)
@@ -66,16 +66,16 @@ func parseCertPEM(certFile string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-// isCertExpiringSoon checks if a certificate is expiring within the renewal threshold.
+// IsCertExpiringSoon checks if a certificate is expiring within the renewal threshold.
 // The threshold is set to 24 hours before expiry to allow ample time for renewal.
-func isCertExpiringSoon(cert *x509.Certificate) bool {
+func IsCertExpiringSoon(cert *x509.Certificate) bool {
 	renewalThreshold := 24 * time.Hour
 	timeUntilExpiry := time.Until(cert.NotAfter)
 	return timeUntilExpiry <= renewalThreshold
 }
 
-// generateCSR generates a new ECDSA P-256 keypair and CSR for the given common name.
-func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
+// GenerateCSR generates a new ECDSA P-256 keypair and CSR for the given common name.
+func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
@@ -101,9 +101,9 @@ func generateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	return string(csrPEM), privKey, nil
 }
 
-// performAutomaticEnrollment handles automatic enrollment with a Gateway when -e flag is provided.
+// PerformAutomaticEnrollment handles automatic enrollment with a Gateway when -e flag is provided.
 // It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
-func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) error {
+func PerformAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) error {
 	// Create PKI directory
 	if err := os.MkdirAll(paths.Infra.PkiTrustDir, 0700); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
@@ -139,13 +139,13 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
-	opCSR, opKey, err := generateCSR(hostname)
+	opCSR, opKey, err := GenerateCSR(hostname)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Generate CLI CSR (required by device enrollment endpoint even for operator-only deployment)
-	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	cliCSR, _, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
@@ -270,15 +270,15 @@ func performAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	return nil
 }
 
-// renewOperatorCertificate performs automatic re-enrollment for the Operator certificate.
+// RenewOperatorCertificate performs automatic re-enrollment for the Operator certificate.
 // This is a fail-closed operation: if renewal fails, it returns an error.
-func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile string, clientIdentity *certs.ClientIdentity) error {
+func RenewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile string, clientIdentity *certs.ClientIdentity) error {
 	expiringSoon, err := func() (bool, error) {
-		cert, err := parseCertPEM(clientCertFile)
+		cert, err := ParseCertPEM(clientCertFile)
 		if err != nil {
 			return false, err
 		}
-		return isCertExpiringSoon(cert), nil
+		return IsCertExpiringSoon(cert), nil
 	}()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
@@ -293,12 +293,12 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
 
-	opCSR, opKey, err := generateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
+	opCSR, opKey, err := GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
-	cliCSR, _, err := generateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	cliCSR, _, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
@@ -444,14 +444,14 @@ func renewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 	return nil
 }
 
-// runClientCertRenewalLoop runs a background goroutine that periodically checks
+// RunClientCertRenewalLoop runs a background goroutine that periodically checks
 // and renews the client certificate if it is expiring soon.
-func runClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCertFile, clientKeyFile string, logger *slog.Logger, clientIdentity *certs.ClientIdentity) {
+func RunClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCertFile, clientKeyFile string, logger *slog.Logger, clientIdentity *certs.ClientIdentity) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 
 	// Check immediately on startup
-	if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
+	if err := RenewOperatorCertificate(cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
 		logger.Error("Failed to renew client certificate on startup", string(constants.ConnectionStateError), err)
 	}
 
@@ -461,7 +461,7 @@ func runClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCer
 			logger.Info("Client certificate renewal loop stopped")
 			return
 		case <-ticker.C:
-			if err := renewOperatorCertificate(cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
+			if err := RenewOperatorCertificate(cfg, clientCertFile, clientKeyFile, clientIdentity); err != nil {
 				logger.Error("Failed to renew client certificate", string(constants.ConnectionStateError), err)
 			} else {
 				logger.Info("Client certificate renewal check completed")
@@ -470,12 +470,12 @@ func runClientCertRenewalLoop(ctx context.Context, cfg *config.Config, clientCer
 	}
 }
 
-// loadTrustBundle attempts to read a trust bundle from:
+// LoadTrustBundle attempts to read a trust bundle from:
 // 1. Explicit path provided via --trust-bundle
 // 2. Local PKI path (from paths.Infra.CaCertPath)
 // Returns true on the first valid PEM found, which is installed via
 // trustStore.SetCA. Returns false if no valid trust bundle is found.
-func loadTrustBundle(logger *slog.Logger, explicitPath string, trustStore *certs.TrustStore) bool {
+func LoadTrustBundle(logger *slog.Logger, explicitPath string, trustStore *certs.TrustStore) bool {
 	pathsToCheck := []string{}
 
 	if explicitPath != "" {
@@ -495,7 +495,7 @@ func loadTrustBundle(logger *slog.Logger, explicitPath string, trustStore *certs
 			logger.Warn("CA file exists but contains invalid certificate", "path", path)
 			continue
 		}
-		logCertBundle(logger, "trust-bundle", pemData)
+		LogCertBundle(logger, "trust-bundle", pemData)
 		trustStore.SetCA(pemData)
 		logger.Info("CA certificate loaded from local file")
 		return true
@@ -503,8 +503,8 @@ func loadTrustBundle(logger *slog.Logger, explicitPath string, trustStore *certs
 	return false
 }
 
-// logCertBundle parses every PEM certificate in pemData and logs its details.
-func logCertBundle(logger *slog.Logger, label string, pemData []byte) {
+// LogCertBundle parses every PEM certificate in pemData and logs its details.
+func LogCertBundle(logger *slog.Logger, label string, pemData []byte) {
 	rest := pemData
 	idx := 0
 	for {
@@ -542,9 +542,9 @@ func logCertBundle(logger *slog.Logger, label string, pemData []byte) {
 	logger.Info("[TLS-DEBUG] bundle parsed", "label", label, "cert_count", idx)
 }
 
-// exportActuatorPublicKey writes the Actuator's public key to both PEM and JSON formats
+// ExportActuatorPublicKey writes the Actuator's public key to both PEM and JSON formats
 // in the PKI directory for receipt verification by the evals harness.
-func exportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
+func ExportActuatorPublicKey(pkiDir string, pubKey ed25519.PublicKey, keyID string, logger *slog.Logger) error {
 	if pkiDir == "" {
 		return constants.ErrPKIDirRequired
 	}
