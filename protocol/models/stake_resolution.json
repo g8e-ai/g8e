@@ -4,6 +4,8 @@
   "_consumers": [
     "agent"
   ],
+  "_collection": "stake_resolutions",
+  "_governed": true,
 
   "stake_resolution": {
     "_description": "Per-agent stake resolution record tied to a specific consensus verdict. Append-only; never revised. Document id is the composite key `{consensus_command_id}:{agent_id}` so that replaying the same verdict is a no-op.",

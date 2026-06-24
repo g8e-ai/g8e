@@ -4,9 +4,9 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-06-15
+Last Updated: 2026-06-24
 
-The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to downstream A2A servers or the in-process execution service.
+The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 
 ---
 
@@ -19,8 +19,8 @@ A2A is an HTTP/JSON protocol for agent skill invocation. A2A agents connect to t
 A2A requests follow an HTTP/JSON pattern:
 
 - **Transport**: HTTP/JSON
-- **Authentication**: mTLS certificate or JWT (when JWKS is configured) or API key depending on configuration
-- **Payload**: JSON-RPC 2.0 structure with `skill_name` and `payload` parameters
+- **Authentication**: mTLS certificate (HTTPS port) or JWT (HTTP port, when JWKS is configured)
+- **Payload**: JSON-RPC 2.0 structure with `skill_name`, `payload`, and optional `execution_id` parameters
 
 ### Gateway Integration
 
@@ -29,7 +29,7 @@ The g8e Gateway translates A2A skill invocations into governance envelopes:
 1. **Inbound**: A2A agent sends HTTP/JSON skill invocation to the gateway.
 2. **Envelope Construction**: Gateway wraps the payload in a `GovernanceEnvelope` with action type `A2A_CALL`.
 3. **Verification**: The envelope passes through L1-L4 verification gates.
-4. **Dispatch**: Verified envelopes are forwarded to the L5 Actuator for execution to a downstream A2A server or local execution.
+4. **Dispatch**: Verified envelopes are forwarded to the L5 Actuator, which dispatches the call to a configured downstream A2A server via `DispatchToA2ADownstream`.
 
 ---
 
@@ -37,7 +37,7 @@ The g8e Gateway translates A2A skill invocations into governance envelopes:
 
 ### A2A_CALL
 
-The gateway maps A2A skill invocations to the `A2A_CALL` action type. The `A2aCallRequested` protobuf payload is defined in `protocol/proto/g8e/operator/v1/operator.proto`:
+The gateway maps A2A skill invocations to the `A2A_CALL` action type (defined in `internal/constants/action_types.go`). The `A2aCallRequested` protobuf payload is defined in `protocol/proto/g8e/operator/v1/operator.proto`, and the corresponding event type `g8e.v1.operator.a2a.call.requested` is registered in `protocol/constants/events.json`:
 
 | Field | Type | Description |
 |---|---|---|
@@ -65,11 +65,11 @@ This ensures compatibility with JSON-based ecosystems while maintaining typed sc
 A2A agents connect to the gateway via:
 
 - **HTTP/JSON**: Skill invocation endpoints with JSON-RPC 2.0 payload structure
-- **Authentication**: mTLS certificate or JWT (when JWKS is configured) or API key depending on configuration
+- **Authentication**: mTLS certificate (HTTPS port) or JWT (HTTP port, when JWKS is configured)
 
 ### Skill Invocation
 
-Invoke A2A skills via POST to `/api/v1/a2a/call`:
+Invoke A2A skills via POST to `/api/v1/a2a/call` (registered in `internal/constants/api_paths.go`). The request is wrapped in a JSON-RPC 2.0 envelope:
 
 ```json
 {
@@ -87,9 +87,11 @@ Invoke A2A skills via POST to `/api/v1/a2a/call`:
 }
 ```
 
+A2A calls are also dispatched through the unified MCP endpoint at `/mcp` (`HandleMCP` in `internal/services/mcp/mcp_endpoint.go`), which routes the `a2a/call` method to the same `a2aCall` handler.
+
 ### Skill Discovery
 
-Skill discovery is not currently implemented. The A2A downstream URL is configured but no discovery endpoint exists. Skills must be known a priori or discovered through out-of-band mechanisms.
+Skill discovery is not currently implemented. The A2A downstream URL is configured via `internal/config/config.go` (`Gateway.A2ADownstreamURL`) and passed to the gateway service via `SetA2ADependencies`, but no discovery endpoint exists. Skills must be known a priori or discovered through out-of-band mechanisms.
 
 ### BYO Clients
 
@@ -110,7 +112,7 @@ Bring-your-own (BYO) clients integrate by:
   - `status`: "suspended"
   - `tx_hash`: Transaction hash
   - `approval_url`: URL for WebAuthn authorization
-  - `message`: "Execution paused for L3 authorization"
+  - `message`: Directive string from `approvalPausedMessage` containing the approval URL and a 2-minute TTL deadline
 
 ---
 
@@ -121,8 +123,8 @@ The g8e platform enforces security across five layers:
 ### L1 Doctrine (Hard Gates)
 
 - **Forbidden patterns**: Protobuf field options with regex constraints on skill names defined in `protocol/proto/g8e/operator/v1/operator.proto` (pattern: (?i)^(sudo|su)$).
-- **Runtime scanning**: The gateway validates skill names against L1 forbidden patterns before envelope construction.
-- **Field validation**: Payload parameters are validated against allowlist/denylist where configured.
+- **Runtime scanning**: L1 validation runs during `ProcessEnvelope` in `internal/services/governance/processor.go`, after envelope construction. The `L1Doctrine.ValidatePayload` method in `internal/services/governance/l1_doctrine.go` checks forbidden patterns on protobuf string fields.
+- **MITRE-based threat detection**: The `payload_json` field is analyzed via `AnalyzeMCPArguments` for MITRE ATT&CK threat indicators, including reverse shells, privilege escalation, credential access, data exfiltration, and system tampering patterns.
 
 ### L2 Consensus
 
@@ -144,7 +146,10 @@ The g8e platform enforces security across five layers:
 
 ### L5 Actuator (Dispatch)
 
-- **Dispatch**: Verified payloads are dispatched to downstream A2A servers or local execution.
+- **Dispatch**: The Actuator egress handler `handleA2aCallRequestSync` in `internal/services/pubsub/pubsub_commands.go` unmarshals the `A2aCallRequested` payload and calls `DispatchToA2ADownstream` to forward the call to the configured downstream A2A server.
+- **Downstream request**: The gateway sends an `A2ADownstreamRequest` (defined in `internal/services/mcp/models.go`) containing `skill_name`, `payload`, and `execution_id` as JSON to the downstream URL via HTTP POST with a 30-second timeout.
+- **Downstream response**: The gateway parses the response for `result`, `summary`, or `error` fields. If `summary` is present, it is used; otherwise `result` is used; otherwise the gateway returns "completed".
+- **Receipt bounding**: The receipt summary is truncated to `ReceiptSummaryMaxBytes` (4096 bytes, defined in `internal/constants/pubsub.go`) to prevent unbounded growth.
 - **Receipts**: Produces signed `ActionReceipt` objects upon completion.
 
 ---
@@ -198,11 +203,12 @@ The g8e platform uses **ZERO environment variables** for production configuratio
 
 ### Circuit Breaker
 
-The Gateway implements a circuit breaker for downstream A2A servers:
+The Gateway implements a shared circuit breaker for downstream MCP and A2A servers. The A2A dispatch path (`DispatchToA2ADownstream`) uses the same circuit breaker state as MCP downstream dispatch:
 
-- **Max failures**: 5 consecutive failures before opening circuit
-- **Cooldown**: 1 minute before attempting recovery
-- **Behavior**: Rejects requests with error when circuit is open
+- **Max failures**: 5 consecutive failures before opening circuit (default, set in `NewGatewayService`)
+- **Cooldown**: 1 minute before attempting recovery (half-open state)
+- **Behavior**: Rejects requests with `ErrGatewayDownstreamUnavailable` when circuit is open
+- **Failure recording**: HTTP connection failures and 5xx responses from the downstream server increment the failure count; successful requests reset it
 
 ---
 
@@ -226,14 +232,24 @@ Sessions are cryptographically bound to their authentication mechanism.
 |---|---|
 | Gateway entry | `cmd/operator/main.go` |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
-| HTTP routing | `internal/services/gateway/gateway_http.go` |
-| A2A translation | `internal/services/mcp/gateway.go` |
-| Envelope construction | `internal/services/mcp/gateway.go` |
+| HTTP routing | `internal/services/gateway/gateway_http_router.go` |
+| A2A REST handler | `internal/services/mcp/gateway.go` (`HandleA2aCall`) |
+| Unified MCP/A2A dispatcher | `internal/services/mcp/mcp_endpoint.go` (`HandleMCP`) |
+| A2A call logic | `internal/services/mcp/gateway.go` (`a2aCall`) |
+| Downstream dispatch | `internal/services/mcp/gateway.go` (`DispatchToA2ADownstream`) |
+| Actuator egress | `internal/services/pubsub/pubsub_commands.go` (`handleA2aCallRequestSync`) |
+| Response models | `internal/services/mcp/models.go` |
+| Envelope construction | `internal/services/mcp/gateway.go` (`processGatewayTransaction`) |
+| L1 doctrine validation | `internal/services/governance/l1_doctrine.go` |
 | Transaction verification | `internal/services/governance/l4_warden.go` |
 | Envelope processor | `internal/services/governance/processor.go` |
-| Downstream dispatch | `internal/services/mcp/gateway.go` |
 | Session management | `internal/services/gateway/session_service.go` |
+| Action type constant | `internal/constants/action_types.go` |
+| API path constant | `internal/constants/api_paths.go` |
 | Error codes | `internal/constants/rpc_errors.go` |
+| Receipt summary limit | `internal/constants/pubsub.go` (`ReceiptSummaryMaxBytes`) |
+| Gateway configuration | `internal/config/config.go` (`Gateway.A2ADownstreamURL`) |
+| Event type registry | `protocol/constants/events.json` |
 | Proto schema | `protocol/proto/g8e/operator/v1/operator.proto` |
 
 ---

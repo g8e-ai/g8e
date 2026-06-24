@@ -174,6 +174,7 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 	var req struct {
 		CliSignature        string `json:"cli_signature"`
 		MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
+		ApprovalPublicKey   string `json:"approval_public_key"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
@@ -190,8 +191,13 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	if req.ApprovalPublicKey == "" {
+		c.responder.Error(w, http.StatusBadRequest, "approval_public_key required")
+		return
+	}
+
 	// Persist the approval with signature before resuming
-	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint); err != nil {
+	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint, req.ApprovalPublicKey); err != nil {
 		c.logger.Error("Failed to approve transaction", "error", err, "txHash", txHash, "userID", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to approve transaction")
 		return

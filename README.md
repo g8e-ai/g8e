@@ -2,7 +2,7 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.22%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/g8e.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/protocol.md)
 
 </div>
 
@@ -154,7 +154,7 @@ graph TD
 ```
 
 1. **L1 Doctrine**: Deterministic static analysis. It enforces rules against forbidden patterns and MITRE ATT&CK indicators. This layer is active for every action. See [Doctrine Configuration](docs/guides/cli.md#doctrine-configuration).
-2. **L2 Consensus**: Tribunal deliberation. An enrolled agentic application evaluates the envelope and produces signed L2 votes over the canonical SHA-256 transaction hash. The gateway never self-signs; under `consensus` posture it calls the Tribunal's `/tribunal/v1/deliberate` endpoint before dispatch. See [Consensus Layer](docs/architecture/protocol.md#l2-consensus).
+2. **L2 Consensus**: Tribunal deliberation. An enrolled Tribunal service evaluates the envelope and produces signed L2 votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal under both `consensus` and `notary` postures via the `/tribunal/v1/deliberate` endpoint. The gateway never self-signs L2 votes. See [Consensus Layer](docs/architecture/protocol.md#l2-consensus).
 3. **L3 Notary**: Hardware-bound human authorization. It utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
 4. **L4 Warden**: Fail-closed verification authority. It re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](docs/architecture/protocol.md#l4-warden).
 5. **L5 Actuator**: Single dispatch path. It handles tool invocation and enforces data sovereignty. See [Actuator Layer](docs/architecture/protocol.md#l5-actuator).
@@ -165,7 +165,7 @@ The platform enforces data sovereignty through several mechanisms:
 - Raw data remains on the host. Tokenization and scrubbing occur before intent material crosses the boundary. See [Encryption](docs/architecture/encryption.md).
 - The transaction hash is computed over the tokenized payload.
 - Transport credentials function as evidence within the envelope rather than bypass mechanisms.
-- The audit record is written before any side effect occurs. See [Secure Data Transfer](docs/guides/secure_data_transfer.md).
+- The audit record is written before any side effect occurs.
 
 ## Quick Start
 
@@ -176,7 +176,7 @@ The binary is available for linux, darwin, and windows on amd64 and arm64 archit
 ./g8e gw start
 
 # Authenticate the CLI
-./g8e auth login
+./g8e auth enroll
 
 # Deploy an Operator to remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
@@ -208,7 +208,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 ## Status
 
-**v1.1.6**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, and multi-platform support. Migration subsystem and federation/peer-connection code have been removed; WebSocket pub/sub now requires wss:// with mTLS.
+**v1.1.9**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline with Tribunal-based L2 consensus, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, JIT execution capabilities, bound vs observed state tiering, and multi-platform support. The gateway delegates L2 deliberation to an enrolled Tribunal service under consensus and notary postures. The L4 Warden verifies L2 consensus before L3 notary. Auto-approval and intent grant/revoke subsystems have been removed.
 
 ## Documentation
 
@@ -222,7 +222,6 @@ Documentation is available in the `docs/` directory:
 - [Build Applications](docs/guides/build_apps.md)
 - [Connect Applications to Gateway](docs/guides/connect_apps_to_gateway.md)
 - [Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)
-- [Secure Data Transfer](docs/guides/secure_data_transfer.md)
 - [Air Gap Deployment](docs/guides/air_gap.md)
 - [Docker Gateway](docs/guides/docker_gateway.md)
 
@@ -235,6 +234,9 @@ Documentation is available in the `docs/` directory:
 - [Storage Architecture](docs/architecture/storage.md)
 - [Network Model](docs/architecture/network.md)
 - [Server-Sent Events](docs/architecture/sse.md)
+- [State Binding](docs/architecture/binding.md)
+- [Posture Configurations](docs/architecture/postures.md)
+- [Transaction Process](docs/architecture/transaction-process.md)
 
 ### Protocols
 - [MCP Integration](docs/protocols/mcp/mcp.md)

@@ -15,10 +15,13 @@ package scrubbing
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1063,6 +1066,39 @@ func (s *ScrubbingService) ClearTokens() {
 	s.tokenSequence = 0
 
 	s.logger.Info("Cleared all in-memory tokens")
+}
+
+// TokenKeymapHash computes a deterministic SHA-256 over the current token keymap.
+// This hash is bound into the state Merkle root so that a rehydration substitution
+// (altering the token→value mapping after a transaction hash was computed) produces
+// a broken transaction, not silent corruption.
+//
+// The hash is computed over sorted token→value pairs to ensure determinism.
+func (s *ScrubbingService) TokenKeymapHash() string {
+	s.tokenMu.RLock()
+	defer s.tokenMu.RUnlock()
+
+	if len(s.tokenMap) == 0 {
+		return ""
+	}
+
+	h := sha256.New()
+
+	// Sort tokens for deterministic ordering
+	tokens := make([]string, 0, len(s.tokenMap))
+	for token := range s.tokenMap {
+		tokens = append(tokens, token)
+	}
+	sort.Strings(tokens)
+
+	for _, token := range tokens {
+		h.Write([]byte(token))
+		h.Write([]byte(":"))
+		h.Write([]byte(s.tokenMap[token]))
+		h.Write([]byte("\n"))
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // ExtractSafeMetrics extracts only safe numeric metrics from output

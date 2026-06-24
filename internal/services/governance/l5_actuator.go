@@ -166,8 +166,29 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 		}
 	}
 
+	// 3.6. Mint JIT capability (zero standing privileges)
+	// The capability is scoped to this single action, bound to the transaction hash,
+	// and dissolved immediately after execution — success or failure.
+	cap, capErr := MintCapability(vt, w.SigningKey, w.KeyID)
+	if capErr != nil {
+		w.Logger.Error("Fail-closed: Failed to mint execution capability", string(constants.ConnectionStateError), capErr, "message_id", vt.Envelope.Id)
+		return nil, fmt.Errorf("%w: %w", constants.ErrL5ActuatorCapabilityMint, capErr)
+	}
+	w.Logger.Info("Minted JIT capability",
+		"message_id", vt.Envelope.Id,
+		"action_type", vt.ActionType,
+		"target_resource", vt.Envelope.TargetResource,
+		"expires_at", cap.ExpiresAt.UTC().Format(time.RFC3339))
+
+	// Inject capability into context for downstream handlers
+	execCtx := ContextWithCapability(ctx, cap)
+
 	// 4. Execute through the handler
-	summary, err := w.ExecutionHandler.ExecuteVerifiedTransaction(ctx, eventType, cmdMsg)
+	summary, err := w.ExecutionHandler.ExecuteVerifiedTransaction(execCtx, eventType, cmdMsg)
+
+	// 4.5. Dissolve capability immediately after execution (zero standing privileges)
+	cap.Dissolve()
+	w.Logger.Info("Dissolved JIT capability", "message_id", vt.Envelope.Id, "action_type", vt.ActionType)
 
 	// 5. Update receipt with final result
 	status := operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED

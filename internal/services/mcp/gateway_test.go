@@ -88,11 +88,12 @@ func (f *fakeSuspendedStore) ListSuspendedTransactions(_ context.Context, userID
 	return result, nil
 }
 
-func (f *fakeSuspendedStore) ApproveSuspendedTransaction(_ context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint string) error {
+func (f *fakeSuspendedStore) ApproveSuspendedTransaction(_ context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey string) error {
 	if tx, ok := f.txs[txHash]; ok {
 		tx.ApprovedBy = approvedBy
 		tx.ApprovalSignature = approvalSignature
 		tx.ExpectedCertFingerprint = expectedCertFingerprint
+		tx.ApprovalPublicKey = approvalPublicKey
 	}
 	return nil
 }

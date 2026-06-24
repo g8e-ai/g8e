@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -49,16 +49,16 @@ Certificate revocation is enforced via a database-backed denylist checked per-re
 
 ## 2. Workload Identity (SPIFFE)
 
-Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate. The generation logic is defined in `@/home/bob/g8e/protocol/workload_identity.go`.
+Each system component receives a SPIFFE ID, embedded as a Uniform Resource Identifier (URI) in the Subject Alternative Name (SAN) of its mTLS certificate. The generation logic is defined in `protocol/workload_identity.go`.
 
 | Workload Type | SPIFFE ID Format | Reference |
 | :--- | :--- | :--- |
-| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `@/home/bob/g8e/protocol/workload_identity.go:37-39` |
-| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `@/home/bob/g8e/protocol/workload_identity.go:48-50` |
-| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `@/home/bob/g8e/protocol/workload_identity.go:59-61` |
-| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` | `@/home/bob/g8e/protocol/workload_identity.go:70-72` |
-| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `@/home/bob/g8e/protocol/workload_identity.go:81-83` |
-| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `@/home/bob/g8e/protocol/workload_identity.go:165-167` |
+| **g8e Operator** | `spiffe://g8e.local/operator/<organization_id>/<operator_id>/<operator_session_id>` | `protocol/workload_identity.go:37-39` |
+| **CLI / BYO Client** | `spiffe://g8e.local/cli/<user_id>/<cli_session_id>` | `protocol/workload_identity.go:48-50` |
+| **Application / Agent** | `spiffe://g8e.local/app/<operator_id>` | `protocol/workload_identity.go:59-61` |
+| **User (Human Delegator)** | `spiffe://g8e.local/user/<user_id>` | `protocol/workload_identity.go:70-72` |
+| **g8e Gateway** | `spiffe://g8e.local/hub/operator-listen` | `protocol/workload_identity.go:81-83` |
+| **Gateway Peer** | `spiffe://g8e.local/gateway/<gateway_id>` | `protocol/workload_identity.go:165-167` |
 
 ---
 
@@ -105,7 +105,7 @@ Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust th
 
 ### No-DNS / Direct IP Configuration
 
-The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `@/home/bob/g8e/internal/cli/cmd/mcp.go:278-331`.
+The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `internal/cli/cmd/mcp.go:279-331`.
 
 ### Windows Certificate Store Enrollment
 
@@ -125,7 +125,7 @@ Windows users can enroll via the Windows Certificate Store for managed browser a
 
 The g8e Gateway utilizes a consolidated 2-port design to maintain the mTLS execution boundary. Surfaces with different TLS requirements are isolated by port.
 
-Default ports are defined in `@/home/bob/g8e/protocol/constants/ports.json`:
+Default ports are defined in `protocol/constants/ports.json`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
@@ -195,7 +195,7 @@ The g8e Operator uses dial-out reverse tunnels with zero inbound port requiremen
 
 ### WebSocket Pub/Sub
 
-The gateway provides a high-performance WebSocket fan-out via `/ws/v1/pubsub`. Mutation channels (`cmd:*`) are governed and require mTLS authentication.
+The gateway provides a high-performance WebSocket fan-out via `/api/v1/pubsub/stream`. Mutation channels (`cmd:*`) are governed and require mTLS authentication.
 
 ### Agent Integration
 
@@ -206,7 +206,7 @@ The platform provides zero-config ingress for agentic CLI coding tools through:
 
 ## 8. Network Identity Detection
 
-The gateway detects the machine's network identity (IPs, hostnames, and aliases) using the detector in `@/home/bob/g8e/internal/services/network/identity.go`. This detection includes:
+The gateway detects the machine's network identity (IPs, hostnames, and aliases) using the detector in `internal/services/network/identity.go`. This detection includes:
 - **Network Interface IPs**: Both IPv4 and IPv6.
 - **Hostnames**: From `/etc/hostname` and system calls.
 - **Hosts File Aliases**: Local aliases pointing to the machine's IPs.
@@ -223,15 +223,14 @@ This information is used for certificate SAN generation and peer discovery.
 
 | Concern | File |
 |---|---|
-| Workload identity | `@/home/bob/g8e/protocol/workload_identity.go` |
-| Network identity | `@/home/bob/g8e/internal/services/network/identity.go` |
-| PKI / CertStore | `@/home/bob/g8e/internal/services/gateway/gateway_certs.go` |
-| Peer connection manager | `@/home/bob/g8e/internal/services/gateway/peer_connection.go` |
-| Port constants | `@/home/bob/g8e/protocol/constants/ports.json` |
-| Gateway pub/sub | `@/home/bob/g8e/internal/services/gateway/gateway_pubsub.go` |
-| Gateway service | `@/home/bob/g8e/internal/services/gateway/gateway_service.go` |
-| Governance envelope verification | `@/home/bob/g8e/internal/services/gateway/governance_envelope.go` |
-| CLI MCP Stdio | `@/home/bob/g8e/internal/cli/cmd/mcp.go` |
+| Workload identity | `protocol/workload_identity.go` |
+| Network identity | `internal/services/network/identity.go` |
+| PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
+| Port constants | `protocol/constants/ports.json` |
+| Gateway pub/sub | `internal/services/gateway/gateway_pubsub.go` |
+| Gateway service | `internal/services/gateway/gateway_service.go` |
+| Governance envelope verification | `internal/services/gateway/governance_envelope.go` |
+| CLI MCP Stdio | `internal/cli/cmd/mcp.go` |
 
 ---
 

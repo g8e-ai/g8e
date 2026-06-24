@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 ---
 
@@ -58,7 +58,7 @@ The gateway provides CLI commands to deploy and manage operators on remote hosts
 ./g8e operator deploy --hosts <host1,host2> --background
 ```
 
-This command copies the operator binary to remote hosts via SSH and optionally starts it in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
+This command copies the operator binary to remote hosts via SCP, makes it executable via SSH, and optionally starts it in the background. Requires `./g8e auth enroll` first. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Stream operator binary to remote hosts:**
 
@@ -66,7 +66,7 @@ This command copies the operator binary to remote hosts via SSH and optionally s
 ./g8e operator stream --hosts <host1,host2>
 ```
 
-This command streams the operator binary via SSH and executes it directly on remote hosts without copying. Useful for quick deployments or air-gapped scenarios. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
+This command streams the operator binary to remote hosts via SSH and writes it to disk without copying. Useful for quick deployments or air-gapped scenarios. The binary is not started automatically; run `./g8e operator deploy --hosts <hosts> --background` after streaming to start the operator. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
 
 **Copy operator binary locally:**
 
@@ -97,7 +97,7 @@ The endpoint is the gateway IP address. The HTTP port (8080) is appended automat
 On the remote host, start the operator with the enrolled certificates:
 
 ```bash
-./g8e gw start
+./g8e operator run -e <gateway-ip>
 ```
 
 The operator will:
@@ -136,9 +136,9 @@ Check status:
 ```
 
 This reports:
-- Gateway process status and PID
-- Gateway endpoint URLs (Operator Bootstrap on HTTPS, Public API on HTTPS, MCP HTTP on port 8080)
 - Gateway running state (RUNNING or STOPPED)
+- Gateway endpoint URLs (Operator Bootstrap, Public API, MCP HTTP)
+- Process PID (when detected via ProcessManager fallback)
 
 ---
 
@@ -160,8 +160,6 @@ curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
 
 # Note: Documentation uses default ports: HTTP 8080, HTTPS 8443.
 
-...
-
 **For plain HTTP MCP (non-mTLS):**
 
 ```bash
@@ -176,7 +174,7 @@ curl -X POST http://localhost:8080/api/v1/mcp/tools/call \
 ./g8e mcp agent show <agent>
 ```
 
-Replace `<agent>` with a supported agent (claude, cursor, devin, vscode, continue, aider, codeium, tabby, ollama, generic). This displays configurations side-by-side for different transport modes (stdio, HTTP, HTTPS).
+Replace `<agent>` with a supported agent (claude, codex, cursor, devin, vscode, continue, aider, codeium, tabby, ollama, gemini, goose, generic). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
 
 ### Direct Envelope Submission
 
@@ -387,4 +385,4 @@ Certificate revocation is enforced on every mTLS handshake. The gateway maintain
 
 ## Next Steps
 
-- **[Build Apps](./build_apps.md)** — Build g8e-compatible applications using a gateway.
+- **[Build Apps](./build_apps.md)**: Build g8e-compatible applications using a gateway.

@@ -42,37 +42,37 @@ const (
 	mcpServerVersion          = "1.0"
 )
 
-// initializeResult is the response to the MCP "initialize" handshake.
-type initializeResult struct {
+// InitializeResult is the response to the MCP "initialize" handshake.
+type InitializeResult struct {
 	ProtocolVersion string             `json:"protocolVersion"`
-	Capabilities    serverCapabilities `json:"capabilities"`
-	ServerInfo      mcpServerInfo      `json:"serverInfo"`
+	Capabilities    ServerCapabilities `json:"capabilities"`
+	ServerInfo      MCPServerInfo      `json:"serverInfo"`
 	Instructions    string             `json:"instructions,omitempty"`
 }
 
-type mcpServerInfo struct {
+type MCPServerInfo struct {
 	Name    string `json:"name"`
 	Version string `json:"version"`
 }
 
-// serverCapabilities describes the server's supported MCP features.
-type serverCapabilities struct {
-	Tools     toolsCapability     `json:"tools"`
-	Resources resourcesCapability `json:"resources"`
-	Prompts   promptsCapability   `json:"prompts"`
+// ServerCapabilities describes the server's supported MCP features.
+type ServerCapabilities struct {
+	Tools     ToolsCapability     `json:"tools"`
+	Resources ResourcesCapability `json:"resources"`
+	Prompts   PromptsCapability   `json:"prompts"`
 }
 
-type toolsCapability struct {
+type ToolsCapability struct {
 	ListChanged bool `json:"listChanged"`
 }
 
-type resourcesCapability struct{}
+type ResourcesCapability struct{}
 
-type promptsCapability struct{}
+type PromptsCapability struct{}
 
 // resourceTemplatesList is the result for "resources/templates/list".
 type resourceTemplatesList struct {
-	ResourceTemplates []interface{} `json:"resourceTemplates"`
+	ResourceTemplates []ResourceTemplate `json:"resourceTemplates"`
 }
 
 // initializeParams captures the subset of initialize params we negotiate on.
@@ -197,7 +197,7 @@ func (g *GatewayService) dispatchMCP(r *http.Request, req *JSONRPCRequest) (inte
 	case "resources/templates/list":
 		// We expose no resource templates; return an empty set so clients
 		// that probe capability-gated methods do not surface errors.
-		return resourceTemplatesList{ResourceTemplates: []interface{}{}}, nil
+		return resourceTemplatesList{ResourceTemplates: []ResourceTemplate{}}, nil
 
 	case "resources/read":
 		res, err := g.readResource(ctx, req.Params)
@@ -237,7 +237,7 @@ func (g *GatewayService) wrapDispatch(result interface{}, err error) (interface{
 
 // mcpInitialize builds the initialize handshake response, echoing the client's
 // requested protocol version when supplied.
-func (g *GatewayService) mcpInitialize(params json.RawMessage) initializeResult {
+func (g *GatewayService) mcpInitialize(params json.RawMessage) InitializeResult {
 	protocolVersion := mcpDefaultProtocolVersion
 	if len(params) > 0 {
 		var p initializeParams
@@ -246,14 +246,14 @@ func (g *GatewayService) mcpInitialize(params json.RawMessage) initializeResult 
 		}
 	}
 
-	return initializeResult{
+	return InitializeResult{
 		ProtocolVersion: protocolVersion,
-		Capabilities: serverCapabilities{
-			Tools:     toolsCapability{ListChanged: true},
-			Resources: resourcesCapability{},
-			Prompts:   promptsCapability{},
+		Capabilities: ServerCapabilities{
+			Tools:     ToolsCapability{ListChanged: true},
+			Resources: ResourcesCapability{},
+			Prompts:   PromptsCapability{},
 		},
-		ServerInfo: mcpServerInfo{
+		ServerInfo: MCPServerInfo{
 			Name:    mcpServerName,
 			Version: mcpServerVersion,
 		},

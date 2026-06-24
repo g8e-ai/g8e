@@ -258,12 +258,10 @@ const (
 	PublicKeySuffix   = ".pub"
 
 	// Storage DB filenames (used with filepath.Join)
-	TokenStoreDBFilename     = "token_store.db"
 	ReplayStoreDBFilename    = "replay_store.db"
 	ExecutionVaultDBFilename = "execution_vault.db"
 
 	// Full relative storage DB paths (relative to project root, used as config defaults)
-	TokenStoreDBPath           = RuntimeDirname + "/token_store.db"
 	ReplayStoreDBPath          = RuntimeDirname + "/replay_store.db"
 	ExecutionVaultDBPath       = RuntimeDirname + "/execution_vault.db"
 	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename

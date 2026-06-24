@@ -1,0 +1,83 @@
+{
+  "_comment": "Canonical OperatorSession document shape. client is the authority - it creates and stores this document when an Operator (g8eo) authenticates via mTLS. Operator sessions authenticate the host agent via mTLS URI SAN and are used by agentic ensembles to look up sessions by ID. A field mismatch breaks Operator authentication, session binding, and command routing.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["agent (looks up sessions by ID)", "client internal services (auth, binding)"],
+  "_collection": "operator_sessions",
+
+  "operator_session": {
+    "_description": "Authenticated Operator session. Created when g8eo successfully authenticates with the client via mTLS. One session per Operator connection.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Session identifier (UUID v4). Primary key."
+      },
+      "session_type": {
+        "type": "string",
+        "required": true,
+        "default": "operator",
+        "description": "Session type discriminator. See status.json session.type."
+      }
+    },
+
+    "ownership": {
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "User ID who owns this Operator session."
+      },
+      "organization_id": {
+        "type": "string",
+        "required": true,
+        "description": "Organization ID. Equals user_id for single-user orgs."
+      },
+      "operator_id": {
+        "type": "string",
+        "required": true,
+        "description": "Operator document ID this session is bound to."
+      }
+    },
+
+    "lifecycle": {
+      "is_active": {
+        "type": "boolean",
+        "required": true,
+        "default": true,
+        "description": "Whether the session is currently active."
+      },
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "When the session was created."
+      },
+      "absolute_expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "Absolute expiry timestamp. Session is invalid after this time regardless of activity."
+      },
+      "idle_expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "Idle expiry timestamp. Session is invalid if no activity occurs before this time."
+      },
+      "last_activity": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true,
+        "description": "Timestamp of the last session activity (heartbeat, command, etc.)."
+      }
+    },
+
+    "auth_metadata": {
+      "login_method": {
+        "type": "string",
+        "required": true,
+        "description": "Authentication method used to create this session. See status.json auth.login_method."
+      }
+    }
+  }
+}

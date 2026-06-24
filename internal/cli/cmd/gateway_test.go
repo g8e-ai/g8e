@@ -15,10 +15,15 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/cli/platform"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetBinaryName(t *testing.T) {
@@ -51,25 +56,25 @@ func TestResolveStartConfig(t *testing.T) {
 			})
 		}
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "doctrine", cfg.Posture)
 		assert.Equal(t, 8080, cfg.HTTPPort)
@@ -99,25 +104,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"", // empty vault dir
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "", // empty vault dir
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "/env/vault", cfg.VaultDir)
 	})
@@ -133,25 +138,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"", // empty vault key
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "", // empty vault key
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "/env/vault/key", cfg.VaultKeyPath)
 	})
@@ -167,25 +172,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"/vault/key",
-			false, // CLI flag false
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false, // CLI flag false
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.True(t, cfg.VaultRequireUnlock)
 	})
@@ -201,25 +206,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/vault",
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/vault",
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.False(t, cfg.VaultRequireUnlock)
 	})
@@ -235,25 +240,25 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(
-			"doctrine",
-			8080,
-			8443,
-			"/data",
-			"/pki",
-			"/secrets",
-			"/cli/vault", // CLI flag set
-			"/vault/key",
-			false,
-			"rp-id",
-			"rp-name",
-			100.0,
-			50,
-			"info",
-			"full",
-			"",
-			"",
-		)
+		cfg := resolveStartConfig(startConfig{
+			Posture:            "doctrine",
+			HTTPPort:           8080,
+			HTTPSPort:          8443,
+			DataDir:            "/data",
+			PKIDir:             "/pki",
+			SecretsDir:         "/secrets",
+			VaultDir:           "/cli/vault", // CLI flag set
+			VaultKeyPath:       "/vault/key",
+			VaultRequireUnlock: false,
+			PasskeyRpID:        "rp-id",
+			PasskeyRpName:      "rp-name",
+			RateLimitRPS:       100.0,
+			RateLimitBurst:     50,
+			LogLevel:           "info",
+			CertIdentityMode:   "full",
+			TribunalID:         "",
+			TribunalURL:        "",
+		})
 
 		assert.Equal(t, "/cli/vault", cfg.VaultDir)
 	})
@@ -267,5 +272,70 @@ func TestDetectIdentity(t *testing.T) {
 		// Unit tests for this function would require mocking the network.Detector struct,
 		// which is not an interface and cannot be easily mocked without refactoring.
 		t.Skip("detectIdentity requires integration testing - see internal/services/network/identity_test.go for network detector tests")
+	})
+}
+
+func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
+	tmpDir := t.TempDir()
+	pm, err := platform.NewProcessManager(tmpDir)
+	require.NoError(t, err)
+
+	// Ensure runtime dir exists so networkIdentityArgs can write the identity file
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".g8e"), 0o700))
+
+	opts := platform.OperatorStartOptions{
+		Posture:            "doctrine",
+		HTTPPort:           8080,
+		HTTPSPort:          8443,
+		DataDir:            "/data",
+		PKIDir:             "/pki",
+		SecretsDir:         "/secrets",
+		VaultDir:           "/vault",
+		VaultKeyPath:       "/vault/key",
+		VaultRequireUnlock: true,
+		PasskeyRpID:        "localhost",
+		PasskeyRpName:      "g8e",
+		RateLimitRPS:       100.0,
+		RateLimitBurst:     50,
+		LogLevel:           "info",
+		CertIdentityMode:   "full",
+		TribunalID:         "trib-1",
+		TribunalURL:        "https://localhost:8443/tribunal/v1/deliberate",
+		IdentityData:       []byte(`{"hostnames":["localhost"]}`),
+	}
+
+	args, err := pm.BuildReExecArgs(opts)
+	require.NoError(t, err)
+
+	// Extract flag names from the re-exec args (skip positional args "gateway" and "serve")
+	emittedFlags := make(map[string]bool)
+	for i := 0; i < len(args); i++ {
+		if strings.HasPrefix(args[i], "--") {
+			emittedFlags[strings.TrimPrefix(args[i], "--")] = true
+			// Skip the value for non-boolean flags
+			// (we don't know which are bools here, so we just skip the next arg
+			// if it doesn't start with -- and isn't a positional)
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
+				i++
+			}
+		}
+	}
+
+	// Get all flags defined on gatewayServeCmd()
+	serveCmd := gatewayServeCmd()
+	cobraFlags := serveCmd.Flags()
+
+	// Assert every emitted flag exists on the cobra command
+	for flagName := range emittedFlags {
+		if cobraFlags.Lookup(flagName) == nil {
+			t.Errorf("re-exec emits --%s but gatewayServeCmd() has no such flag", flagName)
+		}
+	}
+
+	// Assert every cobra flag is emitted when all options are populated
+	cobraFlags.VisitAll(func(f *pflag.Flag) {
+		if !emittedFlags[f.Name] {
+			t.Errorf("gatewayServeCmd() defines --%s but BuildReExecArgs does not emit it", f.Name)
+		}
 	})
 }

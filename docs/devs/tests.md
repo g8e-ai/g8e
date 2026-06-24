@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-19
+Last Updated: 2026-06-23
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -29,7 +29,7 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 | --- | --- | --- | --- | --- | --- |
 | **Tier 1** | **Unit Tests** | `internal/...` & `pkg/...` | *No tags* (Runs by default) | None (mock/stub-only, no files/network/DB) | < 10ms per test |
 | **Tier 2** | **In-Process Integration** | `internal/...` & `test/` | `//go:build integration` | On-disk SQLite, local PKI generation, local pubsub (gateway runs in-process) | < 2s per suite |
-| **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Docker containers (gateway + operator) | < 30s per suite |
+| **Tier 3** | **Docker E2E** | `test/e2e/` | `//go:build e2e` | Docker containers (gateway + operator via docker-compose) | < 30s per suite |
 
 ---
 
@@ -40,7 +40,7 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ```bash
 ./g8e test unit        # Run Tier 1 (Unit) tests - no external dependencies
 ./g8e test integration # Run Tier 2 (In-Process Integration) tests - on-disk SQLite, local PKI
-./g8e test e2e         # Run Tier 3 (Docker E2E) tests - requires Docker
+./g8e test e2e         # Run Tier 3 (E2E) tests - requires running gateway
 ./g8e test coverage    # Run tests with coverage report
 ./g8e test lint        # Run linting and quality checks
 ./g8e agentic-tool-emulator list    # List agentic tool emulator scenarios
@@ -55,9 +55,9 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test integration`** - Runs in-process integration tests with the `integration` build tag. These tests run the gateway in-process against real on-disk SQLite databases, local PKI generation, and local pubsub. No separately running gateway required.
 
-- **`./g8e test e2e`** - Runs Docker-based E2E tests with the `e2e` build tag. These tests require Docker and use `docker-compose.yml` to spin up gateway and operator containers.
+- **`./g8e test e2e`** - Runs live-platform E2E tests with the `e2e` build tag. These tests require a running g8e gateway and authenticated CLI session. The Docker E2E tests in `test/e2e/` spin up their own docker-compose infrastructure.
 
-- **`./g8e test coverage`** - Runs tests with coverage profiling and enforces a minimum coverage threshold (60%). Use PKG flag to test a specific package, VERBOSE for detailed output.
+- **`./g8e test coverage`** - Runs tests with coverage profiling and enforces a minimum coverage threshold (70%). Use PKG flag to test a specific package, VERBOSE for detailed output.
 
 - **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
 
@@ -75,7 +75,6 @@ Validates the g8e Node and protocol enforcement (`GovernanceEnvelope`, 5-layer g
 
 ```bash
 make test-docker
-make test-gov
 ```
 
 Docker-based E2E tests that spin up gateway and operator containers using docker-compose. These tests use the `e2e` build tag and require Docker to be installed and running.
@@ -85,10 +84,6 @@ Docker-based E2E tests that spin up gateway and operator containers using docker
 - Verifies CA bundle discoverable over HTTP
 - Checks HTTPS port reachability (no mTLS)
 - Validates operator container connection
-
-**TestDockerGateway_GovDemo** (`test/e2e/gateway_e2e_test.go`):
-- Tests the gov demo compose configuration
-- Same health checks as above but using gov demo compose file
 
 ### Agentic Tool Emulator
 
@@ -165,23 +160,23 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 - `TestMCPGateway_PayloadVariations` - Tests different JSON-RPC payload structures
 - `TestMCPGateway_ErrorCases` - Validates error handling for malformed JSON-RPC
 
-**MCP Stdio Tests** (`test/mcp_stdio_test.go`):
-- `TestMCPGateway_ConfigOutput` - Validates MCP stdio config generation
-- `TestMCPGateway_CommandExists` - Verifies MCP stdio command availability
-- `TestMCPGateway_JSONRPCParsing` - Tests JSON-RPC message parsing
-- `TestMCPGateway_ConfigTemplate` - Validates config template rendering
+**Goose Integration Tests** (`test/goose_integration_test.go`):
+- `TestGooseGovernanceConfig` - Validates Goose governance configuration generation
+
+**MCP Backup Integration Tests** (`test/mcp_backup_integration_test.go`):
+- `TestBackupConfigFile` - Validates MCP backup config file handling
 
 **Universal Gateway Tests** (`test/universal_gateway_integration_test.go`):
-- `TestUniversalGateway_RealMCPFlow` - Real MCP protocol translation with live platform
-- `TestUniversalGateway_RealA2AFlow` - Real A2A protocol translation with live platform
+- `TestUniversalGateway_MCPFlow` - Real MCP protocol translation with live platform
+- `TestUniversalGateway_A2AFlow` - Real A2A protocol translation with live platform
 - `TestUniversalGateway_MultiProtocolAutoDetection` - Auto-detection of MCP vs A2A payloads
 - `TestUniversalGateway_GovernanceEnvelopeVerification` - Full L1/L2/L3 verification with real infrastructure
 - `TestUniversalGateway_OOBSuspensionAndApproval` - OOB suspension and WebAuthn approval flow
-- `TestUniversalGateway_RealDownstreamIntegration` - Real downstream server integration
+- `TestUniversalGateway_DownstreamIntegration` - Real downstream server integration
 - `TestUniversalGateway_CanonicalJSONWireFormat` - Canonical JSON wire format validation
 
 **Native Tool Registry Tests** (`test/native_tool_registry_integration_test.go`):
-- `TestRegisterNativeTools` - Validates registration of all 27 native tools (db_discover_topology, db_query_validate, db_isolated_read, db_index_triage, log_stream_filter, sys_oom_detect, config_diff_mask, proc_metric_top, fs_disk_profile, proc_signal_safe, net_socket_audit, net_endpoint_ping, net_http_probe, sys_info, net_dns_resolve, tls_cert_inspect, sys_env_vars, fs_file_checksum, sys_service_status, sys_container_status, fs_disk_usage, sys_time_clock, proc_tree, git_ops, cloud_metadata, k8s_inspect, shell_execute, net_ssh_known_hosts, operator_deploy)
+- `TestRegisterNativeTools` - Validates registration of all 30 native tools (db_discover_topology, db_query_validate, db_isolated_read, db_index_triage, log_stream_filter, sys_oom_detect, config_diff_mask, proc_metric_top, fs_disk_profile, proc_signal_safe, net_socket_audit, net_endpoint_ping, net_http_probe, sys_info, net_dns_resolve, tls_cert_inspect, sys_env_vars, fs_file_checksum, sys_service_status, sys_container_status, fs_disk_usage, sys_time_clock, proc_tree, git_ops, cloud_metadata, k8s_inspect, shell_execute, net_ssh_known_hosts, operator_deploy, file_read)
 - `TestRegisterNativeTools_DuplicateRegistration` - Verifies duplicate registration fails
 - `TestRegisterNativeTools_NilRegistry` - Tests panic on nil registry
 - `TestRegisterNativeTools_ToolNameConsistency` - Validates naming convention (lowercase with underscores)
@@ -192,7 +187,12 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 
 **Gateway E2E** (`test/e2e/gateway_e2e_test.go`):
 - `TestDockerGateway_Health` - Tests Docker-based gateway health endpoints
-- `TestDockerGateway_GovDemo` - Tests Docker-based gateway using gov demo compose
+
+**MCP Stdio E2E** (`test/mcp_stdio_test.go`):
+- `TestMCPGateway_ConfigOutput` - Validates MCP stdio config generation
+- `TestMCPGateway_CommandExists` - Verifies MCP stdio command availability
+- `TestMCPGateway_JSONRPCParsing` - Tests JSON-RPC message parsing
+- `TestMCPGateway_ConfigTemplate` - Validates config template rendering
 
 **E2E Harness** (`test/e2e/harness.go`):
 - `DockerE2EFixture` - Manages Docker-based E2E test infrastructure
@@ -201,22 +201,13 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 - `GetCABundle` - Retrieves CA bundle from gateway
 - `CheckOperatorContainer` - Verifies operator container connection
 
-#### Real Operator Tests
-
-**A2A Real Operator** (`test/a2a_real_operator_test.go`):
-- `TestA2ARealOperator_Smoke` - Smoke test for A2A real operator integration
-
-**MCP Real Operator** (`test/mcp_real_operator_test.go`):
-- `TestMCPRealOperator_Smoke` - Smoke test for MCP real operator integration
-
-**Native Real Operator** (`test/native_real_operator_test.go`):
-- `TestNativeRealOperator_Smoke` - Smoke test for native real operator integration
-
 #### Integration Helpers
 
 **Integration Helper** (`test/integration_helper.go`):
 - `NewLiveOperatorHTTPClient` - Creates mTLS HTTP client configured for live platform testing
-- `ResolveRepoRootFromTestDir` - Resolves repository root using go list
+- `ResolveRepoRootFromTestDir` - Resolves repository root using `go list -m`
+- `RunCLICommand` - Executes `./g8e` commands with error handling and output capture, building the binary if needed
+- `RunCLICommandRequire` - Convenience wrapper around `RunCLICommand` that calls `t.Fatalf` on failure
 
 #### Test Fixtures (`test/fixtures/`)
 
@@ -231,27 +222,17 @@ Reusable test infrastructure for integration and E2E tests:
 - `SetPublicBaseURL` - Sets public base URL for MCP gateway (used for approval links)
 - Supports configurable posture (notary, consensus, doctrine), custom downstream URLs, and test port zero allowance
 - Handles path initialization, mock downstream MCP server, and actuator key setup
-- `Cleanup` stops the gateway to release database locks but **does not delete the data directory** — integration runs leave their artifacts behind (see [Fixture Lifecycle and Results](#fixture-lifecycle-and-results))
-
-**Docker Operator Fixture** (`test/fixtures/docker_operator_fixture.go`):
-- `DockerOperatorFixture` - Manages Docker-based operator containers for true multi-operator testing scenarios
-- `NewDockerOperatorFixture` - Creates and starts a Docker operator with configurable image, hostname, gateway URL, network, and environment variables
-- `Stop` - Stops the operator container
-- `GetLogs` - Retrieves container logs for debugging
-- `ExecCommand` - Executes commands inside the container
-- `WaitForReady` - Waits for operator to be ready by checking logs for a readiness marker
-- Supports auto-remove containers, custom Docker networks, and automatic image building from `Dockerfile.operator`
-- Includes cleanup function for graceful container shutdown and removal
+- `Cleanup` stops the gateway to release database locks but **does not delete the data directory**; integration runs leave their artifacts behind (see [Fixture Lifecycle and Results](#fixture-lifecycle-and-results))
 
 #### Fixture Lifecycle and Results
 
 Integration fixtures (`GatewayFixture`) follow a deliberate lifecycle so that runs stay isolated and reproducible while leaving inspectable artifacts behind.
 
-**Results are persisted, never cleaned up between or within runs.** `NewGatewayFixture` writes each run's data/vault/PKI to a fresh, uniquely-named directory under `<repo>/test-results/` (created via `os.MkdirTemp`, so concurrent fixtures in the same test and second never collide). This directory is **not** placed under `t.TempDir()` and is **not** deleted, so results accumulate across runs for later inspection. `test-results/` is gitignored. `Cleanup` stops the gateway — cancelling its context, joining the `Start` goroutine, and calling `Stop` to release database locks — but it intentionally leaves the data directory on disk.
+**Results are persisted, never cleaned up between or within runs.** `NewGatewayFixture` writes each run's data/vault/PKI to a fresh, uniquely-named directory under `<repo>/test-results/` (created via `os.MkdirTemp`, so concurrent fixtures in the same test and second never collide). This directory is **not** placed under `t.TempDir()` and is **not** deleted, so results accumulate across runs for later inspection. `test-results/` is gitignored. `Cleanup` stops the gateway, cancelling its context, joining the `Start` goroutine, and calling `Stop` to release database locks, but it intentionally leaves the data directory on disk.
 
 **Own the teardown at the test scope, exactly once.** Register cleanup with `t.Cleanup(f.Cleanup)` (preferred) or `defer f.Cleanup()` in the test body. Follow these rules:
 
-- **Never `defer f.Cleanup()` inside a setup helper.** A deferred cleanup fires when the *helper returns*, which is before the test body runs — tearing the gateway down and closing every database out from under the test. The symptom is `sql: database is closed` on the first gateway call. If a helper creates the fixture, it must register teardown with `t.Cleanup` (which runs at the end of the test), not `defer`.
+- **Never `defer f.Cleanup()` inside a setup helper.** A deferred cleanup fires when the *helper returns*, which is before the test body runs, tearing the gateway down and closing every database out from under the test. The symptom is `sql: database is closed` on the first gateway call. If a helper creates the fixture, it must register teardown with `t.Cleanup` (which runs at the end of the test), not `defer`.
 - **Never clean up twice.** If a setup helper already registered `t.Cleanup(f.Cleanup)`, the caller must not also `defer f.Cleanup()`. `Cleanup` joins the gateway's `Start` goroutine over a buffered (size 1) error channel; a second call blocks forever on that already-drained channel and the test hangs until the timeout panic.
 - **Hold temp credential files for the whole test.** Cert/key temp files handed to the mTLS client must outlive the test body. Register their removal with `t.Cleanup`, not `defer`, in any setup helper for the same reason as above.
 
@@ -262,69 +243,82 @@ Integration fixtures (`GatewayFixture`) follow a deliberate lifecycle so that ru
 #### Models Tests (`internal/models/`)
 
 Tests for data model serialization and validation:
-- `auth_test.go` - Authentication model tests
-- `base_test.go` - Base model tests
-- `commands_test.go` - Command model tests
-- `file_edit_test.go` - File edit model tests
-- `fs_grep_test.go` - File system grep model tests
-- `fs_list_test.go` - File system list model tests
-- `gateway_test.go` - Gateway model tests
 - `heartbeat_test.go` - Heartbeat model tests
-- `suspended_test.go` - Suspended state model tests
 - `timestamp_test.go` - Timestamp model tests
-- `wire_test.go` - Wire format model tests
 
 #### Gateway Service Tests (`internal/services/gateway/`)
 
 Comprehensive gateway service testing:
 - `admin_controller_test.go` - Admin API controller tests
 - `app_enrollment_service_test.go` - App enrollment flow tests
+- `app_policy_store_service_test.go` - App policy store tests
+- `auth_controller_approvals_test.go` - Auth controller approvals tests
+- `auth_controller_bootstrap_test.go` - Auth controller bootstrap tests
+- `auth_controller_passkey_test.go` - Auth controller passkey tests
+- `auth_controller_session_test.go` - Auth controller session tests
 - `auth_controller_test.go` - Authentication controller tests
 - `auth_integrity_test.go` - Authentication integrity tests
+- `blob_store_service_test.go` - Blob store service tests
 - `bootstrap_test.go` - Gateway bootstrap tests
 - `cli_l3_notary_test.go` - CLI-based L3 notary tests
+- `cli_session_service_test.go` - CLI session service tests
 - `composite_l3_verifier_test.go` - Composite L3 verification tests
 - `db_controller_test.go` - Database controller tests
+- `document_store_service_test.go` - Document store service tests
 - `gateway_auth_bench_test.go` - Gateway authentication benchmark tests
 - `gateway_auth_test.go` - Gateway authentication tests
+- `gateway_certs_test.go` - Gateway certificate tests
 - `gateway_db_test.go` - Gateway database tests
 - `gateway_http_test.go` - Gateway HTTP handler tests
 - `gateway_jwt_integration_test.go` - JWT integration tests
 - `gateway_pubsub_test.go` - Gateway pub/sub tests
 - `gateway_service_test.go` - Gateway service tests
 - `governance_envelope_fuzz_test.go` - Fuzz testing for governance envelopes
+- `governance_envelope_quality_test.go` - Governance envelope quality tests
 - `governance_envelope_test.go` - Governance envelope validation tests
 - `jwks_test.go` - JWKS endpoint tests
+- `jwt_native_test.go` - Native JWT tests
+- `jwt_native_unit_test.go` - Native JWT unit tests
+- `kv_store_service_test.go` - KV store service tests
 - `network_identity_test.go` - Network identity tests
 - `operator_controller_test.go` - Operator controller tests
 - `passkey_service_test.go` - WebAuthn passkey tests
 - `pki_authority_test.go` - PKI authority tests
 - `pki_controller_test.go` - PKI controller tests
 - `registration_service_test.go` - Registration service tests
+- `replay_store_service_native_unit_test.go` - Replay store native unit tests
 - `replay_store_service_test.go` - Replay store service tests
 - `secret_manager_test.go` - Secret manager tests
+- `signer_store_service_test.go` - Signer store service tests
+- `sse_event_service_test.go` - SSE event service tests
 - `state_root_service_test.go` - State root service tests
 - `state_root_test.go` - State root management tests
+- `test_setup_test.go` - Test setup helpers tests
+- `tribunal_store_service_test.go` - Tribunal store service tests
+- `user_service_integration_test.go` - User service integration tests
 - `user_service_test.go` - User service tests
+- `web_session_service_test.go` - Web session service tests
 
 #### Governance Service Tests (`internal/services/governance/`)
 
 Five-layer governance pipeline tests:
 - `actuator_pub_export_test.go` - L5 Actuator public export tests
+- `capability_test.go` - Governance capability tests
 - `eval_answer_test.go` - L1 Doctrine evaluation answer tests
 - `eval_answer_integration_test.go` - L1 Doctrine evaluation answer integration tests
 - `governance_test.go` - General governance tests
 - `governance_integration_test.go` - Governance integration tests with `//go:build integration` tag
 - `l1_doctrine_payload_test.go` - L1 Doctrine payload validation tests
 - `l1_doctrine_test.go` - L1 Doctrine pattern matching tests
-- `l2_consensus_test.go` - L2 Consensus signature verification tests
 - `l3_notary_test.go` - L3 Notary human presence proof tests
 - `l3_notary_integration_test.go` - L3 Notary integration tests with `//go:build integration` tag
+- `l4_warden_consensus_test.go` - L4 Warden consensus verification tests
+- `l4_warden_doctrine_test.go` - L4 Warden doctrine verification tests
+- `l4_warden_notary_test.go` - L4 Warden notary verification tests
 - `l4_warden_test.go` - L4 Warden integrity tests
 - `l5_actuator_test.go` - L5 Actuator execution tests
 - `l5_actuator_integration_test.go` - L5 Actuator integration tests with `//go:build integration` tag
 - `processor_test.go` - Governance processor tests
-- `transaction_verifier_test.go` - Transaction verifier integration tests
 
 #### Execution Service Tests (`internal/services/execution/`)
 
@@ -371,47 +365,61 @@ Authentication and PKI tests:
 - `internal/services/pubsub/pubsub_test_helpers_test.go` - Pub/sub test helper tests
 - `internal/services/pubsub/tls_errors_test.go` - Pub/sub TLS error tests
 - `internal/services/pubsub/vault_writer_test.go` - Pub/sub vault writer tests
+- `internal/services/system/git_test.go` - Git utility tests
 - `internal/services/system/system_utils_test.go` - System utility tests with `//go:build !windows` tag
+- `internal/services/system/utils_test.go` - General system utility tests
 
 #### CLI Tests (`internal/cli/`)
 
 CLI command and configuration tests:
 - `api/client_test.go` - API client tests
 - `auth/agent_enroll_test.go` - Agent enrollment tests with SPIFFE URI SAN generation
+- `auth/bootstrap_test.go` - Auth bootstrap tests
+- `auth/certificate_test.go` - Certificate handling tests
 - `auth/client_test.go` - Auth client tests
+- `auth/credentials_test.go` - Credentials tests
+- `auth/csr_test.go` - CSR tests
+- `auth/fingerprint_test.go` - Fingerprint tests
+- `auth/http_client_test.go` - HTTP client tests
+- `auth/operator_test.go` - Operator auth tests
+- `auth/passkey_bootstrap_test.go` - Passkey bootstrap tests
 - `auth/windows_crypto_test.go` - Windows crypto tests
-- `cmd/approve_test.go` - Approve command tests
+- `cmd/agentic_tool_emulator_test.go` - Agentic tool emulator command tests
+- `cmd/approve_integration_test.go` - Approve command integration tests
+- `cmd/audit_integration_test.go` - Audit command integration tests
+- `cmd/audit_test.go` - Audit command tests
+- `cmd/auth_integration_test.go` - Auth command integration tests
 - `cmd/auth_test.go` - Auth command tests
+- `cmd/chaos_integration_test.go` - Chaos command integration tests
 - `cmd/chaos_test.go` - Chaos command tests
+- `cmd/cmd_integration_test.go` - General command integration tests
 - `cmd/cmd_test.go` - General command tests
 - `cmd/data_test.go` - Data command tests
-- `cmd/emulator_test.go` - Agentic tool emulator command tests
-- `cmd/goose_test.go` - Goose command tests
+- `cmd/demos_integration_test.go` - Demos command integration tests
+- `cmd/demos_test.go` - Demos command tests
+- `cmd/gateway_test.go` - Gateway command tests
 - `cmd/main_test.go` - Main command tests
-- `cmd/mcp_backup_test.go` - MCP backup command tests
+- `cmd/mcp_integration_test.go` - MCP command integration tests
 - `cmd/mcp_test.go` - MCP command tests
+- `cmd/mcp_unix_test.go` - MCP command Unix-specific tests
+- `cmd/mcp_windows_test.go` - MCP command Windows-specific tests
+- `cmd/operator_test.go` - Operator command tests
 - `cmd/platform_test.go` - Platform command tests
 - `cmd/security_test.go` - Security command tests
+- `cmd/swagger_test.go` - Swagger command tests
 - `cmd/test_paths_test.go` - Test path validation tests
+- `cmd/vault_test.go` - Vault command tests
 - `config/config_test.go` - Configuration loader tests
-- `errors/errors_test.go` - Error handling tests
 - `jsonrpc/types_test.go` - JSON-RPC type tests
 - `platform/browser_test.go` - Browser platform tests
 - `platform/process_identity_test.go` - Process identity tests
 - `platform/process_test.go` - Process tests
+- `platform/process_unix_test.go` - Unix process tests
+- `platform/process_windows_test.go` - Windows process tests
 
 #### Configuration and Constants Tests
 
 - `internal/config/config_test.go` - Configuration tests
-- `internal/config/settings_test.go` - Settings tests
-- `internal/constants/channels_test.go` - Channel constants tests
-- `internal/constants/document_ids_test.go` - Document ID constants tests
-- `internal/constants/env_vars_test.go` - Environment variable constants tests
-- `internal/constants/exit_codes_test.go` - Exit code constants tests
-- `internal/constants/field_paths_test.go` - Field path constants tests
-- `internal/constants/output_test.go` - Output constants tests
-- `internal/constants/paths_test.go` - Path constants tests
-- `internal/constants/pubsub_test.go` - Pub/sub constants tests
 
 #### Contract Tests
 
@@ -420,7 +428,6 @@ CLI command and configuration tests:
 
 #### Infrastructure Tests
 
-- `internal/httpclient/errors_test.go` - HTTP client error tests
 - `internal/httpclient/httpclient_test.go` - HTTP client tests
 - `internal/marshaler/marshaler_test.go` - Marshaler tests
 - `internal/response/writer_test.go` - Response writer tests
@@ -428,23 +435,30 @@ CLI command and configuration tests:
 - `internal/security/path_test.go` - Security path validation tests
 - `internal/certs/embed_test.go` - Embedded certificates tests
 - `internal/certs/fetch_test.go` - Certificate fetch tests
+- `internal/testutil/crypto_test.go` - Crypto utility tests
+- `internal/testutil/governance_mocks_test.go` - Governance mock tests
+- `internal/testutil/helpers_test.go` - Test helper tests
+- `internal/testutil/proto_helpers_test.go` - Proto helper tests
 - `internal/testutil/pubsub_integration_test.go` - Pub/sub integration tests with `//go:build integration` tag
+- `internal/testutil/pubsub_test.go` - Pub/sub tests
 - `internal/testutil/pubsub_unit_test.go` - Pub/sub unit tests
 
 #### Storage Test Infrastructure (`internal/services/storage/` and `internal/services/storage/storagetest/`)
 
 Storage service tests and test-only audit storage implementations separated from production code to avoid import cycles:
 
+- `audit_store_unit_test.go` - Audit store unit tests
+- `commitment_ledger_test.go` - Commitment ledger tests
 - `execution_vault_test.go` - Execution vault tests
 - `history_handler_test.go` - History handler tests
+- `history_handler_unit_test.go` - History handler unit tests
 - `ledger_diffcontent_test.go` - Ledger diff content tests
 - `ledger_diffstat_test.go` - Ledger diff stat tests
 - `ledger_git_test.go` - Ledger Git integration tests
 - `ledger_test.go` - Ledger tests
 - `replay_store_test.go` - Replay store tests
 - `storage_test_helpers_test.go` - Storage test helper tests
-- `token_store_test.go` - Token store tests
-- `vault_requirement_test.go` - Vault requirement tests
+- `suspended_transaction_store_test.go` - Suspended transaction store tests
 
 **Test-only audit storage infrastructure** (`internal/services/storage/storagetest/`):
 
@@ -466,28 +480,54 @@ Storage service tests and test-only audit storage implementations separated from
 - `cmd/operator/actuator_pub_export_test.go` - Operator actuator export tests
 - `cmd/operator/main_subprocess_test.go` - Operator subprocess tests
 - `cmd/operator/main_test.go` - Operator main tests
-- `cmd/operator/terminal_linux_test.go` - Linux terminal tests
-- `internal/cmd/stream_ssh_test.go` - SSH stream tests
-- `internal/cmd/stream_ssh_utils_test.go` - SSH stream utility tests
-- `internal/cmd/stream_subprocess_test.go` - Subprocess stream tests
-- `internal/cmd/stream_test.go` - General stream tests
+- `internal/cli/serve/terminal_linux_test.go` - Linux terminal tests
+- `internal/cli/stream/stream_ssh_test.go` - SSH stream tests
+- `internal/cli/stream/stream_ssh_utils_test.go` - SSH stream utility tests
+- `internal/cli/stream/stream_subprocess_test.go` - Subprocess stream tests
+- `internal/cli/stream/stream_test.go` - General stream tests
 
 #### MCP Service Tests (`internal/services/mcp/`)
 
 MCP gateway and native tool integration tests:
 - `audit_attribution_test.go` - Audit attribution tests
-- `byo_client_e2e_test.go` - BYO client E2E tests
 - `config_test.go` - MCP configuration tests
+- `db_discover_topology_test.go` - DB discover topology tool tests
+- `db_index_triage_test.go` - DB index triage tool tests
+- `db_query_validate_test.go` - DB query validate tool tests
 - `field_parser_test.go` - Field parser tests
+- `file_read_test.go` - File read tool tests
+- `fs_disk_profile_test.go` - FS disk profile tool tests
+- `fs_disk_usage_test.go` - FS disk usage tool tests
+- `fs_disk_usage_windows_test.go` - FS disk usage Windows-specific tests
+- `fs_file_checksum_test.go` - FS file checksum tool tests
 - `gateway_integration_test.go` - Gateway integration tests with real envelope processing, SSE streaming, circuit breaker, error code mapping, native tool execution, read_field tool with L3 validation, and real L3 verification
 - `gateway_test.go` - Gateway service tests
+- `git_ops_test.go` - Git ops tool tests
+- `k8s_inspect_test.go` - Kubernetes inspect tool tests
+- `log_stream_filter_test.go` - Log stream filter tool tests
 - `mcp_endpoint_test.go` - MCP endpoint tests
+- `models_test.go` - MCP model tests
 - `native_handlers_test.go` - Native handler tests
+- `native_tool_registry_test.go` - Native tool registry tests
 - `native_tools_integration_test.go` - Native tools integration tests with real SQLite databases, audit vault persistence, log filtering with scrubbing, process metrics and signal safety, network auditing and probing, concurrency tests for TOCTOU resistance, property-based tests for safety invariants, and negative controls for intentional failures
+- `net_dns_resolve_test.go` - DNS resolve tool tests with mock resolver
+- `net_http_probe_test.go` - HTTP probe tool tests
+- `net_socket_audit_test.go` - Socket audit tool tests
+- `net_ssh_known_hosts_test.go` - SSH known hosts tool tests
+- `operator_deploy_test.go` - Operator deploy tool tests
+- `proc_signal_safe_integration_test.go` - Process signal safe integration tests
+- `proc_signal_safe_test.go` - Process signal safe tool tests
+- `proc_tree_test.go` - Process tree tool tests
 - `registry_test.go` - Tool registry tests
 - `run_shell_command_test.go` - Shell command execution tests
 - `suspended_transaction_test.go` - Suspended transaction tests
+- `sys_container_status_test.go` - Container status tool tests
+- `sys_env_vars_test.go` - Environment variables tool tests
+- `sys_info_test.go` - System info tool tests
+- `sys_oom_detect_test.go` - OOM detection tool tests
+- `sys_time_clock_test.go` - Time clock tool tests
 - `sys_tools_test.go` - System tools tests
+- `tls_cert_inspect_test.go` - TLS certificate inspect tool tests
 - `validation_test.go` - Validation tests
 
 #### Package Tests
@@ -507,16 +547,9 @@ MCP gateway and native tool integration tests:
 
 # 3. For Docker E2E tests, ensure Docker is running
 make test-docker
-make test-gov
 
-# 4. For scenario tests, start the Gateway
-./g8e gw start
-
-# 5. Authenticate (required for mTLS tests)
+# 4. Authenticate (required for mTLS tests)
 ./g8e auth enroll
-
-# 6. Run scenario tests
-./g8e test scenario
 ```
 
 ### First-time Setup
@@ -534,17 +567,15 @@ This creates the first user and issues mTLS certificates for the g8e Gateway and
 
 MCP gateway integration tests (`test/mcp_gateway_test.go`) use mTLS authentication to communicate with the Gateway. The test harness follows this flow:
 
-1. **Bootstrap Enrollment**: Tests first bootstrap the platform via the HTTP port (8080) using `/bootstrap` and `/enroll` endpoints
-2. **mTLS Client Creation**: Tests use `NewLiveOperatorHTTPClient` from `test/integration_helper.go` to create an HTTP client configured with:
-   - The enrolled operator certificate (`.g8e/pki/client/operator-cert.pem`)
-   - The operator private key (`.g8e/pki/client/operator-key.pem`)
-   - The canonical trust bundle (`.g8e/pki/trust/g8eg-ca-bundle.pem`)
-3. **HTTPS Port Targeting**: All post-enrollment MCP calls target the HTTPS port (8443) with mTLS enforced
-4. **SPIFFE Identity Extraction**: The Gateway's `auth.Middleware` extracts the `OperatorSessionID` from the mTLS certificate's SPIFFE URI SAN (format: `spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>`)
-5. **Session Validation**: The extracted session ID is validated against the database to ensure the operator session is active
+1. **In-Process Gateway**: Tests use `GatewayFixture` from `test/fixtures/gateway_fixture.go` to start a fully configured gateway in-process with downstream server, execution services, and governance dependencies
+2. **Client Enrollment**: Tests call `EnrollClientIdentity` from `test/fixtures/gateway_fixture.go` to perform CSR enrollment, generating certificates and creating an operator session
+3. **mTLS Client Creation**: Tests use `CreateMTLSClient` from the fixture to create an HTTP client configured with the enrolled identity certificates
+4. **HTTPS Port Targeting**: All post-enrollment MCP calls target the HTTPS port (8443) with mTLS enforced
+5. **SPIFFE Identity Extraction**: The Gateway's `auth.Middleware` extracts the `OperatorSessionID` from the mTLS certificate's SPIFFE URI SAN (format: `spiffe://g8e.local/operator/<org_id>/<operator_id>/<session_id>`)
+6. **Session Validation**: The extracted session ID is validated against the database to ensure the operator session is active
 
 **Key Implementation Details**:
-- MCP routes are exclusively available on the HTTPS port (8443) - they are NOT available on the HTTP bootstrap port (8080)
+- MCP routes are exclusively available on the HTTPS port (8443); they are NOT available on the HTTP bootstrap port (8080)
 - The HTTP port (8080) is limited to bootstrap endpoints only (`/bootstrap`, `/enroll`, `/.well-known/g8e/pki/*`)
 - The `ExtractOperatorSessionID` function in `protocol/workload_identity.go` parses the SPIFFE URI to extract the session ID from path segment 6
 - Tests include wait logic to ensure operator session persistence before making authenticated calls
@@ -613,17 +644,16 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-unit`** - Runs Tier 1 (Unit) tests without build tags. No external dependencies.
 - **`make test-integration`** - Runs Tier 2 (In-Process Integration) tests with `integration` build tag. Uses on-disk SQLite, local PKI, local pubsub.
 - **`make test-docker`** - Runs Tier 3 (Docker E2E) tests with `e2e` build tag. Requires Docker.
-- **`make test-gov`** - Runs Tier 3 (Gov Demo E2E) tests with `e2e` build tag. Requires Docker.
 - **`make test-coverage`** - Runs tests with coverage (enforces 70% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
-- **`make test-shuffle`** - Runs all tests with randomized order.
-- **`make test-gateway`** - Runs gateway-specific integration tests (A2A gateway, MCP gateway, MCP stdio).
+- **`make test-gateway`** - Runs gateway-specific integration tests (A2A gateway, MCP gateway). Targets `test/a2a_gateway_test.go`, `test/mcp_gateway_test.go`, and `test/mcp_stdio_test.go` with the `integration` build tag.
 
 ### Lints
 
-- **`make lint`** - Runs all linting and quality checks including golangci-lint, vulncheck, and doctrine validation.
+- **`make lint`** - Runs all linting and quality checks including golangci-lint, lint-no-embedded-newlines, vulncheck, validate-doctrines, and swagger-generate.
 - **`make lint-no-embedded-newlines`** - Checks for compilation errors including embedded newlines.
 - **`make vulncheck`** - Runs `govulncheck` on Go dependencies.
 - **`make validate-doctrines`** - Validates doctrine JSON schema against the governance policy model.
+- **`make swagger-generate`** - Generates Swagger/OpenAPI documentation from code annotations.
 
 ---
 
@@ -631,8 +661,8 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 
 Defaults from `protocol/constants/ports.json` (canonical source of truth):
 
-- `8080` - Gateway HTTP (bootstrap + MCP)
-- `8443` - Gateway HTTPS (mTLS API + public)
+- `8080` - Gateway HTTP (bootstrap, CA bundle, health)
+- `8443` - Gateway HTTPS (mTLS API, MCP, public)
 
 All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NET_BIND_SERVICE` to the g8e Node or front with an external port redirect.
 
@@ -642,12 +672,12 @@ All defaults are unprivileged ports (>1024). To run on `443`/`80`, grant `CAP_NE
 
 GitHub Actions (`.github/workflows/build-and-test.yml`) enforces:
 
-- **`verify-proto`** - Runs proto generation and validates that generated files are in sync with protocol definitions.
-- **`validate-doctrines`** - Validates doctrine JSON schema against the governance policy model.
-- **`swagger-generate`** - Generates and validates Swagger/OpenAPI documentation from code annotations.
-- **`lint`** - Runs golangci-lint with build tags for integration tests.
-- **`vulncheck`** - Scans Go dependencies for known vulnerabilities using govulncheck.
-- **`test-unit`** - Runs Tier 1 (Unit) tests without build tags.
-- **`test-integration`** - Runs Tier 2 (In-Process Integration) tests with the `integration` build tag.
+- **Verify Proto & Doctrines** - Runs `make proto`, validates generated files are in sync, and runs `make validate-doctrines`.
+- **Generate & Validate Swagger Docs** - Runs `make swagger-generate` and validates generated swagger files are in sync.
+- **Lint** - Runs golangci-lint via `golangci-lint-action`.
+- **Security Scan** - Runs `make vulncheck` (govulncheck).
+- **Unit Tests** - Runs `make test-unit`.
+- **Integration Tests** - Runs `make test-integration`.
+- **Cross-Compile (Windows)** - Runs `make build-windows`.
 
 The CI workflow does not run Tier 3 (Docker E2E) tests. Docker E2E tests require manual execution with Docker installed.

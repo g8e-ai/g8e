@@ -69,10 +69,10 @@ func (t *DBQueryValidateTool) Execute(ctx context.Context, args json.RawMessage)
 	}
 
 	if !strings.HasPrefix(strings.ToUpper(strings.TrimSpace(req.Query)), "SELECT") {
-		result := map[string]interface{}{
-			"valid":    false,
-			"rejected": true,
-			"reason":   "Only SELECT queries are allowed for validation",
+		result := DBQueryValidateResult{
+			Valid:    false,
+			Rejected: true,
+			Reason:   "Only SELECT queries are allowed for validation",
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -89,10 +89,10 @@ func (t *DBQueryValidateTool) Execute(ctx context.Context, args json.RawMessage)
 	}
 
 	if err := validateSQLQuery(req.Query); err != nil {
-		result := map[string]interface{}{
-			"valid":    false,
-			"rejected": true,
-			"reason":   fmt.Sprintf("Query validation failed: %v", err),
+		result := DBQueryValidateResult{
+			Valid:    false,
+			Rejected: true,
+			Reason:   fmt.Sprintf("Query validation failed: %v", err),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -118,10 +118,10 @@ func (t *DBQueryValidateTool) Execute(ctx context.Context, args json.RawMessage)
 	// Query is validated by validateSQLQuery to satisfy CodeQL sql-injection rule.
 	planRows, err := db.Query("EXPLAIN QUERY PLAN " + req.Query)
 	if err != nil {
-		result := map[string]interface{}{
-			"valid":    false,
-			"rejected": true,
-			"reason":   fmt.Sprintf("Query parse error: %v", err),
+		result := DBQueryValidateResult{
+			Valid:    false,
+			Rejected: true,
+			Reason:   fmt.Sprintf("Query parse error: %v", err),
 		}
 		resultJSON, err := json.Marshal(result)
 		if err != nil {
@@ -161,16 +161,16 @@ func (t *DBQueryValidateTool) Execute(ctx context.Context, args json.RawMessage)
 	}
 
 	planStr := strings.Join(planLines, "\n")
-	result := map[string]interface{}{
-		"valid":    true,
-		"plan":     planStr,
-		"rejected": false,
+	result := DBQueryValidateResult{
+		Valid:    true,
+		Plan:     planStr,
+		Rejected: false,
 	}
 
 	if hasFullScan {
-		result["valid"] = false
-		result["rejected"] = true
-		result["reason"] = "Query performs a full table scan, which may be slow on large datasets"
+		result.Valid = false
+		result.Rejected = true
+		result.Reason = "Query performs a full table scan, which may be slow on large datasets"
 	}
 
 	resultJSON, err := json.Marshal(result)

@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-24
+Version: v1.1.9
 
 ---
 
@@ -79,10 +79,10 @@ GOOS=windows GOARCH=amd64 make build
 
 ### Windows Build
 
-On Windows, use the provided PowerShell build script:
+On Windows, use `make build` with Go and Make installed, or invoke `go build` directly:
 
 ```powershell
-.\build.ps1
+go build -o g8e.exe ./cmd/operator
 ```
 
 For cross-compilation from Linux/macOS to Windows:
@@ -127,6 +127,9 @@ To start the gateway, use the CLI gateway command:
 - `--rate-limit-burst <burst>` - Gateway rate limit burst size (default: 0)
 - `--log <level>` - Log level: info, error, debug (default: info)
 - `--cert-mode <mode>` - Certificate mode: full (all hostnames/IPs), localhost (only localhost)
+- `--network-identity-file <path>` - Path to JSON file containing pre-detected network identity (skips runtime detection)
+- `--tribunal-id <id>` - ID of the TribunalPolicy for L2 consensus (required for consensus posture)
+- `--tribunal-url <url>` - URL of the Tribunal service for L2 deliberation (e.g., https://localhost:8443/tribunal/v1/deliberate)
 - `-f, --follow` - Follow log output after starting (like tail -f)
 
 ---
@@ -175,7 +178,10 @@ The gateway must expose HTTP endpoints:
 - **Device Enrollment**: `POST /api/v1/pki/devices/enroll` for CSR-based device enrollment (Operator and CLI certificates).
 - **Certificate Revocation**: `POST /api/v1/pki/certificates/revoke` for certificate revocation.
 - **Revocation Bundle**: `GET /api/v1/pki/revocation-bundle` for the signed revocation list.
-- **MCP Endpoint**: `POST /api/v1/mcp` for JSON-RPC MCP tool calls.
+- **MCP Endpoint**: `POST /mcp` for JSON-RPC MCP tool calls (Streamable HTTP transport).
+- **A2A Endpoint**: `POST /api/v1/a2a/call` for HTTP/JSON A2A skill invocations.
+- **CSR Signing**: `POST /api/v1/pki/csr/sign` for certificate signing request processing.
+- **CRL Distribution**: `GET /.well-known/g8e/pki/crl` for the certificate revocation list.
 - **Trust Bundle**: `GET /.well-known/g8e/pki/ca-bundle` for the CA trust bundle.
 
 #### 5. Protocol Translation
@@ -249,13 +255,17 @@ Refer to `protocol/proto/g8e/` for the canonical schema definitions.
 
 ## Testing
 
-A custom gateway implementation must pass the platform test suite to claim g8e compatibility:
+The CLI provides tiered test subcommands:
 
 ```bash
-./g8e test
+./g8e test unit         # Tier 1: unit tests (no external dependencies)
+./g8e test integration  # Tier 2: in-process integration tests
+./g8e test e2e          # Tier 3: live platform E2E (requires running gateway)
+./g8e test coverage     # Tests with coverage report
+./g8e test lint         # Static analysis
 ```
 
-This verifies:
+The integration and E2E suites verify:
 - Pub/Sub command dispatch
 - Audit vault writes
 - Ledger commits
@@ -266,13 +276,13 @@ This verifies:
 - PKI operations
 - MCP/A2A protocol translation
 
-For comprehensive testing including integration tests, use:
+For comprehensive testing including all unit and integration tests, use:
 
 ```bash
 make test
 ```
 
-For CI-quality testing with coverage enforcement:
+For CI-quality testing with coverage enforcement (70% threshold):
 
 ```bash
 make ci
@@ -283,6 +293,14 @@ make ci
 ## Manage
 
 Manage the gateway lifecycle and configuration:
+
+### Gateway Stop
+
+Stop the running gateway:
+
+```bash
+./g8e gw stop
+```
 
 ### Gateway Restart
 
@@ -320,6 +338,20 @@ Destructively remove all gateway state including databases, secrets, logs, and P
 
 **Warning:** This permanently destroys all trust routes and credentials. Use `--force` or `--yes` to skip the confirmation prompt.
 
+### Security Validation
+
+Run security validation checks on the local PKI and secrets directories:
+
+```bash
+./g8e gw security validate
+```
+
+Enroll an operator with the gateway via CSR to obtain mTLS certificates:
+
+```bash
+./g8e gw security pki enroll -e <gateway-ip>
+```
+
 ---
 
 ## Monitor
@@ -353,9 +385,9 @@ The `-f` flag follows log output (like `tail -f`). Use without `-f` to view hist
 Query the gateway's data store for operators, users, and audit events:
 
 ```bash
-./g8e data operators
-./g8e data users
-./g8e data audit list --operator-session-id <session-id>
+./g8e gw data operators
+./g8e gw data users
+./g8e gw data audit list --operator-session-id <session-id>
 ```
 
 ---

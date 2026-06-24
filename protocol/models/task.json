@@ -1,0 +1,134 @@
+{
+  "_comment": "Canonical Task document shape. The g8e-compatible ensemble is the authority - it creates and owns this document. Tasks are governed collection entries submitted via GovernanceEnvelope. A field mismatch breaks task creation, investigation linkage, and governed mutation flows.",
+  "_authority": "agent",
+  "_consumers": ["client (reads to render dashboard)", "agent"],
+  "_collection": "tasks",
+  "_governed": true,
+
+  "task": {
+    "_description": "A unit of work tracked within an investigation. Tasks are created by the agent to decompose complex investigations into discrete steps. Governed collection - mutations must go through POST /api/v1/governance/envelopes.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique task identifier (UUID v4). Generated server-side by the agent."
+      },
+      "title": {
+        "type": "string",
+        "required": true,
+        "description": "Task title. 1-500 chars."
+      },
+      "description": {
+        "type": "string",
+        "required": false,
+        "description": "Task description with details and context."
+      }
+    },
+
+    "relationships": {
+      "investigation_id": {
+        "type": "string",
+        "required": true,
+        "description": "Investigation ID this task belongs to."
+      },
+      "case_id": {
+        "type": "string",
+        "required": false,
+        "description": "Case ID this task is associated with. Inherited from the parent investigation."
+      },
+      "user_id": {
+        "type": "string",
+        "required": false,
+        "description": "User who initiated the task. Injected server-side."
+      },
+      "parent_task_id": {
+        "type": "string",
+        "required": false,
+        "description": "Parent task ID for hierarchical task decomposition."
+      },
+      "subtask_ids": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "default": [],
+        "description": "IDs of child tasks."
+      }
+    },
+
+    "status_priority": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "default": "pending",
+        "values": ["pending", "in_progress", "completed", "failed", "cancelled", "skipped"],
+        "description": "Task lifecycle status. See status.json task.status."
+      },
+      "priority": {
+        "type": "integer",
+        "required": true,
+        "default": 2,
+        "description": "Priority level (integer enum). Maps to low=1, medium=2, high=3, critical=4."
+      }
+    },
+
+    "execution": {
+      "assignee": {
+        "type": "string",
+        "required": false,
+        "description": "Component or persona assigned to this task (e.g. 'ai.primary', 'operator')."
+      },
+      "result": {
+        "type": "string",
+        "required": false,
+        "description": "Task result or output. Set when the task reaches a terminal status."
+      },
+      "error": {
+        "type": "string",
+        "required": false,
+        "description": "Error message if the task failed."
+      }
+    },
+
+    "metadata": {
+      "metadata": {
+        "type": "object",
+        "required": false,
+        "default": {},
+        "description": "Additional unstructured metadata."
+      },
+      "tags": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "default": []
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "started_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the task transitioned to in_progress."
+      },
+      "completed_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When the task reached a terminal status."
+      }
+    }
+  }
+}

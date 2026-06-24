@@ -1,0 +1,61 @@
+{
+  "_comment": "Canonical Tribunal document shape. client is the authority - it stores TribunalPolicy records that define named consensus bodies for L2 governance. A Tribunal consists of N member identities (enrolled agentic apps) and requires K affirmative distinct signatures to reach quorum. A field mismatch breaks L2 governance and multi-sig verification.",
+  "_authority": "client (SQLite)",
+  "_consumers": ["client internal services (L4 Warden, governance verification)", "agent (reads for governance replay)"],
+  "_collection": "tribunals",
+
+  "tribunal": {
+    "_description": "Named consensus body for L2 governance. Consists of N member identities (enrolled agentic apps via TrustedSigner.ID) and requires K affirmative distinct signatures to reach quorum.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "required": true,
+        "description": "Tribunal name/identifier. Used as the document ID."
+      }
+    },
+
+    "membership": {
+      "member_app_ids": {
+        "type": "array",
+        "items": "string",
+        "required": true,
+        "description": "Member app IDs enrolled in this tribunal. Each ID corresponds to a TrustedSigner.ID."
+      },
+      "quorum": {
+        "type": "integer",
+        "required": true,
+        "minimum": 1,
+        "description": "Number of affirmative distinct signatures required to reach quorum (K-of-N)."
+      },
+      "require_distinct": {
+        "type": "boolean",
+        "required": true,
+        "default": true,
+        "description": "Whether duplicate signer keys are rejected. When true, each signature must come from a distinct signer."
+      }
+    },
+
+    "lifecycle": {
+      "enabled": {
+        "type": "boolean",
+        "required": true,
+        "default": true,
+        "description": "Whether this tribunal is currently enabled for governance participation."
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      }
+    }
+  }
+}

@@ -1,5 +1,10 @@
 {
+  "description": "Output formatting constants for truncated command output.",
   "output": {
-    "TruncatedOutputFormat": "%s\n\n[TRUNCATED: %d bytes skipped]\n\n%s"
+    "TruncatedOutputFormat": {
+      "_go_const": "TruncatedOutputFormat",
+      "value": "%s\n\n[TRUNCATED: %d bytes skipped]\n\n%s",
+      "description": "Format string for head/tail truncated output; %d is the number of bytes skipped"
+    }
   }
 }

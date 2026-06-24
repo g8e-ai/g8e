@@ -1,0 +1,117 @@
+{
+  "_comment": "Canonical Memory document shape. The g8e-compatible ensemble is the authority - it creates and owns this document. Memories are governed collection entries that persist agent-learned context across conversations. A field mismatch breaks memory recall and cross-conversation context building.",
+  "_authority": "agent",
+  "_consumers": ["agent (reads to build context)", "client (reads to render memory management UI)"],
+  "_collection": "memories",
+  "_governed": true,
+
+  "memory": {
+    "_description": "A persistent memory entry created by the agent to retain learned context across conversations. Memories are scoped to a user or investigation and recalled during context building. Governed collection - mutations must go through POST /api/v1/governance/envelopes.",
+
+    "core_identity": {
+      "id": {
+        "type": "string",
+        "format": "uuid",
+        "required": true,
+        "description": "Unique memory identifier (UUID v4). Generated server-side by the agent."
+      },
+      "content": {
+        "type": "string",
+        "required": true,
+        "description": "The memory content text. What the agent learned and wants to recall."
+      }
+    },
+
+    "relationships": {
+      "user_id": {
+        "type": "string",
+        "required": true,
+        "description": "User ID this memory belongs to. Memories are scoped per-user."
+      },
+      "investigation_id": {
+        "type": "string",
+        "required": false,
+        "description": "Investigation ID where this memory was created. Null for cross-investigation memories."
+      },
+      "case_id": {
+        "type": "string",
+        "required": false,
+        "description": "Case ID associated with this memory, if applicable."
+      }
+    },
+
+    "classification": {
+      "memory_type": {
+        "type": "string",
+        "required": true,
+        "default": "general",
+        "values": ["general", "preference", "fact", "procedure", "context"],
+        "description": "Memory classification. See status.json memory.type."
+      },
+      "scope": {
+        "type": "string",
+        "required": true,
+        "default": "user",
+        "values": ["user", "investigation", "case"],
+        "description": "Memory scope - how widely the memory is recalled. See status.json memory.scope."
+      },
+      "importance": {
+        "type": "integer",
+        "required": false,
+        "default": 5,
+        "minimum": 1,
+        "maximum": 10,
+        "description": "Importance score (1-10). Higher values are prioritized during context building."
+      }
+    },
+
+    "lifecycle": {
+      "status": {
+        "type": "string",
+        "required": true,
+        "default": "active",
+        "values": ["active", "archived", "deleted"],
+        "description": "Memory lifecycle status. See status.json memory.status."
+      },
+      "source": {
+        "type": "string",
+        "required": false,
+        "description": "What created this memory (e.g. 'ai.primary', 'user.chat', 'system')."
+      }
+    },
+
+    "metadata": {
+      "metadata": {
+        "type": "object",
+        "required": false,
+        "default": {},
+        "description": "Additional unstructured metadata."
+      },
+      "tags": {
+        "type": "array",
+        "items": "string",
+        "required": false,
+        "default": []
+      }
+    },
+
+    "timestamps": {
+      "created_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": true
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false
+      },
+      "last_recalled_at": {
+        "type": "string",
+        "format": "iso8601",
+        "required": false,
+        "description": "When this memory was last recalled during context building."
+      }
+    }
+  }
+}

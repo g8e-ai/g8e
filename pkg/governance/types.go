@@ -104,6 +104,15 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 		canonical.WriteByte('|')
 	}
 
+	// NOTE: L3 proof is intentionally NOT included in the transaction hash.
+	// The protocol ordering is L1 → L2 → L3 → L4: L2 (machine consensus) signs
+	// the transaction hash before L3 (human notary) is asked. Including L3 in
+	// the hash would create a circular dependency — L2 couldn't sign until the
+	// human had already acted, violating the invariant that the human is never
+	// bothered until all machine-checkable layers pass.
+	// Tamper-evidence for L3 is provided by verifyL3Posture, which checks the
+	// proof against envelope.TransactionHash at verification time.
+
 	canonicalStr := canonical.String()
 	hash := sha256.Sum256([]byte(canonicalStr))
 	return hex.EncodeToString(hash[:]), nil

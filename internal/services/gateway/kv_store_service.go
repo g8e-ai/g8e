@@ -70,6 +70,26 @@ func (s *KVStoreService) KVSet(key, value string, ttlSeconds int) error {
 	return err
 }
 
+// KVSetObserved stores a key/value pair as observed-state (state_tier = 'observed').
+// Observed-state entries are excluded from the bound freshness root and are
+// hashed separately in the observed-state commitment. ttlSeconds <= 0 means no expiration.
+func (s *KVStoreService) KVSetObserved(key, value string, ttlSeconds int) error {
+	now := sqliteutil.NowTimestamp()
+	var expiresAt *string
+	if ttlSeconds > 0 {
+		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		expiresAt = &exp
+	}
+
+	_, err := s.db.ExecWithRetry(
+		`INSERT INTO kv_store (key, value, created_at, expires_at, state_tier)
+		 VALUES (?, ?, ?, ?, 'observed')
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at, state_tier = 'observed'`,
+		key, value, now, expiresAt,
+	)
+	return err
+}
+
 // KVDelete removes a key.
 func (s *KVStoreService) KVDelete(key string) error {
 	_, err := s.db.ExecWithRetry("DELETE FROM kv_store WHERE key = ?", key)

@@ -28,14 +28,41 @@ import (
 )
 
 // StateRootService provides state merkle root calculation with caching.
+// It computes two roots:
+//   - Bound root: hashes only bound-state rows (config, governance, filesystem
+//     mutations) — this is the freshness root that gates transaction admission.
+//   - Observed root: hashes observed-state rows (telemetry, environmental
+//     readings) — a separate commitment that does NOT gate admission but is
+//     chained into the audit ledger.
+//
+// This tiering implements §8 of the position paper: conflating observed and
+// bound state causes the binding root to churn continuously, making every
+// in-flight envelope stale and degrading fail-closed into fail-always.
+//
+// The bound root also incorporates the token keymap hash from the ScrubbingService
+// (§9): this binds the token→value mapping into the state Merkle root so that a
+// rehydration substitution is a broken transaction, not silent corruption.
 type StateRootService struct {
 	db     *sqliteutil.DB
 	logger *slog.Logger
 
-	// Caching
+	// Caching (bound root)
 	mu                 sync.Mutex
 	cachedStateRoot    string
 	cachedStateVersion int64
+
+	// Caching (observed root)
+	cachedObservedRoot    string
+	cachedObservedVersion int64
+
+	// Optional keymap hash provider for token binding (§9)
+	keymapHashProvider KeymapHashProvider
+}
+
+// KeymapHashProvider returns a deterministic hash of the token keymap.
+// Implemented by ScrubbingService to bind token→value mappings into the state root.
+type KeymapHashProvider interface {
+	TokenKeymapHash() string
 }
 
 // NewStateRootService creates a new state root service.
@@ -44,6 +71,14 @@ func NewStateRootService(db *sqliteutil.DB, logger *slog.Logger) *StateRootServi
 		db:     db,
 		logger: logger,
 	}
+}
+
+// SetKeymapHashProvider injects the token keymap hash provider.
+// When set, the keymap hash is incorporated into the bound state root.
+func (s *StateRootService) SetKeymapHashProvider(p KeymapHashProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keymapHashProvider = p
 }
 
 // GetCurrentStateRoot returns the current state merkle root.
@@ -107,6 +142,8 @@ func (s *StateRootService) InvalidateCache() error {
 	defer s.mu.Unlock()
 	s.cachedStateRoot = ""
 	s.cachedStateVersion = 0
+	s.cachedObservedRoot = ""
+	s.cachedObservedVersion = 0
 	return nil
 }
 
@@ -156,11 +193,13 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 
 	now := sqliteutil.NowTimestamp()
 
-	// 2. KV Store (Authoritative)
+	// 2. KV Store (Bound state only)
 	// Filter for active entries only. Exclude created_at.
 	// expires_at IS included because it affects the active state of the entry.
 	// Exclude cache management entries (g8e:cache:*) as they are ephemeral and not authoritative state.
-	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
+	// Only include bound-state rows (state_tier = 'bound') — observed-state rows
+	// are hashed separately in calculateObservedStateRoot().
+	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND state_tier = 'bound' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
 		var key, value, expiresAt string
 		if err := r.Scan(&key, &value, &expiresAt); err != nil {
 			return fmt.Errorf("%w: %v", constants.ErrStateRootScanKVStore, err)
@@ -171,10 +210,11 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 		return "", fmt.Errorf("%w: %v", constants.ErrStateRootHashKVStore, err)
 	}
 
-	// 3. Blobs (Authoritative)
+	// 3. Blobs (Bound state only)
 	// Filter for active entries only. Exclude created_at.
 	// data is included (as hex for determinism).
-	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE expires_at IS NULL OR expires_at > ? ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
+	// Only include bound-state rows (state_tier = 'bound').
+	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE state_tier = 'bound' AND (expires_at IS NULL OR expires_at > ?) ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
 		var namespace, id, contentType, dataHex, expiresAt string
 		var size int64
 		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
@@ -187,9 +227,91 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 	}
 
 	// 4. Nonces and SSE events are EXCLUDED (volatile/metadata)
+	// 5. Observed-state rows (state_tier = 'observed') are EXCLUDED from the bound
+	//    root — they are hashed separately in calculateObservedStateRoot().
+
+	// 6. Token keymap hash (§9 binding)
+	// The token→value mapping is bound into the state root so that a rehydration
+	// substitution (altering the keymap after a transaction hash was computed)
+	// produces a broken transaction, not silent corruption.
+	if s.keymapHashProvider != nil {
+		keymapHash := s.keymapHashProvider.TokenKeymapHash()
+		if keymapHash != "" {
+			h.Write([]byte(`{"table":"token_keymap","values":["`))
+			h.Write([]byte(keymapHash))
+			h.Write([]byte(`"]}`))
+			h.Write([]byte("\n"))
+		}
+	}
 
 	sum := h.Sum(nil)
 	return hex.EncodeToString(sum), nil
+}
+
+// calculateObservedStateRoot computes a separate commitment over observed-state
+// rows only. This root does NOT gate transaction admission — it is chained into
+// the audit ledger so observed evidence is tamper-evident without churning the
+// bound root that in-flight envelopes depend on.
+func (s *StateRootService) calculateObservedStateRoot() (string, error) {
+	h := sha256.New()
+	now := sqliteutil.NowTimestamp()
+
+	// Observed KV entries (state_tier = 'observed')
+	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND state_tier = 'observed' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {
+		var key, value, expiresAt string
+		if err := r.Scan(&key, &value, &expiresAt); err != nil {
+			return fmt.Errorf("%w: %v", constants.ErrStateRootScanKVStore, err)
+		}
+		return writeRowToHash(h, "kv_store_observed", key, value, expiresAt)
+	}); err != nil {
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootHashKVStore, err)
+	}
+
+	// Observed blobs (state_tier = 'observed')
+	if err := s.hashTableToStream(h, "SELECT namespace, id, size, content_type, hex(data), COALESCE(expires_at, '') FROM blobs WHERE state_tier = 'observed' AND (expires_at IS NULL OR expires_at > ?) ORDER BY namespace, id", []interface{}{now}, func(r *sql.Rows) error {
+		var namespace, id, contentType, dataHex, expiresAt string
+		var size int64
+		if err := r.Scan(&namespace, &id, &size, &contentType, &dataHex, &expiresAt); err != nil {
+			return fmt.Errorf("%w: %v", constants.ErrStateRootScanBlobs, err)
+		}
+		return writeRowToHash(h, "blobs_observed", namespace, id, size, contentType, dataHex, expiresAt)
+	}); err != nil {
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootHashBlobs, err)
+	}
+
+	sum := h.Sum(nil)
+	return hex.EncodeToString(sum), nil
+}
+
+// GetObservedStateRoot returns the observed-state commitment root.
+// This root is separate from the bound root and does NOT gate transaction
+// admission. It is used for audit ledger chaining of observed evidence.
+func (s *StateRootService) GetObservedStateRoot() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var currentVersion int64
+	err := s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&currentVersion)
+	if err != nil {
+		root, err := s.calculateObservedStateRoot()
+		if err != nil {
+			return "", fmt.Errorf("%w: %v", constants.ErrStateRootCalculate, err)
+		}
+		return root, nil
+	}
+
+	if currentVersion == s.cachedObservedVersion && s.cachedObservedRoot != "" {
+		return s.cachedObservedRoot, nil
+	}
+
+	root, err := s.calculateObservedStateRoot()
+	if err != nil {
+		return "", fmt.Errorf("%w: %v", constants.ErrStateRootCalculate, err)
+	}
+
+	s.cachedObservedRoot = root
+	s.cachedObservedVersion = currentVersion
+	return root, nil
 }
 
 // hashTableToStream executes a query and streams each row to the hash writer.

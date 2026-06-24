@@ -17,6 +17,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -96,6 +97,21 @@ func nullIfEmpty(s string) sql.NullString {
 		return sql.NullString{Valid: false}
 	}
 	return sql.NullString{String: s, Valid: true}
+}
+
+// SSEEventsCleanup deletes events older than the given max age. This prevents
+// the ring buffer from growing unboundedly between reconnections.
+func (s *SSEEventService) SSEEventsCleanup(maxAge time.Duration) (int64, error) {
+	cutoff := sqliteutil.FormatTimestamp(time.Now().UTC().Add(-maxAge))
+	result, err := s.db.ExecWithRetry("DELETE FROM sse_events WHERE created_at < ?", cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("sse_event_service: cleanup: %w", err)
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("sse_event_service: cleanup: rows affected: %w", err)
+	}
+	return count, nil
 }
 
 // SSEEventsWipe deletes all rows from the sse_events table. Returns the number of rows deleted.

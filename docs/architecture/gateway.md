@@ -4,7 +4,7 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-06-22
+Last Updated: 2026-06-23
 Version: v1.1.6
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
@@ -247,7 +247,7 @@ Defined in `internal/services/tribunal/service.go`. The gateway delegates L2 del
 ### L3 Notary (Human Authorization)
 Defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
 - **Web Sessions**: Use WebAuthn or Passkey proofs (FIDO2) via `internal/services/gateway/passkey_service.go`.
-- **CLI Sessions**: Use mTLS certificate fingerprints or Ed25519 signatures bound to the session via `internal/services/gateway/cli_l3_notary.go`.
+- **CLI Sessions**: Use mTLS certificate fingerprints and Ed25519 signatures bound to the session via `internal/services/gateway/cli_l3_notary.go`. The CLI `approve` command derives the Ed25519 public key from the approver's private key and sends it alongside the signature. The gateway stores this public key in the `suspended_transactions` table at approval time. `VerifyL3Proof` then calls `ed25519.Verify` against the stored public key to cryptographically prove the approver holds the private key — not merely that the stored signature value matches.
 - **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
 - **JWT Sessions**: Use JWT tokens validated at the gateway with JIT user provisioning.
 

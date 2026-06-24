@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "g8e Model Context Protocol (MCP) Schema",
-  "description": "JSON Schema for the Model Context Protocol (MCP) as implemented by the g8e Gateway. This schema defines the JSON-RPC 2.0 messages supported for tool execution, resource access, and prompt management, including g8e-specific extensions like A2A skill calls.",
+  "description": "JSON Schema for the Model Context Protocol (MCP) as implemented by the g8e Gateway. This schema defines the JSON-RPC 2.0 messages supported for tool execution, resource access, and prompt management, including g8e-specific extensions like A2A skill calls. The gateway accepts notifications/initialized and notifications/* methods, returning HTTP 202 Accepted with no response body.",
   "type": "object",
   "required": ["jsonrpc", "method"],
   "properties": {
@@ -87,8 +87,9 @@
         "tools": {
           "type": "object",
           "properties": {
-            "listChanged": { "type": "boolean" }
-          }
+            "listChanged": { "type": "boolean", "const": true }
+          },
+          "required": ["listChanged"]
         },
         "resources": { "type": "object" },
         "prompts": { "type": "object" }
@@ -173,8 +174,7 @@
       "properties": {
         "name": { "type": "string", "description": "The name of the tool to call." },
         "arguments": {
-          "type": "object",
-          "description": "The arguments to pass to the tool, matching its inputSchema."
+          "description": "The arguments to pass to the tool, matching its inputSchema. Accepts any valid JSON value (object, array, string, number, boolean, or null)."
         }
       },
       "required": ["name"],
@@ -360,7 +360,9 @@
       "properties": {
         "code": { "type": "integer" },
         "message": { "type": "string" },
-        "data": { "type": "object" }
+        "data": {
+          "description": "Additional error data. Accepts any valid JSON value."
+        }
       },
       "required": ["code", "message"],
       "type": "object"
@@ -369,7 +371,9 @@
       "description": "A JSON-RPC 2.0 response object.",
       "properties": {
         "jsonrpc": { "const": "2.0", "type": "string" },
-        "result": { "type": "object" },
+        "result": {
+          "description": "The result payload. Accepts any valid JSON value whose shape depends on the method."
+        },
         "error": { "$ref": "#/$defs/JSONRPCError" },
         "id": {
           "oneOf": [
@@ -389,24 +393,38 @@
       "description": "The result of a ping request.",
       "type": "object"
     },
+    "ResourceTemplate": {
+      "description": "An MCP resource template with a URI pattern.",
+      "properties": {
+        "uriTemplate": { "type": "string", "description": "The URI template pattern for the resource." },
+        "name": { "type": "string", "description": "The name of the resource template." },
+        "description": { "type": "string" },
+        "mimeType": { "type": "string" }
+      },
+      "required": ["uriTemplate", "name"],
+      "type": "object"
+    },
     "ListResourceTemplatesResult": {
-      "description": "The result of a resources/templates/list request.",
+      "description": "The result of a resources/templates/list request. The g8e Gateway returns an empty array as no resource templates are exposed.",
       "properties": {
         "resourceTemplates": {
           "type": "array",
-          "items": { "type": "object" }
+          "items": { "$ref": "#/$defs/ResourceTemplate" }
         }
       },
       "required": ["resourceTemplates"],
       "type": "object"
+    },
+    "NotificationAccepted": {
+      "description": "The gateway accepts notifications/initialized and notifications/* methods, returning HTTP 202 Accepted with no JSON-RPC response body. Notifications carry no result or error payload.",
+      "type": "null"
     },
     "A2ACallRequest": {
       "description": "Arguments for an a2a/call request (g8e extension).",
       "properties": {
         "skill_name": { "type": "string", "description": "The name of the A2A skill to call." },
         "payload": {
-          "type": "object",
-          "description": "The payload to pass to the A2A skill."
+          "description": "The payload to pass to the A2A skill. Accepts any valid JSON value."
         },
         "execution_id": { "type": "string", "description": "Optional unique execution ID." }
       },
@@ -436,7 +454,9 @@
       "description": "Request sent to a downstream A2A server.",
       "properties": {
         "skill_name": { "type": "string" },
-        "payload": { "type": "object" },
+        "payload": {
+          "description": "The payload to send to the downstream A2A server. Accepts any valid JSON value."
+        },
         "execution_id": { "type": "string" }
       },
       "required": ["skill_name", "payload"],

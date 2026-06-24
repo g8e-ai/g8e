@@ -43,11 +43,11 @@ export PATH=$GOPATH/bin:$PATH
 
 | Command | Purpose |
 |---|---|
-| `./g8e` | Interactive Platform Manager |
+| `./g8e` | g8e Platform Manager (shows help) |
 | `./g8e gw start` | Start the g8e Gateway |
 | `./g8e gw status` | Get g8e Gateway health and status |
 | `./g8e auth enroll` | Authenticate the local CLI |
-| `./g8e test` | Run Go host-native tests |
+| `./g8e test` | Run test suites (unit, integration, e2e, lint, chaos) |
 
 The g8e Operator is the single entry point for all platform operations. Run `./g8e --help` for complete command reference.
 
@@ -68,7 +68,7 @@ For details, see [Architecture](../architecture/).
 The platform is built via the Makefile. Run `make help` for available targets.
 
 **Startup sequence** (`./g8e gw start`):
-1. g8e Node check/build
+1. g8e binary check/build
 2. Root of trust generation (first boot only) - CA hierarchy in `.g8e/pki/`, secrets in `.g8e/secrets/`
 3. Service convergence via health checks
 
@@ -177,7 +177,8 @@ var ErrCustomError = errors.New("custom error")  // Move to internal/constants/e
 
 **Principles:**
 - Reproduce bugs with failing tests before fixing
-- No mocks; use real database, pub/sub, and LLM calls
+- Tier 1 (Unit) tests use mocks and stubs for isolation; no external dependencies (no files, network, or DB)
+- Tier 2 (Integration) and Tier 3 (E2E) tests use real database, pub/sub, and LLM calls
 - Contract tests enforce alignment between components and `protocol/`
 - mTLS by default; test runner handles certificate injection
 - Test infrastructure separated from production code to avoid import cycles
@@ -186,7 +187,10 @@ var ErrCustomError = errors.New("custom error")  // Move to internal/constants/e
 - `./g8e test unit` - Run Tier 1 (Unit) tests
 - `./g8e test integration` - Run Tier 2 (In-Process Integration) tests
 - `./g8e test e2e` - Run Tier 3 (Live Platform E2E) tests
+- `./g8e test coverage` - Run tests with coverage report (70% threshold)
 - `./g8e test lint` - Run linting and quality checks
+- `./g8e test chaos` - Generate governance events for testing
+- `./g8e test summary` - View chaos test summary from test vault
 
 Never call `go test` directly for platform tests.
 
@@ -196,15 +200,15 @@ Test-only code is separated from production code to avoid import cycles and main
 
 **`internal/services/storage/storagetest/`** - Test-only audit storage implementations
 - `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
-- Used only in test code (e.g., chaos tester at `test/chaos/chaos.go`)
+- Used only in test code (e.g., chaos tester at `internal/tools/chaos/chaos.go`)
 - Implements `TransactionAuditStore` interface with a no-op `DocSet` (the test audit store has no document store; console audit records are irrelevant in chaos tests)
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore` so L5 console audit records go to the canonical document store
 - Production outbound mode uses an `auditStoreTransactionStore` adapter in `g8eo.go` to write receipts via `SQLAuditStore.RecordActionReceipt`
 
-**`test/chaos/`** - Chaos engineering test infrastructure
+**`internal/tools/chaos/`** - Chaos engineering test infrastructure
 - Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
 - This is intentional test infrastructure, not production code
-- Located in `test/` to clearly indicate test-only status
+- Located in `internal/tools/` to clearly indicate test-only status
 
 ## Documentation
 
@@ -254,13 +258,13 @@ See [Constants Reference](../reference/constants.md) for details.
 
 ## Native Tools
 
-Native tools are MCP tools compiled into the Node binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
+Native tools are MCP tools compiled into the g8e binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
 
 **Adding a new native tool:**
 1. Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`
 2. Implement the `NativeTool` interface with `Name()`, `Description()`, `InputSchema()`, and `Execute()` methods
 3. Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
-4. Add unit tests in `internal/services/mcp/native_handlers_test.go`
+4. Add unit tests in `internal/services/mcp/your_tool_name_test.go`
 5. No `init()` function needed - registration is explicit via `RegisterNativeTools()`
 
 **Template:** See `docs/protocols/mcp/tool_template.go` for a complete example.

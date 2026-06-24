@@ -28,6 +28,7 @@ func main() {
 	operatorID := "op-456"
 	sessionID := "session-789"
 	userID := "user-abc"
+	gatewayID := "gw-12345"
 
 	// Operator workload identity
 	operatorSPIFFE := wid.OperatorSPIFFEID(orgID, operatorID, sessionID)
@@ -45,6 +46,14 @@ func main() {
 	hubSPIFFE := wid.HubSPIFFEID()
 	fmt.Printf("Hub SPIFFE ID: %s\n", hubSPIFFE)
 
+	// User workload identity (human delegator)
+	userSPIFFE := wid.UserSPIFFEID(userID)
+	fmt.Printf("User SPIFFE ID: %s\n", userSPIFFE)
+
+	// Gateway peer workload identity
+	gatewaySPIFFE := wid.GatewayPeerSPIFFEID(gatewayID)
+	fmt.Printf("Gateway Peer SPIFFE ID: %s\n", gatewaySPIFFE)
+
 	// Validate identities
 	if wid.MatchesOperator(operatorSPIFFE, orgID, operatorID, sessionID) {
 		fmt.Println("✓ Operator identity valid")
@@ -54,12 +63,20 @@ func main() {
 		fmt.Println("✓ CLI identity valid")
 	}
 
+	if wid.MatchesCLISessionOnly(cliSPIFFE, sessionID) {
+		fmt.Println("✓ CLI session-only match valid")
+	}
+
 	if wid.MatchesApp(appSPIFFE, operatorID) {
 		fmt.Println("✓ App identity valid")
 	}
 
 	if wid.MatchesHub(hubSPIFFE) {
 		fmt.Println("✓ Hub identity valid")
+	}
+
+	if wid.MatchesGatewayPeer(gatewaySPIFFE, gatewayID) {
+		fmt.Println("✓ Gateway peer identity valid")
 	}
 
 	// Extract session ID from CLI SPIFFE ID
@@ -74,10 +91,34 @@ func main() {
 		fmt.Printf("✓ Extracted user ID: %s\n", extractedUser)
 	}
 
+	// Extract user ID from User SAN SPIFFE ID
+	extractedUserFromSAN, ok := wid.ExtractUserIDFromUserSAN(userSPIFFE)
+	if ok {
+		fmt.Printf("✓ Extracted user ID from SAN: %s\n", extractedUserFromSAN)
+	}
+
+	// Extract operator session ID from Operator SPIFFE ID
+	extractedOpSession, ok := wid.ExtractOperatorSessionID(operatorSPIFFE)
+	if ok {
+		fmt.Printf("✓ Extracted operator session ID: %s\n", extractedOpSession)
+	}
+
+	// Extract gateway ID from Gateway Peer SPIFFE ID
+	extractedGatewayID, ok := wid.ExtractGatewayID(gatewaySPIFFE)
+	if ok {
+		fmt.Printf("✓ Extracted gateway ID: %s\n", extractedGatewayID)
+	}
+
 	// Parse SPIFFE URLs
 	operatorURL, err := wid.OperatorSPIFFEURL(orgID, operatorID, sessionID)
 	if err != nil {
 		log.Fatalf("Failed to parse Operator SPIFFE URL: %v", err)
 	}
 	fmt.Printf("Operator SPIFFE URL: %s\n", operatorURL.String())
+
+	gatewayURL, err := wid.GatewayPeerSPIFFEURL(gatewayID)
+	if err != nil {
+		log.Fatalf("Failed to parse Gateway Peer SPIFFE URL: %v", err)
+	}
+	fmt.Printf("Gateway Peer SPIFFE URL: %s\n", gatewayURL.String())
 }

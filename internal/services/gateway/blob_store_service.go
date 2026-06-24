@@ -75,6 +75,37 @@ func (s *BlobStoreService) BlobPut(namespace, id string, data []byte, contentTyp
 	return nil
 }
 
+// BlobPutObserved stores raw bytes as observed-state (state_tier = 'observed').
+// Observed-state blobs are excluded from the bound freshness root and are
+// hashed separately in the observed-state commitment.
+func (s *BlobStoreService) BlobPutObserved(namespace, id string, data []byte, contentType string, ttlSeconds int) error {
+	now := sqliteutil.NowTimestamp()
+	var expiresAt *string
+	if ttlSeconds > 0 {
+		exp := sqliteutil.FormatTimestamp(time.Now().Add(time.Duration(ttlSeconds) * time.Second))
+		expiresAt = &exp
+	} else if ttlSeconds < 0 {
+		exp := sqliteutil.FormatTimestamp(time.Now().Add(-1 * time.Second))
+		expiresAt = &exp
+	}
+
+	_, err := s.db.ExecWithRetry(
+		`INSERT INTO blobs (namespace, id, size, content_type, data, created_at, expires_at, state_tier)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 'observed')
+		 ON CONFLICT(namespace, id) DO UPDATE SET
+		   size         = excluded.size,
+		   content_type = excluded.content_type,
+		   data         = excluded.data,
+		   expires_at   = excluded.expires_at,
+		   state_tier   = 'observed'`,
+		namespace, id, int64(len(data)), contentType, data, now, expiresAt,
+	)
+	if err != nil {
+		return fmt.Errorf("blob_store: put observed %s/%s: %w", namespace, id, constants.ErrBlobStorePutFailed)
+	}
+	return nil
+}
+
 // BlobGet retrieves the raw bytes and content type for a blob.
 // Returns (nil, "", false) if not found or expired.
 func (s *BlobStoreService) BlobGet(namespace, id string) ([]byte, string, bool) {

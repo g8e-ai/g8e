@@ -238,3 +238,110 @@ func BenchmarkStateRootLargeDataset(b *testing.B) {
 		}
 	}
 }
+
+func TestStateRoot_ObservedKVDoesNotChurnBoundRoot(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Get initial bound root
+	root1, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+
+	// Write an observed-state KV entry
+	err = db.KVStore.KVSetObserved("observed:metric:cpu", "42.5", 0)
+	require.NoError(t, err)
+
+	// Bound root must NOT change — observed state is excluded
+	root2, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	assert.Equal(t, root1, root2, "bound root must not change when observed-state KV is written")
+
+	// Write a bound KV entry — root must change
+	err = db.KVStore.KVSet("bound:config:timeout", "30", 0)
+	require.NoError(t, err)
+	root3, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	assert.NotEqual(t, root2, root3, "bound root must change when bound-state KV is written")
+}
+
+func TestStateRoot_ObservedBlobDoesNotChurnBoundRoot(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Get initial bound root
+	root1, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+
+	// Write an observed-state blob
+	err = db.BlobStore.BlobPutObserved("telemetry", "snapshot1", []byte("observed-data"), "application/octet-stream", 0)
+	require.NoError(t, err)
+
+	// Bound root must NOT change
+	root2, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	assert.Equal(t, root1, root2, "bound root must not change when observed-state blob is written")
+
+	// Write a bound blob — root must change
+	err = db.BlobStore.BlobPut("config", "binary1", []byte("bound-data"), "application/octet-stream", 0)
+	require.NoError(t, err)
+	root3, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	assert.NotEqual(t, root2, root3, "bound root must change when bound-state blob is written")
+}
+
+func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Get initial observed root (may be empty hash if no observed state)
+	obsRoot1, err := db.StateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+
+	// Write an observed-state KV entry
+	err = db.KVStore.KVSetObserved("observed:metric:memory", "8192", 0)
+	require.NoError(t, err)
+
+	// Observed root must change
+	obsRoot2, err := db.StateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+	assert.NotEqual(t, obsRoot1, obsRoot2, "observed root must change when observed-state KV is written")
+
+	// Bound root must NOT change
+	boundRoot1, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+
+	err = db.KVStore.KVSetObserved("observed:metric:disk", "512", 0)
+	require.NoError(t, err)
+
+	boundRoot2, err := db.StateRootSvc.GetCurrentStateRoot()
+	require.NoError(t, err)
+	assert.Equal(t, boundRoot1, boundRoot2, "bound root must not change when only observed state changes")
+
+	// Observed root must change again
+	obsRoot3, err := db.StateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+	assert.NotEqual(t, obsRoot2, obsRoot3, "observed root must change when more observed state is written")
+}
+
+func TestStateRoot_ObservedStateRootCaching(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+
+	// Get observed root — should cache it
+	root1, err := db.StateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+
+	// Call again — should return cached value
+	root2, err := db.StateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+	assert.Equal(t, root1, root2, "observed root should be cached")
+
+	// Invalidate cache
+	err = db.StateRootSvc.InvalidateCache()
+	require.NoError(t, err)
+
+	// Call again — should recalculate but return same value (no state change)
+	root3, err := db.StateRootSvc.GetObservedStateRoot()
+	require.NoError(t, err)
+	assert.Equal(t, root1, root3, "observed root should be same after recalculation without changes")
+}

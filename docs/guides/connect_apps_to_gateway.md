@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-06-22
-Version: v1.1.6
+Last Updated: 2026-06-23
+Version: v1.1.9
 
 ---
 
@@ -29,8 +29,8 @@ Start the g8e Gateway to initialize the platform runtime:
 This creates the `.g8e` directory structure:
 - `.g8e/pki/` - PKI hierarchy (CA, certificates, keys)
 - `.g8e/data/` - SQLite database for g8e Gateway persistence
-- `.g8e/logs/` - g8e Gateway logs
-- `.g8e/secrets/` - Encrypted vault for platform secrets
+- `.g8e/secrets/` - Platform secrets (session encryption keys, bootstrap digest)
+- `.g8e/vault/` - Encryption vault for data at rest
 
 ### Starting the g8e Gateway
 
@@ -417,7 +417,7 @@ authenticate via `./g8e auth enroll` becomes the Platform Owner. All other entit
    certificate with a SPIFFE URI SAN
 3. **Client receives certificate**: The client gets `client.crt` (signed by the Gateway's CA)
    and uses it with its private key for all subsequent authentication
-4. **Short-lived by design**: Certificates expire quickly (typically 1 day), so a
+4. **Short-lived by design**: Leaf certificates expire after 7 days (defined by `leafCertValidityDays` in `internal/services/gateway/gateway_certs.go`), so a
    compromised key has limited lifetime
 5. **Certificate renewal**: Clients must re-enroll before certificate expiry
 
@@ -480,7 +480,7 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 
 1. Client submits MCP/A2A request without L3 proof.
 2. Gateway stores transaction in `suspended_transactions` table.
-3. Gateway returns approval URL: `https://localhost:8443/approve/{tx_hash}`.
+3. Gateway returns approval URL: `https://localhost:8443/api/v1/approve/{tx_hash}`.
 4. User opens URL in browser and authenticates with passkey.
 5. User approves transaction via WebAuthn.
 6. Gateway attaches L3 proof and resumes verification.
@@ -528,7 +528,7 @@ curl https://localhost:8443/api/v1/audit/receipts/export?operator_session_id=op-
 ### CLI Audit Query
 
 ```bash
-./g8e data audit list --operator-session-id <session-id> --limit 100
+./g8e gw data audit list --operator-session-id <session-id> --limit 100
 ```
 
 ---
@@ -539,26 +539,16 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 
 1. **Initialize PKI**: Generate root CA and intermediate CAs with SPIFFE URI SAN support
 2. **Configure Persistence**: Set up document store, KV store, and blob store with state root computation
-3. **Configure Ports**: Bind the four logical surfaces to appropriate ports with correct TLS settings
+3. **Configure Ports**: Bind the two logical surfaces (HTTP and HTTPS) to appropriate ports with correct TLS settings
 4. **Start Gateway**: Launch in desired mode (doctrine, consensus, or notary)
-5. **Enroll Clients**: Use device-link tokens and CSR-based enrollment for operators and CLI clients
+5. **Enroll Clients**: Use CSR-based enrollment for operators and CLI clients
 6. **Monitor Health**: Implement health checks for gateway process and connected operators
 
 ### Configuration Requirements
 
 Custom gateways must support:
 - CLI flags for runtime parameters (ports, mode, paths)
-- Configuration files for complex deployments
-- Multiplexed port handling with optional mTLS
-
-### High Availability Considerations
-
-For production deployments:
-- Gateway clustering with shared persistence
-- Load balancing across multiple gateway instances
-- Certificate rotation and revocation automation
-- Automated backup of audit vault and state store
-- Circuit breaker configuration for downstream services
+- Strict port separation with mandatory mTLS (`tls.RequireAndVerifyClientCert`) on the HTTPS surface
 
 ---
 
@@ -599,10 +589,6 @@ Check Gateway is listening on the HTTPS port:
 ```bash
 curl -k https://localhost:8443/api/v1/health
 ```
-
-### Circuit Breaker Active
-
-If downstream MCP/A2A server is unavailable, the Gateway circuit breaker activates after 5 consecutive failures. Check Gateway logs for circuit breaker status.
 
 ---
 

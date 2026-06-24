@@ -334,8 +334,8 @@ func TestFindOperatorProcessWithExecutor(t *testing.T) {
 				if name != "pgrep" {
 					t.Errorf("expected command 'pgrep', got '%s'", name)
 				}
-				if len(args) != 2 || args[0] != "-f" || args[1] != "g8e --doctrine" {
-					t.Errorf("expected args ['-f', 'g8e --doctrine'], got %v", args)
+				if len(args) != 2 || args[0] != "-f" || args[1] != "g8e gateway serve" {
+					t.Errorf("expected args ['-f', 'g8e gateway serve'], got %v", args)
 				}
 				return exec.Command(name, args...)
 			},
@@ -358,7 +358,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		finder := &mockProcessFinder{}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(0, "test", finder, sleeper, tickerFactory)
+		err := pm.stopProcessWithDeps(0, "test", finder, sleeper, tickerFactory, 10*time.Second)
 		if err != nil {
 			t.Errorf("expected nil for PID 0, got %v", err)
 		}
@@ -372,17 +372,18 @@ func TestStopProcessWithDeps(t *testing.T) {
 		}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory)
+		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
 		if err != nil {
 			t.Errorf("expected nil when process not running, got %v", err)
 		}
 	})
 
 	t.Run("returns error when FindProcess fails after running check", func(t *testing.T) {
-		sigtermCalled := false
+		callCount := 0
 		finder := &mockProcessFinder{
 			findProcessFunc: func(pid int) (process, error) {
-				if !sigtermCalled {
+				callCount++
+				if callCount == 1 {
 					// First call for isProcessRunning - process is running
 					return &mockProcess{
 						signalFunc: func(sig syscall.Signal) error {
@@ -396,7 +397,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory)
+		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
 		if err == nil {
 			t.Error("expected error when FindProcess fails")
 		}
@@ -417,7 +418,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 		}
 		sleeper := &mockSleeper{}
 		tickerFactory := &mockTickerFactory{}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory)
+		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
 		if err == nil {
 			t.Error("expected error when SIGTERM fails")
 		}
@@ -455,7 +456,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 				}
 			},
 		}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory)
+		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 10*time.Second)
 		if err != nil {
 			t.Errorf("expected nil when process exits after SIGTERM, got %v", err)
 		}
@@ -495,12 +496,8 @@ func TestStopProcessWithDeps(t *testing.T) {
 		// Use a short timeout by manipulating time.After indirectly
 		// Since we can't mock time.After, we'll just test the SIGKILL path
 		// by ensuring the ticker never fires
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory)
-		// This will timeout after 10 seconds in real execution, but for testing
-		// we can't easily mock time.After. The important thing is that SIGKILL
-		// is called when the timeout fires.
-		// For a true unit test, we'd need to refactor to inject time.After as well.
-		// For now, we'll just verify the structure is correct.
+		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 50*time.Millisecond)
+		// With a 50ms timeout, the SIGKILL path is exercised quickly.
 		_ = err
 	})
 
@@ -532,8 +529,7 @@ func TestStopProcessWithDeps(t *testing.T) {
 				}
 			},
 		}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory)
-		// Same limitation as above - can't easily test timeout path without mocking time.After
+		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 50*time.Millisecond)
 		_ = err
 	})
 
@@ -571,8 +567,8 @@ func TestStopProcessWithDeps(t *testing.T) {
 				}
 			},
 		}
-		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory)
-		_ = err // Can't test timeout path without mocking time.After
+		err := pm.stopProcessWithDeps(123, "test", finder, sleeper, tickerFactory, 50*time.Millisecond)
+		_ = err
 	})
 }
 

@@ -19,10 +19,10 @@ Windows path handling has several unique challenges:
 // WRONG: This creates C:\temp\C:\temp\data.db on Windows
 dataDir := "C:\\temp"
 dbPath := "C:\\temp\\data.db"
-result := filepath.Join(dataDir, dbPath)  // C:\temp\C:\temp\data.db ❌
+result := filepath.Join(dataDir, dbPath)  // C:\temp\C:\temp\data.db (incorrect)
 
 // CORRECT: Use pathutil.SafeJoin
-result := pathutil.SafeJoin(dataDir, dbPath)  // C:\temp\data.db ✅
+result := pathutil.SafeJoin(dataDir, dbPath)  // C:\temp\data.db (correct)
 ```
 
 ## Solution: pathutil Package
@@ -33,7 +33,7 @@ The `internal/pathutil` package provides Windows-safe path utilities.
 
 #### SafeJoin
 
-Safely joins path elements, handling absolute paths correctly:
+Safely joins path elements, handling absolute paths correctly. If the first element in `elem` is absolute (as determined by `filepath.IsAbs`, which is OS-dependent), that element is used as-is instead of being concatenated with `base`. On Windows, drive-letter paths and UNC paths are recognized as absolute. On Unix, only paths starting with `/` are recognized as absolute.
 
 ```go
 import "github.com/g8e-ai/g8e/internal/pathutil"
@@ -41,11 +41,17 @@ import "github.com/g8e-ai/g8e/internal/pathutil"
 // Relative path - works like filepath.Join
 path := pathutil.SafeJoin("/tmp", "data.db")  // /tmp/data.db
 
-// Absolute second path - uses the absolute path
+// Absolute second path on Windows - uses the absolute path
 path := pathutil.SafeJoin("C:\\temp", "C:\\data\\file.db")  // C:\data\file.db
+
+// Absolute second path on Unix - uses the absolute path
+path := pathutil.SafeJoin("/tmp", "/var/lib/data.db")  // /var/lib/data.db
 
 // Multiple elements
 path := pathutil.SafeJoin("/tmp", "subdir", "file.txt")  // /tmp/subdir/file.txt
+
+// Empty elements - returns base
+path := pathutil.SafeJoin("/tmp")  // /tmp
 ```
 
 #### ResolveDBPath
@@ -64,26 +70,76 @@ dbPath := pathutil.ResolveDBPath("/var/lib/g8e", "/opt/databases/g8e.db")
 
 #### NormalizePath
 
-Normalizes path separators for the current OS:
+Cleans the path to remove redundant separators and resolves `.` and `..` segments. On Windows, also converts forward slashes to backslashes via `filepath.FromSlash`. On Unix, backslashes are treated as valid filename characters and are not converted.
 
 ```go
-// On Windows: converts / to \
-path := pathutil.NormalizePath("C:/temp/data")  // C:\temp\data
+// On Windows: converts / to \ and cleans redundant separators
+path := pathutil.NormalizePath("C:/temp//data")  // C:\temp\data
 
-// On Unix: converts \ to /
-path := pathutil.NormalizePath("/tmp\\data")  // /tmp/data
+// On Unix: cleans redundant separators only
+path := pathutil.NormalizePath("/tmp//data")  // /tmp/data
 ```
 
 #### IsWindowsAbsPath
 
-Checks if a path is an absolute Windows path:
+Checks if a path is an absolute Windows path, recognizing drive letters (case-insensitive) and UNC paths. This function is OS-independent and returns the same result on any platform.
 
 ```go
 pathutil.IsWindowsAbsPath("C:\\temp")      // true
 pathutil.IsWindowsAbsPath("D:/data")       // true
-pathutil.IsWindowsAbsPath("\\\\server\\share")  // true (UNC)
+pathutil.IsWindowsAbsPath("c:\\temp")      // true (case-insensitive)
+pathutil.IsWindowsAbsPath("\\\\server\\share")  // true (UNC, backslash)
+pathutil.IsWindowsAbsPath("//server/share")     // true (UNC, forward slash)
 pathutil.IsWindowsAbsPath("temp\\data")    // false
 pathutil.IsWindowsAbsPath("/tmp/data")     // false
+pathutil.IsWindowsAbsPath("")              // false
+```
+
+#### ToSlash
+
+Converts OS-specific path separators to forward slashes. Useful for logging and display where forward slashes are universally readable:
+
+```go
+path := pathutil.ToSlash("C:\\temp\\data")  // C:/temp/data
+```
+
+#### FromSlash
+
+Converts forward slashes to OS-specific separators. Useful when reading paths from configuration files that use forward slashes:
+
+```go
+path := pathutil.FromSlash("C:/temp/data")  // C:\temp\data (on Windows)
+```
+
+#### EnsureTrailingSeparator
+
+Appends an OS-specific separator to the path if one is not already present. Useful for directory paths that need to be clearly distinguished from file paths:
+
+```go
+path := pathutil.EnsureTrailingSeparator("/tmp/data")  // /tmp/data/
+path := pathutil.EnsureTrailingSeparator("/tmp/data/") // /tmp/data/
+path := pathutil.EnsureTrailingSeparator("")           // ""
+```
+
+#### RemoveTrailingSeparator
+
+Removes any trailing OS-specific separator from the path:
+
+```go
+path := pathutil.RemoveTrailingSeparator("/tmp/data/") // /tmp/data
+path := pathutil.RemoveTrailingSeparator("/tmp/data")  // /tmp/data
+```
+
+#### MakeRelative
+
+Attempts to make `targetPath` relative to `basePath`. If the conversion fails (for example, when the paths are on different Windows drives), the original `targetPath` is returned unchanged:
+
+```go
+rel := pathutil.MakeRelative("/var/lib/g8e", "/var/lib/g8e/data/file.db")
+// Result: data/file.db
+
+rel := pathutil.MakeRelative("/var/lib/g8e", "/opt/other")
+// Result: /opt/other (fallback to original)
 ```
 
 ## Usage Guidelines
@@ -259,8 +315,10 @@ When updating existing code:
 
 - `internal/pathutil/pathutil.go` - Implementation
 - `internal/pathutil/pathutil_test.go` - Test examples
-- `internal/services/storage/audit_store.go` - Usage example
-- `internal/cli/cmd/vault.go` - CLI path handling example
+- `internal/paths/paths.go` - Primary consumer; constructs all infrastructure paths via `SafeJoin`
+- `internal/cli/config/config.go` - Configuration path resolution via `SafeJoin`
+- `internal/services/storage/audit_store.go` - Database path resolution via `ResolveDBPath`
+- `internal/cli/cmd/vault.go` - CLI vault path handling via `SafeJoin`
 
 ## Related Issues
 

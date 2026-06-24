@@ -36,8 +36,6 @@ var eventToAction = map[constants.EventType]constants.ActionType{
 	constants.Event.Operator.FsGrep.Requested:           constants.ActionTypeFsGrep,
 	constants.Event.Operator.FetchLogs.Requested:        constants.ActionTypeFetchLogs,
 	constants.Event.Operator.FetchHistory.Requested:     constants.ActionTypeFetchHistory,
-	constants.Event.Operator.Intent.Requested:           constants.ActionTypeGrantIntent,
-	constants.Event.Operator.Intent.RevokeRequested:     constants.ActionTypeRevokeIntent,
 	constants.Event.Operator.Mcp.CallRequested:          constants.ActionTypeMcpCall,
 	constants.Event.Operator.A2a.CallRequested:          constants.ActionTypeA2aCall,
 	constants.Event.Operator.PortCheck.Requested:        constants.ActionTypePortCheck,
