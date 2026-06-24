@@ -93,9 +93,9 @@ reports/
 reports/*
 
 # Binaries
-./g8e
-./buf
-./operator
+*g8e
+*buf
+*operator
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding
