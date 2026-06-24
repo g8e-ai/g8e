@@ -522,6 +522,21 @@ var (
 	// SSH config errors
 	ErrSSHOpenConfigFile = errors.New("failed to open SSH config file")
 	ErrSSHExpandTilde    = errors.New("failed to expand tilde in path")
+
+	// Operator main initialization errors
+	ErrPathsInitFailed        = errors.New("failed to initialize paths")
+	ErrWorkingDirFailed       = errors.New("failed to determine working directory")
+	ErrUnrecognizedCommand    = errors.New("unrecognized command or flag")
+	ErrMutuallyExclusiveFlags = errors.New("only one of --doctrine, --consensus, or --notary may be specified")
+	ErrFetchTrustBundle       = errors.New("failed to fetch trust bundle from Operator")
+	ErrNoTrustBundle          = errors.New("no trust bundle available")
+	ErrPrivateKeyRequired     = errors.New("private key is required")
+	ErrClientCertRequired     = errors.New("client certificate is required")
+	ErrReadClientCert         = errors.New("failed to read client certificate")
+	ErrReadPrivateKey         = errors.New("failed to read private key")
+	ErrLoadCertKeyPair        = errors.New("failed to load client certificate/key pair")
+
+	// SSH config errors
 	ErrSSHScanConfigFile = errors.New("failed to scan SSH config file")
 	ErrSSHResolveHomeDir = errors.New("failed to resolve home directory")
 

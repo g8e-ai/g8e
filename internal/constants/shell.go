@@ -40,6 +40,9 @@ const (
 	// MaxShellCommandTimeout is the maximum allowed timeout for shell command execution in seconds
 	MaxShellCommandTimeout = 300
 
+	// ShutdownTimeout is the timeout for graceful shutdown in seconds
+	ShutdownTimeout = 15
+
 	// LocalhostHostname is the hostname for local execution
 	LocalhostHostname = "localhost"
 

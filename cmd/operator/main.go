@@ -84,12 +84,16 @@ func main() {
 		"auth":                  true,
 		"audit":                 true,
 		"swagger":               true,
+		"demos":                 true,
+		"help":                  true,
+		"--help":                true,
+		"-h":                    true,
 	}
 
 	if len(os.Args) > 1 && cliSubcommands[os.Args[1]] {
 		// Delegate to CLI commands
 		clicmd.Execute(version)
-		os.Exit(0)
+		return
 	}
 
 	// Initialize paths relative to current working directory
@@ -200,26 +204,8 @@ func main() {
 		os.Exit(constants.ExitSuccess)
 	}
 
-	// Check if this is a CLI command (known subcommands)
-	cliCommands := map[string]bool{
-		"gw":       true,
-		"gateway":  true,
-		"mcp":      true,
-		"operator": true,
-		"vault":    true,
-		"test":     true,
-		"setup":    true,
-		"demos":    true,
-		"auth":     true,
-		"audit":    true,
-		"swagger":  true,
-		"help":     true,
-		"--help":   true,
-		"-h":       true,
-	}
-
 	// Show help if no arguments provided, or if first arg is a CLI command
-	if len(os.Args) == 1 || (len(os.Args) > 1 && cliCommands[os.Args[1]]) {
+	if len(os.Args) == 1 || (len(os.Args) > 1 && cliSubcommands[os.Args[1]]) {
 		clicmd.Execute(version)
 		return
 	}
@@ -242,7 +228,7 @@ func main() {
 
 	// If we have arguments after flag parsing but they weren't recognized as CLI commands,
 	// and we're not in operator mode (no -e, no posture flags), show usage help
-	if len(os.Args) > 1 && !cliCommands[os.Args[1]] && endpointURL == "" && postureCount == 0 {
+	if len(os.Args) > 1 && !cliSubcommands[os.Args[1]] && endpointURL == "" && postureCount == 0 {
 		fmt.Fprintf(os.Stderr, "Error: unrecognized command or flag '%s'\n\n", os.Args[1])
 		fmt.Fprintf(os.Stderr, "Usage:\n")
 		fmt.Fprintf(os.Stderr, "  ./g8e [command] [flags]\n\n")
@@ -283,13 +269,13 @@ func main() {
 	if postureCount > 0 {
 		// Environment variables override CLI flags
 		if gatewayVaultDir == "" {
-			gatewayVaultDir = os.Getenv("G8E_VAULT_DIR")
+			gatewayVaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
 		}
 		if gatewayVaultKeyPath == "" {
-			gatewayVaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+			gatewayVaultKeyPath = os.Getenv(string(constants.EnvVar.VaultKey))
 		}
 		if !gatewayVaultRequireUnlock {
-			gatewayVaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
+			gatewayVaultRequireUnlock = os.Getenv(string(constants.EnvVar.VaultRequireUnlock)) == "true"
 		}
 		if gatewayTribunalID == "" {
 			gatewayTribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
@@ -488,10 +474,10 @@ func main() {
 		PKIDir:                "",
 		SecretsDir:            "",
 		HeartbeatInterval:     heartbeatInterval,
-		Shell:                 os.Getenv("SHELL"),
-		Lang:                  os.Getenv("LANG"),
-		Term:                  os.Getenv("TERM"),
-		TZ:                    os.Getenv("TZ"),
+		Shell:                 os.Getenv(string(constants.EnvVar.Shell)),
+		Lang:                  os.Getenv(string(constants.EnvVar.Lang)),
+		Term:                  os.Getenv(string(constants.EnvVar.Term)),
+		TZ:                    os.Getenv(string(constants.EnvVar.TZ)),
 		Posture:               "", // Will default to PostureNotary in Load() since L3Notary is nil
 	})
 	if err != nil {
