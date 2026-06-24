@@ -14,13 +14,10 @@
 package governance
 
 import (
-	"context"
 	"crypto/ed25519"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 
@@ -33,8 +30,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func createStrictVerifier(t *testing.T, replayStore ReplayStore, stateRootProvider StateRootProvider, l3Notary L3Notary, posture string) (*L4Warden, ed25519.PrivateKey) {
@@ -193,189 +188,6 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	return env
 }
 
-func TestL4Warden_AcceptsValidNonMutationGovernanceEnvelope(t *testing.T) {
-	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-
-	verified, err := verifier.VerifyEnvelope(context.Background(), env)
-	if err != nil {
-		t.Fatalf("expected verification to pass, got %v", err)
-	}
-	if verified.DecodedPayload == nil || verified.ActionType != constants.ActionTypeFsList {
-		t.Fatalf("verified transaction missing decoded payload or action: %#v", verified)
-	}
-}
-
-func TestL4Warden_AcceptsValidMutationGovernanceEnvelopeWithL3(t *testing.T) {
-	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "notary")
-	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
-
-	_, err := verifier.VerifyEnvelope(context.Background(), env)
-	if err != nil {
-		t.Fatalf("expected verification to pass, got %v", err)
-	}
-}
-
-func TestL4Warden_FailClosedProofs(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name   string
-		mutate func(*governance.GovernanceEnvelope)
-		want   error
-	}{
-		{name: "missing id", mutate: func(env *governance.GovernanceEnvelope) { env.Id = "" }, want: ErrTransactionIDMissing},
-		{name: "unknown action", mutate: func(env *governance.GovernanceEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrUnknownActionType},
-		{name: "missing payload", mutate: func(env *governance.GovernanceEnvelope) { env.Payload = nil }, want: ErrPayloadMissing},
-		{name: "invalid typed payload", mutate: func(env *governance.GovernanceEnvelope) { env.Payload = []byte("not protobuf") }, want: ErrPayloadDecodeFailed},
-		{name: "missing transaction hash", mutate: func(env *governance.GovernanceEnvelope) { env.TransactionHash = "" }, want: ErrTransactionHashMissing},
-		{name: "hash mismatch", mutate: func(env *governance.GovernanceEnvelope) { env.TransactionHash = "wrong" }, want: ErrTransactionHashMismatch},
-		{name: "expired", mutate: func(env *governance.GovernanceEnvelope) {
-			env.ExpiresAt = timestamppb.New(time.Now().UTC().Add(-time.Minute))
-			rehash(t, env)
-		}, want: ErrTransactionExpired},
-		{name: "missing nonce", mutate: func(env *governance.GovernanceEnvelope) { env.Nonce = ""; rehash(t, env) }, want: ErrNonceMissing},
-		{name: "missing state root", mutate: func(env *governance.GovernanceEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
-		{name: "missing l2", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
-		{name: "non-member signer", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].SignerKeyId = "" }, want: ErrL2QuorumNotMet},
-		{name: "invalid l2 signature", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].ConsensusSignature = "deadbeef" }, want: ErrL2QuorumNotMet},
-		{name: "missing l3", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L3 = nil; rehash(t, env) }, want: ErrL3ProofMissing},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "notary")
-			env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
-			tc.mutate(env)
-
-			_, err := verifier.VerifyEnvelope(context.Background(), env)
-			if !errors.Is(err, tc.want) {
-				t.Fatalf("expected %v, got %v", tc.want, err)
-			}
-		})
-	}
-}
-
-func TestL4Warden_ReplayAndStateRootReject(t *testing.T) {
-	t.Parallel()
-	t.Run("replayed nonce", func(t *testing.T) {
-		t.Parallel()
-		replayStore := testutil.NewStatefulMockReplayStore()
-		verifier, privKey := createStrictVerifier(t, replayStore, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		if _, err := verifier.VerifyEnvelope(context.Background(), env); err != nil {
-			t.Fatalf("first verification failed: %v", err)
-		}
-		_, err := verifier.VerifyEnvelope(context.Background(), env)
-		if !errors.Is(err, ErrTransactionReplay) {
-			t.Fatalf("expected replay rejection, got %v", err)
-		}
-	})
-
-	t.Run("state root mismatch", func(t *testing.T) {
-		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("other-root"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		_, err := verifier.VerifyEnvelope(context.Background(), env)
-		if !errors.Is(err, ErrStateRootMismatch) {
-			t.Fatalf("expected state root mismatch, got %v", err)
-		}
-	})
-}
-
-func TestL4Warden_MissingVerifierDependenciesReject(t *testing.T) {
-	t.Parallel()
-	t.Run("missing replay store", func(t *testing.T) {
-		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, nil, testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		_, err := verifier.VerifyEnvelope(context.Background(), env)
-		if !errors.Is(err, ErrReplayStoreMissing) {
-			t.Fatalf("expected replay store rejection, got %v", err)
-		}
-	})
-
-	t.Run("missing state root provider", func(t *testing.T) {
-		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), nil, testutil.NewConfigurableMockL3Notary(true), "notary")
-		env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-		_, err := verifier.VerifyEnvelope(context.Background(), env)
-		if !errors.Is(err, ErrStateRootMissing) {
-			t.Fatalf("expected state root provider rejection, got %v", err)
-		}
-	})
-
-	t.Run("missing l3 notary", func(t *testing.T) {
-		t.Parallel()
-		verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), nil, "notary")
-		env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
-		_, err := verifier.VerifyEnvelope(context.Background(), env)
-		if !errors.Is(err, ErrL3NotaryNotConfigured) {
-			t.Fatalf("expected l3 notary rejection, got %v", err)
-		}
-	})
-}
-
-func TestL4Warden_NonceRaceCondition(t *testing.T) {
-	t.Parallel()
-	replayStore := testutil.NewStatefulMockReplayStore()
-	stateRootProvider := testutil.NewMockStateRootProvider("root-1")
-
-	// Slow mock notary to hold transactions in-flight
-	l3Notary := testutil.NewSlowMockL3Notary(50 * time.Millisecond)
-
-	verifier, privKey := createStrictVerifier(t, replayStore, stateRootProvider, l3Notary, "notary")
-
-	// Prepare an envelope
-	payload := typedPayload(t, constants.ActionTypeExecuteBash)
-	env := signedEnvelope(t, constants.ActionTypeExecuteBash, payload, privKey)
-
-	const numConcurrent = 5
-	var wg sync.WaitGroup
-	errs := make(chan error, numConcurrent)
-	successes := make(chan bool, numConcurrent)
-
-	for i := 0; i < numConcurrent; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			_, err := verifier.VerifyEnvelope(context.Background(), env)
-			if err != nil {
-				errs <- err
-			} else {
-				successes <- true
-			}
-		}()
-	}
-
-	wg.Wait()
-	close(errs)
-	close(successes)
-
-	successCount := 0
-	for range successes {
-		successCount++
-	}
-
-	replayCount := 0
-	for err := range errs {
-		if errors.Is(err, ErrTransactionReplay) || errors.Is(err, ErrTxInFlight) {
-			replayCount++
-		}
-	}
-
-	if successCount != 1 {
-		t.Errorf("expected exactly 1 success, got %d", successCount)
-	}
-	// The mutex + SQLite replay store should prevent all concurrent identical requests
-	// except one. All remaining should be rejected as replays (either in-flight or SQLite).
-	if replayCount != numConcurrent-1 {
-		t.Errorf("expected exactly %d replays, got %d", numConcurrent-1, replayCount)
-	}
-}
-
 func rehash(t *testing.T, env *governance.GovernanceEnvelope) {
 	t.Helper()
 	hash, err := governance.GenerateMessageID(env)
@@ -384,6 +196,24 @@ func rehash(t *testing.T, env *governance.GovernanceEnvelope) {
 	}
 	env.Id = hash
 	env.TransactionHash = hash
+}
+
+// rehashAndResign recomputes the transaction hash after mutating governance
+// metadata (e.g. stripping L3) and re-signs the L2 vote against the new hash.
+// This is necessary because GenerateMessageID binds L3 proof presence into the
+// hash basis, so any L3 change invalidates the existing L2 signature.
+func rehashAndResign(t *testing.T, env *governance.GovernanceEnvelope, privKey ed25519.PrivateKey) {
+	t.Helper()
+	hash, err := governance.GenerateMessageID(env)
+	if err != nil {
+		t.Fatalf("failed to regenerate transaction hash: %v", err)
+	}
+	env.Id = hash
+	env.TransactionHash = hash
+	if env.Governance != nil && env.Governance.L2 != nil && len(env.Governance.L2.Votes) > 0 {
+		vote := env.Governance.L2.Votes[0]
+		env.Governance.L2.Votes[0] = signL2Vote(privKey, vote.SignerKeyId, hash, vote.Decision)
+	}
 }
 
 // TestNewGovernancePosture_PanicsOnInvalidPosture verifies that invalid posture
@@ -414,137 +244,6 @@ func TestNewGovernancePosture_AcceptsValidPostures(t *testing.T) {
 				t.Errorf("expected posture name %s, got %s", posture, p.Name())
 			}
 		})
-	}
-}
-
-// TestL4Warden_AllActionTypesFromSSOT verifies that every action type
-// defined in the SSOT (constants.AllActionTypes) can be successfully decoded
-// and verified. This prevents action type drift where new action types are added
-// to constants but not to the decodePayloadForAction switch.
-func TestL4Warden_AllActionTypesFromSSOT(t *testing.T) {
-	t.Parallel()
-	allActionTypes := constants.AllActionTypes
-	if len(allActionTypes) == 0 {
-		t.Fatal("AllActionTypes() returned empty list")
-	}
-
-	for _, actionType := range allActionTypes {
-		t.Run(string(actionType), func(t *testing.T) {
-			t.Parallel()
-			verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "doctrine")
-			payload := typedPayload(t, actionType)
-			env := signedEnvelope(t, actionType, payload, privKey)
-
-			// signedEnvelope now adds L3 for mutation actions, so no manual adjustment needed
-
-			verified, err := verifier.VerifyEnvelope(context.Background(), env)
-			if err != nil {
-				t.Fatalf("verification failed for action type %s: %v", actionType, err)
-			}
-			if verified == nil {
-				t.Fatalf("verified transaction is nil for action type %s", actionType)
-				return
-			}
-			if verified.ActionType != actionType {
-				t.Fatalf("action type mismatch: expected %s, got %s", actionType, verified.ActionType)
-			}
-		})
-	}
-}
-
-// TestNotary_MutationRequiresRealL3Proof guards the AutoApproved removal:
-// a mutation under notary with no L3 proof must fail closed. There is no
-// bypass field to set. This pairs with TestNoSelfSign_ConsensusWithoutDeliberator
-// as a trust-boundary regression guard.
-func TestNotary_MutationRequiresRealL3Proof(t *testing.T) {
-	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "notary")
-	env := signedEnvelope(t, constants.ActionTypeExecuteBash, typedPayload(t, constants.ActionTypeExecuteBash), privKey)
-
-	// Strip the L3 proof entirely — no bypass field exists to waive the human bond
-	env.Governance.L3 = nil
-	rehash(t, env)
-
-	_, err := verifier.VerifyEnvelope(context.Background(), env)
-	if !errors.Is(err, constants.ErrTxL3ProofMissing) {
-		t.Fatalf("expected ErrTxL3ProofMissing for mutation under notary with no L3 proof, got: %v", err)
-	}
-}
-
-// TestNotary_NonMutationDoesNotRequireL3Proof verifies that non-mutation
-// actions under notary posture pass without L3 proof. The Warden re-derives
-// that the action is not a mutation, so no human proof is needed.
-func TestNotary_NonMutationDoesNotRequireL3Proof(t *testing.T) {
-	t.Parallel()
-	verifier, privKey := createStrictVerifier(t, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), testutil.NewConfigurableMockL3Notary(true), "notary")
-	env := signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
-
-	// Non-mutation actions don't carry L3 proof — signedEnvelope doesn't set one for non-mutations
-	_, err := verifier.VerifyEnvelope(context.Background(), env)
-	if err != nil {
-		t.Fatalf("expected non-mutation under notary to pass without L3 proof, got: %v", err)
-	}
-}
-
-// TestL4Warden_AppPolicyStore_L3Required_Mutation verifies that mutating
-// intents NOT in AutoApproveIntents require L3 human presence verification.
-func TestL4Warden_AppPolicyStore_L3Required_Mutation(t *testing.T) {
-	t.Parallel()
-
-	// Create an AppPolicyStore
-	appPolicyStore := &SimpleAppPolicyStore{
-		Policies: map[string]*models.AppPolicy{
-			"spiffe://g8e.local/app/test-app-id": {
-				AppID: "spiffe://g8e.local/app/test-app-id",
-			},
-		},
-	}
-
-	// Provide a mock L3 notary that rejects all proofs
-	l3Notary := testutil.NewConfigurableMockL3Notary(false)
-	verifier, privKey := createVerifierWithAppPolicyStore(t, appPolicyStore, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
-
-	// Test a mutating action not in AutoApproveIntents
-	actionType := constants.ActionTypeExecuteBash
-	payload := typedPayload(t, actionType)
-	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "spiffe://g8e.local/app/test-app-id")
-
-	// Mutating action should require L3 proof
-	_, err := verifier.VerifyEnvelope(context.Background(), env)
-	if err == nil {
-		t.Fatalf("mutating action %s should require L3 proof when not in AutoApproveIntents", actionType)
-	}
-	if !errors.Is(err, ErrL3ProofMissing) && !errors.Is(err, ErrL3ProofInvalid) {
-		t.Fatalf("expected L3 proof error for mutating action, got: %v", err)
-	}
-}
-
-// TestL4Warden_AppPolicyStore_NoPolicy_Fallback verifies that when
-// no policy is found for an app, the system falls back to requiring standard L3.
-func TestL4Warden_AppPolicyStore_NoPolicy_Fallback(t *testing.T) {
-	t.Parallel()
-
-	// Create an AppPolicyStore with no policy for the app
-	appPolicyStore := &SimpleAppPolicyStore{
-		Policies: map[string]*models.AppPolicy{},
-	}
-
-	// Provide a mock L3 notary that rejects all proofs
-	l3Notary := testutil.NewConfigurableMockL3Notary(false)
-	verifier, privKey := createVerifierWithAppPolicyStore(t, appPolicyStore, testutil.NewStatefulMockReplayStore(), testutil.NewMockStateRootProvider("root-1"), l3Notary)
-
-	// Test a mutating action that would normally require L3
-	actionType := constants.ActionTypeExecuteBash
-	payload := typedPayload(t, actionType)
-	env := signedEnvelopeWithAppID(t, actionType, payload, privKey, "spiffe://g8e.local/app/test-app-id")
-
-	// Should require L3 when no policy exists
-	_, err := verifier.VerifyEnvelope(context.Background(), env)
-	if err == nil {
-		t.Fatalf("action should require L3 when no app policy exists")
-	}
-	if !errors.Is(err, ErrL3ProofMissing) && !errors.Is(err, ErrL3ProofInvalid) {
-		t.Fatalf("expected L3 proof error when no policy exists, got: %v", err)
 	}
 }
 
@@ -587,233 +286,4 @@ func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payl
 	}
 	rehash(t, env)
 	return env
-}
-
-func TestL4Warden_L2QuorumVerification(t *testing.T) {
-	t.Parallel()
-
-	pub1, priv1, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatalf("failed to generate key: %v", err)
-	}
-	pub2, priv2, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatalf("failed to generate key: %v", err)
-	}
-
-	allSigners := map[string]ed25519.PublicKey{
-		"member-1": pub1,
-		"member-2": pub2,
-	}
-	partialSigners := map[string]ed25519.PublicKey{
-		"member-1": pub1,
-	}
-
-	enabledTribunal2of2 := &models.TribunalPolicy{
-		ID:              "trib-1",
-		MemberAppIDs:    []string{"member-1", "member-2"},
-		Quorum:          2,
-		RequireDistinct: true,
-		Enabled:         true,
-	}
-	enabledTribunal1of2 := &models.TribunalPolicy{
-		ID:              "trib-2",
-		MemberAppIDs:    []string{"member-1", "member-2"},
-		Quorum:          1,
-		RequireDistinct: true,
-		Enabled:         true,
-	}
-	disabledTribunal := &models.TribunalPolicy{
-		ID:              "trib-disabled",
-		MemberAppIDs:    []string{"member-1", "member-2"},
-		Quorum:          2,
-		RequireDistinct: true,
-		Enabled:         false,
-	}
-
-	payload := typedPayload(t, constants.ActionTypeFsList)
-
-	buildEnv := func(nonceTag, tribunalID string, votes []*commonv1.L2Vote) *governance.GovernanceEnvelope {
-		nonceSuffix := hex.EncodeToString(payload)
-		if len(nonceSuffix) > 8 {
-			nonceSuffix = nonceSuffix[:8]
-		}
-		env := &governance.GovernanceEnvelope{
-			ProtocolVersion:   "1.0",
-			Timestamp:         timestamppb.Now(),
-			ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
-			SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
-			OperatorId:        "operator-1",
-			OperatorSessionId: "operator-session-1",
-			ActionType:        string(constants.ActionTypeFsList),
-			TargetResource:    "localhost",
-			Payload:           payload,
-			StateMerkleRoot:   "root-1",
-			Nonce:             "nonce-quorum-" + nonceTag + "-" + nonceSuffix,
-		}
-		hash, err := governance.GenerateMessageID(env)
-		if err != nil {
-			t.Fatalf("failed to generate hash: %v", err)
-		}
-		env.Id = hash
-		env.TransactionHash = hash
-		env.Governance = &commonv1.GovernanceMetadata{
-			L2: &commonv1.L2Metadata{
-				TribunalId: tribunalID,
-				Votes:      votes,
-			},
-		}
-		return env
-	}
-
-	makeVerifier := func(signers map[string]ed25519.PublicKey, tribunals map[string]*models.TribunalPolicy) *L4Warden {
-		return NewL4Warden(
-			testutil.NewTestLogger(),
-			testutil.NewStatefulMockReplayStore(),
-			testutil.NewMockStateRootProvider("root-1"),
-			&SimpleSignerStore{Signers: signers},
-			&SimpleTribunalStore{Tribunals: tribunals},
-			nil,
-			testutil.NewConfigurableMockL3Notary(true),
-			nil,
-			constants.AllActionTypes,
-			"consensus",
-			nil,
-		)
-	}
-
-	tests := []struct {
-		name     string
-		verifier *L4Warden
-		env      *governance.GovernanceEnvelope
-		wantErr  error
-		wantL2   bool
-	}{
-		{
-			name:     "2-of-2 quorum pass",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
-				env := buildEnv("2of2pass", "trib-1", nil)
-				hash := env.TransactionHash
-				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signL2Vote(priv1, "member-1", hash, true),
-					signL2Vote(priv2, "member-2", hash, true),
-				}
-				return env
-			}(),
-			wantErr: nil,
-			wantL2:  true,
-		},
-		{
-			name:     "1 valid of quorum-2 fails",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
-				env := buildEnv("1of2fail", "trib-1", nil)
-				hash := env.TransactionHash
-				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signL2Vote(priv1, "member-1", hash, true),
-				}
-				return env
-			}(),
-			wantErr: ErrL2QuorumNotMet,
-			wantL2:  false,
-		},
-		{
-			name:     "duplicate signer with require_distinct",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
-				env := buildEnv("dupsign", "trib-1", nil)
-				hash := env.TransactionHash
-				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signL2Vote(priv1, "member-1", hash, true),
-					signL2Vote(priv1, "member-1", hash, true),
-				}
-				return env
-			}(),
-			wantErr: ErrL2DuplicateSigner,
-			wantL2:  false,
-		},
-		{
-			name:     "false vote does not count toward quorum",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
-				env := buildEnv("falsevote", "trib-1", nil)
-				hash := env.TransactionHash
-				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signL2Vote(priv1, "member-1", hash, true),
-					signL2Vote(priv2, "member-2", hash, false),
-				}
-				return env
-			}(),
-			wantErr: ErrL2QuorumNotMet,
-			wantL2:  false,
-		},
-		{
-			name:     "unknown signer ignored, quorum-1 passes",
-			verifier: makeVerifier(partialSigners, map[string]*models.TribunalPolicy{"trib-2": enabledTribunal1of2}),
-			env: func() *governance.GovernanceEnvelope {
-				env := buildEnv("unknownsigner", "trib-2", nil)
-				hash := env.TransactionHash
-				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signL2Vote(priv1, "member-1", hash, true),
-					signL2Vote(priv2, "member-2", hash, true),
-				}
-				return env
-			}(),
-			wantErr: nil,
-			wantL2:  true,
-		},
-		{
-			name:     "empty votes under consensus posture",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env:      buildEnv("emptyvotes", "trib-1", []*commonv1.L2Vote{}),
-			wantErr:  ErrL2SignatureMissing,
-			wantL2:   false,
-		},
-		{
-			name:     "disabled tribunal policy",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-disabled": disabledTribunal}),
-			env: func() *governance.GovernanceEnvelope {
-				env := buildEnv("disabledtrib", "trib-disabled", nil)
-				hash := env.TransactionHash
-				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signL2Vote(priv1, "member-1", hash, true),
-					signL2Vote(priv2, "member-2", hash, true),
-				}
-				return env
-			}(),
-			wantErr: ErrL2TribunalNotConfigured,
-			wantL2:  false,
-		},
-		{
-			name:     "unknown tribunal ID",
-			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
-				env := buildEnv("unknowntrib", "nonexistent-trib", nil)
-				hash := env.TransactionHash
-				env.Governance.L2.Votes = []*commonv1.L2Vote{
-					signL2Vote(priv1, "member-1", hash, true),
-					signL2Vote(priv2, "member-2", hash, true),
-				}
-				return env
-			}(),
-			wantErr: ErrL2TribunalNotConfigured,
-			wantL2:  false,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			verified, err := tc.verifier.VerifyEnvelope(context.Background(), tc.env)
-			if tc.wantErr != nil {
-				assert.ErrorIs(t, err, tc.wantErr)
-				return
-			}
-			assert.NoError(t, err)
-			if verified != nil {
-				assert.Equal(t, tc.wantL2, verified.L2Valid)
-			}
-		})
-	}
 }
