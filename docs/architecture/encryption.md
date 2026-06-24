@@ -5,7 +5,7 @@ Version: v1.1.9
 
 ## Overview
 
-g8e uses mandatory encryption for all sensitive data at rest. The encryption system is built around a vault service that provides AES-256-GCM encryption with a master key hierarchy and wrapped Data Encryption Key (DEK).
+g8e uses mandatory encryption for all sensitive data at rest. The encryption system is built around a **vault crypto package** (`internal/services/vault/vault_crypto.go`) that provides canonical AES-256-GCM primitives, a **vault service** for key hierarchy management, and a **keystore service** that reuses the vault's crypto primitives for OS keyring-backed secret storage.
 
 ## Design Principles
 
@@ -27,6 +27,32 @@ g8e uses mandatory encryption for all sensitive data at rest. The encryption sys
   - `internal/services/storage/execution_vault_test.go`: `TestExecutionVault_NewExecutionVaultService_NilVault` verifies `NewExecutionVaultService` rejects nil vault.
   - `internal/services/storage/ledger_test.go`: `TestLedgerService_RestoreFileFromCommit_DisabledVault` verifies `NewGitLedgerService` rejects nil vault.
 - **Integration tests**: Storage service tests in `internal/services/storage/storagetest/` use vault fixtures for end-to-end encryption validation.
+
+## Canonical Crypto Primitives
+
+All encryption in g8e uses the shared primitives defined in `internal/services/vault/vault_crypto.go`. Both the vault service and the keystore service import these primitives — no AES-GCM logic is duplicated.
+
+### Exported Constants
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `KeySize` | 32 | AES-256 key size (bytes) |
+| `NonceSize` | 12 | GCM standard nonce size (bytes) |
+| `KeyFingerprintSize` | 16 | Truncated SHA-256 fingerprint size (bytes) |
+
+### Exported Functions
+
+| Function | Description |
+|----------|-------------|
+| `EncryptAESGCM(key, nonce, plaintext, aad)` | Encrypt with AES-256-GCM, validates key/nonce sizes |
+| `DecryptAESGCM(key, nonce, ciphertext, aad)` | Decrypt with AES-256-GCM, validates key/nonce sizes |
+| `GenerateNonce()` | Generate 12-byte cryptographically secure random nonce |
+| `GenerateDEK()` | Generate 32-byte cryptographically secure random DEK |
+| `DeriveKEK(privateKey)` | Derive KEK via HKDF-SHA256 |
+| `SecureZero(b)` | Zero out a byte slice to prevent key material lingering in memory |
+| `KeyFingerprint(key)` | SHA-256 with domain-separation pepper, 16-byte output |
+| `AESKeyWrap(kek, plaintext)` | RFC 3394 AES Key Wrap |
+| `AESKeyUnwrap(kek, ciphertext)` | RFC 3394 AES Key Unwrap with integrity check |
 
 ## Vault Architecture
 
@@ -72,13 +98,14 @@ Master Key (32-byte hex-encoded, user-provided or generated)
 
 ## Storage Services with Encryption
 
-All storage services require an unlocked vault at initialization:
+All storage services require an unlocked vault at initialization. Both the vault service and keystore service use the same canonical crypto primitives from `vault_crypto.go`.
 
-| Service | Vault Required | Encrypted Data | Vault Integration Pattern |
-|---------|---------------|----------------|-------------------------|
-| `SQLAuditStore` | Yes | `content_text`, `command_stdout`, `command_stderr` fields in audit records | Config struct (`AuditStoreConfig.EncryptionVault`) |
-| `ExecutionVaultService` | Yes | Execution results, command outputs, file diffs | Constructor parameter |
-| `GitLedgerService` | Yes | File content in ledger (stored with `.enc` suffix) | Config struct (`LedgerConfig.EncryptionVault`) |
+| Service | Vault Required | Encrypted Data | Crypto Primitives | Integration Pattern |
+|---------|---------------|----------------|-------------------|---------------------|
+| `SQLAuditStore` | Yes | `content_text`, `command_stdout`, `command_stderr` fields in audit records | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` | Config struct (`AuditStoreConfig.EncryptionVault`) |
+| `ExecutionVaultService` | Yes | Execution results, command outputs, file diffs | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` | Constructor parameter |
+| `GitLedgerService` | Yes | File content in ledger (stored with `.enc` suffix) | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` | Config struct (`LedgerConfig.EncryptionVault`) |
+| `Keystore` | No (uses OS keyring) | Platform secrets, JWT signing keys, DB credentials | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` / `vault.GenerateNonce` / `vault.SecureZero` | OS keyring + file-based secret storage |
 
 ## Vault Lifecycle
 
@@ -228,6 +255,15 @@ The vault service (`internal/services/vault/vault.go`) provides:
 - `Reset(confirmDestroy bool)`: Destroy vault and all data (requires explicit confirmation).
 - `GetDataDir()`: Return vault data directory path.
 
+### Keystore Service
+
+The keystore service (`internal/services/keystore/keystore.go`) provides OS-native keyring-backed secret storage. It **reuses vault crypto primitives** — no AES-GCM logic is duplicated:
+
+- Uses `vault.EncryptAESGCM` / `vault.DecryptAESGCM` for encryption/decryption
+- Uses `vault.GenerateNonce()` for nonce generation
+- Uses `vault.SecureZero()` to zero master key after each encrypt/decrypt operation
+- Uses `vault.KeySize` / `vault.NonceSize` constants for validation
+
 ### Storage Integration
 
 Storage services integrate with the vault via:
@@ -235,6 +271,7 @@ Storage services integrate with the vault via:
 - Constructor validation: Reject nil vault with error.
 - Encryption checks: Verify `vault.IsUnlocked()` before encrypt/decrypt.
 - Error handling: Return errors on locked vault (fail-closed).
+- Key material zeroing: `vault.SecureZero()` called on all temporary key material.
 
 ### CLI Commands
 
@@ -271,10 +308,11 @@ To rotate vault keys:
 
 ### Encryption Standards
 
-- AES-256-GCM (NIST-approved) for data encryption.
+- AES-256-GCM (NIST-approved) for all data encryption — single canonical implementation in `vault_crypto.go`.
 - HKDF-SHA256 for Key Encryption Key derivation.
 - AES Key Wrap (RFC 3394) for DEK wrapping.
 - SHA-256 for key fingerprinting with domain-separation pepper.
+- `vault.SecureZero()` applied to all key material after use (both vault and keystore).
 
 ### Data Protection
 
@@ -326,8 +364,9 @@ If services fail with "vault not initialized":
 
 ## References
 
+- Canonical Crypto Primitives: `internal/services/vault/vault_crypto.go`
 - Vault Service: `internal/services/vault/vault.go`
 - Vault Header: `internal/services/vault/vault_header.go`
-- Vault Cryptography: `internal/services/vault/vault_crypto.go`
+- Keystore Service: `internal/services/keystore/keystore.go`
 - CLI Commands: `internal/cli/cmd/vault.go`
 - Storage Services: `internal/services/storage/`

@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
 // fileKeyring stores the master key in a file within the secrets directory.
@@ -64,8 +65,8 @@ func (f *fileKeyring) RetrieveMasterKey() ([]byte, error) {
 
 func (f *fileKeyring) StoreMasterKey(key []byte) error {
 	// Validate key length (AES-256 requires 32 bytes)
-	if len(key) != keySize {
-		return fmt.Errorf("invalid master key length %d, expected %d", len(key), keySize)
+	if len(key) != vault.KeySize {
+		return fmt.Errorf("invalid master key length %d, expected %d", len(key), vault.KeySize)
 	}
 
 	// Encode as base64 for safe storage

@@ -14,28 +14,23 @@
 package keystore
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/vault"
 )
 
 const (
 	keyStoreName  = "g8e-platform"
 	masterKeyName = "master-encryption-key"
 	keyVersion    = 1
-	nonceSize     = 12 // GCM standard nonce size
-	keySize       = 32 // AES-256
-	gcmTagSize    = 16 // GCM tag size
 )
 
 // EncryptedSecret represents an encrypted secret value on disk.
@@ -75,9 +70,10 @@ func (k *Keystore) Initialize() error {
 		}
 		return fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
+	defer vault.SecureZero(key)
 
-	if len(key) != keySize {
-		return fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreInvalidKeyLength, len(key), keySize)
+	if len(key) != vault.KeySize {
+		return fmt.Errorf("%w: got %d, expected %d", constants.ErrKeyStoreInvalidKeyLength, len(key), vault.KeySize)
 	}
 
 	k.logger.Info("[Keystore] Master key retrieved from OS key store", "keyring", k.keyring.Name())
@@ -86,8 +82,9 @@ func (k *Keystore) Initialize() error {
 
 // generateAndStoreMasterKey generates a new AES-256 key and stores it in the OS key store.
 func (k *Keystore) generateAndStoreMasterKey() error {
-	key := make([]byte, keySize)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
+	key := make([]byte, vault.KeySize)
+	defer vault.SecureZero(key)
+	if _, err := rand.Read(key); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrKeyStoreGenerateFailed, err)
 	}
 
@@ -105,23 +102,17 @@ func (k *Keystore) encrypt(plaintext string) (*EncryptedSecret, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
+	defer vault.SecureZero(key)
 
-	block, err := aes.NewCipher(key)
+	nonce, err := vault.GenerateNonce()
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreCipherCreate, err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreGCMCreate, err)
-	}
-
-	nonce := make([]byte, nonceSize)
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
 		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreNonceGenerate, err)
 	}
 
-	ciphertext := gcm.Seal(nil, nonce, []byte(plaintext), nil)
+	ciphertext, err := vault.EncryptAESGCM(key, nonce, []byte(plaintext), nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", constants.ErrKeyStoreCipherCreate, err)
+	}
 
 	return &EncryptedSecret{
 		Version:    keyVersion,
@@ -140,18 +131,9 @@ func (k *Keystore) decrypt(enc *EncryptedSecret) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreRetrieveFailed, err)
 	}
+	defer vault.SecureZero(key)
 
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreCipherCreate, err)
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", constants.ErrKeyStoreGCMCreate, err)
-	}
-
-	plaintext, err := gcm.Open(nil, enc.Nonce, enc.Ciphertext, nil)
+	plaintext, err := vault.DecryptAESGCM(key, enc.Nonce, enc.Ciphertext, nil)
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", constants.ErrInvalidCiphertext, err)
 	}
