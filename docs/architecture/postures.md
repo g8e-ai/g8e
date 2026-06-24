@@ -1,7 +1,7 @@
 # Governance Postures
 
 Last Updated: 2026-06-23
-Version: v1.1.9
+Version: v1.2.0
 
 ## Overview
 
@@ -118,7 +118,7 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | Check | Code Location | Doctrine | Consensus | Notary |
 |---|---|---|---|---|
 | L1 Doctrine validation | `l4_warden.go:466-469` | **Enforced** | **Enforced** | **Enforced** |
-| Transaction hash integrity | `l4_warden.go:477-493` | **Enforced** | **Enforced** | **Enforced** |
+| Transaction hash integrity (incl. L3 proof binding) | `l4_warden.go:477-493`, `pkg/governance/types.go:107-135` | **Enforced** | **Enforced** | **Enforced** |
 | Nonce replay protection | `l4_warden.go:325-359` | **Enforced** | **Enforced** | **Enforced** |
 | Expiry enforcement | `l4_warden.go:334-341` | **Enforced** | **Enforced** | **Enforced** |
 | State Merkle root validation | `l4_warden.go:500-526` | **Enforced** | **Enforced** | **Enforced** |
@@ -229,6 +229,8 @@ Non-mutation actions never require L3 proof, even under notary posture.
 |---|---|---|
 | Gateway mode | `doctrine` | `--posture` flag; defaults to `PostureDoctrine` (`config.go:398`) |
 | Outbound (operator) mode | `notary` | Defaults to `PostureNotary` (`config.go:534`) |
+
+**Sub-floor postures**: The `doctrine` and `consensus` postures allow mutations to execute without human authorization (L3 proof) or multi-party consensus — below the floor defined in the position paper (§12). Choosing such a posture is itself an act of human intent; the gateway logs a warning at startup and proceeds. The `--doctrine` or `--consensus` flag is the authorization; no secondary acknowledgement is required or accepted.
 
 **Invalid posture handling**: `NewGovernancePosture()` panics on unrecognized posture names (`posture.go:75-80`). This is intentional — misconfigured deployments fail at startup rather than silently running under a weaker posture. `ParseGovernancePosture()` returns an error for CLI flag validation (`posture.go:86-97`).
 

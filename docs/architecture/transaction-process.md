@@ -1,7 +1,7 @@
 # Transaction Process: End-to-End Flow
 
 Last Updated: 2026-06-23
-Version: v1.1.9
+Version: v1.2.0
 
 This document walks through the complete transaction process in the g8e governance system, explaining each step from initial intent to final execution and audit. The process is designed to ensure security, accountability, and sovereignty throughout.
 
@@ -113,7 +113,7 @@ The **L4 Warden** (`internal/services/governance/l4_warden.go`) is the primary o
 
 1. **In-flight tracking** (stage 0): Prevents the same nonce from being processed concurrently using a `sync.Map`.
 2. **Nonce reservation and expiry** (stage 1): Atomically reserves the nonce in the **Replay Store** (durable SQLite storage) to prevent replay attacks even if the operator crashes mid-execution. Checks expiry relative to an injectable clock.
-3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison.
+3. **Stateless validation** (stage 2): Structural checks (transaction ID, action type, payload presence), typed payload decoding, L1 Doctrine validation, and transaction hash recomputation and comparison. The hash basis includes L3 proof presence and identity (via `GenerateMessageID` in `pkg/governance/types.go`), so adding, removing, or changing an L3 proof breaks the hash.
 4. **Stateful validation** (stage 3): State Merkle root validation against the operator's current state root.
 5. **Posture validation** (stage 4): L2 and L3 checks gated by the configured `GovernancePosture`.
 

@@ -104,6 +104,36 @@ func GenerateMessageID(env *GovernanceEnvelope) (string, error) {
 		canonical.WriteByte('|')
 	}
 
+	// 10. L3 proof presence/identity — binds the human authorization into the
+	// transaction hash so an in-flight party cannot strip or swap the proof
+	// without breaking the hash (§7: "every proof is computed over that hash").
+	if env.Governance != nil && env.Governance.L3 != nil && env.Governance.L3.Proof != nil {
+		proof := env.Governance.L3.Proof
+		canonical.WriteString("l3:present|")
+		if proof.CliSignature != "" {
+			canonical.WriteString("cli_sig=")
+			canonical.WriteString(proof.CliSignature)
+			canonical.WriteByte('|')
+		}
+		if proof.MtlsCertFingerprint != "" {
+			canonical.WriteString("mtls_fp=")
+			canonical.WriteString(proof.MtlsCertFingerprint)
+			canonical.WriteByte('|')
+		}
+		if proof.Signature != "" {
+			canonical.WriteString("sig=")
+			canonical.WriteString(proof.Signature)
+			canonical.WriteByte('|')
+		}
+		if proof.CredentialId != "" {
+			canonical.WriteString("cred=")
+			canonical.WriteString(proof.CredentialId)
+			canonical.WriteByte('|')
+		}
+	} else {
+		canonical.WriteString("l3:absent|")
+	}
+
 	canonicalStr := canonical.String()
 	hash := sha256.Sum256([]byte(canonicalStr))
 	return hex.EncodeToString(hash[:]), nil
