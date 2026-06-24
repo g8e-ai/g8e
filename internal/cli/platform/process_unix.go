@@ -169,7 +169,7 @@ func (pm *ProcessManager) findOperatorProcess() int {
 
 // findOperatorProcessWithExecutor finds the PID using a provided CommandExecutor (for testing)
 func (pm *ProcessManager) findOperatorProcessWithExecutor(executor CommandExecutor) int {
-	cmd := executor.Command("pgrep", "-f", "g8e --doctrine")
+	cmd := executor.Command("pgrep", "-f", "g8e gateway serve")
 	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0

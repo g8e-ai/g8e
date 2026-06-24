@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cmd
+package stream
 
 import (
 	"bufio"
@@ -356,7 +356,7 @@ func buildOperatorArgs(endpoint string, noGit bool) string {
 	if endpoint == "" {
 		return ""
 	}
-	parts := []string{"-e", shellQuote(endpoint)}
+	parts := []string{"operator", "run", "-e", shellQuote(endpoint)}
 	if noGit {
 		parts = append(parts, "--no-git")
 	}

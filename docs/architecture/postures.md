@@ -14,7 +14,7 @@ The posture interface is defined in `internal/services/governance/posture.go` an
 
 A third enforcement point exists at startup:
 
-3. **Gateway startup** (`cmd/operator/gateway_cmd.go`): validates consensus posture prerequisites before any services start.
+3. **Gateway startup** (`internal/cli/serve/gateway.go`): validates consensus posture prerequisites before any services start.
 
 ---
 
@@ -66,13 +66,13 @@ A third enforcement point exists at startup:
   - **Signature verification**: Each vote's `consensus_signature` (Ed25519 over `<transaction_hash>|<decision>`) is verified against the trusted public key from the `SignerStore`. Invalid signatures are excluded from quorum count (`l4_warden.go:611-623`).
   - **Quorum check**: The number of affirmative (decision = true) votes from valid, distinct members must be >= `policy.Quorum`. If not → `ErrTxL2QuorumNotMet` (`l4_warden.go:630-636`).
 
-**Startup validation**: The gateway performs additional validation at startup for consensus posture (`cmd/operator/gateway_cmd.go:141-163`):
+**Startup validation**: The gateway performs additional validation at startup for consensus posture (`internal/cli/serve/gateway.go`):
 - `tribunalID` must be non-empty → `ErrConfigTribunalIDRequired` (`internal/config/config.go:292-293`).
 - The `TribunalPolicy` must exist in the database and be enabled.
 - **Quorum must be >= 2** → `ErrConfigTribunalQuorumLow` (`internal/config/config.go:295-296`). This prevents single-member tribunals from being used in consensus posture.
-- The Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator (`gateway_cmd.go:260-275`).
+- The Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
-**Tribunal bootstrap** (`gateway_cmd.go:323-361`): For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). Multi-member tribunals require separate key provisioning; members without private keys are constructed but cannot sign votes, and a warning is logged. Multi-member key provisioning is not yet implemented.
+**Tribunal bootstrap** (`internal/cli/serve/gateway.go`): For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). Multi-member tribunals require separate key provisioning; members without private keys are constructed but cannot sign votes, and a warning is logged. Multi-member key provisioning is not yet implemented.
 
 **What is audited but NOT gated**:
 - **L3 Notary proofs**: same behavior as doctrine: verified if present, recorded in receipt, but not required for mutations (`l4_warden.go:641-676`).
@@ -136,7 +136,7 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | L2/L3 status in receipt | `l5_actuator.go:105-123` | Recorded | Recorded | Recorded |
 | Startup: tribunal ID required | `config.go:292-293` | - | **Enforced** | - |
 | Startup: quorum >= 2 | `config.go:295-296` | - | **Enforced** | - |
-| Startup: tribunal policy exists + enabled | `gateway_cmd.go:149-163` | - | **Enforced** | - |
+| Startup: tribunal policy exists + enabled | `internal/cli/serve/gateway.go` | - | **Enforced** | - |
 | Invalid posture name → panic | `posture.go:75-80` | **Enforced** | **Enforced** | **Enforced** |
 
 **"Enforced"** = fail-closed gate; transaction is rejected if the check fails.

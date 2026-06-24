@@ -338,7 +338,8 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 	}
 
 	args := []string{
-		"--" + opts.Posture,
+		"gateway", "serve",
+		"--posture", opts.Posture,
 		"--working-dir", pm.projectRoot,
 		"--data-dir", effectiveDataDir,
 		"--pki-dir", effectivePKIDir,

@@ -259,7 +259,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Native Git Ledger | `internal/services/storage/ledger.go` |
 | Native Tools | `internal/services/mcp/native_tool_registry.go` |
 | Native Tool Handlers | `internal/services/mcp/native_handlers.go` |
-| Operator Entrypoint | `cmd/operator/main.go` |
+| Operator Entrypoint | `cmd/operator/main.go` (binary) → CLI tree at `internal/cli/cmd/` + worker bodies at `internal/cli/serve/` |
 | Protocol Definitions | `protocol/proto/g8e/common/v1/common.proto` |
 | Operator Protocol | `protocol/proto/g8e/operator/v1/operator.proto` |
 | Workload Identity | `protocol/workload_identity.go` |

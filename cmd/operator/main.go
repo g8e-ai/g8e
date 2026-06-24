@@ -27,5 +27,5 @@ var (
 )
 
 func main() {
-	clicmd.Execute(version)
+	clicmd.ExecuteWithVersionInfo(version, buildID, buildTime, platform)
 }

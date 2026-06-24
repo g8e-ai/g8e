@@ -18,15 +18,15 @@ type EnvVarKey string
 
 // EnvVar groups all environment variable name constants consumed by g8eo.
 var EnvVar = struct {
-	TribunalID          EnvVarKey
-	TribunalURL         EnvVarKey
-	VaultDir            EnvVarKey
-	VaultKey            EnvVarKey
-	VaultRequireUnlock  EnvVarKey
-	Shell               EnvVarKey
-	Lang                EnvVarKey
-	Term                EnvVarKey
-	TZ                  EnvVarKey
+	TribunalID         EnvVarKey
+	TribunalURL        EnvVarKey
+	VaultDir           EnvVarKey
+	VaultKey           EnvVarKey
+	VaultRequireUnlock EnvVarKey
+	Shell              EnvVarKey
+	Lang               EnvVarKey
+	Term               EnvVarKey
+	TZ                 EnvVarKey
 }{
 	TribunalID:         EnvVarKey("G8E_TRIBUNAL_ID"),
 	TribunalURL:        EnvVarKey("G8E_TRIBUNAL_URL"),
