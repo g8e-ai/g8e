@@ -50,9 +50,11 @@ CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    expires_at TEXT
+    expires_at TEXT,
+    state_tier TEXT NOT NULL DEFAULT 'bound'
 );
 CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
+CREATE INDEX IF NOT EXISTS idx_kv_tier ON kv_store(state_tier);
 
 -- SSE event buffer: per-routing-target ring buffer for reconnection replay.
 -- Each row carries exactly one of three first-class routing keys, expressed as
@@ -92,10 +94,12 @@ CREATE TABLE IF NOT EXISTS blobs (
     data         BLOB NOT NULL,
     created_at   TEXT NOT NULL,
     expires_at   TEXT,
+    state_tier   TEXT NOT NULL DEFAULT 'bound',
     PRIMARY KEY (namespace, id)
 );
 CREATE INDEX IF NOT EXISTS idx_blobs_namespace ON blobs(namespace);
 CREATE INDEX IF NOT EXISTS idx_blobs_expires   ON blobs(expires_at);
+CREATE INDEX IF NOT EXISTS idx_blobs_tier      ON blobs(state_tier);
 
 -- State Merkle Root: single row containing the current platform state root
 CREATE TABLE IF NOT EXISTS state_root (

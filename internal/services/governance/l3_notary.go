@@ -136,10 +136,26 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 		return false, constants.ErrCLIL3FingerprintMismatch
 	}
 
-	// Note: Full signature verification against the public key requires access to the CLI session
-	// certificate or public key. The fingerprint match above provides identity binding, and the
-	// signature presence ensures cryptographic proof. For full verification, the caller should
-	// verify the signature using the public key from the CLI session certificate.
+	// Cryptographic verification: verify the signature against the stored public key
+	if tx.ApprovalPublicKey == "" {
+		v.logger.Warn("CLI L3 verification failed: approval public key missing", "transaction_hash", transactionHash)
+		return false, constants.ErrCLIL3PublicKeyMissing
+	}
+
+	pubKeyBytes, err := hex.DecodeString(tx.ApprovalPublicKey)
+	if err != nil {
+		v.logger.Warn("CLI L3 verification failed: invalid public key encoding", "transaction_hash", transactionHash, "error", err)
+		return false, fmt.Errorf("%w: %w", constants.ErrCLIL3PublicKeyInvalid, err)
+	}
+	if len(pubKeyBytes) != ed25519.PublicKeySize {
+		v.logger.Warn("CLI L3 verification failed: invalid public key size", "transaction_hash", transactionHash, "length", len(pubKeyBytes))
+		return false, constants.ErrCLIL3PublicKeyInvalid
+	}
+
+	if !ed25519.Verify(ed25519.PublicKey(pubKeyBytes), []byte(transactionHash), sigBytes) {
+		v.logger.Warn("CLI L3 verification failed: cryptographic signature verification failed", "transaction_hash", transactionHash)
+		return false, constants.ErrCLIL3SignatureVerificationFailed
+	}
 
 	hashPrefix := transactionHash
 	if len(transactionHash) > 8 {

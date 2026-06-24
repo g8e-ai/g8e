@@ -76,6 +76,9 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 			signature := ed25519.Sign(privKey, []byte(txHash))
 			signatureHex := hex.EncodeToString(signature)
 
+			// Derive the Ed25519 public key for cryptographic verification at the gateway
+			pubKeyHex := hex.EncodeToString(privKey.Public().(ed25519.PublicKey))
+
 			// Calculate certificate fingerprint for verification
 			certData, err := os.ReadFile(cfg.CLICertFile())
 			if err != nil {
@@ -102,10 +105,12 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 			type approvalRequest struct {
 				CliSignature        string `json:"cli_signature"`
 				MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
+				ApprovalPublicKey   string `json:"approval_public_key"`
 			}
 			req := approvalRequest{
 				CliSignature:        signatureHex,
 				MtlsCertFingerprint: certFingerprint,
+				ApprovalPublicKey:   pubKeyHex,
 			}
 
 			reqBody, err := json.Marshal(req)

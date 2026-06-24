@@ -1,0 +1,241 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package governance
+
+import (
+	"context"
+	"crypto/ed25519"
+	"encoding/hex"
+	"errors"
+	"log/slog"
+	"testing"
+	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// fakeSuspendedStore is an in-memory implementation of storage.SuspendedTransactionStore
+// for Tier 1 unit testing without SQLite.
+type fakeSuspendedStore struct {
+	txs map[string]*models.SuspendedTransaction
+}
+
+func (f *fakeSuspendedStore) StoreSuspendedTransaction(_ context.Context, tx *models.SuspendedTransaction) error {
+	if f.txs == nil {
+		f.txs = make(map[string]*models.SuspendedTransaction)
+	}
+	f.txs[tx.TransactionHash] = tx
+	return nil
+}
+
+func (f *fakeSuspendedStore) GetSuspendedTransaction(_ context.Context, txHash string) (*models.SuspendedTransaction, bool, error) {
+	tx, ok := f.txs[txHash]
+	return tx, ok, nil
+}
+
+func (f *fakeSuspendedStore) ListSuspendedTransactions(_ context.Context, userID string) ([]*models.SuspendedTransaction, error) {
+	var result []*models.SuspendedTransaction
+	for _, tx := range f.txs {
+		if userID == "" || tx.UserID == userID {
+			result = append(result, tx)
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeSuspendedStore) ApproveSuspendedTransaction(_ context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey string) error {
+	if tx, ok := f.txs[txHash]; ok {
+		tx.Approved = true
+		tx.ApprovedBy = approvedBy
+		tx.ApprovalSignature = approvalSignature
+		tx.ExpectedCertFingerprint = expectedCertFingerprint
+		tx.ApprovalPublicKey = approvalPublicKey
+		now := time.Now().UTC()
+		tx.ApprovedAt = &now
+	}
+	return nil
+}
+
+func (f *fakeSuspendedStore) DeleteSuspendedTransaction(_ context.Context, txHash string) error {
+	delete(f.txs, txHash)
+	return nil
+}
+
+func (f *fakeSuspendedStore) CleanupExpiredSuspendedTransactions(_ context.Context) (int64, error) {
+	var count int64
+	for hash, tx := range f.txs {
+		if tx.ExpiresAt.Before(time.Now()) {
+			delete(f.txs, hash)
+			count++
+		}
+	}
+	return count, nil
+}
+
+func (f *fakeSuspendedStore) GetExpiredSuspendedTransactions(_ context.Context) ([]*models.SuspendedTransaction, error) {
+	var expired []*models.SuspendedTransaction
+	for _, tx := range f.txs {
+		if tx.ExpiresAt.Before(time.Now()) {
+			expired = append(expired, tx)
+		}
+	}
+	return expired, nil
+}
+
+func setupApprovedTx(txHash, userID string, pubKeyHex, signature string) *models.SuspendedTransaction {
+	now := time.Now().UTC()
+	return &models.SuspendedTransaction{
+		TransactionHash:   txHash,
+		Envelope:          []byte("{}"),
+		CreatedAt:         now,
+		ExpiresAt:         now.Add(1 * time.Hour),
+		ToolName:          "test_tool",
+		UserID:            userID,
+		OperatorID:        "op-123",
+		Approved:          true,
+		ApprovedAt:        &now,
+		ApprovedBy:        "approver-123",
+		ApprovalSignature: signature,
+		ApprovalPublicKey: pubKeyHex,
+	}
+}
+
+func TestVerifyL3Proof_ValidSignature(t *testing.T) {
+	t.Parallel()
+
+	txHash := "test-tx-hash-valid"
+	userID := "user-valid"
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
+
+	store := &fakeSuspendedStore{}
+	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
+
+	notary := NewOutboundL3Notary(store, slog.Default())
+	proof := &commonv1.L3Proof{CliSignature: signature}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", proof)
+	require.NoError(t, err)
+	assert.True(t, allowed)
+}
+
+func TestVerifyL3Proof_SignatureFromWrongKey(t *testing.T) {
+	t.Parallel()
+
+	txHash := "test-tx-hash-wrong-key"
+	userID := "user-wrong-key"
+
+	_, correctPrivKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	correctPubKeyHex := hex.EncodeToString(correctPrivKey.Public().(ed25519.PublicKey))
+
+	_, wrongPrivKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	wrongSig := hex.EncodeToString(ed25519.Sign(wrongPrivKey, []byte(txHash)))
+
+	store := &fakeSuspendedStore{}
+	// Store the correct public key but present a signature from a different key.
+	// The stored approval signature matches the wrong sig so the equality check passes,
+	// but ed25519.Verify must fail.
+	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, correctPubKeyHex, wrongSig))
+
+	notary := NewOutboundL3Notary(store, slog.Default())
+	proof := &commonv1.L3Proof{CliSignature: wrongSig}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", proof)
+	require.Error(t, err)
+	assert.False(t, allowed)
+	assert.True(t, errors.Is(err, constants.ErrCLIL3SignatureVerificationFailed))
+}
+
+func TestVerifyL3Proof_TamperedTransactionHash(t *testing.T) {
+	t.Parallel()
+
+	txHash := "test-tx-hash-tampered"
+	userID := "user-tampered"
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	// Sign the original hash
+	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
+
+	store := &fakeSuspendedStore{}
+	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
+
+	notary := NewOutboundL3Notary(store, slog.Default())
+	// Present proof with a different transaction hash than what was signed
+	proof := &commonv1.L3Proof{CliSignature: signature}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, "different-hash", "cli-session", proof)
+	require.Error(t, err)
+	assert.False(t, allowed)
+}
+
+func TestVerifyL3Proof_MissingPublicKeyInStore(t *testing.T) {
+	t.Parallel()
+
+	txHash := "test-tx-hash-no-pubkey"
+	userID := "user-no-pubkey"
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
+
+	store := &fakeSuspendedStore{}
+	tx := setupApprovedTx(txHash, userID, pubKeyHex, signature)
+	tx.ApprovalPublicKey = "" // simulate missing public key
+	store.StoreSuspendedTransaction(context.Background(), tx)
+
+	notary := NewOutboundL3Notary(store, slog.Default())
+	proof := &commonv1.L3Proof{CliSignature: signature}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", proof)
+	require.Error(t, err)
+	assert.False(t, allowed)
+	assert.True(t, errors.Is(err, constants.ErrCLIL3PublicKeyMissing))
+}
+
+func TestVerifyL3Proof_InvalidPublicKeyEncoding(t *testing.T) {
+	t.Parallel()
+
+	txHash := "test-tx-hash-bad-pubkey"
+	userID := "user-bad-pubkey"
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
+
+	store := &fakeSuspendedStore{}
+	tx := setupApprovedTx(txHash, userID, pubKeyHex, signature)
+	tx.ApprovalPublicKey = "not-valid-hex!!"
+	store.StoreSuspendedTransaction(context.Background(), tx)
+
+	notary := NewOutboundL3Notary(store, slog.Default())
+	proof := &commonv1.L3Proof{CliSignature: signature}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", proof)
+	require.Error(t, err)
+	assert.False(t, allowed)
+	assert.True(t, errors.Is(err, constants.ErrCLIL3PublicKeyInvalid))
+}

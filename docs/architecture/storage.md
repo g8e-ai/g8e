@@ -1,6 +1,6 @@
 # Storage Architecture
 
-Last Updated: 2026-06-22
+Last Updated: 2026-06-23
 Version: v1.1.6
 
 ## Overview
@@ -288,12 +288,12 @@ No background pruner is started; callers invoke `Prune` and `CleanupStaleReserve
 
 **Schema Tables:**
 
-- `suspended_transactions`: Approval workflow records (`transaction_hash`, `envelope`, `created_at`, `expires_at`, `tool_name`, `tool_arguments`, `user_id`, `operator_id`, `approved`, `approved_at`, `approved_by`, `approval_signature`, `expected_cert_fingerprint`)
+- `suspended_transactions`: Approval workflow records (`transaction_hash`, `envelope`, `created_at`, `expires_at`, `tool_name`, `tool_arguments`, `user_id`, `operator_id`, `approved`, `approved_at`, `approved_by`, `approval_signature`, `expected_cert_fingerprint`, `approval_public_key`)
 
 **Key Features:**
 
 - **Envelope storage**: The full governance envelope is stored as text for replay after approval.
-- **Approval tracking**: Records approval status, approver identity, cryptographic signature, and expected certificate fingerprint.
+- **Approval tracking**: Records approval status, approver identity, cryptographic signature, expected certificate fingerprint, and Ed25519 public key for cryptographic verification at L3 notary verification time.
 - **Expiration**: Transactions carry an `expires_at` timestamp; `GetSuspendedTransaction` and `ListSuspendedTransactions` filter out expired records.
 - **User filtering**: `ListSuspendedTransactions` optionally filters by `user_id`.
 - **Automatic cleanup**: The background pruner and `CleanupExpiredSuspendedTransactions` remove expired records.
@@ -317,7 +317,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_t
 - `StoreSuspendedTransaction(ctx, tx)`: Upsert a transaction awaiting approval.
 - `GetSuspendedTransaction(ctx, txHash)`: Retrieve a transaction by hash. Returns `(nil, false, nil)` if not found or expired.
 - `ListSuspendedTransactions(ctx, userID)`: List non-expired transactions, optionally filtered by user.
-- `ApproveSuspendedTransaction(ctx, txHash, approvedBy, approvalSignature, certFingerprint)`: Mark a transaction as approved.
+- `ApproveSuspendedTransaction(ctx, txHash, approvedBy, approvalSignature, certFingerprint, approvalPublicKey)`: Mark a transaction as approved with cryptographic signature and Ed25519 public key.
 - `DeleteSuspendedTransaction(ctx, txHash)`: Remove a transaction after approval or rejection.
 - `CleanupExpiredSuspendedTransactions(ctx)`: Delete expired records; returns the count deleted and any error.
 - `GetExpiredSuspendedTransactions(ctx)`: Retrieve expired transactions for audit purposes.

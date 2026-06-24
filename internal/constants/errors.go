@@ -632,6 +632,9 @@ var (
 	ErrCLIL3NoSPIFFEURI                   = errors.New("no SPIFFE URI found in certificate")
 	ErrCLIL3GetSuspendedTransactionFailed = errors.New("failed to get suspended transaction")
 	ErrCLIL3SignatureEncodingFailed       = errors.New("invalid signature encoding")
+	ErrCLIL3SignatureVerificationFailed   = errors.New("cryptographic signature verification failed")
+	ErrCLIL3PublicKeyMissing              = errors.New("approval public key missing")
+	ErrCLIL3PublicKeyInvalid              = errors.New("invalid approval public key")
 
 	// File edit service errors
 	ErrFileEditUnsupportedOperation   = errors.New("unsupported file operation")
