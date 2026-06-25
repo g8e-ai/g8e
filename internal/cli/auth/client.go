@@ -32,6 +32,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -44,6 +45,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 )
+
+// httpTimeout is the default timeout for all HTTP clients in the auth package.
+const httpTimeout = 30 * time.Second
 
 type RegistrationRequest struct {
 	SystemFingerprint string `json:"system_fingerprint"`
@@ -76,6 +80,25 @@ type Credentials struct {
 	CLISessionID      string `json:"cli_session_id"`
 }
 
+// webauthnClientData is the client data JSON for WebAuthn ceremonies.
+type webauthnClientData struct {
+	Challenge string `json:"challenge"`
+	Origin    string `json:"origin"`
+	Type      string `json:"type"`
+}
+
+// cliAssertionVerifyRequest is the typed request for CLI passkey authentication verification.
+type cliAssertionVerifyRequest struct {
+	UserID            string                       `json:"user_id"`
+	AssertionResponse models.WebAuthnAssertionResponse `json:"assertion_response"`
+}
+
+// cliAttestationVerifyRequest is the typed request for CLI passkey registration verification.
+type cliAttestationVerifyRequest struct {
+	UserID              string                          `json:"user_id"`
+	AttestationResponse models.WebAuthnAttestationResponse `json:"attestation_response"`
+}
+
 // getLocalOSUser retrieves the current OS user information.
 func getLocalOSUser() *models.LocalOSUser {
 	currentUser, err := user.Current()
@@ -106,16 +129,8 @@ func getLocalOSUser() *models.LocalOSUser {
 	}
 }
 
-func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "PANIC in GenerateCSR: %v\n", r)
-			fmt.Fprintf(os.Stderr, "Windows CSP (Cryptographic Service Provider) error.\n")
-			fmt.Fprintf(os.Stderr, "Run PowerShell as Administrator and try again.\n")
-		}
-	}()
-
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+func GenerateCSR(commonName string) (csrPEM string, privKey *ecdsa.PrivateKey, err error) {
+	privKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
@@ -133,12 +148,12 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
-	csrPEM := pem.EncodeToMemory(&pem.Block{
+	csrPEMBytes := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE REQUEST",
 		Bytes: csrBytes,
 	})
 
-	return string(csrPEM), privKey, nil
+	return string(csrPEMBytes), privKey, nil
 }
 
 // NewSecureHTTPClient creates an HTTP client bound to the Operator's CA trust bundle.
@@ -660,12 +675,12 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 
 		// 2. Trigger Windows Hello
 		origin := fmt.Sprintf("https://%s", challengeData.Options.Response.RelyingPartyID)
-		clientDataJSON := map[string]interface{}{
-			"challenge": challengeData.Options.Response.Challenge,
-			"origin":    origin,
-			"type":      "webauthn.get",
+		clientData := webauthnClientData{
+			Challenge: challengeData.Options.Response.Challenge.String(),
+			Origin:    origin,
+			Type:      "webauthn.get",
 		}
-		clientDataBytes, err := json.Marshal(clientDataJSON)
+		clientDataBytes, err := json.Marshal(clientData)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 		}
@@ -677,19 +692,22 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 
 		// 3. Verify Authentication
 		verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/verify", gatewayURL)
-		verifyReq := map[string]interface{}{
-			"user_id": creds.UserID,
-			"assertion_response": map[string]interface{}{
-				"id":                assertion.Id,
-				"rawId":             base64.RawURLEncoding.EncodeToString(assertion.RawId),
-				"clientDataJSON":    base64.RawURLEncoding.EncodeToString(clientDataBytes),
-				"authenticatorData": base64.RawURLEncoding.EncodeToString(assertion.AuthenticatorData),
-				"signature":         base64.RawURLEncoding.EncodeToString(assertion.Signature),
-				"userHandle":        base64.RawURLEncoding.EncodeToString(assertion.UserHandle),
+		verifyReq := cliAssertionVerifyRequest{
+			UserID: creds.UserID,
+			AssertionResponse: models.WebAuthnAssertionResponse{
+				ID:                assertion.Id,
+				RawID:             base64.RawURLEncoding.EncodeToString(assertion.RawId),
+				ClientDataJSON:    base64.RawURLEncoding.EncodeToString(clientDataBytes),
+				AuthenticatorData: base64.RawURLEncoding.EncodeToString(assertion.AuthenticatorData),
+				Signature:         base64.RawURLEncoding.EncodeToString(assertion.Signature),
+				UserHandle:        base64.RawURLEncoding.EncodeToString(assertion.UserHandle),
 			},
 		}
 
-		verifyBody, _ := json.Marshal(verifyReq)
+		verifyBody, err := json.Marshal(verifyReq)
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+		}
 		verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
@@ -723,7 +741,10 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		return nil
 	}
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
+	}
 	fmt.Printf("→ Challenge request failed - Response body: %s\n", string(body))
 	return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 }
@@ -796,7 +817,10 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 
 	fmt.Printf("→ Challenge response status: %d\n", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
+		}
 		fmt.Printf("→ Challenge response body: %s\n", string(body))
 		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
@@ -842,12 +866,12 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	// Construct proper clientDataJSON for Windows Hello API
 	// WebAuthn requires clientDataJSON to contain: challenge, origin, type
 	origin := fmt.Sprintf("https://%s", challengeData.Options.PublicKey.RelyingParty.ID)
-	clientDataJSON := map[string]interface{}{
-		"challenge": challengeData.Options.PublicKey.Challenge,
-		"origin":    origin,
-		"type":      "webauthn.create",
+	clientData := webauthnClientData{
+		Challenge: challengeData.Options.PublicKey.Challenge,
+		Origin:    origin,
+		Type:      "webauthn.create",
 	}
-	clientDataBytes, err := json.Marshal(clientDataJSON)
+	clientDataBytes, err := json.Marshal(clientData)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
@@ -867,17 +891,20 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 
 	// 3. Verify Registration
 	verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/verify", gatewayURL)
-	verifyReq := map[string]interface{}{
-		"user_id": userID,
-		"attestation_response": map[string]interface{}{
-			"id":                attestation.Id,
-			"rawId":             base64.RawURLEncoding.EncodeToString(attestation.RawId),
-			"clientDataJSON":    base64.RawURLEncoding.EncodeToString(clientDataBytes),
-			"attestationObject": base64.RawURLEncoding.EncodeToString(attestation.AttestationObject),
+	verifyReq := cliAttestationVerifyRequest{
+		UserID: userID,
+		AttestationResponse: models.WebAuthnAttestationResponse{
+			ID:                attestation.Id,
+			RawID:             base64.RawURLEncoding.EncodeToString(attestation.RawId),
+			ClientDataJSON:    base64.RawURLEncoding.EncodeToString(clientDataBytes),
+			AttestationObject: base64.RawURLEncoding.EncodeToString(attestation.AttestationObject),
 		},
 	}
 
-	verifyBody, _ := json.Marshal(verifyReq)
+	verifyBody, err := json.Marshal(verifyReq)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+	}
 	verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
@@ -957,12 +984,15 @@ func CheckOperatorRunning(cfg *config.Config) error {
 
 func CheckOperatorRunningAtURL(operatorURL string) error {
 	// Parse the URL to extract host:port
-	parts := strings.Split(operatorURL, "://")
-	if len(parts) != 2 {
+	parsedURL, err := url.Parse(operatorURL)
+	if err != nil {
 		return fmt.Errorf("%w: %s", constants.ErrGatewayURLRequired, operatorURL)
 	}
 
-	hostPort := parts[1]
+	hostPort := parsedURL.Host
+	if hostPort == "" {
+		return fmt.Errorf("%w: %s", constants.ErrGatewayURLRequired, operatorURL)
+	}
 	// Force IPv4 by replacing localhost with 127.0.0.1 to prevent IPv6 resolution
 	if strings.HasPrefix(hostPort, "localhost:") {
 		hostPort = "127.0.0.1" + hostPort[9:]

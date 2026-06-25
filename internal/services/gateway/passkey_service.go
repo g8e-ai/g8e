@@ -235,15 +235,6 @@ func (s *PasskeyService) GenerateRegistrationChallenge(userID, userName string) 
 	return options, nil
 }
 
-// AttestationResponse is the client response for registration verification.
-type AttestationResponse struct {
-	ID                string   `json:"id"`
-	RawID             string   `json:"rawId"`
-	ClientDataJSON    string   `json:"clientDataJSON"`
-	AttestationObject string   `json:"attestationObject"`
-	Transports        []string `json:"transports,omitempty"`
-}
-
 // VerifyRegistration verifies a registration response.
 // It accepts the raw JSON of the WebAuthn response.
 func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) (*models.PasskeyCredential, error) {
@@ -350,16 +341,6 @@ func (s *PasskeyService) GenerateApprovalChallenge(userID, transactionHash strin
 	}
 
 	return options, nil
-}
-
-// AssertionResponse is the client response for authentication verification.
-type AssertionResponse struct {
-	ID                string `json:"id"`
-	RawID             string `json:"rawId"`
-	ClientDataJSON    string `json:"clientDataJSON"`
-	AuthenticatorData string `json:"authenticatorData"`
-	Signature         string `json:"signature"`
-	UserHandle        string `json:"userHandle,omitempty"`
 }
 
 // VerifyAuthentication verifies an authentication assertion.

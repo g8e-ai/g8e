@@ -322,6 +322,8 @@ const (
 	TestLocalStateDBFilename    = "local_state.db"
 	TestAuditVaultDBFilename    = "audit_vault.db"
 	TestSecretManagerDBFilename = "secret_manager_test.db"
+	TestCertFilename            = "test-cert.pem"
+	TestKeyFilename             = "test-key.pem"
 
 	// File system listing limits
 	FsListMaxDepth       = 3

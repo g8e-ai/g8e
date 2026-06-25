@@ -122,7 +122,7 @@ func (c *AuthController) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	var req AssertionResponse
+	var req models.WebAuthnAssertionResponse
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return

@@ -370,6 +370,7 @@ type ClientIdentity struct {
 	Certificate       []byte
 	CLIPrivateKey     []byte
 	CLICertificate    string
+	CLISessionID      string
 	OperatorID        string
 	OperatorSessionID string
 }
@@ -514,13 +515,17 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
 	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
 
+	cliPrivBytes, err := x509.MarshalECPrivateKey(cliPriv)
+	require.NoError(t, err)
+
 	return &ClientIdentity{
 		UserID:            userID,
 		OrganizationID:    organizationID,
 		PrivateKey:        privBytes,
 		Certificate:       []byte(regResp.OperatorCert),
-		CLIPrivateKey:     privBytes,
-		CLICertificate:    regResp.OperatorCert,
+		CLIPrivateKey:     cliPrivBytes,
+		CLICertificate:    regResp.CLICert,
+		CLISessionID:      regResp.CLISessionID,
 		OperatorID:        regResp.OperatorID,
 		OperatorSessionID: regResp.OperatorSessionID,
 	}
@@ -547,6 +552,52 @@ func CreateMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity)
 			},
 		},
 	}
+}
+
+// CreateCLIMTLSClient creates an HTTP client configured for mTLS using the
+// enrolled CLI identity. The client presents the CLI certificate (which carries
+// the CLI SPIFFE URI SAN) and sets the X-G8E-CLI-Session-ID header on every
+// outbound request via a wrapping RoundTripper.
+func CreateCLIMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity) *http.Client {
+	t.Helper()
+
+	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
+	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
+	rootPool := x509.NewCertPool()
+	rootPool.AppendCertsFromPEM(rootPEM)
+	rootPool.AppendCertsFromPEM(operatorPEM)
+
+	cliCert, err := tls.X509KeyPair([]byte(identity.CLICertificate), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: identity.CLIPrivateKey}))
+	require.NoError(t, err)
+
+	base := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:      rootPool,
+				Certificates: []tls.Certificate{cliCert},
+			},
+		},
+	}
+
+	return &http.Client{
+		Transport: &cliSessionRoundTripper{
+			base:       base.Transport,
+			sessionID:  identity.CLISessionID,
+		},
+	}
+}
+
+// cliSessionRoundTripper wraps an http.RoundTripper and injects the
+// X-G8E-CLI-Session-ID header on every outbound request.
+type cliSessionRoundTripper struct {
+	base      http.RoundTripper
+	sessionID string
+}
+
+func (rt *cliSessionRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	clone.Header.Set(constants.HeaderCLISessionID, rt.sessionID)
+	return rt.base.RoundTrip(clone)
 }
 
 // TribunalSetup holds the result of wiring a real TribunalService into a gateway fixture.
