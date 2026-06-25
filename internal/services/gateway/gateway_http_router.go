@@ -14,8 +14,13 @@
 package gateway
 
 import (
+	"net"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/gateway/console"
@@ -238,10 +243,101 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 
 	// Catch-all redirect to HTTPS for all other routes
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		target := "https://" + r.Host + r.URL.RequestURI()
-		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+
+		if !isSafeHost(host, h.cfg) {
+			if h.cfg != nil && h.cfg.Endpoint != "" {
+				host = h.cfg.Endpoint
+			} else {
+				host = "localhost"
+			}
+		}
+
+		var httpsPort int
+		if h.cfg != nil && h.cfg.Gateway.HTTPSPort != 0 {
+			httpsPort = h.cfg.Gateway.HTTPSPort
+		} else {
+			httpsPort = constants.Ports.OperatorHttps
+		}
+
+		var targetHost string
+		if httpsPort == 443 {
+			targetHost = host
+		} else {
+			targetHost = net.JoinHostPort(host, strconv.Itoa(httpsPort))
+		}
+
+		path := r.URL.Path
+		if path == "" {
+			path = "/"
+		}
+		for strings.HasPrefix(path, "//") {
+			path = path[1:]
+		}
+
+		target := "https://" + targetHost + path
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+
+		http.Redirect(w, r, target, http.StatusMovedPermanently) // #nosec G710
 	})
 
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
+}
+
+// isSafeHost checks if the requested host is a recognized local, private, or configured endpoint.
+func isSafeHost(host string, cfg *config.Config) bool {
+	if host == "" {
+		return false
+	}
+
+	for i := 0; i < len(host); i++ {
+		c := host[i]
+		isAlphanumeric := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+		isSpecial := c == '.' || c == '-' || c == '[' || c == ']' || c == ':'
+		if !isAlphanumeric && !isSpecial {
+			return false
+		}
+	}
+
+	if host == "localhost" {
+		return true
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() {
+			return true
+		}
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+
+	if cfg != nil {
+		if cfg.Endpoint != "" {
+			endpointHost := cfg.Endpoint
+			if h, _, err := net.SplitHostPort(endpointHost); err == nil {
+				endpointHost = h
+			}
+			if strings.EqualFold(host, endpointHost) {
+				return true
+			}
+		}
+
+		if cfg.Gateway.PublicBaseURL != "" {
+			if u, err := url.Parse(cfg.Gateway.PublicBaseURL); err == nil {
+				publicHost := u.Hostname()
+				if strings.EqualFold(host, publicHost) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }

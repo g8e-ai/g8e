@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.10] - 2026-06-24
+## [1.2.0] - 2026-06-24
+
+### Overview
+
+v1.2.0 is a major feature release introducing the g8e Console SPA, a zero-dependency, single-page application served directly from the gateway binary. To support the interactive web dashboard, this release introduces dual-auth browser passkey endpoints and implements L7 hybrid TLS / mTLS enforcement, enabling secure passkey bootstrap and transaction approval from standard web browsers. It also locks down the plain-HTTP port 8080 and unifies public and operator routing under a single HTTPS server.
 
 ### Added
 

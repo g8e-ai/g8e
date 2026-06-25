@@ -4,8 +4,8 @@ title: Session & Identity Binding
 
 # Session & Identity Binding
 
-Last Updated: 2026-06-23
-Version: v1.1.9
+Last Updated: 2026-06-24
+Version: v1.2.0
 
 Binding is the cryptographic and stateful linkage between platform sessions (web, CLI, operator) and the identities, agents, and Operator instances they authorize. It is the mechanism that answers: *"Which Operator is allowed to act on behalf of which session?"* and *"Which app is allowed to push events to which target?"*
 

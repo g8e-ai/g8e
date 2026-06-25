@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-06-23
-Version: v1.1.9
+Last Updated: 2026-06-24
+Version: v1.2.0
 
 The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
 
