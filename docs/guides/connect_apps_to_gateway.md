@@ -587,6 +587,6 @@ curl -k https://localhost:8443/api/v1/health
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)** - Deploy and use a g8e Operator
 - **[Build Apps](build_apps.md)** - Build g8e-compatible applications using a Gateway
-- **[MCP Protocol](../protocols/mcp/mcp.md)** - Detailed MCP protocol specification
-- **[A2A Protocol](../protocols/a2a/a2a.md)** - Detailed A2A protocol specification
+- **[MCP Protocol](../../protocol/docs/mcp.md)** - Detailed MCP protocol specification
+- **[A2A Protocol](../../protocol/docs/a2a.md)** - Detailed A2A protocol specification
 - **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals

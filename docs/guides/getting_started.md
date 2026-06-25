@@ -407,5 +407,5 @@ After the gateway is running and the CLI is authenticated:
 - **[Docker Gateway Guide](docker_gateway.md)**, Docker-specific configuration, volumes, and production considerations
 - **[CLI Reference](cli.md)**, Full command-line interface reference
 - **[Architecture](../architecture/gateway.md)**, Platform architecture and 5-layer verification sequence
-- **[MCP Protocol](../protocols/mcp/mcp.md)**, Connect AI clients via Model Context Protocol
-- **[A2A Protocol](../protocols/a2a/a2a.md)**, Agent-to-agent communication patterns
+- **[MCP Protocol](../../protocol/docs/mcp.md)**, Connect AI clients via Model Context Protocol
+- **[A2A Protocol](../../protocol/docs/a2a.md)**, Agent-to-agent communication patterns

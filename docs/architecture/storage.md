@@ -507,5 +507,5 @@ These implementations are kept separate from production code to avoid import cyc
 - [**Authentication & Authorization**](./auth.md): Governance sequence and L3 Interlock
 - [**Encryption Architecture**](./encryption.md): Vault subsystem and mandatory encryption at rest
 - [**Network Architecture**](./network.md): Mutual TLS and identity binding
-- [**g8e Protocol**](./protocol.md): The wire contract and governance hierarchy
+- [**g8e Protocol**](../../protocol/docs/spec.md): The wire contract and governance hierarchy
 

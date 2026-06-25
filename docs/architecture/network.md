@@ -238,6 +238,6 @@ This information is used for certificate SAN generation and peer discovery.
 ## Related Documentation
 
 - [**Authentication & Authorization**](./auth.md)
-- [**g8e Protocol**](./protocol.md)
+- [**g8e Protocol**](../../protocol/docs/spec.md)
 - [**g8e Gateway**](./gateway.md)
 - [**g8e Operator**](./operator.md)

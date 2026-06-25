@@ -495,7 +495,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 
 To add a new native tool to the Operator, follow this sequence:
 
-1. **Create tool file**: Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`
+1. **Create tool file**: Copy `protocol/docs/mcp_tool_template.go` to `internal/services/mcp/your_tool_name.go`
 2. **Implement interface**: Replace the template with your tool's logic by implementing the `NativeTool` interface methods:
    - `Name() string`: Returns the unique tool identifier (snake_case, lowercase letters, digits, underscores only)
    - `Description() string`: Returns a human-readable description of the tool's purpose
@@ -521,7 +521,7 @@ All native tools must comply with the following requirements:
 
 ### Template Reference
 
-The template file at `docs/protocols/mcp/tool_template.go` provides a complete starting point with:
+The template file at `protocol/docs/mcp_tool_template.go` provides a complete starting point with:
 
 - Proper copyright header and Apache 2.0 license
 - Build tags to exclude the template from compilation (`//go:build ignore`)
@@ -535,6 +535,6 @@ The template file at `docs/protocols/mcp/tool_template.go` provides a complete s
 
 ## Related Documentation
 
-- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy
-- [**g8e Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode
-- [**A2A Protocol**](../a2a/a2a.md) - A2A protocol specification and integration
+- [**g8e Protocol**](./spec.md) - The wire contract and governance hierarchy
+- [**g8e Operator (g8eo)**](../../docs/architecture/operator.md) - Operator architecture and gateway mode
+- [**A2A Protocol**](./a2a.md) - A2A protocol specification and integration

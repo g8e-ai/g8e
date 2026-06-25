@@ -257,7 +257,7 @@ Sessions are cryptographically bound to their authentication mechanism.
 
 ## Reference Artifacts
 
-The following reference artifacts reside alongside this document in `docs/protocols/a2a/`:
+The following reference artifacts reside alongside this document in `protocol/docs/`:
 
 - **`a2a.proto`**: The upstream A2A protocol protobuf definition (package `lf.a2a.v1`). This is the canonical schema for the Agent-to-Agent protocol surface, including `SendMessage`, `SendStreamingMessage`, `GetTask`, `ListTasks`, `CancelTask`, `SubscribeToTask`, push notification configuration, and `AgentCard` discovery. The g8e Gateway does not implement the full upstream A2A service surface; it integrates A2A skill invocations via the `A2A_CALL` action type and the `/api/v1/a2a/call` endpoint.
 - **`a2a.json`**: A non-normative JSON Schema bundle extracted from the proto definitions. This artifact provides schema validation for JSON-based tooling and is not used at runtime by the gateway.
@@ -266,6 +266,6 @@ The following reference artifacts reside alongside this document in `docs/protoc
 
 ## Related Documentation
 
-- [**g8e Protocol**](../../architecture/protocol.md) - The wire contract and governance hierarchy.
-- [**Operator (g8eo)**](../../architecture/operator.md) - Operator architecture and gateway mode.
-- [**MCP Protocol**](../mcp/mcp.md) - MCP protocol specification and integration.
+- [**g8e Protocol**](./spec.md) - The wire contract and governance hierarchy.
+- [**Operator (g8eo)**](../../docs/architecture/operator.md) - Operator architecture and gateway mode.
+- [**MCP Protocol**](./mcp.md) - MCP protocol specification and integration.

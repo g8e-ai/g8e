@@ -653,7 +653,7 @@ This example demonstrates a resource discovery operation using the `McpResourceL
 
 ## Related Documentation
 
-- [**g8e Operator**](./operator.md) - Operator architecture and execution boundary
-- [**g8e Gateway**](./gateway.md) - Gateway architecture
-- [**MCP Protocol**](../protocols/mcp/mcp.md) - MCP protocol specification and integration
-- [**A2A Protocol**](../protocols/a2a/a2a.md) - A2A protocol specification and integration
+- [**g8e Operator**](../../docs/architecture/operator.md) - Operator architecture and execution boundary
+- [**g8e Gateway**](../../docs/architecture/gateway.md) - Gateway architecture
+- [**MCP Protocol**](./mcp.md) - MCP protocol specification and integration
+- [**A2A Protocol**](./a2a.md) - A2A protocol specification and integration

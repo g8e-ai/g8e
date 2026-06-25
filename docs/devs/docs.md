@@ -48,7 +48,18 @@ When documenting any security, execution, or transactional pipeline, you must tr
 
 ---
 
-## 5. Documentation Lifecycle Procedures
+## 5. Documentation Separation Principle
+
+The repository maintains a strict separation between two documentation domains:
+
+- **Protocol Reference (`protocol/docs/`)**: Contains protocol wire specifications, schema definitions, constant references, and generated API docs. These documents describe the protocol contract independent of any platform implementation. A protocol library consumer should not need to navigate the platform `docs/` tree to find the protocol specification.
+- **Platform Documentation (`docs/`)**: Contains user guides, architecture overviews, compliance reports, developer guides, and position papers. These documents describe how the g8e platform implements and uses the protocol.
+
+When creating or updating documentation, place it in the correct domain. Protocol specs, schemas, and constant references belong in `protocol/docs/`. Platform guides, architecture docs, and compliance material belong in `docs/`. Cross-references between the two domains must use relative paths (e.g., `../../protocol/docs/spec.md` from within `docs/`).
+
+---
+
+## 6. Documentation Lifecycle Procedures
 
 When modifying, extending, or creating documentation within this repository, follow this execution protocol:
 
