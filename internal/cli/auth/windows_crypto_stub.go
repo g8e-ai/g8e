@@ -32,19 +32,9 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 	return constants.ErrWindowsCertStoreImport
 }
 
-// SignWithWindowsHello is a stub for non-Windows platforms.
-func SignWithWindowsHello(transactionHash []byte) ([]byte, error) {
-	return nil, constants.ErrWindowsHelloSigning
-}
-
 // AuthenticateWithWindowsHello is a stub for non-Windows platforms.
 func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAssertionResponse, error) {
 	return nil, constants.ErrWindowsHelloAuthentication
-}
-
-// RegisterWithWindowsHello is a stub for non-Windows platforms.
-func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
-	return nil, constants.ErrWindowsHelloRegistration
 }
 
 // WebAuthnAttestationResponse is a stub for non-Windows platforms.

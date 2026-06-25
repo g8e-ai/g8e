@@ -39,11 +39,6 @@ func CollectionName(c constants.CollectionName) string {
 	return string(c)
 }
 
-// EnvVar converts an EnvVarKey constant to string for environment variable access.
-func EnvVar(e constants.EnvVarKey) string {
-	return string(e)
-}
-
 // DocumentID converts a DocumentID constant to string for database lookups.
 func DocumentID(d constants.DocumentID) string {
 	return string(d)

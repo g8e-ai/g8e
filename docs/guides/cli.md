@@ -1266,7 +1266,7 @@ Use "g8e swagger [command] --help" for more information about a command.
 
 ### swagger init
 ```
-Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses swaggo/swag to parse annotations and generate docs. The command will automatically use the installed `swag` binary, or fall back to running it via `go run` if not available.
+Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses the `swag` CLI tool to parse annotations and generate docs. The `swag` binary must be installed (`go install github.com/swaggo/swag/cmd/swag@latest`).
 
 Usage:
   g8e swagger init [flags]
@@ -1280,7 +1280,6 @@ Flags:
 The generated documentation includes:
 - `swagger.json` - OpenAPI 2.0 specification in JSON format
 - `swagger.yaml` - OpenAPI 2.0 specification in YAML format
-- `docs.go` - Go file with embedded documentation for the gateway
 
 ### swagger serve
 ```

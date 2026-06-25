@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+* **Non-native Go dependencies eliminated** — Replaced three non-native Go dependencies with native Go solutions:
+  * `github.com/google/uuid` — Replaced with `internal/uuid` package using `crypto/rand` for UUIDv4 generation.
+  * `golang.org/x/text` — Replaced `cases.Title(language.English)` with a native `titleCase()` helper using the `strings` package.
+  * `github.com/swaggo/swag` + `github.com/swaggo/http-swagger` — Replaced `httpSwagger.Handler` with a native embedded HTML handler serving Swagger UI from CDN. The `swag` CLI tool is now installed externally (`go install`) rather than via `go run` fallback. Removed 15+ transitive indirect dependencies.
+* **`internal/services/gateway/docs/docs.go`** — Deleted auto-generated Swagger registration file (zero importers, contained `init()` function).
+
+---
+
 ## [1.2.0] - 2026-06-24
 
 ### Overview

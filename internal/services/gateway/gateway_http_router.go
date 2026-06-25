@@ -24,7 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/gateway/console"
-	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
@@ -37,11 +36,10 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.State, h.handleState)
 
 	// Swagger UI documentation
-	mux.Handle("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("/swagger/doc.json"),
-		httpSwagger.DocExpansion("none"),
-	))
+	mux.HandleFunc("/swagger/", handleSwaggerUI)
+	mux.HandleFunc("/swagger/index.html", handleSwaggerUI)
 	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		http.ServeFile(w, r, paths.SwaggerFilePath)
 	})
 
@@ -340,4 +338,33 @@ func isSafeHost(host string, cfg *config.Config) bool {
 	}
 
 	return false
+}
+
+const swaggerUIHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>g8e Gateway API - Swagger UI</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+<style>body{margin:0}</style>
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+window.onload=function(){
+  SwaggerUIBundle({
+    url:"/swagger/doc.json",
+    dom_id:"#swagger-ui",
+    docExpansion:"none",
+    deepLinking:true
+  });
+};
+</script>
+</body>
+</html>`
+
+func handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(swaggerUIHTML))
 }

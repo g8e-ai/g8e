@@ -24,7 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/google/uuid"
+	"github.com/g8e-ai/g8e/internal/uuid"
 )
 
 // CLI Passkey Bootstrap Handlers

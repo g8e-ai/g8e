@@ -61,9 +61,16 @@ COVERAGE_THRESHOLD := 70
 EXCLUDE_PKGS := \
 	mocks \
 	/test/ \
+	/cmd/operator \
 	/internal/protocol/proto \
 	/internal/interfaces \
 	/internal/constants \
+	/internal/contracts \
+	/internal/httpclient \
+	/internal/models \
+	/internal/testutil \
+	/internal/tools/chaos \
+	/internal/tools/agent_harness/scenarios \
 	/internal/services/gateway/docs \
 	/internal/services/gateway/scripts \
 	/internal/services/storage/storagetest

@@ -25,8 +25,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 // DoctrineRule represents a single doctrine rule from the JSON file
@@ -527,9 +525,20 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 	}
 }
 
+// titleCase capitalizes the first letter of each word in s, leaving the rest lowercase.
+func titleCase(s string) string {
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + strings.ToLower(w[1:])
+		}
+	}
+	return strings.Join(words, " ")
+}
+
 func printResultsTable(org string, results []scenarioResult) {
 	fmt.Printf("\n%s\n  %s Scenario Results Summary\n%s\n",
-		strings.Repeat("═", 60), cases.Title(language.English).String(org), strings.Repeat("═", 60))
+		strings.Repeat("═", 60), titleCase(org), strings.Repeat("═", 60))
 	fmt.Println()
 
 	// Print header

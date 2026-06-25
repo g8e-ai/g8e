@@ -22,11 +22,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/uuid"
 )
 
 // authCacheInvalidator defines the auth service operations needed by UserService
@@ -97,7 +96,7 @@ func (s *UserService) CreateUserWithSub(sub string) (*models.User, error) {
 		Provider:           string(constants.AuthProviderJWT),
 		Status:             constants.UserStatusActive,
 		IsBootstrap:        false,
-		WebAuthnUserID:     uuid.New().String(),
+		WebAuthnUserID:     uuid.NewString(),
 	}
 
 	data, err := json.Marshal(user)
@@ -155,7 +154,7 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 		}
 	}
 
-	userID := uuid.New().String()
+	userID := uuid.NewString()
 
 	// Use provided OS user info, or fall back to gateway's local OS user
 	if localOSUser == nil {
@@ -164,7 +163,7 @@ func (s *UserService) createUser(isBootstrap bool, localOSUser *models.LocalOSUs
 
 	// Generate WebAuthnUserID for v4 compliance (Windows Hello requires a GUID, not SID)
 	// This is a stable 16-byte GUID used for WebAuthn operations
-	webAuthnUserID := uuid.New().String()
+	webAuthnUserID := uuid.NewString()
 
 	// Zero-PII: Only user ID and passkey credentials are stored
 	user := &models.User{
@@ -272,7 +271,7 @@ func (s *UserService) FindBootstrapUser() (*models.User, error) {
 
 func (s *UserService) appendAdminAudit(entry models.AdminAuditEntry) error {
 	if entry.ID == "" {
-		entry.ID = uuid.New().String()
+		entry.ID = uuid.NewString()
 	}
 	if entry.At.IsZero() {
 		entry.At = time.Now().UTC()

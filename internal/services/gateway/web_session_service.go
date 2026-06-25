@@ -19,11 +19,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/uuid"
 )
 
 // WebSessionService handles web session persistence and management.
@@ -43,7 +42,7 @@ func NewWebSessionService(db *CanonicalDBService, logger *slog.Logger) *WebSessi
 
 // CreateWebSession creates a new web session after successful authentication.
 func (s *WebSessionService) CreateWebSession(userID string) (*models.WebSession, error) {
-	webSessionID := uuid.New().String()
+	webSessionID := uuid.NewString()
 	now := time.Now()
 
 	webSession := &models.WebSession{
