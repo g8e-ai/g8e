@@ -1285,16 +1285,14 @@ func (ass *SQLAuditStore) GetDataDir() string {
 }
 
 // encryptContent encrypts content using the encryption vault.
-// When the vault is locked, content is stored as plaintext so that audit records
-// are never blocked by vault state. The encrypted column will be 0 in that case.
+// Vault is required and must be unlocked. Returns error if vault is locked (fail-closed).
 func (ass *SQLAuditStore) encryptContent(content string) ([]byte, error) {
 	if content == "" {
 		return nil, nil
 	}
 
 	if !ass.encryptionVault.IsUnlocked() {
-		ass.logger.Warn("Vault is locked; storing audit content as plaintext")
-		return []byte(content), nil
+		return nil, constants.ErrAuditStoreVaultLocked
 	}
 
 	encrypted, err := ass.encryptionVault.Encrypt([]byte(content))

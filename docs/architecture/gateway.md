@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
@@ -242,7 +242,7 @@ Every transaction submitted to `POST /api/v1/governance/envelopes` must pass thr
 Defined in `internal/services/governance/l1_doctrine.go`. Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
 ### L2 Consensus (Tribunal Deliberation)
-Defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` posture, the gateway calls the Tribunal's `Deliberate` endpoint (via `LocalDeliberator` for in-process deliberation or `HTTPTribunalDeliberator` for remote tribunals) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the `TribunalStoreService`.
+Defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` posture, the gateway calls the Tribunal's `Deliberate` endpoint (via `LocalDeliberator` for in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the `TribunalStoreService`.
 
 ### L3 Notary (Human Authorization)
 Defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
@@ -428,6 +428,6 @@ The browser utility (`internal/cli/platform/browser.go`) provides cross-platform
 
 ## Related Documentation
 
-- [**g8e Protocol**](./protocol.md) - The wire contract and governance hierarchy.
+- [**g8e Protocol**](../../protocol/docs/spec.md) - The wire contract and governance hierarchy.
 - [**g8e Operator**](./operator.md) - Sovereign host-side execution agent and MCP server.
 - [**CLI Reference**](../guides/cli.md) - Complete CLI command documentation including agent integration.

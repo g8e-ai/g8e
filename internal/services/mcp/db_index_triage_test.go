@@ -18,7 +18,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -35,52 +34,6 @@ func (m *mockDBOpener) Open(driverName, dataSourceName string) (*sql.DB, error) 
 		return nil, m.openErr
 	}
 	return m.db, nil
-}
-
-// mockRows is a mock implementation of sql.Rows for testing.
-type mockRows struct {
-	columns  []string
-	data     [][]interface{}
-	pos      int
-	closeErr error
-	scanErr  error
-}
-
-func (m *mockRows) Columns() []string {
-	return m.columns
-}
-
-func (m *mockRows) Close() error {
-	return m.closeErr
-}
-
-func (m *mockRows) Next() bool {
-	if m.pos >= len(m.data) {
-		return false
-	}
-	m.pos++
-	return true
-}
-
-func (m *mockRows) Scan(dest ...interface{}) error {
-	if m.scanErr != nil {
-		return m.scanErr
-	}
-	if m.pos > len(m.data) {
-		return sql.ErrNoRows
-	}
-	row := m.data[m.pos-1]
-	for i, val := range row {
-		if i < len(dest) {
-			switch d := dest[i].(type) {
-			case *string:
-				*d = val.(string)
-			default:
-				return fmt.Errorf("unsupported scan type")
-			}
-		}
-	}
-	return nil
 }
 
 func TestDBIndexTriageTool_Name(t *testing.T) {

@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
@@ -58,7 +58,7 @@ Plain HTTP is used only for the bootstrap and CLI enrollment paths because the C
 
 #### Agent App Enrollment (Delegated Credentials)
 
-When `g8e mcp agent run` launches an AI agent, it calls `EnrollAgentApp` (`internal/cli/auth/agent_enroll.go:79`) to issue the agent a short-lived delegated credential (1-hour certificate). This certificate carries:
+When `g8e mcp agent run` launches an AI agent, it calls `EnrollAgentApp` (`internal/cli/auth/agent_enroll.go:82`) to issue the agent a short-lived delegated credential (1-hour certificate). This certificate carries:
 - A SPIFFE URI SAN identifying the agent: `spiffe://g8e.local/app/<agent-name>`
 - The requestor's human identity (bound at issuance time on the gateway)
 
@@ -75,7 +75,7 @@ On Windows, enrollment uses the Windows Certificate Store with TPM-backed keys v
 The platform supports authentication via external Identity Providers (IdPs) for BYO clients on MCP and A2A endpoints.
 - **JWKS Integration**: The gateway validates JWT tokens against configured JWKS endpoints.
 - **JIT Provisioning**: Users are provisioned Just-In-Time (JIT) based on the JWT subject claim upon their first successful authentication, subject to platform owner authorization.
-- **Persona Mapping**: JWT roles are mapped to internal binding personas via the `PersonaService` defined in `internal/services/gateway/user_service.go:392`.
+- **Persona Mapping**: JWT roles are mapped to internal binding personas via the `PersonaService` defined in `internal/services/gateway/user_service.go:391`.
 
 ### 1.5 Browser-Facing Console & L3 Passkey Brokerage
 
@@ -88,7 +88,32 @@ The **g8e Console** (served exclusively over HTTPS at `/console`) is a zero-depe
 #### L7 mTLS Enforcement Model
 To support browser-based clients that cannot hold mTLS client certificates, the HTTPS server's TLS configuration is set to `tls.VerifyClientCertIfGiven` (rather than strict `RequireAndVerifyClientCert`). Security is rigorously enforced at the application layer:
 - **Centralized Public Registry**: The `PublicRouteRegistry` explicitly allowlists routes that can bypass mTLS (e.g., `/console/`, landing/redirect page, and browser-facing passkey registration/authentication endpoints).
+- **Registered Browser Passkey Endpoints**:
+  - `/api/v1/auth/passkeys/cli-browser-register/challenge`
+  - `/api/v1/auth/passkeys/cli-browser-register/verify`
+  - `/api/v1/auth/passkeys/browser/authenticate/challenge`
+  - `/api/v1/auth/passkeys/browser/authenticate/verify`
 - **Fail-Closed Default**: The `auth.Middleware()` acts as a strict, fail-closed gate. Any request to a non-public route that does not carry a verified mTLS certificate is immediately rejected at Layer 7.
+
+#### WebSessionAuth Subtree Routing
+Web-session authenticated routes (e.g., user profile, approvals, passkey list/revocation) are mounted on the main `mux` via `WebSessionAuth` using standard Go `http.ServeMux` subtree patterns:
+- `/api/v1/users/` (matching `/api/v1/users/me`)
+- `/api/v1/auth/sessions/` (matching `/api/v1/auth/sessions/me`)
+- `/api/v1/approvals` & `/api/v1/approvals/` (matching pending list and action sub-paths)
+- `/api/v1/auth/passkeys` & `/api/v1/auth/passkeys/` (matching listing and individual key revocation)
+
+This subtree-match pattern (defined with trailing slashes) ensures all nested endpoints are seamlessly guarded by the `WebSessionAuth` middleware, while the outer public/mTLS routes (like exact-match `/api/v1/users` or public browser passkey handlers) continue to resolve correctly based on Go's longest-prefix routing rules.
+
+#### Excluded Prefixes for mTLS-Protected Sub-Paths
+The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management routes (list, revoke by credential ID) and mTLS-only routes (register, authenticate). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as public, `PublicRouteRegistry` supports **excluded prefixes**:
+- `/api/v1/auth/passkeys/register` — mTLS-only passkey registration challenge/verify
+- `/api/v1/auth/passkeys/authenticate` — mTLS-only passkey authentication challenge/verify
+- `/api/v1/auth/passkeys/jit-` — JIT passkey bootstrap (excluded only when JWKS is not configured)
+
+The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes.
+
+#### Approval Page Redirect
+The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={txHash}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.
 
 #### Dual-Auth Passkey Endpoints
 To avoid circular dependency during authentication, dedicated browser-facing endpoints are registered on the public `cliPasskeyMux` with CORS support:
@@ -114,7 +139,7 @@ See [Network Architecture](./network.md).
 
 ## 3. 5-Layer Verification Sequence (Interlock)
 
-The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:83`.
+The platform implements a deterministic 5-layer governance sequence. Every mutation must pass through all active layers before execution. The structural schema is defined as `GovernanceEnvelope` in `protocol/proto/g8e/common/v1/common.proto:92`.
 
 ### Layer 1: Technical Bedrock (L1Doctrine)
 *Implementation: `internal/services/governance/l1_doctrine.go:35`*
@@ -136,18 +161,17 @@ L2 provides multi-agent cryptographic attestation of payload safety through a Tr
 - **Tribunal Quorum**: The L4 Warden verifies L2 votes by loading the `TribunalPolicy` from `TribunalStore`, checking that each signer is a tribunal member, resolving their Ed25519 public key from `SignerStore`, verifying the signature, and counting affirmative votes against the quorum threshold. The `RequireDistinct` option prevents duplicate signers.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:33`*
+*Implementation: `internal/services/governance/l3_notary.go:60` (`outboundL3Notary` struct); interface at `internal/services/governance/l3_notary.go:35`*
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway suspends transactions requiring L3 approval, storing them in the suspended transaction pool.
 - **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn passkey for web sessions.
 - **Approval Window**: CLI-based approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
 - **Cryptographic Binding**: The CLI proof requires a hex-encoded Ed25519 signature of exactly 64 bytes (`cli_signature`) and, when configured, an mTLS certificate fingerprint (`mtls_cert_fingerprint`) that must match the fingerprint recorded at suspension time.
-- **Composite L3 Verification**: The `CompositeL3Verifier` (`internal/services/gateway/composite_l3_verifier.go:35`) routes L3 proof verification based on proof type. If the proof contains `mtls_cert_fingerprint`, it delegates to `CLIL3Notary` (`internal/services/gateway/cli_l3_notary.go:38`) for CLI mTLS session verification. Otherwise, it delegates to `PasskeyService` (`internal/services/gateway/passkey_service.go:63`) for WebAuthn assertion verification.
-- **CLI L3 Notary**: The `CLIL3Notary` verifies that the user is active, the CLI session exists and belongs to the user, the certificate fingerprint matches the session's stored fingerprint, the session is active and not expired, and the certificate is not revoked via the PKI authority.
+- **Gateway L3 Verification**: The `outboundL3Notary` (`internal/services/governance/l3_notary.go:60`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:89`), routes L3 proof verification based on proof type. If the proof contains `mtls_cert_fingerprint`, it uses the CLI verification path with the `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) for CLI mTLS session verification. Otherwise, it delegates to the `PasskeyService` (`internal/services/gateway/passkey_service.go:63`) for WebAuthn assertion verification.
+- **CLI Session Verifier**: The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) implements the `governance.CLISessionVerifier` interface and verifies that the user is active, the CLI session exists and belongs to the user, the certificate fingerprint matches the session's stored fingerprint (constant-time comparison), the session is active and not expired, and the certificate is not revoked via the PKI authority.
 - **Passkey Service**: The `PasskeyService` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
-- **Outbound L3 Notary**: The `outboundL3Notary` (`internal/services/governance/l3_notary.go:43`) provides L3 verification for outbound mode, verifying cryptographic signatures over the transaction hash against suspended and approved transactions.
-- **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:58`) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
+- **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:64`) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
 *Implementation: `internal/services/governance/l4_warden.go:246`*
@@ -157,14 +181,15 @@ The Warden is the final fail-closed gate before execution. It verifies in the fo
 2. **Nonce Reservation**: Early durable replay protection via `ReplayStore.ReserveNonce`, committed to SQLite before any expensive cryptographic checks. Expiry is checked before reservation; expired transactions are rejected.
 3. **Stateless Validation**: Structural integrity checks, action type recognition, typed payload decoding, L1Doctrine compliance, and transaction hash verification (both `id` and `transaction_hash` must equal the computed hash).
 4. **Stateful Validation**: State Merkle root consistency check via `StateRootProvider`; rejects the envelope if the provided `state_merkle_root` does not match the current root.
-5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification loads the `TribunalPolicy` from `TribunalStore`, verifies each signer is a tribunal member, resolves their Ed25519 public key from `SignerStore` by `key_id`, verifies the signature over `{transaction_hash}|{decision}`, and counts affirmative votes against the quorum threshold. L3 proof verification delegates to the configured `L3Notary` implementation, typically the `CompositeL3Verifier` which routes to `PasskeyService` (WebAuthn) or `CLIL3Notary` (mTLS) based on proof type.
+5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification loads the `TribunalPolicy` from `TribunalStore`, verifies each signer is a tribunal member, resolves their Ed25519 public key from `SignerStore` by `key_id`, verifies the signature over `{transaction_hash}|{decision}`, and counts affirmative votes against the quorum threshold. L3 proof verification delegates to the configured `L3Notary` implementation, typically the `outboundL3Notary` constructed by `NewGatewayL3Notary`, which routes to `PasskeyService` (WebAuthn) or `cliSessionVerifier` (mTLS) based on proof type.
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:52`*
+*Implementation: `internal/services/governance/l5_actuator.go:51`*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Fail-Closed Pre-Execution**: Receipt signing and initial audit logging must both succeed before the execution handler is invoked. If either fails, the transaction is aborted.
 - **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `ScrubbingService.RehydratePayload`.
+- **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving `Capability` (`internal/services/governance/capability.go:39`) from the `VerifiedTransaction` via `MintCapability` (`internal/services/governance/capability.go:117`). The capability binds the action type, target resource, transaction hash, and expiry, and is injected into the execution context. The capability is dissolved immediately after execution completes or fails, ensuring zero standing privileges outside the lifetime of a single `Execute()` call.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A) via `ExecutionHandler.ExecuteVerifiedTransaction`.
 - **Action Receipts**: Issues a signed `ActionReceipt` using the Actuator's own Ed25519 key over a canonical JSON serialization of the receipt fields, providing immutable proof of the execution outcome.
 - **Commitment**: Records the transaction in the `SQLAuditStore` and, where configured, in the console audit store.

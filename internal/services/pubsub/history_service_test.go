@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -35,7 +36,7 @@ func TestNewHistoryService(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 		require.NotNil(t, svc)
 		assert.Equal(t, cfg, svc.config)
@@ -49,7 +50,7 @@ func TestHistoryService_SetAuditStore(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		// Create a mock audit store
@@ -63,7 +64,7 @@ func TestHistoryService_SetAuditStore(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		svc.SetAuditStore(nil)
@@ -76,7 +77,7 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
@@ -93,7 +94,7 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		req := &operatorv1.FetchLogsRequested{ExecutionId: ""}
@@ -114,7 +115,7 @@ func TestHistoryService_HandleFetchLogsRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		req := &operatorv1.FetchLogsRequested{ExecutionId: "exec-1"}
@@ -137,7 +138,7 @@ func TestHistoryService_HandleFetchHistoryRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
@@ -156,7 +157,7 @@ func TestHistoryService_HandleFetchFileHistoryRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
@@ -173,7 +174,7 @@ func TestHistoryService_HandleFetchFileHistoryRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		req := &operatorv1.FetchFileHistoryRequested{FilePath: "/test/file.txt"}
@@ -196,7 +197,7 @@ func TestHistoryService_HandleRestoreFileRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
@@ -213,7 +214,7 @@ func TestHistoryService_HandleRestoreFileRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		req := &operatorv1.RestoreFileRequested{
@@ -239,7 +240,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		req := &operatorv1.FetchFileDiffRequested{DiffId: "diff-1"}
@@ -258,7 +259,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		// Create vault
@@ -293,7 +294,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		// Create vault
@@ -332,7 +333,7 @@ func TestHistoryService_publishFetchLogsResult(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
 		record := &models.ExecutionRecord{

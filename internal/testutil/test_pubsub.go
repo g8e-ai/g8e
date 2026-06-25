@@ -30,6 +30,43 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
+// WaitForMessage waits for a message on a channel with timeout
+func WaitForMessage(t *testing.T, msgChan <-chan []byte, timeout time.Duration) []byte {
+	t.Helper()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case msg := <-msgChan:
+		return msg
+	case <-timer.C:
+		t.Fatalf("testutil: timeout waiting for pub/sub message")
+		return nil
+	}
+}
+
+// AssertMessageReceived asserts that a message is received on a channel within timeout
+func AssertMessageReceived(t *testing.T, msgChan <-chan []byte, timeout time.Duration, expectedPattern string) []byte {
+	t.Helper()
+
+	payload := WaitForMessage(t, msgChan, timeout)
+	if payload == nil {
+		t.Fatalf("testutil: expected message but got nil")
+	}
+
+	if expectedPattern != "" && !strings.Contains(string(payload), expectedPattern) {
+		t.Fatalf("testutil: expected message to contain '%s' but got: %s", expectedPattern, string(payload))
+	}
+
+	return payload
+}
+
+// CreateTestChannel returns a unique channel name for testing
+func CreateTestChannel(t *testing.T, prefix string) string {
+	t.Helper()
+	return fmt.Sprintf("%s:test:%s:%d", prefix, t.Name(), time.Now().UnixNano())
+}
+
 // TestPubSubAvailable checks if the client pub/sub gateway is reachable.
 // Fatally fails the test when client is unavailable - all callers are integration
 // tests that require a live stack.
@@ -43,10 +80,11 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 	trustStore := certs.NewTrustStore(certs.GetRawCA())
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
-	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
+	stdTLS, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		t.Fatalf("testutil: TLS setup failed: %v", err)
+		t.Fatalf("testutil: TLS config build failed: %v", err)
 	}
+	dialer := httpclient.WebSocketDialerWithTLS(stdTLS)
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
@@ -69,10 +107,11 @@ func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []b
 	trustStore := certs.NewTrustStore(certs.GetRawCA())
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
-	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
+	stdTLS, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		t.Fatalf("testutil: TLS dialer build failed: %v", err)
+		t.Fatalf("testutil: TLS config build failed: %v", err)
 	}
+	dialer := httpclient.WebSocketDialerWithTLS(stdTLS)
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
@@ -136,10 +175,11 @@ func PublishTestMessage(t *testing.T, baseURL string, channel string, message st
 	trustStore := certs.NewTrustStore(certs.GetRawCA())
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
-	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
+	stdTLS, err := tlsConfig.GetTLSConfig()
 	if err != nil {
-		t.Fatalf("testutil: TLS dialer build failed: %v", err)
+		t.Fatalf("testutil: TLS config build failed: %v", err)
 	}
+	dialer := httpclient.WebSocketDialerWithTLS(stdTLS)
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
 		if resp != nil {
@@ -158,41 +198,4 @@ func PublishTestMessage(t *testing.T, baseURL string, channel string, message st
 	if err := ws.WriteMessage(websocket.BinaryMessage, pubBytes); err != nil {
 		t.Fatalf("testutil: channel %s publish failed: %v", channel, err)
 	}
-}
-
-// WaitForMessage waits for a message on a channel with timeout
-func WaitForMessage(t *testing.T, msgChan <-chan []byte, timeout time.Duration) []byte {
-	t.Helper()
-
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case msg := <-msgChan:
-		return msg
-	case <-timer.C:
-		t.Fatalf("Timeout waiting for pub/sub message")
-		return nil
-	}
-}
-
-// AssertMessageReceived asserts that a message is received on a channel within timeout
-func AssertMessageReceived(t *testing.T, msgChan <-chan []byte, timeout time.Duration, expectedPattern string) []byte {
-	t.Helper()
-
-	payload := WaitForMessage(t, msgChan, timeout)
-	if payload == nil {
-		t.Fatalf("Expected message but got nil")
-	}
-
-	if expectedPattern != "" && !strings.Contains(string(payload), expectedPattern) {
-		t.Fatalf("Expected message to contain '%s' but got: %s", expectedPattern, string(payload))
-	}
-
-	return payload
-}
-
-// CreateTestChannel returns a unique channel name for testing
-func CreateTestChannel(t *testing.T, prefix string) string {
-	t.Helper()
-	return fmt.Sprintf("%s:test:%s:%d", prefix, t.Name(), time.Now().UnixNano())
 }

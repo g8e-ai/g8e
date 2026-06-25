@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ---
 
@@ -36,6 +36,13 @@ An Operator executes tools on a host and connects back to a Gateway. Start an op
 - `operator run -k, --key <path>`, Specifies the Operator private key.
 - `operator run --cert <path>`, Specifies the Operator certificate.
 - `operator run --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
+- `operator run --working-dir <path>`, Working directory for command execution.
+- `operator run -c, --cloud`, Cloud operator mode.
+- `operator run -p, --provider <provider>`, Cloud provider (aws, gcp, azure).
+- `operator run -s, --execution-vault`, Enable execution vault (data stays in working directory).
+- `operator run -G, --no-git`, Disable Git integration.
+- `operator run -l, --log <level>`, Log level: info, error, debug.
+- `operator run --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
 
 The binary always starts in CLI mode. Use `gw start` or `operator run` subcommands to launch worker processes.
 
@@ -109,7 +116,7 @@ The `operator` subcommand provides tools for managing remote Operator instances:
 
 - `./g8e operator list`, Lists all Operators currently connected to the Gateway.
 - `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH and optionally starts it. Requires `./g8e auth enroll` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`), `--background`.
-- `./g8e operator stream --hosts <hosts>`, Streams the binary to remote hosts via SSH pipe and makes it executable on the remote host. Requires `./g8e auth enroll` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`).
+- `./g8e operator stream [host...] [flags]`, Streams the binary to remote hosts via native Go crypto/ssh and executes it directly on each host. Supports concurrent streaming and advanced SSH configuration. Flags: `--arch` (target architecture: amd64, arm64, 386), `--hosts` (file of hosts, one per line, or `-` for stdin), `--concurrency` (max parallel SSH sessions, default: 50), `--timeout` (per-host dial and inject timeout in seconds, default: 60), `--endpoint` (platform endpoint; if set, starts Operator on each remote host), `--no-git` (disable ledger), `--ssh-config` (path to SSH config file), `--known-hosts` (path to SSH known_hosts file), `--binary-dir` (directory containing arch-specific Operator builds), `--ssh-identity-file` (SSH identity file path), `--ssh-user` (SSH username), `--ssh-passphrase` (passphrase for encrypted SSH private keys), `--preflight` (enable pre-flight SSH connectivity check).
 - `./g8e operator cp <target>`, Copies the binary to a local path.
 - `./g8e operator scp <user@host:path>`, Copies the binary to a remote host. Flags: `--port` (`-P`), `--identity` (`-i`), `--recursive` (`-r`), `--preserve` (`-p`), `--verbose` (`-v`), `--compression` (`-C`), `--prompt`.
 

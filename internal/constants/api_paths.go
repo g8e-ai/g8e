@@ -55,8 +55,9 @@ var APIPaths = struct {
 	KV       string `json:"kv"`
 	KVPrefix string `json:"kv_prefix"`
 	// PubSub routes
-	PubSubPublish string `json:"pubsub_publish"`
-	PubSubStream  string `json:"pubsub_stream"`
+	PubSubPublish   string `json:"pubsub_publish"`
+	PubSubStream    string `json:"pubsub_stream"`
+	PubSubWebSocket string `json:"pubsub_websocket"`
 	// SSE routes
 	SSEPush   string `json:"sse_push"`
 	SSEEvents string `json:"sse_events"`
@@ -182,8 +183,9 @@ var APIPaths = struct {
 	KV:       "/api/v1/kv/",
 	KVPrefix: "/api/v1/kv/",
 	// PubSub routes
-	PubSubPublish: "/api/v1/pubsub/publish",
-	PubSubStream:  "/api/v1/pubsub/stream",
+	PubSubPublish:   "/api/v1/pubsub/publish",
+	PubSubStream:    "/api/v1/pubsub/stream",
+	PubSubWebSocket: "/ws/pubsub",
 	// SSE routes
 	SSEPush:   "/api/v1/sse/push",
 	SSEEvents: "/api/v1/sse/events",

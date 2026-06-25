@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -37,7 +37,7 @@ The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf 
 The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The consensus mechanism is defined in `internal/services/governance/l2_consensus.go`.
 
 ### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions, it validates mTLS certificate fingerprints only (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands. The notary verification logic is defined in `internal/services/governance/l3_notary.go`.
+The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands. The notary verification logic is defined in `internal/services/governance/l3_notary.go`.
 
 ### L4: Warden (Pre-dispatch Gate)
 The **L4Warden** is the final verification gate before execution, defined in `internal/services/governance/l4_warden.go`. It enforces:
@@ -47,11 +47,13 @@ The **L4Warden** is the final verification gate before execution, defined in `in
 4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
 
 ### L5: Actuator (Execution Boundary)
-The **L5Actuator** is the singular execution boundary permitted to mutate host state, defined in `internal/services/governance/l5_actuator.go`. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model**:
+The **L5Actuator** is the singular execution boundary permitted to mutate host state, defined in `internal/services/governance/l5_actuator.go`. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
 1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local `SQLAuditStore`.
 2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereign Execution Boundary**, using local tokens.
-3. **Execution**: Dispatches to the handler and captures the output.
-4. **Post-execution**: Signs a final `ActionReceipt` with status `COMPLETED` or `FAILED`, captures the new `state_root_after`, and publishes the signed result back to the Gateway.
+3. **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving `Capability` bound to the transaction hash and action type, enforcing zero standing privileges. The capability is injected into the execution context for downstream handlers.
+4. **Execution**: Dispatches to the handler and captures the output.
+5. **Capability Dissolution**: Dissolves the JIT capability immediately after execution completes or fails, preventing reuse.
+6. **Post-execution**: Signs a final `ActionReceipt` with status `COMPLETED` or `FAILED`, captures the new `state_root_after`, and publishes the signed result back to the Gateway.
 
 ---
 
@@ -98,7 +100,7 @@ The g8e Operator compiles native tool playbooks directly into the g8e Node to pr
 #### File Operations Playbook
 - **fs_file_checksum**: Calculates cryptographic checksums (SHA256, MD5) of files to verify integrity and detect changes.
 - **fs_disk_usage**: Reports disk usage statistics for mounted filesystems to identify capacity issues.
-- **file_read**: Reads file contents with optional line range limits and encoding detection for safe file inspection.
+- **read_file**: Reads file contents with optional line range limits and encoding detection for safe file inspection.
 
 #### Cloud & Orchestration Playbook
 - **cloud_metadata**: Retrieves cloud provider metadata (AWS, GCP, Azure) to identify instance identity, region, and availability zone.
@@ -107,7 +109,7 @@ The g8e Operator compiles native tool playbooks directly into the g8e Node to pr
 - **operator_deploy**: Deploys or updates g8e operators on remote hosts via secure channels.
 
 #### Shell Execution Playbook
-- **shell_execute**: Executes shell commands within the g8e execution boundary with strict argument validation and output capture.
+- **run_shell_command**: Executes shell commands within the g8e execution boundary with strict argument validation and output capture.
 
 ### Identity, PKI, and mTLS
 The g8e Operator establishes workload identity bound to SPIFFE-style URI SANs, strictly enforced over mutual TLS (mTLS). See [Network Architecture](./network.md) for complete SPIFFE ID formats, PKI hierarchy, mTLS enforcement policies, and certificate revocation mechanisms.
@@ -214,7 +216,7 @@ The Operator will:
 5. Execute through the Actuator boundary
 6. Emit a signed ActionReceipt
 
-### 6. Review Audit Trail
+### 5. Review Audit Trail
 
 Query the local audit vault to verify governance enforcement:
 
@@ -229,7 +231,7 @@ Each entry includes:
 - State root before/after
 - Operator session ID
 
-### 7. Explore Native Tools
+### 6. Explore Native Tools
 
 The Operator compiles native tool playbooks for common operational tasks:
 - **Database Triage**: Schema discovery, query validation, isolated reads, index triage
@@ -237,7 +239,7 @@ The Operator compiles native tool playbooks for common operational tasks:
 - **Process Governance**: Resource profiling, safe signal handling, process tree inspection
 - **Network Validation**: Socket auditing, endpoint probing, HTTP health checks, DNS resolution, TLS certificate inspection, SSH known hosts management
 - **System Introspection**: System information, environment variables, time/clock, service status, container status, disk usage
-- **File Operations**: File checksumming, disk profiling
+- **File Operations**: File checksumming, disk usage analysis, file reading
 - **Cloud & Orchestration**: Cloud metadata, Kubernetes inspection, Git operations, operator deployment
 - **Shell Execution**: Safe shell command execution
 
@@ -258,6 +260,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Local Audit Vault | `internal/services/storage/audit_store.go` |
 | Native Git Ledger | `internal/services/storage/ledger.go` |
 | Native Tools | `internal/services/mcp/native_tool_registry.go` |
+| JIT Capability | `internal/services/governance/capability.go` |
 | Native Tool Handlers | `internal/services/mcp/native_handlers.go` |
 | Operator Entrypoint | `cmd/operator/main.go` (binary) → CLI tree at `internal/cli/cmd/` + worker bodies at `internal/cli/serve/` |
 | Protocol Definitions | `protocol/proto/g8e/common/v1/common.proto` |
@@ -267,4 +270,4 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Event Constants | `protocol/constants/events.json` |
 | Port Constants | `protocol/constants/ports.json` |
 
-See also: [g8e Protocol](./protocol.md), [g8e Gateway](./gateway.md).
+See also: [g8e Protocol](../../protocol/docs/spec.md), [g8e Gateway](./gateway.md).

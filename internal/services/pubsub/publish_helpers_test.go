@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -127,7 +128,7 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-1",
@@ -159,7 +160,7 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-1",
@@ -185,7 +186,7 @@ func TestPublishLFAATypedResponseTo(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		client.SetPublishError(true)
 
 		msg := &PubSubCommandMessage{
@@ -217,7 +218,7 @@ func TestPublishLFAAErrorTo(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 
 		msg := &PubSubCommandMessage{
 			ID:                "msg-1",
@@ -241,7 +242,7 @@ func TestPublishLFAAErrorTo(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		client.SetPublishError(true)
 
 		msg := &PubSubCommandMessage{

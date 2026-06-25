@@ -153,6 +153,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/auth/passkeys/browser/authenticate/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn authentication challenge for browser-based login.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Browser passkey authenticate challenge",
+                "parameters": [
+                    {
+                        "description": "User ID request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/browser/authenticate/verify": {
+            "post": {
+                "description": "Verifies the WebAuthn authentication assertion and creates a web session cookie.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Browser passkey authenticate verify",
+                "parameters": [
+                    {
+                        "description": "Assertion response",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/data/blobs/{namespace}/{id}": {
             "get": {
                 "description": "Retrieves a blob from the data store",
@@ -344,6 +412,29 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/console/": {
+            "get": {
+                "description": "Serves the single-page application dashboard for WebAuthn/passkey operations.",
+                "consumes": [
+                    "text/html"
+                ],
+                "produces": [
+                    "text/html"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Console SPA",
+                "responses": {
+                    "200": {
+                        "description": "Returns the index.html SPA",
                         "schema": {
                             "type": "string"
                         }

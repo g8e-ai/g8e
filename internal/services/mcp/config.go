@@ -140,40 +140,6 @@ func validateGatewayURL(gatewayURL string) error {
 	return nil
 }
 
-// NewStdioConfig creates a stdio transport MCP configuration for local native tools.
-func NewStdioConfig(g8eBinaryPath string) (*Config, error) {
-	if g8eBinaryPath == "" {
-		return nil, constants.ErrMCPConfigBinaryPathEmpty
-	}
-	if strings.TrimSpace(g8eBinaryPath) == "" {
-		return nil, constants.ErrMCPConfigBinaryPathWhitespace
-	}
-
-	return &Config{
-		MCPServers: map[string]ServerConfig{
-			"g8e-native": {
-				Transport: TransportConfig{
-					Type:    "stdio",
-					Command: g8eBinaryPath,
-					Args:    []string{"mcp", "stdio"},
-				},
-				TLS: nil,
-				Capabilities: Capabilities{
-					Tools:     true,
-					Resources: false,
-					Prompts:   false,
-				},
-				Description: "g8e native tools (stdio transport)",
-				Notes: []string{
-					"Uses stdio transport for direct native tool access.",
-					"No gateway governance layer applied.",
-					"Requires g8e binary in PATH or full path specified.",
-				},
-			},
-		},
-	}, nil
-}
-
 // SimpleStdioServerConfig represents a simplified MCP server configuration for stdio transport.
 // This format is compatible with Cursor/Devin MCP clients.
 type SimpleStdioServerConfig struct {

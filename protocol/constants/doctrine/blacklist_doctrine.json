@@ -1,0 +1,91 @@
+{
+  "source": "g8e_blacklist",
+  "version": "1.0.0",
+  "last_updated": "2026-06-25",
+  "license": "Proprietary",
+  "enabled": true,
+  "description": "Command blacklist for Operator execution. Defines forbidden commands, binaries, substrings, and arguments that are globally blocked regardless of whitelist configuration.",
+  "enforcement_policy": {
+    "description": "These patterns are applied as a hard safety net. Any command matching these patterns is blocked before execution.",
+    "restrictions": [
+      "All commands matching forbidden_patterns are blocked unconditionally",
+      "Blacklist enforcement takes precedence over whitelist allowances",
+      "Patterns are matched as case-insensitive substrings of the full command string"
+    ]
+  },
+  "forbidden_commands": [
+    "sudo",
+    "su",
+    "pkexec",
+    "doas",
+    "runas",
+    "nsenter",
+    "unshare"
+  ],
+  "forbidden_binaries": [
+    "nc",
+    "ncat",
+    "netcat",
+    "socat",
+    "cryptominer",
+    "xmrig",
+    "minerd"
+  ],
+  "forbidden_substrings": [
+    "chmod +s",
+    "chmod u+s",
+    "chmod g+s",
+    "setuid",
+    "setgid",
+    "eval ",
+    "exec ",
+    "$(",
+    "`",
+    "> /dev/sd",
+    "> /dev/nvme",
+    "> /dev/vd",
+    "dd if=",
+    ":(){ :|:& };:",
+    "| bash",
+    "| sh",
+    "| zsh",
+    "| python",
+    "| perl",
+    "| php",
+    "| ruby",
+    "| node",
+    "base64 -d",
+    "base64 --decode",
+    "rm -rf /",
+    "rm -rf /etc",
+    "rm -rf /var",
+    "rm -rf /usr",
+    "rm -rf /bin",
+    "chmod 777",
+    "chmod -R 777",
+    "chmod a+rwx",
+    "chown -R",
+    "> /etc/passwd",
+    "> /etc/shadow",
+    "> /etc/sudoers",
+    ">> /etc/passwd",
+    ">> /etc/shadow",
+    ">> /etc/sudoers",
+    "iptables -F",
+    "ufw disable",
+    "history -c",
+    "unset HISTFILE",
+    "rm $0",
+    "rm $BASH_SOURCE"
+  ],
+  "forbidden_arguments": [
+    "--no-preserve-root",
+    "--one-file-system -r"
+  ],
+  "forbidden_directories": [
+    "/etc",
+    "/boot",
+    "/sys",
+    "/proc"
+  ]
+}

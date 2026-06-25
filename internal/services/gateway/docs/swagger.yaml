@@ -148,6 +148,52 @@ paths:
       summary: Bootstrap CA Windows script (alias)
       tags:
       - bootstrap
+  /api/v1/auth/passkeys/browser/authenticate/challenge:
+    post:
+      consumes:
+      - application/json
+      description: Generates a WebAuthn authentication challenge for browser-based
+        login.
+      parameters:
+      - description: User ID request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      summary: Browser passkey authenticate challenge
+      tags:
+      - public
+  /api/v1/auth/passkeys/browser/authenticate/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verifies the WebAuthn authentication assertion and creates a web
+        session cookie.
+      parameters:
+      - description: Assertion response
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      summary: Browser passkey authenticate verify
+      tags:
+      - public
   /api/v1/data/blobs/{namespace}/{id}:
     get:
       description: Retrieves a blob from the data store
@@ -278,6 +324,22 @@ paths:
       summary: Bootstrap CA Windows script
       tags:
       - bootstrap
+  /console/:
+    get:
+      consumes:
+      - text/html
+      description: Serves the single-page application dashboard for WebAuthn/passkey
+        operations.
+      produces:
+      - text/html
+      responses:
+        "200":
+          description: Returns the index.html SPA
+          schema:
+            type: string
+      summary: Console SPA
+      tags:
+      - public
   /g8e-operator.ps1:
     get:
       description: Returns the Windows operator deployment script

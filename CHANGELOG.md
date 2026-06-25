@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+* **Non-native Go dependencies eliminated** — Replaced three non-native Go dependencies with native Go solutions:
+  * `github.com/google/uuid` — Replaced with `internal/uuid` package using `crypto/rand` for UUIDv4 generation.
+  * `golang.org/x/text` — Replaced `cases.Title(language.English)` with a native `titleCase()` helper using the `strings` package.
+  * `github.com/swaggo/swag` + `github.com/swaggo/http-swagger` — Replaced `httpSwagger.Handler` with a native embedded HTML handler serving Swagger UI from CDN. The `swag` CLI tool is now installed externally (`go install`) rather than via `go run` fallback. Removed 15+ transitive indirect dependencies.
+* **`internal/services/gateway/docs/docs.go`** — Deleted auto-generated Swagger registration file (zero importers, contained `init()` function).
+
+---
+
+## [1.2.1] - 2026-06-25
+
+### Overview
+
+v1.2.1 is a maintenance and stability release addressing critical routing, authentication, and UX bugs identified in the v1.2.0 g8e Console release. This update ensures seamless WebSessionAuth-guarded API routing, resolves browser WebAuthn accessibility without client certificates, and optimizes SPA interactive approval states.
+
+### Fixed
+
+* **WebSessionAuth Router Exact-Match Bug** — Fixed a critical routing bug where outer router `WebSessionAuth` prefix registration patterns used exact-matching patterns (without trailing slashes), causing sub-paths like `/api/v1/users/me` to fall through to the catch-all landing redirect. Now registers proper subtree-matching patterns.
+* **Browser Passkey Endpoints Missing from Public Registry** — Added the four browser-facing WebAuthn endpoints to `PublicRouteRegistry`, resolving a critical bug where browser authentication/registration requests were rejected with 401 Unauthorized by the mTLS middleware.
+* **Landing Page Redirect Extra Hop** — Changed landing page redirect from `/console` to `/console/` to avoid an unnecessary extra HTTP 301 hop.
+* **SPA Approval Auto-Trigger on Sign-In** — Fixed a UX issue where landing-redirected transaction approvals would fail to auto-trigger upon login because the location hash was only evaluated once on initial page load.
+* **SPA Unnecessary Passkeys Requests** — Optimized state loading to avoid wasteful, failing requests to passkey/approval endpoints when the user is logged out.
+* **PublicRouteRegistry Excluded Prefixes** — Fixed a security issue where the broad `/api/v1/auth/passkeys` public prefix exposed mTLS-only sub-paths (register, authenticate) and JIT passkey routes as public. Added an excluded-prefixes mechanism to `PublicRouteRegistry` that protects mTLS-only sub-paths while allowing WebSessionAuth management routes to bypass mTLS.
+* **Approval Page Redirect Extra Hop** — Changed approval page redirect from `/console#approve=` to `/console/#approve=` (with trailing slash) to avoid an unnecessary extra HTTP 301 hop from Go's `http.ServeMux` auto-redirect.
+* **L3 Notary Test `ExpiresAt` Bug** — Fixed `TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser` and `RejectsInvalidSignature` tests where missing `ExpiresAt` caused zero-value time (0001-01-01) to fail the SQL query's `WHERE expires_at > now` filter, causing tests to pass for the wrong reason.
+
+---
+
 ## [1.2.0] - 2026-06-24
 
 ### Overview
@@ -80,7 +111,7 @@ v1.1.8 is a maintenance and stability release focused on hardening the Tribunal 
 ### Added
 
 * **Tribunal Store Hardening** — Expanded `TribunalStoreService` with additional validation logic and comprehensive unit test coverage to ensure robust policy management.
-* **Tooling Reorganization** — Centralized development and testing tools (Agentic Tool Emulator and Chaos Testing utilities) by moving them from `test/` to `internal/tools/`, improving repository structure.
+* **Tooling Reorganization** — Centralized development and testing tools (Agent Harness and Chaos Testing utilities) by moving them from `test/` to `internal/tools/`, improving repository structure.
 * **E2E Harness Enhancements** — Significantly improved the E2E test harness (`test/e2e/harness.go`) and added new gateway test fixtures to increase test stability and coverage.
 
 ### Changed
@@ -91,7 +122,7 @@ v1.1.8 is a maintenance and stability release focused on hardening the Tribunal 
 ### Fixed
 
 * **Test Stability** — Resolved flakiness in several E2E and integration tests by improving fixture handling and harness reliability.
-* **Tool Integrity** — Fixed minor issues in the agentic tool emulator to ensure consistency across testing environments.
+* **Tool Integrity** — Fixed minor issues in the agent harness to ensure consistency across testing environments.
 
 ---
 
@@ -173,7 +204,7 @@ v1.1.5 is a code quality and test coverage release that focuses on error typing 
 
 * **Error Typing Improvements** — Systematically improved error typing across governance and storage services for better error handling and consistency.
 * **Test Coverage Expansion** — Significantly improved test coverage for CLI auth, pubsub, network operations, storage services, and history handler.
-* **Emulator Reorganization** — Moved agentic tool emulator to test directory for better code organization.
+* **Emulator Reorganization** — Moved agent harness to test directory for better code organization.
 * **Scenario Test Dissolution** — Dissolved scenario tests into standard integration tests for improved maintainability.
 * **Codebase Cleanup** — Removed unnecessary utilities (slices, sliceutil), unused mocks, and dissolved unnecessary interfaces.
 * **Posture Definitions Centralization** — Centralized posture definitions and removed duplicate code.
@@ -201,7 +232,7 @@ v1.1.4 is a code quality and test coverage release that significantly improves t
 
 ### Breaking Changes
 
-* **`emulator` renamed to `agentic-tool-emulator`** - The emulator CLI command and internal package are renamed to `agentic-tool-emulator` for clarity. Directory renamed from `internal/emulator` to `internal/agentic_tool_emulator`, CLI command changed from `g8e emulator` to `g8e agentic-tool-emulator`, and all references in code, documentation, and configuration files are updated accordingly.
+* **`emulator` renamed to `agent-harness`** - The emulator CLI command and internal package are renamed to `agent-harness` for clarity. Directory renamed from `internal/emulator` to `internal/agent_harness`, CLI command changed from `g8e emulator` to `g8e agent-harness`, and all references in code, documentation, and configuration files are updated accordingly.
 * **`local_http_stdio` (formerly `insecure_mcp`) mode removed** - The ungoverned local MCP node mode is removed entirely. It connected to an MCP gateway over WebSocket and executed `system.run`/`system.which` with no L1/L2/L3 verification — an unconditional governance bypass. All local MCP traffic now goes exclusively through the governed mTLS/HTTPS gateway surface (`g8e mcp stdio`). The `--local-http-stdio*` flags, `LocalHttpStdioGateway` port (18789), service package, config loader, and related constants are deleted.
 
 ### Changed

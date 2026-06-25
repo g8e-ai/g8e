@@ -4,8 +4,8 @@ title: Session & Identity Binding
 
 # Session & Identity Binding
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 Binding is the cryptographic and stateful linkage between platform sessions (web, CLI, operator) and the identities, agents, and Operator instances they authorize. It is the mechanism that answers: *"Which Operator is allowed to act on behalf of which session?"* and *"Which app is allowed to push events to which target?"*
 
@@ -74,7 +74,7 @@ In addition to the KV store (which is optimized for fast lookups), binding state
 | `last_updated_at` | time.Time | Last modification timestamp |
 | `status` | OperatorStatus | `active` when operators are bound, `terminated` when all unbound |
 
-This document serves as the **durability layer** — if the KV store is lost, the bound sessions document can reconstruct bindings.
+This document serves as the **durability layer**; if the KV store is lost, the bound sessions document can reconstruct bindings.
 
 ### 1.4 API Endpoints
 
@@ -90,11 +90,11 @@ Location: `internal/services/gateway/registration_service.go:448`
 
 For each operator ID in the request:
 
-1. **Validate** — fetch the Operator document, verify it belongs to the requesting user, and confirm it has an active `OperatorSessionID`.
-2. **KV: operator→web** — set `g8e:sessions:operator:{op_session_id}:bind` → `web_session_id`.
-3. **KV: web→operator** — fetch existing `g8e:sessions:web:{web_session_id}:bind`, append the operator session ID if not already present, write back.
-4. **Durable doc** — create or update the `BoundSessionsDocumentGo` in the `bound_sessions` collection, adding the operator ID and session ID.
-5. **Operator doc** — stamp `bound_web_session_id` on the Operator document for UI consumption.
+1. **Validate**: fetch the Operator document, verify it belongs to the requesting user, and confirm it has an active `OperatorSessionID`.
+2. **KV: operator→web**: set `g8e:sessions:operator:{op_session_id}:bind` → `web_session_id`.
+3. **KV: web→operator**: fetch existing `g8e:sessions:web:{web_session_id}:bind`, append the operator session ID if not already present, write back.
+4. **Durable doc**: create or update the `BoundSessionsDocumentGo` in the `bound_sessions` collection, adding the operator ID and session ID.
+5. **Operator doc**: stamp `bound_web_session_id` on the Operator document for UI consumption.
 
 **Request/Response types** (`internal/models/auth.go`):
 
@@ -121,11 +121,11 @@ Location: `internal/services/gateway/registration_service.go:624`
 
 For each operator ID:
 
-1. **Validate** — fetch the Operator document, verify ownership.
-2. **KV: operator→web** — delete `g8e:sessions:operator:{op_session_id}:bind`.
-3. **KV: web→operator** — fetch the web bind key, remove the operator session ID from the array. If the array is now empty, delete the key entirely; otherwise write back the reduced array.
-4. **Durable doc** — remove the operator from `BoundSessionsDocumentGo`. If no operators remain, set status to `terminated`.
-5. **Operator doc** — clear `bound_web_session_id` (set to empty string).
+1. **Validate**: fetch the Operator document, verify ownership.
+2. **KV: operator→web**: delete `g8e:sessions:operator:{op_session_id}:bind`.
+3. **KV: web→operator**: fetch the web bind key, remove the operator session ID from the array. If the array is now empty, delete the key entirely; otherwise write back the reduced array.
+4. **Durable doc**: remove the operator from `BoundSessionsDocumentGo`. If no operators remain, set status to `terminated`.
+5. **Operator doc**: clear `bound_web_session_id` (set to empty string).
 
 ### 1.7 Target Context (`SetTargetContext`)
 
@@ -168,7 +168,7 @@ CLI mTLS cert (SPIFFE URI) → CLI session → OperatorSessionID → Operator se
 
 ### 2.2 `cliCertBoundToOperator`
 
-Location: `internal/services/gateway/gateway_auth.go:660`
+Location: `internal/services/gateway/gateway_auth.go:706`
 
 This function verifies that a presented client certificate belongs to a CLI session whose `OperatorSessionID` matches the claimed operator session. It is used during authentication to allow CLI clients to call internal APIs scoped by `cli_session_id` while presenting their CLI mTLS cert and the linked operator session as a Bearer token.
 
@@ -208,12 +208,12 @@ When external Identity Provider (IdP) JWT tokens are used for authentication, th
 
 ### 3.2 Flow
 
-Location: `internal/services/gateway/gateway_auth.go:857-873`
+Location: `internal/services/gateway/gateway_auth.go:903-919`
 
 1. JWT is validated against the configured JWKS endpoint.
 2. `PersonaService.MapRolesToPersona(jwt.Roles)` maps the JWT roles to a persona string. If mapping fails, `"default"` is used.
 3. The persona is stamped into the request context via `ContextKeyBindingPersona`.
-4. The MCP gateway envelope builder (`internal/services/mcp/gateway.go:1294`) reads the persona from context and sets `env.BindingPersona` on the governance envelope.
+4. The MCP gateway envelope builder (`internal/services/mcp/gateway.go:1216`) reads the persona from context and sets `env.BindingPersona` on the governance envelope.
 
 ### 3.3 Context Key
 
@@ -250,14 +250,14 @@ The `handlePKIAppsDelegated` handler:
 
 ### 4.3 Envelope Binding
 
-Location: `internal/services/mcp/gateway.go:1290-1314`
+Location: `internal/services/mcp/gateway.go:1212-1236`
 
 The governance envelope builder binds both identities to the envelope:
 
-- `env.OperatorId` / `env.OperatorSessionId` / `env.ActingAppId` — set from the app identity (for delegated credentials) or operator identity (for operator sessions).
-- `env.RequestorUserId` — set from the human user ID.
-- `env.BindingPersona` — set from the binding persona context key.
-- `env.TenantId` — set from the tenant ID context key.
+- `env.OperatorId` / `env.OperatorSessionId` / `env.ActingAppId`: set from the app identity (for delegated credentials) or operator identity (for operator sessions).
+- `env.RequestorUserId`: set from the human user ID.
+- `env.BindingPersona`: set from the binding persona context key.
+- `env.TenantId`: set from the tenant ID context key.
 
 This ensures every governance envelope carries the full identity chain: who requested it (human), what executed it (app/operator), and under which persona/tenant.
 
@@ -437,8 +437,8 @@ All binding-related errors are defined in `internal/constants/errors.go`:
 
 ## 10. Related Documents
 
-- [Authentication & Authorization](./auth.md) — mTLS, SPIFFE workload identity, JWT/JWKS, passkey bootstrap
-- [Operator Architecture](./operator.md) — Operator lifecycle, 5-layer verification, session management
-- [SSE Streaming](./sse.md) — Event delivery infrastructure, routing, push/stream authorization
-- [Network Architecture](./network.md) — PKI hierarchy, SPIFFE ID formats, mTLS enforcement
-- [Storage Architecture](./storage.md) — KV store, document store, collection schemas
+- [Authentication & Authorization](./auth.md): mTLS, SPIFFE workload identity, JWT/JWKS, passkey bootstrap
+- [Operator Architecture](./operator.md): Operator lifecycle, 5-layer verification, session management
+- [SSE Streaming](./sse.md): Event delivery infrastructure, routing, push/stream authorization
+- [Network Architecture](./network.md): PKI hierarchy, SPIFFE ID formats, mTLS enforcement
+- [Storage Architecture](./storage.md): KV store, document store, collection schemas

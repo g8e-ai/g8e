@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/mapping"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
@@ -95,7 +94,7 @@ func (w *L5Actuator) Execute(ctx context.Context, vt *VerifiedTransaction, cmdMs
 	}
 
 	// Map action type to event type for handler lookup
-	eventType := mapping.MapActionTypeToEventType(vt.ActionType)
+	eventType := constants.MapActionTypeToEventType(vt.ActionType)
 
 	w.Logger.Info("L5Actuator preparing to execute transaction",
 		"message_id", vt.Envelope.Id,

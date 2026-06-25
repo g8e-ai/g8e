@@ -28,7 +28,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
-	"github.com/g8e-ai/g8e/internal/services/pubsub"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -98,7 +98,7 @@ func TestG8eoService_Start_SuccessFlow(t *testing.T) {
 	service.bootstrap.SetHTTPClient(server.Client())
 
 	// Inject Mock PubSub Client
-	mockPubSub := pubsub.NewMockOperatorPubSubClient()
+	mockPubSub := pubsubtest.NewMockOperatorPubSubClient()
 	service.SetPubSubClient(mockPubSub)
 
 	// 4. Start the service

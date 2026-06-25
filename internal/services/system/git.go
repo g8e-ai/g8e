@@ -15,10 +15,6 @@ package system
 
 import (
 	"log/slog"
-	"os"
-	"runtime"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 const GitEmbedded = "embedded"
@@ -26,33 +22,4 @@ const GitEmbedded = "embedded"
 // ResolveGitBinary is a stub for native go-git migration.
 func ResolveGitBinary(logger *slog.Logger) string {
 	return GitEmbedded
-}
-
-// ValidateGitBinary is a stub for native go-git migration.
-func ValidateGitBinary(gitPath string) (string, error) {
-	if gitPath == "" {
-		return "", constants.ErrMCPGitOpsBinaryPathRequired
-	}
-	return "go-git v5 (embedded)", nil
-}
-
-func isExecutable(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	if info.IsDir() {
-		return false
-	}
-	if runtime.GOOS == "windows" {
-		return true // On Windows, if it exists and is not a dir, we consider it executable for these purposes
-	}
-	return info.Mode()&0111 != 0
-}
-
-func truncateHash(hash string) string {
-	if len(hash) <= 12 {
-		return hash
-	}
-	return hash[:12]
 }

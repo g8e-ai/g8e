@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ---
 
@@ -166,7 +166,7 @@ The gateway must serve as the Pub/Sub broker:
 
 - **WebSocket Fan-Out**: Real-time event streaming to subscribed clients.
 - **Channel Format**: Use the `{prefix}:{operator_id}:{operator_session_id}` channel format.
-- **Mutation Channels**: Restrict `cmd:*` and `agentic-tool-emulator:*` channels to envelope-based mutations only.
+- **Mutation Channels**: Restrict `cmd:*` and `agent-harness:*` channels to envelope-based mutations only.
 - **Non-Mutation Channels**: Allow direct publishing to `heartbeat:*`, `results:*`, `sse:*`, `ws_session:*`, `internal:*`.
 - **Subscribe-and-Wait**: Require subscribers to wait for the broker's subscription acknowledgment before publishing.
 
