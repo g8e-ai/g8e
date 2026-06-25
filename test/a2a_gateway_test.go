@@ -372,7 +372,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		resp, err := plainClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"1.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
