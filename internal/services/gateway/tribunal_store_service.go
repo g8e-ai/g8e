@@ -116,14 +116,20 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 		}
 	}
 
-	// New tribunals must be created enabled. Updates to existing tribunals
-	// may set Enabled=false to deactivate without deleting the policy.
-	if !policy.Enabled {
-		existing, err := s.GetTribunal(policy.ID)
-		if err != nil {
-			return fmt.Errorf("%w: failed to check existing tribunal: %v", constants.ErrConstraintViolation, err)
+	// Existence check: prevent silent overwrite of existing tribunals.
+	// - New tribunals must be created with Enabled=true.
+	// - Existing tribunals may only be updated via Enabled=false (disable path).
+	// - Overwriting an existing tribunal with Enabled=true is rejected.
+	existing, err := s.GetTribunal(policy.ID)
+	if err != nil {
+		return fmt.Errorf("%w: failed to check existing tribunal: %v", constants.ErrConstraintViolation, err)
+	}
+	if existing != nil {
+		if policy.Enabled {
+			return fmt.Errorf("%w: tribunal %s", constants.ErrAlreadyExists, policy.ID)
 		}
-		if existing == nil {
+	} else {
+		if !policy.Enabled {
 			return fmt.Errorf("%w", constants.ErrTribunalMustBeEnabled)
 		}
 	}

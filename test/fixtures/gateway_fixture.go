@@ -610,21 +610,23 @@ type TribunalSetup struct {
 // SetupTribunal wires a real TribunalService into the gateway fixture for consensus
 // posture integration tests. It generates nMembers Ed25519 key pairs, registers each
 // member's public key as a TrustedSigner, creates a TribunalPolicy in the TribunalStore,
-// constructs a TribunalService with all members holding private keys, and wires it into
-// both the gateway service (SetTribunal) and the MCP gateway (SetTribunalDeliberator).
+// constructs a TribunalService via the shared tribunal.NewTribunalFromPolicy factory,
+// and wires it into both the gateway service (SetTribunal) and the MCP gateway
+// (SetTribunalDeliberator).
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
-// in the TribunalService — the remaining policy members exist in the store but cannot
-// vote. This lets tests simulate quorum-not-reached by producing fewer votes than the
-// quorum threshold requires.
+// — the remaining policy members exist in the store but cannot vote (their keys resolve
+// to nil via the KeyProvider, and Deliberate skips nil-key members). This lets tests
+// simulate quorum-not-reached by producing fewer votes than the quorum threshold requires.
 //
-// This replicates the production bootstrapTribunal wiring from gateway_cmd.go:243-253
-// without importing package main.
+// This uses the same tribunal.NewTribunalFromPolicy factory as production BootstrapTribunal
+// in internal/cli/serve/gateway.go, eliminating the duplication identified in CS-12.
 func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers, quorum, nServiceMembers int) *TribunalSetup {
 	t.Helper()
 
 	memberAppIDs := make([]string, nMembers)
-	members := make([]tribunal.TribunalMember, 0, nServiceMembers)
+	memberKeys := make(map[string]ed25519.PrivateKey, nServiceMembers)
+	signingMembers := make([]tribunal.TribunalMember, 0, nServiceMembers)
 
 	for i := 0; i < nMembers; i++ {
 		appID := fmt.Sprintf("%s-member-%d", tribunalID, i)
@@ -642,7 +644,8 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 		require.NoError(t, err)
 
 		if i < nServiceMembers {
-			members = append(members, tribunal.TribunalMember{
+			memberKeys[appID] = priv
+			signingMembers = append(signingMembers, tribunal.TribunalMember{
 				AppID:      appID,
 				PrivateKey: priv,
 			})
@@ -659,16 +662,24 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 	err := f.Service.GetDB().TribunalStore.AddTribunal(policy)
 	require.NoError(t, err)
 
+	keyProvider := tribunal.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
+		if key, ok := memberKeys[appID]; ok {
+			return key, nil
+		}
+		return nil, fmt.Errorf("no private key for member %s (quorum-not-reached simulation)", appID)
+	})
+
 	doctrine := govsvc.NewL1Doctrine()
 	responder := response.NewWriter(testutil.NewTestLogger())
-	tribunalSvc := tribunal.NewTribunalService(tribunalID, members, doctrine, testutil.NewTestLogger(), responder)
+	tribunalSvc, err := tribunal.NewTribunalFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
+	require.NoError(t, err)
 
 	f.Service.SetTribunal(tribunalSvc)
 	f.MCPGateway.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
 
 	return &TribunalSetup{
 		TribunalID: tribunalID,
-		Members:    members,
+		Members:    signingMembers,
 		Service:    tribunalSvc,
 	}
 }

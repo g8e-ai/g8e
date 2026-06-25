@@ -178,6 +178,7 @@ const (
 	SecretsFileOperatorPrivateKey   = "operator_private_key"
 	SecretsFileCLIPrivateKey        = "cli_private_key"
 	SecretsFileSessionToken         = "session_token"
+	SecretsFileTribunalMemberKeyPrefix = "tribunal_member_"
 
 	DemosDirname                = "demos"
 	DemosComposeFile            = "compose.yml"
