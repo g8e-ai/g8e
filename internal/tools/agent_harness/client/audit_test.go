@@ -21,6 +21,7 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
 
@@ -196,8 +197,8 @@ func TestAuditReceipts(t *testing.T) {
 				if r.Method != http.MethodGet {
 					t.Errorf("expected GET, got %s", r.Method)
 				}
-				if r.URL.Path != "/api/audit/receipts" {
-					t.Errorf("expected path /api/audit/receipts, got %s", r.URL.Path)
+				if r.URL.Path != constants.APIPaths.AuditReceipts {
+					t.Errorf("expected path %s, got %s", constants.APIPaths.AuditReceipts, r.URL.Path)
 				}
 
 				receivedQuery = r.URL.Query()
@@ -296,8 +297,8 @@ func TestExportReceipts(t *testing.T) {
 				if r.Method != http.MethodGet {
 					t.Errorf("expected GET, got %s", r.Method)
 				}
-				if r.URL.Path != "/api/audit/receipts/export" {
-					t.Errorf("expected path /api/audit/receipts/export, got %s", r.URL.Path)
+				if r.URL.Path != constants.APIPaths.AuditReceiptsExport {
+					t.Errorf("expected path %s, got %s", constants.APIPaths.AuditReceiptsExport, r.URL.Path)
 				}
 
 				receivedQuery = r.URL.Query()
@@ -421,8 +422,8 @@ func TestDiscoverOperatorSession(t *testing.T) {
 				if r.Method != http.MethodGet {
 					t.Errorf("expected GET, got %s", r.Method)
 				}
-				if r.URL.Path != "/api/operators" {
-					t.Errorf("expected path /api/operators, got %s", r.URL.Path)
+				if r.URL.Path != constants.APIPaths.Operators {
+					t.Errorf("expected path %s, got %s", constants.APIPaths.Operators, r.URL.Path)
 				}
 
 				if tt.setupHandler != nil {

@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* **DoW Demo: Real Governance Envelope Submission** — Converted the DoW tactical edge demo Scenario 1 from scripted theater into a genuine end-to-end exercise. The `agent-sigint` container is now a real g8e binary that submits `GovernanceEnvelope`-wrapped `run_shell_command` tool calls through the full L1/L2/L5 pipeline. Added `dow-cross-cue` and `dow-bft-veto` harness scenarios. Added mock gimbal HTTP server (`gimbal.py`) and `slew.sh` demo artifact for actuation.
+* **Operator Cert Sharing for Agent Containers** — Agent containers in demos can now share the operator's enrolled mTLS credentials via a read-only volume mount (`operator_state:/root/.g8e:ro`), eliminating the need for a separate enrollment init container.
+* **Offline Session Discovery** — `DiscoverOperator` in the agent harness now parses the operator's PEM certificate SPIFFE URI SAN to extract operator ID and session ID, enabling headless session recovery in disconnected environments without network calls.
+
+### Fixed
+
+* **OperatorSessionId Propagation** — Fixed `SubmitMaximal` in the agent harness not setting `OperatorSessionId` on `GovernanceEnvelope`, causing L5 actuator receipt recording to fail with a FOREIGN KEY constraint. All call sites now correctly pass the session ID.
+* **Agent Harness API Path Hardcoding** — All five harness client methods (`DiscoverOperator`, `AuditReceipts`, `ExportReceipts`, `RegisterSigner`, `Approve`) now use `constants.APIPaths.*` constants instead of hardcoded path strings. Unit test path assertions also updated to use constants.
+
 ### Removed
 
+* **`demos/dow/enroll.sh`** — Deleted dead code. The enrollment init container approach has been replaced by operator cert sharing via volume mount.
 * **Non-native Go dependencies eliminated** — Replaced three non-native Go dependencies with native Go solutions:
   * `github.com/google/uuid` — Replaced with `internal/uuid` package using `crypto/rand` for UUIDv4 generation.
   * `golang.org/x/text` — Replaced `cases.Title(language.English)` with a native `titleCase()` helper using the `strings` package.

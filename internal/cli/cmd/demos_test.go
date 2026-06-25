@@ -43,6 +43,11 @@ func TestDemos(t *testing.T) {
 		assert.Contains(t, cmd.Long, "hermetically sealed")
 	})
 
+	t.Run("demos command has demo alias", func(t *testing.T) {
+		cmd := demosCmd()
+		assert.Contains(t, cmd.Aliases, "demo")
+	})
+
 	t.Run("demos command has all expected subcommands", func(t *testing.T) {
 		cmd := demosCmd()
 		require.NotNil(t, cmd)

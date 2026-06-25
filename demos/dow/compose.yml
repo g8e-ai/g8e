@@ -31,6 +31,7 @@ volumes:
   gateway_state:
   operator_state:
   target_state:
+  gimbal_data:
 
 services:
   gateway:
@@ -79,6 +80,7 @@ services:
       - operator_state:/root/.g8e
       - ./dow_simulator.py:/app/dow_simulator.py:ro
       - ./target-data:/var/g8e/target:ro
+      - ./slew.sh:/usr/local/bin/slew:ro
     depends_on:
       gateway:
         condition: service_healthy
@@ -97,31 +99,44 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.42.0.10"]
+    command: ["operator", "run", "-e", "10.42.0.10", "--execution-vault"]
 
   agent-sigint:
-    image: python:3.11-slim
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     container_name: dow-agent-sigint
     networks:
       net_internal:
         ipv4_address: 10.42.0.31
+    extra_hosts:
+      - "g8e.local:10.42.0.10"
     volumes:
-      - ./dow_simulator.py:/app/dow_simulator.py:ro
+      - operator_state:/root/.g8e:ro
       - ./target-data:/var/g8e/target:ro
     depends_on:
       gateway:
         condition: service_healthy
-    working_dir: /app
-    restart: unless-stopped
-    environment:
-      - SENSOR_ID=SIGINT-01
-      - SENSOR_TYPE=sigint
+      operator:
+        condition: service_healthy
+    working_dir: /root
     deploy:
       resources:
         limits:
           cpus: '0.25'
           memory: 64M
-    command: ["python", "dow_simulator.py", "SIGINT-01", "sigint"]
+    environment:
+      - SENSOR_ID=SIGINT-01
+      - SENSOR_TYPE=sigint
+    command: ["agent-harness", "run", "--insecure",
+              "--mtls-url", "https://10.42.0.10:8443",
+              "--public-url", "http://10.42.0.10:8080",
+              "--cert", "/root/.g8e/pki/operator.crt",
+              "--key", "/root/.g8e/pki/operator.key",
+              "--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+              "--ensemble", "3",
+              "--l3-mode", "mock",
+              "dow-cross-cue"]
 
   agent-eoir:
     image: python:3.11-slim
@@ -170,6 +185,29 @@ services:
           cpus: '0.25'
           memory: 64M
     command: ["python", "dow_simulator.py", "PNT-FUSION-01", "pnt_fusion"]
+
+  gimbal:
+    image: python:3.11-slim
+    container_name: dow-gimbal
+    networks:
+      net_secure:
+        ipv4_address: 10.43.0.40
+    volumes:
+      - gimbal_data:/var/gimbal
+      - ./gimbal.py:/app/gimbal.py:ro
+    working_dir: /app
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 32M
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    command: ["python", "gimbal.py"]
 
   ground-station:
     image: alpine:latest

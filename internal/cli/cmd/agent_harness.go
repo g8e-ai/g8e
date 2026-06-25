@@ -299,11 +299,15 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 		return err
 	}
 	opID := cfg.OperatorSessionID
+	opSessionID := ""
 	if opID == "" {
-		opID = client.DiscoverOperatorSession(ctx)
+		opID, opSessionID = client.DiscoverOperator(ctx)
+	} else {
+		opSessionID = opID
 	}
 	scenarios.SetGovKit(&scenarios.GovKit{
-		Ensemble: ens, Principal: prin, L3Mode: cfg.L3Mode, OperatorID: opID,
+		Ensemble: ens, Principal: prin, L3Mode: cfg.L3Mode,
+		OperatorID: opID, OperatorSessionID: opSessionID,
 	})
 
 	var errs []string

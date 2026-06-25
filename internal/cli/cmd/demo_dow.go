@@ -42,8 +42,8 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println(strings.Repeat("─", 60))
 		fmt.Println()
 		fmt.Println("  PROVES: The agent-sigint sensor detects a mock RF signal and emits")
-		fmt.Println("          an A2A cross-cue request to the g8e-gateway, which wraps it")
-		fmt.Println("          in a GovernanceEnvelope and forces L2 Consensus on the target")
+		fmt.Println("          a governed cross-cue request to the g8e-gateway, which wraps")
+		fmt.Println("          it in a GovernanceEnvelope and forces L2 Consensus on the target")
 		fmt.Println("          coordinates. The g8e-operator verifies the proofs and executes")
 		fmt.Println("          the camera slew via the L5 Actuator — with ZERO ground station")
 		fmt.Println("          intervention.")
@@ -52,32 +52,25 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("  ── Step 1: Confirm g8e gateway is live (consensus posture) ──────")
 		if err := demoStep(demoDir, "gateway health",
 			false,
-			"curl", "-s", "http://localhost:8086/api/v1/health",
+			"curl", "-sf", "http://localhost:8086/api/v1/health",
 		); err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Inspect the tactical environment (RF signals) ────────")
-		if err := demoStep(demoDir, "tactical environment",
+		fmt.Println("  ── Step 2: Verify agent enrollment (operator mTLS certs) ────────")
+		if err := demoStep(demoDir, "enrollment check",
 			false,
 			"docker", "compose", "exec", "-T", "agent-sigint",
-			"sh", "-c", "cat /var/g8e/target/tactical_environment.json | python3 -c \"import sys,json; d=json.load(sys.stdin); [print(f'  {s[\\\"signal_id\\\"]}: {s[\\\"type\\\"]} at {s[\\\"frequency_mhz\\\"]} MHz (conf: {s[\\\"confidence\\\"]}, class: {s[\\\"classification\\\"]})') for s in d.get('rf_environment',{}).get('signals',[])]\"",
+			"test", "-f", "/root/.g8e/pki/operator.crt",
 		); err != nil {
+			fmt.Println("  (operator cert not found — agent-sigint may not have started correctly)")
+			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Trigger SIGINT sensor scan (emits A2A cross-cue) ─────")
-		if err := demoStep(demoDir, "sigint scan",
-			false,
-			"docker", "compose", "exec", "-T", "agent-sigint",
-			"python", "/app/dow_simulator.py", "SIGINT-01", "sigint",
-		); err != nil {
-			hasErrors = true
-		}
-
-		fmt.Println("  ── Step 4: Confirm cross-cue doctrine is loaded ────────────────")
+		fmt.Println("  ── Step 3: Confirm cross-cue doctrine is loaded ────────────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosDoWDoctrineFile, "unauthorized_cross_cue"); err == nil {
 			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 unauthorized_cross_cue\n", constants.DemosDoWDoctrineFile)
 			fmt.Printf("  id:         %s\n", rule.ID)
@@ -91,7 +84,49 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 5: Verify SWaP constraints (governance overhead) ───────")
+		fmt.Println("  ── Step 4: Inspect the tactical environment (RF signals) ────────")
+		if err := demoStep(demoDir, "tactical environment",
+			false,
+			"docker", "compose", "exec", "-T", "agent-eoir",
+			"sh", "-c", "cat /var/g8e/target/tactical_environment.json | python3 -c \"import sys,json; d=json.load(sys.stdin); [print(f'  {s[\\\"signal_id\\\"]}: {s[\\\"type\\\"]} at {s[\\\"frequency_mhz\\\"]} MHz (conf: {s[\\\"confidence\\\"]}, class: {s[\\\"classification\\\"]})') for s in d.get('rf_environment',{}).get('signals',[])]\"",
+		); err != nil {
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 5: Run real g8e cross-cue (governed envelope → L2 → L5) ──")
+		if err := demoStep(demoDir, "dow-cross-cue via agent-harness",
+			false,
+			"docker", "compose", "run", "--rm", "-T",
+			"--no-deps",
+			"agent-sigint",
+			"agent-harness", "run", "--insecure",
+			"--mtls-url", "https://10.42.0.10:8443",
+			"--public-url", "http://10.42.0.10:8080",
+			"--cert", "/root/.g8e/pki/operator.crt",
+			"--key", "/root/.g8e/pki/operator.key",
+			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+			"--ensemble", "3",
+			"--l3-mode", "mock",
+			"dow-cross-cue",
+		); err != nil {
+			fmt.Println("  (cross-cue harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 6: Verify gimbal received the slew command ─────────────")
+		if err := demoStep(demoDir, "gimbal slew verification",
+			false,
+			"docker", "compose", "exec", "-T", "gimbal",
+			"python3", "-c",
+			"import urllib.request, json; r=urllib.request.urlopen('http://localhost:9000/slews'); d=json.loads(r.read()); slews=d.get('slews',[]); print(f'  Slews recorded: {len(slews)}'); [print(f'  az={s[\\\"az\\\"]}, el={s[\\\"el\\\"]}, ts={s[\\\"timestamp\\\"]}') for s in slews]; exit(0 if slews else 1)",
+		); err != nil {
+			fmt.Println("  (gimbal did not record any slew — L5 actuation may have failed)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 7: Verify SWaP constraints (governance overhead) ───────")
 		_ = demoStep(demoDir, "swap verification",
 			false,
 			"docker", "stats", "--no-stream",

@@ -83,8 +83,9 @@ func toDockerPath(path string) string {
 
 func demosCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "demos",
-		Short: "Manage g8e demo environments",
+		Use:     "demos",
+		Aliases: []string{"demo"},
+		Short:   "Manage g8e demo environments",
 		Long: `Manage Docker Compose demo environments for org-specific g8e deployments.
 Each org environment is hermetically sealed with no shared state, volumes, or cross-org dependencies.`,
 	}

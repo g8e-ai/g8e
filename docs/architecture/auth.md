@@ -120,6 +120,22 @@ To avoid circular dependency during authentication, dedicated browser-facing end
 - `/api/v1/auth/passkeys/browser/authenticate/challenge` - Begins the WebAuthn challenge for browser login.
 - `/api/v1/auth/passkeys/browser/authenticate/verify` - Verifies the WebAuthn assertion and issues a secure `g8e_session` cookie on success.
 
+#### Governance Envelope Authentication
+
+Governance envelope submission (`POST /api/v1/governance/envelopes`) requires operator or CLI mTLS certificates. App certificates (issued via `/api/v1/pki/apps/enroll`) are explicitly blocked from this endpoint by `handleAppAuth` in `gateway_auth.go`. There is no API-key or Bearer token path for governance envelopes. Only operator certs (with a valid operator session in the database) and CLI certs (with `X-G8E-CLI-Session-ID` header) can submit envelopes.
+
+#### Operator Device Enrollment (Headless)
+
+The `/api/v1/auth/device/enroll` endpoint is the correct headless enrollment path for operator containers. Unlike `/api/v1/pki/csr/sign` (which only signs a CSR without persisting a session), device enrollment creates an operator document, persists an operator session in the database, signs the CSR with the session ID embedded in the SPIFFE URI SAN, and writes `operator.crt`, `operator.key`, and `g8eg-ca-bundle.pem` to `/root/.g8e/pki/`. The operator's `operator run -e <endpoint>` command calls this endpoint internally.
+
+#### Operator Cert Sharing for Agent Containers
+
+In demo and edge deployments, agent containers that need to submit real governance envelopes can share the operator's enrolled credentials via a read-only volume mount (`operator_state:/root/.g8e:ro`). This avoids the need for a separate enrollment init container. The agent uses the operator's cert/key/CA bundle directly, and the gateway validates the operator session from the certificate's SPIFFE URI SAN.
+
+#### Offline Session Discovery (Cert SAN Parsing)
+
+In disconnected environments where the gateway's `/api/v1/operators` endpoint is unreachable, the `DiscoverOperator` method in `internal/tools/agent_harness/client/audit.go` parses the operator's PEM certificate locally, extracting the `operator_id` and `operator_session_id` from the SPIFFE URI SAN (`spiffe://g8e.local/operator/<user_id>/<operator_id>/<operator_session_id>`). This enables headless session recovery without network dependencies.
+
 ---
 
 ## 2. Network Security Foundation
