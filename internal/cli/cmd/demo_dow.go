@@ -62,10 +62,10 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("  ── Step 2: Verify agent enrollment (operator mTLS certs) ────────")
 		if err := demoStep(demoDir, "enrollment check",
 			false,
-			"docker", "compose", "exec", "-T", "agent-sigint",
+			"docker", "compose", "exec", "-T", "operator",
 			"test", "-f", "/root/.g8e/pki/operator.crt",
 		); err != nil {
-			fmt.Println("  (operator cert not found — agent-sigint may not have started correctly)")
+			fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
 			fmt.Println()
 			hasErrors = true
 		}
