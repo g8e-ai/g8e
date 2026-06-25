@@ -5,7 +5,7 @@ Version: v1.2.1
 
 ## Overview
 
-The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Following the v1.0.10 refactor, the monolithic `AuditVaultService` is consolidated into `SQLAuditStore`, `GitLedgerService`, and `HistoryHandler`. All services reside under `../../internal/services/storage/`.
+The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Following the v1.0.10 refactor, the monolithic `AuditVaultService` is consolidated into `SQLAuditStore`, `GitLedgerService`, and `HistoryHandler`. All services reside under `internal/services/storage/`.
 
 Mandatory [encryption at rest](./encryption.md) is enforced across the storage layer. Services require an unlocked vault for secure operations, with specific fail-open or fail-closed behaviors depending on the criticality of data continuity versus confidentiality.
 
@@ -30,7 +30,7 @@ Shared implementation patterns across the services:
 
 ## Core Services
 
-### Audit Store (`../../internal/services/storage/audit_store.go`)
+### Audit Store (`internal/services/storage/audit_store.go`)
 
 `SQLAuditStore` provides append-only audit logging for all system events. It is the authoritative record of operator sessions, events, file mutations, and signed action receipts.
 
@@ -68,7 +68,7 @@ type AuditStoreConfig struct {
 
 `EncryptionVault` is required; `NewSQLAuditStore` returns an error if it is nil.
 
-Default values (`DefaultAuditStoreConfig`): `DataDir: ".g8e/data"`, `DBPath: "g8e.db"` (resolved to `.g8e/data/g8e.db` via `pathutil.ResolveDBPath`), `MaxDBSizeMB: 2048`, `RetentionDays: 90`, `PruneIntervalMinutes: 60`, `OutputTruncationThreshold: 102400`, `HeadTailSize: 51200`.
+Default values (`DefaultAuditStoreConfig`): `DataDir: paths.Infra.DataDir` (resolves to `{baseDir}/.g8e/data`), `DBPath: constants.DbFilename` (`"g8e.db"`, resolved to `{DataDir}/g8e.db` via `pathutil.ResolveDBPath`), `MaxDBSizeMB: 2048`, `RetentionDays: 90`, `PruneIntervalMinutes: 60`, `OutputTruncationThreshold: 102400`, `HeadTailSize: 51200`.
 
 **Key Methods:**
 
@@ -93,7 +93,7 @@ Default values (`DefaultAuditStoreConfig`): `DataDir: ".g8e/data"`, `DBPath: "g8
 
 ---
 
-### Ledger (`../../internal/services/storage/ledger.go`)
+### Ledger (`internal/services/storage/ledger.go`)
 
 `GitLedgerService` provides git-backed version control for file modifications. Each operator session has its own isolated git repository. The go-git library is used directly; no git binary is invoked.
 
@@ -157,7 +157,7 @@ err = ledger.CompleteMirrorCreate(result, sessionID)
 
 ---
 
-### Execution Vault (`../../internal/services/storage/execution_vault.go`)
+### Execution Vault (`internal/services/storage/execution_vault.go`)
 
 `ExecutionVaultService` stores command execution results and file diffs. All content is encrypted then compressed before being written to SQLite. The vault must be unlocked for any write or read; the service is fail-closed.
 
@@ -188,7 +188,7 @@ type ExecutionVaultConfig struct {
 
 `vault.Vault` is passed as a constructor argument and is required. `NewExecutionVaultService` returns an error if it is nil.
 
-Default values (`DefaultExecutionVaultConfig`): `DBPath: ".g8e/execution_vault.db"` (from `constants.ExecutionVaultDBPath`), `MaxDBSizeMB: 1024`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
+Default values (`DefaultExecutionVaultConfig`): `DBPath: constants.ExecutionVaultDBPath` (`".g8e/execution_vault.db"`; overridden at runtime to `paths.Infra.ExecutionVaultDBPath`, which resolves to `{baseDir}/.g8e/data/execution_vault.db`), `MaxDBSizeMB: 1024`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
 
 **Key Methods:**
 
@@ -206,9 +206,9 @@ Default values (`DefaultExecutionVaultConfig`): `DBPath: ".g8e/execution_vault.d
 
 ---
 
-### Token Store (`../../internal/services/storage/token_store.go`)
+### Token Store (`internal/services/storage/token_store.go`)
 
-`TokenStore` is an interface defining encrypted key-value persistence for Sentinel tokens. The interface is consumed by `ScrubbingService` and implemented by `gateway.EncryptedKVAdapter` (`../../internal/services/gateway/encrypted_kv_adapter.go`).
+`TokenStore` is an interface defining encrypted key-value persistence for Sentinel tokens. The interface is consumed by `ScrubbingService` and implemented by `gateway.EncryptedKVAdapter` (`internal/services/gateway/encrypted_kv_adapter.go`).
 
 **Interface Definition:**
 
@@ -241,7 +241,7 @@ func NewEncryptedKVAdapter(kv *KVStoreService, v *vault.Vault) *EncryptedKVAdapt
 
 ---
 
-### Replay Store (`../../internal/services/storage/replay_store.go`)
+### Replay Store (`internal/services/storage/replay_store.go`)
 
 `SQLReplayStore` provides nonce-based replay protection. It uses SQLite's UNIQUE constraint on the `nonce` column for atomic replay detection.
 
@@ -266,7 +266,7 @@ type ReplayStoreConfig struct {
 }
 ```
 
-Default value (`DefaultReplayStoreConfig`): `DBPath: ".g8e/replay_store.db"` (from `constants.ReplayStoreDBPath`).
+Default value (`DefaultReplayStoreConfig`): `DBPath: constants.ReplayStoreDBPath` (`".g8e/replay_store.db"`; overridden at runtime to `paths.Infra.ReplayStoreDBPath`, which resolves to `{baseDir}/.g8e/data/replay_store.db`).
 
 No background pruner is started; callers invoke `Prune` and `CleanupStaleReserved` directly.
 
@@ -282,7 +282,7 @@ No background pruner is started; callers invoke `Prune` and `CleanupStaleReserve
 
 ---
 
-### Suspended Transaction Store (`../../internal/services/storage/suspended_transaction_store.go`)
+### Suspended Transaction Store (`internal/services/storage/suspended_transaction_store.go`)
 
 `SuspendedTransactionService` stores governance transactions awaiting L3 human approval.
 
@@ -310,7 +310,7 @@ type SuspendedTransactionConfig struct {
 }
 ```
 
-Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_transactions.db"` (from `constants.SuspendedTransactionDBPath`), `MaxDBSizeMB: 256`, `RetentionDays: 7`, `PruneIntervalMinutes: 30`.
+Default values (`DefaultSuspendedTransactionConfig`): `DBPath: constants.SuspendedTransactionDBPath` (`".g8e/suspended_transactions.db"`; overridden at runtime to `paths.Infra.SuspendedTransactionsDBPath`, which resolves to `{baseDir}/.g8e/data/suspended_transactions.db`), `MaxDBSizeMB: 256`, `RetentionDays: 7`, `PruneIntervalMinutes: 30`.
 
 **Key Methods:**
 
@@ -328,7 +328,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_t
 
 ---
 
-### Commitment Ledger (`../../internal/services/storage/commitment_ledger.go`)
+### Commitment Ledger (`internal/services/storage/commitment_ledger.go`)
 
 `CommitmentLedger` stores commitment attestations as raw JSON with atomic append operations that enforce chain integrity. It is constructed with an externally provided `sqliteutil.DB`; the `commitment_ledger` table must be created by the caller before use.
 
@@ -358,7 +358,7 @@ func NewCommitmentLedger(db *sqliteutil.DB, logger *slog.Logger) *CommitmentLedg
 
 ---
 
-### History Handler (`../../internal/services/storage/history_handler.go`)
+### History Handler (`internal/services/storage/history_handler.go`)
 
 `HistoryHandler` is a thin coordinator that combines `SQLAuditStore` and `GitLedgerService` to serve protobuf-encoded history requests.
 
@@ -437,10 +437,22 @@ Prune functions typically:
 
 ## Testing
 
-The `storagetest` subdirectory (`../../internal/services/storage/storagetest/`) contains test-only implementations:
+The storage package contains comprehensive unit tests co-located with each service implementation:
+
+- `audit_store_unit_test.go`: Unit tests for `SQLAuditStore` session, event, mutation, receipt, encryption, and config validation logic.
+- `ledger_test.go`, `ledger_diffcontent_test.go`, `ledger_diffstat_test.go`, `ledger_git_test.go`: Unit tests for `GitLedgerService` two-phase commit, diff generation, and git operations.
+- `execution_vault_test.go`: Unit tests for `ExecutionVaultService` encryption, compression, storage, and retrieval.
+- `replay_store_test.go`: Unit tests for `SQLReplayStore` nonce reservation, finalization, release, and cleanup.
+- `suspended_transaction_store_test.go`: Unit tests for `SuspendedTransactionService` store, retrieve, approve, and expire operations.
+- `commitment_ledger_test.go`: Unit tests for `CommitmentLedger` chain integrity and atomic append.
+- `history_handler_test.go`, `history_handler_unit_test.go`: Unit and integration tests for `HistoryHandler` protobuf request handling.
+- `storage_test_helpers_test.go`: Shared test helper utilities.
+
+The `storagetest` subdirectory (`internal/services/storage/storagetest/`) contains test-only implementations:
 
 - `audit_vault.go`: `TestSQLAuditStore`, a monolithic test implementation that integrates audit storage with a git ledger in a single struct. It includes an additional `chaos_events` table and `RecordChaosEvent`/`RecordChaosEvents` methods not present in production code.
 - `helpers.go`: `CreateTestVault` helper for initializing an unlocked `vault.Vault` in tests.
+- `audit_store_*_test.go`: Dedicated test suites for audit store config, encryption, events, mutations, receipts, sessions, and end-to-end flows.
 
 These implementations are kept separate from production code to avoid import cycles.
 

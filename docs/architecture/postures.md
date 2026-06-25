@@ -1,7 +1,7 @@
 # Governance Postures
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ## Overview
 
@@ -72,7 +72,7 @@ A third enforcement point exists at startup:
 - **Quorum must be >= 2** → `ErrConfigTribunalQuorumLow` (`internal/config/config.go:295-296`). This prevents single-member tribunals from being used in consensus posture.
 - The Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
-**Tribunal bootstrap** (`internal/cli/serve/gateway.go`): For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). Multi-member tribunals require separate key provisioning; members without private keys are constructed but cannot sign votes, and a warning is logged. Multi-member key provisioning is not yet implemented.
+**Tribunal bootstrap** (`internal/cli/serve/gateway.go:325-357`): The `BootstrapTribunal` function constructs a `TribunalService` from the `TribunalPolicy` stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). For multi-member tribunals, member keys are loaded from disk via `FileKeyProvider` (`internal/services/tribunal/factory.go:85-130`), which reads hex-encoded Ed25519 seeds from `{secretsDir}/{prefix}{tribunalID}_{appID}.key` files. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
 **What is audited but NOT gated**:
 - **L3 Notary proofs**: same behavior as doctrine: verified if present, recorded in receipt, but not required for mutations (`l4_warden.go:641-676`).
@@ -118,7 +118,7 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | Check | Code Location | Doctrine | Consensus | Notary |
 |---|---|---|---|---|
 | L1 Doctrine validation | `l4_warden.go:466-469` | **Enforced** | **Enforced** | **Enforced** |
-| Transaction hash integrity (incl. L3 proof binding) | `l4_warden.go:477-493`, `pkg/governance/types.go:107-135` | **Enforced** | **Enforced** | **Enforced** |
+| Transaction hash integrity (incl. L3 proof binding) | `l4_warden.go:477-493`, `pkg/governance/types.go:107-118` | **Enforced** | **Enforced** | **Enforced** |
 | Nonce replay protection | `l4_warden.go:325-359` | **Enforced** | **Enforced** | **Enforced** |
 | Expiry enforcement | `l4_warden.go:334-341` | **Enforced** | **Enforced** | **Enforced** |
 | State Merkle root validation | `l4_warden.go:500-526` | **Enforced** | **Enforced** | **Enforced** |
@@ -137,7 +137,7 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | Startup: tribunal ID required | `config.go:292-293` | - | **Enforced** | - |
 | Startup: quorum >= 2 | `config.go:295-296` | - | **Enforced** | - |
 | Startup: tribunal policy exists + enabled | `internal/cli/serve/gateway.go` | - | **Enforced** | - |
-| Invalid posture name → panic | `posture.go:75-80` | **Enforced** | **Enforced** | **Enforced** |
+| Invalid posture name → panic | `posture.go:75-81` | **Enforced** | **Enforced** | **Enforced** |
 
 **"Enforced"** = fail-closed gate; transaction is rejected if the check fails.
 **"Audited"** = result is verified if present and recorded in the receipt, but does not gate execution.
@@ -151,17 +151,17 @@ The posture is checked at the following code locations. Each check is a fail-clo
 
 The `TribunalService` (`internal/services/tribunal/service.go`) is the enrolled agentic application that deliberates on governance envelopes and produces L2 consensus votes. Each member is a distinct enrolled principal with its own Ed25519 key.
 
-**Deliberation flow** (`tribunal/service.go:78-122`):
+**Deliberation flow** (`tribunal/service.go:78-126`):
 1. Recompute the transaction hash and verify it matches `envelope.id`. Mismatch → `ErrTribunalHashMismatch`.
 2. Extract command data and intent from the envelope payload.
 3. Each member independently evaluates safety via `evaluateSafety()` (`tribunal/member.go:39-41`):
-   - **MITRE checks**: `L1Doctrine.AnalyzeCommand()`; if any signal has `BlockRecommended = true`, the payload is unsafe (`tribunal/member.go:43-55`).
+   - **MITRE checks**: `L1Doctrine.AnalyzeCommand()`; if any signal has `BlockRecommended = true`, the payload is unsafe (`tribunal/member.go:45-56`).
    - **Fail-closed on nil doctrine**: If doctrine is nil, `runMITREChecks` returns `false` (unsafe) (`tribunal/member.go:46-48`).
 4. Each member signs `<transaction_hash>|<decision>` with Ed25519 (`tribunal/member.go:81-88`).
 5. Votes are collected into `L2Metadata.Votes` with `tribunal_id` set.
 
 **Deliberation adapters**:
-- **LocalDeliberator** (`tribunal/service.go:171-196`): In-process adapter for single-binary deployments. Calls `TribunalService.Deliberate` directly without HTTP.
+- **LocalDeliberator** (`tribunal/service.go:179-204`): In-process adapter for single-binary deployments. Calls `TribunalService.Deliberate` directly without HTTP.
 
 ### L2 Signature Verification
 
@@ -175,12 +175,13 @@ The L4 Warden verifies L2 votes in `verifyL2Posture` (`l4_warden.go:549-639`). T
 
 ### L3 Notary Implementations
 
-The `L3Notary` interface (`internal/services/governance/l3_notary.go`) is implemented by:
+The `L3Notary` interface (`internal/services/governance/l3_notary.go:35-39`) is implemented by a single struct, `outboundL3Notary`, configured through three constructors:
 
-- **PasskeyService** (`internal/services/gateway/passkey_service.go`): WebAuthn assertion verification for web sessions. Uses `transaction_hash` as the challenge.
-- **CLIL3Notary** (`internal/services/gateway/cli_l3_notary.go`): mTLS certificate fingerprint verification for CLI sessions. Checks user active status, session ownership, session expiry, and certificate revocation.
-- **outboundL3Notary** (`internal/services/governance/l3_notary.go`): Operator-side approval. Verifies the transaction exists in `SuspendedTransactionStore`, is marked approved, has a valid CLI signature, and is within the 30-minute approval window.
-- **CompositeL3Verifier** (`internal/services/gateway/composite_l3_verifier.go`): Delegates to `CLIL3Notary` for `mtls_cert_fingerprint` proofs, otherwise to `PasskeyService`.
+- **NewOutboundL3Notary** (`internal/services/governance/l3_notary.go:68-73`): Operator-side approval. Verifies the transaction exists in `SuspendedTransactionStore`, is marked approved, has a valid Ed25519 signature over the transaction hash, matches the expected certificate fingerprint, and is within the 30-minute approval window.
+- **NewCLIL3Notary** (`internal/services/governance/l3_notary.go:78-84`): Gateway CLI mode. Wraps `outboundL3Notary` with a `CLISessionVerifier` that checks user active status, CLI session ownership, session expiry, and certificate revocation before the shared suspended-transaction and signature verification.
+- **NewGatewayL3Notary** (`internal/services/governance/l3_notary.go:89-96`): Unified gateway mode. Wraps `outboundL3Notary` with both a `CLISessionVerifier` and a `passkeyVerifier`. `VerifyL3Proof` dispatches based on proof type: proofs with `mtls_cert_fingerprint` use the CLI verification path; all others delegate to the passkey verifier.
+
+The passkey verifier is **PasskeyService** (`internal/services/gateway/passkey_service.go`), which implements `L3Notary` for WebAuthn assertion verification. It uses `transaction_hash` as the challenge and verifies the assertion against the registered passkey credentials for the user.
 
 ### L3 and Mutations
 
@@ -238,7 +239,7 @@ The L5 Actuator records posture enforcement results in every `ActionReceipt` (`l
 | Consensus | `L2_STATUS_REQUIRED_VALID` or `L2_STATUS_REQUIRED_FAILED` | `L3_STATUS_NOT_REQUIRED` |
 | Notary | `L2_STATUS_REQUIRED_VALID` or `L2_STATUS_REQUIRED_FAILED` | `L3_STATUS_REQUIRED_VALID` or `L3_STATUS_REQUIRED_FAILED` |
 
-These values are part of the canonical receipt JSON (`l5_actuator.go:239-250`) and are signed by the actuator's Ed25519 key. They are also persisted in the `ActionReceiptRecord` in the SQL audit store (`l5_actuator.go:300-317`).
+These values are part of the canonical receipt JSON (`l5_actuator.go:238-250`) and are signed by the actuator's Ed25519 key. They are also persisted in the `ActionReceiptRecord` in the SQL audit store (`l5_actuator.go:299-317`).
 
 ---
 

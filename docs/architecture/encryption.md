@@ -273,7 +273,7 @@ These paths are resolved relative to the current working directory at initializa
 
 The vault service (`internal/services/vault/vault.go`) provides:
 
-- `NewVault(config *VaultConfig)`: Create new vault instance with `VaultConfig` (requires `DataDir` and optional `Logger`).
+- `NewVault(config *VaultConfig)`: Create new vault instance with `VaultConfig` (requires `DataDir` and optional `Logger`). The vault is not initialized or unlocked until `Unlock()` is called.
 - `Unlock(privateKey []byte)`: Unwrap DEK with private key; loads header from disk and verifies fingerprint.
 - `Lock()`: Zero DEK from memory and set locked state.
 - `Close()`: Lock vault and release resources.

@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -356,10 +356,13 @@ See [Network Architecture](./network.md) for detailed port topology, authenticat
 
 ### Configuration
 
-The g8e platform uses CLI flags for production configuration. All paths are computed relative to project root. The following environment variables are supported for Tribunal configuration:
+The g8e platform uses CLI flags for production configuration. All paths are computed relative to project root. The following environment variables are supported:
 
 - `G8E_TRIBUNAL_ID`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture)
 - `G8E_TRIBUNAL_URL`: URL of the Tribunal service for L2 deliberation (e.g. `https://localhost:8443/tribunal/v1/deliberate`)
+- `G8E_VAULT_DIR`: Directory for vault data (overrides `--vault-dir`)
+- `G8E_VAULT_KEY`: Path to vault private key (overrides `--vault-key`)
+- `G8E_VAULT_REQUIRE_UNLOCK`: Set to `true` to require vault unlock at startup (overrides `--vault-require-unlock`)
 
 CLI flags:
 
@@ -380,6 +383,8 @@ CLI flags:
 - `--cert-mode <mode>`: Certificate mode: full (all hostnames/IPs), localhost (only localhost)
 - `--tribunal-id <id>`: ID of the TribunalPolicy for L2 consensus (required for `--consensus` posture, env: `G8E_TRIBUNAL_ID`)
 - `--tribunal-url <url>`: URL of the Tribunal service for L2 deliberation (env: `G8E_TRIBUNAL_URL`)
+- `--mcp-downstream-url <url>`: URL of a downstream MCP server to proxy discovery and execution to (default: none)
+- `--a2a-downstream-url <url>`: URL of a downstream A2A server to proxy execution to (default: none)
 - `--follow`: Follow log output after starting (like tail -f)
 
 ---
@@ -442,17 +447,19 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 | Network identity detector | `../../internal/services/network/identity.go` |
 | Network architecture | `./network.md` |
 | Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
-| Gateway HTTP routing | `../../internal/services/gateway/gateway_http.go` |
+| Gateway HTTP handler | `../../internal/services/gateway/gateway_http.go` |
+| Gateway HTTP routing | `../../internal/services/gateway/gateway_http_router.go` |
 | Pub/Sub command service | `../../internal/services/pubsub/pubsub_commands.go` |
 | Pub/Sub results service | `../../internal/services/pubsub/pubsub_results.go` |
 | MCP/A2A translation | `../../internal/services/mcp/gateway.go` |
 | Session management | `../../internal/services/gateway/cli_session_service.go`, `../../internal/services/gateway/operator_session_service.go`, `../../internal/services/gateway/web_session_service.go` |
-| CLI L3 verification | `../../internal/services/gateway/cli_l3_notary.go` |
-| Composite L3 verifier | `../../internal/services/gateway/composite_l3_verifier.go` |
+| CLI session verification | `../../internal/services/gateway/cli_session_verifier.go` |
 | Doctrine registry | `../../protocol/constants/doctrine/doctrine_registry.json` |
 | MCP vectors doctrine | `../../protocol/constants/doctrine/mcp_vectors_doctrine.json` |
 | Gitleaks doctrine | `../../protocol/constants/doctrine/gitleaks_doctrine.json` |
 | OWASP CRS doctrine | `../../protocol/constants/doctrine/owasp_crs_doctrine.json` |
+| Blacklist doctrine | `../../protocol/constants/doctrine/blacklist_doctrine.json` |
+| Whitelist doctrine | `../../protocol/constants/doctrine/whitelist_doctrine.json` |
 | RPC error codes | `../../internal/constants/rpc_errors.go` |
 | Governance posture | `../../internal/services/governance/posture.go` |
 

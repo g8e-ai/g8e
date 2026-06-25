@@ -1,6 +1,6 @@
 # Authentication & Authorization
 
-Last Updated: 2026-06-26
+Last Updated: 2026-06-25
 Version: v1.2.1
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
@@ -171,7 +171,6 @@ L3 ensures explicit human authorization for mutations.
 - **Gateway L3 Verification**: The `outboundL3Notary` (`internal/services/governance/l3_notary.go:60`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:89`), routes L3 proof verification based on proof type. If the proof contains `mtls_cert_fingerprint`, it uses the CLI verification path with the `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) for CLI mTLS session verification. Otherwise, it delegates to the `PasskeyService` (`internal/services/gateway/passkey_service.go:63`) for WebAuthn assertion verification.
 - **CLI Session Verifier**: The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) implements the `governance.CLISessionVerifier` interface and verifies that the user is active, the CLI session exists and belongs to the user, the certificate fingerprint matches the session's stored fingerprint (constant-time comparison), the session is active and not expired, and the certificate is not revoked via the PKI authority.
 - **Passkey Service**: The `PasskeyService` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
-- **Outbound L3 Notary**: The `outboundL3Notary` (`internal/services/governance/l3_notary.go:60`) provides L3 verification for outbound mode, verifying cryptographic signatures over the transaction hash against suspended and approved transactions. In gateway mode, `NewGatewayL3Notary` constructs the notary with both a `CLISessionVerifier` and a `PasskeyService` (implementing `L3Notary`), dispatching based on proof type.
 - **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:64`) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
 
 ### Layer 4: Warden (L4Warden)
@@ -185,11 +184,12 @@ The Warden is the final fail-closed gate before execution. It verifies in the fo
 5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification loads the `TribunalPolicy` from `TribunalStore`, verifies each signer is a tribunal member, resolves their Ed25519 public key from `SignerStore` by `key_id`, verifies the signature over `{transaction_hash}|{decision}`, and counts affirmative votes against the quorum threshold. L3 proof verification delegates to the configured `L3Notary` implementation, typically the `outboundL3Notary` constructed by `NewGatewayL3Notary`, which routes to `PasskeyService` (WebAuthn) or `cliSessionVerifier` (mTLS) based on proof type.
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:52`*
+*Implementation: `internal/services/governance/l5_actuator.go:51`*
 
 The Actuator represents the execution boundary and final audit commitment.
 - **Fail-Closed Pre-Execution**: Receipt signing and initial audit logging must both succeed before the execution handler is invoked. If either fails, the transaction is aborted.
 - **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `ScrubbingService.RehydratePayload`.
+- **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving `Capability` (`internal/services/governance/capability.go:39`) from the `VerifiedTransaction` via `MintCapability` (`internal/services/governance/capability.go:117`). The capability binds the action type, target resource, transaction hash, and expiry, and is injected into the execution context. The capability is dissolved immediately after execution completes or fails, ensuring zero standing privileges outside the lifetime of a single `Execute()` call.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A) via `ExecutionHandler.ExecuteVerifiedTransaction`.
 - **Action Receipts**: Issues a signed `ActionReceipt` using the Actuator's own Ed25519 key over a canonical JSON serialization of the receipt fields, providing immutable proof of the execution outcome.
 - **Commitment**: Records the transaction in the `SQLAuditStore` and, where configured, in the console audit store.

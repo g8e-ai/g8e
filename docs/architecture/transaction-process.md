@@ -1,7 +1,7 @@
 # Transaction Process: End-to-End Flow
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 This document walks through the complete transaction process in the g8e governance system, explaining each step from initial intent to final execution and audit. The process is designed to ensure security, accountability, and sovereignty throughout.
 
@@ -41,7 +41,7 @@ A **Principal** (human user or AI agent) submits an intent to perform an action.
 - **Agentic ensemble**: Through A2A (Agent-to-Agent) protocols or tool calls
 - **Native application**: Direct integration with g8e protocols
 
-The intent represents what the principal wants to accomplish—for example, "read a file," "deploy a container," or "query a database."
+The intent represents what the principal wants to accomplish, for example, "read a file," "deploy a container," or "query a database."
 
 ### Step 2: Producer Wraps Intent
 
@@ -73,7 +73,7 @@ The gateway accepts connections through:
 
 The gateway performs initial admission checks on the envelope (`internal/services/gateway/gateway_auth.go`, `internal/services/gateway/governance_envelope.go`, `internal/services/gateway/replay_store_service.go`):
 
-1. **mTLS enforcement**: The gateway requires `RequireAndVerifyClientCert` on the HTTPS port. The mTLS middleware extracts operator session IDs from certificate SPIFFE URI SANs and authenticates Operator, CLI, or App identities.
+1. **mTLS enforcement**: The HTTPS port uses `tls.VerifyClientCertIfGiven`, accepting and verifying client certificates when present but not requiring them at the TLS layer. mTLS enforcement for protected routes happens at the application layer via `auth.Middleware()`, which checks client cert presence and validity for all routes not in the `PublicRouteRegistry`. Browser clients (console, WebAuthn flows) reach public routes without a client cert. The mTLS middleware extracts operator session IDs from certificate SPIFFE URI SANs and authenticates Operator, CLI, or App identities.
 2. **Certificate revocation check**: The gateway verifies that the client certificate is not revoked via the PKI authority.
 3. **Transport-to-envelope identity binding**: The `verifyEnvelopeIdentityBinding` function enforces that mTLS certificate URI SANs match envelope identity claims (`operator_session_id`, `operator_id`), preventing impersonation.
 4. **Replay protection**: The `ReplayStoreService` atomically reserves nonces in SQLite to prevent replay attacks at the gateway level.
@@ -93,7 +93,7 @@ A **Governed Operator (g8eo)** running on a sovereign host establishes an outbou
 - **mTLS encryption**: Mutual TLS ensures both ends authenticate each other
 - **Policy Execution Point**: The operator is where policies are actually enforced
 
-This design ensures that operators remain sovereign—they can pull work but cannot be pushed into from the gateway.
+This design ensures that operators remain sovereign; they can pull work but cannot be pushed into from the gateway.
 
 ### Step 6: Operator Fetches Pending Envelope
 
@@ -170,13 +170,17 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 **L3 Notary implementations** (interface defined in `internal/services/governance/l3_notary.go`):
 
-- **PasskeyService** (`internal/services/gateway/passkey_service.go`): Gateway mode for web sessions. Verifies WebAuthn assertions using the `transaction_hash` as the challenge. Validates credential ID, client data JSON, authenticator data, and signature against registered passkey credentials.
+The `L3Notary` interface is implemented by the `outboundL3Notary` struct, which supports three operational modes via different constructor functions:
 
-- **CLIL3Notary** (`internal/services/gateway/cli_l3_notary.go`): Gateway mode for CLI sessions. Verifies mTLS certificate fingerprints against stored CLI session records. Checks user active status, session ownership, session expiry, and certificate revocation via the PKI authority. Also provides `VerifyCLICertificate` for real-time mTLS certificate validation during request authentication.
+- **PasskeyService** (`internal/services/gateway/passkey_service.go`): Gateway mode for web sessions. Verifies WebAuthn assertions using the `transaction_hash` as the challenge. Validates credential ID, client data JSON, authenticator data, and signature against registered passkey credentials. Implements the `L3Notary` interface directly and is injected as the `passkeyVerifier` in `NewGatewayL3Notary`.
 
-- **outboundL3Notary** (`internal/services/governance/l3_notary.go`): Outbound mode for operator-side approval. Verifies that a transaction exists in the `SuspendedTransactionStore`, is marked as approved, has a valid CLI signature over the transaction hash, and has not exceeded the 30-minute approval window.
+- **NewOutboundL3Notary** (`internal/services/governance/l3_notary.go`): Outbound mode for operator-side approval. Verifies that a transaction exists in the `SuspendedTransactionStore`, is marked as approved, has a valid CLI signature over the transaction hash, and has not exceeded the 30-minute approval window. No CLI session or certificate revocation checks are performed in this mode.
 
-- **CompositeL3Verifier** (`internal/services/gateway/composite_l3_verifier.go`): Delegates to the appropriate verifier based on proof type. If the proof contains `mtls_cert_fingerprint`, it routes to `CLIL3Notary`; otherwise, it routes to `PasskeyService`.
+- **NewCLIL3Notary** (`internal/services/governance/l3_notary.go`): Gateway mode for CLI sessions. Extends outbound mode with a `CLISessionVerifier` that checks user active status, session ownership, certificate fingerprint match, session expiry, and certificate revocation via the PKI authority. The `CLISessionVerifier` interface is implemented by `cliSessionVerifier` in `internal/services/gateway/cli_session_verifier.go`.
+
+- **NewGatewayL3Notary** (`internal/services/governance/l3_notary.go`): Unified gateway mode that handles both CLI (mTLS) and passkey (WebAuthn) proofs. When `VerifyL3Proof` is called, proofs containing `mtls_cert_fingerprint` route to the CLI verification path; all others delegate to the injected `passkeyVerifier` (PasskeyService). This is the constructor used in `GetGovernanceDeps` (`internal/services/gateway/gateway_service.go`) for gateway-mode deployments.
+
+- **VerifyCLICertificate** (`internal/services/gateway/cli_cert.go`): Standalone function for real-time mTLS certificate validation during request authentication, distinct from the L3 notary verification path.
 
 **Posture behavior**:
 - **doctrine/consensus**: L3 results are recorded for audit but do not gate execution.
@@ -184,7 +188,7 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 **Mutation enforcement**: The `isMutation` check determines whether an action type is state-changing. Only mutations require L3 proof under the notary posture.
 
-**No bypass field**: L3 is satisfied only by a verified proof. There is no `AutoApproved` or equivalent bypass — the Warden re-derives whether L3 is required from the action type and posture, and if required, demands a real proof. Out-of-band approvals use the `outboundL3Notary` + `SuspendedTransactionStore` path with a verifiable CLI signature, not a producer-supplied flag.
+**No bypass field**: L3 is satisfied only by a verified proof. There is no `AutoApproved` or equivalent bypass; the Warden re-derives whether L3 is required from the action type and posture, and if required, demands a real proof. Out-of-band approvals use the `outboundL3Notary` + `SuspendedTransactionStore` path with a verifiable CLI signature, not a producer-supplied flag.
 
 **Outcome**:
 - **Authorized**: Proceeds to L5 (Actuator)
@@ -282,7 +286,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 - Every receipt is signed by the L5 Actuator using Ed25519 over canonical JSON (`CanonicalizeActionReceipt`).
 - Audit entries are stored in encrypted SQLite databases with optional vault encryption.
 - File mutations in the git ledger are optionally encrypted before storage.
-- mTLS with `RequireAndVerifyClientCert` protects all network communications.
+- mTLS with `tls.VerifyClientCertIfGiven` on the HTTPS port, with application-layer enforcement via `auth.Middleware()` for all non-public routes. The PKI TLSConfig defaults to `RequireAndVerifyClientCert` for operator-side connections.
 - Transport-to-envelope identity binding prevents impersonation by matching mTLS certificate SPIFFE URI SANs to envelope identity claims.
 
 ### Defense in Depth
@@ -310,7 +314,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 | **L4 Warden** | Verification Orchestrator | Five-stage verification: in-flight tracking, nonce reservation, stateless validation (L1 Doctrine + hash), stateful validation (state root), posture-gated L2/L3. |
 | **L1 Doctrine** | Technical Bedrock | Protobuf `forbidden_patterns` field option validation, MITRE-based threat detection with `ThreatDetector` regex patterns. |
 | **L2 Consensus** | Tribunal Verification | Ed25519 vote signatures, quorum and distinct-signer checks, TribunalPolicy enforcement. |
-| **L3 Notary** | Authorization Engine | CompositeL3Verifier delegates to PasskeyService (WebAuthn), CLIL3Notary (mTLS), or outboundL3Notary (CLI approval). |
+| **L3 Notary** | Authorization Engine | `outboundL3Notary` (`l3_notary.go`) configured via `NewGatewayL3Notary` (gateway), `NewCLIL3Notary` (CLI), or `NewOutboundL3Notary` (operator). Routes WebAuthn proofs to PasskeyService and mTLS proofs to CLI session verification. |
 | **L5 Actuator** | Execution Gateway | Fail-closed dual receipt signing with canonical JSON, JIT capability minting/dissolving, rehydration, execution dispatch via ExecutionHandler. |
 | **Local Audit Vault** | Immutable Ledger | SQLAuditStore (encrypted SQLite) and GitLedgerService (git-backed, two-phase commit, optional encryption). |
 
