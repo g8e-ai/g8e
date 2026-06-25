@@ -43,8 +43,8 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ./g8e test e2e         # Run Tier 3 (E2E) tests - requires running gateway
 ./g8e test coverage    # Run tests with coverage report
 ./g8e test lint        # Run linting and quality checks
-./g8e agent-harness list    # List agentic tool emulator scenarios
-./g8e agent-harness run     # Run agentic tool emulator scenarios against real Gateway/Operator
+./g8e agent-harness list    # List agent harness scenarios
+./g8e agent-harness run     # Run agent harness scenarios against real Gateway/Operator
 ./g8e test chaos       # Generate realistic governance events for testing
 ./g8e test summary     # View chaos test summary from test vault
 ```
@@ -61,9 +61,9 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
 
-- **`./g8e agent-harness list`** - Lists available agentic tool emulator scenarios with their posture requirements and personas.
+- **`./g8e agent-harness list`** - Lists available agent harness scenarios with their posture requirements and personas.
 
-- **`./g8e agent-harness run`** - Runs agentic tool emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+- **`./g8e agent-harness run`** - Runs agent harness scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
 
 - **`./g8e test chaos`** - Generates realistic governance events for testing. Creates a test vault with distributed event categories (70% Good Actor, 20% Prompt Injection, 10% MitM) to test governance pipeline behavior under various conditions.
 
@@ -93,9 +93,9 @@ Docker-based E2E tests that spin up gateway and operator containers using docker
 ./g8e agent-harness audit
 ```
 
-The agentic tool emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
+The agent harness is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
 
-**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The agentic tool emulator merely wears different "personas" to test how the system behaves when various AI tools interact with it.
+**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The agent harness merely wears different "personas" to test how the system behaves when various AI tools interact with it.
 
 **Architecture**:
 - **client/** - Thin, faithful HTTP client with mTLS support and exchange recording
@@ -129,7 +129,7 @@ Scenarios run under different enforcement modes:
 - Mock principal (L3 human notary)
 
 **Governance Testing**:
-For consensus/notary scenarios, the agentic tool emulator uses mock cryptographic actors:
+For consensus/notary scenarios, the agent harness uses mock cryptographic actors:
 - **Ensemble**: Mock consensus agents that co-sign L2 envelopes
 - **Principal**: Mock human notary for L3 signing (or drives real OOB approve flow)
 
@@ -425,7 +425,7 @@ CLI command and configuration tests:
 - `auth/operator_test.go` - Operator auth tests
 - `auth/passkey_bootstrap_test.go` - Passkey bootstrap tests
 - `auth/windows_crypto_test.go` - Windows crypto tests
-- `cmd/agent_harness_test.go` - Agentic tool emulator command tests
+- `cmd/agent_harness_test.go` - Agent harness command tests
 - `cmd/approve_integration_test.go` - Approve command integration tests
 - `cmd/audit_integration_test.go` - Audit command integration tests
 - `cmd/audit_test.go` - Audit command tests

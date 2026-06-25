@@ -91,7 +91,7 @@ v1.1.8 is a maintenance and stability release focused on hardening the Tribunal 
 ### Fixed
 
 * **Test Stability** — Resolved flakiness in several E2E and integration tests by improving fixture handling and harness reliability.
-* **Tool Integrity** — Fixed minor issues in the agentic tool emulator to ensure consistency across testing environments.
+* **Tool Integrity** — Fixed minor issues in the agent harness to ensure consistency across testing environments.
 
 ---
 
@@ -173,7 +173,7 @@ v1.1.5 is a code quality and test coverage release that focuses on error typing 
 
 * **Error Typing Improvements** — Systematically improved error typing across governance and storage services for better error handling and consistency.
 * **Test Coverage Expansion** — Significantly improved test coverage for CLI auth, pubsub, network operations, storage services, and history handler.
-* **Emulator Reorganization** — Moved agentic tool emulator to test directory for better code organization.
+* **Emulator Reorganization** — Moved agent harness to test directory for better code organization.
 * **Scenario Test Dissolution** — Dissolved scenario tests into standard integration tests for improved maintainability.
 * **Codebase Cleanup** — Removed unnecessary utilities (slices, sliceutil), unused mocks, and dissolved unnecessary interfaces.
 * **Posture Definitions Centralization** — Centralized posture definitions and removed duplicate code.
