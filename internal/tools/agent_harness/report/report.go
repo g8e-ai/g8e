@@ -116,7 +116,7 @@ func txMatch(hashes []string, idx map[string]clientpkg.Receipt) string {
 	var parts []string
 	for _, h := range hashes {
 		if _, ok := idx[h]; ok {
-			parts = append(parts, "`"+shortHash(h)+"` matched")
+			parts = append(parts, "✓ `"+shortHash(h)+"` matched")
 		} else {
 			parts = append(parts, "`"+shortHash(h)+"` (no receipt)")
 		}
@@ -126,9 +126,9 @@ func txMatch(hashes []string, idx map[string]clientpkg.Receipt) string {
 
 func mark(ok bool) string {
 	if ok {
-		return "ok"
+		return "✅ ok"
 	}
-	return "FAIL"
+	return "❌ fail"
 }
 
 func orNone(s string) string {

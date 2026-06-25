@@ -6,8 +6,12 @@ package report
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
@@ -50,33 +54,21 @@ func TestWrite(t *testing.T) {
 	jsonPath := filepath.Join(tmpDir, "report.json")
 	mdPath := filepath.Join(tmpDir, "report.md")
 	_, _, err := Write(jsonPath, mdPath, rep)
-	if err != nil {
-		t.Fatalf("Write failed: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify JSON file exists and is readable
-	if jsonPath == "" {
-		t.Error("jsonPath should not be empty")
-	}
-	if _, err := os.Stat(jsonPath); err != nil {
-		t.Errorf("JSON file does not exist: %v", err)
-	}
+	assert.NotEmpty(t, jsonPath)
+	_, err = os.Stat(jsonPath)
+	assert.NoError(t, err)
 
 	// Verify MD file exists and is readable
-	if mdPath == "" {
-		t.Error("mdPath should not be empty")
-	}
-	if _, err := os.Stat(mdPath); err != nil {
-		t.Errorf("MD file does not exist: %v", err)
-	}
+	assert.NotEmpty(t, mdPath)
+	_, err = os.Stat(mdPath)
+	assert.NoError(t, err)
 
 	// Verify paths are in the temp dir
-	if filepath.Dir(jsonPath) != tmpDir {
-		t.Error("jsonPath should be in temp dir")
-	}
-	if filepath.Dir(mdPath) != tmpDir {
-		t.Error("mdPath should be in temp dir")
-	}
+	assert.Equal(t, tmpDir, filepath.Dir(jsonPath))
+	assert.Equal(t, tmpDir, filepath.Dir(mdPath))
 }
 
 func TestWrite_NestedDir(t *testing.T) {
@@ -93,22 +85,17 @@ func TestWrite_NestedDir(t *testing.T) {
 	jsonPath := filepath.Join(nestedDir, "report.json")
 	mdPath := filepath.Join(nestedDir, "report.md")
 	_, _, err := Write(jsonPath, mdPath, rep)
-	if err != nil {
-		t.Fatalf("Write failed with nested dir: %v", err)
-	}
+	require.NoError(t, err)
 
 	// Verify nested directory was created
-	if _, err := os.Stat(nestedDir); err != nil {
-		t.Errorf("Nested directory was not created: %v", err)
-	}
+	_, err = os.Stat(nestedDir)
+	assert.NoError(t, err)
 
 	// Verify files exist
-	if _, err := os.Stat(jsonPath); err != nil {
-		t.Errorf("JSON file does not exist in nested dir: %v", err)
-	}
-	if _, err := os.Stat(mdPath); err != nil {
-		t.Errorf("MD file does not exist in nested dir: %v", err)
-	}
+	_, err = os.Stat(jsonPath)
+	assert.NoError(t, err)
+	_, err = os.Stat(mdPath)
+	assert.NoError(t, err)
 }
 
 func TestMarkdown(t *testing.T) {
@@ -143,9 +130,7 @@ func TestMarkdown(t *testing.T) {
 	}
 
 	md := markdown(rep)
-	if md == "" {
-		t.Error("markdown should not be empty")
-	}
+	assert.NotEmpty(t, md)
 
 	// Check for expected sections
 	expectedStrings := []string{
@@ -161,9 +146,7 @@ func TestMarkdown(t *testing.T) {
 	}
 
 	for _, s := range expectedStrings {
-		if !contains(md, s) {
-			t.Errorf("markdown should contain %q", s)
-		}
+		assert.True(t, strings.Contains(md, s), "markdown should contain %q", s)
 	}
 }
 
@@ -177,14 +160,8 @@ func TestMarkdown_EmptyResults(t *testing.T) {
 	}
 
 	md := markdown(rep)
-	if md == "" {
-		t.Error("markdown should not be empty")
-	}
-
-	// Should show "(auto-discover)" for empty operator session
-	if !contains(md, "(auto-discover)") {
-		t.Error("markdown should show (auto-discover) for empty operator session")
-	}
+	assert.NotEmpty(t, md)
+	assert.True(t, strings.Contains(md, "(auto-discover)"), "markdown should show (auto-discover) for empty operator session")
 }
 
 func TestMarkdown_NoReceipts(t *testing.T) {
@@ -207,9 +184,7 @@ func TestMarkdown_NoReceipts(t *testing.T) {
 	}
 
 	md := markdown(rep)
-	if !contains(md, "No receipts returned") {
-		t.Error("markdown should show message when no receipts")
-	}
+	assert.True(t, strings.Contains(md, "No receipts returned"), "markdown should show message when no receipts")
 }
 
 func TestIndexReceipts(t *testing.T) {
@@ -221,19 +196,10 @@ func TestIndexReceipts(t *testing.T) {
 
 	idx := indexReceipts(receipts)
 
-	if len(idx) != 2 {
-		t.Errorf("index should have 2 entries, got %d", len(idx))
-	}
-
-	if _, ok := idx["hash1"]; !ok {
-		t.Error("index should contain hash1")
-	}
-	if _, ok := idx["hash2"]; !ok {
-		t.Error("index should contain hash2")
-	}
-	if _, ok := idx[""]; ok {
-		t.Error("index should not contain empty hash")
-	}
+	assert.Len(t, idx, 2)
+	assert.Contains(t, idx, "hash1")
+	assert.Contains(t, idx, "hash2")
+	assert.NotContains(t, idx, "")
 }
 
 func TestTxMatch(t *testing.T) {
@@ -256,29 +222,19 @@ func TestTxMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := txMatch(tt.hashes, idx)
-			if !contains(result, tt.contains) {
-				t.Errorf("txMatch result should contain %q, got %s", tt.contains, result)
-			}
+			assert.True(t, strings.Contains(result, tt.contains), "txMatch result should contain %q, got %s", tt.contains, result)
 		})
 	}
 }
 
 func TestMark(t *testing.T) {
-	if mark(true) != "✅ ok" {
-		t.Error("mark(true) should return '✅ ok'")
-	}
-	if mark(false) != "❌ fail" {
-		t.Error("mark(false) should return '❌ fail'")
-	}
+	assert.Equal(t, "✅ ok", mark(true))
+	assert.Equal(t, "❌ fail", mark(false))
 }
 
 func TestOrNone(t *testing.T) {
-	if orNone("") != "(auto-discover)" {
-		t.Error("orNone('') should return '(auto-discover)'")
-	}
-	if orNone("test") != "test" {
-		t.Error("orNone('test') should return 'test'")
-	}
+	assert.Equal(t, "(auto-discover)", orNone(""))
+	assert.Equal(t, "test", orNone("test"))
 }
 
 func TestShortHash(t *testing.T) {
@@ -295,21 +251,6 @@ func TestShortHash(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if result := shortHash(tt.input); result != tt.expected {
-			t.Errorf("shortHash(%q) = %q, want %q", tt.input, result, tt.expected)
-		}
+		assert.Equal(t, tt.expected, shortHash(tt.input), "shortHash(%q)", tt.input)
 	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
