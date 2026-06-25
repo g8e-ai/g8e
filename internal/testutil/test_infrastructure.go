@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,21 +131,4 @@ func TempFile(t *testing.T, path string) {
 			t.Logf("TempFile cleanup: failed to remove %s: %v", path, err)
 		}
 	})
-}
-
-// GetFreePort returns a free TCP port.
-func GetFreePort(t *testing.T) int {
-	t.Helper()
-	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("failed to resolve tcp addr: %v", err)
-	}
-
-	l, err := net.ListenTCP("tcp", addr)
-	if err != nil {
-		t.Fatalf("failed to listen on tcp addr: %v", err)
-	}
-	defer l.Close()
-
-	return l.Addr().(*net.TCPAddr).Port
 }

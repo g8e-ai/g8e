@@ -33,7 +33,7 @@ func (h *HTTPHandler) handleLandingPage(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	http.Redirect(w, r, "/console", http.StatusFound)
+	http.Redirect(w, r, "/console/", http.StatusFound)
 }
 
 // @Summary		Health check

@@ -35,19 +35,22 @@ import (
 
 // PublicRouteRegistry defines routes that bypass authentication.
 // Exact paths are matched precisely. Prefixes allow any path under the prefix.
+// Excluded prefixes protect mTLS-only sub-paths that share a prefix with WebSessionAuth routes.
 // This centralized registry eliminates fragile HasPrefix duplication.
 type PublicRouteRegistry struct {
-	exactPaths  map[string]struct{}
-	prefixes    map[string]struct{}
-	jwksEnabled bool
+	exactPaths       map[string]struct{}
+	prefixes         map[string]struct{}
+	excludedPrefixes map[string]struct{}
+	jwksEnabled      bool
 }
 
 // NewPublicRouteRegistry creates a registry with the canonical public routes.
 func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r := &PublicRouteRegistry{
-		exactPaths:  make(map[string]struct{}),
-		prefixes:    make(map[string]struct{}),
-		jwksEnabled: jwksEnabled,
+		exactPaths:       make(map[string]struct{}),
+		prefixes:         make(map[string]struct{}),
+		excludedPrefixes: make(map[string]struct{}),
+		jwksEnabled:      jwksEnabled,
 	}
 
 	// Health check (always public)
@@ -85,6 +88,32 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// Console SPA (public, no auth required)
 	r.addPrefix("/console/")
 
+	// Browser passkey endpoints (public, no mTLS for browser access)
+	r.addExact("/api/v1/auth/passkeys/cli-browser-register/challenge")
+	r.addExact("/api/v1/auth/passkeys/cli-browser-register/verify")
+	r.addExact("/api/v1/auth/passkeys/browser/authenticate/challenge")
+	r.addExact("/api/v1/auth/passkeys/browser/authenticate/verify")
+
+	// WebSessionAuth-protected routes (browser-facing, no client cert)
+	// These bypass mTLS middleware; WebSessionAuth provides the auth gate
+	// (cookie validation, session expiry, user active check — fail-closed).
+	r.addPrefix("/api/v1/users/")
+	r.addPrefix("/api/v1/auth/sessions/")
+	r.addPrefix("/api/v1/approvals")
+	r.addPrefix("/api/v1/auth/passkeys")
+
+	// Exclude mTLS-protected sub-paths under the passkeys prefix.
+	// These routes require client certificates and must NOT bypass mTLS.
+	r.addExcludedPrefix("/api/v1/auth/passkeys/register")
+	r.addExcludedPrefix("/api/v1/auth/passkeys/authenticate")
+
+	// Exclude JIT passkey sub-paths when JWKS is not configured.
+	// When JWKS is enabled, the JIT prefix is added below as a public prefix,
+	// and exact paths are checked before exclusions in IsPublic.
+	if !jwksEnabled {
+		r.addExcludedPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
+	}
+
 	// JIT passkey bootstrap (only when JWKS is configured)
 	if jwksEnabled {
 		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
@@ -105,11 +134,22 @@ func (r *PublicRouteRegistry) addPrefix(prefix string) {
 	r.prefixes[prefix] = struct{}{}
 }
 
+func (r *PublicRouteRegistry) addExcludedPrefix(prefix string) {
+	r.excludedPrefixes[prefix] = struct{}{}
+}
+
 // IsPublic returns true if the path is registered as a public route.
 func (r *PublicRouteRegistry) IsPublic(path string) bool {
-	// Check exact matches first
+	// Check exact matches first (highest priority)
 	if _, ok := r.exactPaths[path]; ok {
 		return true
+	}
+
+	// Check excluded prefixes (mTLS-protected sub-paths under WebSessionAuth prefixes)
+	for prefix := range r.excludedPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return false
+		}
 	}
 
 	// Check prefix matches

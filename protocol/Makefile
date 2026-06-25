@@ -56,5 +56,5 @@ lint:
 openapi:
 	@echo "Generating OpenAPI spec from protobuf..."
 	@echo "Note: Requires buf or google protobuf dependencies. Use 'buf generate' instead for full protobuf tooling."
-	@mkdir -p ../internal/services/gateway/docs/openapi
-	@echo "OpenAPI generation from protobuf requires additional setup. See docs/ for instructions."
+	@mkdir -p docs/reference/api
+	@echo "OpenAPI generation from protobuf requires additional setup. See protocol/docs/ for instructions."

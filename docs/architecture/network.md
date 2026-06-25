@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -83,11 +83,11 @@ All peer connections enforce mTLS with SPIFFE URI SAN validation. Certificates u
 
 ### CSR-Based Enrollment
 
-**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret (like an API key), a client generates its own key pair and asks the Gateway to sign a certificate attesting "this public key belongs to this identity." The Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is itself the Platform Owner's authorization — there are no standing invite codes, pre-shared keys, or manual approval steps. The client then proves its identity on every subsequent call by signing with its private key (via mTLS). No shared secrets, no API keys to leak.
+**The mental model:** CSR-based enrollment is cryptographic identity proof. Instead of sharing a secret (like an API key), a client generates its own key pair and asks the Gateway to sign a certificate attesting "this public key belongs to this identity." The Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is itself the Platform Owner's authorization; there are no standing invite codes, pre-shared keys, or manual approval steps. The client then proves its identity on every subsequent call by signing with its private key (via mTLS). No shared secrets, no API keys to leak.
 
 Clients enroll in the platform using a Certificate Signing Request (CSR) bootstrap flow:
 
-1. **CA Discovery**: Clients fetch the platform root CA bundle from the endpoint `/.well-known/g8e/pki/ca-bundle`.
+1. **CA Discovery**: Clients fetch the platform gateway trust bundle (root CA, hub intermediate, operator intermediate, and gateway peer intermediate) from the endpoint `/.well-known/g8e/pki/ca-bundle`.
 2. **CSR Submission**: Clients generate a local ECDSA P-256 key pair and submit a CSR to `/api/v1/pki/csr/sign`.
 3. **Registration**: The g8e Gateway validates the CSR and binds the certificate to a user identity.
 4. **Session Issuance**: Upon successful enrollment, the g8e Gateway issues a specific `operator_session_id` or `cli_session_id`.
@@ -116,7 +116,7 @@ Windows users can enroll via the Windows Certificate Store for managed browser a
 2. **CSR Signing**: The CLI submits a CSR to the g8e Gateway and receives a signed certificate with SPIFFE URI SAN.
 3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store (experimental).
 4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the g8e Gateway issues a TLS CertificateRequest.
-5. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `web_session_id` bound to the user identity.
+5. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates an `operator_session_id` bound to the user identity.
 
 **TPM-Backed Keys**: The `--tpm` flag utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
 
@@ -130,13 +130,13 @@ Default ports are defined in `protocol/constants/ports.json`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Trust establishment scripts, CA discovery, and initial bootstrap. All other requests are redirected to HTTPS. |
-| **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, and all mTLS-guarded operator API and MCP routes. |
+| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Health checks, trust establishment scripts, CA discovery, enrollment, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS. |
+| **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, CA bundle and CRL endpoints, and all mTLS-guarded operator API and MCP routes. |
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for trust scripts (`/bootstrap-ca` etc.) and initial CA bundle discovery. All other requests are redirected to HTTPS via a permanent 301 redirect.
-- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, and WebAuthn browser endpoints) are accessible directly.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, trust scripts (`/bootstrap-ca` etc.), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS via a permanent 301 redirect.
+- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default from `PKIAuthority.TLSConfig()`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 
 ---
@@ -238,6 +238,6 @@ This information is used for certificate SAN generation and peer discovery.
 ## Related Documentation
 
 - [**Authentication & Authorization**](./auth.md)
-- [**g8e Protocol**](./protocol.md)
+- [**g8e Protocol**](../../protocol/docs/spec.md)
 - [**g8e Gateway**](./gateway.md)
 - [**g8e Operator**](./operator.md)

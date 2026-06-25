@@ -60,12 +60,17 @@ COVERAGE_THRESHOLD := 70
 # Each pattern is matched against Go import paths and coverage profile file paths.
 EXCLUDE_PKGS := \
 	mocks \
-	/cmd/ \
 	/test/ \
+	/cmd/operator \
 	/internal/protocol/proto \
-	/internal/contracts \
 	/internal/interfaces \
 	/internal/constants \
+	/internal/contracts \
+	/internal/httpclient \
+	/internal/models \
+	/internal/testutil \
+	/internal/tools/chaos \
+	/internal/tools/agent_harness/scenarios \
 	/internal/services/gateway/docs \
 	/internal/services/gateway/scripts \
 	/internal/services/storage/storagetest

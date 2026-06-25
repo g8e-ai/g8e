@@ -25,7 +25,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/mapping"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -563,7 +562,7 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, constants.ErrPubSubActuator
 	}
 
-	eventType := mapping.MapActionTypeToEventType(verified.ActionType)
+	eventType := constants.MapActionTypeToEventType(verified.ActionType)
 	cmdMsg := &PubSubCommandMessage{
 		ID:                envelope.Id,
 		EventType:         eventType,
@@ -607,7 +606,7 @@ func (rs *OperatorPubSubService) handleGovernanceEnvelope(env *govpkg.Governance
 
 	// Convert GovernanceEnvelope to PubSubCommandMessage for execution through Actuator
 	// Map GovernanceEnvelope action types back to protobuf event types for handler dispatch
-	eventType := mapping.MapActionTypeToEventType(verified.ActionType)
+	eventType := constants.MapActionTypeToEventType(verified.ActionType)
 
 	payload := env.Payload
 	if len(payload) == 0 {

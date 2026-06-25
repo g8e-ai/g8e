@@ -102,54 +102,6 @@ type ExecutionResultsPayload struct {
 	EnvironmentInfo   *ExecutionEnvironmentInfo  `json:"environment_info,omitempty"`
 }
 
-// DomainResultFromPayload converts a wire ExecutionResultsPayload to a domain ExecutionResult.
-// This is the conversion point at the pubsub/HTTP boundary.
-func DomainResultFromPayload(p *ExecutionResultsPayload) *ExecutionResult {
-	if p == nil {
-		return nil
-	}
-	result := &ExecutionResult{
-		ExecutionID:       p.ExecutionID,
-		CaseID:            p.CaseID,
-		InvestigationID:   p.InvestigationID,
-		Command:           p.Command,
-		Args:              p.Args,
-		Status:            p.Status,
-		DurationSeconds:   p.DurationSeconds,
-		OperatorID:        p.OperatorID,
-		OperatorSessionID: p.OperatorSessionID,
-		Stdout:            p.Stdout,
-		Stderr:            p.Stderr,
-		StdoutSize:        p.StdoutSize,
-		StderrSize:        p.StderrSize,
-		StdoutHash:        p.StdoutHash,
-		StderrHash:        p.StderrHash,
-		StoredLocally:     p.StoredLocally,
-		TerminalOutput:    p.TerminalOutput,
-		SystemInfo:        p.SystemInfo,
-		EnvironmentInfo:   p.EnvironmentInfo,
-	}
-	if p.TaskID != nil {
-		result.TaskID = *p.TaskID
-	}
-	if p.ReturnCode != nil {
-		result.ReturnCode = *p.ReturnCode
-	}
-	if p.ErrorMessage != nil {
-		result.ErrorMessage = *p.ErrorMessage
-	}
-	if p.ErrorType != nil {
-		result.ErrorType = *p.ErrorType
-	}
-	if p.StartTime != nil {
-		result.StartTime = *p.StartTime
-	}
-	if p.EndTime != nil {
-		result.EndTime = *p.EndTime
-	}
-	return result
-}
-
 // PayloadFromDomainResult converts a domain ExecutionResult to a wire ExecutionResultsPayload.
 // This is used when publishing results to the wire.
 func PayloadFromDomainResult(r *ExecutionResult) *ExecutionResultsPayload {

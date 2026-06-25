@@ -1,0 +1,13 @@
+# g8e Gateway Configuration for DoW Tactical Edge Demo
+posture: consensus
+http_port: 8080
+https_port: 8443
+data_dir: /root/.g8e/data
+pki_dir: /root/.g8e/pki
+secrets_dir: /root/.g8e/secrets
+vault_dir: /root/.g8e/vault
+passkey_rpid: localhost
+passkey_rpname: g8e-dow
+rate_limit_rps: 100
+rate_limit_burst: 200
+cert_mode: localhost

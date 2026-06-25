@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -26,8 +26,10 @@ docker run -d \
   -p 8443:8443 \
   -v g8e-data:/root/.g8e \
   g8e-gateway:latest \
-  gw start --posture doctrine
+  gw serve --posture doctrine
 ```
+
+The `gw serve` subcommand runs the gateway in foreground mode, which blocks until shutdown. This is the recommended invocation for direct `docker run` usage. The root `docker-compose.yml` uses `gw start -f` instead, which starts the gateway as a subprocess and tails the log output. Both approaches keep the container running; `gw serve` is more direct for single-container deployments.
 
 ## Docker Compose Deployment
 
@@ -77,6 +79,7 @@ Functional demo environments are located in the `demos/` directory. These config
 - **Government**: Public sector data residency and access control.
 - **Finance**: High-integrity ledger and audit requirements.
 - **Secure Data**: Governed data migration with a two-operator pipeline and chain-of-custody receipts.
+- **Department of War (DoW)**: Tactical edge operations with SWaP-constrained sensors, BFT spoofing defense, and autonomous SIGINT-to-EO/IR cross-cueing.
 - **Swarm**: Drone swarm simulation with 20 autonomous operators, battlefield intelligence, and doctrine-based weapons control.
 
 To run a demo:
@@ -102,7 +105,7 @@ Custom ports are configured via CLI flags or environment variables:
 ```bash
 docker run -d \
   g8e-gateway:latest \
-  gw start --posture doctrine --http-port 3000 --https-port 3443
+  gw serve --posture doctrine --http-port 3000 --https-port 3443
 ```
 
 **Compose Example:**
@@ -115,7 +118,7 @@ services:
     command: ["gw", "start", "--posture", "doctrine", "--http-port", "8080", "--https-port", "8443", "-f"]
 ```
 
-The `gw start` subcommand accepts the same `--posture`, `--http-port`, and `--https-port` flags as the direct binary invocation. The `-f` flag follows log output. Container ports remain 8080 and 8443; only the host-side mapping changes.
+The `gw start` and `gw serve` subcommands accept the same `--posture`, `--http-port`, and `--https-port` flags. The `-f` flag (available only on `gw start`) follows log output after starting the gateway as a subprocess. Container ports remain 8080 and 8443; only the host-side mapping changes.
 
 ### Data Persistence
 
@@ -128,7 +131,7 @@ The gateway maintains state in `/root/.g8e` within the container. This directory
 Mount a persistent volume to preserve state across container lifecycles:
 
 ```bash
-docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw start --posture doctrine
+docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw serve --posture doctrine
 ```
 
 ### Governance Posture

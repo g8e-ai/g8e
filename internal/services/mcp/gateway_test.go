@@ -1789,20 +1789,6 @@ func (f *fakeAuditLogger) LogFieldRead(operatorSessionID, collection, documentID
 // testGatewayOption is a functional option for configuring test GatewayService instances
 type testGatewayOption func(*GatewayService)
 
-// withLogger sets a custom logger for the test GatewayService
-func withLogger(logger *slog.Logger) testGatewayOption {
-	return func(g *GatewayService) {
-		g.logger = logger
-	}
-}
-
-// withResponder sets a custom responder for the test GatewayService
-func withResponder(r *response.Writer) testGatewayOption {
-	return func(g *GatewayService) {
-		g.responder = r
-	}
-}
-
 // withEnvProc sets a custom envelope processor for the test GatewayService
 func withEnvProc(proc governance.EnvelopeProcessor) testGatewayOption {
 	return func(g *GatewayService) {
@@ -1821,28 +1807,6 @@ func withSuspendedStore(store storage.SuspendedTransactionStore) testGatewayOpti
 func withAuditStore(auditStore *storage.SQLAuditStore) testGatewayOption {
 	return func(g *GatewayService) {
 		g.auditStore = auditStore
-	}
-}
-
-// withSigningKey sets custom signing key and keyID for the test GatewayService
-func withSigningKey(privKey ed25519.PrivateKey, keyID string) testGatewayOption {
-	return func(g *GatewayService) {
-		g.signingKey = privKey
-		g.keyID = keyID
-	}
-}
-
-// withStateRootProvider sets a custom state root provider for the test GatewayService
-func withStateRootProvider(provider StateRootProvider) testGatewayOption {
-	return func(g *GatewayService) {
-		g.stateRootProvider = provider
-	}
-}
-
-// withPublicBaseURL sets a custom public base URL for the test GatewayService
-func withPublicBaseURL(url string) testGatewayOption {
-	return func(g *GatewayService) {
-		g.publicBaseURL = url
 	}
 }
 
@@ -1872,13 +1836,6 @@ func withCircuitBreaker(maxFailures int, cooldown time.Duration) testGatewayOpti
 func withMaxPayloadBytes(bytes int64) testGatewayOption {
 	return func(g *GatewayService) {
 		g.maxPayloadBytes = bytes
-	}
-}
-
-// withNativeToolHandler sets a custom native tool handler for the test GatewayService
-func withNativeToolHandler(handler *NativeToolHandler) testGatewayOption {
-	return func(g *GatewayService) {
-		g.nativeToolHandler = handler
 	}
 }
 

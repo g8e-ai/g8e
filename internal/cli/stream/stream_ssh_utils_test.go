@@ -16,6 +16,7 @@ package stream
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -80,11 +81,11 @@ func TestBuildHostKeyCallback(t *testing.T) {
 	})
 }
 
-func TestIsSSHExitError(t *testing.T) {
+func TestSSHExitErrorDetection(t *testing.T) {
 	t.Run("is an exit error", func(t *testing.T) {
 		mockErr := &sshlib.ExitError{}
 		var target *sshlib.ExitError
-		result := isSSHExitError(mockErr, &target)
+		result := errors.As(mockErr, &target)
 		assert.True(t, result)
 		assert.Equal(t, mockErr, target)
 	})
@@ -92,7 +93,7 @@ func TestIsSSHExitError(t *testing.T) {
 	t.Run("is not an exit error", func(t *testing.T) {
 		mockErr := fmt.Errorf("generic error")
 		var target *sshlib.ExitError
-		result := isSSHExitError(mockErr, &target)
+		result := errors.As(mockErr, &target)
 		assert.False(t, result)
 		assert.Nil(t, target)
 	})

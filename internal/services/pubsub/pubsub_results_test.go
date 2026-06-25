@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	pb "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -29,7 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func requireLastPublishedUniversal(t *testing.T, db *MockOperatorPubSubClient) []byte {
+func requireLastPublishedUniversal(t *testing.T, db *pubsubtest.MockOperatorPubSubClient) []byte {
 	t.Helper()
 	published := db.LastPublished()
 	require.NotNil(t, published, "expected a message to be published")
@@ -50,7 +51,7 @@ func mustUnmarshalGovernanceEnvelope(t *testing.T, data []byte) *commonv1.Govern
 func TestNewPubSubResultsService(t *testing.T) {
 	t.Run("creates service", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -62,7 +63,7 @@ func TestNewPubSubResultsService(t *testing.T) {
 func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 	t.Run("successful heartbeat publish", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -87,7 +88,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 	t.Run("successful cancellation publish", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -119,7 +120,7 @@ func TestPubSubResultsService_PublishCancellationResult(t *testing.T) {
 func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 	t.Run("successful fs list publish", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -148,7 +149,7 @@ func TestPubSubResultsService_PublishFsListResult(t *testing.T) {
 
 	t.Run("publishes failed status on error", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -180,7 +181,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 	t.Run("successful fs grep publish", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -209,7 +210,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 
 	t.Run("publishes failed status on error", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -240,7 +241,7 @@ func TestPubSubResultsService_PublishFsGrepResult(t *testing.T) {
 func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -284,7 +285,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 
 	t.Run("publishes failed status on error", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -314,7 +315,7 @@ func TestPubSubResultsService_PublishExecutionResult(t *testing.T) {
 
 	t.Run("publishes timeout status on timeout", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -347,7 +348,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	t.Run("successful publish", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -378,7 +379,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 	t.Run("publishes failed status on error", func(t *testing.T) {
 		t.Parallel()
 		tmpDir := t.TempDir()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -411,7 +412,7 @@ func TestPubSubResultsService_PublishFileEditResult(t *testing.T) {
 func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 	t.Run("publishes running status", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -444,7 +445,7 @@ func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 
 	t.Run("publishes completed status", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -472,7 +473,7 @@ func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 
 	t.Run("publishes failed status", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -500,7 +501,7 @@ func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 
 	t.Run("publishes cancelled status", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -528,7 +529,7 @@ func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 
 	t.Run("publishes queued status for unspecified", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -556,7 +557,7 @@ func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 
 	t.Run("uses original message ID for correlation", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)
@@ -584,7 +585,7 @@ func TestPubSubResultsService_PublishExecutionStatus(t *testing.T) {
 
 	t.Run("uses custom operator ID when provided", func(t *testing.T) {
 		t.Parallel()
-		db := NewMockOperatorPubSubClient()
+		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 		svc, err := NewPubSubResultsService(cfg, logger, db)

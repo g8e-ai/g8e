@@ -34,6 +34,13 @@ demos/
 │   ├── config/
 │   ├── doctrine/               # Migration-screening L1 rules (bypass, exfil, cross-tenant)
 │   └── target-data/            # Simulated SharePoint migration manifest
+├── dow/                        # Department of War tactical edge demo
+│   ├── compose.yml
+│   ├── config/
+│   ├── doctrine/               # Tactical edge L1 rules (spoofing, cross-cue, EW, weapons)
+│   ├── target-data/            # Simulated RF environment, PNT sources, payload manifest
+│   ├── dow_simulator.py        # Sensor agent simulator (SIGINT, EO/IR, PNT fusion)
+│   └── README.md               # DoW-specific documentation
 └── swarm/                      # Drone swarm battlefield demo
     ├── compose.yml
     ├── config/
@@ -68,20 +75,20 @@ Each org deploys five isolated networks:
 
 * Operator appears on net_internal only for its outbound mTLS tunnel to the Gateway. It accepts no inbound connections from net_internal.
 
-The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal.
+The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal. The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, and an EW adversary on net_untrusted, with SWaP resource limits on all g8e containers.
 
 ## Org Differentiation
 
 Each org demonstrates different compliance requirements and use cases:
 
-| Dimension | Gov | Healthcare | Finance | Secure-Data | Swarm |
-|---|---|---|---|---|---|
-| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | Weapons control, safety, navigation, command integrity |
-| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | Battlefield intelligence and drone fleet manifest |
-| Gateway posture | notary | consensus | notary | notary | consensus |
-| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Autonomous drone operator (recon, attack, support, relay) |
-| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Drone fleet with telemetry simulation |
-| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | Adversary interception and safety violation detection |
+| Dimension | Gov | Healthcare | Finance | Secure-Data | DoW | Swarm |
+|---|---|---|---|---|---|---|
+| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | GPS spoofing, cross-cue, EW, weapons control, PNT BFT | Weapons control, safety, navigation, command integrity |
+| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | RF environment, PNT sources (incl. spoofed), payload manifest | Battlefield intelligence and drone fleet manifest |
+| Gateway posture | notary | consensus | notary | notary | consensus | consensus |
+| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Tactical sensor agent (SIGINT, EO/IR, PNT fusion) | Autonomous drone operator (recon, attack, support, relay) |
+| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Gimbal/flight controller actuator | Drone fleet with telemetry simulation |
+| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | SIGINT cross-cue + BFT spoofing defense + disconnected ops | Adversary interception and safety violation detection |
 
 ## Quick Start
 
@@ -150,6 +157,11 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 
 **Gov Demo Scenarios:**
 - `g8e demos run gov 1` - CUI Exfiltration Attempt Blocked
+
+**DoW Demo Scenarios:**
+- `g8e demos run dow 1` - Autonomous SIGINT-to-EO/IR Cross-Cueing (Challenge 5)
+- `g8e demos run dow 2` - BFT Spoofing Defense (Challenge 8)
+- `g8e demos run dow 3` - Disconnected Operations (Challenge 6)
 
 **Finance Demo Scenarios:**
 - `g8e demos run finance 1` - Unauthorized Trade Blocked
@@ -233,6 +245,7 @@ Each org uses different host ports to allow simultaneous deployment:
 | finance | 8082 | 8445 | Demo UI: 3002 |
 | secure-data (src) | 8083 | 8446 | |
 | secure-data (dst) | 8084 | 8447 | |
+| dow | 8086 | 8449 | |
 | swarm | 8085 | 8448 | Command Interface: 5005 |
 
 ## PKI and Enrollment

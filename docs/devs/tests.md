@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-24
+Last Updated: 2026-06-25
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -43,8 +43,8 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ./g8e test e2e         # Run Tier 3 (E2E) tests - requires running gateway
 ./g8e test coverage    # Run tests with coverage report
 ./g8e test lint        # Run linting and quality checks
-./g8e agentic-tool-emulator list    # List agentic tool emulator scenarios
-./g8e agentic-tool-emulator run     # Run agentic tool emulator scenarios against real Gateway/Operator
+./g8e agent-harness list    # List agent harness scenarios
+./g8e agent-harness run     # Run agent harness scenarios against real Gateway/Operator
 ./g8e test chaos       # Generate realistic governance events for testing
 ./g8e test summary     # View chaos test summary from test vault
 ```
@@ -61,9 +61,9 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
 
-- **`./g8e agentic-tool-emulator list`** - Lists available agentic tool emulator scenarios with their posture requirements and personas.
+- **`./g8e agent-harness list`** - Lists available agent harness scenarios with their posture requirements and personas.
 
-- **`./g8e agentic-tool-emulator run`** - Runs agentic tool emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+- **`./g8e agent-harness run`** - Runs agent harness scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
 
 - **`./g8e test chaos`** - Generates realistic governance events for testing. Creates a test vault with distributed event categories (70% Good Actor, 20% Prompt Injection, 10% MitM) to test governance pipeline behavior under various conditions.
 
@@ -85,17 +85,17 @@ Docker-based E2E tests that spin up gateway and operator containers using docker
 - Checks HTTPS port reachability (no mTLS)
 - Validates operator container connection
 
-### Agentic Tool Emulator
+### Agent Harness
 
 ```bash
-./g8e agentic-tool-emulator list
-./g8e agentic-tool-emulator run [scenario ...]
-./g8e agentic-tool-emulator audit
+./g8e agent-harness list
+./g8e agent-harness run [scenario ...]
+./g8e agent-harness audit
 ```
 
-The agentic tool emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
+The agent harness is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
 
-**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The agentic tool emulator merely wears different "personas" to test how the system behaves when various AI tools interact with it.
+**Key Design Principle**: The ONLY fiction is the client identity. The Gateway and Operator are real infrastructure components. The agent harness merely wears different "personas" to test how the system behaves when various AI tools interact with it.
 
 **Architecture**:
 - **client/** - Thin, faithful HTTP client with mTLS support and exchange recording
@@ -129,18 +129,18 @@ Scenarios run under different enforcement modes:
 - Mock principal (L3 human notary)
 
 **Governance Testing**:
-For consensus/notary scenarios, the agentic tool emulator uses mock cryptographic actors:
+For consensus/notary scenarios, the agent harness uses mock cryptographic actors:
 - **Ensemble**: Mock consensus agents that co-sign L2 envelopes
 - **Principal**: Mock human notary for L3 signing (or drives real OOB approve flow)
 
 This allows testing maximal governance envelopes without requiring actual distributed consensus infrastructure.
 
-**Agentic Tool Emulator Commands**:
-- **`./g8e agentic-tool-emulator list`** - Lists available scenarios with their posture requirements and personas
-- **`./g8e agentic-tool-emulator run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
-- **`./g8e agentic-tool-emulator audit`** - Audits signed receipts from the Operator for a specific session
+**Agent Harness Commands**:
+- **`./g8e agent-harness list`** - Lists available scenarios with their posture requirements and personas
+- **`./g8e agent-harness run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
+- **`./g8e agent-harness audit`** - Audits signed receipts from the Operator for a specific session
 
-**Agentic Tool Emulator Configuration**:
+**Agent Harness Configuration**:
 - Supports JSON config overlay for complex scenarios
 - Configurable mTLS surface, public surface, client certificates, and CA bundle
 - Operator API key authentication for MCP/A2A surface
@@ -289,9 +289,8 @@ Comprehensive gateway service testing:
 - `auth_integrity_test.go` - Authentication integrity tests
 - `blob_store_service_test.go` - Blob store service tests
 - `bootstrap_test.go` - Gateway bootstrap tests
-- `cli_l3_notary_test.go` - CLI-based L3 notary tests
+- `cli_session_verifier_test.go` - CLI session verifier and unified L3 notary tests
 - `cli_session_service_test.go` - CLI session service tests
-- `composite_l3_verifier_test.go` - Composite L3 verification tests
 - `db_controller_test.go` - Database controller tests
 - `document_store_service_test.go` - Document store service tests
 - `gateway_auth_bench_test.go` - Gateway authentication benchmark tests
@@ -328,10 +327,14 @@ Comprehensive gateway service testing:
 - `user_service_test.go` - User service tests
 - `web_session_service_test.go` - Web session service tests
 
+**Console SPA Tests** (`internal/services/gateway/console/`):
+- `console_test.go` - Console SPA handler and static asset tests
+
 #### Tribunal Service Tests (`internal/services/tribunal/`)
 
 Tribunal consensus and key provisioning tests:
 - `factory_test.go` - `NewTribunalFromPolicy` factory tests including `FileKeyProvider` key loading (success, not-found, invalid seed length, invalid hex), `SaveMemberKey` provisioning (creates directory and file), and multi-member key resolution
+- `local_deliberator_test.go` - `LocalDeliberator` tests including quorum counting, veto detection, and nil-member handling
 - `service_test.go` - `TribunalService` tests including deliberation, nil-key member skipping (aligns with factory contract), and quorum behavior
 
 **Shared Factory** (`internal/services/tribunal/factory.go`):
@@ -391,7 +394,7 @@ Authentication and PKI tests:
 - `internal/services/pubsub/command_service_test.go` - Pub/sub command service tests
 - `internal/services/pubsub/file_ops_service_test.go` - Pub/sub file operations service tests
 - `internal/services/pubsub/g8eg_pubsub_client_test.go` - g8e Gateway pub/sub client tests
-- `internal/services/pubsub/g8eg_pubsub_mock_test.go` - g8e Gateway pub/sub mock tests
+- `internal/services/pubsub/pubsubtest/mock_client_test.go` - PubSub mock client tests
 - `internal/services/pubsub/heartbeat_service_test.go` - Pub/sub heartbeat tests
 - `internal/services/pubsub/history_service_test.go` - Pub/sub history service tests
 - `internal/services/pubsub/inprocess_client_test.go` - In-process pub/sub client tests
@@ -410,6 +413,36 @@ Authentication and PKI tests:
 - `internal/services/system/system_utils_test.go` - System utility tests with `//go:build !windows` tag
 - `internal/services/system/utils_test.go` - General system utility tests
 
+#### Keystore Tests (`internal/services/keystore/`)
+
+Keyring backend and keystore abstraction tests:
+- `keystore_test.go` - Keystore abstraction tests
+- `keyring_file_test.go` - File-based keyring backend tests
+- `keyring_keychain_test.go` - macOS Keychain keyring backend tests
+- `keyring_libsecret_test.go` - Linux libsecret keyring backend tests
+- `keyring_memory_test.go` - In-memory keyring backend tests
+
+#### SQLite Utility Tests (`internal/services/sqliteutil/`)
+
+SQLite helper and utility tests:
+- `compress_test.go` - SQLite compression utility tests
+- `db_test.go` - SQLite database helper tests
+- `pruner_test.go` - SQLite pruner tests
+- `timestamp_test.go` - SQLite timestamp utility tests
+- `validate_test.go` - SQLite validation utility tests
+
+#### Scrubbing Tests (`internal/services/scrubbing/`)
+
+- `boundary_test.go` - Log scrubbing boundary tests
+
+#### Network Service Tests (`internal/services/network/`)
+
+- `identity_test.go` - Network identity tests
+
+#### Vault Service Tests (`internal/services/vault/`)
+
+- `vault_test.go` - Vault service tests
+
 #### CLI Tests (`internal/cli/`)
 
 CLI command and configuration tests:
@@ -425,7 +458,7 @@ CLI command and configuration tests:
 - `auth/operator_test.go` - Operator auth tests
 - `auth/passkey_bootstrap_test.go` - Passkey bootstrap tests
 - `auth/windows_crypto_test.go` - Windows crypto tests
-- `cmd/agentic_tool_emulator_test.go` - Agentic tool emulator command tests
+- `cmd/agent_harness_test.go` - Agent harness command tests
 - `cmd/approve_integration_test.go` - Approve command integration tests
 - `cmd/audit_integration_test.go` - Audit command integration tests
 - `cmd/audit_test.go` - Audit command tests
@@ -451,7 +484,6 @@ CLI command and configuration tests:
 - `cmd/test_paths_test.go` - Test path validation tests
 - `cmd/vault_test.go` - Vault command tests
 - `config/config_test.go` - Configuration loader tests
-- `jsonrpc/types_test.go` - JSON-RPC type tests
 - `platform/browser_test.go` - Browser platform tests
 - `platform/process_identity_test.go` - Process identity tests
 - `platform/process_test.go` - Process tests
@@ -461,11 +493,7 @@ CLI command and configuration tests:
 #### Configuration and Constants Tests
 
 - `internal/config/config_test.go` - Configuration tests
-
-#### Contract Tests
-
-- `internal/contracts/constants_enforcement_test.go` - Constants enforcement tests
-- `internal/contracts/protocol_constants_test.go` - Protocol constants tests
+- `internal/constants/mappings_test.go` - Constants mappings tests
 
 #### Infrastructure Tests
 
@@ -483,6 +511,15 @@ CLI command and configuration tests:
 - `internal/testutil/pubsub_integration_test.go` - Pub/sub integration tests with `//go:build integration` tag
 - `internal/testutil/pubsub_test.go` - Pub/sub tests
 - `internal/testutil/pubsub_unit_test.go` - Pub/sub unit tests
+
+#### Utility Package Tests
+
+- `internal/exitcode/exitcode_test.go` - Exit code constants tests
+- `internal/netutil/netutil_test.go` - Network utility tests
+- `internal/paths/paths_test.go` - Path constants tests
+- `internal/pathutil/pathutil_test.go` - Path utility tests
+- `internal/pkg/ssh/config_test.go` - SSH config tests
+- `internal/uuid/uuid_test.go` - UUID generation tests
 
 #### Storage Test Infrastructure (`internal/services/storage/` and `internal/services/storage/storagetest/`)
 
@@ -518,10 +555,13 @@ Storage service tests and test-only audit storage implementations separated from
 
 #### Command Tests
 
-- `cmd/operator/actuator_pub_export_test.go` - Operator actuator export tests
-- `cmd/operator/main_subprocess_test.go` - Operator subprocess tests
 - `cmd/operator/main_test.go` - Operator main tests
+- `internal/cli/serve/cert_test.go` - Serve certificate tests
+- `internal/cli/serve/gateway_test.go` - Serve gateway command tests
+- `internal/cli/serve/logger_test.go` - Serve logger tests
+- `internal/cli/serve/operator_test.go` - Serve operator command tests
 - `internal/cli/serve/terminal_linux_test.go` - Linux terminal tests
+- `internal/cli/serve/version_test.go` - Serve version tests
 - `internal/cli/stream/stream_ssh_test.go` - SSH stream tests
 - `internal/cli/stream/stream_ssh_utils_test.go` - SSH stream utility tests
 - `internal/cli/stream/stream_subprocess_test.go` - Subprocess stream tests
@@ -569,12 +609,32 @@ MCP gateway and native tool integration tests:
 - `sys_time_clock_test.go` - Time clock tool tests
 - `sys_tools_test.go` - System tools tests
 - `tls_cert_inspect_test.go` - TLS certificate inspect tool tests
-- `tribunal_deliberator_test.go` - HTTP tribunal deliberator timeout test (CS-6: 1s client timeout fires before 2s server delay)
 - `validation_test.go` - Validation tests
 
 #### Package Tests
 
 - `pkg/governance/types_test.go` - Governance types tests
+
+#### Protocol Tests (`protocol/`)
+
+- `workload_identity_test.go` - Workload identity SPIFFE URI parsing tests
+
+#### Agent Harness Tests (`internal/tools/agent_harness/`)
+
+Agent harness client, config, and scenario tests:
+- `client/audit_test.go` - Audit exchange recording tests
+- `client/client_test.go` - HTTP client tests
+- `client/envelope_test.go` - Governance envelope construction tests
+- `client/mtls_test.go` - mTLS client configuration tests
+- `client/protocols_test.go` - Protocol coverage tests (MCP, A2A, protobuf)
+- `config/config_test.go` - Runtime configuration tests
+- `scenarios/governance_test.go` - Governance scenario tests
+- `scenarios/mcp_a2a_test.go` - MCP and A2A scenario tests
+- `scenarios/scenario_test.go` - Scenario registry and execution tests
+
+#### Chaos Tool Tests (`internal/tools/chaos/`)
+
+- `chaos_test.go` - Chaos event generation tests
 
 ---
 
@@ -668,9 +728,9 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 ### Go Tests
 
 - **Tooling** - Standard `go test` with optional `gotestsum` for dots-style output.
-- **Race detection** - Enabled via `-race` in CI and by default in `./g8e test unit` and `./g8e test ci`.
+- **Race detection** - Enabled via `-race` in CI and by default in `./g8e test unit`.
 - **Parallelism** - `-parallel 4` with `180s` timeout.
-- **Coverage** - `--coverage` flag generates reports. CI enforces 60% coverage threshold.
+- **Coverage** - `--coverage` flag generates reports. CI enforces 70% coverage threshold.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
 - **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Gateway gate infrastructure.
 - **Path constants** - ALL filepath strings in test code MUST be defined as constants in `internal/constants/paths.go`. No filepath strings may be constructed dynamically or hardcoded inline, including relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`, etc. Dynamic path construction using `filepath.Join()` with string literals is prohibited. Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). The only exception is when using `TestPaths` for isolated test environments - the base directory for TestPaths must come from a constant, and all path construction within TestPaths must use constants. This eliminates magic strings and improves maintainability and system robustness.
@@ -688,6 +748,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-docker`** - Runs Tier 3 (Docker E2E) tests with `e2e` build tag. Requires Docker.
 - **`make test-coverage`** - Runs tests with coverage (enforces 70% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
 - **`make test-gateway`** - Runs gateway-specific integration tests (A2A gateway, MCP gateway). Targets `test/a2a_gateway_test.go`, `test/mcp_gateway_test.go`, and `test/mcp_stdio_test.go` with the `integration` build tag.
+- **`make ci`** - Runs the full CI pipeline locally (proto verification, swagger generation, lint, vulncheck, tests). Equivalent to the GitHub Actions workflow.
 
 ### Lints
 

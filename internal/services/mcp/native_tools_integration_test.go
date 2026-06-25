@@ -33,7 +33,6 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -43,6 +42,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
@@ -825,7 +825,7 @@ func callNativeToolViaEnvelope(t *testing.T, client *http.Client, operatorURL, s
 	// Build governance envelope with native tool call
 	now := time.Now()
 	envelope := &commonv1.GovernanceEnvelope{
-		Id:              uuid.New().String(),
+		Id:              uuid.NewString(),
 		Timestamp:       timestamppb.New(now),
 		ExpiresAt:       timestamppb.New(now.Add(5 * time.Minute)),
 		TransactionHash: computeTransactionHash(toolName, arguments),
@@ -878,7 +878,7 @@ func buildToolCallPayload(toolName string, arguments json.RawMessage) []byte {
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      toolName,
 		ArgumentsJson: string(arguments),
-		ExecutionId:   uuid.New().String(),
+		ExecutionId:   uuid.NewString(),
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {

@@ -19,6 +19,8 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Broker is the interface for the GatewayWebSocketHandler to avoid import cycles.
@@ -51,7 +53,7 @@ func (c *InProcessPubSubClient) Subscribe(ctx context.Context, channel string) (
 	defer c.mu.Unlock()
 
 	if c.closed {
-		return nil, fmt.Errorf("client is closed")
+		return nil, constants.ErrClientClosed
 	}
 
 	if _, exists := c.subs[channel]; exists {
@@ -102,7 +104,7 @@ func (c *InProcessPubSubClient) Publish(ctx context.Context, channel string, dat
 	c.mu.Unlock()
 
 	if closed {
-		return fmt.Errorf("client is closed")
+		return constants.ErrClientClosed
 	}
 
 	c.broker.Publish(channel, data)

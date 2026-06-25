@@ -411,7 +411,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | **Threat Detection** | Identify malicious activity | L1 Doctrine with MITRE ATT&CK patterns | `internal/services/governance/l1_doctrine.go` |
 | **Automated Response** | Automated containment of threats | Fail-closed verification pipeline | `internal/services/governance/l5_actuator.go` |
 | **Audit Logging** | Comprehensive audit trail | Git-backed ledger | `internal/services/storage/ledger.go` |
-| **Session Management** | Secure session handling | Session-based isolation (operator_session_id, cli_session_id, web_session_id) | `docs/architecture/protocol.md` |
+| **Session Management** | Secure session handling | Session-based isolation (operator_session_id, cli_session_id, web_session_id) | `protocol/docs/spec.md` |
 | **Certificate Management** | PKI lifecycle management | Root/intermediate CA hierarchy, CRL | `internal/services/gateway/pki_controller.go` |
 | **Key Management** | Secure key storage and rotation | PKI hierarchy with key separation | `internal/services/gateway/pki_controller.go` |
 | **API Security** | Secure API communication | mTLS for all platform APIs | `docs/architecture/auth.md` |
@@ -516,7 +516,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 | Document | Location | Purpose |
 |---------|----------|---------|
 | **Security Policy** | `.github/SECURITY.md` | Security posture and vulnerability reporting |
-| **Architecture: Protocol** | `docs/architecture/protocol.md` | Protocol specification and verification layers |
+| **Architecture: Protocol** | `protocol/docs/spec.md` | Protocol specification and verification layers |
 | **Architecture: Auth** | `docs/architecture/auth.md` | Authentication and authorization architecture |
 | **Architecture: Operator** | `docs/architecture/operator.md` | Operator execution boundary |
 | **Architecture: Gateway** | `docs/architecture/gateway.md` | Gateway policy decision point |

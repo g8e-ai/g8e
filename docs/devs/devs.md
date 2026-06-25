@@ -17,7 +17,7 @@ g8e is a zero-trust execution platform for agentic infrastructure. The platform 
 - **BYO clients**: The platform is UI-less by design. The CLI (`./g8e`) is the default interface.
 
 For detailed architecture, see:
-- [g8e Protocol](../architecture/protocol.md) - Platform architecture, governance model, and protocol wire format
+- [g8e Protocol](../../protocol/docs/spec.md) - Platform architecture, governance model, and protocol wire format
 - [g8e Gateway](../architecture/gateway.md) - Gateway service details
 - [g8e Operator](../architecture/operator.md) - Operator service details
 
@@ -171,7 +171,7 @@ var ErrCustomError = errors.New("custom error")  // Move to internal/constants/e
 
 **Wire format:** Canonical JSON (protojson) for all client-facing surfaces
 
-**Governance:** All mutations must pass through the `GovernanceEnvelope` and 5-layer verification gauntlet. See [g8e Protocol](../architecture/protocol.md) for detailed layer responsibilities.
+**Governance:** All mutations must pass through the `GovernanceEnvelope` and 5-layer verification gauntlet. See [g8e Protocol](../../protocol/docs/spec.md) for detailed layer responsibilities.
 
 ## Testing
 
@@ -230,7 +230,7 @@ Security doctrines are stored in `protocol/constants/doctrine/` as canonical JSO
 2. Run `make validate-doctrines`
 3. Restart g8e Operator to load new doctrines
 
-See [g8e Protocol](../architecture/protocol.md) for doctrine schema details.
+See [g8e Protocol](../../protocol/docs/spec.md) for doctrine schema details.
 
 ## Constants
 
@@ -254,20 +254,20 @@ Constants are defined in Go source files in `internal/constants/` (SSOT). JSON f
 - `make generate` - Generate protobuf code from `.proto` files
 - `make proto` - Generate Go Protobuf code (alias for generate)
 
-See [Constants Reference](../reference/constants.md) for details.
+See [Constants Reference](../../protocol/docs/constants.md) for details.
 
 ## Native Tools
 
 Native tools are MCP tools compiled into the g8e binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
 
 **Adding a new native tool:**
-1. Copy `docs/protocols/mcp/tool_template.go` to `internal/services/mcp/your_tool_name.go`
+1. Copy `protocol/docs/mcp_tool_template.go` to `internal/services/mcp/your_tool_name.go`
 2. Implement the `NativeTool` interface with `Name()`, `Description()`, `InputSchema()`, and `Execute()` methods
 3. Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
 4. Add unit tests in `internal/services/mcp/your_tool_name_test.go`
 5. No `init()` function needed - registration is explicit via `RegisterNativeTools()`
 
-**Template:** See `docs/protocols/mcp/tool_template.go` for a complete example.
+**Template:** See `protocol/docs/mcp_tool_template.go` for a complete example.
 
 **Existing tools:** Database tools (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics (top, tree), disk profiling (usage, profile, file checksum), signal safety, network socket audit, endpoint ping, HTTP probe, DNS resolution, TLS cert inspection, SSH known hosts, service status, container status, system info, environment variables, time clock, Git operations, cloud metadata, Kubernetes inspection, shell command execution, file read, operator deploy.
 

@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ---
 
@@ -63,10 +63,12 @@ This command copies the operator binary to remote hosts via SCP, makes it execut
 **Stream operator binary to remote hosts:**
 
 ```bash
-./g8e operator stream --hosts <host1,host2>
+./g8e operator stream <host1> <host2> --endpoint <gateway-ip>
 ```
 
-This command streams the operator binary to remote hosts via SSH and writes it to disk without copying. Useful for quick deployments or air-gapped scenarios. The binary is not started automatically; run `./g8e operator deploy --hosts <hosts> --background` after streaming to start the operator. Additional flags include `-P` for SSH port and `-i` for SSH identity file.
+This command streams the operator binary to remote hosts via native Go crypto/ssh and executes it directly on each host. Supports concurrent streaming, structured JSON output, and advanced SSH configuration. When `--endpoint` is provided, the operator starts automatically on each remote host after the binary is injected. Without `--endpoint`, the binary is saved to a temporary file on the remote host with instructions for manual startup.
+
+Hosts are specified as positional arguments or via `--hosts <file>` (one host per line, or `-` for stdin). Additional flags include `--arch` (target architecture: amd64, arm64, 386), `--concurrency` (max parallel SSH sessions), `--timeout` (per-host dial and inject timeout in seconds), `--ssh-config` (path to SSH config file), `--known-hosts` (path to SSH known_hosts file), `--ssh-identity-file` (SSH identity file path), `--ssh-user` (SSH username), `--ssh-passphrase` (passphrase for encrypted SSH private keys), `--binary-dir` (directory containing architecture-specific operator builds), `--no-git` (disable ledger), and `--preflight` (enable pre-flight SSH connectivity check before binary transfer).
 
 **Copy operator binary locally:**
 
@@ -80,7 +82,7 @@ This command streams the operator binary to remote hosts via SSH and writes it t
 ./g8e operator scp <user@host:path>
 ```
 
-This command uses SCP to copy the operator binary to a remote host. Supports common SCP flags including `-P` for SSH port, `-i` for identity file, `-p` to preserve attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
+This command uses SCP to copy the operator binary to a remote host. Supports common SCP flags including `-P` for SSH port, `-i` for identity file, `-r` for recursive copy, `-p` to preserve attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
 
 #### 3. CSR-Based Enrollment
 
@@ -90,7 +92,7 @@ On the remote host, generate a CSR and enroll with the gateway:
 ./g8e gw security pki enroll -e <gateway-ip>
 ```
 
-The endpoint is the gateway IP address. The HTTP port (8080) is appended automatically. This command generates operator and CLI CSRs, submits them to the gateway, and saves the signed certificates to the PKI directory.
+The endpoint is the gateway IP address. The HTTP port (8080) is appended automatically. This command generates an operator CSR, submits it to the gateway, and saves the signed certificates to the PKI directory.
 
 #### 4. Start the Operator
 
@@ -158,7 +160,7 @@ curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
 
-# Note: Documentation uses default ports: HTTP 8080, HTTPS 8443.
+> Note: Documentation uses default ports: HTTP 8080, HTTPS 8443.
 
 **For plain HTTP MCP (non-mTLS):**
 

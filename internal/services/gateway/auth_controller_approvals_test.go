@@ -333,7 +333,7 @@ func TestHandleApprovalPage(t *testing.T) {
 		c.handleApprovalPage(rr, req)
 
 		assert.Equal(t, http.StatusFound, rr.Code)
-		assert.Equal(t, "/console#approve="+txHash, rr.Header().Get("Location"))
+		assert.Equal(t, "/console/#approve="+txHash, rr.Header().Get("Location"))
 	})
 }
 

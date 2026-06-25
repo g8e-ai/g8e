@@ -35,25 +35,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 )
 
-// extractPortFromURL extracts the port number from a httptest server URL
-func extractPortFromURL(url string) int {
-	// httptest URLs are like "http://127.0.0.1:12345"
-	// Split by "://" first to get the host:port part
-	parts := strings.Split(url, "://")
-	if len(parts) < 2 {
-		return 0
-	}
-	// Then split by ":" to get the port
-	hostPort := parts[1]
-	portParts := strings.Split(hostPort, ":")
-	if len(portParts) < 2 {
-		return 0
-	}
-	var port int
-	fmt.Sscanf(portParts[1], "%d", &port)
-	return port
-}
-
 func TestGenerateCSR(t *testing.T) {
 	tests := []struct {
 		name       string

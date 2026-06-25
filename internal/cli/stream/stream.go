@@ -34,18 +34,16 @@ import (
 const (
 	defaultConcurrency = 50
 	defaultTimeout     = 60 * time.Second
-	defaultArch        = "amd64"
 )
 
 func getDefaultNodeBinaryDir() string {
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
-		// If we can't get cwd, fall back to current directory
-		_ = paths.InitWithBase(constants.ProjectRootFromCurrentDir)
+		if fallbackErr := paths.InitWithBase(constants.ProjectRootFromCurrentDir); fallbackErr != nil {
+			fmt.Fprintf(os.Stderr, "[stream] failed to initialize paths: %v\n", fallbackErr)
+		}
 	}
-	// Use pathutil.SafeJoin to handle cross-platform path joining correctly
-	// paths.Infra.RuntimeDir is absolute after Init(), so SafeJoin handles the relative "../bin" correctly
-	return pathutil.SafeJoin(paths.Infra.RuntimeDir, "..", constants.BinDirname)
+	return pathutil.SafeJoin(paths.Infra.RuntimeDir, constants.PathParentDir, constants.BinDirname)
 }
 
 // StreamStatusEvent is written as a JSON line to stdout for each host event.
@@ -372,7 +370,7 @@ func shellQuote(s string) string {
 func emitJSON(evt *StreamStatusEvent) {
 	data, err := json.Marshal(evt)
 	if err != nil {
-		fmt.Printf(`{"error":"failed to marshal event","details":"%s"}\n`, err)
+		fmt.Printf("{\"error\":\"failed to marshal event\",\"details\":\"%s\"}\n", err)
 		return
 	}
 	fmt.Println(string(data))

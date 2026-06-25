@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "last_updated": "2026-05-22",
+  "version": "1.1.0",
+  "last_updated": "2026-06-25",
   "sources": [
     {
       "name": "owasp_crs",
@@ -41,6 +41,22 @@
       "license": "Proprietary",
       "enabled": true,
       "last_ingested": "2026-05-22"
+    },
+    {
+      "name": "g8e_whitelist",
+      "url": null,
+      "version": "1.0.0",
+      "license": "Proprietary",
+      "enabled": false,
+      "last_ingested": "2026-06-25"
+    },
+    {
+      "name": "g8e_blacklist",
+      "url": null,
+      "version": "1.0.0",
+      "license": "Proprietary",
+      "enabled": true,
+      "last_ingested": "2026-06-25"
     }
   ]
 }

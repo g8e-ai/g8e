@@ -35,7 +35,17 @@ protocol/
   models/                 JSON model schemas and Python Pydantic models
   python/                 Python package (g8e-protocol)
   examples/               Go example programs
-  docs/                   Protocol reference documentation (placeholder)
+  docs/                   Protocol reference documentation
+    spec.md               Protocol specification (GovernanceEnvelope, 5-layer interlock)
+    constants.md          Constants system reference
+    a2a.md                A2A protocol specification and integration
+    a2a.proto             A2A upstream protocol protobuf definition (reference)
+    a2a.json              A2A JSON Schema bundle (non-normative)
+    mcp.md                MCP protocol specification and integration
+    mcp.json              MCP payload type JSON Schema bundle (non-normative)
+    mcp_jsonrpc_schema.json  MCP JSON-RPC 2.0 message schema
+    mcp_tool_template.go  Native tool implementation template
+    reference/api/        Generated Markdown API documentation from protobuf
 ```
 
 ## Components
@@ -101,7 +111,7 @@ The `models/` directory contains JSON Schema files that define the structure for
 - `tool_results.json`, `agent_activity_metadata.json`
 - `reputation_commitment.json`, `reputation_state.json`, `stake_resolution.json`
 - `security_constraints.json`
-- `agents/`: Per-agent-role model schemas (`primary.json`, `assistant.json`, `lite.json`, `triage.json`, `title_generator.json`, `agentic_tool_emulator.json`)
+- `agents/`: Per-agent-role model schemas (`primary.json`, `assistant.json`, `lite.json`, `triage.json`, `title_generator.json`, `agent_harness.json`)
 
 ### Python Package
 

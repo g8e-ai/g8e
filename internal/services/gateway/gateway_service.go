@@ -567,7 +567,7 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 
 // GovernanceDeps holds the governance dependencies required for transaction verification.
 // These interfaces are implemented by CanonicalDBService (ReplayStore, StateRootProvider,
-// TransactionAuditStore) and CompositeL3Verifier (L3Notary).
+// TransactionAuditStore) and the governance L3Notary.
 type GovernanceDeps struct {
 	ReplayStore       governance.ReplayStore
 	StateRootProvider governance.StateRootProvider
@@ -584,17 +584,17 @@ type GovernanceDeps struct {
 
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
 // This enables the in-process OperatorPubSubService to perform fail-closed verification.
-// The L3 notary is a composite that handles both WebAuthn (web sessions) and mTLS (CLI sessions).
+// The L3 notary handles both WebAuthn (web sessions) and mTLS (CLI sessions).
 func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
-	// Create composite L3 notary that handles both web and CLI sessions
-	cliL3 := NewCLIL3Notary(ls.db, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
-	compositeL3 := NewCompositeL3Verifier(ls.passkey, cliL3, ls.logger)
+	// Create unified L3 notary that handles both CLI (mTLS) and passkey (WebAuthn) proofs
+	cliVerifier := NewCLISessionVerifier(ls.db, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
+	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey, ls.logger)
 
 	return &GovernanceDeps{
 		ReplayStore:       ls.db.ReplayStore,
 		StateRootProvider: ls.db.StateRootSvc,
 		TransactionAudit:  ls.db.DocStore,
-		L3Notary:          compositeL3,
+		L3Notary:          l3Notary,
 		SignerStore:       ls.db.SignerStore,
 		AppPolicyStore:    ls.db.AppPolicyStore,
 		TribunalStore:     ls.db.TribunalStore,

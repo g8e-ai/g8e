@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	storagetest "github.com/g8e-ai/g8e/internal/services/storage/storagetest"
@@ -51,7 +52,7 @@ func TestNewOperatorPubSubService(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -71,7 +72,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{
 		Config:            cfg,
 		Logger:            testutil.NewTestLogger(),
-		PubSubClient:      NewMockOperatorPubSubClient(),
+		PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 		ReplayStore:       &testutil.MockReplayStore{},
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 		TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -168,7 +169,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -581,7 +582,7 @@ func TestOperatorPubSubService_Start(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -685,7 +686,7 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -730,7 +731,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		t.Parallel()
 
 		cfg := testutil.NewTestConfig(t)
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 
 		// Test FS_LIST
 		t.Run("FS_LIST records content evidence", func(t *testing.T) {
@@ -939,7 +940,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 
 		// Create a mock audit store that fails
 		mockAuditStore := &failingAuditStore{}
@@ -1008,7 +1009,7 @@ func TestOperatorPubSubService_ObservedStateEvidence(t *testing.T) {
 		scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
 
 		cfg := testutil.NewTestConfig(t)
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 
 		// Create a session for this test
 		sessionID := "session-scrub-" + hex.EncodeToString([]byte{13, 14, 15, 16})
@@ -1046,7 +1047,7 @@ func TestOperatorPubSubService_SetL4Warden(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1068,7 +1069,7 @@ func TestOperatorPubSubService_handleEvalAnswerRequest(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1100,7 +1101,7 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1134,7 +1135,7 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1160,7 +1161,7 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1219,7 +1220,7 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1238,7 +1239,7 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},

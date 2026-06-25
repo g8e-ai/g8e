@@ -173,85 +173,85 @@ var Infra struct {
 	DemosSecureDataDoctrineDir       string
 	DemosSecureDataDoctrinePath      string
 }{
-	DbPath:                  ".g8e/data/g8e.db",
-	PkiDir:                  ".g8e/pki",
-	SecretsDir:              ".g8e/secrets",
-	CaCertPath:              ".g8e/pki/trust/g8eg-ca-bundle.pem",
-	AppCertDir:              ".g8e/pki/issued/apps",
-	DocsDir:                 ".g8e/docs",
-	ProtocolDir:             ".g8e/protocol",
-	ProtocolConstantsDir:    ".g8e/protocol/constants",
-	ProtocolModelsDir:       ".g8e/protocol/models",
-	SshConfigPath:           ".g8e/ssh_config",
-	RuntimeDir:              ".g8e",
-	DataDir:                 ".g8e/data",
-	VaultDir:                ".g8e/vault",
-	TestVaultDir:            ".g8e/test-vault",
-	LocalStateDBPath:        ".g8e/local_state.db",
-	AuditVaultDBPath:        ".g8e/audit_vault.db",
-	RootCAPath:              ".g8e/pki/root/root_ca.crt",
-	HubCAPath:               ".g8e/pki/authorities/hub_ca.crt",
-	OperatorCAPath:          ".g8e/pki/authorities/operator_ca.crt",
-	GatewayPeerCAPath:       ".g8e/pki/authorities/gateway_peer_ca.crt",
-	GatewayChainPath:        ".g8e/pki/issued/hub/operator-gateway.chain.pem",
-	TrustDomainJSONPath:     ".g8e/pki/trust/trust-domain.json",
-	ServiceCertPath:         ".g8e/pki/issued/hub/operator-gateway.crt",
-	PkiRootDir:              ".g8e/pki/root",
-	PkiAuthoritiesDir:       ".g8e/pki/authorities",
-	PkiIssuedHubDir:         ".g8e/pki/issued/hub",
-	PkiIssuedGatewayPeerDir: ".g8e/pki/issued/gateway-peer",
-	PkiTrustDir:             ".g8e/pki/trust",
-	PkiRevocationDir:        ".g8e/pki/revocation",
-	ActuatorPubJSONPath:     ".g8e/pki/Actuator_pub.json",
-	ActuatorPubPEMPath:      ".g8e/pki/Actuator_pub.pem",
+	DbPath:                  constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.DbFilename,
+	PkiDir:                  constants.RuntimeDirname + "/" + constants.PkiDirname,
+	SecretsDir:              constants.RuntimeDirname + "/" + constants.SecretsDirname,
+	CaCertPath:              constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirTrust + "/" + constants.PkiFileGatewayBundle,
+	AppCertDir:              constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirApps,
+	DocsDir:                 constants.RuntimeDirname + "/" + constants.DocsDirname,
+	ProtocolDir:             constants.RuntimeDirname + "/" + constants.ProtocolDirname,
+	ProtocolConstantsDir:    constants.RuntimeDirname + "/" + constants.ProtocolDirname + "/" + constants.ProtocolConstantsDirname,
+	ProtocolModelsDir:       constants.RuntimeDirname + "/" + constants.ProtocolDirname + "/" + constants.ProtocolModelsDirname,
+	SshConfigPath:           constants.RuntimeDirname + "/" + constants.SshConfigFilename,
+	RuntimeDir:              constants.RuntimeDirname,
+	DataDir:                 constants.RuntimeDirname + "/" + constants.DataDirname,
+	VaultDir:                constants.RuntimeDirname + "/" + constants.VaultDirname,
+	TestVaultDir:            constants.RuntimeDirname + "/" + constants.TestVaultDirname,
+	LocalStateDBPath:        constants.RuntimeDirname + "/" + constants.LocalStateDBFilename,
+	AuditVaultDBPath:        constants.RuntimeDirname + "/" + constants.AuditVaultDBFilename,
+	RootCAPath:              constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirRoot + "/" + constants.PkiFileRootCA,
+	HubCAPath:               constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirAuthorities + "/" + constants.PkiFileHubCA,
+	OperatorCAPath:          constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirAuthorities + "/" + constants.PkiFileOperatorCA,
+	GatewayPeerCAPath:       constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirAuthorities + "/" + constants.PkiFileGatewayPeerCA,
+	GatewayChainPath:        constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirHub + "/" + constants.PkiFileGatewayChain,
+	TrustDomainJSONPath:     constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirTrust + "/" + constants.PkiFileTrustDomainJSON,
+	ServiceCertPath:         constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirHub + "/" + constants.PkiFileGatewayCert,
+	PkiRootDir:              constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirRoot,
+	PkiAuthoritiesDir:       constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirAuthorities,
+	PkiIssuedHubDir:         constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirHub,
+	PkiIssuedGatewayPeerDir: constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirGatewayPeer,
+	PkiTrustDir:             constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirTrust,
+	PkiRevocationDir:        constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirRevocation,
+	ActuatorPubJSONPath:     constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.ActuatorPubJSONFilename,
+	ActuatorPubPEMPath:      constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.ActuatorPubPEMFilename,
 
-	OperatorKeyPath:        ".g8e/pki/operator.key",
-	OperatorCertPath:       ".g8e/pki/operator.crt",
-	OperatorChainPath:      ".g8e/pki/operator.chain.pem",
-	WardenPubPath:          ".g8e/pki/warden_pub.pem",
-	RootCAKeyPath:          ".g8e/pki/root/root_ca.key",
-	TrustedSignersDir:      ".g8e/pki/trusted_signers",
-	ClientPkiDir:           ".g8e/pki/client",
-	ClientOperatorKeyPath:  ".g8e/pki/client/operator.key",
-	ClientOperatorCertPath: ".g8e/pki/client/operator.crt",
+	OperatorKeyPath:        constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiFileOperatorKey,
+	OperatorCertPath:       constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiFileOperatorCert,
+	OperatorChainPath:      constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiFileOperatorChain,
+	WardenPubPath:          constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiFileWardenPub,
+	RootCAKeyPath:          constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirRoot + "/" + constants.PkiFileRootCAKey,
+	TrustedSignersDir:      constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirTrustedSigners,
+	ClientPkiDir:           constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirClient,
+	ClientOperatorKeyPath:  constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirClient + "/" + constants.PkiFileOperatorKey,
+	ClientOperatorCertPath: constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirClient + "/" + constants.PkiFileOperatorCert,
 
-	SessionEncKeyPath:   ".g8e/secrets/session_encryption_key",
-	BootstrapDigestPath: ".g8e/secrets/bootstrap_digest.json",
+	SessionEncKeyPath:   constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileSessionEncryptionKey,
+	BootstrapDigestPath: constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileBootstrapDigest,
 
-	LogDir:          ".g8e/logs",
-	OperatorLogFile: ".g8e/logs/operator.log",
+	LogDir:          constants.RuntimeDirname + "/" + constants.LogDirname,
+	OperatorLogFile: constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.OperatorLogFilename,
 
-	ExecutionVaultDBPath: ".g8e/data/execution_vault.db",
-	ReplayStoreDBPath:    ".g8e/data/replay_store.db",
-	LedgerDir:            ".g8e/data/ledger",
+	ExecutionVaultDBPath: constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ExecutionVaultDBFilename,
+	ReplayStoreDBPath:    constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ReplayStoreDBFilename,
+	LedgerDir:            constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.LedgerDirname,
 
-	DemosDir:                         "demos",
-	DemosHealthcareDir:               "demos/healthcare",
-	DemosFinanceDir:                  "demos/finance",
-	DemosGovDir:                      "demos/gov",
-	DemosSecureDataDir:               "demos/secure-data",
-	DemosHealthcareTargetDataDir:     "demos/healthcare/target-data",
-	DemosHealthcareDoctrineDir:       "demos/healthcare/doctrine",
-	DemosHealthcarePARequestsPath:    "demos/healthcare/target-data/pa_requests.json",
-	DemosHealthcareComposePath:       "demos/healthcare/compose.yml",
-	DemosHealthcareDoctrineHIPAAPath: "demos/healthcare/doctrine/phi_hipaa_doctrine.json",
-	DemosSecureDataDoctrineDir:       "demos/secure-data/doctrine",
-	DemosSecureDataDoctrinePath:      "demos/secure-data/doctrine/secure_data_transfer_doctrine.json",
+	DemosDir:                         constants.DemosDirname,
+	DemosHealthcareDir:               constants.DemosDirname + "/" + constants.DemosOrgHealthcare,
+	DemosFinanceDir:                  constants.DemosDirname + "/" + constants.DemosOrgFinance,
+	DemosGovDir:                      constants.DemosDirname + "/" + constants.DemosOrgGov,
+	DemosSecureDataDir:               constants.DemosDirname + "/" + constants.DemosOrgSecureData,
+	DemosHealthcareTargetDataDir:     constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir,
+	DemosHealthcareDoctrineDir:       constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosDoctrineDir,
+	DemosHealthcarePARequestsPath:    constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosTargetDataDir + "/" + constants.DemosPARequestsFile,
+	DemosHealthcareComposePath:       constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosComposeFile,
+	DemosHealthcareDoctrineHIPAAPath: constants.DemosDirname + "/" + constants.DemosOrgHealthcare + "/" + constants.DemosDoctrineDir + "/" + constants.DemosHIPAADoctrineFile,
+	DemosSecureDataDoctrineDir:       constants.DemosDirname + "/" + constants.DemosOrgSecureData + "/" + constants.DemosDoctrineDir,
+	DemosSecureDataDoctrinePath:      constants.DemosDirname + "/" + constants.DemosOrgSecureData + "/" + constants.DemosDoctrineDir + "/" + constants.DemosSecureDataDoctrineFile,
 }
 
 // Mutable path vars that are derived from the base directory at init time.
 // These complement Infra for paths accessed as bare variables.
 var (
-	GatewayIDPath       = ".g8e/data/gateway-id"
-	ActuatorPubJSONPath = ".g8e/pki/Actuator_pub.json"
-	ActuatorPubPEMPath  = ".g8e/pki/Actuator_pub.pem"
-	NetworkIdentityPath = ".g8e/pki/network-identity.json"
-	PeerCertPath        = ".g8e/pki/peer/peer.crt"
-	PeerKeyPath         = ".g8e/pki/peer/peer.key"
-	PeerChainPath       = ".g8e/pki/peer/peer.chain.pem"
-	PkiGatewayKeyPath   = ".g8e/pki/issued/hub/operator-gateway.key"
-	SwaggerFilePath     = "docs/swagger.json"
-	OperatorLogPath     = "operator.log"
+	GatewayIDPath       = constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.GatewayIDFilename
+	ActuatorPubJSONPath = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.ActuatorPubJSONFilename
+	ActuatorPubPEMPath  = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.ActuatorPubPEMFilename
+	NetworkIdentityPath = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.NetworkIdentityFilename
+	PeerCertPath        = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PeerSubdir + "/" + constants.PeerCertFilename
+	PeerKeyPath         = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PeerSubdir + "/" + constants.PeerKeyFilename
+	PeerChainPath       = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PeerSubdir + "/" + constants.PeerChainFilename
+	PkiGatewayKeyPath   = constants.RuntimeDirname + "/" + constants.PkiDirname + "/" + constants.PkiSubdirIssued + "/" + constants.PkiSubdirHub + "/" + constants.PkiFileGatewayKey
+	SwaggerFilePath     = constants.DocsDirname + "/" + constants.SwaggerFilename
+	OperatorLogPath     = constants.OperatorLogFilename
 )
 
 // Init initializes paths relative to the current working directory.
@@ -270,38 +270,38 @@ func InitWithBase(baseDir string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	Infra.RuntimeDir = pathutil.SafeJoin(baseDir, ".g8e")
-	Infra.DataDir = pathutil.SafeJoin(baseDir, ".g8e/data")
-	Infra.PkiDir = pathutil.SafeJoin(baseDir, ".g8e/pki")
-	Infra.SecretsDir = pathutil.SafeJoin(baseDir, ".g8e/secrets")
-	Infra.ProtocolDir = pathutil.SafeJoin(baseDir, ".g8e/protocol")
-	Infra.VaultDir = pathutil.SafeJoin(baseDir, ".g8e/vault")
-	Infra.VaultKeyPath = pathutil.SafeJoin(Infra.VaultDir, "key")
+	Infra.RuntimeDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname)
+	Infra.DataDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.DataDirname)
+	Infra.PkiDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.PkiDirname)
+	Infra.SecretsDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.SecretsDirname)
+	Infra.ProtocolDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.ProtocolDirname)
+	Infra.VaultDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.VaultDirname)
+	Infra.VaultKeyPath = pathutil.SafeJoin(Infra.VaultDir, constants.VaultKeyFilename)
 
-	Infra.ProtocolConstantsDir = pathutil.SafeJoin(Infra.ProtocolDir, "constants")
-	Infra.ProtocolModelsDir = pathutil.SafeJoin(Infra.ProtocolDir, "models")
-	Infra.DbPath = pathutil.SafeJoin(Infra.DataDir, "g8e.db")
-	Infra.LocalStateDBPath = pathutil.SafeJoin(Infra.RuntimeDir, "local_state.db")
-	Infra.SuspendedTransactionsDBPath = pathutil.SafeJoin(Infra.DataDir, "suspended_transactions.db")
-	Infra.AuditVaultDBPath = pathutil.SafeJoin(Infra.DataDir, "audit_vault.db")
-	Infra.CaCertPath = pathutil.SafeJoin(Infra.PkiDir, "trust/g8eg-ca-bundle.pem")
-	Infra.AppCertDir = pathutil.SafeJoin(Infra.PkiDir, "issued/apps")
-	Infra.DocsDir = pathutil.SafeJoin(baseDir, ".g8e/docs")
-	Infra.SshConfigPath = pathutil.SafeJoin(baseDir, ".g8e/ssh_config")
-	Infra.TestVaultDir = pathutil.SafeJoin(baseDir, ".g8e/test-vault")
-	Infra.RootCAPath = pathutil.SafeJoin(Infra.PkiDir, "root/root_ca.crt")
-	Infra.HubCAPath = pathutil.SafeJoin(Infra.PkiDir, "authorities/hub_ca.crt")
-	Infra.OperatorCAPath = pathutil.SafeJoin(Infra.PkiDir, "authorities/operator_ca.crt")
-	Infra.GatewayPeerCAPath = pathutil.SafeJoin(Infra.PkiDir, "authorities/gateway_peer_ca.crt")
-	Infra.GatewayChainPath = pathutil.SafeJoin(Infra.PkiDir, "issued/hub/operator-gateway.chain.pem")
-	Infra.TrustDomainJSONPath = pathutil.SafeJoin(Infra.PkiDir, "trust/trust-domain.json")
-	Infra.ServiceCertPath = pathutil.SafeJoin(Infra.PkiDir, "issued/hub/operator-gateway.crt")
-	Infra.PkiRootDir = pathutil.SafeJoin(Infra.PkiDir, "root")
-	Infra.PkiAuthoritiesDir = pathutil.SafeJoin(Infra.PkiDir, "authorities")
-	Infra.PkiIssuedHubDir = pathutil.SafeJoin(Infra.PkiDir, "issued/hub")
-	Infra.PkiIssuedGatewayPeerDir = pathutil.SafeJoin(Infra.PkiDir, "issued/gateway-peer")
-	Infra.PkiTrustDir = pathutil.SafeJoin(Infra.PkiDir, "trust")
-	Infra.PkiRevocationDir = pathutil.SafeJoin(Infra.PkiDir, "revocation")
+	Infra.ProtocolConstantsDir = pathutil.SafeJoin(Infra.ProtocolDir, constants.ProtocolConstantsDirname)
+	Infra.ProtocolModelsDir = pathutil.SafeJoin(Infra.ProtocolDir, constants.ProtocolModelsDirname)
+	Infra.DbPath = pathutil.SafeJoin(Infra.DataDir, constants.DbFilename)
+	Infra.LocalStateDBPath = pathutil.SafeJoin(Infra.RuntimeDir, constants.LocalStateDBFilename)
+	Infra.SuspendedTransactionsDBPath = pathutil.SafeJoin(Infra.DataDir, constants.SuspendedTxFilename)
+	Infra.AuditVaultDBPath = pathutil.SafeJoin(Infra.DataDir, constants.AuditVaultDBFilename)
+	Infra.CaCertPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
+	Infra.AppCertDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirApps)
+	Infra.DocsDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.DocsDirname)
+	Infra.SshConfigPath = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.SshConfigFilename)
+	Infra.TestVaultDir = pathutil.SafeJoin(baseDir, constants.RuntimeDirname, constants.TestVaultDirname)
+	Infra.RootCAPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
+	Infra.HubCAPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirAuthorities, constants.PkiFileHubCA)
+	Infra.OperatorCAPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirAuthorities, constants.PkiFileOperatorCA)
+	Infra.GatewayPeerCAPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirAuthorities, constants.PkiFileGatewayPeerCA)
+	Infra.GatewayChainPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayChain)
+	Infra.TrustDomainJSONPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirTrust, constants.PkiFileTrustDomainJSON)
+	Infra.ServiceCertPath = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert)
+	Infra.PkiRootDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirRoot)
+	Infra.PkiAuthoritiesDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirAuthorities)
+	Infra.PkiIssuedHubDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub)
+	Infra.PkiIssuedGatewayPeerDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirIssued, constants.PkiSubdirGatewayPeer)
+	Infra.PkiTrustDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirTrust)
+	Infra.PkiRevocationDir = pathutil.SafeJoin(Infra.PkiDir, constants.PkiSubdirRevocation)
 	Infra.ActuatorPubJSONPath = pathutil.SafeJoin(Infra.PkiDir, constants.ActuatorPubJSONFilename)
 	Infra.ActuatorPubPEMPath = pathutil.SafeJoin(Infra.PkiDir, constants.ActuatorPubPEMFilename)
 
@@ -319,7 +319,7 @@ func InitWithBase(baseDir string) error {
 	Infra.BootstrapDigestPath = pathutil.SafeJoin(Infra.SecretsDir, constants.SecretsFileBootstrapDigest)
 
 	Infra.LogDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.LogDirname)
-	Infra.OperatorLogFile = pathutil.SafeJoin(Infra.LogDir, OperatorLogPath)
+	Infra.OperatorLogFile = pathutil.SafeJoin(Infra.LogDir, constants.OperatorLogFilename)
 
 	Infra.ExecutionVaultDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)
 	Infra.ReplayStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)
@@ -410,12 +410,12 @@ type SSHConfigPaths struct {
 // GetSSHConfigPaths precomputes all SSH configuration paths from the given home directory.
 // Used by SSH connection resolution functions.
 func GetSSHConfigPaths(homeDir string) SSHConfigPaths {
-	sshDir := pathutil.SafeJoin(homeDir, ".ssh")
+	sshDir := pathutil.SafeJoin(homeDir, constants.SshDirname)
 	return SSHConfigPaths{
-		ConfigPath:      pathutil.SafeJoin(sshDir, "config"),
-		KnownHostsPath:  pathutil.SafeJoin(sshDir, "known_hosts"),
-		IDE25519KeyPath: pathutil.SafeJoin(sshDir, "id_ed25519"),
-		IDECDSAKeyPath:  pathutil.SafeJoin(sshDir, "id_ecdsa"),
-		IDRSAKeyPath:    pathutil.SafeJoin(sshDir, "id_rsa"),
+		ConfigPath:      pathutil.SafeJoin(sshDir, constants.SshConfigBasename),
+		KnownHostsPath:  pathutil.SafeJoin(sshDir, constants.SshKnownHostsBasename),
+		IDE25519KeyPath: pathutil.SafeJoin(sshDir, constants.SshKeyEd25519),
+		IDECDSAKeyPath:  pathutil.SafeJoin(sshDir, constants.SshKeyECDSA),
+		IDRSAKeyPath:    pathutil.SafeJoin(sshDir, constants.SshKeyRSA),
 	}
 }

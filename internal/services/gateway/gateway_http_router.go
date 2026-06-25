@@ -24,7 +24,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/services/gateway/console"
-	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
@@ -37,11 +36,10 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.State, h.handleState)
 
 	// Swagger UI documentation
-	mux.Handle("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("/swagger/doc.json"),
-		httpSwagger.DocExpansion("none"),
-	))
+	mux.HandleFunc("/swagger/", handleSwaggerUI)
+	mux.HandleFunc("/swagger/index.html", handleSwaggerUI)
 	mux.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		http.ServeFile(w, r, paths.SwaggerFilePath)
 	})
 
@@ -172,10 +170,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.authController.handleAuthPasskeysRevoke))
 
 	// Wrap authed routes in WebSessionAuth middleware
-	mux.Handle(constants.APIPaths.Users[:len(constants.APIPaths.Users)-1], h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle(constants.APIPaths.AuthSessionsMe[:len(constants.APIPaths.AuthSessionsMe)-len("/me")], h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle(constants.APIPaths.Approvals, h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle(constants.APIPaths.AuthPasskeysPrefix[:len(constants.APIPaths.AuthPasskeysPrefix)-1], h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/users/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/auth/sessions/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/approvals", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/approvals/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/auth/passkeys", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/auth/passkeys/", h.auth.WebSessionAuth(authedMux, h.db))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -340,4 +340,33 @@ func isSafeHost(host string, cfg *config.Config) bool {
 	}
 
 	return false
+}
+
+const swaggerUIHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>g8e Gateway API - Swagger UI</title>
+<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
+<style>body{margin:0}</style>
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+<script>
+window.onload=function(){
+  SwaggerUIBundle({
+    url:"/swagger/doc.json",
+    dom_id:"#swagger-ui",
+    docExpansion:"none",
+    deepLinking:true
+  });
+};
+</script>
+</body>
+</html>`
+
+func handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(swaggerUIHTML))
 }

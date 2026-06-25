@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +31,7 @@ func TestNewPortService(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 		require.NotNil(t, svc)
 		assert.Equal(t, cfg, svc.config)
@@ -44,7 +45,7 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		msg := &PubSubCommandMessage{
@@ -61,7 +62,7 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		req := &operatorv1.CheckPortRequested{Port: 0}
@@ -80,7 +81,7 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		req := &operatorv1.CheckPortRequested{Port: -1}
@@ -99,7 +100,7 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		req := &operatorv1.CheckPortRequested{Port: 70000}
@@ -118,7 +119,7 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		req := &operatorv1.CheckPortRequested{Port: 8080}
@@ -141,7 +142,7 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		req := &operatorv1.CheckPortRequested{Port: 8080, Host: "127.0.0.1"}
@@ -164,7 +165,7 @@ func TestPortService_HandlePortCheckRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		req := &operatorv1.CheckPortRequested{Port: 8080, Protocol: "tcp"}
@@ -189,7 +190,7 @@ func TestPortService_SetAuditStore(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		// Create a mock audit store
@@ -203,7 +204,7 @@ func TestPortService_SetAuditStore(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewPortService(cfg, logger, client)
 
 		svc.SetAuditStore(nil)

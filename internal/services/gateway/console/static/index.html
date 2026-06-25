@@ -116,14 +116,26 @@ async function loadState() {
     var uid = user ? user.id : '';
     var results = await Promise.all([
       api('/api/v1/users/me'),
-      api('/api/v1/auth/passkeys?user_id=' + uid),
-      api('/api/v1/approvals'),
+      uid ? api('/api/v1/auth/passkeys?user_id=' + uid) : null,
+      uid ? api('/api/v1/approvals') : null,
       api('/api/v1/health')
     ]);
-    if (results[0] && results[0].ok) { var d = await results[0].json(); user = d.user || d; }
-    else user = null;
-    if (results[1] && results[1].ok) { var pd = await results[1].json(); passkeys = pd.credentials || []; }
-    if (results[2] && results[2].ok) { var ad = await results[2].json(); approvals = ad.transactions || []; }
+    if (results[0] && results[0].ok) {
+      var d = await results[0].json();
+      user = d.user || d;
+      if (!uid && user && user.id) {
+        var results2 = await Promise.all([
+          api('/api/v1/auth/passkeys?user_id=' + user.id),
+          api('/api/v1/approvals')
+        ]);
+        if (results2[0] && results2[0].ok) { var pd = await results2[0].json(); passkeys = pd.credentials || []; }
+        if (results2[1] && results2[1].ok) { var ad = await results2[1].json(); approvals = ad.transactions || []; }
+      }
+    } else {
+      user = null;
+    }
+    if (uid && results[1] && results[1].ok) { var pd = await results[1].json(); passkeys = pd.credentials || []; }
+    if (uid && results[2] && results[2].ok) { var ad = await results[2].json(); approvals = ad.transactions || []; }
     if (results[3] && results[3].ok) health = await results[3].json();
   } catch (e) { user = null; }
 }
@@ -200,7 +212,13 @@ async function authenticatePasskey() {
     })
   });
   var vd = await vr.json();
-  if (vd.success) { await loadState(); render(); }
+  if (vd.success) {
+    await loadState();
+    render();
+    var params = new URLSearchParams(location.hash.slice(1));
+    var txHash = params.get('approve');
+    if (txHash) { approveTransaction(txHash); }
+  }
   else showMsg('error', vd.error || 'Authentication failed');
 }
 

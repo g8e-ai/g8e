@@ -14,7 +14,6 @@
 package testutil
 
 import (
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -79,24 +78,4 @@ func NewTestPaths(baseDir string) *TestPaths {
 func NewTestPathsFromTemp(t *testing.T) *TestPaths {
 	t.Helper()
 	return NewTestPaths(t.TempDir())
-}
-
-// Cleanup removes the test base directory.
-// This is typically called via t.Cleanup().
-func (tp *TestPaths) Cleanup() error {
-	if tp.BaseDir == "" {
-		return nil
-	}
-	return os.RemoveAll(tp.BaseDir)
-}
-
-// RegisterCleanup registers a cleanup function with the test to remove
-// the test directories when the test completes.
-func (tp *TestPaths) RegisterCleanup(t *testing.T) {
-	t.Helper()
-	t.Cleanup(func() {
-		if err := tp.Cleanup(); err != nil {
-			t.Logf("TestPaths cleanup failed: %v", err)
-		}
-	})
 }

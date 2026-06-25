@@ -2,19 +2,19 @@
 
 # g8e
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](docs/protocols/mcp/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](docs/architecture/protocol.md)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8.svg)](https://go.dev) [![CI](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/g8e-ai/g8e/actions/workflows/build-and-test.yml) [![Go Report Card](https://goreportcard.com/badge/github.com/g8e-ai/g8e)](https://goreportcard.com/report/github.com/g8e-ai/g8e) [![Latest Release](https://img.shields.io/github/v/release/g8e-ai/g8e)](https://github.com/g8e-ai/g8e/releases) [![Status](https://img.shields.io/badge/status-active%20development-orange.svg)](#status) [![Compliance](https://img.shields.io/badge/compliance-SOC2%20ISO%20GDPR-006400.svg)](docs/reference/compliance-alignment.md) [![Secure MCP](https://img.shields.io/badge/Secure-MCP-5D3FD3.svg)](protocol/docs/mcp.md) [![Protocol g8e](https://img.shields.io/badge/Protocol-g8e-FF6B6B.svg)](protocol/docs/spec.md)
 
 </div>
 
 g8e is a reference monitor for agentic infrastructure that provides a fail-closed admission boundary and a sovereign context plane. It is implemented as a single static Go binary. The platform governs state-changing actions on a host and maintains a tamper-evident record of those actions for agent context.
 
-**Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Position Paper](docs/core/position_paper.md) · [Architecture](docs/architecture/protocol.md) · [CLI Reference](docs/guides/cli.md) · [MCP Integration](docs/protocols/mcp/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
+**Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [CLI Reference](docs/guides/cli.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
 
 ## Architectural Model
 
 The g8e platform treats cloud providers as stateless inference utilities. The cloud model functions as a reasoning coprocessor rather than a stateful execution environment. This design ensures that canonical state resides within the [Local-First Audit Architecture (LFAA)](docs/architecture/storage.md) on the host. See the [Position Paper](docs/core/position_paper.md) for deeper analysis.
 
-Context is composed locally from the hash-chained ledger and live host state accessed through [governed tools](docs/protocols/mcp/mcp.md). Only tokenized and scrubbed intent material crosses the sovereignty boundary to the cloud. Payload rehydration occurs at the L5 Actuator layer on the host where the data resides. The model reasons over references while the underlying data remains on the host. See [Data Sovereignty](docs/architecture/encryption.md) for details.
+Context is composed locally from the hash-chained ledger and live host state accessed through [governed tools](protocol/docs/mcp.md). Only tokenized and scrubbed intent material crosses the sovereignty boundary to the cloud. Payload rehydration occurs at the L5 Actuator layer on the host where the data resides. The model reasons over references while the underlying data remains on the host. See [Data Sovereignty](docs/architecture/encryption.md) for details.
 
 This approach integrates the control plane and data plane into a single system. The proof chain that governs execution also serves as the context substrate. Context delivery and action governance are performed as a single operation on the same object.
 
@@ -22,7 +22,7 @@ This approach integrates the control plane and data plane into a single system. 
 
 The platform operates as a context settlement layer where the cloud reasoning layer possesses zero custody of underlying data. The cloud provider is restricted to viewing commitments, such as tokenized payloads, transaction hashes, and state roots. Real state is maintained on the host and updated per transaction, with each update cryptographically superseding the previous state. See [Storage Architecture](docs/architecture/storage.md) for implementation details.
 
-The hash-chained ledger serves as a state history. Settlement is performed through execution at the L5 layer and verified against the latest committed state. The system enforces state freshness through the L4 Warden, which rejects any envelope bound to a stale Merkle root. See [Protocol Specification](docs/architecture/protocol.md) for the complete verification flow.
+The hash-chained ledger serves as a state history. Settlement is performed through execution at the L5 layer and verified against the latest committed state. The system enforces state freshness through the L4 Warden, which rejects any envelope bound to a stale Merkle root. See [Protocol Specification](protocol/docs/spec.md) for the complete verification flow.
 
 The platform maintains an asymmetric trust topology where the host is sovereign and the cloud is an untrusted utility. Trust is not extended to the cloud; instead, cloud exposure is limited to cryptographic commitments and dispute resolution. See [Security Model](docs/architecture/auth.md) for identity and trust management.
 
@@ -83,10 +83,10 @@ flowchart LR
 ```
 
 ### Action Plane
-Every mutation must clear a five-layer admission pipeline at the host before execution. The system drops and records any actions that are stale, unsigned, unauthorized, or non-compliant with policy. The default state is closed. See [Admission Pipeline](#admission-pipeline) below and [Protocol Specification](docs/architecture/protocol.md).
+Every mutation must clear a five-layer admission pipeline at the host before execution. The system drops and records any actions that are stale, unsigned, unauthorized, or non-compliant with policy. The default state is closed. See [Admission Pipeline](#admission-pipeline) below and [Protocol Specification](protocol/docs/spec.md).
 
 ### Context Plane
-Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger called the [Local-First Audit Architecture (LFAA)](docs/architecture/storage.md). This occurs before the side effect is executed. The ledger provides a cryptographically provable chain of intent, interpretation, and outcome. Agents derive context from this chain and verify it against live host state through [governed tools](docs/protocols/mcp/mcp.md).
+Every admitted action writes a signed `ActionReceipt` to a host-local, git-backed, hash-chained ledger called the [Local-First Audit Architecture (LFAA)](docs/architecture/storage.md). This occurs before the side effect is executed. The ledger provides a cryptographically provable chain of intent, interpretation, and outcome. Agents derive context from this chain and verify it against live host state through [governed tools](protocol/docs/mcp.md).
 
 ```mermaid
 sequenceDiagram
@@ -154,10 +154,10 @@ graph TD
 ```
 
 1. **L1 Doctrine**: Deterministic static analysis. It enforces rules against forbidden patterns and MITRE ATT&CK indicators. This layer is active for every action. See [Doctrine Configuration](docs/guides/cli.md#doctrine-configuration).
-2. **L2 Consensus**: Tribunal deliberation. An enrolled Tribunal service evaluates the envelope and produces signed L2 votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal under both `consensus` and `notary` postures via the `/tribunal/v1/deliberate` endpoint. The gateway never self-signs L2 votes. See [Consensus Layer](docs/architecture/protocol.md#l2-consensus).
+2. **L2 Consensus**: Tribunal deliberation. An enrolled Tribunal service evaluates the envelope and produces signed L2 votes over the canonical SHA-256 transaction hash. The gateway delegates L2 deliberation to the Tribunal under both `consensus` and `notary` postures via the `/tribunal/v1/deliberate` endpoint. The gateway never self-signs L2 votes. See [Consensus Layer](protocol/docs/spec.md#l2-consensus).
 3. **L3 Notary**: Hardware-bound human authorization. It utilizes WebAuthn/FIDO2 passkey assertions computed over the transaction hash. See [Authentication](docs/architecture/auth.md).
-4. **L4 Warden**: Fail-closed verification authority. It re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](docs/architecture/protocol.md#l4-warden).
-5. **L5 Actuator**: Single dispatch path. It handles tool invocation and enforces data sovereignty. See [Actuator Layer](docs/architecture/protocol.md#l5-actuator).
+4. **L4 Warden**: Fail-closed verification authority. It re-verifies all proofs against local state, signatures, freshness, and the state Merkle root. See [Warden Layer](protocol/docs/spec.md#l4-warden).
+5. **L5 Actuator**: Single dispatch path. It handles tool invocation and enforces data sovereignty. See [Actuator Layer](protocol/docs/spec.md#l5-actuator).
 
 ## Data Sovereignty
 
@@ -212,9 +212,9 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 ## Documentation
 
-Documentation is available in the `docs/` directory:
+### Platform Documentation (`docs/`)
 
-### Guides
+#### Guides
 - [Getting Started](docs/guides/getting_started.md)
 - [CLI Reference](docs/guides/cli.md)
 - [Build Gateway](docs/guides/build_gateway.md)
@@ -225,8 +225,7 @@ Documentation is available in the `docs/` directory:
 - [Air Gap Deployment](docs/guides/air_gap.md)
 - [Docker Gateway](docs/guides/docker_gateway.md)
 
-### Architecture
-- [Protocol Specification](docs/architecture/protocol.md)
+#### Architecture
 - [Gateway Architecture](docs/architecture/gateway.md)
 - [Operator Architecture](docs/architecture/operator.md)
 - [Security Model](docs/architecture/auth.md)
@@ -238,19 +237,21 @@ Documentation is available in the `docs/` directory:
 - [Posture Configurations](docs/architecture/postures.md)
 - [Transaction Process](docs/architecture/transaction-process.md)
 
-### Protocols
-- [MCP Integration](docs/protocols/mcp/mcp.md)
-- [A2A Protocol](docs/protocols/a2a/)
-
-### Reference
+#### Reference
 - [Compliance Alignment](docs/reference/compliance-alignment.md)
 - [Glossary](docs/reference/glossary.md)
-- [Constants](docs/reference/constants.md)
-- [Schema](docs/reference/schema.json)
 
-### Core
+#### Core
 - [Position Paper](docs/core/position_paper.md)
 - [About](docs/core/about.md)
+
+### Protocol Reference (`protocol/docs/`)
+
+- [Protocol Specification](protocol/docs/spec.md)
+- [MCP Integration](protocol/docs/mcp.md)
+- [A2A Protocol](protocol/docs/a2a.md)
+- [Constants Reference](protocol/docs/constants.md)
+- [MCP JSON-RPC Schema](protocol/docs/mcp_jsonrpc_schema.json)
 
 ---
 

@@ -1,7 +1,7 @@
 # CLI Reference
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 This reference documents the g8e CLI commands for managing the g8e Gateway, g8e Operator, and platform setup.
 
@@ -19,12 +19,12 @@ Available Commands:
   mcp                    MCP protocol operations (stdio transport with full governance)
   operator               Manage Operator instances
   vault                  Manage the encryption vault
-  test                   Run test suites (unit, integration, e2e, lint, agentic-tool-emulator, chaos)
+  test                   Run test suites (unit, integration, e2e, lint, agent-harness, chaos)
   demos                  Manage g8e demo environments
   audit                  Run audit reports for compliance
   report                 Generate CSV evidence reports from all persistent stores
   swagger                Manage Swagger/OpenAPI documentation
-  agentic-tool-emulator  Universal agentic tool emulator for a real g8e Gateway/Operator
+  agent-harness  Universal agent harness for a real g8e Gateway/Operator
   help                   Help about any command
 
 Flags:
@@ -417,7 +417,7 @@ Flags:
 
 ## test
 ```
-Run test suites (unit, integration, e2e, lint, agentic-tool-emulator, chaos)
+Run test suites (unit, integration, e2e, lint, agent-harness, chaos)
 
 Usage:
   g8e test [command]
@@ -428,7 +428,7 @@ Available Commands:
   e2e         Run Tier 3 (Live Platform E2E) tests
   coverage    Run tests with coverage report
   lint        Run linting and quality checks
-  agentic-tool-emulator    Universal agentic tool emulator for a real g8e Gateway/Operator
+  agent-harness    Universal agent harness for a real g8e Gateway/Operator
   chaos       Generate realistic governance events against the local g8e audit stack
   summary     View chaos test summary from test vault
 
@@ -497,14 +497,14 @@ Flags:
   -h, --help   help for lint
 ```
 
-### test agentic-tool-emulator
+### test agent-harness
 ```
-Universal agentic tool emulator for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
+Universal agent harness for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
 
-The agentic tool emulator is a protocol compliance verifier that records every HTTP exchange with detailed metadata (request/response bodies, latency, status codes) and cross-references against the Operator's signed receipts. The ONLY fiction is the client identity, the Gateway and Operator are real infrastructure.
+The agent harness is a protocol compliance verifier that records every HTTP exchange with detailed metadata (request/response bodies, latency, status codes) and cross-references against the Operator's signed receipts. The ONLY fiction is the client identity, the Gateway and Operator are real infrastructure.
 
 Usage:
-  g8e test agentic-tool-emulator [command]
+  g8e test agent-harness [command]
 
 Available Commands:
   list        List available scenarios
@@ -512,30 +512,30 @@ Available Commands:
   audit       Audit signed receipts from the Operator
 
 Flags:
-  -h, --help   help for agentic-tool-emulator
+  -h, --help   help for agent-harness
 
-Use "g8e test agentic-tool-emulator [command] --help" for more information about a command.
+Use "g8e test agent-harness [command] --help" for more information about a command.
 ```
 
-The `agentic-tool-emulator` command is also available as a top-level command (`g8e agentic-tool-emulator`) with identical subcommands and flags.
+The `agent-harness` command is also available as a top-level command (`g8e agent-harness`) with identical subcommands and flags.
 
-#### test agentic-tool-emulator list
+#### test agent-harness list
 ```
 List available scenarios
 
 Usage:
-  g8e test agentic-tool-emulator list [flags]
+  g8e test agent-harness list [flags]
 
 Flags:
   -h, --help   help for list
 ```
 
-#### test agentic-tool-emulator run
+#### test agent-harness run
 ```
 Run scenarios against a real Gateway/Operator
 
 Usage:
-  g8e test agentic-tool-emulator run [flags] [scenario ...]
+  g8e test agent-harness run [flags] [scenario ...]
 
 Flags:
       --config string            JSON config overlay
@@ -555,12 +555,12 @@ Flags:
   -h, --help                     help for run
 ```
 
-#### test agentic-tool-emulator audit
+#### test agent-harness audit
 ```
 Audit signed receipts from the Operator
 
 Usage:
-  g8e test agentic-tool-emulator audit [flags]
+  g8e test agent-harness audit [flags]
 
 Flags:
       --config string            JSON config overlay
@@ -1266,7 +1266,7 @@ Use "g8e swagger [command] --help" for more information about a command.
 
 ### swagger init
 ```
-Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses swaggo/swag to parse annotations and generate docs. The command will automatically use the installed `swag` binary, or fall back to running it via `go run` if not available.
+Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses the `swag` CLI tool to parse annotations and generate docs. The `swag` binary must be installed (`go install github.com/swaggo/swag/cmd/swag@latest`).
 
 Usage:
   g8e swagger init [flags]
@@ -1280,7 +1280,6 @@ Flags:
 The generated documentation includes:
 - `swagger.json` - OpenAPI 2.0 specification in JSON format
 - `swagger.yaml` - OpenAPI 2.0 specification in YAML format
-- `docs.go` - Go file with embedded documentation for the gateway
 
 ### swagger serve
 ```
@@ -1361,12 +1360,12 @@ Flags:
       --runtime-dir string  Runtime directory (default: .g8e)
 ```
 
-## agentic-tool-emulator
+## agent-harness
 ```
-Universal agentic tool emulator for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
+Universal agent harness for a real g8e Gateway/Operator. Impersonates arbitrary AI tools and agents against a REAL g8e Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus + principal signing), then audits every result against the Operator's signed receipts.
 
 Usage:
-  g8e agentic-tool-emulator [command]
+  g8e agent-harness [command]
 
 Available Commands:
   list        List available scenarios
@@ -1374,30 +1373,30 @@ Available Commands:
   audit       Audit signed receipts from the Operator
 
 Flags:
-  -h, --help   help for agentic-tool-emulator
+  -h, --help   help for agent-harness
 
-Use "g8e agentic-tool-emulator [command] --help" for more information about a command.
+Use "g8e agent-harness [command] --help" for more information about a command.
 ```
 
-The `agentic-tool-emulator` command is also available as a subcommand of `test` (`g8e test agentic-tool-emulator`) with identical subcommands and flags.
+The `agent-harness` command is also available as a subcommand of `test` (`g8e test agent-harness`) with identical subcommands and flags.
 
-### agentic-tool-emulator list
+### agent-harness list
 ```
 List available scenarios
 
 Usage:
-  g8e agentic-tool-emulator list [flags]
+  g8e agent-harness list [flags]
 
 Flags:
   -h, --help   help for list
 ```
 
-### agentic-tool-emulator run
+### agent-harness run
 ```
 Run scenarios against a real Gateway/Operator
 
 Usage:
-  g8e agentic-tool-emulator run [flags] [scenario ...]
+  g8e agent-harness run [flags] [scenario ...]
 
 Flags:
       --config string            JSON config overlay
@@ -1417,12 +1416,12 @@ Flags:
   -h, --help                     help for run
 ```
 
-### agentic-tool-emulator audit
+### agent-harness audit
 ```
 Audit signed receipts from the Operator
 
 Usage:
-  g8e agentic-tool-emulator audit [flags]
+  g8e agent-harness audit [flags]
 
 Flags:
       --config string            JSON config overlay

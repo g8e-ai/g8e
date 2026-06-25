@@ -41,10 +41,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/uuid"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"github.com/google/uuid"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -656,7 +656,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      callParams.Name,
 		ArgumentsJson: argumentsJSON,
-		ExecutionId:   uuid.New().String(),
+		ExecutionId:   uuid.NewString(),
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -841,7 +841,7 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 
 	mcpPayload := &operatorv1.McpResourceReadRequested{
 		Uri:         readParams.URI,
-		ExecutionId: uuid.New().String(),
+		ExecutionId: uuid.NewString(),
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -974,7 +974,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 
 	mcpPayload := &operatorv1.McpPromptGetRequested{
 		Name:        getParams.Name,
-		ExecutionId: uuid.New().String(),
+		ExecutionId: uuid.NewString(),
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -1093,7 +1093,7 @@ func (g *GatewayService) HandleToolsCallSSE(w http.ResponseWriter, r *http.Reque
 	mcpPayload := &operatorv1.McpCallRequested{
 		ToolName:      callParams.Name,
 		ArgumentsJson: argumentsJSON,
-		ExecutionId:   uuid.New().String(),
+		ExecutionId:   uuid.NewString(),
 	}
 	payloadBytes, err := proto.Marshal(mcpPayload)
 	if err != nil {
@@ -1204,7 +1204,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 		TargetResource:  opts.targetResource,
 		Payload:         opts.payloadBytes,
 		ProtocolVersion: "1.0",
-		Nonce:           uuid.New().String(),
+		Nonce:           uuid.NewString(),
 		StateMerkleRoot: stateRoot,
 		Governance:      &commonv1.GovernanceMetadata{},
 	}

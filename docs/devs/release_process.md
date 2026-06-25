@@ -1,23 +1,17 @@
-# g8e Release Process
+# g8e Release Process — Version & Documentation Updates
 
-This document describes the complete release process for g8e, covering all steps required after code changes are complete and tests are passing.
+This document is the definitive checklist for updating all version-bearing files and documentation when bumping a g8e release. Every file listed here must be updated, verified, and committed before a git tag is created.
 
-## Prerequisites
+## How to Use This Document
 
-Before starting a release, ensure:
+1. Determine the new version number (see [Versioning Rules](#versioning-rules))
+2. Work through the [Version-Bearing Files](#version-bearing-files) section top-to-bottom
+3. Run the [Verification](#verification) section to catch any missed files
+4. Commit all changes together as a single release-prep commit
 
-- All code changes for the release are merged to the main branch
-- All tests pass locally: `make ci` or `make ci-platform`
-- No outstanding security vulnerabilities: `make vulncheck`
-- All linting passes: `make lint`
-- Protocol generation is up to date: `make proto` (no uncommitted changes to generated .pb.go files)
-- Documentation is updated for any breaking changes or new features
+---
 
-## Pre-Release Preparation
-
-Complete all of the following steps before creating the git tag. These steps prepare the repository for release but do not yet publish anything.
-
-### 1. Determine Version Number
+## Versioning Rules
 
 Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 
@@ -25,71 +19,67 @@ Follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html):
 - **MINOR** (x.Y.0): New features, backward-compatible changes
 - **PATCH** (x.y.Z): Bug fixes, backward-compatible changes
 
-Check the current version:
+Check the current version before starting:
+
 ```bash
 cat VERSION
 ```
 
-### 2. Update VERSION File
+Throughout this document, **`vX.Y.Z`** refers to the new release version (e.g., `v1.2.2`), and **`YYYY-MM-DD`** refers to the release date.
 
-Update the VERSION file with the new version:
+---
 
-```bash
-echo "v1.1.4" > VERSION
-```
+## Version-Bearing Files
 
-The VERSION file must contain only the version string with a newline (no trailing spaces).
+The following files contain version strings that must be updated on every release. They are grouped by category.
 
-### 3. Update CHANGELOG.md
+### A. Core Version Files
 
-Add a new section at the top of CHANGELOG.md following the [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format:
+These are the canonical files that define the platform and protocol versions.
+
+| # | File | What to Update | Format |
+|---|------|---------------|--------|
+| 1 | `VERSION` | Entire file contents | `vX.Y.Z\n` (with trailing newline, no trailing spaces) |
+| 2 | `CHANGELOG.md` | Add new section at top (after `## [Unreleased]` block) | `## [X.Y.Z] - YYYY-MM-DD` with Overview, Breaking Changes, Added, Changed, Fixed, Security subsections |
+| 3 | `protocol/python/pyproject.toml` | `version` field in `[project]` section (line 20) | `version = "X.Y.Z"` (no `v` prefix) |
+
+#### CHANGELOG.md Template
 
 ```markdown
-## [1.1.4] - YYYY-MM-DD
+## [X.Y.Z] - YYYY-MM-DD
 
 ### Overview
 
-[Brief summary of the release - 2-3 sentences highlighting major changes]
+[Brief summary of the release — 2-3 sentences highlighting major changes]
 
 ### Breaking Changes
 
 * **Change title** - Description of breaking change and migration path
-* **Another breaking change** - Description and impact
 
 ### Added
 
 * **Feature title** - Description of new feature
-* **Another feature** - Description
 
 ### Changed
 
 * **Change title** - Description of modification
-* **Another change** - Description
 
 ### Fixed
 
 * **Bug title** - Description of fix
-* **Another bug** - Description
 
 ### Security
 
 * **Security title** - Description of security improvement
 ```
 
-**Guidelines:**
-- Group changes under appropriate headers
-- Use concise, clear descriptions
-- Reference relevant files or components where helpful
-- Include migration instructions for breaking changes
-- Date format: YYYY-MM-DD
+### B. Release Notes File
 
-### 4. Create Release Notes File
+Create a new release notes file for every release.
 
-Create a new release notes file in `docs/release_notes/`:
-
-```bash
-touch docs/release_notes/v1.1.4.md
-```
+| # | File | Action |
+|---|------|--------|
+| 4 | `docs/release_notes/vX.Y.x/vX.Y.Z.md` | Create new file (use the minor-version subdirectory, e.g., `v1.2.x/v1.2.2.md`) |
 
 The release notes file should mirror the CHANGELOG entry but can be more detailed. Include:
 
@@ -100,274 +90,198 @@ The release notes file should mirror the CHANGELOG entry but can be more detaile
 - Links to relevant documentation
 
 **Example structure:**
+
 ```markdown
-## [1.1.4] - YYYY-MM-DD
+## [X.Y.Z] - YYYY-MM-DD
 
 ### Overview
 
-v1.1.4 introduces [major feature], adds [another feature], and fixes [critical bug]. This release focuses on [theme].
+vX.Y.Z introduces [major feature], adds [another feature], and fixes [critical bug]. This release focuses on [theme].
 
 ### Breaking Changes
 
 * **Change title** - Description with migration path
-  ```bash
-  # Migration example
-  ./g8e old-command → ./g8e new-command
-  ```
 
 ### Added
 
 * **Feature title** - Detailed description
-* **Another feature** - Description with usage example
 
 ### Changed
 
 * **Change title** - Description
-* **Another change** - Description
 
 ### Fixed
 
 * **Bug title** - Description
-* **Another bug** - Description
 
 ### Security
 
 * **Security title** - Description
 ```
 
-### 5. Update Protocol Version (if applicable)
+### C. Documentation with `Version:` Headers
 
-If protocol changes are included in this release, update the protocol version:
+Every markdown file below has a `Version: vX.Y.Z` header (and a `Last Updated: YYYY-MM-DD` date) near the top. **Both fields must be updated** on every release to match the new version and release date.
 
-**Go Protocol:**
-- The protocol module is at `protocol/go.mod` (module: `github.com/g8e-ai/g8e/protocol`)
-- Requires Go 1.26
-- The protocol version follows the platform version but may be released independently
-- No separate version field in go.mod - version is managed via git tags
+#### Architecture Docs (`docs/architecture/`)
 
-**Python Protocol:**
-- Update `protocol/python/pyproject.toml` version (line 20: `version = "X.Y.Z"`)
-- The package name is `g8e-protocol` (not `g8e`)
+| # | File |
+|---|------|
+| 5 | `docs/architecture/auth.md` |
+| 6 | `docs/architecture/binding.md` |
+| 7 | `docs/architecture/encryption.md` |
+| 8 | `docs/architecture/gateway.md` |
+| 9 | `docs/architecture/network.md` |
+| 10 | `docs/architecture/operator.md` |
+| 11 | `docs/architecture/postures.md` |
+| 12 | `docs/architecture/sse.md` |
+| 13 | `docs/architecture/storage.md` |
+| 14 | `docs/architecture/transaction-process.md` |
 
-**Note:** Protocol packages are released via GitHub tags with the format `protocol/vX.Y.Z`. These can be released independently of platform releases.
+#### Guide Docs (`docs/guides/`)
 
-### 6. Build and Verify
+| # | File |
+|---|------|
+| 15 | `docs/guides/air_gap.md` |
+| 16 | `docs/guides/build_apps.md` |
+| 17 | `docs/guides/build_gateway.md` |
+| 18 | `docs/guides/build_operator.md` |
+| 19 | `docs/guides/cli.md` |
+| 20 | `docs/guides/connect_apps_to_gateway.md` |
+| 21 | `docs/guides/connect_operator_to_gateway.md` |
+| 22 | `docs/guides/docker_gateway.md` |
+| 23 | `docs/guides/getting_started.md` |
 
-Build the g8e Node and verify it works:
+#### Reference Docs (`docs/reference/`)
 
-```bash
-# Build the g8e Operator
-make build-all
+| # | File |
+|---|------|
+| 24 | `docs/reference/glossary.md` |
 
-# Verify the g8e Operator
-./g8e --help
+#### Protocol Docs (`protocol/docs/`)
 
-# Run tests
-make test
+| # | File |
+|---|------|
+| 25 | `protocol/docs/spec.md` |
 
-# Run integration tests (Tier 2: In-Memory)
-make test-integration
+#### Update Pattern for Each Doc
 
-# Run Docker E2E tests (Tier 3)
-make test-docker
+For each file above, update the two header lines:
+
+```diff
+-Last Updated: 2026-06-24
+-Version: v1.2.0
++Last Updated: YYYY-MM-DD
++Version: vX.Y.Z
 ```
 
-Check that the build includes the correct version:
+### D. Docs Without Version Headers (No Version Update Required)
+
+The following doc directories intentionally do **not** carry `Version:` headers and do **not** need version updates on release. They may still need content updates if the release changes their subject matter:
+
+- `docs/core/` — Position papers, about page
+- `docs/devs/` — Developer documentation (including this file)
+- `docs/diagrams/` — Mermaid diagrams and flowcharts
+- `docs/release_notes/` — Historical release notes (past entries are immutable)
+- `demos/` — Demo configurations and doctrine files
+- `README.md` — Uses a dynamic GitHub badge for latest release; no hardcoded version
+
+### E. Go Protocol Module
+
+| # | File | Notes |
+|---|------|-------|
+| — | `protocol/go.mod` | No version field to update. The Go module version is derived from git tags (`protocol/vX.Y.Z`). |
+
+### F. Build & CI Files (No Version Update Required)
+
+The following files read the version dynamically from `VERSION` at build time and do **not** require manual updates:
+
+- `Makefile` — Reads `VERSION` via `$(shell cat VERSION)`
+- `Dockerfile` / `Dockerfile.operator` — Receive version as build arg
+- `docker-compose.yml` — References build context, not version
+- `.github/workflows/*.yml` — Triggered by git tags, no hardcoded version
+
+---
+
+## Complete Update Checklist
+
+When preparing a release, work through this checklist in order:
+
+- [ ] **1. `VERSION`** — Set to `vX.Y.Z`
+- [ ] **2. `CHANGELOG.md`** — Add `## [X.Y.Z] - YYYY-MM-DD` section
+- [ ] **3. `protocol/python/pyproject.toml`** — Update `version = "X.Y.Z"` (no `v` prefix)
+- [ ] **4. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
+- [ ] **5–14. Architecture docs** — Update `Version:` and `Last Updated:` in all 10 files under `docs/architecture/`
+- [ ] **15–23. Guide docs** — Update `Version:` and `Last Updated:` in all 9 files under `docs/guides/`
+- [ ] **24. `docs/reference/glossary.md`** — Update `Version:` and `Last Updated:`
+- [ ] **25. `protocol/docs/spec.md`** — Update `Version:` and `Last Updated:`
+
+**Total: 25 files to update on every release.**
+
+---
+
+## Verification
+
+After making all updates, run these checks to catch any missed files:
+
 ```bash
-./g8e -v
-# or
-./g8e --version
-```
-
-### 7. Commit Changes
-
-**Note:** Commit all release-related changes (VERSION, CHANGELOG.md, docs/release_notes/v1.1.4.md) using your standard git workflow.
-
-**Commit message guidelines:**
-- Use the version number as the commit message
-- Include a brief summary in the commit body if needed
-- Reference relevant issue numbers if applicable
-
-### 8. Final Pre-Release Verification
-
-Before proceeding to the actual release, verify everything is in order:
-
-```bash
-# Verify VERSION file is correct
+# 1. Verify VERSION file is correct
 cat VERSION
 
-# Verify CHANGELOG is updated
+# 2. Verify CHANGELOG has the new version section
 head -n 50 CHANGELOG.md
 
-# Verify release notes file exists
-ls docs/release_notes/v1.1.4.md
+# 3. Verify release notes file exists
+ls docs/release_notes/vX.Y.x/vX.Y.Z.md
 
-# Verify no uncommitted changes (using your git workflow)
-# Verify the commit is on main branch (using your git workflow)
-```
+# 4. Verify Python protocol version matches
+grep '^version' protocol/python/pyproject.toml
 
-Ensure all pre-release changes are committed and the working directory is clean before proceeding to the release execution phase.
-
-## Release Execution
-
-Once all pre-release preparation is complete and committed, execute the following steps to publish the release.
-
-### 1. Create Git Tag
-
-**Note:** Create and push an annotated tag for the release using your standard git workflow.
-
-**Tag guidelines:**
-- Use annotated tags (not lightweight tags)
-- Tag format: `vX.Y.Z` (matches VERSION file without 'v' prefix)
-- Include release notes in the tag message or reference the release notes file
-
-### 2. Create GitHub Release
-
-Create a GitHub release via the web interface or GitHub CLI:
-
-**Via GitHub CLI:**
-```bash
-gh release create v1.1.4 \
-  --title "Release v1.1.4" \
-  --notes-file docs/release_notes/v1.1.4.md
-```
-
-**Via Web Interface:**
-1. Go to GitHub repository → Releases
-2. Click "Draft a new release"
-3. Tag: Select `v1.1.4`
-4. Title: `Release v1.1.4`
-5. Description: Copy contents from `docs/release_notes/v1.1.4.md`
-6. Attach binaries if distributing via GitHub Releases (optional)
-7. Click "Publish release"
-
-**Release notes guidelines:**
-- Use the release notes file content
-- Include installation instructions
-- Highlight breaking changes prominently
-- Link to full CHANGELOG for detailed changes
-
-### 3. Release Protocol Packages (if applicable)
-
-If protocol changes are included, release the Go and Python protocol packages.
-
-#### Version Synchronization
-
-The Go and Python packages must use the same version number. Update the Python version in `protocol/python/pyproject.toml` before tagging. The Go module version derives from the git tag.
-
-- Go: `protocol/go.mod` - version determined by git tag
-- Python: `protocol/python/pyproject.toml` - version field in `[project]` section
-
-#### Tag and Push
-
-**Note:** Update Python version in protocol/python/pyproject.toml first, then tag and push the protocol release using your standard git workflow.
-
-The tag format `protocol/vX.Y.Z` triggers both release workflows.
-
-#### Automated Workflows
-
-**Go Protocol** (`.github/workflows/release-go-protocol.yml`):
-- Runs tests with Go 1.26.4
-- Creates GitHub release with installation instructions
-- Publishes Go module
-
-**Python Protocol** (`.github/workflows/release-python-protocol.yml`):
-- Runs tests with Python 3.14
-- Builds package using standard `build` module
-- Validates package with `twine check`
-- Publishes to PyPI using `PYPI_API_TOKEN`
-- Creates GitHub release with installation instructions
-
-#### Verification
-
-After workflows complete, verify both packages:
-
-```bash
-# Go verification
-go get github.com/g8e-ai/g8e/protocol@v1.1.4
-
-# Python verification
-pip install g8e-protocol==1.1.4
-```
-
-### 4. Update Documentation
-
-Update any documentation that references version numbers:
-
-- **README.md**: Update status section if the version changes significantly
-- **Getting Started Guide**: Update any version-specific instructions
-- **API Reference**: Update if API changes are included
-- **Architecture Docs**: Update if architectural changes are included
-
-**Documentation Version Sync**: Every markdown file in `docs/` that contains a `Version: vX.Y.Z` header must be updated to match the release version in the `VERSION` file. This ensures users can identify which release a document corresponds to. To find all docs with stale version headers:
-
-```bash
-# List all docs with a Version header and their current version
-grep -rn '^Version: v' docs/ --include='*.md'
-
-# Find docs whose version does not match the VERSION file
+# 5. Find any docs with stale Version headers (should return nothing)
 RELEASE_VERSION=$(cat VERSION)
-grep -rn '^Version: v' docs/ --include='*.md' | grep -v "$RELEASE_VERSION"
+grep -rn '^Version: v' docs/ protocol/docs/ --include='*.md' | grep -v "$RELEASE_VERSION"
+
+# 6. Find any docs with stale Last Updated dates (should return nothing or only intentional entries)
+RELEASE_DATE="YYYY-MM-DD"
+grep -rn '^Last Updated:' docs/ protocol/docs/ --include='*.md' | grep -v "$RELEASE_DATE"
 ```
 
-Update each stale `Version:` header to the current release version and update the `Last Updated:` date accordingly.
+If step 5 returns any results, those files still have an old version — update them before proceeding.
 
-### 5. Post-Release Verification
+---
 
-After the release is published:
+## Commit
 
-1. **Verify GitHub Release**: Check that the release is visible and notes are correct
-2. **Verify Protocol Packages**: Check that Go and Python packages are available
-  - Go: `go list -m -versions github.com/g8e-ai/g8e/protocol`
-  - Python: `pip index versions g8e-protocol`
-3. **Test Installation**: Verify users can install the new version
-  ```bash
-  # Test Go protocol installation
-  go get github.com/g8e-ai/g8e/protocol@v1.1.4
+Commit all release-related changes as a single commit:
 
-  # Test Python protocol installation
-  pip install g8e-protocol==1.1.4
-  ```
-4. **Monitor Issues**: Watch for any post-release issues or regressions
+- **Files**: All 25 files listed above
+- **Commit message**: Use the version number (e.g., `v1.2.2`)
+- Include a brief summary in the commit body if needed
 
-### 6. Announce the Release
+---
 
-Announce the release through appropriate channels:
+## Protocol Release Notes (If Applicable)
 
-- Update project status in README if applicable
-- Post release notes to project communication channels
-- Notify stakeholders of breaking changes
-- Update project roadmaps or milestones
+Protocol packages (Go and Python) may be released independently of platform releases. If protocol changes are included:
+
+1. The Go and Python packages must use the same version number
+2. The Go module version derives from the git tag (`protocol/vX.Y.Z`)
+3. The Python version is set in `protocol/python/pyproject.toml` (already covered in the checklist above)
+4. The `protocol/vX.Y.Z` tag triggers both release workflows:
+   - **Go**: `.github/workflows/release-go-protocol.yml`
+   - **Python**: `.github/workflows/release-python-protocol.yml`
+
+---
 
 ## Emergency Releases (Hotfixes)
 
-For critical security issues or production bugs, follow this expedited process:
+For critical security issues or production bugs:
 
 1. Apply the minimal fix necessary to the appropriate branch
+2. Work through the [Complete Update Checklist](#complete-update-checklist) above
+3. Proceed with the standard tag and release process
 
-2. Update VERSION, CHANGELOG, and create release notes
-
-3. Proceed with the standard release process
-
-## Version Compatibility
-
-- **Platform Version**: Tracked in `VERSION` file (e.g., `v1.1.4`)
-- **Go Protocol Version**: Managed via git tags (module: `github.com/g8e-ai/g8e/protocol`)
-- **Python Protocol Version**: Tracked in `protocol/python/pyproject.toml` (package: `g8e-protocol`)
-
-Protocol versions may be released independently of platform versions. However, for major platform releases, coordinate protocol releases to ensure compatibility.
-
-## Rollback Procedure
-
-If a critical issue is discovered after release:
-
-1. Identify the last known good version
-2. Communicate the issue to users
-3. If necessary, yank the release from package registries:
-   - PyPI: `pip yank g8e-protocol==X.Y.Z`
-   - Go: Cannot yank, but can deprecate in next release
-4. Release a new version with the fix
-5. Update documentation to guide users to the safe version
+---
 
 ## References
 

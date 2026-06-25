@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
 
@@ -116,8 +116,6 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
     {
       "id": 1,
       "web_session_id": "session-123",
-      "cli_session_id": null,
-      "user_id": null,
       "event_type": "g8e.v1.operator.audit.command.recorded",
       "payload": "{\"type\":\"...\",\"data\":{...}}",
       "created_at": "2026-01-01T00:00:00Z"
@@ -126,6 +124,8 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
   "count": 1
 }
 ```
+
+Unset routing fields are omitted from the JSON response (the `SSEEventRow` model uses `omitempty` tags on `web_session_id`, `cli_session_id`, and `user_id`).
 
 **Behavior**:
 1. Validates Operator session authorization for requested route.
@@ -165,7 +165,7 @@ data: {"type":"...","data":{...}}
 1. Validates Operator session authorization for requested route.
 2. Sets SSE response headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no` (for Nginx), and permissive CORS headers based on the request `Origin`.
 3. Subscribes to the Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`) using a buffered channel of 100 entries. If the buffer is full, incoming events are dropped with a back-pressure warning log.
-4. Replays historical events from the `sse_events` table since `since_id` (up to 1000 rows) in SSE format, including the `id:` field for each row.
+4. If `since_id` is greater than 0, replays historical events from the `sse_events` table since `since_id` (up to 1000 rows) in SSE format, including the `id:` field for each row. If `since_id` is 0 or absent, no replay occurs and the stream begins with only real-time events.
 5. Streams new events as they arrive from Pub/Sub. Real-time events are emitted without an `id:` field; the `event:` field carries the extracted type and the `data:` field carries the full push payload.
 6. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
 
@@ -309,24 +309,25 @@ POST /api/v1/sse/push
 
 ### Core Files
 - `internal/services/gateway/gateway_http_sse.go`: HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`).
-- `internal/services/gateway/sse_event_service.go`: SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsListAllSince`, `SSEEventsWipe`, `SSEEventsCount`).
+- `internal/services/gateway/sse_event_service.go`: SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsListAllSince`, `SSEEventsCleanup`, `SSEEventsWipe`, `SSEEventsCount`).
 - `internal/services/gateway/gateway_pubsub.go`: Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`).
 - `internal/services/gateway/db_controller.go`: Admin endpoints for SSE event management (`handleSSEEvents`).
 - `internal/services/gateway/db/schema.sql`: Database schema for `sse_events` table.
 - `internal/constants/api_paths.go`: API path constants.
 - `protocol/constants/events.json`: Event type catalog.
-- `internal/models/gateway.go`: SSE event row models (`SSEEventRow`, `SSEPushResponse`, `SSEEventsResponse`).
+- `internal/models/gateway.go`: SSE event row models (`SSEEventRow`, `SSEPushResponse`, `SSEEventsResponse`, `SSEEventsCountResponse`, `SSEEventsWipeResponse`).
 
 ### State Root Impact
 SSE event inserts are deliberately excluded from state root calculation. The `sse_events` table has no triggers to increment `state_version`, allowing high-frequency event streaming without triggering governance consensus rounds. Events are considered ephemeral telemetry, not governance state.
 
 ### Pruning
-The `sse_events` table can be pruned via:
-- `DELETE /api/v1/data/_sse_events`: Admin wipe endpoint (requires mTLS).
-- `GET /api/v1/data/_sse_events/count`: Admin count endpoint (requires mTLS).
-- Direct database operations (not recommended in production).
+The `sse_events` table is pruned through two mechanisms:
 
-Consider implementing time-based retention policies for production deployments.
+**Automatic cleanup**: The gateway maintenance loop (`RunMaintenance` in `internal/services/gateway/gateway_db.go`) calls `SSEEventsCleanup` every 30 seconds with a 1-hour retention window. Events older than 1 hour are automatically deleted.
+
+**Manual admin endpoints**:
+- `DELETE /api/v1/data/_sse_events`: Admin wipe endpoint (requires mTLS). Deletes all rows and returns the count.
+- `GET /api/v1/data/_sse_events/count`: Admin count endpoint (requires mTLS). Returns the total row count.
 
 ---
 

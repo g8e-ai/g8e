@@ -28,7 +28,6 @@ import (
 
 const (
 	DefaultTimeout         = 30 * time.Second
-	DefaultShortTimeout    = 10 * time.Second
 	DefaultDialTimeout     = 10 * time.Second
 	DefaultTLSTimeout      = 10 * time.Second
 	DefaultIdleConnTimeout = 90 * time.Second
@@ -47,21 +46,7 @@ func newBaseTransport(tlsCfg *tls.Config) *http.Transport {
 	}
 }
 
-// Deprecated: Use NewWithTLSConfig instead. This function relies on mutable global state.
-func New() (*http.Client, error) {
-	tlsCfg, err := certs.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-
-	return &http.Client{
-		Timeout:   DefaultTimeout,
-		Transport: newBaseTransport(tlsCfg),
-	}, nil
-}
-
 // NewWithTLSConfig creates an HTTP client using the provided TLSConfig (DI pattern).
-// This is the preferred constructor for new code using dependency injection.
 func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
 	tlsCfg, err := tlsConfig.GetTLSConfig()
 	if err != nil {
@@ -74,32 +59,6 @@ func NewWithTLSConfig(tlsConfig *certs.TLSConfig) (*http.Client, error) {
 	}, nil
 }
 
-// Deprecated: Use NewWithTLSConfigAndTimeout instead. This function relies on mutable global state.
-func NewWithTimeout(timeout time.Duration) (*http.Client, error) {
-	tlsCfg, err := certs.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-
-	return &http.Client{
-		Timeout:   timeout,
-		Transport: newBaseTransport(tlsCfg),
-	}, nil
-}
-
-// NewWithTLSConfigAndTimeout creates an HTTP client using the provided TLSConfig and timeout (DI pattern).
-func NewWithTLSConfigAndTimeout(tlsConfig *certs.TLSConfig, timeout time.Duration) (*http.Client, error) {
-	tlsCfg, err := tlsConfig.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-
-	return &http.Client{
-		Timeout:   timeout,
-		Transport: newBaseTransport(tlsCfg),
-	}, nil
-}
-
 func NewWithTLS(tlsCfg *tls.Config) *http.Client {
 	return &http.Client{
 		Timeout:   DefaultTimeout,
@@ -107,50 +66,11 @@ func NewWithTLS(tlsCfg *tls.Config) *http.Client {
 	}
 }
 
-// Deprecated: Use WebSocketDialerWithTLSConfig instead. This function relies on mutable global state.
-func WebSocketDialer() (*websocket.Dialer, error) {
-	tlsCfg, err := certs.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-
-	return &websocket.Dialer{
-		TLSClientConfig:  tlsCfg,
-		HandshakeTimeout: DefaultTLSTimeout,
-	}, nil
-}
-
-// WebSocketDialerWithTLSConfig creates a WebSocket dialer using the provided TLSConfig (DI pattern).
-func WebSocketDialerWithTLSConfig(tlsConfig *certs.TLSConfig) (*websocket.Dialer, error) {
-	tlsCfg, err := tlsConfig.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-
-	return &websocket.Dialer{
-		TLSClientConfig:  tlsCfg,
-		HandshakeTimeout: DefaultTLSTimeout,
-	}, nil
-}
-
 func WebSocketDialerWithTLS(tlsCfg *tls.Config) *websocket.Dialer {
 	return &websocket.Dialer{
 		TLSClientConfig:  tlsCfg,
 		HandshakeTimeout: DefaultTLSTimeout,
 	}
-}
-
-// Deprecated: Use NewWithTLSConfigAndServerName instead. This function relies on mutable global state.
-func NewWithServerName(serverName string) (*http.Client, error) {
-	tlsCfg, err := certs.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-	tlsCfg.ServerName = serverName
-	return &http.Client{
-		Timeout:   DefaultTimeout,
-		Transport: newBaseTransport(tlsCfg),
-	}, nil
 }
 
 // NewWithTLSConfigAndServerName creates an HTTP client using the provided TLSConfig and server name (DI pattern).
@@ -164,53 +84,6 @@ func NewWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string
 		Timeout:   DefaultTimeout,
 		Transport: newBaseTransport(tlsCfg),
 	}, nil
-}
-
-// Deprecated: Use WebSocketDialerWithTLSConfigAndServerName instead. This function relies on mutable global state.
-func WebSocketDialerWithServerName(serverName string) (*websocket.Dialer, error) {
-	tlsCfg, err := certs.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-	tlsCfg.ServerName = serverName
-	return &websocket.Dialer{
-		TLSClientConfig:  tlsCfg,
-		HandshakeTimeout: DefaultTLSTimeout,
-	}, nil
-}
-
-// WebSocketDialerWithTLSConfigAndServerName creates a WebSocket dialer using the provided TLSConfig and server name (DI pattern).
-func WebSocketDialerWithTLSConfigAndServerName(tlsConfig *certs.TLSConfig, serverName string) (*websocket.Dialer, error) {
-	tlsCfg, err := tlsConfig.GetTLSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("httpclient: get TLS config: %w", err)
-	}
-	tlsCfg.ServerName = serverName
-	return &websocket.Dialer{
-		TLSClientConfig:  tlsCfg,
-		HandshakeTimeout: DefaultTLSTimeout,
-	}, nil
-}
-
-// MustNew creates an HTTP client using global TLS state and panics on error.
-// Deprecated: Use NewWithTLSConfig for dependency injection. Only use this
-// in init-time contexts where panicking on misconfiguration is acceptable.
-func MustNew() *http.Client {
-	client, err := New()
-	if err != nil {
-		panic(fmt.Sprintf("httpclient: MustNew: %v", err))
-	}
-	return client
-}
-
-// MustWebSocketDialer creates a WebSocket dialer using global TLS state and
-// panics on error. Deprecated: Use WebSocketDialerWithTLSConfig instead.
-func MustWebSocketDialer() *websocket.Dialer {
-	dialer, err := WebSocketDialer()
-	if err != nil {
-		panic(fmt.Sprintf("httpclient: MustWebSocketDialer: %v", err))
-	}
-	return dialer
 }
 
 // ExtractErrorMessage returns a human-readable error string from a raw JSON

@@ -1,0 +1,21 @@
+{
+  "_comment": "Canonical Agent Harness model. A separate, fast Consensus call that provides final syntactic validation of the voting winner.",
+  "name": "AgentHarness",
+  "metadata": {
+    "id": "agent_harness",
+    "display_name": "Agent Harness",
+    "icon": "fact_check"
+  },
+  "description": "Syntactic validation and final review of command candidates.",
+  "request": {
+    "intent": { "type": "string", "description": "The original user intent." },
+    "os": { "type": "string", "description": "The operating system of the target." },
+    "candidate_command": { "type": "string", "description": "The command string to be verified." }
+  },
+  "result": {
+    "passed": { "type": "boolean", "description": "True if the agent harness approves the candidate." },
+    "revision": { "type": "string", "nullable": true, "description": "The revised command string if the agent harness rejects the candidate." },
+    "reason": { "type": "string", "description": "Reasoning for the approval or rejection." },
+    "reason_enum": { "type": "string", "enum": ["ok", "revised", "empty_response", "no_valid_revision", "agent_harness_error", "swapped_to_dissenter", "revised_from_dissent", "whitelist_violation"] }
+  }
+}

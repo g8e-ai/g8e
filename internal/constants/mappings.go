@@ -1,0 +1,125 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package constants
+
+import (
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+)
+
+// eventToAction is the single source of truth for the EventType <-> ActionType
+// relationship. The reverse map (actionToEvent) is derived from this in init().
+// Add new pairs here only — never touch actionToEvent directly.
+var eventToAction = map[EventType]ActionType{
+	Event.Operator.Eval.AnswerRequested:       ActionTypeEvalAnswer,
+	Event.Operator.HeartbeatRequested:         ActionTypeHeartbeat,
+	Event.Operator.ShutdownRequested:          ActionTypeShutdown,
+	Event.Operator.Command.Requested:          ActionTypeExecuteBash,
+	Event.Operator.Command.CancelRequested:    ActionTypeCancel,
+	Event.Operator.FileEdit.Requested:         ActionTypeFileEdit,
+	Event.Operator.FetchFileHistory.Requested: ActionTypeFetchFileHistory,
+	Event.Operator.RestoreFile.Requested:      ActionTypeRestoreFile,
+	Event.Operator.FsList.Requested:           ActionTypeFsList,
+	Event.Operator.FsRead.Requested:           ActionTypeFsRead,
+	Event.Operator.FsGrep.Requested:           ActionTypeFsGrep,
+	Event.Operator.FetchLogs.Requested:        ActionTypeFetchLogs,
+	Event.Operator.FetchHistory.Requested:     ActionTypeFetchHistory,
+	Event.Operator.Mcp.CallRequested:          ActionTypeMcpCall,
+	Event.Operator.A2a.CallRequested:          ActionTypeA2aCall,
+	Event.Operator.PortCheck.Requested:        ActionTypePortCheck,
+	EventAppInvestigationCreated:              ActionTypeInvestigationCreate,
+}
+
+var actionToEvent map[ActionType]EventType
+
+func init() {
+	actionToEvent = make(map[ActionType]EventType, len(eventToAction))
+	for e, a := range eventToAction {
+		actionToEvent[a] = e
+	}
+}
+
+// MapEventTypeToActionType maps protobuf event types to GovernanceEnvelope action types.
+func MapEventTypeToActionType(eventType EventType) ActionType {
+	if a, ok := eventToAction[eventType]; ok {
+		return a
+	}
+	return ActionType(eventType)
+}
+
+// MapActionTypeToEventType maps GovernanceEnvelope action types back to protobuf event types.
+func MapActionTypeToEventType(actionType ActionType) EventType {
+	if e, ok := actionToEvent[actionType]; ok {
+		return e
+	}
+	return EventType(actionType)
+}
+
+func actionResult(a ActionType) ActionType {
+	return ActionType(string(a) + "_RESULT")
+}
+
+func actionCancelled(a ActionType) ActionType {
+	return ActionType(string(a) + "_CANCELLED")
+}
+
+var eventToResultAction = map[EventType]ActionType{
+	Event.Operator.Heartbeat: actionResult(ActionTypeHeartbeat),
+
+	Event.Operator.Command.Completed: actionResult(ActionTypeExecuteBash),
+	Event.Operator.Command.Failed:    actionResult(ActionTypeExecuteBash),
+	Event.Operator.Command.Cancelled: actionCancelled(ActionTypeExecuteBash),
+
+	Event.Operator.Command.StatusUpdated.Queued:    "EXECUTE_STATUS_UPDATE",
+	Event.Operator.Command.StatusUpdated.Running:   "EXECUTE_STATUS_UPDATE",
+	Event.Operator.Command.StatusUpdated.Completed: "EXECUTE_STATUS_UPDATE",
+	Event.Operator.Command.StatusUpdated.Failed:    "EXECUTE_STATUS_UPDATE",
+	Event.Operator.Command.StatusUpdated.Cancelled: "EXECUTE_STATUS_UPDATE",
+
+	Event.Operator.FileEdit.Completed: actionResult(ActionTypeFileEdit),
+	Event.Operator.FileEdit.Failed:    actionResult(ActionTypeFileEdit),
+
+	Event.Operator.FsList.Completed: actionResult(ActionTypeFsList),
+	Event.Operator.FsList.Failed:    actionResult(ActionTypeFsList),
+
+	Event.Operator.FsGrep.Completed: actionResult(ActionTypeFsGrep),
+	Event.Operator.FsGrep.Failed:    actionResult(ActionTypeFsGrep),
+}
+
+// MapEventTypeToResultActionType maps protobuf event types to GovernanceEnvelope result action types.
+func MapEventTypeToResultActionType(eventType EventType) ActionType {
+	if a, ok := eventToResultAction[eventType]; ok {
+		return a
+	}
+	return actionResult(ActionType(eventType))
+}
+
+// ProtoToExecutionStatus maps protobuf ExecutionStatus enum to internal ExecutionStatus constants.
+func ProtoToExecutionStatus(status operatorv1.ExecutionStatus) ExecutionStatus {
+	switch status {
+	case operatorv1.ExecutionStatus_EXECUTION_STATUS_UNSPECIFIED:
+		return ExecutionStatusPending
+	case operatorv1.ExecutionStatus_EXECUTION_STATUS_EXECUTING:
+		return ExecutionStatusExecuting
+	case operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED:
+		return ExecutionStatusCompleted
+	case operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED:
+		return ExecutionStatusFailed
+	case operatorv1.ExecutionStatus_EXECUTION_STATUS_TIMEOUT:
+		return ExecutionStatusTimeout
+	case operatorv1.ExecutionStatus_EXECUTION_STATUS_CANCELLED:
+		return ExecutionStatusCancelled
+	default:
+		return ExecutionStatusPending
+	}
+}

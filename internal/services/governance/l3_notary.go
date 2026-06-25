@@ -16,7 +16,9 @@ package governance
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -36,16 +38,33 @@ type L3Notary interface {
 	VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error)
 }
 
-// outboundL3Notary provides L3 verification for outbound mode using CLI-based approval.
-// In outbound mode, mutations requiring L3 are suspended and must be approved via
-// a CLI command (e.g., `g8e approve <tx_hash>`). This notary verifies cryptographic
-// signatures over the transaction hash to prove human presence.
-type outboundL3Notary struct {
-	suspendedStore storage.SuspendedTransactionStore
-	logger         *slog.Logger
+// ErrCLISessionDenied signals that the CLI session was denied (e.g., revoked certificate)
+// rather than encountering a system error. VerifyL3Proof translates this into (false, nil).
+var ErrCLISessionDenied = errors.New("CLI session denied")
+
+// CLISessionVerifier performs CLI session-specific verification including user active
+// status, session validity, and certificate revocation. Returns nil if verification passes.
+// Returns ErrCLISessionDenied for denials (revoked certs, inactive sessions) and other
+// errors for system failures.
+type CLISessionVerifier interface {
+	VerifyCLISession(userID, cliSessionID, certFingerprint string) error
 }
 
-// NewOutboundL3Notary creates a new CLI L3 notary for outbound mode.
+// outboundL3Notary provides L3 verification for CLI-based approval. It supports three modes:
+// - Outbound mode: suspended transaction + signature verification only
+// - Gateway CLI mode: additional CLI session, user active, and certificate revocation checks
+// - Gateway passkey mode: WebAuthn passkey verification for web sessions
+//
+// When a passkeyVerifier is configured, VerifyL3Proof dispatches based on proof type:
+// proofs with mtls_cert_fingerprint use the CLI path; all others use the passkey verifier.
+type outboundL3Notary struct {
+	suspendedStore  storage.SuspendedTransactionStore
+	cliVerifier     CLISessionVerifier
+	passkeyVerifier L3Notary
+	logger          *slog.Logger
+}
+
+// NewOutboundL3Notary creates a new L3 notary for outbound mode (no CLI session verification).
 func NewOutboundL3Notary(suspendedStore storage.SuspendedTransactionStore, logger *slog.Logger) L3Notary {
 	return &outboundL3Notary{
 		suspendedStore: suspendedStore,
@@ -53,26 +72,80 @@ func NewOutboundL3Notary(suspendedStore storage.SuspendedTransactionStore, logge
 	}
 }
 
-// VerifyL3Proof verifies an L3 proof for CLI-based approval in outbound mode.
-// For outbound mode, the L3 proof is verified by checking that:
-// 1. The transaction exists in the suspended store and is marked as approved
-// 2. The proof contains a valid CLI signature over the transaction hash
-// 3. The signature was created by the expected certificate (fingerprint match)
-// 4. The approval has not expired
+// NewCLIL3Notary creates a new L3 notary with CLI session verification for gateway mode.
+// The cliVerifier performs user active, CLI session, and certificate revocation checks
+// before the shared suspended transaction and signature verification.
+func NewCLIL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifier CLISessionVerifier, logger *slog.Logger) L3Notary {
+	return &outboundL3Notary{
+		suspendedStore: suspendedStore,
+		cliVerifier:    cliVerifier,
+		logger:         logger,
+	}
+}
+
+// NewGatewayL3Notary creates a unified L3 notary that handles both CLI (mTLS) and
+// passkey (WebAuthn) proofs. Proofs with mtls_cert_fingerprint use the CLI verification
+// path; all others delegate to the passkey verifier.
+func NewGatewayL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifier CLISessionVerifier, passkeyVerifier L3Notary, logger *slog.Logger) L3Notary {
+	return &outboundL3Notary{
+		suspendedStore:  suspendedStore,
+		cliVerifier:     cliVerifier,
+		passkeyVerifier: passkeyVerifier,
+		logger:          logger,
+	}
+}
+
+// VerifyL3Proof verifies an L3 proof for CLI-based approval.
+// The L3 proof is verified by checking that:
+// 1. (Gateway mode) The user is active, CLI session is valid, and certificate is not revoked
+// 2. The transaction exists in the suspended store and is marked as approved
+// 3. The proof contains a valid Ed25519 signature over the transaction hash
+// 4. The signature was created by the expected certificate (fingerprint match)
+// 5. The approval has not expired (30 minute window)
 //
-// This replaces the previous string-only acceptance with cryptographic verification.
+// In outbound mode (no cliVerifier), only checks 2-5 are performed.
+// In gateway mode (with cliVerifier), all checks are performed.
 func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
+	if proof == nil {
+		return false, constants.ErrGatewayL3ProofRequired
+	}
+
+	// Dispatch to passkey verifier for WebAuthn proofs (no mtls_cert_fingerprint)
+	if v.passkeyVerifier != nil && proof.MtlsCertFingerprint == "" {
+		return v.passkeyVerifier.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
+	}
+
+	// CLI path: validate required inputs
 	if userID == "" {
 		return false, constants.ErrUserIDRequired
 	}
 	if transactionHash == "" {
 		return false, constants.ErrCLIL3TransactionHashRequired
 	}
-	if proof == nil {
-		return false, constants.ErrGatewayL3ProofRequired
+
+	// Gateway mode: perform CLI session, user active, and cert revocation checks
+	if v.cliVerifier != nil {
+		if proof.MtlsCertFingerprint == "" {
+			return false, constants.ErrCLIL3CertFingerprintRequired
+		}
+		if proof.CliSignature == "" {
+			return false, constants.ErrCLIL3SignatureRequired
+		}
+		if _, err := hex.DecodeString(proof.MtlsCertFingerprint); err != nil {
+			return false, fmt.Errorf("%w: %w", constants.ErrCLIL3InvalidFingerprintFormat, err)
+		}
+		if err := v.cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
+			if errors.Is(err, ErrCLISessionDenied) {
+				return false, nil
+			}
+			return false, err
+		}
 	}
 
-	// Check if the transaction exists in the suspended store
+	// Load the suspended transaction
+	if v.suspendedStore == nil {
+		return false, constants.ErrCLIL3SuspendedStoreNotConfigured
+	}
 	tx, ok, err := v.suspendedStore.GetSuspendedTransaction(ctx, transactionHash)
 	if err != nil {
 		v.logger.Warn("CLI L3 verification failed: error getting suspended transaction", "transaction_hash", transactionHash, "error", err)
@@ -92,7 +165,7 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 	// Require explicit approval decision
 	if !tx.Approved {
 		v.logger.Warn("CLI L3 verification failed: transaction not approved", "transaction_hash", transactionHash)
-		return false, constants.ErrTransactionApproveFailed
+		return false, constants.ErrCLIL3TransactionNotApproved
 	}
 
 	// Verify approval has not expired (30 minute approval window)
@@ -100,14 +173,14 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 		approvalExpiry := tx.ApprovedAt.Add(30 * time.Minute)
 		if time.Now().UTC().After(approvalExpiry) {
 			v.logger.Warn("CLI L3 verification failed: approval expired", "transaction_hash", transactionHash, "approved_at", tx.ApprovedAt)
-			return false, constants.ErrTransactionExpired
+			return false, constants.ErrCLIL3ApprovalExpired
 		}
 	}
 
 	// Require cryptographic signature over transaction hash
 	if proof.CliSignature == "" {
 		v.logger.Warn("CLI L3 verification failed: CLI signature missing", "transaction_hash", transactionHash)
-		return false, constants.ErrCLIL3CertFingerprintRequired
+		return false, constants.ErrCLIL3SignatureRequired
 	}
 
 	// Verify signature format (hex-encoded Ed25519 signature)
@@ -118,22 +191,18 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 	}
 	if len(sigBytes) != ed25519.SignatureSize {
 		v.logger.Warn("CLI L3 verification failed: invalid signature length", "transaction_hash", transactionHash, "length", len(sigBytes))
-		return false, constants.ErrInvalidCiphertext
+		return false, constants.ErrCLIL3SignatureEncodingFailed
 	}
 
-	// Verify the stored approval signature matches the proof signature
-	if tx.ApprovalSignature != proof.CliSignature {
-		v.logger.Warn("CLI L3 verification failed: signature mismatch", "transaction_hash", transactionHash)
-		return false, constants.ErrCLIL3FingerprintMismatch
-	}
-
-	// Verify the certificate fingerprint matches the expected fingerprint
-	if tx.ExpectedCertFingerprint != "" && proof.MtlsCertFingerprint != tx.ExpectedCertFingerprint {
-		v.logger.Warn("CLI L3 verification failed: certificate fingerprint mismatch",
-			"transaction_hash", transactionHash,
-			"expected", tx.ExpectedCertFingerprint,
-			"provided", proof.MtlsCertFingerprint)
-		return false, constants.ErrCLIL3FingerprintMismatch
+	// Verify the certificate fingerprint matches the expected fingerprint (constant-time)
+	if tx.ExpectedCertFingerprint != "" {
+		if subtle.ConstantTimeCompare([]byte(tx.ExpectedCertFingerprint), []byte(proof.MtlsCertFingerprint)) != 1 {
+			v.logger.Warn("CLI L3 verification failed: certificate fingerprint mismatch",
+				"transaction_hash", transactionHash,
+				"expected", tx.ExpectedCertFingerprint,
+				"provided", proof.MtlsCertFingerprint)
+			return false, constants.ErrCLIL3FingerprintMismatch
+		}
 	}
 
 	// Cryptographic verification: verify the signature against the stored public key

@@ -153,6 +153,9 @@ var (
 	ErrFsGrepInvalidPattern = errors.New("fs_grep invalid pattern")
 	ErrFsGrepExecution      = errors.New("fs_grep execution error")
 
+	// PubSub client errors
+	ErrClientClosed = errors.New("client is closed")
+
 	// Execution service errors
 	ErrExecutionServiceStopping = errors.New("execution service is stopping")
 	ErrExecutionNotFound        = errors.New("execution not found")
@@ -519,10 +522,6 @@ var (
 	ErrConfigTribunalIDRequired = errors.New("consensus posture requires --tribunal-id")
 	ErrConfigTribunalQuorumLow  = errors.New("consensus posture requires tribunal quorum >= 2")
 
-	// SSH config errors
-	ErrSSHOpenConfigFile = errors.New("failed to open SSH config file")
-	ErrSSHExpandTilde    = errors.New("failed to expand tilde in path")
-
 	// Operator main initialization errors
 	ErrPathsInitFailed        = errors.New("failed to initialize paths")
 	ErrWorkingDirFailed       = errors.New("failed to determine working directory")
@@ -535,10 +534,6 @@ var (
 	ErrReadClientCert         = errors.New("failed to read client certificate")
 	ErrReadPrivateKey         = errors.New("failed to read private key")
 	ErrLoadCertKeyPair        = errors.New("failed to load client certificate/key pair")
-
-	// SSH config errors
-	ErrSSHScanConfigFile = errors.New("failed to scan SSH config file")
-	ErrSSHResolveHomeDir = errors.New("failed to resolve home directory")
 
 	// JWKS errors
 	ErrJWKSRequestCreate    = errors.New("jwks: failed to create request")
@@ -554,15 +549,6 @@ var (
 	ErrJWTNotYetValid      = errors.New("token is not yet valid")
 	ErrJWTIssuerMismatch   = errors.New("token issuer mismatch")
 	ErrJWTAudienceMismatch = errors.New("token audience mismatch")
-
-	// SSH config errors
-	ErrSSHParseConfig        = errors.New("failed to parse SSH config")
-	ErrSSHDialAgentSocket    = errors.New("failed to dial SSH agent socket")
-	ErrSSHGetAgentSigners    = errors.New("failed to get SSH agent signers")
-	ErrSSHReadKeyFile        = errors.New("failed to read SSH key file")
-	ErrSSHParsePrivateKey    = errors.New("failed to parse SSH private key")
-	ErrSSHKnownHostsNotFound = errors.New("SSH known_hosts file not found")
-	ErrSSHParseKnownHosts    = errors.New("failed to parse SSH known hosts file")
 
 	// Bootstrap service errors
 	ErrBootstrapTLSConfig          = errors.New("bootstrap: failed to configure TLS")
@@ -650,6 +636,11 @@ var (
 	ErrCLIL3SignatureVerificationFailed   = errors.New("cryptographic signature verification failed")
 	ErrCLIL3PublicKeyMissing              = errors.New("approval public key missing")
 	ErrCLIL3PublicKeyInvalid              = errors.New("invalid approval public key")
+	ErrCLIL3SignatureRequired             = errors.New("cli_signature required for CLI L3 verification")
+	ErrCLIL3SuspendedStoreNotConfigured   = errors.New("suspended transaction store not configured for CLI L3 verification")
+	ErrCLIL3TransactionNotApproved        = errors.New("suspended transaction is not approved")
+	ErrCLIL3ApprovalExpired               = errors.New("CLI L3 approval has expired")
+	ErrCLIL3UserServiceNotConfigured      = errors.New("user service not configured for CLI L3 verification")
 
 	// File edit service errors
 	ErrFileEditUnsupportedOperation   = errors.New("unsupported file operation")

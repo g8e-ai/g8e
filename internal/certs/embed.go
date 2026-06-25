@@ -180,14 +180,6 @@ func GetServerCARootCAs() (*x509.CertPool, error) {
 	return pool, nil
 }
 
-// SetClientCertificate stores the mTLS client certificate for Operator outbound connections.
-// DEPRECATED: Use ClientIdentity.SetCertificate instead.
-func SetClientCertificate(cert tls.Certificate) {
-	clientCertMu.Lock()
-	defer clientCertMu.Unlock()
-	clientCert = cert
-}
-
 // GetClientCertificate returns the mTLS client certificate.
 // DEPRECATED: Use ClientIdentity.GetCertificate instead.
 func GetClientCertificate() (tls.Certificate, bool) {

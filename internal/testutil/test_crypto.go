@@ -189,7 +189,6 @@ type PKICertPaths struct {
 }
 
 // GetPKICertPaths returns the standard PKI certificate paths for a given PKI directory.
-// This centralizes path construction and eliminates hardcoded paths in tests.
 func GetPKICertPaths(pkiDir string) PKICertPaths {
 	return PKICertPaths{
 		RootCA:          filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA),
@@ -204,8 +203,6 @@ func GetPKICertPaths(pkiDir string) PKICertPaths {
 }
 
 // ReadCACert reads a CA certificate from the given path with graceful error handling.
-// If the file doesn't exist, it returns a clear error message indicating which CA is missing.
-// This prevents tests from failing with generic "file not found" errors.
 func ReadCACert(t *testing.T, path, caName string) []byte {
 	t.Helper()
 
@@ -267,13 +264,12 @@ func ReadHubBundle(t *testing.T, pkiDir string) []byte {
 }
 
 // RequirePKIInitialized checks that the PKI directory structure exists and contains
-// expected certificates. This is useful for tests that depend on a pre-initialized PKI.
+// expected certificates.
 func RequirePKIInitialized(t *testing.T, pkiDir string) {
 	t.Helper()
 
 	paths := GetPKICertPaths(pkiDir)
 
-	// Check that critical directories exist
 	dirs := []string{
 		filepath.Join(pkiDir, constants.PkiSubdirRoot),
 		filepath.Join(pkiDir, constants.PkiSubdirAuthorities),
@@ -286,7 +282,6 @@ func RequirePKIInitialized(t *testing.T, pkiDir string) {
 		require.True(t, info.IsDir(), "PKI path %s is not a directory", dir)
 	}
 
-	// Check that root CA exists (required for all operations)
 	_, err := os.Stat(paths.RootCA)
 	require.NoError(t, err, "Root CA certificate does not exist at %s. PKI may not be initialized.", paths.RootCA)
 }

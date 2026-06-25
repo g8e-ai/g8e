@@ -47,7 +47,7 @@ func swaggerInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Generate Swagger documentation from code annotations",
-		Long:  `Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses swaggo/swag to parse annotations and generate docs.`,
+		Long:  `Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses the swag CLI tool to parse annotations and generate docs.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Default to cmd/operator and internal/services/gateway directories
 			// cmd/operator has main.go (entry point), internal/services/gateway has the annotations
@@ -70,19 +70,9 @@ func swaggerInitCmd() *cobra.Command {
 
 			// Check if swag is available
 			if _, err := exec.LookPath("swag"); err != nil {
-				// Try to run via go run
-				cmd.Println("swag binary not found, attempting to run via go run...")
-				swagCmd := exec.Command("go", "run", "github.com/swaggo/swag/cmd/swag@latest", "init",
-					"--dir", absSearchDir,
-					"--output", absOutputDir,
-					"--parseDependency",
-					"--parseInternal",
-				)
-				swagCmd.Stdout = cmd.OutOrStdout()
-				swagCmd.Stderr = cmd.ErrOrStderr()
-				if err := swagCmd.Run(); err != nil {
-					return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
-				}
+				cmd.Println("swag binary not found. Install it with:")
+				cmd.Println("  go install github.com/swaggo/swag/cmd/swag@latest")
+				return fmt.Errorf("%w: swag not installed", constants.ErrPathNotFound)
 			} else {
 				// Use installed swag binary
 				swagCmd := exec.Command("swag", "init",
@@ -132,8 +122,6 @@ func swaggerServeCmd() *cobra.Command {
 				host = "localhost"
 			}
 
-			// Check if swagger-ui-serve or similar is available
-			// For now, we'll use http-swagger which is already in dependencies
 			docsPath := "internal/services/gateway/docs"
 			absDocsPath, err := filepath.Abs(docsPath)
 			if err != nil {
@@ -148,16 +136,9 @@ func swaggerServeCmd() *cobra.Command {
 				return fmt.Errorf("%w: %s", constants.ErrPathNotFound, swaggerJSON)
 			}
 
-			// Use http-swagger to serve the UI
 			cmd.Printf("Serving Swagger UI at http://%s:%d/swagger/index.html\n", host, port)
 			cmd.Printf("Press Ctrl+C to stop.\n")
 
-			// We'll use a simple Go server with http-swagger
-			serveCmd := exec.Command("go", "run", "-tags", "swagger", "-exec", "echo", "Serving Swagger UI...")
-			serveCmd.Env = append(os.Environ(), fmt.Sprintf("SWAGGER_HOST=%s:%d", host, port))
-			serveCmd.Env = append(serveCmd.Env, fmt.Sprintf("SWAGGER_DOCS_PATH=%s", absDocsPath))
-
-			// Since http-swagger requires embedding in a Go server, we'll provide instructions
 			cmd.Println("\nNote: To serve Swagger UI, start the g8e Gateway and access:")
 			cmd.Printf("  %s/swagger/index.html\n", netutil.LocalhostHTTPSURL(8443))
 			cmd.Println("\nOr use a standalone tool like:")

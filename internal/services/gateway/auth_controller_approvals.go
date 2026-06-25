@@ -235,7 +235,7 @@ func (c *AuthController) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	http.Redirect(w, r, "/console#approve="+url.QueryEscape(txHash), http.StatusFound)
+	http.Redirect(w, r, "/console/#approve="+url.QueryEscape(txHash), http.StatusFound)
 }
 
 func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, r *http.Request) {

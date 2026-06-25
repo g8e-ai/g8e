@@ -12,6 +12,6 @@ plugins:
       - paths=source_relative
   # Markdown documentation generation
   - local: protoc-gen-doc
-    out: docs/reference/api
+    out: protocol/docs/reference/api
     opt:
       - markdown,index.md,source_relative

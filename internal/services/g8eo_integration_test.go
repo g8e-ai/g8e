@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/certs"
 	"github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/pubsub"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -84,7 +85,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 			Logger:            logger,
 			Execution:         execSvc,
 			FileEdit:          fileEditSvc,
-			PubSubClient:      pubsub.NewMockOperatorPubSubClient(),
+			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},

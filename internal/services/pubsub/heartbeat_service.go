@@ -30,9 +30,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/system"
+	"github.com/g8e-ai/g8e/internal/uuid"
 	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
-	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -323,7 +323,7 @@ func (hs *HeartbeatService) SendAutomatic() error {
 	hashStr := hex.EncodeToString(hash[:])
 
 	env := &govpkg.GovernanceEnvelope{
-		Id:              uuid.New().String(),
+		Id:              uuid.NewString(),
 		TransactionHash: hashStr,
 		ActionType:      string(constants.ActionTypeHeartbeat),
 		Payload:         data,

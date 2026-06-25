@@ -5,8 +5,8 @@ parent: Architecture
 
 # Air-Gap Architecture
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies. The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -32,8 +32,8 @@ The gateway exposes two logical communication surfaces. Canonical ports are defi
 
 | Surface | Port (default) | Authentication | Purpose |
 | :--- | :--- | :--- | :--- |
-| **HTTP (Bootstrap + MCP)** | `8080` (plain HTTP) | None | Serves local trust bundles, handles Certificate Signing Request (CSR) enrollment, and plain HTTP MCP for development/testing. |
-| **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, runs WebSocket pub/sub streaming and SSE event streaming, and provides browser management interface. |
+| **HTTP (Bootstrap)** | `8080` (plain HTTP) | None | Serves health checks, local trust bundles, bootstrap CA trust scripts (Linux, macOS, Windows), device and app enrollment, deploy scripts, binary downloads, and a catch-all redirect to HTTPS for all other routes. |
+| **HTTPS (mTLS API + Public)** | `8443` (mTLS) | mTLS + URI SAN | Receives `GovernanceEnvelope` mutation payloads, handles `/db` persistence, runs WebSocket pub/sub streaming and SSE event streaming, serves MCP and A2A ingress, provides WebAuthn passkey authentication, and hosts the browser management console. |
 
 Surfaces with conflicting TLS client-authentication requirements do not share a network port. Sharing ports forces the use of `tls.VerifyClientCertIfGiven`, which degrades the mTLS execution boundary. The initialization sequence validates port isolation and fails if configurations overlap.
 
@@ -94,7 +94,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, or `demos/swarm` as reference. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the same `Dockerfile` with different command-line flags.
+3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, or `demos/swarm` as reference. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the same `Dockerfile` with different command-line flags.
 
 ### 2. Implementation on the Air-Gapped Target Host
 

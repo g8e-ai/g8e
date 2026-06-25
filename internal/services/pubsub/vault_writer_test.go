@@ -196,7 +196,3 @@ func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {
 		// Should handle gracefully
 	})
 }
-
-func intPtr(i int) *int {
-	return &i
-}

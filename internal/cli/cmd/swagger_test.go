@@ -67,7 +67,7 @@ func TestSwaggerInitCmd(t *testing.T) {
 		assert.Equal(t, "init", cmd.Use)
 		assert.Contains(t, cmd.Short, "Generate")
 		assert.Contains(t, cmd.Short, "Swagger")
-		assert.Contains(t, cmd.Long, "swaggo/swag")
+		assert.Contains(t, cmd.Long, "swag CLI tool")
 		assert.Contains(t, cmd.Long, "annotations")
 	})
 
@@ -545,7 +545,7 @@ func TestSwaggerCommandOutputFormatting(t *testing.T) {
 		// This test verifies the output format when init succeeds
 		// Since we can't actually run swag, we just verify the command structure
 		cmd := swaggerInitCmd()
-		assert.Contains(t, cmd.Long, "swaggo/swag")
+		assert.Contains(t, cmd.Long, "swag CLI tool")
 	})
 
 	t.Run("serve prints URL with host and port", func(t *testing.T) {
@@ -614,7 +614,7 @@ func TestSwaggerCommandErrorMessages(t *testing.T) {
 		cmd := swaggerInitCmd()
 		// The error message should contain "failed to resolve" prefix
 		// This is verified by checking the code structure
-		assert.Contains(t, cmd.Long, "swaggo/swag")
+		assert.Contains(t, cmd.Long, "swag CLI tool")
 	})
 
 	t.Run("validate provides clear error when file not found", func(t *testing.T) {
