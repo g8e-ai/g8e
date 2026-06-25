@@ -147,6 +147,8 @@ services:
     volumes:
       - ./dow_simulator.py:/app/dow_simulator.py:ro
       - ./target-data:/var/g8e/target:ro
+      - ./inspect_rf.py:/app/inspect_rf.py:ro
+      - ./inspect_pnt.py:/app/inspect_pnt.py:ro
     depends_on:
       gateway:
         condition: service_healthy
@@ -171,6 +173,7 @@ services:
     volumes:
       - ./dow_simulator.py:/app/dow_simulator.py:ro
       - ./target-data:/var/g8e/target:ro
+      - ./inspect_pnt.py:/app/inspect_pnt.py:ro
     depends_on:
       gateway:
         condition: service_healthy
@@ -195,6 +198,7 @@ services:
     volumes:
       - gimbal_data:/var/gimbal
       - ./gimbal.py:/app/gimbal.py:ro
+      - ./verify_slews.py:/app/verify_slews.py:ro
     working_dir: /app
     deploy:
       resources:

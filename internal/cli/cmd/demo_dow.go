@@ -88,7 +88,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "tactical environment",
 			false,
 			"docker", "compose", "exec", "-T", "agent-eoir",
-			"sh", "-c", "cat /var/g8e/target/tactical_environment.json | python3 -c \"import sys,json; d=json.load(sys.stdin); [print(f'  {s[\\\"signal_id\\\"]}: {s[\\\"type\\\"]} at {s[\\\"frequency_mhz\\\"]} MHz (conf: {s[\\\"confidence\\\"]}, class: {s[\\\"classification\\\"]})') for s in d.get('rf_environment',{}).get('signals',[])]\"",
+			"python3", "/app/inspect_rf.py",
 		); err != nil {
 			hasErrors = true
 		}
@@ -118,8 +118,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "gimbal slew verification",
 			false,
 			"docker", "compose", "exec", "-T", "gimbal",
-			"python3", "-c",
-			"import urllib.request, json; r=urllib.request.urlopen('http://localhost:9000/slews'); d=json.loads(r.read()); slews=d.get('slews',[]); print(f'  Slews recorded: {len(slews)}'); [print(f'  az={s[\\\"az\\\"]}, el={s[\\\"el\\\"]}, ts={s[\\\"timestamp\\\"]}') for s in slews]; exit(0 if slews else 1)",
+			"python3", "/app/verify_slews.py",
 		); err != nil {
 			fmt.Println("  (gimbal did not record any slew — L5 actuation may have failed)")
 			fmt.Println()
@@ -171,7 +170,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "pnt sources",
 			false,
 			"docker", "compose", "exec", "-T", "agent-pnt-fusion",
-			"sh", "-c", "cat /var/g8e/target/tactical_environment.json | python3 -c \"import sys,json; d=json.load(sys.stdin); [print(f'  {s[\\\"source_id\\\"]}: {s[\\\"type\\\"]} → {s[\\\"coordinates\\\"]} (trusted: {s.get(\\\"trusted\\\", True)}){\\\" [SPOOFED]\\\" if s.get(\\\"spoofed\\\") else \\\"\\\"}') for s in d.get('pnt_sources',[])]\"",
+			"python3", "/app/inspect_pnt.py",
 		); err != nil {
 			hasErrors = true
 		}

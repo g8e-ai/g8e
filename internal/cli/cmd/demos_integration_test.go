@@ -336,7 +336,7 @@ func TestRunDemosClean(t *testing.T) {
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
-		err = runDemosClean(cmd, []string{"nonexistent"})
+		err = runDemosClean(cmd, []string{"nonexistent"}, true)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "demo environment 'nonexistent' not found")
 	})
@@ -360,7 +360,7 @@ func TestRunDemosClean(t *testing.T) {
 		require.NoError(t, err)
 
 		cmd := &cobra.Command{}
-		err = runDemosClean(cmd, []string{"healthcare"})
+		err = runDemosClean(cmd, []string{"healthcare"}, true)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "compose.yml not found in demo directory 'healthcare'")
 	})

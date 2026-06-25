@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -320,37 +321,68 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 }
 
 func demosCleanCmd() *cobra.Command {
+	var skipConfirm bool
+
 	cmd := &cobra.Command{
-		Use:   "clean <org>",
-		Short: "Remove containers, volumes, and networks for a demo environment",
-		Args:  cobra.ExactArgs(1),
-		RunE:  runDemosClean,
+		Use:   "clean [org]",
+		Short: "Remove containers, volumes, and networks for demo environments",
+		Long: `Remove containers, volumes, and networks for demo environments.
+If no org is specified, all demo environments are cleaned.
+
+This is a destructive operation that removes all associated Docker volumes and networks.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDemosClean(cmd, args, skipConfirm)
+		},
 	}
+
+	cmd.Flags().BoolVar(&skipConfirm, "yes", false, "Skip interactive confirmation")
 
 	return cmd
 }
 
-func runDemosClean(cmd *cobra.Command, args []string) error {
-	org := args[0]
+func runDemosClean(cmd *cobra.Command, args []string, skipConfirm bool) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
-	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
+	demosDir := filepath.Join(cwd, constants.DemosDirname)
 
-	// Verify demo directory exists
+	if len(args) == 1 {
+		org := args[0]
+		return cleanSingleDemo(cmd, demosDir, org, skipConfirm)
+	}
+
+	return cleanAllDemos(cmd, demosDir, skipConfirm)
+}
+
+func cleanSingleDemo(cmd *cobra.Command, demosDir, org string, skipConfirm bool) error {
+	demoDir := filepath.Join(demosDir, org)
+
 	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
 		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
 	}
 
-	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
-	// Clean the demo environment (remove containers, volumes, and networks)
-	fmt.Printf("Cleaning demo environment: %s\n", org)
+	if !skipConfirm {
+		running := isDemoRunning(demoDir, composePath)
+		cmd.Printf("WARNING: This will remove all containers, volumes, and networks for '%s'.\n", org)
+		if running {
+			cmd.Printf("Status: RUNNING\n")
+		} else {
+			cmd.Printf("Status: not running\n")
+		}
+		if !confirmAction(cmd, "Proceed with clean?") {
+			cmd.Println("Clean cancelled.")
+			return nil
+		}
+	}
+
+	cmd.Printf("Cleaning demo environment: %s\n", org)
 	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down", "-v")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
@@ -360,9 +392,103 @@ func runDemosClean(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 	}
 
-	fmt.Printf("\nDemo environment '%s' cleaned successfully.\n", org)
-
+	cmd.Printf("\nDemo environment '%s' cleaned successfully.\n", org)
 	return nil
+}
+
+func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error {
+	entries, err := os.ReadDir(demosDir)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
+	}
+
+	type demoInfo struct {
+		name        string
+		demoDir     string
+		composePath string
+		running     bool
+	}
+
+	var demos []demoInfo
+	for _, entry := range entries {
+		if !entry.IsDir() || entry.Name() == constants.DemosBinDirname {
+			continue
+		}
+		composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)
+		if _, err := os.Stat(composePath); err != nil {
+			continue
+		}
+		demoDir := filepath.Join(demosDir, entry.Name())
+		demos = append(demos, demoInfo{
+			name:        entry.Name(),
+			demoDir:     demoDir,
+			composePath: composePath,
+			running:     isDemoRunning(demoDir, composePath),
+		})
+	}
+
+	if len(demos) == 0 {
+		cmd.Println("No demo environments found.")
+		return nil
+	}
+
+	cmd.Println("The following demo environments will be cleaned:")
+	cmd.Println()
+	var runningCount int
+	for _, d := range demos {
+		status := "stopped"
+		if d.running {
+			status = "RUNNING"
+			runningCount++
+		}
+		cmd.Printf("  - %-15s  [%s]\n", d.name, status)
+	}
+	cmd.Println()
+	cmd.Printf("Total: %d demo environment(s) (%d running)\n", len(demos), runningCount)
+	cmd.Println()
+	cmd.Println("WARNING: This will remove ALL containers, volumes, and networks for the above demos.")
+
+	if !skipConfirm {
+		if !confirmAction(cmd, "Proceed with cleaning all demos?") {
+			cmd.Println("Clean cancelled.")
+			return nil
+		}
+	}
+
+	var failed []string
+	for _, d := range demos {
+		cmd.Printf("\nCleaning demo environment: %s\n", d.name)
+		dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(d.composePath), "down", "-v")
+		dockerComposeCmd.Dir = d.demoDir
+		dockerComposeCmd.Stdout = os.Stdout
+		dockerComposeCmd.Stderr = os.Stderr
+
+		if err := dockerComposeCmd.Run(); err != nil {
+			cmd.Printf("Error cleaning '%s': %v\n", d.name, err)
+			failed = append(failed, d.name)
+			continue
+		}
+		cmd.Printf("Demo environment '%s' cleaned successfully.\n", d.name)
+	}
+
+	cmd.Println()
+	if len(failed) > 0 {
+		cmd.Printf("Completed with errors. Failed: %s\n", strings.Join(failed, ", "))
+		return fmt.Errorf("%w: failed to clean: %s", constants.ErrProcessStopFailed, strings.Join(failed, ", "))
+	}
+	cmd.Printf("All %d demo environment(s) cleaned successfully.\n", len(demos))
+	return nil
+}
+
+func confirmAction(cmd *cobra.Command, prompt string) bool {
+	reader := bufio.NewReader(cmd.InOrStdin())
+	cmd.Printf("%s [y/N]: ", prompt)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return false
+	}
+	answer := strings.TrimSpace(strings.ToLower(input))
+	return answer == "y" || answer == "yes"
 }
 
 func demosResetCmd() *cobra.Command {
@@ -377,8 +503,8 @@ func demosResetCmd() *cobra.Command {
 }
 
 func runDemosReset(cmd *cobra.Command, args []string) error {
-	// First clean the environment
-	if err := runDemosClean(cmd, args); err != nil {
+	// First clean the environment (skip confirmation since reset is already explicit)
+	if err := runDemosClean(cmd, args, true); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 	}
 
