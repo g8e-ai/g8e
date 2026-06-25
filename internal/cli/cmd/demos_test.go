@@ -145,7 +145,7 @@ func TestDemosStatusCmd(t *testing.T) {
 func TestDemosCleanCmd(t *testing.T) {
 	t.Run("clean command has correct structure", func(t *testing.T) {
 		cmd := demosCleanCmd()
-		assert.Equal(t, "clean <org>", cmd.Use)
+		assert.Equal(t, "clean [org]", cmd.Use)
 		assert.Contains(t, cmd.Short, "Remove containers, volumes, and networks")
 		assert.NotNil(t, cmd.RunE)
 	})
