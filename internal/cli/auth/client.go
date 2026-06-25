@@ -80,8 +80,10 @@ type Credentials struct {
 	CLISessionID      string `json:"cli_session_id"`
 }
 
-// webauthnClientData is the client data JSON for WebAuthn ceremonies.
-type webauthnClientData struct {
+// webauthnClientDataJSON is the client data JSON for WebAuthn ceremonies.
+// Named differently from the syscall struct in windows_crypto.go to avoid
+// duplicate declaration on GOOS=windows.
+type webauthnClientDataJSON struct {
 	Challenge string `json:"challenge"`
 	Origin    string `json:"origin"`
 	Type      string `json:"type"`
@@ -675,7 +677,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 
 			// 2. Trigger Windows Hello
 			origin := fmt.Sprintf("https://%s", challengeData.Options.Response.RelyingPartyID)
-			clientData := webauthnClientData{
+			clientData := webauthnClientDataJSON{
 				Challenge: challengeData.Options.Response.Challenge.String(),
 				Origin:    origin,
 				Type:      "webauthn.get",
@@ -835,35 +837,19 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
-	var challengeData struct {
-		Success bool `json:"success"`
-		Options struct {
-			PublicKey struct {
-				Challenge    string `json:"challenge"`
-				RelyingParty struct {
-					ID   string `json:"id"`
-					Name string `json:"name"`
-				} `json:"rp"`
-				User struct {
-					ID          string `json:"id"`
-					Name        string `json:"name"`
-					DisplayName string `json:"displayName"`
-				} `json:"user"`
-			} `json:"publicKey"`
-		} `json:"options"`
-	}
+	var challengeData models.PasskeyRegisterChallengeResponse
 	if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	// 2. Trigger Windows Hello Registration
 	slog.Info("Triggering Windows Hello registration prompt",
-		"rp_id", challengeData.Options.PublicKey.RelyingParty.ID,
-		"rp_name", challengeData.Options.PublicKey.RelyingParty.Name)
+		"rp_id", challengeData.Options.Response.RelyingParty.ID,
+		"rp_name", challengeData.Options.Response.RelyingParty.Name)
 	// The gateway provides a base64url-encoded user ID
 	// Windows Hello API expects raw bytes for the user ID, so we need to decode it
 	// Windows Hello requires user ID to be 1-64 bytes per WEBAUTHN_MAX_USER_ID_LENGTH
-	userIDBase64 := challengeData.Options.PublicKey.User.ID
+	userIDBase64, _ := challengeData.Options.Response.User.ID.(string)
 	userIDBytes, err := base64.RawURLEncoding.DecodeString(userIDBase64)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
@@ -875,9 +861,9 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 
 	// Construct proper clientDataJSON for Windows Hello API
 	// WebAuthn requires clientDataJSON to contain: challenge, origin, type
-	origin := fmt.Sprintf("https://%s", challengeData.Options.PublicKey.RelyingParty.ID)
-	clientData := webauthnClientData{
-		Challenge: challengeData.Options.PublicKey.Challenge,
+	origin := fmt.Sprintf("https://%s", challengeData.Options.Response.RelyingParty.ID)
+	clientData := webauthnClientDataJSON{
+		Challenge: challengeData.Options.Response.Challenge.String(),
 		Origin:    origin,
 		Type:      "webauthn.create",
 	}
@@ -887,10 +873,10 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	}
 
 	attestation, err := RegisterWithWindowsHello(
-		challengeData.Options.PublicKey.RelyingParty.ID,
-		challengeData.Options.PublicKey.RelyingParty.Name,
+		challengeData.Options.Response.RelyingParty.ID,
+		challengeData.Options.Response.RelyingParty.Name,
 		userIDBytes,
-		challengeData.Options.PublicKey.User.Name,
+		challengeData.Options.Response.User.Name,
 		clientDataBytes,
 	)
 	if err != nil {
