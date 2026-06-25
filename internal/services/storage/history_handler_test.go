@@ -100,7 +100,7 @@ func TestHistoryHandler_FetchHistory(t *testing.T) {
 	}
 
 	// Fetch history
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -120,7 +120,7 @@ func TestHistoryHandler_FetchHistoryMissingSession(t *testing.T) {
 	defer testVault.Close()
 
 	// Fetch history for non-existent session
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", "non-existent-session", 10, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", "non-existent-session", 10, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -138,7 +138,7 @@ func TestHistoryHandler_FetchHistoryInvalidRequest(t *testing.T) {
 	defer testVault.Close()
 
 	// Empty operator_session_id
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", "", 10, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", "", 10, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -186,7 +186,7 @@ func TestHistoryHandler_FetchHistoryWithFileMutations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Fetch history
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 	}
 
 	// Test first page
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestHistoryHandler_FetchHistoryPagination(t *testing.T) {
 	assert.Equal(t, int32(0), response.Offset)
 
 	// Test second page with offset
-	requestJSON = testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-124", operatorSessionID, 10, 10)
+	requestJSON = testutil.BuildFetchHistoryRequestedPayload(t, "exec-124", operatorSessionID, 10, 10)
 
 	response, err = hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -272,7 +272,7 @@ func TestHistoryHandler_FetchHistoryDefaultLimit(t *testing.T) {
 	}
 
 	// Request with limit=0 (should default to 50)
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 0, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 0, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -326,7 +326,7 @@ func TestHistoryHandler_FetchFileHistory(t *testing.T) {
 	lms.CompleteMirrorWrite(result3, operatorSessionID)
 
 	// Fetch file history
-	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 10, operatorSessionID)
+	requestJSON := testutil.BuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 10, operatorSessionID)
 
 	response, err := hh.HandleFetchFileHistory(requestJSON)
 	require.NoError(t, err)
@@ -360,7 +360,7 @@ func TestHistoryHandler_FetchFileHistoryValidationErrors(t *testing.T) {
 			if tc.name == "invalid JSON" {
 				requestJSON = []byte("invalid json")
 			} else {
-				requestJSON = testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", tc.filePath, tc.limit, tc.sessionID)
+				requestJSON = testutil.BuildFetchFileHistoryRequestedPayload(t, "exec-123", tc.filePath, tc.limit, tc.sessionID)
 			}
 
 			response, err := hh.HandleFetchFileHistory(requestJSON)
@@ -388,7 +388,7 @@ func TestHistoryHandler_FetchFileHistoryDefaultLimit(t *testing.T) {
 	lms.CompleteMirrorCreate(result, operatorSessionID)
 
 	// Request with limit=0 (use same session ID as mirroring)
-	requestJSON := testutil.MustBuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 0, "operator_session")
+	requestJSON := testutil.BuildFetchFileHistoryRequestedPayload(t, "exec-123", testFilePath, 0, "operator_session")
 
 	response, err := hh.HandleFetchFileHistory(requestJSON)
 	require.NoError(t, err)
@@ -424,7 +424,7 @@ func TestHistoryHandler_RestoreFile(t *testing.T) {
 	assert.Equal(t, "Modified content", string(content))
 
 	// Restore to original
-	requestJSON := testutil.MustBuildRestoreFileRequestedPayload(t, "exec-123", testFilePath, originalHash, operatorSessionID)
+	requestJSON := testutil.BuildRestoreFileRequestedPayload(t, "exec-123", testFilePath, originalHash, operatorSessionID)
 
 	response, err := hh.HandleRestoreFile(requestJSON)
 	require.NoError(t, err)
@@ -465,7 +465,7 @@ func TestHistoryHandler_RestoreFileValidationErrors(t *testing.T) {
 			if tc.name == "invalid JSON" {
 				requestJSON = []byte("invalid json")
 			} else {
-				requestJSON = testutil.MustBuildRestoreFileRequestedPayload(t, "exec-123", tc.filePath, tc.commitHash, tc.sessionID)
+				requestJSON = testutil.BuildRestoreFileRequestedPayload(t, "exec-123", tc.filePath, tc.commitHash, tc.sessionID)
 			}
 
 			response, err := hh.HandleRestoreFile(requestJSON)
@@ -487,7 +487,7 @@ func TestHistoryHandler_RestoreFileInvalidCommit(t *testing.T) {
 	testFilePath := filepath.Join(tempDir, "invalid_restore.txt")
 	os.WriteFile(testFilePath, []byte("content"), 0644)
 
-	requestJSON := testutil.MustBuildRestoreFileRequestedPayload(t, "exec-123", testFilePath, "invalidhash123456789", "operator_session")
+	requestJSON := testutil.BuildRestoreFileRequestedPayload(t, "exec-123", testFilePath, "invalidhash123456789", "operator_session")
 
 	response, err := hh.HandleRestoreFile(requestJSON)
 	require.NoError(t, err)
@@ -562,7 +562,7 @@ func TestHistoryHandler_AllEventTypes(t *testing.T) {
 	}
 
 	// Fetch history
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)
@@ -616,7 +616,7 @@ func TestHistoryHandler_MultipleFileMutationsInHistory(t *testing.T) {
 	}
 
 	// Fetch history
-	requestJSON := testutil.MustBuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
+	requestJSON := testutil.BuildFetchHistoryRequestedPayload(t, "exec-123", operatorSessionID, 10, 0)
 
 	response, err := hh.HandleFetchHistory(requestJSON)
 	require.NoError(t, err)

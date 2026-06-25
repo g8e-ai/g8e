@@ -101,7 +101,7 @@ The `models/` directory contains JSON Schema files that define the structure for
 - `tool_results.json`, `agent_activity_metadata.json`
 - `reputation_commitment.json`, `reputation_state.json`, `stake_resolution.json`
 - `security_constraints.json`
-- `agents/`: Per-agent-role model schemas (`primary.json`, `assistant.json`, `lite.json`, `triage.json`, `title_generator.json`, `agentic_tool_emulator.json`)
+- `agents/`: Per-agent-role model schemas (`primary.json`, `assistant.json`, `lite.json`, `triage.json`, `title_generator.json`, `agent_harness.json`)
 
 ### Python Package
 

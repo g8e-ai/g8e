@@ -8,11 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/client"
+	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
 	"github.com/google/uuid"
 )
 
-// Personas — the real-world tools Agentic Tool Emulator pretends to be. This is the ONLY
+// Personas — the real-world tools Agent Harness pretends to be. This is the ONLY
 // fiction in the system; the Gateway and Operator are real throughout.
 var (
 	claudeDesktop  = clientpkg.Persona{ID: "claude-desktop", UserAgent: "Claude-Desktop/1.x (MCP)"}

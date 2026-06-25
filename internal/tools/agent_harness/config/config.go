@@ -16,7 +16,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/netutil"
 )
 
-// Auth selects how Agentic Tool Emulator authenticates to the Gateway's mTLS surface.
+// Auth selects how Agent Harness authenticates to the Gateway's mTLS surface.
 // The MCP/A2A routes are exempt from the main mTLS middleware and can also take
 // an API key, but the TLS listener itself still negotiates client certs,
 // so a cert is the realistic default.
@@ -33,7 +33,7 @@ type Auth struct {
 	Insecure bool `json:"insecure"`
 }
 
-// Config is the full Agentic Tool Emulator runtime configuration.
+// Config is the full Agent Harness runtime configuration.
 type Config struct {
 	// MTLSBaseURL is the Gateway mTLS API surface (governance envelope, MCP/A2A,
 	// audit).
@@ -48,14 +48,14 @@ type Config struct {
 	UseCLIConfig bool `json:"use_cli_config"`
 
 	// OperatorSessionID scopes audit receipt queries to the real Operator that
-	// executed the work. If empty, Agentic Tool Emulator tries to discover it from /api/operators.
+	// executed the work. If empty, Agent Harness tries to discover it from /api/operators.
 	OperatorSessionID string `json:"operator_session_id"`
 
 	// EnsembleSize is the number of mock consensus agents that "vote" on each
 	// maximal envelope. The envelope still carries a single aggregate L2
 	// signature from the registered consensus key (KeyID), with one AgentID per voter.
 	EnsembleSize int `json:"ensemble_size"`
-	// ConsensusKeyID is the trusted-signer id Agentic Tool Emulator registers for its L2 key.
+	// ConsensusKeyID is the trusted-signer id Agent Harness registers for its L2 key.
 	ConsensusKeyID string `json:"consensus_key_id"`
 	// PrincipalKeyID identifies the mock L3 principal (the "human" notary).
 	PrincipalKeyID string `json:"principal_key_id"`

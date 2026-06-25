@@ -24,46 +24,46 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/client"
-	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/config"
-	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/scenarios"
+	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 )
 
 var (
-	emulatorConfigPath string
-	emulatorMTLSURL    string
-	emulatorPublicURL  string
-	emulatorCert       string
-	emulatorKey        string
-	emulatorCA         string
-	emulatorAPIKey     string
-	emulatorInsecure   bool
-	emulatorSessionID  string
-	emulatorOutDir     string
-	emulatorL3Mode     string
-	emulatorEnsemble   int
-	emulatorVerbose    bool
-	emulatorPhase      string
+	harnessConfigPath string
+	harnessMTLSURL    string
+	harnessPublicURL  string
+	harnessCert       string
+	harnessKey        string
+	harnessCA         string
+	harnessAPIKey     string
+	harnessInsecure   bool
+	harnessSessionID  string
+	harnessOutDir     string
+	harnessL3Mode     string
+	harnessEnsemble   int
+	harnessVerbose    bool
+	harnessPhase      string
 )
 
-func agenticToolEmulatorCmd() *cobra.Command {
+func agentHarnessCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "agentic-tool-emulator",
-		Short: "Universal agentic tool emulator for a real g8e Gateway/Operator",
-		Long: `agentic-tool-emulator impersonates arbitrary AI tools and agents against a REAL g8e
+		Use:   "agent-harness",
+		Short: "Universal agent harness for a real g8e Gateway/Operator",
+		Long: `agent-harness impersonates arbitrary AI tools and agents against a REAL g8e
 Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A
 protobuf, and official governance envelopes with mock consensus + principal
 signing), then audits every result against the Operator's signed receipts.`,
 	}
 
-	cmd.AddCommand(agenticToolEmulatorListCmd())
-	cmd.AddCommand(agenticToolEmulatorRunCmd())
-	cmd.AddCommand(agenticToolEmulatorAuditCmd())
+	cmd.AddCommand(agentHarnessListCmd())
+	cmd.AddCommand(agentHarnessRunCmd())
+	cmd.AddCommand(agentHarnessAuditCmd())
 
 	return cmd
 }
 
-func agenticToolEmulatorListCmd() *cobra.Command {
+func agentHarnessListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List available scenarios",
@@ -76,59 +76,59 @@ func agenticToolEmulatorListCmd() *cobra.Command {
 	}
 }
 
-func agenticToolEmulatorRunCmd() *cobra.Command {
+func agentHarnessRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [flags] [scenario ...]",
 		Short: "Run scenarios against a real Gateway/Operator",
-		Run:   runAgenticToolEmulator,
+		Run:   runAgentHarness,
 	}
 
-	cmd.Flags().StringVar(&emulatorConfigPath, "config", "", "JSON config overlay")
-	cmd.Flags().StringVar(&emulatorMTLSURL, "mtls-url", "", "Gateway mTLS surface")
-	cmd.Flags().StringVar(&emulatorPublicURL, "public-url", "", "Gateway public surface for OOB approve")
-	cmd.Flags().StringVar(&emulatorCert, "cert", "", "client cert PEM")
-	cmd.Flags().StringVar(&emulatorKey, "key", "", "client key PEM")
-	cmd.Flags().StringVar(&emulatorCA, "ca", "", "gateway CA bundle PEM")
-	cmd.Flags().StringVar(&emulatorAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
-	cmd.Flags().StringVar(&emulatorSessionID, "operator-session", "", "scope audit to a specific Operator session")
-	cmd.Flags().BoolVar(&emulatorInsecure, "insecure", false, "skip TLS verify (local dev only)")
-	cmd.Flags().StringVar(&emulatorOutDir, "out", "", "report output dir")
-	cmd.Flags().StringVar(&emulatorL3Mode, "l3-mode", "", "mock|suspend")
-	cmd.Flags().IntVar(&emulatorEnsemble, "ensemble", 3, "mock consensus voters")
-	cmd.Flags().BoolVar(&emulatorVerbose, "verbose", false, "echo each request/response")
-	cmd.Flags().StringVar(&emulatorPhase, "phase", "all", "doctrine|notary|all")
+	cmd.Flags().StringVar(&harnessConfigPath, "config", "", "JSON config overlay")
+	cmd.Flags().StringVar(&harnessMTLSURL, "mtls-url", "", "Gateway mTLS surface")
+	cmd.Flags().StringVar(&harnessPublicURL, "public-url", "", "Gateway public surface for OOB approve")
+	cmd.Flags().StringVar(&harnessCert, "cert", "", "client cert PEM")
+	cmd.Flags().StringVar(&harnessKey, "key", "", "client key PEM")
+	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
+	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
+	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
+	cmd.Flags().BoolVar(&harnessInsecure, "insecure", false, "skip TLS verify (local dev only)")
+	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
+	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend")
+	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "mock consensus voters")
+	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
+	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|notary|all")
 
 	return cmd
 }
 
-func agenticToolEmulatorAuditCmd() *cobra.Command {
+func agentHarnessAuditCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit [flags]",
 		Short: "Audit signed receipts from the Operator",
-		Run:   runAgenticToolEmulatorAudit,
+		Run:   runAgentHarnessAudit,
 	}
 
-	cmd.Flags().StringVar(&emulatorConfigPath, "config", "", "JSON config overlay")
-	cmd.Flags().StringVar(&emulatorMTLSURL, "mtls-url", "", "Gateway mTLS surface")
-	cmd.Flags().StringVar(&emulatorPublicURL, "public-url", "", "Gateway public surface")
-	cmd.Flags().StringVar(&emulatorCert, "cert", "", "client cert PEM")
-	cmd.Flags().StringVar(&emulatorKey, "key", "", "client key PEM")
-	cmd.Flags().StringVar(&emulatorCA, "ca", "", "gateway CA bundle PEM")
-	cmd.Flags().StringVar(&emulatorAPIKey, "api-key", "", "operator API key")
-	cmd.Flags().StringVar(&emulatorSessionID, "operator-session", "", "operator session id")
-	cmd.Flags().BoolVar(&emulatorInsecure, "insecure", false, "skip TLS verify")
-	cmd.Flags().StringVar(&emulatorOutDir, "out", "", "report output dir")
+	cmd.Flags().StringVar(&harnessConfigPath, "config", "", "JSON config overlay")
+	cmd.Flags().StringVar(&harnessMTLSURL, "mtls-url", "", "Gateway mTLS surface")
+	cmd.Flags().StringVar(&harnessPublicURL, "public-url", "", "Gateway public surface")
+	cmd.Flags().StringVar(&harnessCert, "cert", "", "client cert PEM")
+	cmd.Flags().StringVar(&harnessKey, "key", "", "client key PEM")
+	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
+	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key")
+	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "operator session id")
+	cmd.Flags().BoolVar(&harnessInsecure, "insecure", false, "skip TLS verify")
+	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
 
 	return cmd
 }
 
-func runAgenticToolEmulator(cmd *cobra.Command, args []string) {
+func runAgentHarness(cmd *cobra.Command, args []string) {
 	cfg := config.Default()
-	applyAgenticToolEmulatorFlags(&cfg)
+	applyAgentHarnessFlags(&cfg)
 
-	if emulatorConfigPath != "" {
-		if err := cfg.LoadFile(emulatorConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", emulatorConfigPath, err)
+	if harnessConfigPath != "" {
+		if err := cfg.LoadFile(harnessConfigPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", harnessConfigPath, err)
 		}
 	}
 
@@ -142,7 +142,7 @@ func runAgenticToolEmulator(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	selected := selectAgenticToolEmulatorScenarios(emulatorPhase, names)
+	selected := selectAgentHarnessScenarios(harnessPhase, names)
 	if len(selected) == 0 {
 		fmt.Fprintln(os.Stderr, "no scenarios selected")
 		os.Exit(1)
@@ -169,18 +169,18 @@ func runAgenticToolEmulator(cmd *cobra.Command, args []string) {
 		_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsExportFilename), export, 0o644)
 	}
 
-	// report and summary printing would go here if we had internal/agentic_tool_emulator/report
+	// report and summary printing would go here if we had internal/agent_harness/report
 	// but for now we just print summary to satisfy the compiler and user
-	printAgenticToolEmulatorSummary(results, "", "")
+	printAgentHarnessSummary(results, "", "")
 }
 
-func runAgenticToolEmulatorAudit(cmd *cobra.Command, args []string) {
+func runAgentHarnessAudit(cmd *cobra.Command, args []string) {
 	cfg := config.Default()
-	applyAgenticToolEmulatorFlags(&cfg)
+	applyAgentHarnessFlags(&cfg)
 
-	if emulatorConfigPath != "" {
-		if err := cfg.LoadFile(emulatorConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", emulatorConfigPath, err)
+	if harnessConfigPath != "" {
+		if err := cfg.LoadFile(harnessConfigPath); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", harnessConfigPath, err)
 		}
 	}
 
@@ -210,46 +210,46 @@ func runAgenticToolEmulatorAudit(cmd *cobra.Command, args []string) {
 	}
 }
 
-func applyAgenticToolEmulatorFlags(cfg *config.Config) {
-	if emulatorMTLSURL != "" {
-		cfg.MTLSBaseURL = emulatorMTLSURL
+func applyAgentHarnessFlags(cfg *config.Config) {
+	if harnessMTLSURL != "" {
+		cfg.MTLSBaseURL = harnessMTLSURL
 	}
-	if emulatorPublicURL != "" {
-		cfg.PublicBaseURL = emulatorPublicURL
+	if harnessPublicURL != "" {
+		cfg.PublicBaseURL = harnessPublicURL
 	}
-	if emulatorCert != "" {
-		cfg.Auth.ClientCert = emulatorCert
+	if harnessCert != "" {
+		cfg.Auth.ClientCert = harnessCert
 	}
-	if emulatorKey != "" {
-		cfg.Auth.ClientKey = emulatorKey
+	if harnessKey != "" {
+		cfg.Auth.ClientKey = harnessKey
 	}
-	if emulatorCA != "" {
-		cfg.Auth.CABundle = emulatorCA
+	if harnessCA != "" {
+		cfg.Auth.CABundle = harnessCA
 	}
-	if emulatorAPIKey != "" {
-		cfg.Auth.APIKey = emulatorAPIKey
+	if harnessAPIKey != "" {
+		cfg.Auth.APIKey = harnessAPIKey
 	}
-	if emulatorInsecure {
-		cfg.Auth.Insecure = emulatorInsecure
+	if harnessInsecure {
+		cfg.Auth.Insecure = harnessInsecure
 	}
-	if emulatorSessionID != "" {
-		cfg.OperatorSessionID = emulatorSessionID
+	if harnessSessionID != "" {
+		cfg.OperatorSessionID = harnessSessionID
 	}
-	if emulatorOutDir != "" {
-		cfg.OutDir = emulatorOutDir
+	if harnessOutDir != "" {
+		cfg.OutDir = harnessOutDir
 	}
-	if emulatorL3Mode != "" {
-		cfg.L3Mode = emulatorL3Mode
+	if harnessL3Mode != "" {
+		cfg.L3Mode = harnessL3Mode
 	}
-	if emulatorEnsemble != 0 {
-		cfg.EnsembleSize = emulatorEnsemble
+	if harnessEnsemble != 0 {
+		cfg.EnsembleSize = harnessEnsemble
 	}
-	if emulatorVerbose {
-		cfg.Verbose = emulatorVerbose
+	if harnessVerbose {
+		cfg.Verbose = harnessVerbose
 	}
 }
 
-func selectAgenticToolEmulatorScenarios(phase string, names []string) []scenarios.Scenario {
+func selectAgentHarnessScenarios(phase string, names []string) []scenarios.Scenario {
 	all := scenarios.Registry()
 	if len(names) > 0 {
 		var out []scenarios.Scenario
@@ -319,7 +319,7 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	return nil
 }
 
-func printAgenticToolEmulatorSummary(results []scenarios.Result, jsonPath, mdPath string) {
+func printAgentHarnessSummary(results []scenarios.Result, jsonPath, mdPath string) {
 	fmt.Println("\n── summary ──")
 	ok := 0
 	for _, r := range results {

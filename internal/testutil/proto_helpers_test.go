@@ -24,10 +24,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMustMarshalJSON(t *testing.T) {
+func TestMarshalJSON(t *testing.T) {
 	tests := []struct {
 		name  string
-		value interface{}
+		value any
 	}{
 		{
 			name:  "string",
@@ -49,19 +49,19 @@ func TestMustMarshalJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := MustMarshalJSON(t, tt.value)
+			result := MarshalJSON(t, tt.value)
 			require.NotNil(t, result)
 
 			// Verify it's valid JSON
-			var decoded interface{}
+			var decoded any
 			err := json.Unmarshal(result, &decoded)
 			require.NoError(t, err)
 		})
 	}
 }
 
-func TestMustBuildCommandRequestedPayload(t *testing.T) {
-	payload := MustBuildCommandRequestedPayload(t, "ls -la", "exec-123", "test justification", "strict", 30)
+func TestBuildCommandRequestedPayload(t *testing.T) {
+	payload := BuildCommandRequestedPayload(t, "ls -la", "exec-123", "test justification", "strict", 30)
 	require.NotNil(t, payload)
 	require.NotEmpty(t, payload)
 
@@ -76,8 +76,8 @@ func TestMustBuildCommandRequestedPayload(t *testing.T) {
 	require.Equal(t, int32(30), cmd.TimeoutSeconds)
 }
 
-func TestMustBuildCommandCancelRequestedPayload(t *testing.T) {
-	payload := MustBuildCommandCancelRequestedPayload(t, "exec-456")
+func TestBuildCommandCancelRequestedPayload(t *testing.T) {
+	payload := BuildCommandCancelRequestedPayload(t, "exec-456")
 	require.NotNil(t, payload)
 	require.NotEmpty(t, payload)
 
@@ -88,7 +88,7 @@ func TestMustBuildCommandCancelRequestedPayload(t *testing.T) {
 	require.Equal(t, "exec-456", cancel.ExecutionId)
 }
 
-func TestMustUnmarshalPayload(t *testing.T) {
+func TestUnmarshalPayload(t *testing.T) {
 	// Create a test payload
 	testCmd := &operatorv1.CommandRequested{
 		Command:        "test",
@@ -102,12 +102,12 @@ func TestMustUnmarshalPayload(t *testing.T) {
 
 	// Test unmarshaling
 	result := &operatorv1.CommandRequested{}
-	MustUnmarshalPayload(t, payload, result)
+	UnmarshalPayload(t, payload, result)
 	require.Equal(t, "test", result.Command)
 	require.Equal(t, "exec-789", result.ExecutionId)
 }
 
-func TestMustBuildFileEditRequestedPayload(t *testing.T) {
+func TestBuildFileEditRequestedPayload(t *testing.T) {
 	fields := FileEditRequestFields{
 		FilePath:        "/tmp/test.txt",
 		Operation:       "replace",
@@ -125,7 +125,7 @@ func TestMustBuildFileEditRequestedPayload(t *testing.T) {
 		CreateIfMissing: false,
 	}
 
-	payload := MustBuildFileEditRequestedPayload(t, &fields)
+	payload := BuildFileEditRequestedPayload(t, &fields)
 	require.NotNil(t, payload)
 
 	edit := &operatorv1.FileEditRequested{}
@@ -137,8 +137,8 @@ func TestMustBuildFileEditRequestedPayload(t *testing.T) {
 	require.True(t, edit.CreateBackup)
 }
 
-func TestMustBuildFsListRequestedPayload(t *testing.T) {
-	payload := MustBuildFsListRequestedPayload(t, "/tmp", "exec-002", 100, 5)
+func TestBuildFsListRequestedPayload(t *testing.T) {
+	payload := BuildFsListRequestedPayload(t, "/tmp", "exec-002", 100, 5)
 	require.NotNil(t, payload)
 
 	list := &operatorv1.FsListRequested{}
@@ -150,8 +150,8 @@ func TestMustBuildFsListRequestedPayload(t *testing.T) {
 	require.Equal(t, int32(5), list.MaxDepth)
 }
 
-func TestMustBuildCheckPortRequestedPayload(t *testing.T) {
-	payload := MustBuildCheckPortRequestedPayload(t, "localhost", 8080, "tcp", "exec-003")
+func TestBuildCheckPortRequestedPayload(t *testing.T) {
+	payload := BuildCheckPortRequestedPayload(t, "localhost", 8080, "tcp", "exec-003")
 	require.NotNil(t, payload)
 
 	check := &operatorv1.CheckPortRequested{}
@@ -163,8 +163,8 @@ func TestMustBuildCheckPortRequestedPayload(t *testing.T) {
 	require.Equal(t, "exec-003", check.ExecutionId)
 }
 
-func TestMustBuildFsReadRequestedPayload(t *testing.T) {
-	payload := MustBuildFsReadRequestedPayload(t, "/tmp/file.txt", "exec-004", 1024)
+func TestBuildFsReadRequestedPayload(t *testing.T) {
+	payload := BuildFsReadRequestedPayload(t, "/tmp/file.txt", "exec-004", 1024)
 	require.NotNil(t, payload)
 
 	read := &operatorv1.FsReadRequested{}
@@ -175,8 +175,8 @@ func TestMustBuildFsReadRequestedPayload(t *testing.T) {
 	require.Equal(t, int32(1024), read.MaxSize)
 }
 
-func TestMustBuildFetchLogsRequestedPayload(t *testing.T) {
-	payload := MustBuildFetchLogsRequestedPayload(t, "exec-005")
+func TestBuildFetchLogsRequestedPayload(t *testing.T) {
+	payload := BuildFetchLogsRequestedPayload(t, "exec-005")
 	require.NotNil(t, payload)
 
 	logs := &operatorv1.FetchLogsRequested{}
@@ -185,8 +185,8 @@ func TestMustBuildFetchLogsRequestedPayload(t *testing.T) {
 	require.Equal(t, "exec-005", logs.ExecutionId)
 }
 
-func TestMustBuildFetchHistoryRequestedPayload(t *testing.T) {
-	payload := MustBuildFetchHistoryRequestedPayload(t, "exec-006", "session-123", 50, 0)
+func TestBuildFetchHistoryRequestedPayload(t *testing.T) {
+	payload := BuildFetchHistoryRequestedPayload(t, "exec-006", "session-123", 50, 0)
 	require.NotNil(t, payload)
 
 	hist := &operatorv1.FetchHistoryRequested{}
@@ -198,8 +198,8 @@ func TestMustBuildFetchHistoryRequestedPayload(t *testing.T) {
 	require.Equal(t, int32(0), hist.Offset)
 }
 
-func TestMustBuildFetchFileHistoryRequestedPayload(t *testing.T) {
-	payload := MustBuildFetchFileHistoryRequestedPayload(t, "exec-007", "/tmp/file.txt", 20, "session-456")
+func TestBuildFetchFileHistoryRequestedPayload(t *testing.T) {
+	payload := BuildFetchFileHistoryRequestedPayload(t, "exec-007", "/tmp/file.txt", 20, "session-456")
 	require.NotNil(t, payload)
 
 	fhist := &operatorv1.FetchFileHistoryRequested{}
@@ -211,8 +211,8 @@ func TestMustBuildFetchFileHistoryRequestedPayload(t *testing.T) {
 	require.Equal(t, "session-456", fhist.OperatorSessionId)
 }
 
-func TestMustBuildFetchFileDiffRequestedPayload(t *testing.T) {
-	payload := MustBuildFetchFileDiffRequestedPayload(t, "exec-008", "/tmp/file.txt")
+func TestBuildFetchFileDiffRequestedPayload(t *testing.T) {
+	payload := BuildFetchFileDiffRequestedPayload(t, "exec-008", "/tmp/file.txt")
 	require.NotNil(t, payload)
 
 	diff := &operatorv1.FetchFileDiffRequested{}
@@ -222,8 +222,8 @@ func TestMustBuildFetchFileDiffRequestedPayload(t *testing.T) {
 	require.Equal(t, "/tmp/file.txt", diff.FilePath)
 }
 
-func TestMustBuildRestoreFileRequestedPayload(t *testing.T) {
-	payload := MustBuildRestoreFileRequestedPayload(t, "exec-009", "/tmp/file.txt", "abc123", "session-789")
+func TestBuildRestoreFileRequestedPayload(t *testing.T) {
+	payload := BuildRestoreFileRequestedPayload(t, "exec-009", "/tmp/file.txt", "abc123", "session-789")
 	require.NotNil(t, payload)
 
 	restore := &operatorv1.RestoreFileRequested{}
@@ -235,8 +235,8 @@ func TestMustBuildRestoreFileRequestedPayload(t *testing.T) {
 	require.Equal(t, "session-789", restore.OperatorSessionId)
 }
 
-func TestMustBuildAuditMsgRequestedPayload(t *testing.T) {
-	payload := MustBuildAuditMsgRequestedPayload(t, "audit message content")
+func TestBuildAuditMsgRequestedPayload(t *testing.T) {
+	payload := BuildAuditMsgRequestedPayload(t, "audit message content")
 	require.NotNil(t, payload)
 
 	audit := &operatorv1.AuditMsgRequested{}
@@ -245,8 +245,8 @@ func TestMustBuildAuditMsgRequestedPayload(t *testing.T) {
 	require.Equal(t, "audit message content", audit.Content)
 }
 
-func TestMustBuildDirectCommandAuditRequestedPayload(t *testing.T) {
-	payload := MustBuildDirectCommandAuditRequestedPayload(t, "ls", "exec-010", "session-111", "command")
+func TestBuildDirectCommandAuditRequestedPayload(t *testing.T) {
+	payload := BuildDirectCommandAuditRequestedPayload(t, "ls", "exec-010", "session-111", "command")
 	require.NotNil(t, payload)
 
 	audit := &operatorv1.DirectCommandAuditRequested{}
@@ -258,8 +258,8 @@ func TestMustBuildDirectCommandAuditRequestedPayload(t *testing.T) {
 	require.Equal(t, "command", audit.Type)
 }
 
-func TestMustBuildDirectCommandResultAuditRequestedPayload(t *testing.T) {
-	payload := MustBuildDirectCommandResultAuditRequestedPayload(t, "ls", "exec-011", "output", "stderr", 0, 1.5)
+func TestBuildDirectCommandResultAuditRequestedPayload(t *testing.T) {
+	payload := BuildDirectCommandResultAuditRequestedPayload(t, "ls", "exec-011", "output", "stderr", 0, 1.5)
 	require.NotNil(t, payload)
 
 	result := &operatorv1.DirectCommandResultAuditRequested{}
@@ -273,8 +273,8 @@ func TestMustBuildDirectCommandResultAuditRequestedPayload(t *testing.T) {
 	require.InEpsilon(t, float32(1.5), result.ExecutionTimeSeconds, 0.01)
 }
 
-func TestMustBuildHeartbeatRequestedPayload(t *testing.T) {
-	payload := MustBuildHeartbeatRequestedPayload(t)
+func TestBuildHeartbeatRequestedPayload(t *testing.T) {
+	payload := BuildHeartbeatRequestedPayload(t)
 	require.NotNil(t, payload)
 
 	hb := &operatorv1.HeartbeatRequested{}
@@ -282,8 +282,8 @@ func TestMustBuildHeartbeatRequestedPayload(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestMustBuildShutdownRequestedPayload(t *testing.T) {
-	payload := MustBuildShutdownRequestedPayload(t, "maintenance")
+func TestBuildShutdownRequestedPayload(t *testing.T) {
+	payload := BuildShutdownRequestedPayload(t, "maintenance")
 	require.NotNil(t, payload)
 
 	shutdown := &operatorv1.ShutdownRequested{}
@@ -292,9 +292,9 @@ func TestMustBuildShutdownRequestedPayload(t *testing.T) {
 	require.Equal(t, "maintenance", shutdown.Reason)
 }
 
-func TestMustMarshalGovernanceEnvelope(t *testing.T) {
+func TestMarshalGovernanceEnvelope(t *testing.T) {
 	taskID := "task-123"
-	payload := MustMarshalGovernanceEnvelope(t, "msg-001", "v1.0", "operator-1", "execute", "/tmp", "json", "{}", 3, "case-001", "inv-001", &taskID)
+	payload := MarshalGovernanceEnvelope(t, "msg-001", "v1.0", "operator-1", "execute", "/tmp", "{}", "case-001", "inv-001", &taskID)
 	require.NotNil(t, payload)
 
 	// Verify it's valid JSON
@@ -311,10 +311,10 @@ func TestMustMarshalGovernanceEnvelope(t *testing.T) {
 	require.Equal(t, "task-123", env.TaskId)
 }
 
-func TestMustMarshalGovernanceEnvelopeWithVotes(t *testing.T) {
+func TestMarshalGovernanceEnvelopeWithVotes(t *testing.T) {
 	agentIDs := []string{"agent-1", "agent-2", "agent-3"}
 	consensusSig := "sig-abc123"
-	payload := MustMarshalGovernanceEnvelopeWithVotes(t, "msg-002", "v1.0", "operator-2", "execute", "/tmp", "json", "{}", 3, agentIDs, consensusSig)
+	payload := MarshalGovernanceEnvelopeWithVotes(t, "msg-002", "v1.0", "operator-2", "execute", "/tmp", "{}", agentIDs, consensusSig)
 	require.NotNil(t, payload)
 
 	env := &governance.GovernanceEnvelope{}
@@ -329,34 +329,34 @@ func TestMustMarshalGovernanceEnvelopeWithVotes(t *testing.T) {
 	require.True(t, env.Governance.L2.Votes[0].Decision)
 }
 
-func TestMustUnmarshalGovernanceEnvelope(t *testing.T) {
+func TestUnmarshalGovernanceEnvelope(t *testing.T) {
 	taskID := "task-456"
-	payload := MustMarshalGovernanceEnvelope(t, "msg-003", "v1.0", "operator-3", "execute", "/tmp", "json", "{}", 3, "case-002", "inv-002", &taskID)
+	payload := MarshalGovernanceEnvelope(t, "msg-003", "v1.0", "operator-3", "execute", "/tmp", "{}", "case-002", "inv-002", &taskID)
 
-	env := MustUnmarshalGovernanceEnvelope(t, payload)
+	env := UnmarshalGovernanceEnvelope(t, payload)
 	require.NotNil(t, env)
 	require.Equal(t, "msg-003", env.Id)
 	require.Equal(t, "v1.0", env.ProtocolVersion)
 	require.Equal(t, "operator-3", env.OperatorId)
 }
 
-func TestMustGenerateGovernanceMessageID(t *testing.T) {
-	id := MustGenerateGovernanceMessageID(t, "execute", "/tmp", "json", "{}")
+func TestGenerateGovernanceMessageID(t *testing.T) {
+	id := GenerateGovernanceMessageID(t, "execute", "/tmp", "{}")
 	require.NotEmpty(t, id)
 
 	// Different inputs should generate different ID
-	id2 := MustGenerateGovernanceMessageID(t, "read", "/tmp", "json", "{}")
+	id2 := GenerateGovernanceMessageID(t, "read", "/tmp", "{}")
 	require.NotEqual(t, id, id2, "Different inputs should generate different IDs")
 
 	// Different target should generate different ID
-	id3 := MustGenerateGovernanceMessageID(t, "execute", "/var", "json", "{}")
+	id3 := GenerateGovernanceMessageID(t, "execute", "/var", "{}")
 	require.NotEqual(t, id, id3, "Different target should generate different IDs")
 }
 
-func TestMustMarshalGovernanceEnvelopeWithNonce(t *testing.T) {
+func TestMarshalGovernanceEnvelopeWithNonce(t *testing.T) {
 	taskID := "task-789"
 	nonce := "nonce-xyz123"
-	payload := MustMarshalGovernanceEnvelopeWithNonce(t, "msg-004", "v1.0", "operator-4", "execute", "/tmp", "json", "{}", 3, "case-003", "inv-003", &taskID, nonce)
+	payload := MarshalGovernanceEnvelopeWithNonce(t, "msg-004", "v1.0", "operator-4", "execute", "/tmp", "{}", "case-003", "inv-003", &taskID, nonce)
 	require.NotNil(t, payload)
 
 	env := &governance.GovernanceEnvelope{}
@@ -366,8 +366,8 @@ func TestMustMarshalGovernanceEnvelopeWithNonce(t *testing.T) {
 	require.Equal(t, nonce, env.Nonce)
 }
 
-func TestMustCreateGovernanceVote(t *testing.T) {
-	vote := MustCreateGovernanceVote(t, "node-1", "sig-123", true)
+func TestCreateGovernanceVote(t *testing.T) {
+	vote := CreateGovernanceVote(t, "node-1")
 	require.NotNil(t, vote)
 	require.Len(t, vote, 1)
 	require.Equal(t, "node-1", vote[0])

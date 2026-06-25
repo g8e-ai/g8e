@@ -21,7 +21,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/config"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 )
 
 func TestMCPToolsList(t *testing.T) {

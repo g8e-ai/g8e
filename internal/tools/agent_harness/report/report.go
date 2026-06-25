@@ -14,8 +14,9 @@ import (
 	"strings"
 	"time"
 
-	clientpkg "github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/client"
-	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/scenarios"
+	"github.com/g8e-ai/g8e/internal/constants"
+	clientpkg "github.com/g8e-ai/g8e/internal/tools/agent_harness/client"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 )
 
 type Report struct {
@@ -29,19 +30,19 @@ type Report struct {
 // Write emits report.json and report.md at the specified paths.
 // The directory containing jsonPath and mdPath will be created if it does not exist.
 func Write(jsonPath, mdPath string, rep Report) (string, string, error) {
-	if err := os.MkdirAll(filepath.Dir(jsonPath), 0o755); err != nil {
-		return "", "", err
+	if err := os.MkdirAll(filepath.Dir(jsonPath), constants.PermDirStandard); err != nil {
+		return "", "", fmt.Errorf("report: write: mkdir: %w", err)
 	}
 	b, err := json.MarshalIndent(rep, "", "  ")
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("report: write: marshal json: %w", err)
 	}
-	if err := os.WriteFile(jsonPath, b, 0o644); err != nil {
-		return "", "", err
+	if err := os.WriteFile(jsonPath, b, constants.PermFilePublic); err != nil {
+		return "", "", fmt.Errorf("report: write: write json: %w", err)
 	}
 
-	if err := os.WriteFile(mdPath, []byte(markdown(rep)), 0o644); err != nil {
-		return jsonPath, "", err
+	if err := os.WriteFile(mdPath, []byte(markdown(rep)), constants.PermFilePublic); err != nil {
+		return jsonPath, "", fmt.Errorf("report: write: write markdown: %w", err)
 	}
 	return jsonPath, mdPath, nil
 }
@@ -50,7 +51,7 @@ func markdown(rep Report) string {
 	var b strings.Builder
 	receiptIndex := indexReceipts(rep.Receipts)
 
-	fmt.Fprintf(&b, "# Agentic Tool Emulator run report\n\n")
+	fmt.Fprintf(&b, "# Agent Harness run report\n\n")
 	fmt.Fprintf(&b, "- Generated: %s\n", rep.GeneratedAt.Format(time.RFC3339))
 	fmt.Fprintf(&b, "- Gateway: `%s`\n", rep.Gateway)
 	fmt.Fprintf(&b, "- Operator session: `%s`\n", orNone(rep.OperatorSessionID))
@@ -115,7 +116,7 @@ func txMatch(hashes []string, idx map[string]clientpkg.Receipt) string {
 	var parts []string
 	for _, h := range hashes {
 		if _, ok := idx[h]; ok {
-			parts = append(parts, "`"+shortHash(h)+"` ✓")
+			parts = append(parts, "`"+shortHash(h)+"` matched")
 		} else {
 			parts = append(parts, "`"+shortHash(h)+"` (no receipt)")
 		}
@@ -125,9 +126,9 @@ func txMatch(hashes []string, idx map[string]clientpkg.Receipt) string {
 
 func mark(ok bool) string {
 	if ok {
-		return "✅ ok"
+		return "ok"
 	}
-	return "❌ fail"
+	return "FAIL"
 }
 
 func orNone(s string) string {

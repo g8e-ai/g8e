@@ -43,8 +43,8 @@ g8e tests are organized into three clearly defined tiers using Go build tags:
 ./g8e test e2e         # Run Tier 3 (E2E) tests - requires running gateway
 ./g8e test coverage    # Run tests with coverage report
 ./g8e test lint        # Run linting and quality checks
-./g8e agentic-tool-emulator list    # List agentic tool emulator scenarios
-./g8e agentic-tool-emulator run     # Run agentic tool emulator scenarios against real Gateway/Operator
+./g8e agent-harness list    # List agentic tool emulator scenarios
+./g8e agent-harness run     # Run agentic tool emulator scenarios against real Gateway/Operator
 ./g8e test chaos       # Generate realistic governance events for testing
 ./g8e test summary     # View chaos test summary from test vault
 ```
@@ -61,9 +61,9 @@ The CLI test commands map directly to the 3-tier test architecture:
 
 - **`./g8e test lint`** - Runs golangci-lint with modern Go best practices. This includes staticcheck, govet, and additional linters for bug prevention, security, and code quality.
 
-- **`./g8e agentic-tool-emulator list`** - Lists available agentic tool emulator scenarios with their posture requirements and personas.
+- **`./g8e agent-harness list`** - Lists available agentic tool emulator scenarios with their posture requirements and personas.
 
-- **`./g8e agentic-tool-emulator run`** - Runs agentic tool emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
+- **`./g8e agent-harness run`** - Runs agentic tool emulator scenarios against a real Gateway/Operator. Impersonates arbitrary AI tools and agents, exercising the full protocol surface (MCP, A2A, A2A protobuf, and official governance envelopes with mock consensus and principal signing), then audits every result against the Operator's signed receipts.
 
 - **`./g8e test chaos`** - Generates realistic governance events for testing. Creates a test vault with distributed event categories (70% Good Actor, 20% Prompt Injection, 10% MitM) to test governance pipeline behavior under various conditions.
 
@@ -85,12 +85,12 @@ Docker-based E2E tests that spin up gateway and operator containers using docker
 - Checks HTTPS port reachability (no mTLS)
 - Validates operator container connection
 
-### Agentic Tool Emulator
+### Agent Harness
 
 ```bash
-./g8e agentic-tool-emulator list
-./g8e agentic-tool-emulator run [scenario ...]
-./g8e agentic-tool-emulator audit
+./g8e agent-harness list
+./g8e agent-harness run [scenario ...]
+./g8e agent-harness audit
 ```
 
 The agentic tool emulator is a universal agent testing and auditing tool that impersonates arbitrary AI tools and agents against a **REAL** g8e Gateway and Operator. It serves as a protocol compliance verifier by exercising the full g8e surface while recording every exchange for detailed audit.
@@ -135,12 +135,12 @@ For consensus/notary scenarios, the agentic tool emulator uses mock cryptographi
 
 This allows testing maximal governance envelopes without requiring actual distributed consensus infrastructure.
 
-**Agentic Tool Emulator Commands**:
-- **`./g8e agentic-tool-emulator list`** - Lists available scenarios with their posture requirements and personas
-- **`./g8e agentic-tool-emulator run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
-- **`./g8e agentic-tool-emulator audit`** - Audits signed receipts from the Operator for a specific session
+**Agent Harness Commands**:
+- **`./g8e agent-harness list`** - Lists available scenarios with their posture requirements and personas
+- **`./g8e agent-harness run`** - Runs scenarios against a real Gateway/Operator with configurable mTLS, public surface, L3 mode (mock|suspend), ensemble size, and phase filtering (doctrine|notary|all)
+- **`./g8e agent-harness audit`** - Audits signed receipts from the Operator for a specific session
 
-**Agentic Tool Emulator Configuration**:
+**Agent Harness Configuration**:
 - Supports JSON config overlay for complex scenarios
 - Configurable mTLS surface, public surface, client certificates, and CA bundle
 - Operator API key authentication for MCP/A2A surface
@@ -425,7 +425,7 @@ CLI command and configuration tests:
 - `auth/operator_test.go` - Operator auth tests
 - `auth/passkey_bootstrap_test.go` - Passkey bootstrap tests
 - `auth/windows_crypto_test.go` - Windows crypto tests
-- `cmd/agentic_tool_emulator_test.go` - Agentic tool emulator command tests
+- `cmd/agent_harness_test.go` - Agentic tool emulator command tests
 - `cmd/approve_integration_test.go` - Approve command integration tests
 - `cmd/audit_integration_test.go` - Audit command integration tests
 - `cmd/audit_test.go` - Audit command tests

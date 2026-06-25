@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/tools/agentic_tool_emulator/config"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 

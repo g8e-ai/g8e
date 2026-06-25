@@ -80,7 +80,7 @@ v1.1.8 is a maintenance and stability release focused on hardening the Tribunal 
 ### Added
 
 * **Tribunal Store Hardening** — Expanded `TribunalStoreService` with additional validation logic and comprehensive unit test coverage to ensure robust policy management.
-* **Tooling Reorganization** — Centralized development and testing tools (Agentic Tool Emulator and Chaos Testing utilities) by moving them from `test/` to `internal/tools/`, improving repository structure.
+* **Tooling Reorganization** — Centralized development and testing tools (Agent Harness and Chaos Testing utilities) by moving them from `test/` to `internal/tools/`, improving repository structure.
 * **E2E Harness Enhancements** — Significantly improved the E2E test harness (`test/e2e/harness.go`) and added new gateway test fixtures to increase test stability and coverage.
 
 ### Changed
@@ -201,7 +201,7 @@ v1.1.4 is a code quality and test coverage release that significantly improves t
 
 ### Breaking Changes
 
-* **`emulator` renamed to `agentic-tool-emulator`** - The emulator CLI command and internal package are renamed to `agentic-tool-emulator` for clarity. Directory renamed from `internal/emulator` to `internal/agentic_tool_emulator`, CLI command changed from `g8e emulator` to `g8e agentic-tool-emulator`, and all references in code, documentation, and configuration files are updated accordingly.
+* **`emulator` renamed to `agent-harness`** - The emulator CLI command and internal package are renamed to `agent-harness` for clarity. Directory renamed from `internal/emulator` to `internal/agent_harness`, CLI command changed from `g8e emulator` to `g8e agent-harness`, and all references in code, documentation, and configuration files are updated accordingly.
 * **`local_http_stdio` (formerly `insecure_mcp`) mode removed** - The ungoverned local MCP node mode is removed entirely. It connected to an MCP gateway over WebSocket and executed `system.run`/`system.which` with no L1/L2/L3 verification — an unconditional governance bypass. All local MCP traffic now goes exclusively through the governed mTLS/HTTPS gateway surface (`g8e mcp stdio`). The `--local-http-stdio*` flags, `LocalHttpStdioGateway` port (18789), service package, config loader, and related constants are deleted.
 
 ### Changed
