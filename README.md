@@ -233,9 +233,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 - [Storage Architecture](docs/architecture/storage.md)
 - [Network Model](docs/architecture/network.md)
 - [Server-Sent Events](docs/architecture/sse.md)
-- [State Binding](docs/architecture/binding.md)
-- [Posture Configurations](docs/architecture/postures.md)
-- [Transaction Process](docs/architecture/transaction-process.md)
+- [Governance](docs/architecture/governance.md)
 
 #### Reference
 - [Compliance Alignment](docs/reference/compliance-alignment.md)
