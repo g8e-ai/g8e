@@ -98,16 +98,16 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 
 func TestGatewayConfig_Equality(t *testing.T) {
 	a := GatewayConfig{
-		Posture:          config.PostureDoctrine,
-		HTTPPort:         8080,
-		HTTPSPort:        8443,
-		DataDir:          "/data",
-		PKIDir:           "/pki",
-		SecretsDir:       "/secrets",
-		LogLevel:         "debug",
-		TribunalID:       "trib-1",
-		RateLimitRPS:     5.0,
-		RateLimitBurst:   10,
+		Posture:        config.PostureDoctrine,
+		HTTPPort:       8080,
+		HTTPSPort:      8443,
+		DataDir:        "/data",
+		PKIDir:         "/pki",
+		SecretsDir:     "/secrets",
+		LogLevel:       "debug",
+		TribunalID:     "trib-1",
+		RateLimitRPS:   5.0,
+		RateLimitBurst: 10,
 	}
 	b := a
 	c := a
@@ -119,9 +119,9 @@ func TestGatewayConfig_Equality(t *testing.T) {
 
 func TestGatewayConfig_PartialAssignment(t *testing.T) {
 	cfg := GatewayConfig{
-		Posture:   config.PostureNotary,
-		HTTPPort:  8080,
-		LogLevel:  "error",
+		Posture:  config.PostureNotary,
+		HTTPPort: 8080,
+		LogLevel: "error",
 	}
 
 	assert.Equal(t, config.PostureNotary, cfg.Posture)
@@ -321,8 +321,8 @@ func TestGatewayConfigToOptions_EmptyConfig(t *testing.T) {
 
 func TestGatewayConfigToOptions_CertModeMapping(t *testing.T) {
 	tests := []struct {
-		name           string
-		certMode       string
+		name             string
+		certMode         string
 		expectedCertMode string
 	}{
 		{"empty", "", ""},

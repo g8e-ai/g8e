@@ -30,6 +30,9 @@ v1.2.1 is a maintenance and stability release addressing critical routing, authe
 * **Landing Page Redirect Extra Hop** — Changed landing page redirect from `/console` to `/console/` to avoid an unnecessary extra HTTP 301 hop.
 * **SPA Approval Auto-Trigger on Sign-In** — Fixed a UX issue where landing-redirected transaction approvals would fail to auto-trigger upon login because the location hash was only evaluated once on initial page load.
 * **SPA Unnecessary Passkeys Requests** — Optimized state loading to avoid wasteful, failing requests to passkey/approval endpoints when the user is logged out.
+* **PublicRouteRegistry Excluded Prefixes** — Fixed a security issue where the broad `/api/v1/auth/passkeys` public prefix exposed mTLS-only sub-paths (register, authenticate) and JIT passkey routes as public. Added an excluded-prefixes mechanism to `PublicRouteRegistry` that protects mTLS-only sub-paths while allowing WebSessionAuth management routes to bypass mTLS.
+* **Approval Page Redirect Extra Hop** — Changed approval page redirect from `/console#approve=` to `/console/#approve=` (with trailing slash) to avoid an unnecessary extra HTTP 301 hop from Go's `http.ServeMux` auto-redirect.
+* **L3 Notary Test `ExpiresAt` Bug** — Fixed `TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser` and `RejectsInvalidSignature` tests where missing `ExpiresAt` caused zero-value time (0001-01-01) to fail the SQL query's `WHERE expires_at > now` filter, causing tests to pass for the wrong reason.
 
 ---
 

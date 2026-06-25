@@ -772,9 +772,9 @@ func TestHTTPHandler_ServeHTTP(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	h.ServeHTTP(rr, req)
-	// ServeHTTP uses buildPublicRouter which redirects "/" to "/console"
+	// ServeHTTP uses buildPublicRouter which redirects "/" to "/console/"
 	assert.Equal(t, http.StatusFound, rr.Code)
-	assert.Equal(t, "/console", rr.Header().Get("Location"))
+	assert.Equal(t, "/console/", rr.Header().Get("Location"))
 }
 
 func TestHTTPHandler_GetMCPGateway(t *testing.T) {
@@ -810,7 +810,7 @@ func TestHTTPHandler_handleLandingPage(t *testing.T) {
 
 	h.handleLandingPage(rr, req)
 	assert.Equal(t, http.StatusFound, rr.Code)
-	assert.Equal(t, "/console", rr.Header().Get("Location"))
+	assert.Equal(t, "/console/", rr.Header().Get("Location"))
 }
 
 // makeTestAppWorkloadCert returns a self-signed cert with a SPIFFE URI SAN for an app workload identity.

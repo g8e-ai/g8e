@@ -42,4 +42,3 @@ func (c *FixedClock) Now() time.Time {
 func NewFixedClock(t time.Time) *FixedClock {
 	return &FixedClock{fixed: t}
 }
-

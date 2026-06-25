@@ -221,6 +221,7 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 		ApprovalSignature:       hex.EncodeToString(sig),
 		ExpectedCertFingerprint: validFingerprint,
 		ApprovalPublicKey:       hex.EncodeToString(pubKey),
+		ExpiresAt:               time.Now().UTC().Add(1 * time.Hour),
 	}
 	err = suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 	require.NoError(t, err)
@@ -299,6 +300,7 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 		ApprovalSignature:       hex.EncodeToString(badSig),
 		ExpectedCertFingerprint: validFingerprint,
 		ApprovalPublicKey:       hex.EncodeToString(storePubKey),
+		ExpiresAt:               time.Now().UTC().Add(1 * time.Hour),
 	}
 	err = suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
 	require.NoError(t, err)

@@ -58,10 +58,10 @@ type CLISessionVerifier interface {
 // When a passkeyVerifier is configured, VerifyL3Proof dispatches based on proof type:
 // proofs with mtls_cert_fingerprint use the CLI path; all others use the passkey verifier.
 type outboundL3Notary struct {
-	suspendedStore storage.SuspendedTransactionStore
-	cliVerifier    CLISessionVerifier
+	suspendedStore  storage.SuspendedTransactionStore
+	cliVerifier     CLISessionVerifier
 	passkeyVerifier L3Notary
-	logger         *slog.Logger
+	logger          *slog.Logger
 }
 
 // NewOutboundL3Notary creates a new L3 notary for outbound mode (no CLI session verification).

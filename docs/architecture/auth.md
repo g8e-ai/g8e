@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
@@ -103,6 +103,17 @@ Web-session authenticated routes (e.g., user profile, approvals, passkey list/re
 - `/api/v1/auth/passkeys` & `/api/v1/auth/passkeys/` (matching listing and individual key revocation)
 
 This subtree-match pattern (defined with trailing slashes) ensures all nested endpoints are seamlessly guarded by the `WebSessionAuth` middleware, while the outer public/mTLS routes (like exact-match `/api/v1/users` or public browser passkey handlers) continue to resolve correctly based on Go's longest-prefix routing rules.
+
+#### Excluded Prefixes for mTLS-Protected Sub-Paths
+The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management routes (list, revoke by credential ID) and mTLS-only routes (register, authenticate). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as public, `PublicRouteRegistry` supports **excluded prefixes**:
+- `/api/v1/auth/passkeys/register` — mTLS-only passkey registration challenge/verify
+- `/api/v1/auth/passkeys/authenticate` — mTLS-only passkey authentication challenge/verify
+- `/api/v1/auth/passkeys/jit-` — JIT passkey bootstrap (excluded only when JWKS is not configured)
+
+The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes.
+
+#### Approval Page Redirect
+The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={txHash}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.
 
 #### Dual-Auth Passkey Endpoints
 To avoid circular dependency during authentication, dedicated browser-facing endpoints are registered on the public `cliPasskeyMux` with CORS support:
