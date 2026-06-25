@@ -140,10 +140,10 @@ func TestTribunalConsensus_MalformedCSR(t *testing.T) {
 
 	// Submit a malformed CSR (not a real PEM)
 	regReq := map[string]string{
-		"csr_pem":           "-----BEGIN CERTIFICATE REQUEST-----\nnot-a-valid-csr\n-----END CERTIFICATE REQUEST-----",
-		"cli_csr":           "",
+		"csr_pem":            "-----BEGIN CERTIFICATE REQUEST-----\nnot-a-valid-csr\n-----END CERTIFICATE REQUEST-----",
+		"cli_csr":            "",
 		"system_fingerprint": "fp-malformed",
-		"hostname":          "bad-host",
+		"hostname":           "bad-host",
 	}
 	regBody, _ := json.Marshal(regReq)
 	req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.PKIDevicesEnroll, bytes.NewReader(regBody))

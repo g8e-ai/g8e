@@ -157,6 +157,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.PasskeyService
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
+│   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
 │   ├── tribunal.TribunalService [SHARED]
 │   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]

@@ -77,6 +77,24 @@ The platform supports authentication via external Identity Providers (IdPs) for 
 - **JIT Provisioning**: Users are provisioned Just-In-Time (JIT) based on the JWT subject claim upon their first successful authentication, subject to platform owner authorization.
 - **Persona Mapping**: JWT roles are mapped to internal binding personas via the `PersonaService` defined in `internal/services/gateway/user_service.go:392`.
 
+### 1.5 Browser-Facing Console & L3 Passkey Brokerage
+
+The **g8e Console** (served exclusively over HTTPS at `/console`) is a zero-dependency, single-page application (SPA) that acts as the primary WebAuthn interface for L3 passkey brokerage. It consolidates all browser-facing interactions:
+- **Unified Interface**: Replaces legacy inline HTML pages across various routes with a single elegant dark-themed UI.
+- **L3 Passkey Authentication**: Provides browser-based WebAuthn registration and authentication flows, allowing users to obtain web session cookies.
+- **Interactive Approval**: Automatically intercepts OOB approval redirects from `/api/v1/approve/{txHash}` to `/console#approve={txHash}` and handles cryptographic challenge-response signature generation directly from the browser.
+- **Passkey Management**: Under `WebSessionAuth` protection, authenticated users can view their active passkeys and revoke credentials.
+
+#### L7 mTLS Enforcement Model
+To support browser-based clients that cannot hold mTLS client certificates, the HTTPS server's TLS configuration is set to `tls.VerifyClientCertIfGiven` (rather than strict `RequireAndVerifyClientCert`). Security is rigorously enforced at the application layer:
+- **Centralized Public Registry**: The `PublicRouteRegistry` explicitly allowlists routes that can bypass mTLS (e.g., `/console/`, landing/redirect page, and browser-facing passkey registration/authentication endpoints).
+- **Fail-Closed Default**: The `auth.Middleware()` acts as a strict, fail-closed gate. Any request to a non-public route that does not carry a verified mTLS certificate is immediately rejected at Layer 7.
+
+#### Dual-Auth Passkey Endpoints
+To avoid circular dependency during authentication, dedicated browser-facing endpoints are registered on the public `cliPasskeyMux` with CORS support:
+- `/api/v1/auth/passkeys/browser/authenticate/challenge` - Begins the WebAuthn challenge for browser login.
+- `/api/v1/auth/passkeys/browser/authenticate/verify` - Verifies the WebAuthn assertion and issues a secure `g8e_session` cookie on success.
+
 ---
 
 ## 2. Network Security Foundation

@@ -618,14 +618,6 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 }
 
-func TestHTTPHandler_buildRouter(t *testing.T) {
-	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
-
-	router := h.buildRouter()
-	assert.NotNil(t, router, "buildRouter should return non-nil handler")
-}
-
 func TestHTTPHandler_ServeHTTP(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
@@ -634,8 +626,9 @@ func TestHTTPHandler_ServeHTTP(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	h.ServeHTTP(rr, req)
-	// ServeHTTP uses buildRouter which includes auth middleware, so unauthenticated requests are rejected
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	// ServeHTTP uses buildPublicRouter which redirects "/" to "/console"
+	assert.Equal(t, http.StatusFound, rr.Code)
+	assert.Equal(t, "/console", rr.Header().Get("Location"))
 }
 
 func TestHTTPHandler_GetMCPGateway(t *testing.T) {
@@ -670,8 +663,8 @@ func TestHTTPHandler_handleLandingPage(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	h.handleLandingPage(rr, req)
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Body.String(), "g8e", "Landing page should contain g8e")
+	assert.Equal(t, http.StatusFound, rr.Code)
+	assert.Equal(t, "/console", rr.Header().Get("Location"))
 }
 
 // makeTestAppWorkloadCert returns a self-signed cert with a SPIFFE URI SAN for an app workload identity.

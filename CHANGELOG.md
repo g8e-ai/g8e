@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.10] - 2026-06-24
+
+### Added
+
+* **g8e Console SPA** — A zero-dependency, single-page application (HTML+CSS+JS) served over HTTPS at `/console` using Go's `embed.FS`. Acts as the unified dashboard for WebAuthn passkey registration, authentication, management, and interactive L3 transaction approval.
+* **Dual-Auth Browser Passkey Endpoints** — Added browser-specific, public endpoints (`/api/v1/auth/passkeys/browser/authenticate/challenge` and `/verify`) that permit unauthenticated WebAuthn login to obtain web sessions without carrying an mTLS client certificate.
+* **Hybrid TLS / L7 mTLS Enforcement** — Transitioned the HTTPS server TLS configuration to `tls.VerifyClientCertIfGiven`, moving the fail-closed mTLS gate to the application layer (`auth.Middleware`). All non-public routes continue to require client certificates.
+* **Passkey Management Under WebSessionAuth** — Passkey listing and revocation routes are now protected under WebSessionAuth, allowing users to safely manage their credentials.
+
+### Changed
+
+* **HTTP Port Lockdown** — Stripped non-bootstrap routes from the plain-HTTP port (`8080`), confining it exclusively to trust-establishment and CA discovery scripts. Added a catch-all redirect forcing all other requests to HTTPS (`8443`).
+* **Router Consolidation** — Fully retired the old `buildRouter()` method, merging its mTLS routes into `buildPublicRouter()`. The single unified HTTPS server now handles both mTLS operator routes and public web routes.
+* **Landing Page & Approval Redirects** — Replaced legacy inline HTML rendering for `/` and `/api/v1/approve/{txHash}` with 302 redirects to `/console` and `/console#approve={txHash}`.
+
 ## [1.1.9] - 2026-06-23
 
 ### Overview

@@ -87,9 +87,9 @@ func NewTribunalFromPolicy(
 // {prefix}{tribunalID}_{memberAppID}.key within the secrets directory.
 // This enables multi-member tribunal co-signing without sharing a single key.
 type FileKeyProvider struct {
-	secretsDir  string
-	tribunalID  string
-	keyPrefix   string
+	secretsDir string
+	tribunalID string
+	keyPrefix  string
 }
 
 // NewFileKeyProvider creates a FileKeyProvider that looks for member keys in

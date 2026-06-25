@@ -321,6 +321,127 @@ func (c *AuthController) handleCLIBrowserPasskeyRegisterVerify(w http.ResponseWr
 	})
 }
 
+// handleCLIBrowserPasskeyAuthenticateChallenge handles passkey authentication challenges for browser-based login.
+// This is a public endpoint (no auth) for browser-based passkey authentication.
+func (c *AuthController) handleCLIBrowserPasskeyAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	options, err := c.passkey.GenerateAuthenticationChallenge(req.UserID)
+	if err != nil {
+		c.logger.Warn("Browser passkey auth challenge failed", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
+			Success:    false,
+			Error:      err.Error(),
+			NeedsSetup: errors.Is(err, constants.ErrNoPasskeysRegistered),
+		})
+		return
+	}
+
+	c.responder.JSON(w, http.StatusOK, models.PasskeyChallengeResponse{
+		Success: true,
+		Options: options,
+	})
+}
+
+// handleCLIBrowserPasskeyAuthenticateVerify handles passkey authentication verification for browser-based login.
+// This is a public endpoint (no auth) for browser-based passkey authentication.
+// It creates a web session and sets a session cookie on successful authentication.
+func (c *AuthController) handleCLIBrowserPasskeyAuthenticateVerify(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
+	body, err := c.readBody(r)
+	if err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	var req struct {
+		UserID            string                            `json:"user_id"`
+		AssertionResponse *models.WebAuthnAssertionResponse `json:"assertion_response"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	if req.UserID == "" {
+		c.responder.Error(w, http.StatusBadRequest, "user_id required")
+		return
+	}
+
+	responseJSON, err := json.Marshal(req.AssertionResponse)
+	if err != nil {
+		c.logger.Warn("Failed to marshal assertion response", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   "failed to marshal assertion response",
+		})
+		return
+	}
+
+	cred, err := c.passkey.VerifyAuthentication(req.UserID, responseJSON)
+	if err != nil {
+		c.logger.Warn("Browser passkey auth verify failed", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Create web session for browser-based authentication
+	webSession, err := c.webSessionSvc.CreateWebSession(req.UserID)
+	if err != nil {
+		c.logger.Error("Failed to create web session after browser auth", "error", err, "userID", req.UserID)
+		c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+			Success: false,
+			Error:   "authentication succeeded but session creation failed",
+		})
+		return
+	}
+
+	// Set web session cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "g8e_session",
+		Value:    webSession.ID,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	c.responder.JSON(w, http.StatusOK, models.PasskeyAuthVerifyResponse{
+		Success:    true,
+		UserID:     req.UserID,
+		Credential: cred,
+	})
+}
+
 // handleCLIPasskeyAuthenticateChallenge handles passkey authentication challenges for CLI.
 // This endpoint requires mTLS authentication via CLI certificate with X-G8E-CLI-Session-ID header.
 func (c *AuthController) handleCLIPasskeyAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {

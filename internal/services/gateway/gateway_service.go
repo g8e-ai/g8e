@@ -441,20 +441,12 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		}
 	}
 
-	tlsConfig := pki.TLSConfig() // strict mTLS (RequireAndVerifyClientCert)
-
-	// Fail-closed assertion: mTLS surface MUST use RequireAndVerifyClientCert
-	// If this is downgraded to VerifyClientCertIfGiven, the execution boundary
-	// becomes an L7 check instead of a TLS-layer gate, which is a security regression.
-	if tlsConfig.ClientAuth != tls.RequireAndVerifyClientCert {
-		panic(fmt.Sprintf("gateway: mTLS port %d configured with ClientAuth=%v; must be RequireAndVerifyClientCert for fail-closed execution boundary", cfg.Gateway.HTTPPort, tlsConfig.ClientAuth))
-	}
-
-	// Each surface gets its own dedicated gateway with a TLS config that
-	// matches the surface's authentication contract. The mTLS surface MUST
-	// use RequireAndVerifyClientCert; mixing it with any non-mTLS surface
-	// on the same port would force VerifyClientCertIfGiven and downgrade
-	// the execution boundary to an L7 check.
+	// TLS verification: client certs are accepted and verified when present, but not required.
+	// mTLS enforcement for protected routes happens at the application layer via auth.Middleware(),
+	// which checks client cert presence/validity for all routes not in PublicRouteRegistry.
+	// Browser clients (console, WebAuthn flows) reach public routes without a client cert.
+	tlsConfig := pki.TLSConfig()
+	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
 	ls.server = &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Gateway.HTTPPort),
 		Handler:           ls.handler.buildHTTPRouter(),

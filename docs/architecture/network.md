@@ -66,9 +66,10 @@ Each system component receives a SPIFFE ID, embedded as a Uniform Resource Ident
 
 The g8e Gateway enforces TLS 1.3 for all L7 communication.
 
-### Strict mTLS
+### Application-Layer mTLS Enforcement
 
-- The gateway requires and verifies client certificates using `tls.RequireAndVerifyClientCert`.
+- The gateway accepts and verifies client certificates using `tls.VerifyClientCertIfGiven` at the TLS layer. This allows browser-based clients (such as the g8e Console) to connect without certificates.
+- For all non-public routes, the `auth.Middleware()` acts as a strict, fail-closed gate at the application layer, requiring a verified client certificate.
 - Revocation is checked against a database-backed revoked certificates store.
 - Middleware verifies that the SPIFFE ID in the client certificate matches the specific session identifier (such as `operator_session_id` or `cli_session_id`) inside the `GovernanceEnvelope`.
 
@@ -123,19 +124,19 @@ Windows users can enroll via the Windows Certificate Store for managed browser a
 
 ## 5. Port Topology
 
-The g8e Gateway utilizes a consolidated 2-port design to maintain the mTLS execution boundary. Surfaces with different TLS requirements are isolated by port.
+The g8e Gateway utilizes a consolidated 2-port design. Surfaces with different TLS requirements are isolated by port.
 
 Default ports are defined in `protocol/constants/ports.json`:
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Bootstrap enrollment (`/bootstrap`, `/enroll`), CA bundle discovery (`/.well-known/g8e/pki/*`), and MCP health checks. |
-| **HTTPS (mTLS API + MCP)** | `8443` (mTLS) | mTLS + URI SAN | The primary execution boundary. Includes `/api/v1/governance/envelopes`, database access, pubsub, and all governed MCP endpoints (`/mcp/*`). |
+| **HTTP (Bootstrap)** | `8080` (plain HTTP) | No TLS | Trust establishment scripts, CA discovery, and initial bootstrap. All other requests are redirected to HTTPS. |
+| **HTTPS (Merged API + Console)** | `8443` (hybrid TLS) | mTLS / WebSession / Public | The primary execution boundary. Includes the g8e Console, browser WebAuthn endpoints, and all mTLS-guarded operator API and MCP routes. |
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for initial provisioning and CA discovery. While it responds to some MCP health checks, it does NOT serve governed MCP tool routes.
-- **HTTPS Surface** (`8443`): Requires `tls.RequireAndVerifyClientCert`. This is the mandatory entry point for all governed actions. Every request must present a valid SPIFFE identity.
+- **HTTP Surface** (`8080`): Serves plain HTTP for trust scripts (`/bootstrap-ca` etc.) and initial CA bundle discovery. All other requests are redirected to HTTPS via a permanent 301 redirect.
+- **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, and WebAuthn browser endpoints) are accessible directly.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 
 ---

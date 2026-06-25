@@ -588,7 +588,7 @@ func LoadCredentials(cfg *config.Config) (*Credentials, error) {
 func PerformNativeWindowsAuth(cfg *config.Config) error {
 	retried := false
 	for {
-		slog.Info("Starting native Windows Hello authentication")
+		slog.Debug("Starting native Windows Hello authentication")
 		creds, err := LoadCredentials(cfg)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
@@ -600,17 +600,17 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 			return constants.ErrNotAuthenticated
 		}
 
-		slog.Info("Loaded credentials", "user_id", creds.UserID, "cli_session_id", creds.CLISessionID)
+		slog.Debug("Loaded credentials", "user_id", creds.UserID, "cli_session_id", creds.CLISessionID)
 
 		// Load CLI certificate for mTLS authentication
-		slog.Info("Loading CLI certificate", "path", cfg.CLICertFile())
+		slog.Debug("Loading CLI certificate", "path", cfg.CLICertFile())
 		cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 		}
 
 		// Load trust bundle for TLS verification
-		slog.Info("Loading trust bundle", "path", cfg.TrustBundleFile())
+		slog.Debug("Loading trust bundle", "path", cfg.TrustBundleFile())
 		caPEM, err := os.ReadFile(cfg.TrustBundleFile())
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
@@ -635,11 +635,11 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		client := &http.Client{Transport: transport, Timeout: httpTimeout}
 
 		gatewayURL := cfg.OperatorPublicURL()
-		slog.Info("Gateway URL", "url", gatewayURL)
+		slog.Debug("Gateway URL", "url", gatewayURL)
 
 		// 1. Get Authentication Challenge
 		challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/challenge", gatewayURL)
-		slog.Info("Requesting authentication challenge", "url", challengeURL)
+		slog.Debug("Requesting authentication challenge", "url", challengeURL)
 		reqBody, err := json.Marshal(models.PasskeyChallengeRequest{UserID: creds.UserID})
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
@@ -651,14 +651,14 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
 
-		slog.Info("Sending authentication challenge request")
+		slog.Debug("Sending authentication challenge request")
 		resp, err := client.Do(req)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 		}
 		defer resp.Body.Close()
 
-		slog.Info("Challenge response", "status", resp.StatusCode)
+		slog.Debug("Challenge response", "status", resp.StatusCode)
 		if resp.StatusCode == http.StatusOK {
 			var challengeData models.PasskeyChallengeResponse
 			if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
@@ -667,7 +667,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 
 			if !challengeData.Success {
 				if challengeData.NeedsSetup && !retried {
-					slog.Info("No passkey registered, starting registration", "user_id", creds.UserID)
+					slog.Debug("No passkey registered, starting registration", "user_id", creds.UserID)
 					if err := RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
 						return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 					}
@@ -766,7 +766,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 // RegisterPasskeyWithWindowsHello performs native passkey registration using Windows Hello APIs.
 func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID string) error {
 	gatewayURL := cfg.OperatorPublicURL()
-	slog.Info("Starting Windows Hello passkey registration", "user_id", userID, "gateway_url", gatewayURL)
+	slog.Debug("Starting Windows Hello passkey registration", "user_id", userID, "gateway_url", gatewayURL)
 
 	// Get local OS user information directly
 	localOSUser := getLocalOSUser()
@@ -774,17 +774,17 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		return constants.ErrUserNotFound
 	}
 	userName := localOSUser.Username
-	slog.Info("OS username", "username", userName)
+	slog.Debug("OS username", "username", userName)
 
 	// Load CLI certificate for mTLS authentication
-	slog.Info("Loading CLI certificate", "path", cfg.CLICertFile())
+	slog.Debug("Loading CLI certificate", "path", cfg.CLICertFile())
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Load trust bundle for TLS verification
-	slog.Info("Loading trust bundle", "path", cfg.TrustBundleFile())
+	slog.Debug("Loading trust bundle", "path", cfg.TrustBundleFile())
 	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
@@ -807,7 +807,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 
 	// 1. Get Registration Challenge
 	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", gatewayURL)
-	slog.Info("Requesting registration challenge", "url", challengeURL)
+	slog.Debug("Requesting registration challenge", "url", challengeURL)
 	reqBody, err := json.Marshal(models.PasskeyRegisterChallengeRequest{
 		UserID:   userID,
 		UserName: userName,
@@ -822,14 +822,14 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
 
-	slog.Info("Sending registration challenge request")
+	slog.Debug("Sending registration challenge request")
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
-	slog.Info("Challenge response", "status", resp.StatusCode)
+	slog.Debug("Challenge response", "status", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
 		body, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
@@ -845,7 +845,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	}
 
 	// 2. Trigger Windows Hello Registration
-	slog.Info("Triggering Windows Hello registration prompt",
+	slog.Debug("Triggering Windows Hello registration prompt",
 		"rp_id", challengeData.Options.Response.RelyingParty.ID,
 		"rp_name", challengeData.Options.Response.RelyingParty.Name)
 	// The gateway provides a base64url-encoded user ID
@@ -859,7 +859,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	if len(userIDBytes) > 64 {
 		return constants.ErrValidationFailed
 	}
-	slog.Info("Windows Hello user ID decoded", "bytes", len(userIDBytes))
+	slog.Debug("Windows Hello user ID decoded", "bytes", len(userIDBytes))
 
 	// Construct proper clientDataJSON for Windows Hello API
 	// WebAuthn requires clientDataJSON to contain: challenge, origin, type
@@ -885,7 +885,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
-	slog.Info("Windows Hello registration successful, verifying with gateway")
+	slog.Debug("Windows Hello registration successful, verifying with gateway")
 
 	// 3. Verify Registration
 	verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/verify", gatewayURL)
@@ -930,7 +930,7 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
 	}
 
-	slog.Info("Passkey registered successfully via Windows Hello")
+	slog.Debug("Passkey registered successfully via Windows Hello")
 	return nil
 }
 
