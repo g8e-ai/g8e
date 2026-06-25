@@ -74,8 +74,8 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 	}
 
 	var req struct {
-		UserID            string             `json:"user_id"`
-		AssertionResponse *AssertionResponse `json:"assertion_response"`
+		UserID            string                            `json:"user_id"`
+		AssertionResponse *models.WebAuthnAssertionResponse `json:"assertion_response"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())

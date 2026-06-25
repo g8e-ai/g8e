@@ -32,6 +32,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -44,6 +45,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/auth"
 )
+
+// httpTimeout is the default timeout for all HTTP clients in the auth package.
+const httpTimeout = 30 * time.Second
 
 type RegistrationRequest struct {
 	SystemFingerprint string `json:"system_fingerprint"`
@@ -76,6 +80,27 @@ type Credentials struct {
 	CLISessionID      string `json:"cli_session_id"`
 }
 
+// webauthnClientDataJSON is the client data JSON for WebAuthn ceremonies.
+// Named differently from the syscall struct in windows_crypto.go to avoid
+// duplicate declaration on GOOS=windows.
+type webauthnClientDataJSON struct {
+	Challenge string `json:"challenge"`
+	Origin    string `json:"origin"`
+	Type      string `json:"type"`
+}
+
+// cliAssertionVerifyRequest is the typed request for CLI passkey authentication verification.
+type cliAssertionVerifyRequest struct {
+	UserID            string                           `json:"user_id"`
+	AssertionResponse models.WebAuthnAssertionResponse `json:"assertion_response"`
+}
+
+// cliAttestationVerifyRequest is the typed request for CLI passkey registration verification.
+type cliAttestationVerifyRequest struct {
+	UserID              string                             `json:"user_id"`
+	AttestationResponse models.WebAuthnAttestationResponse `json:"attestation_response"`
+}
+
 // getLocalOSUser retrieves the current OS user information.
 func getLocalOSUser() *models.LocalOSUser {
 	currentUser, err := user.Current()
@@ -106,16 +131,8 @@ func getLocalOSUser() *models.LocalOSUser {
 	}
 }
 
-func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "PANIC in GenerateCSR: %v\n", r)
-			fmt.Fprintf(os.Stderr, "Windows CSP (Cryptographic Service Provider) error.\n")
-			fmt.Fprintf(os.Stderr, "Run PowerShell as Administrator and try again.\n")
-		}
-	}()
-
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+func GenerateCSR(commonName string) (csrPEM string, privKey *ecdsa.PrivateKey, err error) {
+	privKey, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
@@ -133,12 +150,12 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
-	csrPEM := pem.EncodeToMemory(&pem.Block{
+	csrPEMBytes := pem.EncodeToMemory(&pem.Block{
 		Type:  "CERTIFICATE REQUEST",
 		Bytes: csrBytes,
 	})
 
-	return string(csrPEM), privKey, nil
+	return string(csrPEMBytes), privKey, nil
 }
 
 // NewSecureHTTPClient creates an HTTP client bound to the Operator's CA trust bundle.
@@ -169,7 +186,7 @@ func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 		TLSClientConfig: tlsConfig,
 	}
 
-	return &http.Client{Transport: transport}, nil
+	return &http.Client{Transport: transport, Timeout: httpTimeout}, nil
 }
 
 // FetchRootCAFingerprint fetches the root CA fingerprint from the gateway.
@@ -181,7 +198,8 @@ func FetchRootCAFingerprint(cfg *config.Config, baseURL string) (string, error) 
 		discoveryURL = baseURL
 	}
 	fingerprintURL := fmt.Sprintf("%s/.well-known/g8e/pki/fingerprint", discoveryURL)
-	resp, err := http.Get(fingerprintURL)
+	client := &http.Client{Timeout: httpTimeout}
+	resp, err := client.Get(fingerprintURL)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
@@ -268,7 +286,7 @@ func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerpr
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Use plain HTTP client for bootstrap (no TLS required)
-	client := &http.Client{}
+	client := &http.Client{Timeout: httpTimeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
@@ -339,7 +357,7 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// Use plain HTTP client for enrollment (no TLS required)
-	client := &http.Client{}
+	client := &http.Client{Timeout: httpTimeout}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
@@ -380,7 +398,8 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		discoveryURL = baseURL
 	}
 	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", discoveryURL)
-	trustBundleResp, err := http.Get(trustBundleURL)
+	client := &http.Client{Timeout: httpTimeout}
+	trustBundleResp, err := client.Get(trustBundleURL)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
@@ -407,15 +426,6 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		}
 	}
 
-	// Update local trust bundle with current version from operator
-	trustBundlePath := cfg.TrustBundlePath()
-	if err := os.MkdirAll(filepath.Dir(trustBundlePath), 0755); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
-	}
-	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
-	}
-
 	// Load existing CLI certificate for mTLS
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
@@ -440,7 +450,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		TLSClientConfig: tlsConfig,
 	}
 
-	client := &http.Client{Transport: transport}
+	client = &http.Client{Transport: transport, Timeout: httpTimeout}
 
 	req := models.BootstrapRequest{
 		CSR:               operatorCSR,
@@ -492,6 +502,15 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 
 	if regResp.Error != "" {
 		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
+	}
+
+	// Write updated trust bundle only after successful mTLS enrollment
+	trustBundlePath := cfg.TrustBundlePath()
+	if err := os.MkdirAll(filepath.Dir(trustBundlePath), 0755); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+	}
+	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 
 	return &regResp, nil
@@ -564,176 +583,190 @@ func LoadCredentials(cfg *config.Config) (*Credentials, error) {
 }
 
 // PerformNativeWindowsAuth attempts to authenticate using Windows Hello without a browser.
+// Uses a bounded retry loop (max 1 retry) to avoid unbounded recursion when passkey
+// registration succeeds but subsequent authentication fails.
 func PerformNativeWindowsAuth(cfg *config.Config) error {
-	fmt.Printf("→ Starting native Windows Hello authentication...\n")
-	creds, err := LoadCredentials(cfg)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
-	}
-	if creds == nil || creds.UserID == "" {
-		return constants.ErrNotAuthenticated
-	}
-	if creds.CLISessionID == "" {
-		return constants.ErrNotAuthenticated
-	}
-
-	fmt.Printf("→ Loaded credentials - User ID: %s, CLI Session ID: %s\n", creds.UserID, creds.CLISessionID)
-
-	// Load CLI certificate for mTLS authentication
-	fmt.Printf("→ Loading CLI certificate from: %s\n", cfg.CLICertFile())
-	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
-	}
-
-	// Load trust bundle for TLS verification
-	fmt.Printf("→ Loading trust bundle from: %s\n", cfg.TrustBundleFile())
-	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
-	}
-
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caPEM) {
-		return constants.ErrCAParseFailed
-	}
-
-	// Create HTTP client with mTLS (client certificate + trust bundle)
-	tlsConfig := &tls.Config{
-		RootCAs:      caPool,
-		Certificates: []tls.Certificate{cliCert},
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	client := &http.Client{Transport: transport}
-
-	gatewayURL := cfg.OperatorPublicURL()
-	fmt.Printf("→ Gateway URL: %s\n", gatewayURL)
-
-	// 1. Get Authentication Challenge
-	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/challenge", gatewayURL)
-	fmt.Printf("→ Requesting authentication challenge from: %s\n", challengeURL)
-	reqBody, err := json.Marshal(models.PasskeyChallengeRequest{UserID: creds.UserID})
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-	req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	// Add CLI session ID header for auth middleware
-	req.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
-
-	fmt.Printf("→ Sending authentication challenge request...\n")
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
-	}
-	defer resp.Body.Close()
-
-	fmt.Printf("→ Challenge response status: %d\n", resp.StatusCode)
-	if resp.StatusCode == http.StatusOK {
-		var challengeData models.PasskeyChallengeResponse
-		if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-		}
-
-		if !challengeData.Success {
-			if challengeData.NeedsSetup {
-				fmt.Printf("No passkey registered for user %s. Starting registration...\n", creds.UserID)
-				// Use browser-based registration on all platforms (including Windows)
-				// The browser's WebAuthn API properly handles Windows Hello integration
-				if err := RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-				}
-
-				// Re-attempt authentication after registration
-				return PerformNativeWindowsAuth(cfg)
-			}
-			return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, challengeData.Error)
-		}
-
-		// 2. Trigger Windows Hello
-		origin := fmt.Sprintf("https://%s", challengeData.Options.Response.RelyingPartyID)
-		clientDataJSON := map[string]interface{}{
-			"challenge": challengeData.Options.Response.Challenge,
-			"origin":    origin,
-			"type":      "webauthn.get",
-		}
-		clientDataBytes, err := json.Marshal(clientDataJSON)
+	retried := false
+	for {
+		slog.Debug("Starting native Windows Hello authentication")
+		creds, err := LoadCredentials(cfg)
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
+			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
+		}
+		if creds == nil || creds.UserID == "" {
+			return constants.ErrNotAuthenticated
+		}
+		if creds.CLISessionID == "" {
+			return constants.ErrNotAuthenticated
 		}
 
-		assertion, err := AuthenticateWithWindowsHello(challengeData.Options.Response.RelyingPartyID, clientDataBytes)
+		slog.Debug("Loaded credentials", "user_id", creds.UserID, "cli_session_id", creds.CLISessionID)
+
+		// Load CLI certificate for mTLS authentication
+		slog.Debug("Loading CLI certificate", "path", cfg.CLICertFile())
+		cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 		if err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+			return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 		}
 
-		// 3. Verify Authentication
-		verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/verify", gatewayURL)
-		verifyReq := map[string]interface{}{
-			"user_id": creds.UserID,
-			"assertion_response": map[string]interface{}{
-				"id":                assertion.Id,
-				"rawId":             base64.RawURLEncoding.EncodeToString(assertion.RawId),
-				"clientDataJSON":    base64.RawURLEncoding.EncodeToString(clientDataBytes),
-				"authenticatorData": base64.RawURLEncoding.EncodeToString(assertion.AuthenticatorData),
-				"signature":         base64.RawURLEncoding.EncodeToString(assertion.Signature),
-				"userHandle":        base64.RawURLEncoding.EncodeToString(assertion.UserHandle),
-			},
+		// Load trust bundle for TLS verification
+		slog.Debug("Loading trust bundle", "path", cfg.TrustBundleFile())
+		caPEM, err := os.ReadFile(cfg.TrustBundleFile())
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 		}
 
-		verifyBody, _ := json.Marshal(verifyReq)
-		verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
+		caPool := x509.NewCertPool()
+		if !caPool.AppendCertsFromPEM(caPEM) {
+			return constants.ErrCAParseFailed
+		}
+
+		// Create HTTP client with mTLS (client certificate + trust bundle)
+		tlsConfig := &tls.Config{
+			RootCAs:      caPool,
+			Certificates: []tls.Certificate{cliCert},
+			MinVersion:   tls.VersionTLS13,
+		}
+
+		transport := &http.Transport{
+			TLSClientConfig: tlsConfig,
+		}
+
+		client := &http.Client{Transport: transport, Timeout: httpTimeout}
+
+		gatewayURL := cfg.OperatorPublicURL()
+		slog.Debug("Gateway URL", "url", gatewayURL)
+
+		// 1. Get Authentication Challenge
+		challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/challenge", gatewayURL)
+		slog.Debug("Requesting authentication challenge", "url", challengeURL)
+		reqBody, err := json.Marshal(models.PasskeyChallengeRequest{UserID: creds.UserID})
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+		}
+		req, err := http.NewRequest("POST", challengeURL, bytes.NewReader(reqBody))
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 		}
-		verifyReqHTTP.Header.Set("Content-Type", "application/json")
-		// Add CLI session ID header for auth middleware
-		verifyReqHTTP.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
 
-		verifyResp, err := client.Do(verifyReqHTTP)
+		slog.Debug("Sending authentication challenge request")
+		resp, err := client.Do(req)
 		if err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 		}
-		defer verifyResp.Body.Close()
+		defer resp.Body.Close()
 
-		if verifyResp.StatusCode != http.StatusOK {
-			return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
+		slog.Debug("Challenge response", "status", resp.StatusCode)
+		if resp.StatusCode == http.StatusOK {
+			var challengeData models.PasskeyChallengeResponse
+			if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+			}
+
+			if !challengeData.Success {
+				if challengeData.NeedsSetup && !retried {
+					slog.Debug("No passkey registered, starting registration", "user_id", creds.UserID)
+					if err := RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
+						return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+					}
+					retried = true
+					continue
+				}
+				return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, challengeData.Error)
+			}
+
+			// 2. Trigger Windows Hello
+			origin := fmt.Sprintf("https://%s", challengeData.Options.Response.RelyingPartyID)
+			clientData := webauthnClientDataJSON{
+				Challenge: challengeData.Options.Response.Challenge.String(),
+				Origin:    origin,
+				Type:      "webauthn.get",
+			}
+			clientDataBytes, err := json.Marshal(clientData)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
+			}
+
+			assertion, err := AuthenticateWithWindowsHello(challengeData.Options.Response.RelyingPartyID, clientDataBytes)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+			}
+
+			// 3. Verify Authentication
+			verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/verify", gatewayURL)
+			verifyReq := cliAssertionVerifyRequest{
+				UserID: creds.UserID,
+				AssertionResponse: models.WebAuthnAssertionResponse{
+					ID:                assertion.Id,
+					RawID:             base64.RawURLEncoding.EncodeToString(assertion.RawId),
+					ClientDataJSON:    base64.RawURLEncoding.EncodeToString(clientDataBytes),
+					AuthenticatorData: base64.RawURLEncoding.EncodeToString(assertion.AuthenticatorData),
+					Signature:         base64.RawURLEncoding.EncodeToString(assertion.Signature),
+					UserHandle:        base64.RawURLEncoding.EncodeToString(assertion.UserHandle),
+				},
+			}
+
+			verifyBody, err := json.Marshal(verifyReq)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+			}
+			verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
+			}
+			verifyReqHTTP.Header.Set("Content-Type", "application/json")
+			verifyReqHTTP.Header.Set("X-G8E-CLI-Session-ID", creds.CLISessionID)
+
+			verifyResp, err := client.Do(verifyReqHTTP)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+			}
+			defer verifyResp.Body.Close()
+
+			if verifyResp.StatusCode != http.StatusOK {
+				verifyBody, readErr := io.ReadAll(verifyResp.Body)
+				if readErr != nil {
+					return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
+				}
+				var errResp struct {
+					Error string `json:"error"`
+				}
+				if json.Unmarshal(verifyBody, &errResp) == nil && errResp.Error != "" {
+					return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, errResp.Error)
+				}
+				return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
+			}
+
+			var verifyResult struct {
+				Success bool   `json:"success"`
+				Error   string `json:"error"`
+			}
+			if err := json.NewDecoder(verifyResp.Body).Decode(&verifyResult); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+			}
+
+			if !verifyResult.Success {
+				return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, verifyResult.Error)
+			}
+
+			return nil
 		}
 
-		var verifyResult struct {
-			Success bool   `json:"success"`
-			Error   string `json:"error"`
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 		}
-		if err := json.NewDecoder(verifyResp.Body).Decode(&verifyResult); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-		}
-
-		if !verifyResult.Success {
-			return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, verifyResult.Error)
-		}
-
-		return nil
+		slog.Error("Challenge request failed", "status", resp.StatusCode, "body", string(body))
+		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
-
-	body, _ := io.ReadAll(resp.Body)
-	fmt.Printf("→ Challenge request failed - Response body: %s\n", string(body))
-	return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 }
 
 // RegisterPasskeyWithWindowsHello performs native passkey registration using Windows Hello APIs.
 func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID string) error {
 	gatewayURL := cfg.OperatorPublicURL()
-	fmt.Printf("→ Starting Windows Hello passkey registration for user %s\n", userID)
-	fmt.Printf("→ Gateway URL: %s\n", gatewayURL)
-	fmt.Printf("→ CLI Session ID: %s\n", cliSessionID)
+	slog.Debug("Starting Windows Hello passkey registration", "user_id", userID, "gateway_url", gatewayURL)
 
 	// Get local OS user information directly
 	localOSUser := getLocalOSUser()
@@ -741,17 +774,17 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		return constants.ErrUserNotFound
 	}
 	userName := localOSUser.Username
-	fmt.Printf("→ OS username: %s\n", userName)
+	slog.Debug("OS username", "username", userName)
 
 	// Load CLI certificate for mTLS authentication
-	fmt.Printf("→ Loading CLI certificate from: %s\n", cfg.CLICertFile())
+	slog.Debug("Loading CLI certificate", "path", cfg.CLICertFile())
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Load trust bundle for TLS verification
-	fmt.Printf("→ Loading trust bundle from: %s\n", cfg.TrustBundleFile())
+	slog.Debug("Loading trust bundle", "path", cfg.TrustBundleFile())
 	caPEM, err := os.ReadFile(cfg.TrustBundleFile())
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
@@ -767,11 +800,14 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 		Certificates: []tls.Certificate{cliCert},
 		MinVersion:   tls.VersionTLS13,
 	}
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}
+	client := &http.Client{
+		Transport: &http.Transport{TLSClientConfig: tlsConfig},
+		Timeout:   httpTimeout,
+	}
 
 	// 1. Get Registration Challenge
 	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", gatewayURL)
-	fmt.Printf("→ Requesting registration challenge from: %s\n", challengeURL)
+	slog.Debug("Requesting registration challenge", "url", challengeURL)
 	reqBody, err := json.Marshal(models.PasskeyRegisterChallengeRequest{
 		UserID:   userID,
 		UserName: userName,
@@ -786,50 +822,36 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-G8E-CLI-Session-ID", cliSessionID)
 
-	// Reuse the existing mTLS client for registration challenge
-	fmt.Printf("→ Sending registration challenge request...\n")
+	slog.Debug("Sending registration challenge request")
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
-	fmt.Printf("→ Challenge response status: %d\n", resp.StatusCode)
+	slog.Debug("Challenge response", "status", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("→ Challenge response body: %s\n", string(body))
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
+		}
+		slog.Error("Challenge response error", "status", resp.StatusCode, "body", string(body))
 		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
-	var challengeData struct {
-		Success bool `json:"success"`
-		Options struct {
-			PublicKey struct {
-				Challenge    string `json:"challenge"`
-				RelyingParty struct {
-					ID   string `json:"id"`
-					Name string `json:"name"`
-				} `json:"rp"`
-				User struct {
-					ID          string `json:"id"`
-					Name        string `json:"name"`
-					DisplayName string `json:"displayName"`
-				} `json:"user"`
-			} `json:"publicKey"`
-		} `json:"options"`
-	}
+	var challengeData models.PasskeyRegisterChallengeResponse
 	if err := json.NewDecoder(resp.Body).Decode(&challengeData); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	// 2. Trigger Windows Hello Registration
-	fmt.Printf("→ Triggering Windows Hello registration prompt...\n")
-	fmt.Printf("→ Relying Party ID: %s\n", challengeData.Options.PublicKey.RelyingParty.ID)
-	fmt.Printf("→ Relying Party Name: %s\n", challengeData.Options.PublicKey.RelyingParty.Name)
+	slog.Debug("Triggering Windows Hello registration prompt",
+		"rp_id", challengeData.Options.Response.RelyingParty.ID,
+		"rp_name", challengeData.Options.Response.RelyingParty.Name)
 	// The gateway provides a base64url-encoded user ID
 	// Windows Hello API expects raw bytes for the user ID, so we need to decode it
 	// Windows Hello requires user ID to be 1-64 bytes per WEBAUTHN_MAX_USER_ID_LENGTH
-	userIDBase64 := challengeData.Options.PublicKey.User.ID
+	userIDBase64, _ := challengeData.Options.Response.User.ID.(string)
 	userIDBytes, err := base64.RawURLEncoding.DecodeString(userIDBase64)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
@@ -837,47 +859,50 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	if len(userIDBytes) > 64 {
 		return constants.ErrValidationFailed
 	}
-	fmt.Printf("→ Windows Hello user ID (decoded): %x (%d bytes)\n", userIDBytes, len(userIDBytes))
+	slog.Debug("Windows Hello user ID decoded", "bytes", len(userIDBytes))
 
 	// Construct proper clientDataJSON for Windows Hello API
 	// WebAuthn requires clientDataJSON to contain: challenge, origin, type
-	origin := fmt.Sprintf("https://%s", challengeData.Options.PublicKey.RelyingParty.ID)
-	clientDataJSON := map[string]interface{}{
-		"challenge": challengeData.Options.PublicKey.Challenge,
-		"origin":    origin,
-		"type":      "webauthn.create",
+	origin := fmt.Sprintf("https://%s", challengeData.Options.Response.RelyingParty.ID)
+	clientData := webauthnClientDataJSON{
+		Challenge: challengeData.Options.Response.Challenge.String(),
+		Origin:    origin,
+		Type:      "webauthn.create",
 	}
-	clientDataBytes, err := json.Marshal(clientDataJSON)
+	clientDataBytes, err := json.Marshal(clientData)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
 	attestation, err := RegisterWithWindowsHello(
-		challengeData.Options.PublicKey.RelyingParty.ID,
-		challengeData.Options.PublicKey.RelyingParty.Name,
+		challengeData.Options.Response.RelyingParty.ID,
+		challengeData.Options.Response.RelyingParty.Name,
 		userIDBytes,
-		challengeData.Options.PublicKey.User.Name,
+		challengeData.Options.Response.User.Name,
 		clientDataBytes,
 	)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 	}
 
-	fmt.Printf("→ Windows Hello registration successful, verifying with gateway...\n")
+	slog.Debug("Windows Hello registration successful, verifying with gateway")
 
 	// 3. Verify Registration
 	verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/verify", gatewayURL)
-	verifyReq := map[string]interface{}{
-		"user_id": userID,
-		"attestation_response": map[string]interface{}{
-			"id":                attestation.Id,
-			"rawId":             base64.RawURLEncoding.EncodeToString(attestation.RawId),
-			"clientDataJSON":    base64.RawURLEncoding.EncodeToString(clientDataBytes),
-			"attestationObject": base64.RawURLEncoding.EncodeToString(attestation.AttestationObject),
+	verifyReq := cliAttestationVerifyRequest{
+		UserID: userID,
+		AttestationResponse: models.WebAuthnAttestationResponse{
+			ID:                attestation.Id,
+			RawID:             base64.RawURLEncoding.EncodeToString(attestation.RawId),
+			ClientDataJSON:    base64.RawURLEncoding.EncodeToString(clientDataBytes),
+			AttestationObject: base64.RawURLEncoding.EncodeToString(attestation.AttestationObject),
 		},
 	}
 
-	verifyBody, _ := json.Marshal(verifyReq)
+	verifyBody, err := json.Marshal(verifyReq)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
+	}
 	verifyReqHTTP, err := http.NewRequest("POST", verifyURL, bytes.NewReader(verifyBody))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
@@ -892,10 +917,20 @@ func RegisterPasskeyWithWindowsHello(cfg *config.Config, userID, cliSessionID st
 	defer verifyResp.Body.Close()
 
 	if verifyResp.StatusCode != http.StatusOK {
+		verifyBody, readErr := io.ReadAll(verifyResp.Body)
+		if readErr != nil {
+			return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
+		}
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(verifyBody, &errResp) == nil && errResp.Error != "" {
+			return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, errResp.Error)
+		}
 		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, verifyResp.StatusCode)
 	}
 
-	fmt.Println("✓ Passkey registered successfully via Windows Hello!")
+	slog.Debug("Passkey registered successfully via Windows Hello")
 	return nil
 }
 
@@ -957,12 +992,15 @@ func CheckOperatorRunning(cfg *config.Config) error {
 
 func CheckOperatorRunningAtURL(operatorURL string) error {
 	// Parse the URL to extract host:port
-	parts := strings.Split(operatorURL, "://")
-	if len(parts) != 2 {
+	parsedURL, err := url.Parse(operatorURL)
+	if err != nil {
 		return fmt.Errorf("%w: %s", constants.ErrGatewayURLRequired, operatorURL)
 	}
 
-	hostPort := parts[1]
+	hostPort := parsedURL.Host
+	if hostPort == "" {
+		return fmt.Errorf("%w: %s", constants.ErrGatewayURLRequired, operatorURL)
+	}
 	// Force IPv4 by replacing localhost with 127.0.0.1 to prevent IPv6 resolution
 	if strings.HasPrefix(hostPort, "localhost:") {
 		hostPort = "127.0.0.1" + hostPort[9:]
@@ -986,11 +1024,10 @@ func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 		discoveryURL = baseURL
 	}
 	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", discoveryURL)
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: httpTimeout}
+	resp, err := client.Get(url)
 	if err != nil {
-		// If Operator is not reachable, we cannot confirm bootstrap status
-		// Return false (not bootstrapped) without error to allow tests to proceed
-		return false, nil
+		return false, fmt.Errorf("%w: %w", constants.ErrServiceUnavailable, err)
 	}
 	defer resp.Body.Close()
 
@@ -1154,7 +1191,7 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	// For initial enrollment without mTLS, use plain HTTP client
-	client := &http.Client{}
+	client := &http.Client{Timeout: httpTimeout}
 
 	resp, err := client.Do(httpReq)
 	if err != nil {

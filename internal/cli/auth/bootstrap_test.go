@@ -637,10 +637,10 @@ func TestCheckBootstrapStatus_HTTPError(t *testing.T) {
 		Paths:          &config.PathsConfig{},
 	}
 
-	// When gateway is not reachable, CheckBootstrapStatus returns false without error
-	bootstrapped, err := CheckBootstrapStatus(cfg, "")
-	require.NoError(t, err)
-	assert.False(t, bootstrapped)
+	// When gateway is not reachable, CheckBootstrapStatus returns the connection error
+	_, err := CheckBootstrapStatus(cfg, "")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrServiceUnavailable)
 }
 
 func TestCheckBootstrapStatus_InvalidJSON(t *testing.T) {

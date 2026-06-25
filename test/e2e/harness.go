@@ -205,9 +205,56 @@ func (f *DockerE2EFixture) CheckOperatorContainer(t *testing.T) {
 	require.Equal(t, "running", status, "Operator container is not running")
 
 	// Check logs for connection success marker
+	logs := f.OperatorLogs(t)
+	require.Contains(t, logs, "Authentication successful", "Operator logs do not contain authentication success marker")
+}
+
+// OperatorLogs returns the combined stdout/stderr logs of the operator container.
+// This is a black-box observation helper — it only reads container logs, never
+// accesses files inside the container or opens mTLS connections from the test process.
+func (f *DockerE2EFixture) OperatorLogs(t *testing.T) string {
+	t.Helper()
+
+	opContainerName := f.ContainerPrefix + "-operator"
 	logsCmd := exec.Command("docker", "logs", opContainerName)
 	logsOutput, err := logsCmd.CombinedOutput()
 	require.NoError(t, err, "Failed to get operator logs")
-	logs := string(logsOutput)
-	require.Contains(t, logs, "Authentication successful", "Operator logs do not contain authentication success marker")
+	return string(logsOutput)
+}
+
+// RestartOperator restarts the operator container and waits for it to become
+// healthy again by polling the gateway health endpoint. This is a black-box
+// helper — it uses `docker restart` and HTTP health checks only, no in-container
+// file access or mTLS from the test process.
+func (f *DockerE2EFixture) RestartOperator(t *testing.T) {
+	t.Helper()
+
+	opContainerName := f.ContainerPrefix + "-operator"
+
+	t.Logf("Restarting operator container: %s", opContainerName)
+	restartCmd := exec.Command("docker", "restart", opContainerName)
+	restartOutput, err := restartCmd.CombinedOutput()
+	require.NoError(t, err, "Failed to restart operator container: %s", string(restartOutput))
+
+	// Wait for operator to re-authenticate by checking logs for the auth success marker
+	client := &http.Client{Timeout: 2 * time.Second}
+	require.Eventually(t, func() bool {
+		// Verify gateway is still healthy
+		resp, err := client.Get(f.GatewayHTTPURL + "/api/v1/health")
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+
+		// Check operator logs for re-authentication
+		logsCmd := exec.Command("docker", "logs", "--since", "10s", opContainerName)
+		logsOutput, err := logsCmd.CombinedOutput()
+		if err != nil {
+			return false
+		}
+		return strings.Contains(string(logsOutput), "Authentication successful")
+	}, 120*time.Second, 2*time.Second, "Operator did not re-authenticate within 120s after restart")
 }

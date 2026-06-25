@@ -61,6 +61,8 @@ type startConfig struct {
 	IdentityData       []byte
 	TribunalID         string
 	TribunalURL        string
+	MCPDownstreamURL   string
+	A2ADownstreamURL   string
 }
 
 // resolveStartConfig resolves environment variable overrides and defaults for gateway start.
@@ -172,6 +174,8 @@ func gatewayStartCmd() *cobra.Command {
 	var certIdentityMode string
 	var tribunalID string
 	var tribunalURL string
+	var mcpDownstreamURL string
+	var a2aDownstreamURL string
 	var follow bool
 
 	cmd := &cobra.Command{
@@ -216,6 +220,8 @@ func gatewayStartCmd() *cobra.Command {
 				CertIdentityMode:   certIdentityMode,
 				TribunalID:         tribunalID,
 				TribunalURL:        tribunalURL,
+				MCPDownstreamURL:   mcpDownstreamURL,
+				A2ADownstreamURL:   a2aDownstreamURL,
 			})
 
 			// Detect and display network identity before prompting
@@ -256,6 +262,8 @@ func gatewayStartCmd() *cobra.Command {
 				IdentityData:       identityResult.IdentityData,
 				TribunalID:         startCfg.TribunalID,
 				TribunalURL:        startCfg.TribunalURL,
+				MCPDownstreamURL:   startCfg.MCPDownstreamURL,
+				A2ADownstreamURL:   startCfg.A2ADownstreamURL,
 			}); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
@@ -337,6 +345,8 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().StringVar(&certIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
 	cmd.Flags().StringVar(&tribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
 	cmd.Flags().StringVar(&tribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
+	cmd.Flags().StringVar(&mcpDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
+	cmd.Flags().StringVar(&a2aDownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output after starting (like tail -f)")
 
 	return cmd
@@ -361,6 +371,8 @@ func gatewayServeCmd() *cobra.Command {
 	var networkIdentityFile string
 	var tribunalID string
 	var tribunalURL string
+	var mcpDownstreamURL string
+	var a2aDownstreamURL string
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -392,6 +404,8 @@ func gatewayServeCmd() *cobra.Command {
 				NetworkIdentityFile: networkIdentityFile,
 				TribunalID:          tribunalID,
 				TribunalURL:         tribunalURL,
+				MCPDownstreamURL:    mcpDownstreamURL,
+				A2ADownstreamURL:    a2aDownstreamURL,
 			}
 
 			// Run gateway (this blocks until shutdown)
@@ -418,6 +432,8 @@ func gatewayServeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&networkIdentityFile, "network-identity-file", "", "Path to network identity JSON file (for cert mode)")
 	cmd.Flags().StringVar(&tribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
 	cmd.Flags().StringVar(&tribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
+	cmd.Flags().StringVar(&mcpDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
+	cmd.Flags().StringVar(&a2aDownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
 
 	return cmd
 }

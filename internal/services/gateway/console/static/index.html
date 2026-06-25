@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>g8e Console</title>
+<style>
+:root {
+  --bg:      #0d1117;
+  --surface: #161b22;
+  --border:  #30363d;
+  --text:    #c9d1d9;
+  --muted:   #8b949e;
+  --accent:  #58a6ff;
+  --success: #3fb950;
+  --warning: #d29922;
+  --danger:  #f85149;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.5;
+  min-height: 100vh; display: flex; flex-direction: column;
+}
+header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 24px; border-bottom: 1px solid var(--border); background: var(--surface);
+}
+header h1 { font-size: 1.1rem; font-weight: 600; color: var(--accent); }
+header .user { font-size: 0.85rem; color: var(--muted); }
+main { flex: 1; padding: 24px; max-width: 720px; margin: 0 auto; width: 100%; }
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 20px; margin-bottom: 16px;
+}
+.card h2 { font-size: 0.95rem; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+.row { display: flex; gap: 12px; flex-wrap: wrap; }
+.stat {
+  flex: 1; min-width: 140px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 14px; text-align: center;
+}
+.stat .num { font-size: 1.5rem; font-weight: 700; }
+.stat .label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+.btn {
+  display: inline-block; padding: 8px 18px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); cursor: pointer; font-size: 0.85rem;
+  transition: background 0.15s; text-decoration: none;
+}
+.btn:hover { background: var(--border); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { opacity: 0.85; }
+.btn-danger { border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-sm { padding: 4px 10px; font-size: 0.75rem; }
+.input {
+  width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 0.85rem; margin-bottom: 10px;
+}
+.input:focus { outline: none; border-color: var(--accent); }
+.msg { padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-top: 10px; display: none; }
+.msg-success { background: #12261a; border: 1px solid var(--success); color: var(--success); }
+.msg-error { background: #261212; border: 1px solid var(--danger); color: var(--danger); }
+.msg-info { background: #121a26; border: 1px solid var(--accent); color: var(--accent); }
+.list-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem;
+}
+.list-item:last-child { border-bottom: none; }
+.mono { font-family: monospace; font-size: 0.8rem; color: var(--muted); word-break: break-all; }
+footer { text-align: center; padding: 16px; color: var(--muted); font-size: 0.75rem; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <h1>g8e Console</h1>
+  <span class="user" id="userDisplay"></span>
+</header>
+<main id="main"></main>
+<footer>g8e Gateway &copy; 2026 Lateralus Labs, LLC.</footer>
+<script>
+var user = null, passkeys = [], approvals = [], health = null;
+
+function b64urlToBuf(s) {
+  s = s.replace(/-/g,'+').replace(/_/g,'/');
+  var r = atob(s), b = new Uint8Array(r.length);
+  for (var i = 0; i < r.length; i++) b[i] = r.charCodeAt(i);
+  return b.buffer;
+}
+function bufToB64url(b) {
+  var a = new Uint8Array(b), s = '';
+  for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+function el(tag, attrs) {
+  var e = document.createElement(tag);
+  if (attrs) Object.keys(attrs).forEach(function(k) { if (attrs[k] != null) e[k] = attrs[k]; });
+  for (var i = 2; i < arguments.length; i++) {
+    var c = arguments[i];
+    if (c != null) e.append(typeof c === 'string' ? document.createTextNode(c) : c);
+  }
+  return e;
+}
+function showMsg(cls, text) {
+  var m = document.getElementById('msg'); if (!m) return;
+  m.className = 'msg msg-' + cls; m.textContent = text; m.style.display = 'block';
+}
+
+async function api(path, opts) {
+  opts = opts || {};
+  var r = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts));
+  if (r.status === 401) { user = null; render(); return null; }
+  return r;
+}
+async function loadState() {
+  try {
+    var uid = user ? user.id : '';
+    var results = await Promise.all([
+      api('/api/v1/users/me'),
+      api('/api/v1/auth/passkeys?user_id=' + uid),
+      api('/api/v1/approvals'),
+      api('/api/v1/health')
+    ]);
+    if (results[0] && results[0].ok) { var d = await results[0].json(); user = d.user || d; }
+    else user = null;
+    if (results[1] && results[1].ok) { var pd = await results[1].json(); passkeys = pd.credentials || []; }
+    if (results[2] && results[2].ok) { var ad = await results[2].json(); approvals = ad.transactions || []; }
+    if (results[3] && results[3].ok) health = await results[3].json();
+  } catch (e) { user = null; }
+}
+
+async function registerPasskey() {
+  var uidEl = document.getElementById('regUserId');
+  var unameEl = document.getElementById('regUserName');
+  var uid = uidEl ? uidEl.value.trim() : '';
+  var uname = unameEl ? unameEl.value.trim() : '';
+  if (!uid) { showMsg('error', 'User ID required'); return; }
+
+  var cr = await fetch('/api/v1/auth/passkeys/cli-browser-register/challenge', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ user_id: uid, user_name: uname || uid, cli_session_id: 'browser' })
+  });
+  var cd = await cr.json();
+  if (!cd.success) { showMsg('error', cd.error || 'Challenge failed'); return; }
+
+  var pk = cd.options.publicKey;
+  pk.challenge = b64urlToBuf(pk.challenge);
+  pk.user.id = b64urlToBuf(pk.user.id);
+  if (pk.excludeCredentials) pk.excludeCredentials.forEach(function(c) { c.id = b64urlToBuf(c.id); });
+
+  showMsg('info', 'Follow your browser prompt to register your passkey...');
+  var cred = await navigator.credentials.create({ publicKey: pk });
+
+  var vr = await fetch('/api/v1/auth/passkeys/cli-browser-register/verify', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      user_id: uid, cli_session_id: 'browser',
+      attestation_response: {
+        id: cred.id, rawId: bufToB64url(cred.rawId),
+        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+        attestationObject: bufToB64url(cred.response.attestationObject),
+        transports: cred.response.getTransports ? cred.response.getTransports() : []
+      }
+    })
+  });
+  var vd = await vr.json();
+  if (vd.success) { await loadState(); render(); }
+  else showMsg('error', vd.error || 'Registration failed');
+}
+
+async function authenticatePasskey() {
+  var uidEl = document.getElementById('loginUserId');
+  var uid = uidEl ? uidEl.value.trim() : '';
+  if (!uid) { showMsg('error', 'User ID required'); return; }
+
+  var cr = await fetch('/api/v1/auth/passkeys/browser/authenticate/challenge', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ user_id: uid })
+  });
+  var cd = await cr.json();
+  if (!cd.success) { showMsg('error', cd.error || 'Challenge failed'); return; }
+
+  var pk = cd.options.publicKey;
+  pk.challenge = b64urlToBuf(pk.challenge);
+  if (pk.allowCredentials) pk.allowCredentials.forEach(function(c) { c.id = b64urlToBuf(c.id); });
+
+  showMsg('info', 'Follow your browser prompt to sign in...');
+  var assertion = await navigator.credentials.get({ publicKey: pk });
+
+  var vr = await fetch('/api/v1/auth/passkeys/browser/authenticate/verify', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      user_id: uid,
+      assertion_response: {
+        id: assertion.id, rawId: bufToB64url(assertion.rawId),
+        clientDataJSON: bufToB64url(assertion.response.clientDataJSON),
+        authenticatorData: bufToB64url(assertion.response.authenticatorData),
+        signature: bufToB64url(assertion.response.signature),
+        userHandle: assertion.response.userHandle ? bufToB64url(assertion.response.userHandle) : null
+      }
+    })
+  });
+  var vd = await vr.json();
+  if (vd.success) { await loadState(); render(); }
+  else showMsg('error', vd.error || 'Authentication failed');
+}
+
+async function approveTransaction(txHash) {
+  var cr = await api('/api/v1/approvals/' + txHash + '/challenge');
+  if (!cr || !cr.ok) { showMsg('error', 'Failed to get approval challenge'); return; }
+  var cd = await cr.json();
+
+  var pk = cd.publicKey;
+  pk.challenge = b64urlToBuf(pk.challenge);
+  if (pk.allowCredentials) pk.allowCredentials.forEach(function(c) { c.id = b64urlToBuf(c.id); });
+
+  showMsg('info', 'Follow your browser prompt to approve...');
+  var assertion = await navigator.credentials.get({ publicKey: pk });
+
+  var vr = await api('/api/v1/approvals/' + txHash + '/verify', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      id: assertion.id, rawId: bufToB64url(assertion.rawId),
+      clientDataJSON: bufToB64url(assertion.response.clientDataJSON),
+      authenticatorData: bufToB64url(assertion.response.authenticatorData),
+      signature: bufToB64url(assertion.response.signature),
+      userHandle: assertion.response.userHandle ? bufToB64url(assertion.response.userHandle) : null
+    })
+  });
+  if (vr && vr.ok) { showMsg('success', 'Transaction approved!'); await loadState(); render(); }
+  else { var ed = vr ? await vr.json() : {}; showMsg('error', ed.error || 'Approval failed'); }
+}
+
+async function revokePasskey(credId) {
+  if (!confirm('Revoke this passkey?')) return;
+  var r = await api('/api/v1/auth/passkeys/' + encodeURIComponent(credId) + '?user_id=' + user.id, { method: 'DELETE' });
+  if (r && r.ok) { await loadState(); render(); }
+  else showMsg('error', 'Failed to revoke passkey');
+}
+
+async function signOut() {
+  await api('/api/v1/auth/logout', { method: 'POST' });
+  user = null; passkeys = []; approvals = []; render();
+}
+
+function render() {
+  var m = document.getElementById('main');
+  var ud = document.getElementById('userDisplay');
+  m.innerHTML = '';
+
+  if (!user) {
+    ud.textContent = '';
+    m.appendChild(el('div', {className:'card'},
+      el('h2', null, 'Sign In'),
+      el('input', {className:'input', id:'loginUserId', placeholder:'User ID', type:'text'}),
+      el('div', {className:'row'},
+        el('button', {className:'btn btn-primary', onclick: authenticatePasskey}, 'Sign In with Passkey'),
+        el('button', {className:'btn', onclick: function() {
+          document.getElementById('regSection').style.display = 'block';
+        }}, 'Register Passkey')
+      ),
+      el('div', {id:'msg'})
+    ));
+    m.appendChild(el('div', {className:'card', id:'regSection', style:'display:none'},
+      el('h2', null, 'Register New Passkey'),
+      el('input', {className:'input', id:'regUserId', placeholder:'User ID', type:'text'}),
+      el('input', {className:'input', id:'regUserName', placeholder:'Display Name (optional)', type:'text'}),
+      el('button', {className:'btn btn-primary', onclick: registerPasskey}, 'Register')
+    ));
+    return;
+  }
+
+  ud.textContent = (user.email || user.name || user.id || 'User');
+  var v = health ? (health.version || '') : '';
+
+  m.appendChild(el('div', {className:'row'},
+    el('div', {className:'stat'}, el('div', {className:'num', style:'color:var(--accent)'}, '' + passkeys.length), el('div', {className:'label'}, 'Passkeys')),
+    el('div', {className:'stat'}, el('div', {className:'num', style:'color:' + (approvals.length ? 'var(--warning)' : 'var(--muted)')}, '' + approvals.length), el('div', {className:'label'}, 'Pending Approvals')),
+    el('div', {className:'stat'}, el('div', {className:'num', style:'color:var(--success)'}, v || '\u2014'), el('div', {className:'label'}, 'Version'))
+  ));
+
+  var pkCard = el('div', {className:'card'}, el('h2', null, 'Passkeys'));
+  if (passkeys.length) {
+    passkeys.forEach(function(p) {
+      pkCard.appendChild(el('div', {className:'list-item'},
+        el('span', {className:'mono'}, (p.id && typeof p.id === 'string' ? p.id.slice(0,16) : '') + '...'),
+        el('button', {className:'btn btn-danger btn-sm', onclick: function() { revokePasskey(p.id); }}, 'Revoke')
+      ));
+    });
+  } else {
+    pkCard.appendChild(el('div', {style:'color:var(--muted);font-size:0.85rem'}, 'No passkeys registered'));
+  }
+  pkCard.appendChild(el('button', {className:'btn btn-primary', style:'margin-top:12px', onclick: function() {
+    document.getElementById('regSection2').style.display = 'block';
+  }}, '+ Register New Passkey'));
+  pkCard.appendChild(el('div', {id:'regSection2', style:'display:none;margin-top:12px'},
+    el('input', {className:'input', id:'regUserId2', placeholder:'User ID', type:'text', value: user.id || ''}),
+    el('input', {className:'input', id:'regUserName2', placeholder:'Display Name (optional)', type:'text'}),
+    el('button', {className:'btn btn-primary', onclick: function() {
+      document.getElementById('regUserId').value = document.getElementById('regUserId2').value;
+      document.getElementById('regUserName').value = document.getElementById('regUserName2').value;
+      registerPasskey();
+    }}, 'Register')
+  ));
+  m.appendChild(pkCard);
+
+  var appCard = el('div', {className:'card'}, el('h2', null, 'Pending Approvals'));
+  if (approvals.length) {
+    approvals.forEach(function(a) {
+      appCard.appendChild(el('div', {className:'list-item'},
+        el('div', null, el('div', null, a.tool_name || 'Transaction'), el('div', {className:'mono'}, (a.transaction_hash || '').slice(0,24) + '...')),
+        el('button', {className:'btn btn-primary btn-sm', onclick: function() { approveTransaction(a.transaction_hash); }}, 'Approve')
+      ));
+    });
+  } else {
+    appCard.appendChild(el('div', {style:'color:var(--muted);font-size:0.85rem'}, 'No pending approvals'));
+  }
+  m.appendChild(appCard);
+
+  m.appendChild(el('div', {className:'card'},
+    el('h2', null, 'Account'),
+    el('button', {className:'btn btn-danger', onclick: signOut}, 'Sign Out')
+  ));
+  m.appendChild(el('div', {id:'msg'}));
+}
+
+(async function() {
+  await loadState();
+  render();
+  var params = new URLSearchParams(location.hash.slice(1));
+  var txHash = params.get('approve');
+  if (txHash && user) { approveTransaction(txHash); }
+})();
+</script>
+</body>
+</html>

@@ -74,6 +74,8 @@ type OperatorStartOptions struct {
 	IdentityData       []byte
 	TribunalID         string
 	TribunalURL        string
+	MCPDownstreamURL   string
+	A2ADownstreamURL   string
 }
 
 type ProcessManager struct {
@@ -297,6 +299,12 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	}
 	if opts.TribunalURL != "" {
 		args = append(args, "--tribunal-url", opts.TribunalURL)
+	}
+	if opts.MCPDownstreamURL != "" {
+		args = append(args, "--mcp-downstream-url", opts.MCPDownstreamURL)
+	}
+	if opts.A2ADownstreamURL != "" {
+		args = append(args, "--a2a-downstream-url", opts.A2ADownstreamURL)
 	}
 
 	if opts.PasskeyRpID != "" {

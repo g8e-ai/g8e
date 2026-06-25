@@ -14,100 +14,24 @@
 package gateway
 
 import (
+	"net"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 
+	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
+	"github.com/g8e-ai/g8e/internal/services/gateway/console"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
-
-func (h *HTTPHandler) buildRouter() http.Handler {
-	mux := http.NewServeMux()
-
-	// Health endpoint (available on mTLS surface for state root queries)
-	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
-
-	// State endpoint (for envelope state root binding)
-	mux.HandleFunc(constants.APIPaths.State, h.handleState)
-
-	// MCP/A2A ingress (rate-limited, JWT when JWKS is configured, else mTLS via main middleware)
-	mcpHandler := h.buildMCPHandler()
-
-	// Rate-limited mux for core governance envelope (uses mTLS via main middleware)
-	govEnvMux := http.NewServeMux()
-	govEnvMux.HandleFunc(constants.APIPaths.GovernanceEnvelopes, h.handleGovernanceEnvelope)
-	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
-
-	// Authenticated routes (require mTLS)
-	mux.HandleFunc(constants.APIPaths.DataSettings, h.dbController.handleDataSettings)
-	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
-	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
-	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
-	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)
-	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
-	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
-	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.dbController.handleGovernanceSigners)
-	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.dbController.handleGovernanceSignerByID))
-	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
-	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
-	mux.HandleFunc(constants.APIPaths.AdminTribunals, h.adminController.handleTribunals)
-	mux.Handle(constants.APIPaths.AdminTribunalsByID, http.HandlerFunc(h.adminController.handleDeleteTribunal))
-
-	// Tribunal deliberate endpoint (mTLS-guarded, enrolled principal)
-	if h.tribunal != nil {
-		mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.tribunal.HandleDeliberate)
-	}
-
-	// Register rate-limited MCP routes with full paths
-	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
-	registerMCPRoutes(mux, mcpHandler)
-
-	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
-	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
-	mux.HandleFunc(constants.APIPaths.AuditEvents, h.dbController.handleAuditEvents)
-	mux.HandleFunc(constants.APIPaths.AuditSummary, h.dbController.handleAuditSummary)
-	mux.HandleFunc(constants.APIPaths.AuditReport, h.dbController.handleAuditReport)
-
-	// Internal SSE event bridge (used by g8e-compatible agentic ensembles to publish typed events
-	// for browser/CLI subscribers to consume). Producers are authenticated by
-	// mTLS app identity; consumers poll /api/v1/sse/events or stream /api/v1/sse/stream.
-	mux.HandleFunc(constants.APIPaths.SSEPush, h.handleInternalSSEPush)
-	mux.HandleFunc(constants.APIPaths.SSEEvents, h.handleInternalSSEEvents)
-	mux.HandleFunc(constants.APIPaths.SSEStream, h.handleInternalSSEStream)
-	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dbController.handleDataDB))
-	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dbController.handleKV))
-	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dbController.handlePubSubPublish)
-	mux.Handle(constants.APIPaths.PubSubStream, h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
-
-	// PKI management routes (require mTLS)
-	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
-	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
-	mux.HandleFunc(constants.APIPaths.PKIAppsDelegated, h.pkiController.handlePKIAppsDelegated)
-	mux.HandleFunc(constants.APIPaths.PKICertificatesRevoke, h.pkiController.handlePKICertificatesRevoke)
-	mux.HandleFunc(constants.APIPaths.PKIRevocationBundle, h.pkiController.handlePKIRevocationBundle)
-
-	// User management routes (require mTLS)
-	mux.HandleFunc(constants.APIPaths.Users, h.authController.handleUsers)
-
-	// Passkey / L3 Brokerage Routes (require mTLS)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateChallenge, h.authController.handleAuthPasskeysAuthenticateChallenge)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateVerify, h.authController.handleAuthPasskeysAuthenticateVerify)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.authController.handleAuthPasskeys)
-	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.authController.handleAuthPasskeysRevoke))
-
-	// Approval routes (require mTLS)
-	mux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.authController.handleApprovalAction))
-
-	return h.pathTraversalGuard(h.auth.Middleware(mux))
-}
 
 func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux := http.NewServeMux()
 
-	// Health endpoint
-	mux.HandleFunc(constants.APIPaths.Health, h.handleBootstrapHealth)
+	// Health endpoint (full health check: platform_settings + state root)
+	mux.HandleFunc(constants.APIPaths.Health, h.handleHealth)
 
 	// State endpoint (for envelope state root binding)
 	mux.HandleFunc(constants.APIPaths.State, h.handleState)
@@ -126,6 +50,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.PKICRL, h.pkiController.handlePKIRevocationBundle)
 	mux.Handle(constants.APIPaths.DataBlobs, http.HandlerFunc(h.dbController.handleBlob))
+
+	// Console SPA (public, no auth required)
+	mux.Handle("/console/", http.StripPrefix("/console", console.Handler()))
 
 	// Landing page and health
 	mux.HandleFunc(constants.APIPaths.Landing, h.handleLandingPage)
@@ -162,6 +89,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Browser-based CLI bootstrap endpoints (create web session after registration)
 	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
 	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
+	// Browser-based passkey authenticate endpoints (create web session after auth)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/browser/authenticate/challenge", h.authController.handleCLIBrowserPasskeyAuthenticateChallenge)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/browser/authenticate/verify", h.authController.handleCLIBrowserPasskeyAuthenticateVerify)
 	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(cliPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
@@ -169,6 +99,63 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, corsCLIPasskeyMux)
 	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/challenge", corsCLIPasskeyMux)
 	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/verify", corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/browser/authenticate/challenge", corsCLIPasskeyMux)
+	mux.Handle("/api/v1/auth/passkeys/browser/authenticate/verify", corsCLIPasskeyMux)
+
+	// mTLS-only routes (merged from buildRouter)
+	mux.HandleFunc(constants.APIPaths.DataSettings, h.dbController.handleDataSettings)
+	mux.HandleFunc(constants.APIPaths.Operators, h.operatorController.handleListOperators)
+	mux.Handle(constants.APIPaths.OperatorsByID, http.HandlerFunc(h.operatorController.handleTerminateOperator))
+	mux.HandleFunc(constants.APIPaths.OperatorsBind, h.operatorController.handleBindOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsUnbind, h.operatorController.handleUnbindOperators)
+	mux.HandleFunc(constants.APIPaths.OperatorsTarget, h.operatorController.handleSetTargetContext)
+	mux.HandleFunc(constants.APIPaths.OperatorsReauth, h.operatorController.handleReauth)
+	mux.HandleFunc(constants.APIPaths.GovernanceSigners, h.dbController.handleGovernanceSigners)
+	mux.Handle(constants.APIPaths.GovernanceSignersByID, http.HandlerFunc(h.dbController.handleGovernanceSignerByID))
+	mux.Handle(constants.APIPaths.AdminAppPoliciesBySigner, http.HandlerFunc(h.adminController.handleAppPolicySigner))
+	mux.HandleFunc(constants.APIPaths.AdminAppsRevoke, h.adminController.handleRevokeApp)
+	mux.HandleFunc(constants.APIPaths.AdminTribunals, h.adminController.handleTribunals)
+	mux.Handle(constants.APIPaths.AdminTribunalsByID, http.HandlerFunc(h.adminController.handleDeleteTribunal))
+
+	// Tribunal deliberate endpoint (mTLS-guarded, enrolled principal)
+	if h.tribunal != nil {
+		mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.tribunal.HandleDeliberate)
+	}
+
+	// Rate-limited governance envelope
+	govEnvMux := http.NewServeMux()
+	govEnvMux.HandleFunc(constants.APIPaths.GovernanceEnvelopes, h.handleGovernanceEnvelope)
+	govEnvHandler := h.rateLimitMiddleware(govEnvMux)
+	mux.Handle(constants.APIPaths.GovernanceEnvelopes, govEnvHandler)
+
+	mux.HandleFunc(constants.APIPaths.AuditReceipts, h.dbController.handleAuditReceipts)
+	mux.HandleFunc(constants.APIPaths.AuditReceiptsExport, h.dbController.handleAuditReceiptsExport)
+	mux.HandleFunc(constants.APIPaths.AuditEvents, h.dbController.handleAuditEvents)
+	mux.HandleFunc(constants.APIPaths.AuditSummary, h.dbController.handleAuditSummary)
+	mux.HandleFunc(constants.APIPaths.AuditReport, h.dbController.handleAuditReport)
+
+	mux.HandleFunc(constants.APIPaths.SSEPush, h.handleInternalSSEPush)
+	mux.HandleFunc(constants.APIPaths.SSEEvents, h.handleInternalSSEEvents)
+	mux.HandleFunc(constants.APIPaths.SSEStream, h.handleInternalSSEStream)
+	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dbController.handleDataDB))
+	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dbController.handleKV))
+	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dbController.handlePubSubPublish)
+	mux.Handle(constants.APIPaths.PubSubStream, h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
+
+	// PKI management routes (require mTLS)
+	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
+	mux.HandleFunc(constants.APIPaths.PKIAppsDelegated, h.pkiController.handlePKIAppsDelegated)
+	mux.HandleFunc(constants.APIPaths.PKICertificatesRevoke, h.pkiController.handlePKICertificatesRevoke)
+	mux.HandleFunc(constants.APIPaths.PKIRevocationBundle, h.pkiController.handlePKIRevocationBundle)
+
+	// User management routes (require mTLS)
+	mux.HandleFunc(constants.APIPaths.Users, h.authController.handleUsers)
+
+	// Passkey / L3 Brokerage Routes (require mTLS) - register/challenge/verify variants
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateChallenge, h.authController.handleAuthPasskeysAuthenticateChallenge)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateVerify, h.authController.handleAuthPasskeysAuthenticateVerify)
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
@@ -180,10 +167,15 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.authController.handleApprovalAction))
 	authedMux.HandleFunc(constants.APIPaths.Approvals, h.authController.handleListSuspendedTransactions)
 
+	// Passkey management (list, revoke) under WebSessionAuth
+	authedMux.HandleFunc(constants.APIPaths.AuthPasskeys, h.authController.handleAuthPasskeys)
+	authedMux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.authController.handleAuthPasskeysRevoke))
+
 	// Wrap authed routes in WebSessionAuth middleware
 	mux.Handle(constants.APIPaths.Users[:len(constants.APIPaths.Users)-1], h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle(constants.APIPaths.AuthSessionsMe[:len(constants.APIPaths.AuthSessionsMe)-len("/me")], h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle(constants.APIPaths.Approvals, h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle(constants.APIPaths.AuthPasskeysPrefix[:len(constants.APIPaths.AuthPasskeysPrefix)-1], h.auth.WebSessionAuth(authedMux, h.db))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }
@@ -249,24 +241,103 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.DeployScriptLinux, h.pkiController.handleDeployScriptLinux)
 	mux.HandleFunc(constants.APIPaths.DeployScriptWindows, h.pkiController.handleDeployScriptWindows)
 
-	// CLI passkey bootstrap: allow first-credential registration for CLI bootstrap flow
-	// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet
-	cliPasskeyMux := http.NewServeMux()
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.authController.handleCLIPasskeyRegisterChallenge)
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, h.authController.handleCLIPasskeyAuthenticateChallenge)
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, h.authController.handleCLIPasskeyAuthenticateVerify)
-	// Browser-based CLI bootstrap endpoints (create web session after registration)
-	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
-	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
-	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(cliPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, corsCLIPasskeyMux)
-	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/challenge", corsCLIPasskeyMux)
-	mux.Handle("/api/v1/auth/passkeys/cli-browser-register/verify", corsCLIPasskeyMux)
+	// Catch-all redirect to HTTPS for all other routes
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+
+		if !isSafeHost(host, h.cfg) {
+			if h.cfg != nil && h.cfg.Endpoint != "" {
+				host = h.cfg.Endpoint
+			} else {
+				host = "localhost"
+			}
+		}
+
+		var httpsPort int
+		if h.cfg != nil && h.cfg.Gateway.HTTPSPort != 0 {
+			httpsPort = h.cfg.Gateway.HTTPSPort
+		} else {
+			httpsPort = constants.Ports.OperatorHttps
+		}
+
+		var targetHost string
+		if httpsPort == 443 {
+			targetHost = host
+		} else {
+			targetHost = net.JoinHostPort(host, strconv.Itoa(httpsPort))
+		}
+
+		path := r.URL.Path
+		if path == "" {
+			path = "/"
+		}
+		for strings.HasPrefix(path, "//") {
+			path = path[1:]
+		}
+
+		target := "https://" + targetHost + path
+		if r.URL.RawQuery != "" {
+			target += "?" + r.URL.RawQuery
+		}
+
+		http.Redirect(w, r, target, http.StatusMovedPermanently) // #nosec G710
+	})
 
 	// Wrap with rate limiting
 	return h.pathTraversalGuard(h.rateLimitMiddleware(mux))
+}
+
+// isSafeHost checks if the requested host is a recognized local, private, or configured endpoint.
+func isSafeHost(host string, cfg *config.Config) bool {
+	if host == "" {
+		return false
+	}
+
+	for i := 0; i < len(host); i++ {
+		c := host[i]
+		isAlphanumeric := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+		isSpecial := c == '.' || c == '-' || c == '[' || c == ']' || c == ':'
+		if !isAlphanumeric && !isSpecial {
+			return false
+		}
+	}
+
+	if host == "localhost" {
+		return true
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsLoopback() {
+			return true
+		}
+		if isPrivateIP(ip) {
+			return true
+		}
+	}
+
+	if cfg != nil {
+		if cfg.Endpoint != "" {
+			endpointHost := cfg.Endpoint
+			if h, _, err := net.SplitHostPort(endpointHost); err == nil {
+				endpointHost = h
+			}
+			if strings.EqualFold(host, endpointHost) {
+				return true
+			}
+		}
+
+		if cfg.Gateway.PublicBaseURL != "" {
+			if u, err := url.Parse(cfg.Gateway.PublicBaseURL); err == nil {
+				publicHost := u.Hostname()
+				if strings.EqualFold(host, publicHost) {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
 }

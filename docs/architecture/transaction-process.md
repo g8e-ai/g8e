@@ -1,7 +1,7 @@
 # Transaction Process: End-to-End Flow
 
-Last Updated: 2026-06-23
-Version: v1.1.9
+Last Updated: 2026-06-24
+Version: v1.2.0
 
 This document walks through the complete transaction process in the g8e governance system, explaining each step from initial intent to final execution and audit. The process is designed to ensure security, accountability, and sovereignty throughout.
 

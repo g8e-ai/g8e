@@ -370,6 +370,7 @@ type ClientIdentity struct {
 	Certificate       []byte
 	CLIPrivateKey     []byte
 	CLICertificate    string
+	CLISessionID      string
 	OperatorID        string
 	OperatorSessionID string
 }
@@ -465,8 +466,8 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
 	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
 	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(operatorPEM)
+	require.True(t, rootPool.AppendCertsFromPEM(rootPEM), "failed to parse root CA PEM")
+	require.True(t, rootPool.AppendCertsFromPEM(operatorPEM), "failed to parse operator CA PEM")
 
 	enrollClient := &http.Client{
 		Transport: &http.Transport{
@@ -514,13 +515,17 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 		return opDoc.OperatorSessionID == regResp.OperatorSessionID && opDoc.Status == constants.OperatorStatusActive
 	}, 5*time.Second, 100*time.Millisecond, "Operator session not persisted")
 
+	cliPrivBytes, err := x509.MarshalECPrivateKey(cliPriv)
+	require.NoError(t, err)
+
 	return &ClientIdentity{
 		UserID:            userID,
 		OrganizationID:    organizationID,
 		PrivateKey:        privBytes,
 		Certificate:       []byte(regResp.OperatorCert),
-		CLIPrivateKey:     privBytes,
-		CLICertificate:    regResp.OperatorCert,
+		CLIPrivateKey:     cliPrivBytes,
+		CLICertificate:    regResp.CLICert,
+		CLISessionID:      regResp.CLISessionID,
 		OperatorID:        regResp.OperatorID,
 		OperatorSessionID: regResp.OperatorSessionID,
 	}
@@ -533,8 +538,8 @@ func CreateMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity)
 	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
 	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
 	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(operatorPEM)
+	require.True(t, rootPool.AppendCertsFromPEM(rootPEM), "failed to parse root CA PEM")
+	require.True(t, rootPool.AppendCertsFromPEM(operatorPEM), "failed to parse operator CA PEM")
 
 	enrolledCert, err := tls.X509KeyPair(identity.Certificate, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: identity.PrivateKey}))
 	require.NoError(t, err)
@@ -549,6 +554,52 @@ func CreateMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity)
 	}
 }
 
+// CreateCLIMTLSClient creates an HTTP client configured for mTLS using the
+// enrolled CLI identity. The client presents the CLI certificate (which carries
+// the CLI SPIFFE URI SAN) and sets the X-G8E-CLI-Session-ID header on every
+// outbound request via a wrapping RoundTripper.
+func CreateCLIMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity) *http.Client {
+	t.Helper()
+
+	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
+	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
+	rootPool := x509.NewCertPool()
+	require.True(t, rootPool.AppendCertsFromPEM(rootPEM), "failed to parse root CA PEM")
+	require.True(t, rootPool.AppendCertsFromPEM(operatorPEM), "failed to parse operator CA PEM")
+
+	cliCert, err := tls.X509KeyPair([]byte(identity.CLICertificate), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: identity.CLIPrivateKey}))
+	require.NoError(t, err)
+
+	base := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs:      rootPool,
+				Certificates: []tls.Certificate{cliCert},
+			},
+		},
+	}
+
+	return &http.Client{
+		Transport: &cliSessionRoundTripper{
+			base:      base.Transport,
+			sessionID: identity.CLISessionID,
+		},
+	}
+}
+
+// cliSessionRoundTripper wraps an http.RoundTripper and injects the
+// X-G8E-CLI-Session-ID header on every outbound request.
+type cliSessionRoundTripper struct {
+	base      http.RoundTripper
+	sessionID string
+}
+
+func (rt *cliSessionRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	clone.Header.Set(constants.HeaderCLISessionID, rt.sessionID)
+	return rt.base.RoundTrip(clone)
+}
+
 // TribunalSetup holds the result of wiring a real TribunalService into a gateway fixture.
 type TribunalSetup struct {
 	TribunalID string
@@ -559,21 +610,23 @@ type TribunalSetup struct {
 // SetupTribunal wires a real TribunalService into the gateway fixture for consensus
 // posture integration tests. It generates nMembers Ed25519 key pairs, registers each
 // member's public key as a TrustedSigner, creates a TribunalPolicy in the TribunalStore,
-// constructs a TribunalService with all members holding private keys, and wires it into
-// both the gateway service (SetTribunal) and the MCP gateway (SetTribunalDeliberator).
+// constructs a TribunalService via the shared tribunal.NewTribunalFromPolicy factory,
+// and wires it into both the gateway service (SetTribunal) and the MCP gateway
+// (SetTribunalDeliberator).
 //
 // If nServiceMembers < nMembers, only the first nServiceMembers are given private keys
-// in the TribunalService — the remaining policy members exist in the store but cannot
-// vote. This lets tests simulate quorum-not-reached by producing fewer votes than the
-// quorum threshold requires.
+// — the remaining policy members exist in the store but cannot vote (their keys resolve
+// to nil via the KeyProvider, and Deliberate skips nil-key members). This lets tests
+// simulate quorum-not-reached by producing fewer votes than the quorum threshold requires.
 //
-// This replicates the production bootstrapTribunal wiring from gateway_cmd.go:243-253
-// without importing package main.
+// This uses the same tribunal.NewTribunalFromPolicy factory as production BootstrapTribunal
+// in internal/cli/serve/gateway.go, eliminating the duplication identified in CS-12.
 func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers, quorum, nServiceMembers int) *TribunalSetup {
 	t.Helper()
 
 	memberAppIDs := make([]string, nMembers)
-	members := make([]tribunal.TribunalMember, 0, nServiceMembers)
+	memberKeys := make(map[string]ed25519.PrivateKey, nServiceMembers)
+	signingMembers := make([]tribunal.TribunalMember, 0, nServiceMembers)
 
 	for i := 0; i < nMembers; i++ {
 		appID := fmt.Sprintf("%s-member-%d", tribunalID, i)
@@ -591,7 +644,8 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 		require.NoError(t, err)
 
 		if i < nServiceMembers {
-			members = append(members, tribunal.TribunalMember{
+			memberKeys[appID] = priv
+			signingMembers = append(signingMembers, tribunal.TribunalMember{
 				AppID:      appID,
 				PrivateKey: priv,
 			})
@@ -608,16 +662,24 @@ func SetupTribunal(t *testing.T, f *GatewayFixture, tribunalID string, nMembers,
 	err := f.Service.GetDB().TribunalStore.AddTribunal(policy)
 	require.NoError(t, err)
 
+	keyProvider := tribunal.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
+		if key, ok := memberKeys[appID]; ok {
+			return key, nil
+		}
+		return nil, fmt.Errorf("no private key for member %s (quorum-not-reached simulation)", appID)
+	})
+
 	doctrine := govsvc.NewL1Doctrine()
 	responder := response.NewWriter(testutil.NewTestLogger())
-	tribunalSvc := tribunal.NewTribunalService(tribunalID, members, doctrine, testutil.NewTestLogger(), responder)
+	tribunalSvc, err := tribunal.NewTribunalFromPolicy(&policy, keyProvider, doctrine, testutil.NewTestLogger(), responder)
+	require.NoError(t, err)
 
 	f.Service.SetTribunal(tribunalSvc)
 	f.MCPGateway.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
 
 	return &TribunalSetup{
 		TribunalID: tribunalID,
-		Members:    members,
+		Members:    signingMembers,
 		Service:    tribunalSvc,
 	}
 }

@@ -58,6 +58,8 @@ type GatewayConfig struct {
 	NetworkIdentityFile string
 	TribunalID          string
 	TribunalURL         string
+	MCPDownstreamURL    string
+	A2ADownstreamURL    string
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -120,8 +122,8 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		RateLimitBurst:      cfg.RateLimitBurst,
 		CertMode:            cfg.CertIdentityMode,
 		NetworkIdentityFile: cfg.NetworkIdentityFile,
-		MCPDownstreamURL:    "",
-		A2ADownstreamURL:    "",
+		MCPDownstreamURL:    cfg.MCPDownstreamURL, // empty by default — no downstream proxy
+		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
 		TribunalID:          cfg.TribunalID,
 		TribunalURL:         cfg.TribunalURL,
 		AllowTestPortZero:   false,
@@ -263,7 +265,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	// (for in-process envelope processing). Under doctrine/notary posture,
 	// the Tribunal is not constructed.
 	if cfg.Posture == config.PostureConsensus && cfg.TribunalID != "" {
-		tribunalSvc, err := BootstrapTribunal(svc, cfg.TribunalID, ActuatorPriv, ActuatorKeyID, logger)
+		tribunalSvc, err := BootstrapTribunal(svc, cfg.TribunalID, ActuatorPriv, ActuatorKeyID, cfg.SecretsDir, logger)
 		if err != nil {
 			logger.Error("Failed to bootstrap Tribunal service", string(constants.ConnectionStateError), err)
 			cancel()
@@ -322,9 +324,10 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 
 // BootstrapTribunal constructs a TribunalService from the TribunalPolicy stored
 // in the database. For single-member tribunals, the gateway's actuator signing
-// key is used as the member private key (Option C from the design doc). Multi-
-// member tribunals require a separate key provisioning flow (not yet implemented).
-func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, logger *slog.Logger) (*tribunal.TribunalService, error) {
+// key is used as the member private key (Option C from the design doc). For
+// multi-member tribunals, member keys are loaded from disk via FileKeyProvider
+// (CS-9), falling back to the actuator key for the matching member.
+func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, secretsDir string, logger *slog.Logger) (*tribunal.TribunalService, error) {
 	policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)
@@ -333,28 +336,22 @@ func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actua
 		return nil, fmt.Errorf("bootstrap tribunal: %w: %s", constants.ErrTxL2TribunalNotConfigured, tribunalID)
 	}
 
-	// Option C: For single-member tribunal, use the gateway's actuator key.
-	// The actuator's public key must already be registered as a TrustedSigner
-	// with keyID = policy.MemberAppIDs[0].
-	var members []tribunal.TribunalMember
-	for _, appID := range policy.MemberAppIDs {
-		if appID == actuatorKeyID {
-			members = append(members, tribunal.TribunalMember{
-				AppID:      appID,
-				PrivateKey: actuatorPriv,
-			})
-		} else {
-			logger.Warn("Tribunal member lacks private key (multi-member not yet supported)",
-				"member_app_id", appID,
-				"actuator_key_id", actuatorKeyID)
-			members = append(members, tribunal.TribunalMember{
-				AppID: appID,
-			})
+	fileProvider := tribunal.NewFileKeyProvider(secretsDir, tribunalID)
+
+	keyProvider := tribunal.KeyProviderFunc(func(appID string) (ed25519.PrivateKey, error) {
+		if key, err := fileProvider.GetMemberKey(appID); err == nil {
+			logger.Info("Tribunal member key loaded from file", "member_app_id", appID)
+			return key, nil
 		}
-	}
+
+		if appID == actuatorKeyID {
+			return actuatorPriv, nil
+		}
+		return nil, fmt.Errorf("no private key for member %s (no file key and not the actuator)", appID)
+	})
 
 	doctrine := govsvc.NewL1Doctrine()
 	responder := response.NewWriter(logger)
 
-	return tribunal.NewTribunalService(tribunalID, members, doctrine, logger, responder), nil
+	return tribunal.NewTribunalFromPolicy(policy, keyProvider, doctrine, logger, responder)
 }

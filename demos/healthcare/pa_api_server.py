@@ -15,10 +15,18 @@
 """
 Minimal FHIR PA API server for healthcare demo.
 Accepts POST requests to /fhir/ClaimResponse endpoint.
+
+The direct FHIR endpoint (/fhir/ClaimResponse) bypasses governance and is
+gated behind --allow-legacy (default: off). Use the governed MCP JSON-RPC
+path (tools/call submit_pa) for production flows.
 """
 from http.server import HTTPServer, BaseHTTPRequestHandler
+import argparse
 import json
 from urllib.parse import urlparse, parse_qs
+
+# Module-level flag set from argparse in __main__
+allow_legacy = False
 
 class FHIRHandler(BaseHTTPRequestHandler):
     def do_POST(self):
@@ -84,8 +92,14 @@ class FHIRHandler(BaseHTTPRequestHandler):
         except:
             pass
 
-        # Handle direct FHIR ClaimResponse endpoint (Fallback/Legacy Path)
+        # Handle direct FHIR ClaimResponse endpoint (Legacy Path — gated behind --allow-legacy)
         if parsed_path.path == '/fhir/ClaimResponse' or parsed_path.path == '/':
+            if not allow_legacy:
+                self.send_response(403)
+                self.send_header('Content-Type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b"Forbidden: legacy FHIR endpoint is disabled. Use the governed MCP 'submit_pa' tool instead, or restart with --allow-legacy to enable the bypass.")
+                return
             try:
                 data = json.loads(post_data.decode('utf-8'))
                 print(f"Received Direct FHIR ClaimResponse: {data}")
@@ -132,6 +146,18 @@ class FHIRHandler(BaseHTTPRequestHandler):
         pass
 
 if __name__ == '__main__':
-    server = HTTPServer(('0.0.0.0', 8000), FHIRHandler)
-    print("FHIR PA API server listening on port 8000")
+    parser = argparse.ArgumentParser(description='FHIR PA API server for healthcare demo')
+    parser.add_argument('--allow-legacy', action='store_true', default=False,
+                        help='Enable the legacy direct FHIR endpoint (/fhir/ClaimResponse) that bypasses governance. Default: off (403 Forbidden).')
+    parser.add_argument('--port', type=int, default=8000, help='Port to listen on (default: 8000)')
+    args = parser.parse_args()
+
+    allow_legacy = args.allow_legacy
+    if allow_legacy:
+        print("WARNING: --allow-legacy is enabled. Direct FHIR endpoint bypasses governance.")
+    else:
+        print("Legacy FHIR endpoint disabled (403 Forbidden). Use governed MCP 'submit_pa' tool instead.")
+
+    server = HTTPServer(('0.0.0.0', args.port), FHIRHandler)
+    print(f"FHIR PA API server listening on port {args.port}")
     server.serve_forever()

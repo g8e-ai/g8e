@@ -38,7 +38,10 @@ func EnrollCLI(cfg *config.Config) error {
 		return fmt.Errorf("check bootstrap status: %w", err)
 	}
 
-	hostname, _ := os.Hostname()
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
+	}
 	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
@@ -113,7 +116,9 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
-	caPool.AppendCertsFromPEM(caBundleBytes)
+	if !caPool.AppendCertsFromPEM(caBundleBytes) {
+		return "", "", "", constants.ErrCAParseFailed
+	}
 
 	creds, err := LoadCredentials(cfg)
 	if err != nil {
@@ -131,6 +136,7 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 				MinVersion:   tls.VersionTLS13,
 			},
 		},
+		Timeout: httpTimeout,
 	}
 
 	enrollURL := cfg.OperatorHTTPURL() + constants.APIPaths.PKIAppsDelegated

@@ -400,6 +400,14 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 		assert.Equal(t, http.StatusForbidden, rr.Code)
 	})
 
+	t.Run("DELETE - unauthorized + missing tribunal ID (authz precedence)", func(t *testing.T) {
+		ctx := context.Background()
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/", nil).WithContext(ctx)
+		rr := httptest.NewRecorder()
+		adminController.handleDeleteTribunal(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code, "authz should take precedence over path validation")
+	})
+
 	t.Run("DELETE - missing tribunal ID", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, bootstrapUser.ID)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/admin/tribunals/", nil).WithContext(ctx)

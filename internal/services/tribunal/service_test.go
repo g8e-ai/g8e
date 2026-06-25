@@ -210,7 +210,7 @@ func TestTribunalService_Deliberate_WithIntentData(t *testing.T) {
 	assert.True(t, result.Envelope.Governance.L2.Votes[0].Decision)
 }
 
-func TestTribunalService_Deliberate_NilPrivateKey_Error(t *testing.T) {
+func TestTribunalService_Deliberate_NilPrivateKey_Skipped(t *testing.T) {
 	t.Parallel()
 	doctrine := govsvc.NewL1Doctrine()
 	members := []TribunalMember{
@@ -220,9 +220,9 @@ func TestTribunalService_Deliberate_NilPrivateKey_Error(t *testing.T) {
 
 	env := makeEnvelope(t, string(constants.ActionTypeFetchLogs), []byte("fetch logs"))
 
-	_, err := svc.Deliberate(env)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "private key missing")
+	result, err := svc.Deliberate(env)
+	require.NoError(t, err)
+	assert.Empty(t, result.Envelope.Governance.L2.Votes, "nil-key members should be skipped, producing zero votes")
 }
 
 func TestTribunalService_Deliberate_InitializesGovernance(t *testing.T) {

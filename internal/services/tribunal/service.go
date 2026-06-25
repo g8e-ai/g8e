@@ -91,6 +91,10 @@ func (s *TribunalService) Deliberate(env *governance.GovernanceEnvelope) (*Delib
 
 	votes := make([]*commonv1.L2Vote, 0, len(s.members))
 	for _, member := range s.members {
+		if member.PrivateKey == nil {
+			continue
+		}
+
 		isSafe := s.evaluateSafety(s.doctrine, env.TargetResource, cmdData, intent)
 
 		sig, err := signDecision(member.PrivateKey, env.Id, isSafe)

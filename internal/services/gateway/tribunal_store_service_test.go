@@ -448,6 +448,39 @@ func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
 	assert.False(t, retrieved.Enabled)
 }
 
+func TestTribunalStoreService_AddTribunal_AlreadyExists(t *testing.T) {
+	infra := setupTestInfrastructure(t, false)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+
+	pubKey, _, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signer := models.TrustedSigner{
+		ID:        "exists-member",
+		PublicKey: hex.EncodeToString(pubKey),
+		AddedAt:   time.Now().UTC(),
+		Enabled:   true,
+	}
+	err = infra.DB.SignerStore.AddTrustedSigner(signer)
+	require.NoError(t, err)
+	t.Cleanup(func() { infra.DB.SignerStore.DeleteTrustedSigner("exists-member") })
+
+	policy := models.TribunalPolicy{
+		ID:              "exists-tribunal",
+		MemberAppIDs:    []string{"exists-member"},
+		Quorum:          1,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	err = tribunalSvc.AddTribunal(policy)
+	require.NoError(t, err)
+	t.Cleanup(func() { tribunalSvc.DeleteTribunal("exists-tribunal") })
+
+	// Attempt to create the same tribunal again with Enabled=true
+	err = tribunalSvc.AddTribunal(policy)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "already exists")
+}
+
 func TestIsValidTribunalID(t *testing.T) {
 	tests := []struct {
 		id   string

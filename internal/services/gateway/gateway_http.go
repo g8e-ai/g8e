@@ -138,7 +138,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
 	// Build router once to avoid per-request overhead
-	h.router = h.buildRouter()
+	h.router = h.buildPublicRouter()
 
 	return h, nil
 }
@@ -161,7 +161,7 @@ func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
 // the TribunalService is constructed.
 func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
 	h.tribunal = ts
-	h.router = h.buildRouter()
+	h.router = h.buildPublicRouter()
 }
 
 func (h *HTTPHandler) GetPasskeyService() *PasskeyService {
