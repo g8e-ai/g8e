@@ -1,7 +1,7 @@
 # Storage Architecture
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ## Overview
 
@@ -334,7 +334,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: ".g8e/suspended_t
 
 **Schema Table (`commitment_ledger`):**
 
-Columns: `transaction_id`, `transaction_hash`, `prior_commitment_hash`, `state_root_at_commit`, `l2_signature_digest`, `Actuator_intent_signature_digest`, `human_signature_digest`, `action_type`, `target_resource`, `committed_at_unix_ms`, `auditor_key_id`, `signature`, `hash`, `attestation_json`.
+Columns: `id` (auto-increment primary key, mapped to `CommitmentRow.Seq`), `transaction_id`, `transaction_hash`, `prior_commitment_hash`, `state_root_at_commit`, `l2_signature_digest`, `Actuator_intent_signature_digest`, `human_signature_digest`, `action_type`, `target_resource`, `committed_at_unix_ms`, `auditor_key_id`, `signature`, `hash`, `attestation_json`.
 
 **Key Features:**
 

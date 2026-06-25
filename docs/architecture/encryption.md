@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ## Overview
 
@@ -30,7 +30,7 @@ g8e uses mandatory encryption for all sensitive data at rest. The encryption sys
 
 ## Canonical Crypto Primitives
 
-All encryption in g8e uses the shared primitives defined in `internal/services/vault/vault_crypto.go`. Both the vault service and the keystore service import these primitives — no AES-GCM logic is duplicated.
+All encryption in g8e uses the shared primitives defined in `internal/services/vault/vault_crypto.go`. Both the vault service and the keystore service import these primitives; no AES-GCM logic is duplicated.
 
 ### Exported Constants
 
@@ -39,6 +39,8 @@ All encryption in g8e uses the shared primitives defined in `internal/services/v
 | `KeySize` | 32 | AES-256 key size (bytes) |
 | `NonceSize` | 12 | GCM standard nonce size (bytes) |
 | `KeyFingerprintSize` | 16 | Truncated SHA-256 fingerprint size (bytes) |
+| `HKDFInfo` | `"g8e-lfaa-kek-v1"` | HKDF-SHA256 info string for KEK derivation |
+| `KeyFingerprintPepper` | `"g8e-vault-fingerprint-v1"` | Domain-separation pepper for key fingerprinting |
 
 ### Exported Functions
 
@@ -48,20 +50,22 @@ All encryption in g8e uses the shared primitives defined in `internal/services/v
 | `DecryptAESGCM(key, nonce, ciphertext, aad)` | Decrypt with AES-256-GCM, validates key/nonce sizes |
 | `GenerateNonce()` | Generate 12-byte cryptographically secure random nonce |
 | `GenerateDEK()` | Generate 32-byte cryptographically secure random DEK |
-| `DeriveKEK(privateKey)` | Derive KEK via HKDF-SHA256 |
+| `DeriveKEK(privateKey)` | Derive KEK via HKDF-SHA256 with `HKDFInfo` info string |
 | `SecureZero(b)` | Zero out a byte slice to prevent key material lingering in memory |
-| `KeyFingerprint(key)` | SHA-256 with domain-separation pepper, 16-byte output |
+| `KeyFingerprint(key)` | SHA-256 with `KeyFingerprintPepper` pepper, 16-byte output |
+| `PrivateKeyFingerprint(privateKey)` | Convenience wrapper calling `KeyFingerprint` on a private key |
 | `AESKeyWrap(kek, plaintext)` | RFC 3394 AES Key Wrap |
 | `AESKeyUnwrap(kek, ciphertext)` | RFC 3394 AES Key Unwrap with integrity check |
+| `ReadVaultKey(keyPath)` | Read and hex-decode a 32-byte vault private key from file |
 
 ## Vault Architecture
 
 ### Key Hierarchy
 
 ```
-Master Key (32-byte hex-encoded, user-provided or generated)
+Private Key (32-byte hex-encoded, user-provided or generated)
     |
-    +-- Key Encryption Key (KEK) - derived via HKDF-SHA256 from master key
+    +-- Key Encryption Key (KEK) - derived via HKDF-SHA256 from private key
         |
         +-- Data Encryption Key (DEK) - per-vault, wrapped with AES Key Wrap (RFC 3394)
             |
@@ -71,17 +75,44 @@ Master Key (32-byte hex-encoded, user-provided or generated)
 ### Vault Components
 
 - **Vault Header**: Metadata including key derivation parameters, wrapped DEK, and key fingerprint. Stored at `.g8e/vault/vault.header` as JSON.
-- **Vault Data**: Encrypted DEK and encrypted data records (stored in vault data directory).
-- **Vault Key**: Master key (32-byte hex-encoded) used to unlock the vault, stored at `.g8e/vault/key`.
+- **Vault Database**: SQLite database (`g8e.db`) in the vault directory, storing encrypted data records.
+- **Vault Key**: Private key (32-byte hex-encoded) used to unlock the vault, stored at `.g8e/vault/key`.
+
+### Vault Header Structure
+
+The `VaultHeader` struct (`internal/services/vault/vault_header.go`) contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Version` | `int` | Header format version (current: 1) |
+| `CreatedAt` | `time.Time` | Header creation timestamp (UTC) |
+| `LastRekeyedAt` | `*time.Time` | Last re-key timestamp (UTC), nil if never re-keyed |
+| `KDF` | `KDFParams` | KDF configuration (`Algorithm`: `"hkdf-sha256"`, `Info`: `HKDFInfo`) |
+| `KEK` | `KEKParams` | KEK configuration (`Algorithm`: `"aes-256-kw"`) |
+| `DEK` | `DEKParams` | Wrapped DEK (`Algorithm`: `"aes-256-gcm"`, `Wrapped`: base64-encoded ciphertext) |
+| `KeyFingerprint` | `string` | Hex-encoded `PrivateKeyFingerprint` of the current private key |
+
+### Vault Header Methods
+
+| Method | Description |
+|--------|-------------|
+| `NewVaultHeader(privateKey)` | Create new header with freshly generated DEK wrapped by KEK derived from `privateKey` |
+| `UnwrapDEK(privateKey)` | Unwrap DEK using provided private key; verifies key fingerprint first |
+| `Rekey(oldPrivateKey, newPrivateKey)` | Re-wrap DEK with a new private key; updates fingerprint and `LastRekeyedAt` |
+| `Save(dataDir)` | Write header to disk atomically via temp file rename |
+| `LoadVaultHeader(dataDir)` | Load and parse header from disk; rejects unsupported versions |
+| `VaultHeaderExists(dataDir)` | Check if header file exists |
+| `DeleteVaultHeader(dataDir)` | Remove header file (makes vault unrecoverable) |
+| `ValidatePrivateKey(privateKey)` | Check if private key fingerprint matches header |
 
 ### Encryption Flow
 
 1. **Vault Initialization**:
-   - Generate or import master key (32-byte hex-encoded).
-   - Derive Key Encryption Key (KEK) from master key using HKDF-SHA256 with info string "g8e-lfaa-kek-v1".
+   - Generate or import private key (32-byte hex-encoded).
+   - Derive Key Encryption Key (KEK) from private key using HKDF-SHA256 with info string `"g8e-lfaa-kek-v1"`.
    - Generate Data Encryption Key (DEK) (32-byte random).
    - Wrap DEK with KEK using AES Key Wrap (RFC 3394).
-   - Compute key fingerprint using SHA-256 with pepper "g8e-vault-fingerprint-v1" (16-byte output).
+   - Compute key fingerprint using SHA-256 with pepper `"g8e-vault-fingerprint-v1"` (16-byte output).
    - Save vault header with wrapped DEK and key fingerprint to disk.
 
 2. **Data Encryption**:
@@ -102,10 +133,11 @@ All storage services require an unlocked vault at initialization. Both the vault
 
 | Service | Vault Required | Encrypted Data | Crypto Primitives | Integration Pattern |
 |---------|---------------|----------------|-------------------|---------------------|
-| `SQLAuditStore` | Yes | `content_text`, `command_stdout`, `command_stderr` fields in audit records | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` | Config struct (`AuditStoreConfig.EncryptionVault`) |
-| `ExecutionVaultService` | Yes | Execution results, command outputs, file diffs | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` | Constructor parameter |
-| `GitLedgerService` | Yes | File content in ledger (stored with `.enc` suffix) | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` | Config struct (`LedgerConfig.EncryptionVault`) |
-| `Keystore` | No (uses OS keyring) | Platform secrets, JWT signing keys, DB credentials | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` / `vault.GenerateNonce` / `vault.SecureZero` | OS keyring + file-based secret storage |
+| `SQLAuditStore` | Yes | `content_text`, `command_stdout`, `command_stderr` fields in audit records | `vault.Encrypt` / `vault.Decrypt` | Config struct (`AuditStoreConfig.EncryptionVault`) |
+| `ExecutionVaultService` | Yes | Compressed stdout, compressed stderr, compressed file diffs | `vault.Encrypt` / `vault.Decrypt` | Constructor parameter |
+| `GitLedgerService` | Yes | File content in ledger (stored with `.enc` suffix) | `vault.Encrypt` / `vault.Decrypt` | Config struct (`LedgerConfig.EncryptionVault`) |
+| `EncryptedKVAdapter` | Yes | Sentinel UEI token values in canonical KV store | `vault.Encrypt` / `vault.Decrypt` | Constructor parameter (`internal/services/gateway/encrypted_kv_adapter.go`) |
+| `Keystore` | No (uses OS keyring) | Platform secrets, JWT signing keys, DB credentials | `vault.EncryptAESGCM` / `vault.DecryptAESGCM` / `vault.GenerateNonce` / `vault.SecureZero` / `vault.KeySize` | OS keyring + file-based secret storage |
 
 ## Vault Lifecycle
 
@@ -178,7 +210,7 @@ export G8E_VAULT_KEY=/path/to/vault/key
 ### Export
 
 ```bash
-# Export master key in hex format
+# Export private key in hex format
 ./g8e vault export --key-path /path/to/vault/key
 
 # Export with default key path
@@ -203,13 +235,13 @@ export G8E_VAULT_KEY=/path/to/vault/key
 
 ### Configuration File
 
-Vault paths are configured in the embedded paths configuration in `internal/constants/paths.go`. The default paths are:
+Vault path constants are defined in `internal/constants/paths.go` and initialized in `internal/paths/paths.go`. The default paths are:
 
 - Vault directory: `.g8e/vault`
 - Vault header file: `.g8e/vault/vault.header`
 - Vault key path: `.g8e/vault/key`
 
-These paths are resolved relative to the current working directory.
+These paths are resolved relative to the current working directory at initialization time via `paths.Init()`.
 
 ## Security Guarantees
 
@@ -222,8 +254,8 @@ These paths are resolved relative to the current working directory.
 
 ### Key Management
 
-- Master keys are 32-byte hex-encoded values.
-- Key fingerprints are computed using SHA-256 with pepper "g8e-vault-fingerprint-v1" (16-byte output). The key material (256-bit) provides sufficient entropy; a fast hash is appropriate for identification purposes.
+- Private keys are 32-byte hex-encoded values.
+- Key fingerprints are computed using SHA-256 with pepper `"g8e-vault-fingerprint-v1"` (16-byte output). The key material (256-bit) provides sufficient entropy; a fast hash is appropriate for identification purposes.
 - Keys can be imported or exported for backup via `g8e vault export` and `g8e vault import`.
 - Re-keying rotates the DEK wrapper without data loss (only the DEK wrapper changes).
 - Vault reset destroys all data irrecoverably.
@@ -241,28 +273,76 @@ These paths are resolved relative to the current working directory.
 
 The vault service (`internal/services/vault/vault.go`) provides:
 
-- `NewVault()`: Create new vault instance with `VaultConfig`.
-- `Unlock()`: Unwrap DEK with master key.
-- `Lock()`: Zero DEK from memory.
+- `NewVault(config *VaultConfig)`: Create new vault instance with `VaultConfig` (requires `DataDir` and optional `Logger`).
+- `Unlock(privateKey []byte)`: Unwrap DEK with private key; loads header from disk and verifies fingerprint.
+- `Lock()`: Zero DEK from memory and set locked state.
 - `Close()`: Lock vault and release resources.
-- `Encrypt()`: Encrypt data with AES-256-GCM (generates random nonce).
-- `Decrypt()`: Decrypt data with AES-256-GCM (expects nonce prepended to ciphertext).
-- `Rekey()`: Rotate DEK with new master key.
-- `GetDEK()`: Return Data Encryption Key for database operations.
+- `Encrypt(plaintext []byte)`: Encrypt data with AES-256-GCM using vault DEK (generates random nonce, prepends nonce to ciphertext).
+- `Decrypt(ciphertext []byte)`: Decrypt data with AES-256-GCM using vault DEK (reads nonce from first 12 bytes of ciphertext).
+- `Rekey(oldPrivateKey, newPrivateKey []byte)`: Re-wrap DEK with new private key and save updated header.
+- `GetDEK()`: Return a copy of the Data Encryption Key for database operations.
 - `IsUnlocked()`: Check vault lock state.
-- `IsInitialized()`: Check if vault header exists.
+- `IsInitialized()`: Check if vault header exists on disk.
 - `VerifyIntegrity(privateKey []byte)`: Verify vault integrity by attempting to unwrap DEK with the provided key.
-- `Reset(confirmDestroy bool)`: Destroy vault and all data (requires explicit confirmation).
+- `Reset(confirmDestroy bool)`: Destroy vault header, database, and all data (requires explicit confirmation).
 - `GetDataDir()`: Return vault data directory path.
 
 ### Keystore Service
 
-The keystore service (`internal/services/keystore/keystore.go`) provides OS-native keyring-backed secret storage. It **reuses vault crypto primitives** — no AES-GCM logic is duplicated:
+The keystore service (`internal/services/keystore/keystore.go`) provides OS-native keyring-backed secret storage. It reuses vault crypto primitives; no AES-GCM logic is duplicated:
 
 - Uses `vault.EncryptAESGCM` / `vault.DecryptAESGCM` for encryption/decryption
 - Uses `vault.GenerateNonce()` for nonce generation
 - Uses `vault.SecureZero()` to zero master key after each encrypt/decrypt operation
-- Uses `vault.KeySize` / `vault.NonceSize` constants for validation
+- Uses `vault.KeySize` for key length validation
+
+#### Keyring Interface
+
+The `Keyring` interface (`internal/services/keystore/keyring.go`) abstracts the OS-native credential store:
+
+| Method | Description |
+|--------|-------------|
+| `RetrieveMasterKey()` | Retrieve the master encryption key from the keyring |
+| `StoreMasterKey(key)` | Store the master encryption key in the keyring |
+| `DeleteMasterKey()` | Remove the master encryption key from the keyring |
+| `Name()` | Return human-readable name of the keyring implementation |
+
+Platform implementations:
+
+| Platform | Implementation | File | Fallback |
+|----------|---------------|------|----------|
+| Linux | `libsecretKeyring` (GNOME Keyring via libsecret) | `internal/services/keystore/keyring_libsecret.go` | `fileKeyring` |
+| macOS | `keychainKeyring` (macOS Keychain) | `internal/services/keystore/keyring_keychain.go` | None |
+| Windows | `fileKeyring` | `internal/services/keystore/keyring_file.go` | None |
+| Tests | `memoryKeyring` | `internal/services/keystore/keyring_memory.go` | N/A |
+
+The `fileKeyring` implementation (`internal/services/keystore/keyring_file.go`) stores the master key as a file on disk with `0600` permissions.
+
+#### EncryptedSecret Structure
+
+The `EncryptedSecret` struct represents an encrypted secret value on disk:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `Version` | `int` | Secret format version (current: 1) |
+| `Nonce` | `[]byte` | AES-GCM nonce |
+| `Ciphertext` | `[]byte` | AES-GCM ciphertext |
+
+#### Keystore Methods
+
+| Method | Description |
+|--------|-------------|
+| `New(secretsDir, logger)` | Create keystore with platform-default keyring (platform-specific files) |
+| `NewWithKeyring(secretsDir, logger, keyring)` | Create keystore with custom keyring (used for testing) |
+| `Initialize()` | Retrieve or generate master encryption key from OS keyring |
+| `EncryptSecret(name, plaintext)` | Encrypt plaintext and write to disk as JSON file |
+| `DecryptSecret(name)` | Read and decrypt secret from disk |
+| `Encrypt(plaintext)` | Encrypt plaintext, return base64-encoded ciphertext string (in-memory use) |
+| `Decrypt(encodedCiphertext)` | Decrypt base64-encoded ciphertext string (in-memory use) |
+| `DeleteSecret(name)` | Remove secret file from disk |
+| `Purge()` | Delete master key from keyring and remove all secret files |
+| `EnforcePermissions()` | Enforce `0700` on secrets directory and `0600` on secret files |
+| `KeyringName()` | Return name of the active keyring implementation |
 
 ### Storage Integration
 
@@ -282,8 +362,8 @@ Vault management commands (`internal/cli/cmd/vault.go`):
 - `rekey`: Re-encrypt DEK with new key.
 - `status`: Check vault status.
 - `reset`: Destroy vault and all encrypted data.
-- `export`: Export master key in hex format.
-- `import`: Import master key from hex string or stdin.
+- `export`: Export private key in hex format.
+- `import`: Import private key from hex string or stdin.
 
 ## Migration Path
 
@@ -308,7 +388,7 @@ To rotate vault keys:
 
 ### Encryption Standards
 
-- AES-256-GCM (NIST-approved) for all data encryption — single canonical implementation in `vault_crypto.go`.
+- AES-256-GCM (NIST-approved) for all data encryption; single canonical implementation in `vault_crypto.go`.
 - HKDF-SHA256 for Key Encryption Key derivation.
 - AES Key Wrap (RFC 3394) for DEK wrapping.
 - SHA-256 for key fingerprinting with domain-separation pepper.
@@ -367,6 +447,10 @@ If services fail with "vault not initialized":
 - Canonical Crypto Primitives: `internal/services/vault/vault_crypto.go`
 - Vault Service: `internal/services/vault/vault.go`
 - Vault Header: `internal/services/vault/vault_header.go`
+- Vault Error Constants: `internal/constants/errors.go`
 - Keystore Service: `internal/services/keystore/keystore.go`
+- Keyring Interface: `internal/services/keystore/keyring.go`
+- Encrypted KV Adapter: `internal/services/gateway/encrypted_kv_adapter.go`
 - CLI Commands: `internal/cli/cmd/vault.go`
+- Path Configuration: `internal/paths/paths.go`, `internal/constants/paths.go`
 - Storage Services: `internal/services/storage/`

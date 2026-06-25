@@ -16,6 +16,7 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -193,189 +194,19 @@ func TestInitWithBase_AllFieldsPopulated(t *testing.T) {
 	// Every field in Infra should be non-empty after InitWithBase.
 	// PkiBinariesDir is intentionally excluded — it is declared in the struct
 	// but not populated by InitWithBase (it uses the default zero value).
-	emptyFields := []string{}
-	if Infra.DbPath == "" {
-		emptyFields = append(emptyFields, "DbPath")
-	}
-	if Infra.PkiDir == "" {
-		emptyFields = append(emptyFields, "PkiDir")
-	}
-	if Infra.SecretsDir == "" {
-		emptyFields = append(emptyFields, "SecretsDir")
-	}
-	if Infra.CaCertPath == "" {
-		emptyFields = append(emptyFields, "CaCertPath")
-	}
-	if Infra.AppCertDir == "" {
-		emptyFields = append(emptyFields, "AppCertDir")
-	}
-	if Infra.DocsDir == "" {
-		emptyFields = append(emptyFields, "DocsDir")
-	}
-	if Infra.ProtocolDir == "" {
-		emptyFields = append(emptyFields, "ProtocolDir")
-	}
-	if Infra.ProtocolConstantsDir == "" {
-		emptyFields = append(emptyFields, "ProtocolConstantsDir")
-	}
-	if Infra.ProtocolModelsDir == "" {
-		emptyFields = append(emptyFields, "ProtocolModelsDir")
-	}
-	if Infra.SshConfigPath == "" {
-		emptyFields = append(emptyFields, "SshConfigPath")
-	}
-	if Infra.RuntimeDir == "" {
-		emptyFields = append(emptyFields, "RuntimeDir")
-	}
-	if Infra.DataDir == "" {
-		emptyFields = append(emptyFields, "DataDir")
-	}
-	if Infra.VaultDir == "" {
-		emptyFields = append(emptyFields, "VaultDir")
-	}
-	if Infra.VaultKeyPath == "" {
-		emptyFields = append(emptyFields, "VaultKeyPath")
-	}
-	if Infra.TestVaultDir == "" {
-		emptyFields = append(emptyFields, "TestVaultDir")
-	}
-	if Infra.LocalStateDBPath == "" {
-		emptyFields = append(emptyFields, "LocalStateDBPath")
-	}
-	if Infra.SuspendedTransactionsDBPath == "" {
-		emptyFields = append(emptyFields, "SuspendedTransactionsDBPath")
-	}
-	if Infra.AuditVaultDBPath == "" {
-		emptyFields = append(emptyFields, "AuditVaultDBPath")
-	}
-	if Infra.RootCAPath == "" {
-		emptyFields = append(emptyFields, "RootCAPath")
-	}
-	if Infra.HubCAPath == "" {
-		emptyFields = append(emptyFields, "HubCAPath")
-	}
-	if Infra.OperatorCAPath == "" {
-		emptyFields = append(emptyFields, "OperatorCAPath")
-	}
-	if Infra.GatewayPeerCAPath == "" {
-		emptyFields = append(emptyFields, "GatewayPeerCAPath")
-	}
-	if Infra.GatewayChainPath == "" {
-		emptyFields = append(emptyFields, "GatewayChainPath")
-	}
-	if Infra.TrustDomainJSONPath == "" {
-		emptyFields = append(emptyFields, "TrustDomainJSONPath")
-	}
-	if Infra.ServiceCertPath == "" {
-		emptyFields = append(emptyFields, "ServiceCertPath")
-	}
-	if Infra.PkiRootDir == "" {
-		emptyFields = append(emptyFields, "PkiRootDir")
-	}
-	if Infra.PkiAuthoritiesDir == "" {
-		emptyFields = append(emptyFields, "PkiAuthoritiesDir")
-	}
-	if Infra.PkiIssuedHubDir == "" {
-		emptyFields = append(emptyFields, "PkiIssuedHubDir")
-	}
-	if Infra.PkiIssuedGatewayPeerDir == "" {
-		emptyFields = append(emptyFields, "PkiIssuedGatewayPeerDir")
-	}
-	if Infra.PkiTrustDir == "" {
-		emptyFields = append(emptyFields, "PkiTrustDir")
-	}
-	if Infra.PkiRevocationDir == "" {
-		emptyFields = append(emptyFields, "PkiRevocationDir")
-	}
-	if Infra.ActuatorPubJSONPath == "" {
-		emptyFields = append(emptyFields, "ActuatorPubJSONPath")
-	}
-	if Infra.ActuatorPubPEMPath == "" {
-		emptyFields = append(emptyFields, "ActuatorPubPEMPath")
-	}
-	if Infra.OperatorKeyPath == "" {
-		emptyFields = append(emptyFields, "OperatorKeyPath")
-	}
-	if Infra.OperatorCertPath == "" {
-		emptyFields = append(emptyFields, "OperatorCertPath")
-	}
-	if Infra.OperatorChainPath == "" {
-		emptyFields = append(emptyFields, "OperatorChainPath")
-	}
-	if Infra.WardenPubPath == "" {
-		emptyFields = append(emptyFields, "WardenPubPath")
-	}
-	if Infra.RootCAKeyPath == "" {
-		emptyFields = append(emptyFields, "RootCAKeyPath")
-	}
-	if Infra.TrustedSignersDir == "" {
-		emptyFields = append(emptyFields, "TrustedSignersDir")
-	}
-	if Infra.ClientPkiDir == "" {
-		emptyFields = append(emptyFields, "ClientPkiDir")
-	}
-	if Infra.ClientOperatorKeyPath == "" {
-		emptyFields = append(emptyFields, "ClientOperatorKeyPath")
-	}
-	if Infra.ClientOperatorCertPath == "" {
-		emptyFields = append(emptyFields, "ClientOperatorCertPath")
-	}
-	if Infra.SessionEncKeyPath == "" {
-		emptyFields = append(emptyFields, "SessionEncKeyPath")
-	}
-	if Infra.BootstrapDigestPath == "" {
-		emptyFields = append(emptyFields, "BootstrapDigestPath")
-	}
-	if Infra.LogDir == "" {
-		emptyFields = append(emptyFields, "LogDir")
-	}
-	if Infra.OperatorLogFile == "" {
-		emptyFields = append(emptyFields, "OperatorLogFile")
-	}
-	if Infra.ExecutionVaultDBPath == "" {
-		emptyFields = append(emptyFields, "ExecutionVaultDBPath")
-	}
-	if Infra.ReplayStoreDBPath == "" {
-		emptyFields = append(emptyFields, "ReplayStoreDBPath")
-	}
-	if Infra.LedgerDir == "" {
-		emptyFields = append(emptyFields, "LedgerDir")
-	}
-	if Infra.DemosDir == "" {
-		emptyFields = append(emptyFields, "DemosDir")
-	}
-	if Infra.DemosHealthcareDir == "" {
-		emptyFields = append(emptyFields, "DemosHealthcareDir")
-	}
-	if Infra.DemosFinanceDir == "" {
-		emptyFields = append(emptyFields, "DemosFinanceDir")
-	}
-	if Infra.DemosGovDir == "" {
-		emptyFields = append(emptyFields, "DemosGovDir")
-	}
-	if Infra.DemosSecureDataDir == "" {
-		emptyFields = append(emptyFields, "DemosSecureDataDir")
-	}
-	if Infra.DemosHealthcareTargetDataDir == "" {
-		emptyFields = append(emptyFields, "DemosHealthcareTargetDataDir")
-	}
-	if Infra.DemosHealthcareDoctrineDir == "" {
-		emptyFields = append(emptyFields, "DemosHealthcareDoctrineDir")
-	}
-	if Infra.DemosHealthcarePARequestsPath == "" {
-		emptyFields = append(emptyFields, "DemosHealthcarePARequestsPath")
-	}
-	if Infra.DemosHealthcareComposePath == "" {
-		emptyFields = append(emptyFields, "DemosHealthcareComposePath")
-	}
-	if Infra.DemosHealthcareDoctrineHIPAAPath == "" {
-		emptyFields = append(emptyFields, "DemosHealthcareDoctrineHIPAAPath")
-	}
-	if Infra.DemosSecureDataDoctrineDir == "" {
-		emptyFields = append(emptyFields, "DemosSecureDataDoctrineDir")
-	}
-	if Infra.DemosSecureDataDoctrinePath == "" {
-		emptyFields = append(emptyFields, "DemosSecureDataDoctrinePath")
+	skipFields := map[string]bool{"PkiBinariesDir": true}
+
+	v := reflect.ValueOf(&Infra).Elem()
+	t2 := v.Type()
+	var emptyFields []string
+	for i := 0; i < t2.NumField(); i++ {
+		name := t2.Field(i).Name
+		if skipFields[name] {
+			continue
+		}
+		if v.Field(i).String() == "" {
+			emptyFields = append(emptyFields, name)
+		}
 	}
 
 	if len(emptyFields) > 0 {

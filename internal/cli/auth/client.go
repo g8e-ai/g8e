@@ -95,12 +95,6 @@ type cliAssertionVerifyRequest struct {
 	AssertionResponse models.WebAuthnAssertionResponse `json:"assertion_response"`
 }
 
-// cliAttestationVerifyRequest is the typed request for CLI passkey registration verification.
-type cliAttestationVerifyRequest struct {
-	UserID              string                             `json:"user_id"`
-	AttestationResponse models.WebAuthnAttestationResponse `json:"attestation_response"`
-}
-
 // getLocalOSUser retrieves the current OS user information.
 func getLocalOSUser() *models.LocalOSUser {
 	currentUser, err := user.Current()

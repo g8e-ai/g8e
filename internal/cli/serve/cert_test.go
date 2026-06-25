@@ -249,7 +249,7 @@ func TestGenerateCSR_Uniqueness(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotEqual(t, csr1, csr2, "two CSRs with same CN should differ due to random keys")
-	assert.NotEqual(t, key1.D, key2.D, "private keys should be distinct")
+	assert.False(t, key1.Equal(key2), "private keys should be distinct")
 }
 
 // ---------------------------------------------------------------------------
