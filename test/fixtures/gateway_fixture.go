@@ -581,8 +581,8 @@ func CreateCLIMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdenti
 
 	return &http.Client{
 		Transport: &cliSessionRoundTripper{
-			base:       base.Transport,
-			sessionID:  identity.CLISessionID,
+			base:      base.Transport,
+			sessionID: identity.CLISessionID,
 		},
 	}
 }

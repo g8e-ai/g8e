@@ -446,7 +446,9 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 		return false, fmt.Errorf("%w: %v", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
-	caPool.AppendCertsFromPEM(caBundleBytes)
+	if !caPool.AppendCertsFromPEM(caBundleBytes) {
+		return false, constants.ErrCAParseFailed
+	}
 
 	// Create HTTP client with TLS configuration
 	tlsCfg := &tls.Config{
@@ -458,6 +460,7 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 		Transport: &http.Transport{
 			TLSClientConfig: tlsCfg,
 		},
+		Timeout: httpTimeout,
 	}
 
 	resp, err := httpClient.Get(url)
@@ -526,7 +529,10 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("%w: status %d", constants.ErrHTTPStatusError, resp.StatusCode)
+		}
 		return fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(body))
 	}
 

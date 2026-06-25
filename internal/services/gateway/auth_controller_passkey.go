@@ -106,7 +106,7 @@ func (c *AuthController) handleAuthPasskeysRegisterVerify(w http.ResponseWriter,
 	}
 
 	var req struct {
-		UserID              string                          `json:"user_id"`
+		UserID              string                              `json:"user_id"`
 		AttestationResponse *models.WebAuthnAttestationResponse `json:"attestation_response"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -237,7 +237,7 @@ func (c *AuthController) handleAuthPasskeysAuthenticateVerify(w http.ResponseWri
 	}
 
 	var req struct {
-		UserID            string                       `json:"user_id"`
+		UserID            string                            `json:"user_id"`
 		AssertionResponse *models.WebAuthnAssertionResponse `json:"assertion_response"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
