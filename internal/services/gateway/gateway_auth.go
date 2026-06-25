@@ -53,6 +53,9 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// Health check (always public)
 	r.addExact(constants.APIPaths.Health)
 
+	// Landing page (always public to allow redirecting to /console)
+	r.addExact(constants.APIPaths.Landing)
+
 	// State endpoint (always public for envelope binding)
 	r.addExact(constants.APIPaths.State)
 
@@ -78,6 +81,9 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addExact(constants.APIPaths.AuthLoginVerify)
 	r.addExact(constants.APIPaths.AuthLogout)
 	r.addPrefix(constants.APIPaths.ApprovePage)
+
+	// Console SPA (public, no auth required)
+	r.addPrefix("/console/")
 
 	// JIT passkey bootstrap (only when JWKS is configured)
 	if jwksEnabled {

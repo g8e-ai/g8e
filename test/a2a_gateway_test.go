@@ -370,13 +370,9 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		req.Header.Set("X-API-Key", "test-api-key")
 
 		resp, err := plainClient.Do(req)
-		if resp != nil {
-			defer resp.Body.Close()
-		}
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "tls: certificate required")
-
-		// The gateway should reject this at the TLS layer or middleware before reaching the A2A handler
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 	t.Run("invalid JSON-RPC version", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"1.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`

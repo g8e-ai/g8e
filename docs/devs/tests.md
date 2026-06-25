@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-23
+Last Updated: 2026-06-24
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -108,6 +108,14 @@ The agentic tool emulator is a universal agent testing and auditing tool that im
 - **A2A (Agent-to-Agent)** - Skill invocations with JSON and protobuf payloads
 - **Governance envelopes** - L2 consensus and L3 notary flows
 
+**Governance Scenarios** (4 scenarios added 2026-06-24):
+- `agent-delegation` (Doctrine) - CLI delegates to agent persona, verifies distinct SPIFFE identity
+- `tribunal-quorum` (Consensus) - 2-of-3 co-sign, asserts admission success
+- `tribunal-veto` (Consensus) - False vote, asserts rejection with status ≥ 400
+- `notary-oob` (Notary) - Suspend mode, OOB principal approval flow
+
+The registry now has 14 scenarios total (5 MCP + 3 A2A + 6 governance).
+
 **Testing Postures**:
 Scenarios run under different enforcement modes:
 - **Doctrine** - L1 enforced, L2/L3 audited
@@ -166,6 +174,17 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 **MCP Backup Integration Tests** (`test/mcp_backup_integration_test.go`):
 - `TestBackupConfigFile` - Validates MCP backup config file handling
 
+**Tribunal Consensus Tests** (`test/tribunal_consensus_integration_test.go`):
+- `TestTribunalConsensus_IdempotentEnrollment` - Verifies repeated CLI enrollment returns the same identity without error
+- `TestTribunalConsensus_MalformedCSR` - Validates that malformed CSR submissions are rejected with typed error
+- `TestTribunalConsensus_DelegatedAppEnrollment` - CLI delegates to an agent app via `CreateCLIMTLSClient`, verifies distinct SPIFFE identity and successful enrollment
+- `TestTribunalConsensus_QuorumReached` - 2-of-3 tribunal co-sign produces admission success
+- `TestTribunalConsensus_QuorumNotReached` - Insufficient votes (1-of-3) produces rejection with quorum-not-met error
+- `TestTribunalConsensus_VetoByMITRE` - A false vote from MITRE member produces veto rejection
+- `TestTribunalConsensus_L1ToL5Walkthrough` - Full L1–L5 identity-bound action walkthrough with receipt verification
+
+All 7 tests use `GatewayFixture` with real PKI, SQLite, `TribunalService`, and `LocalDeliberator` — no mocks, no `t.Parallel()`.
+
 **Universal Gateway Tests** (`test/universal_gateway_integration_test.go`):
 - `TestUniversalGateway_MCPFlow` - Real MCP protocol translation with live platform
 - `TestUniversalGateway_A2AFlow` - Real A2A protocol translation with live platform
@@ -188,6 +207,12 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 **Gateway E2E** (`test/e2e/gateway_e2e_test.go`):
 - `TestDockerGateway_Health` - Tests Docker-based gateway health endpoints
 
+**Auth E2E** (`test/e2e/auth_e2e_test.go`):
+- `TestDockerGateway_Auth` - Black-box cross-container auth validation with 3 subtests:
+  - `mTLS handshake over network` - Verifies operator establishes mTLS with gateway over Docker bridge (log-based assertion)
+  - `CA bundle consistency` - Compares CA bundle from `/.well-known` with operator's trusted chain (log-based)
+  - `restart persistence` - Restarts operator container, verifies re-authentication using persisted enrolled identity (no fresh bootstrap)
+
 **MCP Stdio E2E** (`test/mcp_stdio_test.go`):
 - `TestMCPGateway_ConfigOutput` - Validates MCP stdio config generation
 - `TestMCPGateway_CommandExists` - Verifies MCP stdio command availability
@@ -200,6 +225,8 @@ Integration tests exercise end-to-end workflows with real infrastructure (no moc
 - `GetHealth` - Retrieves gateway health status
 - `GetCABundle` - Retrieves CA bundle from gateway
 - `CheckOperatorContainer` - Verifies operator container connection
+- `OperatorLogs` - Returns combined stdout/stderr logs of the operator container (black-box observation)
+- `RestartOperator` - Restarts operator container and waits for re-authentication via health polling
 
 #### Integration Helpers
 
@@ -216,8 +243,10 @@ Reusable test infrastructure for integration and E2E tests:
 **Gateway Fixture** (`test/fixtures/gateway_fixture.go`):
 - `GatewayFixture` - Reusable gateway setup for integration tests with full lifecycle management
 - `NewGatewayFixture` - Creates a fully configured gateway with downstream server, execution services, governance dependencies, and MCP gateway wiring
-- `EnrollClientIdentity` - Performs CSR enrollment for test clients with certificate generation and operator session creation
-- `CreateMTLSClient` - Creates HTTP client configured for mTLS using enrolled identity
+- `EnrollClientIdentity` - Performs CSR enrollment for test clients with certificate generation and operator session creation. Correctly sets `CLICertificate`, `CLIPrivateKey`, and `CLISessionID` (CS-13 fix)
+- `CreateMTLSClient` - Creates HTTP client configured for mTLS using enrolled operator identity
+- `CreateCLIMTLSClient` - Creates mTLS HTTP client using the CLI certificate (distinct from operator cert) with `X-G8E-CLI-Session-ID` header injection via `cliSessionRoundTripper`. Used for delegated app enrollment and CLI-identity-bound flows
+- `SetupTribunal` - Wires a real `TribunalService` via the shared `tribunal.NewTribunalFromPolicy` factory with Ed25519 member keys, `TribunalPolicy`, and `LocalDeliberator`. Generates `nMembers` key pairs, registers each as a `TrustedSigner`, and supports `nServiceMembers < nMembers` split for quorum-not-reached simulation
 - `WaitForReady` - Polls HTTP health endpoint until server accepts connections
 - `SetPublicBaseURL` - Sets public base URL for MCP gateway (used for approval links)
 - Supports configurable posture (notary, consensus, doctrine), custom downstream URLs, and test port zero allowance
@@ -249,7 +278,7 @@ Tests for data model serialization and validation:
 #### Gateway Service Tests (`internal/services/gateway/`)
 
 Comprehensive gateway service testing:
-- `admin_controller_test.go` - Admin API controller tests
+- `admin_controller_test.go` - Admin API controller tests including authz-precedence subtest (CS-5: no-auth + no-tribunal-ID → 401, not 400)
 - `app_enrollment_service_test.go` - App enrollment flow tests
 - `app_policy_store_service_test.go` - App policy store tests
 - `auth_controller_approvals_test.go` - Auth controller approvals tests
@@ -299,6 +328,18 @@ Comprehensive gateway service testing:
 - `user_service_test.go` - User service tests
 - `web_session_service_test.go` - Web session service tests
 
+#### Tribunal Service Tests (`internal/services/tribunal/`)
+
+Tribunal consensus and key provisioning tests:
+- `factory_test.go` - `NewTribunalFromPolicy` factory tests including `FileKeyProvider` key loading (success, not-found, invalid seed length, invalid hex), `SaveMemberKey` provisioning (creates directory and file), and multi-member key resolution
+- `service_test.go` - `TribunalService` tests including deliberation, nil-key member skipping (aligns with factory contract), and quorum behavior
+
+**Shared Factory** (`internal/services/tribunal/factory.go`):
+- `NewTribunalFromPolicy` - Shared factory used by both production `BootstrapTribunal` and test `SetupTribunal` to construct `TribunalService` from a `TribunalPolicy`, `KeyProvider`, and `L1Doctrine`. Eliminates duplication (CS-12)
+- `KeyProvider` interface + `KeyProviderFunc` adapter - Allows each caller to supply keys from its own source
+- `FileKeyProvider` - Loads Ed25519 seeds from `{secretsDir}/{prefix}{tribunalID}_{appID}.key` for multi-member co-signing (CS-9)
+- `SaveMemberKey` - Provisioning helper that writes hex-encoded Ed25519 seeds to the secrets directory
+
 #### Governance Service Tests (`internal/services/governance/`)
 
 Five-layer governance pipeline tests:
@@ -307,7 +348,7 @@ Five-layer governance pipeline tests:
 - `eval_answer_test.go` - L1 Doctrine evaluation answer tests
 - `eval_answer_integration_test.go` - L1 Doctrine evaluation answer integration tests
 - `governance_test.go` - General governance tests
-- `governance_integration_test.go` - Governance integration tests with `//go:build integration` tag
+- `governance_integration_test.go` - Governance integration tests with `//go:build integration` tag. Includes `TestGovernanceFailClosed` with 5 fail-closed subtests: `NilReplayStore_FailClosed`, `NilStateRootProvider_FailClosed`, `EmptyStateRoot_FailClosed`, `NilDoctrine_DefaultsToValid`, `NilTribunalStore_ConsensusFailClosed`. Uses real implementations (`StatefulMockReplayStore`, `SimpleStateRootProvider`), `testutil.NewTestLogger()`, and typed error assertions via `errors.Is` (CS-7)
 - `l1_doctrine_payload_test.go` - L1 Doctrine payload validation tests
 - `l1_doctrine_test.go` - L1 Doctrine pattern matching tests
 - `l3_notary_test.go` - L3 Notary human presence proof tests
@@ -528,6 +569,7 @@ MCP gateway and native tool integration tests:
 - `sys_time_clock_test.go` - Time clock tool tests
 - `sys_tools_test.go` - System tools tests
 - `tls_cert_inspect_test.go` - TLS certificate inspect tool tests
+- `tribunal_deliberator_test.go` - HTTP tribunal deliberator timeout test (CS-6: 1s client timeout fires before 2s server delay)
 - `validation_test.go` - Validation tests
 
 #### Package Tests

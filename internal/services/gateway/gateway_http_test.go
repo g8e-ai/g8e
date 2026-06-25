@@ -146,6 +146,111 @@ func TestIsPrivateIP(t *testing.T) {
 	}
 }
 
+func TestIsSafeHost(t *testing.T) {
+	t.Parallel()
+
+	cfg := &config.Config{
+		Endpoint: "g8e.local",
+		Gateway: config.GatewayConfig{
+			PublicBaseURL: "https://g8e-public.com:8443",
+		},
+	}
+
+	cases := []struct {
+		host     string
+		expected bool
+	}{
+		// Local / Loopback
+		{"localhost", true},
+		{"127.0.0.1", true},
+		{"::1", true},
+		// RFC 1918 Private IPs
+		{"192.168.1.1", true},
+		{"10.0.0.1", true},
+		{"172.16.0.1", true},
+		// Configured Endpoint
+		{"g8e.local", true},
+		// Configured PublicBaseURL
+		{"g8e-public.com", true},
+		// Case insensitivity
+		{"G8E.LOCAL", true},
+		// Invalid / Malicious Characters
+		{"evil.com;sh", false},
+		{"evil.com/path", false},
+		{"evil.com?param=value", false},
+		{"evil.com", false},
+		{"google.com", false},
+		{"", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.host, func(t *testing.T) {
+			t.Parallel()
+			result := isSafeHost(tc.host, cfg)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestCatchAllRedirect(t *testing.T) {
+	t.Parallel()
+
+	h, cfg := setupTestHTTPHandler(t)
+	cfg.Gateway.HTTPSPort = 8443
+
+	router := h.buildHTTPRouter()
+
+	cases := []struct {
+		name           string
+		reqHost        string
+		reqPath        string
+		expectedStatus int
+		expectedLoc    string
+	}{
+		{
+			name:           "Redirect safe host localhost",
+			reqHost:        "localhost",
+			reqPath:        "/some/path?foo=bar",
+			expectedStatus: http.StatusMovedPermanently,
+			expectedLoc:    "https://localhost:8443/some/path?foo=bar",
+		},
+		{
+			name:           "Redirect safe host with port",
+			reqHost:        "localhost:8080",
+			reqPath:        "/some/path",
+			expectedStatus: http.StatusMovedPermanently,
+			expectedLoc:    "https://localhost:8443/some/path",
+		},
+		{
+			name:           "Fallback for unsafe host",
+			reqHost:        "evil.com",
+			reqPath:        "/some/path",
+			expectedStatus: http.StatusMovedPermanently,
+			expectedLoc:    "https://localhost:8443/some/path",
+		},
+		{
+			name:           "Prevent path injection redirect",
+			reqHost:        "localhost",
+			reqPath:        "//evil.com/some/path",
+			expectedStatus: http.StatusTemporaryRedirect, // Go's ServeMux intercepts and cleans double slashes with a 307
+			expectedLoc:    "/evil.com/some/path",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://"+tc.reqHost+tc.reqPath, nil)
+			req.Host = tc.reqHost
+			rr := httptest.NewRecorder()
+
+			router.ServeHTTP(rr, req)
+
+			assert.Equal(t, tc.expectedStatus, rr.Code)
+			assert.Equal(t, tc.expectedLoc, rr.Header().Get("Location"))
+		})
+	}
+}
+
 func setupTestHTTPHandler(t *testing.T) (*HTTPHandler, *config.Config) {
 	t.Helper()
 	infra := setupTestInfrastructure(t, false)
@@ -618,14 +723,6 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 }
 
-func TestHTTPHandler_buildRouter(t *testing.T) {
-	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
-
-	router := h.buildRouter()
-	assert.NotNil(t, router, "buildRouter should return non-nil handler")
-}
-
 func TestHTTPHandler_ServeHTTP(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
@@ -634,8 +731,9 @@ func TestHTTPHandler_ServeHTTP(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	h.ServeHTTP(rr, req)
-	// ServeHTTP uses buildRouter which includes auth middleware, so unauthenticated requests are rejected
-	assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	// ServeHTTP uses buildPublicRouter which redirects "/" to "/console"
+	assert.Equal(t, http.StatusFound, rr.Code)
+	assert.Equal(t, "/console", rr.Header().Get("Location"))
 }
 
 func TestHTTPHandler_GetMCPGateway(t *testing.T) {
@@ -670,8 +768,8 @@ func TestHTTPHandler_handleLandingPage(t *testing.T) {
 	rr := httptest.NewRecorder()
 
 	h.handleLandingPage(rr, req)
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Contains(t, rr.Body.String(), "g8e", "Landing page should contain g8e")
+	assert.Equal(t, http.StatusFound, rr.Code)
+	assert.Equal(t, "/console", rr.Header().Get("Location"))
 }
 
 // makeTestAppWorkloadCert returns a self-signed cert with a SPIFFE URI SAN for an app workload identity.

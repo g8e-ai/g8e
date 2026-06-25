@@ -1,7 +1,7 @@
 # CLI Reference
 
-Last Updated: 2026-06-23
-Version: v1.1.9
+Last Updated: 2026-06-24
+Version: v1.2.0
 
 This reference documents the g8e CLI commands for managing the g8e Gateway, g8e Operator, and platform setup.
 

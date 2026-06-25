@@ -311,19 +311,7 @@ func TestHandleApprovalPage(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionHashRequired.Error())
 	})
 
-	t.Run("Failure - transaction not found", func(t *testing.T) {
-		t.Parallel()
-		c, _ := setupTestAuthController(t)
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/nonexistent", nil)
-		rr := httptest.NewRecorder()
-
-		c.handleApprovalPage(rr, req)
-
-		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
-	})
-
-	t.Run("Success - returns HTML page", func(t *testing.T) {
+	t.Run("Success - redirects to console with txHash", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
@@ -344,11 +332,8 @@ func TestHandleApprovalPage(t *testing.T) {
 
 		c.handleApprovalPage(rr, req)
 
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "text/html; charset=utf-8", rr.Header().Get("Content-Type"))
-		assert.Contains(t, rr.Body.String(), "Approve Transaction")
-		assert.Contains(t, rr.Body.String(), txHash)
-		assert.Contains(t, rr.Body.String(), "test-tool")
+		assert.Equal(t, http.StatusFound, rr.Code)
+		assert.Equal(t, "/console#approve="+txHash, rr.Header().Get("Location"))
 	})
 }
 

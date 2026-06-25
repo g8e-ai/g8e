@@ -18,8 +18,7 @@ package governance
 import (
 	"context"
 	"crypto/ed25519"
-	"log/slog"
-	"os"
+	"errors"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -32,12 +31,11 @@ import (
 // TestGovernanceFlow tests the full governance flow from envelope creation
 // through L5Actuator execution.
 func TestGovernanceFlow(t *testing.T) {
-	t.Parallel()
 	pub, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
 	actuator := &L5Actuator{
-		Logger: slog.New(slog.NewTextHandler(os.Stdout, nil)),
+		Logger: testutil.NewTestLogger(),
 		SignerStore: &SimpleSignerStore{
 			Signers: map[string]ed25519.PublicKey{
 				nodeID: pub,
@@ -99,29 +97,81 @@ func TestGovernanceFlow(t *testing.T) {
 	}
 }
 
-// TestGovernanceFailClosed tests that the L1 Doctrine fails closed
-// when critical components are missing or misconfigured.
+// TestGovernanceFailClosed tests that the L4 Warden fails closed when
+// critical components are missing or misconfigured. Each subtest verifies
+// a specific fail-closed path by calling VerifyEnvelope with a valid
+// envelope and asserting the correct typed error is returned.
 func TestGovernanceFailClosed(t *testing.T) {
-	t.Parallel()
+	buildValidEnvelope := func(t *testing.T) *governance.GovernanceEnvelope {
+		t.Helper()
+		_, privKey, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			t.Fatalf("failed to generate key: %v", err)
+		}
+		return signedEnvelope(t, constants.ActionTypeFsList, typedPayload(t, constants.ActionTypeFsList), privKey)
+	}
 
-	t.Run("DoctrineNil_FailClosed", func(t *testing.T) {
-		t.Parallel()
-		doctrine := NewL1Doctrine()
-		warden := NewL4Warden(
-			slog.New(slog.NewTextHandler(os.Stdout, nil)),
-			&testutil.MockReplayStore{},
-			testutil.NewMockStateRootProvider("test-state-root"),
+	makeWarden := func(replayStore ReplayStore, stateRootProvider StateRootProvider, tribunalStore TribunalStore, doctrine *L1Doctrine, posture string) *L4Warden {
+		return NewL4Warden(
+			testutil.NewTestLogger(),
+			replayStore,
+			stateRootProvider,
 			&SimpleSignerStore{Signers: map[string]ed25519.PublicKey{}},
-			nil, // TribunalStore
+			tribunalStore,
 			nil, // AppPolicyStore
 			nil, // L3Notary
 			doctrine,
 			constants.AllActionTypes,
-			"doctrine",
+			posture,
 			nil, // Clock defaults to RealClock
 		)
-		if warden == nil {
-			t.Error("Expected non-nil warden with doctrine")
+	}
+
+	t.Run("NilReplayStore_FailClosed", func(t *testing.T) {
+		warden := makeWarden(nil, &SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "doctrine")
+		env := buildValidEnvelope(t)
+		_, err := warden.VerifyEnvelope(context.Background(), env)
+		if !errors.Is(err, ErrReplayStoreMissing) {
+			t.Fatalf("expected ErrReplayStoreMissing, got %v", err)
+		}
+	})
+
+	t.Run("NilStateRootProvider_FailClosed", func(t *testing.T) {
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), nil, nil, NewL1Doctrine(), "doctrine")
+		env := buildValidEnvelope(t)
+		_, err := warden.VerifyEnvelope(context.Background(), env)
+		if !errors.Is(err, ErrStateRootMissing) {
+			t.Fatalf("expected ErrStateRootMissing, got %v", err)
+		}
+	})
+
+	t.Run("EmptyStateRoot_FailClosed", func(t *testing.T) {
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &SimpleStateRootProvider{Root: ""}, nil, NewL1Doctrine(), "doctrine")
+		env := buildValidEnvelope(t)
+		_, err := warden.VerifyEnvelope(context.Background(), env)
+		if !errors.Is(err, constants.ErrTxProviderMisconfigured) {
+			t.Fatalf("expected ErrTxProviderMisconfigured, got %v", err)
+		}
+	})
+
+	t.Run("NilDoctrine_DefaultsToValid", func(t *testing.T) {
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &SimpleStateRootProvider{Root: "root-1"}, nil, nil, "doctrine")
+		env := buildValidEnvelope(t)
+		verified, err := warden.VerifyEnvelope(context.Background(), env)
+		if err != nil {
+			t.Fatalf("expected nil doctrine to default to NewL1Doctrine and pass, got %v", err)
+		}
+		if verified == nil {
+			t.Fatal("expected non-nil verified transaction")
+		}
+	})
+
+	t.Run("NilTribunalStore_ConsensusFailClosed", func(t *testing.T) {
+		warden := makeWarden(testutil.NewStatefulMockReplayStore(), &SimpleStateRootProvider{Root: "root-1"}, nil, NewL1Doctrine(), "consensus")
+		env := buildValidEnvelope(t)
+		_, err := warden.VerifyEnvelope(context.Background(), env)
+		if !errors.Is(err, ErrL2TribunalNotConfigured) {
+			t.Fatalf("expected ErrL2TribunalNotConfigured, got %v", err)
 		}
 	})
 }

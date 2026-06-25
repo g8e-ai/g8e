@@ -169,15 +169,16 @@ const (
 	ReceiptsFilename       = "receipts.json"
 	ReceiptsExportFilename = "receipts-export.json"
 
-	SecretsFileSessionEncryptionKey = "session_encryption_key"
-	SecretsFileBootstrapDigest      = "bootstrap_digest.json"
-	SecretsFileActuatorSigningKey   = "actuator_signing_key"
-	SecretsFileActuatorKeyID        = "actuator_key_id"
-	SecretsFileAuditorHMACKey       = "auditor_hmac_key"
-	SecretsFileNotarySigningKey     = "notary_signing_key"
-	SecretsFileOperatorPrivateKey   = "operator_private_key"
-	SecretsFileCLIPrivateKey        = "cli_private_key"
-	SecretsFileSessionToken         = "session_token"
+	SecretsFileSessionEncryptionKey    = "session_encryption_key"
+	SecretsFileBootstrapDigest         = "bootstrap_digest.json"
+	SecretsFileActuatorSigningKey      = "actuator_signing_key"
+	SecretsFileActuatorKeyID           = "actuator_key_id"
+	SecretsFileAuditorHMACKey          = "auditor_hmac_key"
+	SecretsFileNotarySigningKey        = "notary_signing_key"
+	SecretsFileOperatorPrivateKey      = "operator_private_key"
+	SecretsFileCLIPrivateKey           = "cli_private_key"
+	SecretsFileSessionToken            = "session_token"
+	SecretsFileTribunalMemberKeyPrefix = "tribunal_member_"
 
 	DemosDirname                = "demos"
 	DemosComposeFile            = "compose.yml"
@@ -322,6 +323,8 @@ const (
 	TestLocalStateDBFilename    = "local_state.db"
 	TestAuditVaultDBFilename    = "audit_vault.db"
 	TestSecretManagerDBFilename = "secret_manager_test.db"
+	TestCertFilename            = "test-cert.pem"
+	TestKeyFilename             = "test-key.pem"
 
 	// File system listing limits
 	FsListMaxDepth       = 3

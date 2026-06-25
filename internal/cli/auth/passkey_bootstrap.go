@@ -68,7 +68,7 @@ func (s *PasskeyBootstrapServer) Start() (string, error) {
 	// Find an available port on 0.0.0.0 to allow remote access via port forwarding
 	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
-		return "", fmt.Errorf("%w: %v", constants.ErrPortUnavailable, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrPortUnavailable, err)
 	}
 
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -356,7 +356,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	// Get current username for passkey registration
 	currentUser, err := user.Current()
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrGetCurrentUser, err)
+		return fmt.Errorf("%w: %w", constants.ErrGetCurrentUser, err)
 	}
 	userName := currentUser.Username
 
@@ -365,7 +365,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 
 	url, err := server.Start()
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrPasskeyBootstrapServerStart, err)
+		return fmt.Errorf("%w: %w", constants.ErrPasskeyBootstrapServerStart, err)
 	}
 	defer server.Stop()
 
@@ -437,16 +437,18 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 	// Load CLI mTLS certificate for authentication
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return false, fmt.Errorf("%w: %v", constants.ErrFailedToLoadClientCertificate, err)
+		return false, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	// Load CA bundle for server verification
 	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
 	if err != nil {
-		return false, fmt.Errorf("%w: %v", constants.ErrFailedToReadTrustBundle, err)
+		return false, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
-	caPool.AppendCertsFromPEM(caBundleBytes)
+	if !caPool.AppendCertsFromPEM(caBundleBytes) {
+		return false, constants.ErrCAParseFailed
+	}
 
 	// Create HTTP client with TLS configuration
 	tlsCfg := &tls.Config{
@@ -458,11 +460,12 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 		Transport: &http.Transport{
 			TLSClientConfig: tlsCfg,
 		},
+		Timeout: httpTimeout,
 	}
 
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		return false, fmt.Errorf("%w: %v", constants.ErrHTTPRequestExecuteFailed, err)
+		return false, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -472,7 +475,7 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, fmt.Errorf("%w: %v", constants.ErrHTTPResponseReadFailed, err)
+		return false, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
 	var result struct {
@@ -483,7 +486,7 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
-		return false, fmt.Errorf("%w: %v", constants.ErrInvalidJSONResponse, err)
+		return false, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	return len(result.Credentials) > 0, nil
@@ -504,7 +507,7 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	// Get current username for passkey registration
 	currentUser, err := user.Current()
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrGetCurrentUser, err)
+		return fmt.Errorf("%w: %w", constants.ErrGetCurrentUser, err)
 	}
 	userName := currentUser.Username
 
@@ -516,17 +519,20 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	}
 	challengeBody, err := json.Marshal(challengeReq)
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrHTTPRequestMarshalFailed, err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
 	}
 
 	resp, err := http.Post(challengeURL, "application/json", bytes.NewReader(challengeBody))
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrHTTPRequestExecuteFailed, err)
+		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("%w: status %d", constants.ErrHTTPStatusError, resp.StatusCode)
+		}
 		return fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(body))
 	}
 
@@ -545,7 +551,7 @@ func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&challengeResp); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrInvalidJSONResponse, err)
+		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
 
 	if !challengeResp.Success {

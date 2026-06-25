@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-06-23
-Version: v1.1.6
+Last Updated: 2026-06-24
+Version: v1.2.0
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 

@@ -15,89 +15,31 @@ package cmd
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
-	"fmt"
+	"encoding/pem"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/mcp"
 )
-
-func mapMethodToPath(method string) (string, error) {
-	switch method {
-	case "tools/list":
-		return "/tools/list", nil
-	case "tools/call":
-		return "/tools/call", nil
-	case "resources/list":
-		return "/resources/list", nil
-	case "resources/read":
-		return "/resources/read", nil
-	case "prompts/list":
-		return "/prompts/list", nil
-	case "prompts/get":
-		return "/prompts/get", nil
-	default:
-		return "", fmt.Errorf("unsupported method: %s", method)
-	}
-}
-
-func TestMapMethodToPath(t *testing.T) {
-	t.Run("tools/list maps correctly", func(t *testing.T) {
-		path, err := mapMethodToPath("tools/list")
-		require.NoError(t, err)
-		assert.Equal(t, "/tools/list", path)
-	})
-
-	t.Run("tools/call maps correctly", func(t *testing.T) {
-		path, err := mapMethodToPath("tools/call")
-		require.NoError(t, err)
-		assert.Equal(t, "/tools/call", path)
-	})
-
-	t.Run("resources/list maps correctly", func(t *testing.T) {
-		path, err := mapMethodToPath("resources/list")
-		require.NoError(t, err)
-		assert.Equal(t, "/resources/list", path)
-	})
-
-	t.Run("resources/read maps correctly", func(t *testing.T) {
-		path, err := mapMethodToPath("resources/read")
-		require.NoError(t, err)
-		assert.Equal(t, "/resources/read", path)
-	})
-
-	t.Run("prompts/list maps correctly", func(t *testing.T) {
-		path, err := mapMethodToPath("prompts/list")
-		require.NoError(t, err)
-		assert.Equal(t, "/prompts/list", path)
-	})
-
-	t.Run("prompts/get maps correctly", func(t *testing.T) {
-		path, err := mapMethodToPath("prompts/get")
-		require.NoError(t, err)
-		assert.Equal(t, "/prompts/get", path)
-	})
-
-	t.Run("unsupported method returns error", func(t *testing.T) {
-		path, err := mapMethodToPath("unknown/method")
-		require.Error(t, err)
-		assert.Empty(t, path)
-		assert.Contains(t, err.Error(), "unsupported method")
-	})
-}
 
 func TestAgentCmd(t *testing.T) {
 	t.Run("agent command has correct use and description", func(t *testing.T) {
@@ -135,7 +77,7 @@ func TestAgentCmd(t *testing.T) {
 		assert.Contains(t, cmd.Short, "Print MCP client configuration")
 	})
 
-	t.Run("agent show generates gateway configs for claude", func(t *testing.T) {
+	t.Run("agent show generates gateway configs for claude with full transport details", func(t *testing.T) {
 		cmd := agentShowCmd()
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
@@ -150,113 +92,20 @@ func TestAgentCmd(t *testing.T) {
 		assert.Contains(t, output, "Stdio Transport")
 	})
 
-	t.Run("agent show generates gateway configs for cursor", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"cursor"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for devin", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"devin"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for vscode", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"vscode"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for continue", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"continue"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for aider", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"aider"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for codeium", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"codeium"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for tabby", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"tabby"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for generic", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"generic"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
-
-	t.Run("agent show generates gateway configs for goose", func(t *testing.T) {
-		cmd := agentShowCmd()
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-		cmd.SetArgs([]string{"goose"})
-		err := cmd.Execute()
-		require.NoError(t, err)
-		output := buf.String()
-		assert.Contains(t, output, "g8e Gateway MCP Configurations")
-	})
+	agents := []string{"cursor", "devin", "vscode", "continue", "aider", "codeium", "tabby", "generic", "goose"}
+	for _, agent := range agents {
+		t.Run("agent show generates gateway configs for "+agent, func(t *testing.T) {
+			cmd := agentShowCmd()
+			var buf bytes.Buffer
+			cmd.SetOut(&buf)
+			cmd.SetErr(&buf)
+			cmd.SetArgs([]string{agent})
+			err := cmd.Execute()
+			require.NoError(t, err)
+			output := buf.String()
+			assert.Contains(t, output, "g8e Gateway MCP Configurations")
+		})
+	}
 
 	t.Run("agent show returns error for unknown agent", func(t *testing.T) {
 		cmd := agentShowCmd()
@@ -772,55 +621,14 @@ func TestProxyToGatewayWithRetry(t *testing.T) {
 }
 
 func TestCreateMCPClient_WithValidCerts(t *testing.T) {
-	t.Run("createMCPClient loads certificates successfully", func(t *testing.T) {
+	t.Run("createMCPClient fails when certificates are missing", func(t *testing.T) {
 		tempDir := t.TempDir()
-
-		// Generate a self-signed cert/key pair for testing
-		certPEM := `-----BEGIN CERTIFICATE-----
-MIIBhTCCASugAwIBAgIQIRi6zePL6mKjOipn+dNuaTAKBggqhkjOPQQDAjASMRAw
-DgYDVQQKEwdBY21lIENvMB4XDTE3MTAyMDE5NDMwNloXDTE4MTAyMDE5NDMwNlow
-EjEQMA4GA1UEChMHQWNtZSBDbzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABFwi
-6NyKaHXnBlDElMh9fS9jOaK7hM1o5J6I1JUqS1q2mOX+dz9k1qjCBkDAOBgNVHQ8B
-Af8EBAMCB4AwEwYDVR0lBAwwCgYIKwYBBQUHAwIwDAYDVR0TAQH/BAIwADAdBgNV
-HQ4EFgQU9fYJ3V8V3N/NlRP8tq+pG2jvYXMwHwYDVR0jBBgwFoAU9fYJ3V8V3N/N
-lRP8tq+pG2jvYXMwCgYIKoZIzj0EAwIDRwAwRAIgK+Tczv6H1lVfU0VfK3BjL9U6
-m8F0dT1HYL6O0XbY8iYCIGyB8LJ4z3K1X7lR+zF3dX1HYL6O0XbY8iYJ
------END CERTIFICATE-----`
-		keyPEM := `-----BEGIN EC PRIVATE KEY-----
-MHcCAQEEIIrYSSNQFaA2Hwf1duRSxKtLYX5CB04fSeQ6tF1aY/PuoAoGCCqGSM49
-AwEHoUQDQgAEXCLo3IpodecGUMSUyH19L2M5oruEzWjknoh0lSpLWrab5d+d7J1g
-6NyKaHXnBlDElMh9fS9jOaK7hM1o5J6I1JUqS1q2mOX+dz9k1g==
------END EC PRIVATE KEY-----`
-
-		certPath := tempDir + "/client.pem"
-		keyPath := tempDir + "/client-key.pem"
-		caPath := tempDir + "/ca.pem"
-
-		require.NoError(t, os.WriteFile(certPath, []byte(certPEM), 0644))
-		require.NoError(t, os.WriteFile(keyPath, []byte(keyPEM), 0644))
-		require.NoError(t, os.WriteFile(caPath, []byte(certPEM), 0644))
-
 		cfg := &config.Config{
 			ProjectRoot: tempDir,
 		}
-		// Use reflection-like approach: we can't set private fields, so we test
-		// that createMCPClient fails with our custom paths by creating a helper
-		// or we test at the function boundary. Since createMCPClient uses
-		// cfg.CLICertFile() etc, and those are methods on Config, we need to
-		// trace what they return.
-		_ = certPath
-		_ = keyPath
-		_ = caPath
-		_ = cfg
-
-		// The createMCPClient function uses cfg.CLICertFile() which depends on
-		// config layout. Rather than fighting the config internals, we verify
-		// the function exists and has the right signature by calling it and
-		// expecting the canonical "failed to load client certificate" when
-		// certificates are missing.
 		_, err := createMCPClient(cfg)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load client certificate")
+		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
 	})
 
 	t.Run("createMCPClient configures TLS with cert and CA", func(t *testing.T) {
@@ -856,18 +664,35 @@ func generateTestCerts(t *testing.T) (certPath, keyPath, caPath string) {
 	t.Helper()
 	tempDir := t.TempDir()
 
-	// Use openssl to generate test certificates
-	keyFile := tempDir + "/test-key.pem"
-	certFile := tempDir + "/test-cert.pem"
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
 
-	cmd := exec.Command("openssl", "ecparam", "-genkey", "-name", "prime256v1", "-noout", "-out", keyFile)
-	require.NoError(t, cmd.Run())
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test"},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:     []string{"g8e.local"},
+	}
 
-	cmd = exec.Command("openssl", "req", "-new", "-x509", "-key", keyFile, "-out", certFile,
-		"-days", "1", "-subj", "/CN=test", "-addext", "subjectAltName=DNS:g8e.local")
-	require.NoError(t, cmd.Run())
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	require.NoError(t, err)
 
-	return certFile, keyFile, certFile
+	certPath = filepath.Join(tempDir, constants.TestCertFilename)
+	keyPath = filepath.Join(tempDir, constants.TestKeyFilename)
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	require.NoError(t, os.WriteFile(certPath, certPEM, 0644))
+
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0644))
+
+	return certPath, keyPath, certPath
 }
 
 func TestEnvOr(t *testing.T) {
@@ -1008,34 +833,27 @@ func TestPrintMCPConfigLocal(t *testing.T) {
 	t.Run("generates local config with /etc/hosts entry", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		// Create minimal config structure
-		cfgDir := filepath.Join(tempDir, ".g8e", "pki", "client")
+		cfgDir := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirClient)
 		require.NoError(t, os.MkdirAll(cfgDir, 0755))
 
-		certPath := filepath.Join(cfgDir, "operator-cert.pem")
-		keyPath := filepath.Join(cfgDir, "operator-key.pem")
-		caPath := filepath.Join(tempDir, ".g8e", "pki", "trust", "g8eg-ca-bundle.pem")
+		certPath := filepath.Join(cfgDir, constants.TestCertFilename)
+		keyPath := filepath.Join(cfgDir, constants.TestKeyFilename)
+		caPath := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 		require.NoError(t, os.MkdirAll(filepath.Dir(caPath), 0755))
 
-		// Create dummy cert files
 		require.NoError(t, os.WriteFile(certPath, []byte("cert"), 0644))
 		require.NoError(t, os.WriteFile(keyPath, []byte("key"), 0644))
 		require.NoError(t, os.WriteFile(caPath, []byte("ca"), 0644))
 
-		// Set project root to temp dir
-		originalProjectRoot := os.Getenv("G8E_PROJECT_ROOT")
-		defer func() { os.Setenv("G8E_PROJECT_ROOT", originalProjectRoot) }()
-		os.Setenv("G8E_PROJECT_ROOT", tempDir)
+		t.Setenv("G8E_PROJECT_ROOT", tempDir)
 
 		cmd := &cobra.Command{}
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
 		err := printMCPConfigLocal(cmd)
-		// This may fail due to config.Load() complexity, but we test the structure
 		if err != nil {
-			// Expected to fail without full config setup
-			assert.Contains(t, err.Error(), "failed to load config")
+			assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 		}
 	})
 }
@@ -1044,34 +862,27 @@ func TestPrintMCPConfigIP(t *testing.T) {
 	t.Run("generates IP-based config", func(t *testing.T) {
 		tempDir := t.TempDir()
 
-		// Create minimal config structure
-		cfgDir := filepath.Join(tempDir, ".g8e", "pki", "client")
+		cfgDir := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirClient)
 		require.NoError(t, os.MkdirAll(cfgDir, 0755))
 
-		certPath := filepath.Join(cfgDir, "operator-cert.pem")
-		keyPath := filepath.Join(cfgDir, "operator-key.pem")
-		caPath := filepath.Join(tempDir, ".g8e", "pki", "trust", "g8eg-ca-bundle.pem")
+		certPath := filepath.Join(cfgDir, constants.TestCertFilename)
+		keyPath := filepath.Join(cfgDir, constants.TestKeyFilename)
+		caPath := filepath.Join(tempDir, constants.RuntimeDirname, constants.PkiDirname, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 		require.NoError(t, os.MkdirAll(filepath.Dir(caPath), 0755))
 
-		// Create dummy cert files
 		require.NoError(t, os.WriteFile(certPath, []byte("cert"), 0644))
 		require.NoError(t, os.WriteFile(keyPath, []byte("key"), 0644))
 		require.NoError(t, os.WriteFile(caPath, []byte("ca"), 0644))
 
-		// Set project root to temp dir
-		originalProjectRoot := os.Getenv("G8E_PROJECT_ROOT")
-		defer func() { os.Setenv("G8E_PROJECT_ROOT", originalProjectRoot) }()
-		os.Setenv("G8E_PROJECT_ROOT", tempDir)
+		t.Setenv("G8E_PROJECT_ROOT", tempDir)
 
 		cmd := &cobra.Command{}
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 
 		err := printMCPConfigIP(cmd)
-		// This may fail due to config.Load() complexity, but we test the structure
 		if err != nil {
-			// Expected to fail without full config setup
-			assert.Contains(t, err.Error(), "failed to load config")
+			assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 		}
 	})
 }
@@ -1109,8 +920,7 @@ func TestPrintAgentShow(t *testing.T) {
 
 			err := printAgentShow(cmd, agent.ID)
 			if err != nil {
-				// May fail due to config.Load, but we test the agent lookup works
-				assert.Contains(t, err.Error(), "failed to load config")
+				assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 			} else {
 				output := buf.String()
 				assert.Contains(t, output, "g8e Gateway MCP Configurations")
@@ -1127,7 +937,7 @@ func TestPrintAgentShow(t *testing.T) {
 		// Test uppercase
 		err := printAgentShow(cmd, "CLAUDE")
 		if err != nil {
-			assert.Contains(t, err.Error(), "failed to load config")
+			assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 		}
 
 		// Test mixed case
@@ -1138,7 +948,7 @@ func TestPrintAgentShow(t *testing.T) {
 
 		err = printAgentShow(cmd2, "ClaUdE")
 		if err != nil {
-			assert.Contains(t, err.Error(), "failed to load config")
+			assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 		}
 	})
 }

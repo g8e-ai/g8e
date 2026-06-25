@@ -255,13 +255,13 @@ func TestSuspendedFromBodyEdgeCases(t *testing.T) {
 func TestGovernanceScenarios(t *testing.T) {
 	scenarios := governanceScenarios()
 
-	// Should have 2 governance scenarios
-	if len(scenarios) != 2 {
-		t.Errorf("governanceScenarios should return 2 scenarios, got %d", len(scenarios))
+	// Should have 6 governance scenarios
+	if len(scenarios) != 6 {
+		t.Errorf("governanceScenarios should return 6 scenarios, got %d", len(scenarios))
 	}
 
 	// Should have expected names
-	expectedNames := []string{"consensus", "envelope-maximal"}
+	expectedNames := []string{"consensus", "envelope-maximal", "agent-delegation", "tribunal-quorum", "tribunal-veto", "notary-oob"}
 	nameSet := make(map[string]bool)
 	for _, sc := range scenarios {
 		nameSet[sc.Name] = true
@@ -297,6 +297,10 @@ func TestGovernanceScenarioNames(t *testing.T) {
 	expectedNames := map[string]bool{
 		"consensus":        true,
 		"envelope-maximal": true,
+		"agent-delegation": true,
+		"tribunal-quorum":  true,
+		"tribunal-veto":    true,
+		"notary-oob":       true,
 	}
 
 	for _, sc := range scenarios {
@@ -312,6 +316,10 @@ func TestGovernanceScenarioTitles(t *testing.T) {
 	expectedTitles := map[string]string{
 		"consensus":        "L2 consensus envelope (mock ensemble co-sign)",
 		"envelope-maximal": "Official notary envelope: L2 consensus + principal L3 signing",
+		"agent-delegation": "CLI delegates app credential to agent (SPIFFE distinctness + receipt audit)",
+		"tribunal-quorum":  "Tribunal quorum: 2-of-3 co-sign, receipt records consensus",
+		"tribunal-veto":    "Tribunal veto: one member votes false, envelope is rejected",
+		"notary-oob":       "L3 notary OOB: suspend then principal approves out-of-band",
 	}
 
 	for _, sc := range scenarios {
@@ -332,6 +340,10 @@ func TestGovernanceScenarioPostures(t *testing.T) {
 	expectedPostures := map[string]Posture{
 		"consensus":        Consensus,
 		"envelope-maximal": Notary,
+		"agent-delegation": Doctrine,
+		"tribunal-quorum":  Consensus,
+		"tribunal-veto":    Consensus,
+		"notary-oob":       Notary,
 	}
 
 	for _, sc := range scenarios {
@@ -349,10 +361,23 @@ func TestGovernanceScenarioPostures(t *testing.T) {
 func TestGovernanceScenarioPersonas(t *testing.T) {
 	scenarios := governanceScenarios()
 
-	// Both governance scenarios should use ensemble-producer persona
+	// Governance scenarios should use expected personas
+	expectedPersonas := map[string]string{
+		"consensus":        "ensemble-producer",
+		"envelope-maximal": "ensemble-producer",
+		"agent-delegation": "cli-delegator",
+		"tribunal-quorum":  "ensemble-producer",
+		"tribunal-veto":    "ensemble-producer",
+		"notary-oob":       "principal",
+	}
 	for _, sc := range scenarios {
-		if sc.Persona.ID != "ensemble-producer" {
-			t.Errorf("Governance scenario %q should use ensemble-producer persona, got %q", sc.Name, sc.Persona.ID)
+		expected, ok := expectedPersonas[sc.Name]
+		if !ok {
+			t.Errorf("No expected persona defined for scenario %q", sc.Name)
+			continue
+		}
+		if sc.Persona.ID != expected {
+			t.Errorf("Governance scenario %q should use persona %q, got %q", sc.Name, expected, sc.Persona.ID)
 		}
 	}
 }
