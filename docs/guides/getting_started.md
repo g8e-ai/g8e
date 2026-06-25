@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ---
 
@@ -269,13 +269,13 @@ Print MCP client configurations for connecting to the g8e Gateway from local cod
 ./g8e mcp agent show claude
 ```
 
-The CLI displays configurations for `g8e.local` (mTLS), Direct IP (mTLS), and Stdio Transport. If `g8e.local` resolution fails, the proxy automatically falls back to direct IP access.
+The CLI displays configurations for `g8e.local` (mTLS), IP Address (mTLS), and Stdio Transport. If `g8e.local` resolution fails, the proxy automatically falls back to direct IP access.
 
 ---
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for five scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), and **Swarm** (drone swarm with 20 autonomous operators). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for six scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), and **Swarm** (drone swarm with 20 autonomous operators). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
 
 ### What the demos use Docker for
 
@@ -287,29 +287,17 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All demos build the gateway and operator images from the root `Dockerfile`. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The swarm demo deploys a single gateway with 20 operator containers.
+All demos build the gateway and operator images from the root `Dockerfile` using `build: context: ../..`, which compiles the g8e binary from source inside each container. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 
-The `g8e` binary must be built before running demos. The demos CLI checks for the binary at `demos/bin/g8e` and provides a warning if it is not found. Build the binary and copy it to the demos directory:
-
-```bash
-make build
-cp g8e demos/bin/g8e
-```
-
-The binary is then bind-mounted into every container. No per-demo image rebuilds are needed when the binary changes.
+The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This check is advisory; the demo containers build the binary from source via Docker. No pre-built binary is bind-mounted into containers.
 
 ### Prerequisites for demos
 
 - Docker 24.0+ with Docker Compose v2
-- The `g8e` binary built at the repository root (see [Build locally](#build-locally) or [Build in Docker](#build-in-docker))
 
-Build the binary first:
-
-```bash
-make build
-```
+Docker builds the g8e binary from source inside each container. No local Go toolchain or pre-built binary is required.
 
 ### Run a demo
 
@@ -364,9 +352,11 @@ docker compose down -v
 | secure-data | 1 | Governed migration with chain-of-custody receipts |
 | secure-data | 2 | Connector bypass attempt blocked |
 | secure-data | 3 | Cross-tenant leak doctrine triggered |
-| swarm | 1 | Normal operations within doctrine rules |
-| swarm | 2 | Adversary interception attempt blocked |
-| swarm | 3 | Safety violation detection (no-fly zone breach) |
+| dow | 1 | Autonomous SIGINT-to-EO/IR cross-cueing |
+| dow | 2 | BFT spoofing defense |
+| dow | 3 | Disconnected operations |
+
+The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
 
 ### Demo port mappings
 
@@ -380,6 +370,7 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 | secure-data (src) | 8083 | 8446 | 3003 |
 | secure-data (dst) | 8084 | 8447 | - |
 | swarm | 8085 | 8448 | 5005 |
+| dow | 8086 | 8449 | - |
 
 ---
 

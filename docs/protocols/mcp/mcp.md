@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-06-23
+Last Updated: 2026-06-25
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -331,9 +331,9 @@ Validation failures are rejected before envelope construction, ensuring maliciou
 
 ### L3 Notary (Authorization)
 
-- **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprint as proof via CLIL3Notary
+- **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprint as proof via the CLI session verifier (`internal/services/gateway/cli_session_verifier.go`)
 - **WebAuthn**: Browser-based clients authenticate with passkeys via PasskeyService
-- **Composite verifier**: CompositeL3Verifier handles both web and CLI session types
+- **Gateway L3 notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` dispatches based on proof type: proofs with `mtls_cert_fingerprint` use the CLI verification path; all others delegate to the passkey verifier
 - **Auto-approval**: Benign diagnostic commands may skip human prompt after L1/L2 pass
 
 ### L4 Warden (Pre-Dispatch Verification)
@@ -459,7 +459,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Concern | File |
 |---|---|
 | Governance proxy (agent run) | `internal/cli/cmd/mcp.go` (runMCPAgentRun) |
-| Gateway entry | `cmd/operator/main.go` (runGatewayMode) |
+| Gateway entry | `internal/cli/cmd/gateway.go` (gatewayStartCmd, gatewayServeCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http.go` |
 | MCP/A2A translation | `internal/services/mcp/gateway.go` |
@@ -473,10 +473,10 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Field path registry | `internal/services/mcp/field_parser.go` |
 | Envelope construction | `internal/services/mcp/gateway.go` (processGatewayTransaction) |
 | Transaction verification | `internal/services/governance/l4_warden.go` |
-| Envelope processor | `internal/services/governance/processor.go` |
+| Envelope processor | `internal/services/governance/types.go` (EnvelopeProcessor interface) |
 | Pub/Sub command service | `internal/services/pubsub/command_service.go` |
-| CLI L3 verification | `internal/services/gateway/cli_l3_notary.go` |
-| Composite L3 verifier | `internal/services/gateway/composite_l3_verifier.go` |
+| CLI L3 verification | `internal/services/gateway/cli_session_verifier.go` |
+| Gateway L3 notary | `internal/services/governance/l3_notary.go` (NewGatewayL3Notary) |
 | Passkey L3 brokerage | `internal/services/gateway/passkey_service.go` |
 | Error mapping | `internal/services/mcp/gateway.go` (mapGatewayError) |
 | Suspended transaction store | `internal/services/gateway/gateway_db.go` |

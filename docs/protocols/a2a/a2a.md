@@ -4,7 +4,7 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-06-24
+Last Updated: 2026-06-25
 
 The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 
@@ -123,7 +123,7 @@ The g8e platform enforces security across five layers:
 ### L1 Doctrine (Hard Gates)
 
 - **Forbidden patterns**: Protobuf field options with regex constraints on skill names defined in `protocol/proto/g8e/operator/v1/operator.proto` (pattern: (?i)^(sudo|su)$).
-- **Runtime scanning**: L1 validation runs during `ProcessEnvelope` in `internal/services/governance/processor.go`, after envelope construction. The `L1Doctrine.ValidatePayload` method in `internal/services/governance/l1_doctrine.go` checks forbidden patterns on protobuf string fields.
+- **Runtime scanning**: L1 validation runs during `VerifyEnvelope` in `internal/services/governance/l4_warden.go`, which calls `L1Doctrine.ValidatePayload` in `internal/services/governance/l1_doctrine.go` after payload decoding. The `ValidatePayload` method checks forbidden patterns on protobuf string fields.
 - **MITRE-based threat detection**: The `payload_json` field is analyzed via `AnalyzeMCPArguments` for MITRE ATT&CK threat indicators, including reverse shells, privilege escalation, credential access, data exfiltration, and system tampering patterns.
 
 ### L2 Consensus
@@ -135,8 +135,8 @@ The g8e platform enforces security across five layers:
 
 ### L3 Notary (Authorization)
 
-- **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprints as proof via `internal/services/gateway/cli_l3_notary.go`.
-- **Composite verifier**: `internal/services/gateway/composite_l3_verifier.go` handles both web and CLI session types.
+- **mTLS fingerprint**: CLI sessions use mTLS certificate fingerprints as proof. The `CLISessionVerifier` in `internal/services/gateway/cli_session_verifier.go` performs user active, session validity, and certificate revocation checks.
+- **Unified notary**: `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go` creates a composite `L3Notary` that dispatches based on proof type: proofs with `mtls_cert_fingerprint` use the CLI verification path; all others delegate to the passkey (WebAuthn) verifier.
 - **Suspension**: Transactions requiring L3 approval are suspended and stored for later resumption via WebAuthn or CLI proof.
 - **L3 status tracking**: `ActionReceipt.l3_status` distinguishes between `L3_STATUS_NOT_REQUIRED`, `L3_STATUS_REQUIRED_VALID`, and `L3_STATUS_REQUIRED_FAILED`.
 
@@ -147,7 +147,7 @@ The g8e platform enforces security across five layers:
 ### L5 Actuator (Dispatch)
 
 - **Dispatch**: The Actuator egress handler `handleA2aCallRequestSync` in `internal/services/pubsub/pubsub_commands.go` unmarshals the `A2aCallRequested` payload and calls `DispatchToA2ADownstream` to forward the call to the configured downstream A2A server.
-- **Downstream request**: The gateway sends an `A2ADownstreamRequest` (defined in `internal/services/mcp/models.go`) containing `skill_name`, `payload`, and `execution_id` as JSON to the downstream URL via HTTP POST with a 30-second timeout.
+- **Downstream request**: The gateway sends an `A2ADownstreamRequest` (defined in `internal/services/mcp/models.go`) containing `skill_name` and `payload` as JSON to the downstream URL via HTTP POST with a 30-second timeout. The `execution_id` field is present in the struct but is not populated during downstream dispatch.
 - **Downstream response**: The gateway parses the response for `result`, `summary`, or `error` fields. If `summary` is present, it is used; otherwise `result` is used; otherwise the gateway returns "completed".
 - **Receipt bounding**: The receipt summary is truncated to `ReceiptSummaryMaxBytes` (4096 bytes, defined in `internal/constants/pubsub.go`) to prevent unbounded growth.
 - **Receipts**: Produces signed `ActionReceipt` objects upon completion.
@@ -242,8 +242,9 @@ Sessions are cryptographically bound to their authentication mechanism.
 | Envelope construction | `internal/services/mcp/gateway.go` (`processGatewayTransaction`) |
 | L1 doctrine validation | `internal/services/governance/l1_doctrine.go` |
 | Transaction verification | `internal/services/governance/l4_warden.go` |
-| Envelope processor | `internal/services/governance/processor.go` |
-| Session management | `internal/services/gateway/session_service.go` |
+| Envelope processor interface | `internal/services/governance/types.go` (`EnvelopeProcessor`) |
+| Envelope processor impl | `internal/services/pubsub/pubsub_commands.go` (`OperatorPubSubService.ProcessEnvelope`) |
+| Session management | `internal/services/gateway/cli_session_service.go`, `web_session_service.go`, `operator_session_service.go` |
 | Action type constant | `internal/constants/action_types.go` |
 | API path constant | `internal/constants/api_paths.go` |
 | Error codes | `internal/constants/rpc_errors.go` |
@@ -251,6 +252,15 @@ Sessions are cryptographically bound to their authentication mechanism.
 | Gateway configuration | `internal/config/config.go` (`Gateway.A2ADownstreamURL`) |
 | Event type registry | `protocol/constants/events.json` |
 | Proto schema | `protocol/proto/g8e/operator/v1/operator.proto` |
+
+---
+
+## Reference Artifacts
+
+The following reference artifacts reside alongside this document in `docs/protocols/a2a/`:
+
+- **`a2a.proto`**: The upstream A2A protocol protobuf definition (package `lf.a2a.v1`). This is the canonical schema for the Agent-to-Agent protocol surface, including `SendMessage`, `SendStreamingMessage`, `GetTask`, `ListTasks`, `CancelTask`, `SubscribeToTask`, push notification configuration, and `AgentCard` discovery. The g8e Gateway does not implement the full upstream A2A service surface; it integrates A2A skill invocations via the `A2A_CALL` action type and the `/api/v1/a2a/call` endpoint.
+- **`a2a.json`**: A non-normative JSON Schema bundle extracted from the proto definitions. This artifact provides schema validation for JSON-based tooling and is not used at runtime by the gateway.
 
 ---
 

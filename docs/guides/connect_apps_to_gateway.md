@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ---
 
@@ -18,7 +18,7 @@ This guide covers connecting applications to the g8e Gateway. The g8e Gateway se
 
 ## Reference g8e Gateway Connection
 
-### Initialization
+### Starting the g8e Gateway
 
 Start the g8e Gateway to initialize the platform runtime:
 
@@ -31,14 +31,6 @@ This creates the `.g8e` directory structure:
 - `.g8e/data/` - SQLite database for g8e Gateway persistence
 - `.g8e/secrets/` - Platform secrets (session encryption keys, bootstrap digest)
 - `.g8e/vault/` - Encryption vault for data at rest
-
-### Starting the g8e Gateway
-
-Start the g8e Gateway:
-
-```bash
-./g8e gw start
-```
 
 The g8e Gateway runs in the default mode (Doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
 
@@ -72,16 +64,16 @@ The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves 
 
 | Surface | Port (default) | Auth | Purpose |
 |---|---|---|---|
-| **HTTP Surface** | 8080 (HTTP) | None | Bootstrap enrollment, PKI discovery endpoints |
-| **HTTPS Surface** | 8443 (TLS) | mTLS + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub |
+| **HTTP Surface** | 8080 (HTTP) | None | Health checks, bootstrap enrollment, PKI discovery endpoints, catch-all redirect to HTTPS |
+| **HTTPS Surface** | 8443 (TLS) | mTLS (app-layer) + URI SAN | Governance envelopes, MCP/A2A APIs, document store, WebSocket pub/sub, console SPA |
 
-### Port Multiplexing
+### Port Separation
 
 The g8e Gateway enforces strict port separation for security:
-- **HTTP Surface**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only.
-- **HTTPS Surface with mTLS**: TLS with `tls.RequireAndVerifyClientCert` for strict mutual TLS on the execution boundary.
+- **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, PKI discovery, and catch-all redirect to HTTPS. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
+- **HTTPS Surface**: TLS with `tls.VerifyClientCertIfGiven`. Client certificates are verified when present but not required at the TLS layer. mTLS enforcement occurs at the application layer via `auth.Middleware()`, which checks certificate presence and validity for all routes not registered in `PublicRouteRegistry` (defined in `internal/services/gateway/gateway_auth.go`). Public routes (health, console SPA, bootstrap, passkey endpoints) bypass mTLS; all other routes require a valid client certificate.
 
-Port mixing is prohibited. The gateway fails startup if incompatible surfaces are assigned to the same port, as this would force a downgrade to `VerifyClientCertIfGiven` and weaken the execution boundary to an L7 check.
+Port mixing is prohibited. The gateway fails startup if the HTTP and HTTPS surfaces are assigned to the same port, as this would conflate plain-HTTP bootstrap routes with TLS-protected API routes.
 
 Ports can be customized via CLI flags.
 
@@ -94,10 +86,8 @@ Check Gateway status:
 ```
 
 This reports:
-- Gateway process status
-- Listening ports
-- PKI hierarchy status
-- Connected Operators
+- Gateway process status (running or stopped)
+- Listening ports and endpoint URLs
 
 The Gateway provides a unified health endpoint across all services for consistent health checking.
 
@@ -353,7 +343,7 @@ The document store uses the `/api/v1/data/{collection}/{id}` pattern for CRUD op
 
 #### Governed Collections
 
-Direct `/api/v1/data/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata, etc.) must use `POST /api/v1/governance/envelopes` for mutations.
+Direct `/api/v1/data/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata) must use `POST /api/v1/governance/envelopes` for mutations.
 
 ---
 
@@ -388,9 +378,9 @@ CLI sessions use the mTLS certificate fingerprint as L3 proof via CLIL3Notary.
 
 For web-based interactions:
 
-1. Navigate to `https://localhost:8443` (public port)
-2. Follow on-screen prompts to register a security key
-3. Use the key for subsequent authentication
+1. Navigate to `https://localhost:8443`, which redirects to `/console/` (the console SPA)
+2. Follow on-screen prompts to register a passkey
+3. Use the passkey for subsequent authentication
 
 Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
 
@@ -400,7 +390,7 @@ Web sessions use WebAuthn signatures as L3 proof via PasskeyService.
 sharing a secret (like an API key), a client generates its own key pair and asks the
 Gateway to sign a certificate attesting "this public key belongs to this identity." The
 Gateway acts as a Certificate Authority (CA). The act of starting the Gateway is itself
-the Platform Owner's authorization — there are no standing invite codes, pre-shared keys,
+the Platform Owner's authorization; there are no standing invite codes, pre-shared keys,
 or manual approval steps. The client then proves its identity on every subsequent call by
 signing with its private key (via mTLS). No shared secrets, no API keys to leak.
 
@@ -548,7 +538,7 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 
 Custom gateways must support:
 - CLI flags for runtime parameters (ports, mode, paths)
-- Strict port separation with mandatory mTLS (`tls.RequireAndVerifyClientCert`) on the HTTPS surface
+- Strict port separation with `tls.VerifyClientCertIfGiven` on the HTTPS surface and application-layer mTLS enforcement via a public route registry
 
 ---
 

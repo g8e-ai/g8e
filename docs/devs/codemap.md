@@ -19,13 +19,13 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   ├── pubsub.PortService
 │   ├── pubsub.AuditService
 │   ├── pubsub.HistoryService
-│   ├── governance.L1Doctrine
 │   ├── governance.L4Warden
 │   │   ├── governance.ReplayStore (storage.SQLReplayStore)
-│   │   ├── governance.StateRootProvider (gateway.CanonicalDBService) [SHARED]
+│   │   ├── governance.StateRootProvider (gateway.StateRootService via CanonicalDBService) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
-│   │   ├── governance.AppPolicyStore (gateway.CanonicalDBService) [SHARED]
+│   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via CanonicalDBService) [SHARED]
 │   │   ├── governance.TribunalStore (nil in outbound mode, gateway.TribunalStoreService in gateway mode)
+│   │   ├── governance.L1Doctrine (created internally by L4Warden when doctrine param is nil)
 │   │   └── governance.L3Notary (governance.outboundL3Notary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
@@ -35,8 +35,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.L3Notary
 │   │   ├── scrubbing.ScrubbingService
 │   │   ├── governance.StateRootProvider
-│   │   ├── governance.SignerStore
-│   │   └── governance.GovernancePosture
+│   │   └── governance.SignerStore
 │   └── mcp.GatewayService [SHARED] (declared in CommandServiceConfig but not wired in g8eo.go; subtree is potential wiring only)
 │       ├── response.Writer
 │       └── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
@@ -88,8 +87,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.ReplayStoreService (extracted field)
 │   ├── gateway.KVStoreService (extracted field)
 │   ├── gateway.SSEEventService (extracted field)
-│   ├── gateway.BlobStoreService (extracted field)
-│   └── keystore (embedded in schema, via keystore.Keystore)
+│   └── gateway.BlobStoreService (extracted field)
 ├── storage.SuspendedTransactionService (for L3 approval workflow)
 │   └── sqliteutil.DB
 ├── gateway.GatewayWebSocketHandler
@@ -102,10 +100,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── response.Writer
 ├── gateway.PKIAuthority
 │   ├── gateway.CanonicalDBService [SHARED]
-│   └── gateway.SecretManager
-├── gateway.SecretManager
-│   ├── sqliteutil.DB
-│   └── keystore.Keystore (via gateway.CanonicalDBService)
+│   └── gateway.SecretManager (local variable in NewGatewayModeService, not a retained field)
+│       ├── sqliteutil.DB
+│       └── keystore.Keystore (via gateway.CanonicalDBService)
 ├── gateway.RegistrationService
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.PKIAuthority
@@ -116,35 +113,12 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
-├── gateway.PersonaService
-│   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.OperatorSessionService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.WebSessionService
 │   └── gateway.CanonicalDBService [SHARED]
-├── gateway.AppEnrollmentService
-│   ├── gateway.CanonicalDBService [SHARED]
-│   └── gateway.PKIAuthority
-├── gateway.SignerStoreService (implements governance.SignerStore)
-│   └── sqliteutil.DB
-├── gateway.TribunalStoreService (implements governance.TribunalStore)
-│   └── sqliteutil.DB
-├── gateway.AppPolicyStoreService (implements governance.AppPolicyStore)
-│   └── sqliteutil.DB
-├── gateway.ReplayStoreService (implements governance.ReplayStore)
-│   └── sqliteutil.DB
-├── gateway.DocumentStoreService (implements governance.TransactionAuditStore)
-│   └── sqliteutil.DB
-├── gateway.StateRootService (implements governance.StateRootProvider)
-│   └── sqliteutil.DB
-├── gateway.KVStoreService (TTL-aware ephemeral state)
-│   └── sqliteutil.DB
-├── gateway.SSEEventService (Server-Sent Events)
-│   └── sqliteutil.DB
-├── gateway.BlobStoreService (Binary persistence)
-│   └── sqliteutil.DB
 ├── gateway.HTTPHandler
 │   ├── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.GatewayWebSocketHandler
@@ -157,19 +131,23 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.PasskeyService
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
+│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   └── gateway.PKIAuthority
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
 │   ├── tribunal.TribunalService [SHARED]
 │   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
 │   ├── governance.EnvelopeProcessor (set post-construction by boot sequence)
 │   └── response.Writer
-├── gateway.CompositeL3Verifier (implements governance.L3Notary)
-│   ├── gateway.PasskeyService
-│   └── gateway.CLIL3Notary
-│       ├── gateway.CanonicalDBService [SHARED]
-│       ├── gateway.PKIAuthority
-│       ├── gateway.UserService
-│       └── gateway.CLISessionService
+├── governance.outboundL3Notary (gateway variant via governance.NewGatewayL3Notary, implements governance.L3Notary)
+│   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore)
+│   ├── gateway.cliSessionVerifier (via NewCLISessionVerifier, implements governance.CLISessionVerifier)
+│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── gateway.PKIAuthority
+│   │   ├── gateway.UserService
+│   │   └── gateway.CLISessionService
+│   └── gateway.PasskeyService (as governance.L3Notary for WebAuthn proofs)
+│       └── gateway.CanonicalDBService [SHARED]
 ├── tribunal.TribunalService
 │   ├── governance.L1Doctrine
 │   ├── tribunal.TribunalMember (one or more enrolled members with Ed25519 keys)
@@ -182,8 +160,8 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
 │   ├── mcp.FieldReader (gateway.DocumentStoreService) [SHARED]
-│   ├── mcp.SessionValidator (OperatorPubSubService in outbound mode)
-│   ├── mcp.AuditLogger (pubsubAuditLogger in outbound mode)
+│   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in both modes)
+│   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in both modes)
 │   └── tribunal.TribunalDeliberator (tribunal.LocalDeliberator in gateway mode, nil in outbound)
 └── response.Writer
 ```
@@ -219,7 +197,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
 - **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `TribunalStore` interface in `governance.L4Warden` loads `TribunalPolicy` for quorum verification.
-- **L3**: `governance.L3Notary` (gateway mode uses `gateway.CompositeL3Verifier` combining WebAuthn passkey and mTLS CLI proofs; outbound mode uses `governance.outboundL3Notary` for CLI-based approval via suspended transactions)
+- **L3**: `governance.L3Notary` (gateway mode uses `governance.outboundL3Notary` via `governance.NewGatewayL3Notary`, combining WebAuthn passkey proofs via `PasskeyService` and mTLS CLI proofs via `cliSessionVerifier`; outbound mode uses `governance.outboundL3Notary` via `governance.NewOutboundL3Notary` for CLI-based approval via suspended transactions)
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging)
 
@@ -233,8 +211,8 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `gateway.EncryptedKVAdapter` implements: `storage.TokenStore` (outbound mode).
 - `storage.SuspendedTransactionService` implements: `storage.SuspendedTransactionStore` (used in both gateway and outbound modes).
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
-- `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode).
-- `gateway.CompositeL3Verifier` implements: `governance.L3Notary` (used in gateway mode, delegates to `PasskeyService` for WebAuthn proofs and `CLIL3Notary` for mTLS proofs).
+- `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode via `NewOutboundL3Notary`; used in gateway mode via `NewGatewayL3Notary` with both `cliSessionVerifier` and `PasskeyService` as delegates).
+- `gateway.cliSessionVerifier` implements: `governance.CLISessionVerifier` (used in gateway mode for mTLS CLI session verification within the L3 notary).
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
@@ -249,10 +227,13 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 All Model Context Protocol (MCP) native tools are registered explicitly in `internal/services/mcp/native_tool_registry.go` inside the `RegisterNativeTools` function, avoiding global state mutation and init-based registrations. The tools are handled and dispatched via `mcp.NativeToolHandler`. Key tool categories include:
 
 - **Database Inspection**: `DBDiscoverTopologyTool`, `DBQueryValidateTool`, `DBIsolatedReadTool`, `DBIndexTriageTool` for database schema discovery and safe read-only querying.
+- **Log Analysis**: `LogStreamFilterTool` for structured log streaming and filtering.
 - **System and Process Profiling**: `SysOOMDetectTool`, `ProcMetricTopTool`, `ProcSignalSafeTool`, `SysInfoTool`, `SysServiceStatusTool`, `SysContainerStatusTool`, `SysTimeClockTool`, `ProcTreeTool` for host system health and telemetry.
 - **Network Inspection**: `NetSocketAuditTool`, `NetEndpointPingTool`, `NetHTTPProbeTool`, `NetDNSResolveTool`, `NetSSHKnownHostsTool` for connectivity and port auditing.
+- **TLS and Security Inspection**: `TLSCertInspectTool` for certificate chain and TLS configuration verification.
 - **File and Configuration Management**: `FSDiskProfileTool`, `ConfigDiffMaskTool`, `FSFileChecksumTool`, `FSDiskUsageTool`, `FileReadTool` for filesystem verification and config diff masking.
 - **Environment and Cloud Integration**: `SysEnvVarsTool`, `GitOpsTool`, `CloudMetadataTool`, `K8sInspectTool`, `OperatorDeployTool` for metadata discovery and deployment workflows.
+- **Shell Execution**: `RunShellCommandTool` for controlled shell command execution with scrubbing and audit logging.
 
 ## Critical Data Flows
 
@@ -277,14 +258,8 @@ The following packages are test-only and are not part of the production dependen
 
 **`internal/services/storage/storagetest/`** - Test-only audit storage implementations
 - `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
-- Used only in test code (e.g., chaos tester at `test/chaos/chaos.go`)
 - Implements `TransactionAuditStore` interface via a no-op `DocSet` method
 - Production code uses `storage.SQLAuditStore` from `audit_store.go`
-
-**`test/chaos/`** - Chaos engineering test infrastructure
-- Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
-- This is intentional test infrastructure, not production code
-- Located in `test/` to clearly indicate test-only status
 
 **`internal/services/pubsub/pubsubtest/`** - Test-only PubSub client mock
 - `MockOperatorPubSubClient` - In-memory mock implementing the `pubsub.PubSubClient` interface

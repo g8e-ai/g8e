@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-06-24
-Version: v1.2.0
+Last Updated: 2026-06-25
+Version: v1.2.1
 
 ---
 
@@ -14,13 +14,13 @@ Version: v1.2.0
 
 A g8e-compatible application functions strictly as a GovernanceEnvelope producer and receipt consumer. It maintains no privileged communication channels, never interacts directly with the host system, and communicates with the g8e Gateway exclusively through public ingress paths.
 
-Security operations including Doctrine (L1Doctrine), Consensus (L2Consensus), and Notary (L3Notary) verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the g8e Gateway. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
+Security operations including L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, and L5 Actuator verification gates, replay defense, state binding, cryptographic audit, and human-in-the-loop authorization are fully delegated to the g8e Gateway. The application provides only the components the protocol cannot intrinsically supply: the mutation intent and optionally, consensus evidence.
 
 ---
 
 ## Application Architecture Spectrum
 
-The architecture of a g8e application varies based on how it satisfies the Consensus (L2Consensus) requirement. All applications produce the canonical GovernanceEnvelope wire format.
+The architecture of a g8e application varies based on how it satisfies the L2 Consensus requirement. All applications produce the canonical GovernanceEnvelope wire format.
 
 ### Minimal Applications
 
@@ -31,11 +31,11 @@ A minimal application constructs the mutation intent and builds a valid Governan
 - **Envelope Construction**: Append nonce, expiry, and fetched state root to the envelope.
 - **Submission**: Submit the envelope to the Gateway and consume the signed receipt.
 
-Minimal applications do not produce L2 consensus evidence natively. They rely on the Gateway's protocol-agnostic MCP/A2A translation layer or a trusted upstream producer to fulfill the L2 requirement.
+Minimal applications do not produce L2 Consensus evidence natively. They rely on the Gateway's protocol-agnostic MCP/A2A translation layer or a trusted upstream producer to fulfill the L2 requirement.
 
 ### Maximal Applications
 
-A maximal application performs the identical intent formulation and envelope construction, while additionally producing its own Consensus (L2Consensus) consensus evidence. It executes an internal consensus mechanism and signs the envelope directly.
+A maximal application performs the identical intent formulation and envelope construction, while additionally producing its own L2 Consensus evidence. It executes an internal consensus mechanism and signs the envelope directly.
 
 A g8e-compatible agentic ensemble represents the reference implementation of a maximal application, generating the required consensus signatures.
 
@@ -47,7 +47,7 @@ Two invariants apply to all g8e applications:
 
 ### Identity and Authentication
 
-Application identity is established via an mTLS/SPIFFE certificate. The application authenticates cryptographically and receives no ambient trust. The g8e Gateway evaluates its envelope with identical rigor to any external client.
+Application identity is established via an mTLS client certificate with SPIFFE-style URI SANs. The application authenticates cryptographically and receives no ambient trust. The g8e Gateway evaluates its envelope with identical rigor to any external client.
 
 ### State Management
 
@@ -96,15 +96,19 @@ A valid GovernanceEnvelope must include:
 
 ### Typed Payloads
 
-The protocol defines canonical event types for all first-class operations. Applications must use these event types:
+The protocol defines canonical event types for all first-class operations. The following list covers the primary mutation event types used by applications:
 
-- **Shell Operations**: `g8e.v1.operator.command.requested`
+- **Shell Operations**: `g8e.v1.operator.command.requested`, `g8e.v1.operator.command.cancel.requested`
 - **File Operations**: `g8e.v1.operator.filesystem.read.requested`, `g8e.v1.operator.file.edit.requested`, `g8e.v1.operator.file.history.fetch.requested`, `g8e.v1.operator.file.diff.fetch.requested`, `g8e.v1.operator.file.restore.requested`
 - **Filesystem Operations**: `g8e.v1.operator.filesystem.list.requested`, `g8e.v1.operator.filesystem.grep.requested`
+- **MCP Operations**: `g8e.v1.operator.mcp.call.requested`
+- **A2A Operations**: `g8e.v1.operator.a2a.call.requested`
+- **Network Operations**: `g8e.v1.operator.network.ping.requested`, `g8e.v1.operator.network.port.check.requested`
+- **Heartbeat**: `g8e.v1.operator.heartbeat.requested`
 - **Audit Operations**: `g8e.v1.operator.audit.command.recorded`, `g8e.v1.operator.audit.ai.recorded`
 - **Shutdown**: `g8e.v1.operator.shutdown.requested`
 
-Refer to `protocol/proto/g8e/operator/v1/operator.proto` for the canonical schema definitions and `protocol/constants/events.json` for event type constants.
+This list is not exhaustive. Refer to `protocol/constants/events.json` for the complete set of event type constants and `protocol/proto/g8e/operator/v1/operator.proto` for the canonical payload schema definitions.
 
 ---
 
@@ -112,13 +116,13 @@ Refer to `protocol/proto/g8e/operator/v1/operator.proto` for the canonical schem
 
 ### Step 1: Obtain Client Certificate
 
-Generate an mTLS client certificate from the Gateway (Operator in gateway mode):
+Generate an mTLS client certificate from the Gateway via CSR-based enrollment:
 
 ```bash
 ./g8e auth enroll
 ```
 
-This stores the certificate in `.g8e/cli.crt` and key in `.g8e/cli.key`.
+This generates a local keypair, submits a CSR to the Gateway CA, and stores the signed certificate in `.g8e/cli.crt` with the private key in `.g8e/cli.key`. On non-Windows platforms, enrollment also opens a browser to register a WebAuthn passkey. The Gateway must be running before enrollment (`./g8e gw start`).
 
 ### Step 2: Fetch State Root
 
@@ -134,15 +138,18 @@ The response includes the `state_merkle_root` field. Alternatively, the `/api/v1
 
 ### Step 3: Construct Typed Payload
 
-Format the mutation intent according to the protocol schema. For example, a shell execute request uses the `CommandRequested` protobuf message:
+Format the mutation intent according to the protocol schema. For example, a shell execute request uses the `CommandRequested` protobuf message defined in `protocol/proto/g8e/operator/v1/operator.proto`:
 
 ```json
 {
   "command": "ls -la",
-  "working_directory": "/tmp",
-  "environment": {},
   "execution_id": "unique-execution-id",
-  "justification": "List directory contents"
+  "justification": "List directory contents",
+  "vault_mode": "scrub",
+  "timeout_seconds": 30,
+  "intent": "Inspect filesystem",
+  "environment": {},
+  "working_directory": "/tmp"
 }
 ```
 
@@ -216,7 +223,7 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -d @envelope.json
 ```
 
-The Gateway validates the envelope through the five-layer governance pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator) before execution.
+The Gateway validates the envelope through the five-layer governance pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator) before execution. See `internal/services/governance/l4_warden.go` for the canonical verification sequence.
 
 ### Step 7: Consume Receipt
 
@@ -226,7 +233,7 @@ The Gateway returns a signed ActionReceipt. Verify the receipt and consume the r
 
 ## Building a Maximal Application
 
-A maximal application adds L2Consensus signature generation to the minimal application flow.
+A maximal application adds L2 Consensus signature generation to the minimal application flow.
 
 ### Step 1: Execute Internal Consensus
 
@@ -238,7 +245,7 @@ Run an internal consensus mechanism to generate L2 signatures. This typically in
 
 ### Step 2: Attach Signatures to Envelope
 
-Add the L2Consensus signatures to the envelope:
+Add the L2 Consensus signatures to the envelope:
 
 ```json
 {
@@ -283,7 +290,7 @@ Add the L2Consensus signatures to the envelope:
 
 ### Step 3: Submit to Gateway
 
-Submit the envelope with L2 signatures to the g8e Gateway. The g8e Gateway will verify the signatures as part of the L2Consensus check.
+Submit the envelope with L2 signatures to the g8e Gateway. The Gateway verifies the signatures as part of the L2 Consensus check.
 
 ---
 
