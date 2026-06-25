@@ -186,7 +186,7 @@ func NewSecureHTTPClient(cfg *config.Config) (*http.Client, error) {
 		TLSClientConfig: tlsConfig,
 	}
 
-	return &http.Client{Transport: transport}, nil
+	return &http.Client{Transport: transport, Timeout: httpTimeout}, nil
 }
 
 // FetchRootCAFingerprint fetches the root CA fingerprint from the gateway.
@@ -198,7 +198,8 @@ func FetchRootCAFingerprint(cfg *config.Config, baseURL string) (string, error) 
 		discoveryURL = baseURL
 	}
 	fingerprintURL := fmt.Sprintf("%s/.well-known/g8e/pki/fingerprint", discoveryURL)
-	resp, err := http.Get(fingerprintURL)
+	client := &http.Client{Timeout: httpTimeout}
+	resp, err := client.Get(fingerprintURL)
 	if err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
@@ -397,7 +398,8 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		discoveryURL = baseURL
 	}
 	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", discoveryURL)
-	trustBundleResp, err := http.Get(trustBundleURL)
+	client := &http.Client{Timeout: httpTimeout}
+	trustBundleResp, err := client.Get(trustBundleURL)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
@@ -448,7 +450,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 		TLSClientConfig: tlsConfig,
 	}
 
-	client := &http.Client{Transport: transport, Timeout: httpTimeout}
+	client = &http.Client{Transport: transport, Timeout: httpTimeout}
 
 	req := models.BootstrapRequest{
 		CSR:               operatorCSR,
@@ -1022,7 +1024,8 @@ func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 		discoveryURL = baseURL
 	}
 	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", discoveryURL)
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: httpTimeout}
+	resp, err := client.Get(url)
 	if err != nil {
 		return false, fmt.Errorf("%w: %w", constants.ErrServiceUnavailable, err)
 	}

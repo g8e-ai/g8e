@@ -122,7 +122,7 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 	// - Overwriting an existing tribunal with Enabled=true is rejected.
 	existing, err := s.GetTribunal(policy.ID)
 	if err != nil {
-		return fmt.Errorf("%w: failed to check existing tribunal: %v", constants.ErrConstraintViolation, err)
+		return fmt.Errorf("%w: failed to check existing tribunal: %w", constants.ErrConstraintViolation, err)
 	}
 	if existing != nil {
 		if policy.Enabled {
@@ -130,7 +130,7 @@ func (s *TribunalStoreService) AddTribunal(policy models.TribunalPolicy) error {
 		}
 	} else {
 		if !policy.Enabled {
-			return fmt.Errorf("%w", constants.ErrTribunalMustBeEnabled)
+			return constants.ErrTribunalMustBeEnabled
 		}
 	}
 

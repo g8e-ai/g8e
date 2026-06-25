@@ -59,10 +59,10 @@ func NewTribunalFromPolicy(
 	responder *response.Writer,
 ) (*TribunalService, error) {
 	if policy == nil {
-		return nil, fmt.Errorf("tribunal factory: policy is nil")
+		return nil, constants.ErrTribunalFactoryNilPolicy
 	}
 	if keyProvider == nil {
-		return nil, fmt.Errorf("tribunal factory: key provider is nil")
+		return nil, constants.ErrTribunalFactoryNilKeyProvider
 	}
 
 	members := make([]TribunalMember, 0, len(policy.MemberAppIDs))

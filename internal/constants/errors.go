@@ -862,6 +862,8 @@ var (
 	ErrTribunalHashMismatch         = errors.New("TRIBUNAL_HASH_MISMATCH: envelope id does not match recomputed transaction hash")
 	ErrTribunalInvalidID            = errors.New("TRIBUNAL_INVALID_ID: tribunal ID must contain only alphanumeric characters, hyphens, and underscores")
 	ErrTribunalMustBeEnabled        = errors.New("TRIBUNAL_MUST_BE_ENABLED: new tribunals must be created with enabled=true")
+	ErrTribunalFactoryNilPolicy     = errors.New("TRIBUNAL_FACTORY_NIL_POLICY: tribunal policy is nil")
+	ErrTribunalFactoryNilKeyProvider = errors.New("TRIBUNAL_FACTORY_NIL_KEY_PROVIDER: key provider is nil")
 	ErrTxL3ProofMissing             = errors.New("TX_NOTARY_L3_PROOF_MISSING: Notary (L3Notary) WebAuthn proof required but missing")
 	ErrTxL3ProofInvalid             = errors.New("TX_NOTARY_L3_PROOF_INVALID: Notary (L3Notary) WebAuthn proof failed verification")
 	ErrTxL3NotaryNotConfigured      = errors.New("TX_NOTARY_L3_NOTARY_MISSING: Notary (L3Notary) required but not configured")

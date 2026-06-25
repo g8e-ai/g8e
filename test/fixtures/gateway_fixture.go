@@ -466,8 +466,8 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
 	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
 	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(operatorPEM)
+	require.True(t, rootPool.AppendCertsFromPEM(rootPEM), "failed to parse root CA PEM")
+	require.True(t, rootPool.AppendCertsFromPEM(operatorPEM), "failed to parse operator CA PEM")
 
 	enrollClient := &http.Client{
 		Transport: &http.Transport{
@@ -538,8 +538,8 @@ func CreateMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity)
 	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
 	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
 	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(operatorPEM)
+	require.True(t, rootPool.AppendCertsFromPEM(rootPEM), "failed to parse root CA PEM")
+	require.True(t, rootPool.AppendCertsFromPEM(operatorPEM), "failed to parse operator CA PEM")
 
 	enrolledCert, err := tls.X509KeyPair(identity.Certificate, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: identity.PrivateKey}))
 	require.NoError(t, err)
@@ -564,8 +564,8 @@ func CreateCLIMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdenti
 	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
 	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
 	rootPool := x509.NewCertPool()
-	rootPool.AppendCertsFromPEM(rootPEM)
-	rootPool.AppendCertsFromPEM(operatorPEM)
+	require.True(t, rootPool.AppendCertsFromPEM(rootPEM), "failed to parse root CA PEM")
+	require.True(t, rootPool.AppendCertsFromPEM(operatorPEM), "failed to parse operator CA PEM")
 
 	cliCert, err := tls.X509KeyPair([]byte(identity.CLICertificate), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: identity.CLIPrivateKey}))
 	require.NoError(t, err)
