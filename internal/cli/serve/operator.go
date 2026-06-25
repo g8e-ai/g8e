@@ -48,6 +48,22 @@ type ServeOperatorOptions struct {
 	HeartbeatInterval time.Duration
 }
 
+// resolveOperatorEndpoint returns the trimmed endpoint if non-empty, otherwise the default endpoint.
+func resolveOperatorEndpoint(endpoint string) string {
+	if trimmed := strings.TrimSpace(endpoint); trimmed != "" {
+		return trimmed
+	}
+	return constants.DefaultEndpoint
+}
+
+// resolveWorkingDir returns workingDir if set, otherwise falls back to launchDir.
+func resolveWorkingDir(workingDir, launchDir string) string {
+	if workingDir != "" {
+		return workingDir
+	}
+	return launchDir
+}
+
 // RunOperator runs the operator in standalone mode with the given options.
 func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	logger, err := ConfigureLogger(opts.LogLevel)
@@ -56,10 +72,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		os.Exit(constants.ExitConfigError)
 	}
 
-	operatorEndpoint := constants.DefaultEndpoint
-	if strings.TrimSpace(opts.Endpoint) != "" {
-		operatorEndpoint = strings.TrimSpace(opts.Endpoint)
-	}
+	operatorEndpoint := resolveOperatorEndpoint(opts.Endpoint)
 
 	logger.Info("g8e", "version", vi.Version, "build", vi.BuildID)
 	logger.Info("Using Operator endpoint", "endpoint", operatorEndpoint)
@@ -179,10 +192,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		"key_file", privateKey,
 	)
 
-	effectiveWorkDir := opts.LaunchDir
-	if opts.WorkingDir != "" {
-		effectiveWorkDir = opts.WorkingDir
-	}
+	effectiveWorkDir := resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
 
 	cfg, err := config.Load(config.LoadOptions{
 		OperatorEndpoint:      operatorEndpoint,

@@ -40,4 +40,16 @@ const (
 
 	// SSHKeepaliveMaxMissed is the maximum number of missed keepalive responses before failure
 	SSHKeepaliveMaxMissed = 3
+
+	// SSHMaxRetries is the maximum number of retry attempts for transient SSH errors
+	SSHMaxRetries = 3
+
+	// SSHCaptureMaxBytes is the maximum number of bytes to capture from remote stdout/stderr
+	SSHCaptureMaxBytes = 64 * 1024
+
+	// SSHPreflightVerifyCommand is the minimal command run to verify remote shell works
+	SSHPreflightVerifyCommand = "true"
+
+	// SSHProxyAddrLabel is the network address label for proxy connections
+	SSHProxyAddrLabel = "proxy"
 )

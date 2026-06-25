@@ -31,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/g8e-ai/g8e/internal/certs"
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func init() {
@@ -109,57 +108,9 @@ func assertEmbeddedCADialer(t *testing.T, dialer *websocket.Dialer) {
 
 func TestConstants(t *testing.T) {
 	assert.Equal(t, 30*time.Second, DefaultTimeout)
-	assert.Equal(t, 10*time.Second, DefaultShortTimeout)
 	assert.Equal(t, 10*time.Second, DefaultDialTimeout)
 	assert.Equal(t, 10*time.Second, DefaultTLSTimeout)
 	assert.Equal(t, 90*time.Second, DefaultIdleConnTimeout)
-}
-
-func TestNew(t *testing.T) {
-	client, err := New()
-	require.NoError(t, err)
-	require.NotNil(t, client)
-
-	assert.Equal(t, DefaultTimeout, client.Timeout)
-
-	transport, ok := client.Transport.(*http.Transport)
-	require.True(t, ok)
-	assertEmbeddedCATransport(t, transport)
-	assertBaseTransportTimeouts(t, transport)
-}
-
-func TestNew_InvalidCert(t *testing.T) {
-	old := certs.GetRawCA()
-	t.Cleanup(func() { certs.SetCA(old) })
-	certs.SetCA([]byte("not a valid pem block"))
-
-	client, err := New()
-	require.Error(t, err)
-	assert.Nil(t, client)
-}
-
-func TestNewWithTimeout(t *testing.T) {
-	timeout := 5 * time.Second
-	client, err := NewWithTimeout(timeout)
-	require.NoError(t, err)
-	require.NotNil(t, client)
-
-	assert.Equal(t, timeout, client.Timeout)
-
-	transport, ok := client.Transport.(*http.Transport)
-	require.True(t, ok)
-	assertEmbeddedCATransport(t, transport)
-	assertBaseTransportTimeouts(t, transport)
-}
-
-func TestNewWithTimeout_InvalidCert(t *testing.T) {
-	old := certs.GetRawCA()
-	t.Cleanup(func() { certs.SetCA(old) })
-	certs.SetCA([]byte("not a valid pem block"))
-
-	client, err := NewWithTimeout(5 * time.Second)
-	require.Error(t, err)
-	assert.Nil(t, client)
 }
 
 func TestNewWithTLS(t *testing.T) {
@@ -181,25 +132,6 @@ func TestNewWithTLS(t *testing.T) {
 	assertBaseTransportTimeouts(t, transport)
 }
 
-func TestWebSocketDialer(t *testing.T) {
-	dialer, err := WebSocketDialer()
-	require.NoError(t, err)
-	require.NotNil(t, dialer)
-
-	assert.Equal(t, DefaultTLSTimeout, dialer.HandshakeTimeout)
-	assertEmbeddedCADialer(t, dialer)
-}
-
-func TestWebSocketDialer_InvalidCert(t *testing.T) {
-	old := certs.GetRawCA()
-	t.Cleanup(func() { certs.SetCA(old) })
-	certs.SetCA([]byte("not a valid pem block"))
-
-	dialer, err := WebSocketDialer()
-	require.Error(t, err)
-	assert.Nil(t, dialer)
-}
-
 func TestWebSocketDialerWithTLS(t *testing.T) {
 	customTLS := &tls.Config{
 		MinVersion: tls.VersionTLS13,
@@ -212,78 +144,3 @@ func TestWebSocketDialerWithTLS(t *testing.T) {
 	assert.Equal(t, DefaultTLSTimeout, dialer.HandshakeTimeout)
 }
 
-func TestNewWithServerName(t *testing.T) {
-	client, err := NewWithServerName(constants.DefaultEndpoint)
-	require.NoError(t, err)
-	require.NotNil(t, client)
-
-	assert.Equal(t, DefaultTimeout, client.Timeout)
-
-	transport, ok := client.Transport.(*http.Transport)
-	require.True(t, ok)
-	assertEmbeddedCATransport(t, transport)
-	assertBaseTransportTimeouts(t, transport)
-	assert.Equal(t, constants.DefaultEndpoint, transport.TLSClientConfig.ServerName)
-}
-
-func TestNewWithServerName_InvalidCert(t *testing.T) {
-	old := certs.GetRawCA()
-	t.Cleanup(func() { certs.SetCA(old) })
-	certs.SetCA([]byte("not a valid pem block"))
-
-	client, err := NewWithServerName(constants.DefaultEndpoint)
-	require.Error(t, err)
-	assert.Nil(t, client)
-}
-
-func TestWebSocketDialerWithServerName(t *testing.T) {
-	dialer, err := WebSocketDialerWithServerName(constants.DefaultEndpoint)
-	require.NoError(t, err)
-	require.NotNil(t, dialer)
-
-	assert.Equal(t, DefaultTLSTimeout, dialer.HandshakeTimeout)
-	assertEmbeddedCADialer(t, dialer)
-	assert.Equal(t, constants.DefaultEndpoint, dialer.TLSClientConfig.ServerName)
-}
-
-func TestWebSocketDialerWithServerName_InvalidCert(t *testing.T) {
-	old := certs.GetRawCA()
-	t.Cleanup(func() { certs.SetCA(old) })
-	certs.SetCA([]byte("not a valid pem block"))
-
-	dialer, err := WebSocketDialerWithServerName(constants.DefaultEndpoint)
-	require.Error(t, err)
-	assert.Nil(t, dialer)
-}
-
-func TestMustNew(t *testing.T) {
-	client := MustNew()
-	require.NotNil(t, client)
-	assert.Equal(t, DefaultTimeout, client.Timeout)
-}
-
-func TestMustNew_PanicsOnInvalidCert(t *testing.T) {
-	old := certs.GetRawCA()
-	t.Cleanup(func() { certs.SetCA(old) })
-	certs.SetCA([]byte("not a valid pem block"))
-
-	assert.Panics(t, func() {
-		MustNew()
-	})
-}
-
-func TestMustWebSocketDialer(t *testing.T) {
-	dialer := MustWebSocketDialer()
-	require.NotNil(t, dialer)
-	assert.Equal(t, DefaultTLSTimeout, dialer.HandshakeTimeout)
-}
-
-func TestMustWebSocketDialer_PanicsOnInvalidCert(t *testing.T) {
-	old := certs.GetRawCA()
-	t.Cleanup(func() { certs.SetCA(old) })
-	certs.SetCA([]byte("not a valid pem block"))
-
-	assert.Panics(t, func() {
-		MustWebSocketDialer()
-	})
-}

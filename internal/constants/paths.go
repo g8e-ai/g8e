@@ -101,6 +101,9 @@ const (
 	PathRoot                                                  = "/"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 
+	// Relative path components
+	PathParentDir = ".."
+
 	// SSH paths
 	PathEtcSshKnownHosts            = "/etc/ssh/known_hosts"
 	PathEtcSshSshKnownHosts         = "/etc/ssh/ssh_known_hosts"
@@ -221,6 +224,7 @@ const (
 	OperatorPIDFilename     = "operator.pid"
 	OperatorPostureFilename = "operator.posture"
 	OperatorBinaryFilename  = "g8e-operator"
+	OperatorLogFilename     = "operator.log"
 
 	// Peer certificate filenames
 	PeerCertFilename  = "peer.crt"
@@ -236,16 +240,23 @@ const (
 	PathCurrentDir            = "."
 
 	// Directory names (single path segment, no separators)
-	RuntimeDirname        = ".g8e"
-	DataDirname           = "data"
-	VaultDirname          = "vault"
-	SecretsDirname        = "secrets"
-	LedgerDirname         = "ledger"
-	SshConfigFilename     = "ssh_config"
-	SshDirname            = ".ssh"
-	SshConfigBasename     = "config"
-	SshKnownHostsBasename = "known_hosts"
-	PidDirname            = "pids"
+	RuntimeDirname           = ".g8e"
+	DataDirname              = "data"
+	VaultDirname             = "vault"
+	SecretsDirname           = "secrets"
+	LedgerDirname            = "ledger"
+	SshConfigFilename        = "ssh_config"
+	SshDirname               = ".ssh"
+	SshConfigBasename        = "config"
+	SshKnownHostsBasename    = "known_hosts"
+	SshKeyEd25519            = "id_ed25519"
+	SshKeyECDSA              = "id_ecdsa"
+	SshKeyRSA                = "id_rsa"
+	PidDirname               = "pids"
+	DocsDirname              = "docs"
+	ProtocolDirname          = "protocol"
+	ProtocolConstantsDirname = "constants"
+	ProtocolModelsDirname    = "models"
 
 	// Ledger-specific directory and file names
 	FilesDirname      = "files"
@@ -261,6 +272,8 @@ const (
 	// Storage DB filenames (used with filepath.Join)
 	ReplayStoreDBFilename    = "replay_store.db"
 	ExecutionVaultDBFilename = "execution_vault.db"
+	LocalStateDBFilename     = "local_state.db"
+	AuditVaultDBFilename     = "audit_vault.db"
 
 	// Full relative storage DB paths (relative to project root, used as config defaults)
 	ReplayStoreDBPath          = RuntimeDirname + "/replay_store.db"
@@ -315,9 +328,10 @@ const (
 	TestResultsDirname         = "test-results"
 
 	// Test-specific directory names
-	TestVaultDirname    = "test-vault"
-	TestProtocolDirname = "protocol"
-	TestDocsDirname     = "docs"
+	TestVaultDirname             = "test-vault"
+	TestProtocolDirname          = "protocol"
+	TestProtocolConstantsDirname = "constants"
+	TestDocsDirname              = "docs"
 
 	// Test-specific database filenames
 	TestLocalStateDBFilename    = "local_state.db"

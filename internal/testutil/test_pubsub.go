@@ -30,6 +30,29 @@ import (
 	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
+// dialPubSubWebSocket creates a TLS-configured WebSocket dialer and connects to
+// the pub/sub endpoint at baseURL. It returns the established connection.
+func dialPubSubWebSocket(t *testing.T, baseURL string) *websocket.Conn {
+	t.Helper()
+	wsURL := baseURL + constants.APIPaths.PubSubWebSocket
+
+	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
+	if err != nil {
+		t.Fatalf("testutil: TLS dialer build failed: %v", err)
+	}
+	ws, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		t.Fatalf("testutil: pub/sub connection failed at %s: %v", wsURL, err)
+	}
+	return ws
+}
+
 // TestPubSubAvailable checks if the client pub/sub gateway is reachable.
 // Fatally fails the test when client is unavailable - all callers are integration
 // tests that require a live stack.
@@ -39,13 +62,14 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 	if baseURL == "" {
 		baseURL = GetTestOperatorDirectURL()
 	}
-	wsURL := baseURL + "/ws/pubsub"
+	wsURL := baseURL + constants.APIPaths.PubSubWebSocket
+
 	trustStore := certs.NewTrustStore(certs.GetRawCA())
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
 	if err != nil {
-		t.Fatalf("testutil: TLS setup failed: %v", err)
+		t.Fatalf("testutil: TLS dialer build failed: %v", err)
 	}
 	ws, resp, err := dialer.Dial(wsURL, nil)
 	if err != nil {
@@ -64,22 +88,7 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []byte {
 	t.Helper()
 
-	wsURL := baseURL + "/ws/pubsub"
-
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
-	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
-	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
-	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
-	if err != nil {
-		t.Fatalf("testutil: TLS dialer build failed: %v", err)
-	}
-	ws, resp, err := dialer.Dial(wsURL, nil)
-	if err != nil {
-		if resp != nil {
-			resp.Body.Close()
-		}
-		t.Fatalf("testutil: pub/sub connection failed at %s: %v", wsURL, err)
-	}
+	ws := dialPubSubWebSocket(t, baseURL)
 
 	subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: channel}
 	subBytes, err := proto.Marshal(subMsg)
@@ -131,22 +140,7 @@ func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []b
 func PublishTestMessage(t *testing.T, baseURL string, channel string, message string) {
 	t.Helper()
 
-	wsURL := baseURL + "/ws/pubsub"
-
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
-	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
-	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
-	dialer, err := httpclient.WebSocketDialerWithTLSConfig(tlsConfig)
-	if err != nil {
-		t.Fatalf("testutil: TLS dialer build failed: %v", err)
-	}
-	ws, resp, err := dialer.Dial(wsURL, nil)
-	if err != nil {
-		if resp != nil {
-			resp.Body.Close()
-		}
-		t.Fatalf("testutil: pub/sub connection failed for channel %s: %v", channel, err)
-	}
+	ws := dialPubSubWebSocket(t, baseURL)
 	defer ws.Close()
 
 	pubMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionPublish, Channel: channel, Data: []byte(message)}
@@ -170,7 +164,7 @@ func WaitForMessage(t *testing.T, msgChan <-chan []byte, timeout time.Duration) 
 	case msg := <-msgChan:
 		return msg
 	case <-timer.C:
-		t.Fatalf("Timeout waiting for pub/sub message")
+		t.Fatalf("testutil: timeout waiting for pub/sub message")
 		return nil
 	}
 }
@@ -181,11 +175,11 @@ func AssertMessageReceived(t *testing.T, msgChan <-chan []byte, timeout time.Dur
 
 	payload := WaitForMessage(t, msgChan, timeout)
 	if payload == nil {
-		t.Fatalf("Expected message but got nil")
+		t.Fatalf("testutil: expected message but got nil")
 	}
 
 	if expectedPattern != "" && !strings.Contains(string(payload), expectedPattern) {
-		t.Fatalf("Expected message to contain '%s' but got: %s", expectedPattern, string(payload))
+		t.Fatalf("testutil: expected message to contain '%s' but got: %s", expectedPattern, string(payload))
 	}
 
 	return payload

@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -41,31 +40,29 @@ import (
 var protocolConstantsDir string
 
 func init() {
-	// Use project root for contract tests
 	cwd, err := os.Getwd()
 	if err != nil {
-		cwd = "."
+		cwd = constants.PathCurrentDir
 	}
-	// Walk up to find project root
 	current := cwd
 	for {
-		if _, err := os.Stat(filepath.Join(current, "protocol")); err == nil {
-			protocolConstantsDir = filepath.Join(current, "protocol/constants")
+		if _, err := os.Stat(filepath.Join(current, constants.TestProtocolDirname)); err == nil {
+			protocolConstantsDir = filepath.Join(current, constants.TestProtocolDirname, constants.TestProtocolConstantsDirname)
 			break
 		}
-		if _, err := os.Stat(filepath.Join(current, ".git")); err == nil {
-			protocolConstantsDir = filepath.Join(current, "protocol/constants")
+		if _, err := os.Stat(filepath.Join(current, constants.GitDirname)); err == nil {
+			protocolConstantsDir = filepath.Join(current, constants.TestProtocolDirname, constants.TestProtocolConstantsDirname)
 			break
 		}
 		parent := filepath.Dir(current)
 		if parent == current {
-			protocolConstantsDir = filepath.Join(cwd, "protocol/constants")
+			protocolConstantsDir = filepath.Join(cwd, constants.TestProtocolDirname, constants.TestProtocolConstantsDirname)
 			break
 		}
 		current = parent
 	}
-	if err := paths.InitWithBase(filepath.Dir(protocolConstantsDir)); err != nil {
-		panic(fmt.Sprintf("failed to initialize paths: %v", err))
+	if err := paths.InitWithBase(filepath.Dir(filepath.Dir(protocolConstantsDir))); err != nil {
+		panic(fmt.Errorf("protocol_constants_test: init paths: %w", err))
 	}
 }
 
@@ -77,354 +74,36 @@ func loadProtocolFile(t *testing.T, filename string) []byte {
 	return data
 }
 
-// ---------------------------------------------------------------------------
-// Typed structs mirroring protocol/constants/events.json
-// ---------------------------------------------------------------------------
-
-type protocolCommandOutputEvents struct {
-	Received protocolLeaf `json:"received"`
-}
-
-type protocolCommandCancelEvents struct {
-	Requested    protocolLeaf `json:"requested"`
-	Acknowledged protocolLeaf `json:"acknowledged"`
-	Failed       protocolLeaf `json:"failed"`
-}
-
-type protocolCommandApprovalEvents struct {
-	Requested protocolLeaf `json:"requested"`
-	Granted   protocolLeaf `json:"granted"`
-	Rejected  protocolLeaf `json:"rejected"`
-}
-
-type protocolOperatorCommandEvents struct {
-	Requested protocolLeaf                  `json:"requested"`
-	Started   protocolLeaf                  `json:"started"`
-	Completed protocolLeaf                  `json:"completed"`
-	Failed    protocolLeaf                  `json:"failed"`
-	Cancelled protocolLeaf                  `json:"cancelled"`
-	Output    protocolCommandOutputEvents   `json:"output"`
-	Cancel    protocolCommandCancelEvents   `json:"cancel"`
-	Approval  protocolCommandApprovalEvents `json:"approval"`
-}
-
-type protocolFileEditApprovalEvents struct {
-	Requested protocolLeaf `json:"requested"`
-	Granted   protocolLeaf `json:"granted"`
-	Rejected  protocolLeaf `json:"rejected"`
-}
-
-type protocolOperatorFileEditEvents struct {
-	Requested protocolLeaf                   `json:"requested"`
-	Started   protocolLeaf                   `json:"started"`
-	Completed protocolLeaf                   `json:"completed"`
-	Failed    protocolLeaf                   `json:"failed"`
-	Approval  protocolFileEditApprovalEvents `json:"approval"`
-}
-
-type protocolIntentApprovalEvents struct {
-	Requested protocolLeaf `json:"requested"`
-	Granted   protocolLeaf `json:"granted"`
-	Rejected  protocolLeaf `json:"rejected"`
-}
-
-type protocolOperatorIntentEvents struct {
-	Granted  protocolLeaf                 `json:"granted"`
-	Denied   protocolLeaf                 `json:"denied"`
-	Revoked  protocolLeaf                 `json:"revoked"`
-	Approval protocolIntentApprovalEvents `json:"approval"`
-}
-
-type protocolFetchLeaf struct {
-	Requested protocolLeaf `json:"requested"`
-	Completed protocolLeaf `json:"completed"`
-	Failed    protocolLeaf `json:"failed"`
-}
-
-type protocolOperatorNetworkPortCheck struct {
-	Requested protocolLeaf `json:"requested"`
-	Completed protocolLeaf `json:"completed"`
-	Failed    protocolLeaf `json:"failed"`
-}
-
-type protocolOperatorNetworkPort struct {
-	Check protocolOperatorNetworkPortCheck `json:"check"`
-}
-
-type protocolOperatorNetwork struct {
-	Port protocolOperatorNetworkPort `json:"port"`
-}
-
-type protocolOperatorFilesystem struct {
-	List protocolFetchLeaf `json:"list"`
-	Read protocolFetchLeaf `json:"read"`
-}
-
-type protocolOperatorFileHistory struct {
-	Fetch protocolFetchLeaf `json:"fetch"`
-}
-
-type protocolOperatorFileDiff struct {
-	Fetch protocolFetchLeaf `json:"fetch"`
-}
-
-type protocolOperatorFileRestore struct {
-	Requested protocolLeaf `json:"requested"`
-	Completed protocolLeaf `json:"completed"`
-	Failed    protocolLeaf `json:"failed"`
-}
-
-type protocolOperatorFileEditApproval struct {
-	Requested protocolLeaf `json:"requested"`
-	Granted   protocolLeaf `json:"granted"`
-	Rejected  protocolLeaf `json:"rejected"`
-}
-
-type protocolOperatorFileEdit struct {
-	Requested protocolLeaf                     `json:"requested"`
-	Started   protocolLeaf                     `json:"started"`
-	Completed protocolLeaf                     `json:"completed"`
-	Failed    protocolLeaf                     `json:"failed"`
-	Approval  protocolOperatorFileEditApproval `json:"approval"`
-}
-
-type protocolOperatorFileEvents struct {
-	Edit    protocolOperatorFileEdit    `json:"edit"`
-	History protocolOperatorFileHistory `json:"history"`
-	Diff    protocolOperatorFileDiff    `json:"diff"`
-	Restore protocolOperatorFileRestore `json:"restore"`
-}
-
-type protocolOperatorAuditUserRecorded struct {
-	Recorded protocolLeaf `json:"recorded"`
-}
-
-type protocolOperatorAuditAIRecorded struct {
-	Recorded protocolLeaf `json:"recorded"`
-}
-
-type protocolOperatorAuditDirectCommandResult struct {
-	Recorded protocolLeaf `json:"recorded"`
-}
-
-type protocolOperatorAuditDirectCommandEvents struct {
-	Recorded protocolLeaf                             `json:"recorded"`
-	Result   protocolOperatorAuditDirectCommandResult `json:"result"`
-}
-
-type protocolOperatorAuditDirectEvents struct {
-	Command protocolOperatorAuditDirectCommandEvents `json:"command"`
-}
-
-type protocolOperatorAuditEvents struct {
-	User   protocolOperatorAuditUserRecorded `json:"user"`
-	AI     protocolOperatorAuditAIRecorded   `json:"ai"`
-	Direct protocolOperatorAuditDirectEvents `json:"direct"`
-}
-
-type protocolOperatorHeartbeat struct {
-	Sent      protocolLeaf `json:"sent"`
-	Requested protocolLeaf `json:"requested"`
-	Received  protocolLeaf `json:"received"`
-	Missed    protocolLeaf `json:"missed"`
-}
-
-type protocolOperatorShutdown struct {
-	Requested    protocolLeaf `json:"requested"`
-	Acknowledged protocolLeaf `json:"acknowledged"`
-}
-
-type protocolOperatorLogs struct {
-	Fetch protocolFetchLeaf `json:"fetch"`
-}
-
-type protocolOperatorHistory struct {
-	Fetch protocolFetchLeaf `json:"fetch"`
-}
-
-type protocolOperatorEvents struct {
-	Heartbeat  protocolOperatorHeartbeat     `json:"operator.heartbeat"`
-	Shutdown   protocolOperatorShutdown      `json:"operator.shutdown"`
-	Command    protocolOperatorCommandEvents `json:"operator.command"`
-	Intent     protocolOperatorIntentEvents  `json:"operator.intent"`
-	Filesystem protocolOperatorFilesystem    `json:"operator.filesystem"`
-	Logs       protocolOperatorLogs          `json:"operator.logs"`
-	History    protocolOperatorHistory       `json:"operator.history"`
-	File       protocolOperatorFileEvents    `json:"operator.file"`
-	Network    protocolOperatorNetwork       `json:"operator.network"`
-	Audit      protocolOperatorAuditEvents   `json:"operator.audit"`
+type protocolLeaf struct {
+	Value       string `json:"value"`
+	GoConst     string `json:"_go_const"`
+	PythonConst string `json:"_python_const"`
+	GoName      string `json:"_go_name"`
+	PythonName  string `json:"_python_name"`
 }
 
 type protocolEventsJSON struct {
 	Events map[string]protocolLeaf `json:"events"`
 }
 
-// ---------------------------------------------------------------------------
-// Typed structs mirroring protocol/constants/status.json
-// ---------------------------------------------------------------------------
-
-type protocolLeaf struct {
-	Value       interface{} `json:"value"`
-	GoConst     string      `json:"_go_const"`
-	PythonConst string      `json:"_python_const"`
-	GoName      string      `json:"_go_name"`
-	PythonName  string      `json:"_python_name"`
-}
-
-type protocolOperatorStatusValues struct {
-	Available   protocolLeaf `json:"available"`
-	Unavailable protocolLeaf `json:"unavailable"`
-	Offline     protocolLeaf `json:"offline"`
-	Bound       protocolLeaf `json:"bound"`
-	Stale       protocolLeaf `json:"stale"`
-	Active      protocolLeaf `json:"active"`
-	Stopped     protocolLeaf `json:"stopped"`
-	Terminated  protocolLeaf `json:"terminated"`
-}
-
-type protocolOperatorTypeValues struct {
-	System protocolLeaf `json:"system"`
-	Cloud  protocolLeaf `json:"cloud"`
-}
-
-type protocolCloudSubtypeValues struct {
-	AWS   protocolLeaf `json:"aws"`
-	GCP   protocolLeaf `json:"gcp"`
-	Azure protocolLeaf `json:"azure"`
-}
-
-type protocolVaultModeValues struct {
-	Raw      protocolLeaf `json:"raw"`
-	Scrubbed protocolLeaf `json:"scrubbed"`
-}
-
-type protocolVersionStabilityValues struct {
-	Stable protocolLeaf `json:"stable"`
-	Beta   protocolLeaf `json:"beta"`
-	Dev    protocolLeaf `json:"dev"`
-}
-
-type protocolComponentNameValues struct {
-	G8EO   protocolLeaf `json:"g8eo"`
-	CLIENT protocolLeaf `json:"client"`
-}
-
-type protocolPlatformValues struct {
-	Linux   protocolLeaf `json:"linux"`
-	Windows protocolLeaf `json:"windows"`
-	Darwin  protocolLeaf `json:"darwin"`
-}
-
-type protocolAISourceValues struct {
-	Tool             protocolLeaf `json:"tool.call"`
-	TerminalAnchored protocolLeaf `json:"terminal.anchored"`
-	TerminalDirect   protocolLeaf `json:"terminal.direct"`
-}
-
-type protocolAITaskIDValues struct {
-	Command          protocolLeaf `json:"command"`
-	DirectCommand    protocolLeaf `json:"direct.command"`
-	FileEdit         protocolLeaf `json:"file.edit"`
-	FsList           protocolLeaf `json:"fs.list"`
-	FsRead           protocolLeaf `json:"fs.read"`
-	PortCheck        protocolLeaf `json:"port.check"`
-	FetchLogs        protocolLeaf `json:"fetch.logs"`
-	FetchHistory     protocolLeaf `json:"fetch.history"`
-	FetchFileHistory protocolLeaf `json:"fetch.file.history"`
-	RestoreFile      protocolLeaf `json:"restore.file"`
-	FetchFileDiff    protocolLeaf `json:"fetch.file.diff"`
-}
-
-type protocolHeartbeatTypeValues struct {
-	Automatic protocolLeaf `json:"automatic"`
-	Bootstrap protocolLeaf `json:"bootstrap"`
-	Requested protocolLeaf `json:"requested"`
-}
-
-type protocolExecutionStatusValues struct {
-	Pending   protocolLeaf `json:"pending"`
-	Executing protocolLeaf `json:"executing"`
-	Completed protocolLeaf `json:"completed"`
-	Failed    protocolLeaf `json:"failed"`
-	Timeout   protocolLeaf `json:"timeout"`
-	Cancelled protocolLeaf `json:"cancelled"`
-}
-
 type protocolStatusJSON struct {
 	Status map[string]map[string]protocolLeaf `json:"status"`
 }
-
-// ---------------------------------------------------------------------------
-// Typed structs mirroring protocol/constants/channels.json
-// ---------------------------------------------------------------------------
 
 type protocolChannelsJSON struct {
 	Channels map[string]protocolLeaf `json:"channels"`
 }
 
-// ---------------------------------------------------------------------------
-// Typed structs mirroring protocol/constants/pubsub.json
-// ---------------------------------------------------------------------------
-
-type protocolPubSubWireActions struct {
-	Subscribe   protocolLeaf `json:"subscribe"`
-	PSubscribe  protocolLeaf `json:"psubscribe"`
-	Unsubscribe protocolLeaf `json:"unsubscribe"`
-	Publish     protocolLeaf `json:"publish"`
-}
-
-type protocolPubSubWireEventTypes struct {
-	Message    protocolLeaf `json:"message"`
-	PMessage   protocolLeaf `json:"pmessage"`
-	Subscribed protocolLeaf `json:"subscribed"`
-}
-
-type protocolPubSubWireFields struct {
-	Action  protocolLeaf `json:"action"`
-	Channel protocolLeaf `json:"channel"`
-	Data    protocolLeaf `json:"data"`
-	Message protocolLeaf `json:"message"`
-	Pattern protocolLeaf `json:"pattern"`
-	Type    protocolLeaf `json:"type"`
-	Sender  protocolLeaf `json:"sender"`
-}
-
-type protocolPubSubWire struct {
-	Actions    protocolPubSubWireActions    `json:"actions"`
-	EventTypes protocolPubSubWireEventTypes `json:"event_types"`
-	Fields     protocolPubSubWireFields     `json:"fields"`
-}
-
-type protocolPubSubJSON struct {
-	Wire protocolPubSubWire `json:"wire"`
-}
-
-// ---------------------------------------------------------------------------
-// Typed structs mirroring protocol/constants/headers.json
-// ---------------------------------------------------------------------------
-
 type protocolHeadersJSON struct {
 	Headers map[string]protocolLeaf `json:"headers"`
 }
-
-// ---------------------------------------------------------------------------
-// Typed structs mirroring protocol/constants/collections.json
-// ---------------------------------------------------------------------------
 
 type protocolCollectionsJSON struct {
 	Collections map[string]protocolLeaf `json:"collections"`
 }
 
-// ---------------------------------------------------------------------------
-// Typed structs mirroring protocol/constants/env_vars.json
-// ---------------------------------------------------------------------------
-
 type protocolEnvVarsJSON struct {
-	LLM     map[string]string `json:"llm"`
-	Auth    map[string]string `json:"auth"`
-	General map[string]string `json:"general"`
-	Search  map[string]string `json:"search"`
-	SSL     map[string]string `json:"ssl"`
+	EnvVars map[string]protocolLeaf `json:"env_vars"`
 }
 
 func loadEventsJSON(t *testing.T) protocolEventsJSON {
@@ -446,13 +125,6 @@ func loadChannelsJSON(t *testing.T) protocolChannelsJSON {
 	var ch protocolChannelsJSON
 	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "channels.json"), &ch), "channels.json must unmarshal into protocolChannelsJSON")
 	return ch
-}
-
-func loadPubSubJSON(t *testing.T) protocolPubSubJSON {
-	t.Helper()
-	var ps protocolPubSubJSON
-	require.NoError(t, json.Unmarshal(loadProtocolFile(t, "pubsub.json"), &ps), "pubsub.json must unmarshal into protocolPubSubJSON")
-	return ps
 }
 
 func loadHeadersJSON(t *testing.T) protocolHeadersJSON {
@@ -524,23 +196,23 @@ func TestProtocolEventsMatchGoConstants(t *testing.T) {
 	events := ev.Events
 
 	t.Run("operator.heartbeat", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorHeartbeatSent"].Value), string(constants.EventOperatorHeartbeatSent))
+		assert.Equal(t, events["OperatorHeartbeatSent"].Value, string(constants.EventOperatorHeartbeatSent))
 	})
 
 	t.Run("operator.command", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorCommandRequested"].Value), string(constants.EventOperatorCommandRequested))
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorCommandCompleted"].Value), string(constants.EventOperatorCommandCompleted))
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorCommandFailed"].Value), string(constants.EventOperatorCommandFailed))
+		assert.Equal(t, events["OperatorCommandRequested"].Value, string(constants.EventOperatorCommandRequested))
+		assert.Equal(t, events["OperatorCommandCompleted"].Value, string(constants.EventOperatorCommandCompleted))
+		assert.Equal(t, events["OperatorCommandFailed"].Value, string(constants.EventOperatorCommandFailed))
 	})
 
 	t.Run("operator.file.edit", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorFileEditRequested"].Value), string(constants.EventOperatorFileEditRequested))
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorFileEditCompleted"].Value), string(constants.EventOperatorFileEditCompleted))
+		assert.Equal(t, events["OperatorFileEditRequested"].Value, string(constants.EventOperatorFileEditRequested))
+		assert.Equal(t, events["OperatorFileEditCompleted"].Value, string(constants.EventOperatorFileEditCompleted))
 	})
 
 	t.Run("operator.lifecycle", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorBound"].Value), string(constants.EventOperatorBound))
-		assert.Equal(t, fmt.Sprintf("%v", events["OperatorUnbound"].Value), string(constants.EventOperatorUnbound))
+		assert.Equal(t, events["OperatorBound"].Value, string(constants.EventOperatorBound))
+		assert.Equal(t, events["OperatorUnbound"].Value, string(constants.EventOperatorUnbound))
 	})
 }
 
@@ -552,15 +224,15 @@ func TestProtocolStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
 	t.Run("operator.status", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", st.Status["operator_status"]["available"].Value), string(constants.OperatorStatusAvailable))
-		assert.Equal(t, fmt.Sprintf("%v", st.Status["operator_status"]["offline"].Value), string(constants.OperatorStatusOffline))
+		assert.Equal(t, st.Status["operator_status"]["available"].Value, string(constants.OperatorStatusAvailable))
+		assert.Equal(t, st.Status["operator_status"]["offline"].Value, string(constants.OperatorStatusOffline))
 	})
 
 	t.Run("execution.status", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["pending"].Value), string(constants.ExecutionStatusPending))
-		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["executing"].Value), string(constants.ExecutionStatusExecuting))
-		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["completed"].Value), string(constants.ExecutionStatusCompleted))
-		assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["failed"].Value), string(constants.ExecutionStatusFailed))
+		assert.Equal(t, st.Status["execution_status"]["pending"].Value, string(constants.ExecutionStatusPending))
+		assert.Equal(t, st.Status["execution_status"]["executing"].Value, string(constants.ExecutionStatusExecuting))
+		assert.Equal(t, st.Status["execution_status"]["completed"].Value, string(constants.ExecutionStatusCompleted))
+		assert.Equal(t, st.Status["execution_status"]["failed"].Value, string(constants.ExecutionStatusFailed))
 	})
 }
 
@@ -569,23 +241,11 @@ func TestProtocolStatusMatchesGoConstants(t *testing.T) {
 // =============================================================================
 
 func TestProtocolChannelsMatchGoConstants(t *testing.T) {
-	// Channel prefixes are now defined in constants/channels.go
-	// These are not in the JSON anymore, so we test the Go functions directly
 	t.Run("channel prefixes used by CmdChannel/ResultsChannel/HeartbeatChannel", func(t *testing.T) {
 		assert.Equal(t, "cmd:op1:s1", pubsub.CmdChannel("op1", "s1"))
 		assert.Equal(t, "results:op1:s1", pubsub.ResultsChannel("op1", "s1"))
 		assert.Equal(t, "heartbeat:op1:s1", pubsub.HeartbeatChannel("op1", "s1"))
 	})
-}
-
-// =============================================================================
-// Heartbeat type
-// =============================================================================
-
-func TestProtocolHeartbeatTypeMatchesGoConstants(t *testing.T) {
-	// HeartbeatType is not in the protocol JSON - it's a Go-only constant
-	// This test is not part of the protocol contract, so we remove it
-	t.Skip("HeartbeatType is not in protocol JSON, it's a Go-only constant")
 }
 
 // =============================================================================
@@ -596,14 +256,14 @@ func TestProtocolHeadersMatchGoConstants(t *testing.T) {
 	h := loadHeadersJSON(t)
 
 	t.Run("standard http headers", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["Authorization"].Value), string(constants.HeaderAuthorization))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["UserAgent"].Value), string(constants.HeaderUserAgent))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["ContentType"].Value), string(constants.HeaderContentType))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["ContentDisposition"].Value), string(constants.HeaderContentDisposition))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["ContentLength"].Value), string(constants.HeaderContentLength))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XForwardedProto"].Value), string(constants.HeaderXForwardedProto))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XForwardedHost"].Value), string(constants.HeaderXForwardedHost))
-		assert.Equal(t, fmt.Sprintf("%v", h.Headers["XRequestTimestamp"].Value), string(constants.HeaderXRequestTimestamp))
+		assert.Equal(t, h.Headers["Authorization"].Value, string(constants.HeaderAuthorization))
+		assert.Equal(t, h.Headers["UserAgent"].Value, string(constants.HeaderUserAgent))
+		assert.Equal(t, h.Headers["ContentType"].Value, string(constants.HeaderContentType))
+		assert.Equal(t, h.Headers["ContentDisposition"].Value, string(constants.HeaderContentDisposition))
+		assert.Equal(t, h.Headers["ContentLength"].Value, string(constants.HeaderContentLength))
+		assert.Equal(t, h.Headers["XForwardedProto"].Value, string(constants.HeaderXForwardedProto))
+		assert.Equal(t, h.Headers["XForwardedHost"].Value, string(constants.HeaderXForwardedHost))
+		assert.Equal(t, h.Headers["XRequestTimestamp"].Value, string(constants.HeaderXRequestTimestamp))
 	})
 }
 
@@ -615,16 +275,16 @@ func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 	ch := loadChannelsJSON(t)
 
 	t.Run("wire.actions", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Subscribe"].Value), string(constants.PubSubActionSubscribe))
-		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["PSubscribe"].Value), string(constants.PubSubActionPSubscribe))
-		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Unsubscribe"].Value), string(constants.PubSubActionUnsubscribe))
-		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Publish"].Value), string(constants.PubSubActionPublish))
+		assert.Equal(t, ch.Channels["Subscribe"].Value, string(constants.PubSubActionSubscribe))
+		assert.Equal(t, ch.Channels["PSubscribe"].Value, string(constants.PubSubActionPSubscribe))
+		assert.Equal(t, ch.Channels["Unsubscribe"].Value, string(constants.PubSubActionUnsubscribe))
+		assert.Equal(t, ch.Channels["Publish"].Value, string(constants.PubSubActionPublish))
 	})
 
 	t.Run("wire.event_types", func(t *testing.T) {
-		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Message"].Value), string(constants.PubSubEventMessage))
-		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["PMessage"].Value), string(constants.PubSubEventPMessage))
-		assert.Equal(t, fmt.Sprintf("%v", ch.Channels["Subscribed"].Value), string(constants.PubSubEventSubscribed))
+		assert.Equal(t, ch.Channels["Message"].Value, string(constants.PubSubEventMessage))
+		assert.Equal(t, ch.Channels["PMessage"].Value, string(constants.PubSubEventPMessage))
+		assert.Equal(t, ch.Channels["Subscribed"].Value, string(constants.PubSubEventSubscribed))
 	})
 }
 
@@ -635,10 +295,10 @@ func TestProtocolPubSubWireMatchesGoConstants(t *testing.T) {
 func TestProtocolExecutionStatusMatchesGoConstants(t *testing.T) {
 	st := loadStatusJSON(t)
 
-	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["pending"].Value), string(constants.ExecutionStatusPending))
-	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["executing"].Value), string(constants.ExecutionStatusExecuting))
-	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["completed"].Value), string(constants.ExecutionStatusCompleted))
-	assert.Equal(t, fmt.Sprintf("%v", st.Status["execution_status"]["failed"].Value), string(constants.ExecutionStatusFailed))
+	assert.Equal(t, st.Status["execution_status"]["pending"].Value, string(constants.ExecutionStatusPending))
+	assert.Equal(t, st.Status["execution_status"]["executing"].Value, string(constants.ExecutionStatusExecuting))
+	assert.Equal(t, st.Status["execution_status"]["completed"].Value, string(constants.ExecutionStatusCompleted))
+	assert.Equal(t, st.Status["execution_status"]["failed"].Value, string(constants.ExecutionStatusFailed))
 }
 
 // =============================================================================
@@ -648,16 +308,43 @@ func TestProtocolExecutionStatusMatchesGoConstants(t *testing.T) {
 func TestProtocolCollectionsMatchGoConstants(t *testing.T) {
 	c := loadCollectionsJSON(t)
 
+	goCollections := map[string]constants.CollectionName{
+		"users":                   constants.CollectionUsers,
+		"web_sessions":            constants.CollectionWebSessions,
+		"operator_sessions":       constants.CollectionOperatorSessions,
+		"cli_sessions":            constants.CollectionCLISessions,
+		"login_audit":             constants.CollectionLoginAudit,
+		"auth_admin_audit":        constants.CollectionAuthAdminAudit,
+		"account_locks":           constants.CollectionAccountLocks,
+		"organizations":           constants.CollectionOrganizations,
+		"operators":               constants.CollectionOperators,
+		"operator_usage":          constants.CollectionOperatorUsage,
+		"cases":                   constants.CollectionCases,
+		"investigations":          constants.CollectionInvestigations,
+		"tasks":                   constants.CollectionTasks,
+		"memories":                constants.CollectionMemories,
+		"settings":                constants.CollectionSettings,
+		"console_audit":           constants.CollectionConsoleAudit,
+		"bound_sessions":          constants.CollectionBoundSessions,
+		"passkey_challenges":      constants.CollectionPasskeyChallenges,
+		"personas":                constants.CollectionPersonas,
+		"agent_activity_metadata": constants.CollectionAgentActivityMetadata,
+		"reputation_state":        constants.CollectionReputationState,
+		"reputation_commitments":  constants.CollectionReputationCommitments,
+		"stake_resolutions":       constants.CollectionStakeResolutions,
+		"revoked_certificates":    constants.CollectionRevokedCertificates,
+		"trusted_signers":         constants.CollectionTrustedSigners,
+		"app_policies":            constants.CollectionAppPolicies,
+		"tribunals":               constants.CollectionTribunals,
+	}
+
 	t.Run("collection names", func(t *testing.T) {
-		// Verify that all collections in JSON have corresponding Go constants
 		for key, leaf := range c.Collections {
-			value := leaf.Value
-			// Convert key to Go constant name format (CollectionUsers, CollectionWebSessions, etc.)
-			constName := "Collection" + toPascalCase(key)
-			// Use reflection to verify the constant exists and has the correct value
-			assert.NotEmpty(t, constName, "collection constant name should not be empty")
-			assert.NotEmpty(t, value, "collection value should not be empty")
-			t.Logf("Collection %s has constant %s with value %s", key, constName, value)
+			goConst, ok := goCollections[key]
+			assert.True(t, ok, "collection %s must have Go constant", key)
+			if ok {
+				assert.Equal(t, leaf.Value, string(goConst), "collection %s value mismatch", key)
+			}
 		}
 	})
 }
@@ -669,46 +356,22 @@ func TestProtocolCollectionsMatchGoConstants(t *testing.T) {
 func TestProtocolEnvVarsMatchGoConstants(t *testing.T) {
 	e := loadEnvVarsJSON(t)
 
-	t.Run("env var keys", func(t *testing.T) {
-		// Verify that env vars in JSON have corresponding Go constants
-		allEnvVars := map[string]string{}
-		for _, vars := range []map[string]string{e.LLM, e.Auth, e.General, e.Search, e.SSL} {
-			for key, value := range vars {
-				allEnvVars[key] = value
-			}
-		}
+	goEnvVars := map[string]string{
+		"G8E_TRIBUNAL_ID":          string(constants.EnvVar.TribunalID),
+		"G8E_TRIBUNAL_URL":         string(constants.EnvVar.TribunalURL),
+		"G8E_VAULT_DIR":            string(constants.EnvVar.VaultDir),
+		"G8E_VAULT_KEY":            string(constants.EnvVar.VaultKey),
+		"G8E_VAULT_REQUIRE_UNLOCK": string(constants.EnvVar.VaultRequireUnlock),
+	}
 
-		// Verify all env vars are non-empty
-		for key, value := range allEnvVars {
-			assert.NotEmpty(t, key, "env var key should not be empty")
-			assert.NotEmpty(t, value, "env var value should not be empty")
-			t.Logf("Env var %s maps to config key %s", key, value)
+	t.Run("env var keys", func(t *testing.T) {
+		for key, leaf := range e.EnvVars {
+			goValue, ok := goEnvVars[leaf.Value]
+			if ok {
+				assert.Equal(t, leaf.Value, goValue, "env var %s value mismatch", key)
+			} else {
+				assert.NotEmpty(t, leaf.Value, "env var %s must have non-empty value", key)
+			}
 		}
 	})
-}
-
-// Helper function to convert snake_case to PascalCase
-func toPascalCase(s string) string {
-	parts := []string{}
-	current := ""
-	for _, r := range s {
-		if r == '_' {
-			if current != "" {
-				parts = append(parts, current)
-				current = ""
-			}
-		} else {
-			current += string(r)
-		}
-	}
-	if current != "" {
-		parts = append(parts, current)
-	}
-	result := ""
-	for _, part := range parts {
-		if len(part) > 0 {
-			result += strings.ToUpper(part[:1]) + part[1:]
-		}
-	}
-	return result
 }

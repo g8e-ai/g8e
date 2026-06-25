@@ -13,14 +13,18 @@
 
 package netutil
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+)
 
 // LocalhostHTTPSURL returns a localhost HTTPS URL with the specified port.
 func LocalhostHTTPSURL(port int) string {
-	return fmt.Sprintf("https://localhost:%d", port)
+	return fmt.Sprintf("https://%s:%d", constants.DefaultEndpoint, port)
 }
 
 // LocalhostHTTPURL returns a localhost HTTP URL with the specified port.
 func LocalhostHTTPURL(port int) string {
-	return fmt.Sprintf("http://localhost:%d", port)
+	return fmt.Sprintf("http://%s:%d", constants.DefaultEndpoint, port)
 }

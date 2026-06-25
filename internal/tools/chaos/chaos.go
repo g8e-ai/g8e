@@ -46,7 +46,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/mapping"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -702,7 +701,7 @@ func fireOne(
 
 	cmdMsg := pubsub.PubSubCommandMessage{
 		ID:                env.Id,
-		EventType:         mapping.MapActionTypeToEventType(constants.ActionType(env.ActionType)),
+		EventType:         constants.MapActionTypeToEventType(constants.ActionType(env.ActionType)),
 		OperatorSessionID: env.OperatorSessionId,
 		Payload:           env.Payload,
 		Timestamp:         env.Timestamp.AsTime(),
@@ -712,7 +711,7 @@ func fireOne(
 	// so we use a custom execution flow that still hits the handler but batches the audit log.
 
 	// Execute through the handler
-	eventType := mapping.MapActionTypeToEventType(constants.ActionType(env.ActionType))
+	eventType := constants.MapActionTypeToEventType(constants.ActionType(env.ActionType))
 	_, err := actuator.ExecutionHandler.ExecuteVerifiedTransaction(context.Background(), eventType, cmdMsg)
 
 	if err != nil {
