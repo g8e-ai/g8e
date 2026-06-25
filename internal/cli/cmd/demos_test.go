@@ -187,6 +187,9 @@ func TestDemosRunCmd(t *testing.T) {
 		assert.Contains(t, cmd.Long, "CUI Exfiltration")
 		assert.Contains(t, cmd.Long, "Unauthorized Trade")
 		assert.Contains(t, cmd.Long, "Governed Migration")
+		assert.Contains(t, cmd.Long, "SIGINT-to-EO/IR")
+		assert.Contains(t, cmd.Long, "BFT Spoofing")
+		assert.Contains(t, cmd.Long, "Disconnected Operations")
 	})
 }
 
@@ -196,10 +199,11 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 1, scenarioCounts["gov"])
 		assert.Equal(t, 1, scenarioCounts["finance"])
 		assert.Equal(t, 3, scenarioCounts["secure-data"])
+		assert.Equal(t, 3, scenarioCounts["dow"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data"}
+		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -286,6 +290,24 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:3003")
 	})
 
+	t.Run("prints dow endpoints", func(t *testing.T) {
+		var buf bytes.Buffer
+		originalStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		printDemoEndpoints("dow")
+
+		w.Close()
+		os.Stdout = originalStdout
+		buf.ReadFrom(r)
+
+		output := buf.String()
+		assert.Contains(t, output, "Available endpoints:")
+		assert.Contains(t, output, "http://localhost:8086")
+		assert.Contains(t, output, "https://localhost:8449")
+	})
+
 	t.Run("prints default message for unknown org", func(t *testing.T) {
 		var buf bytes.Buffer
 		originalStdout := os.Stdout
@@ -339,6 +361,13 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1-3")
 	})
 
+	t.Run("returns error for invalid dow scenario", func(t *testing.T) {
+		err := runDoWScenario("/tmp", "99")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid scenario number for dow")
+		assert.Contains(t, err.Error(), "valid: 1-3")
+	})
+
 	t.Run("healthcare scenario functions exist", func(t *testing.T) {
 		// Verify the scenario function exists and doesn't panic on valid input
 		// We don't execute it since it requires Docker
@@ -355,6 +384,10 @@ func TestRunScenario(t *testing.T) {
 
 	t.Run("secure-data scenario functions exist", func(t *testing.T) {
 		assert.NotNil(t, runSecureDataScenario)
+	})
+
+	t.Run("dow scenario functions exist", func(t *testing.T) {
+		assert.NotNil(t, runDoWScenario)
 	})
 }
 
@@ -385,6 +418,12 @@ func TestRunAllScenarios(t *testing.T) {
 
 	t.Run("secure-data has 3 scenarios", func(t *testing.T) {
 		count, ok := scenarioCounts["secure-data"]
+		assert.True(t, ok)
+		assert.Equal(t, 3, count)
+	})
+
+	t.Run("dow has 3 scenarios", func(t *testing.T) {
+		count, ok := scenarioCounts["dow"]
 		assert.True(t, ok)
 		assert.Equal(t, 3, count)
 	})
@@ -482,5 +521,15 @@ func TestSecureDataScenarioDescriptions(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Governed Migration with Chain-of-Custody Receipts")
 		assert.Contains(t, cmd.Long, "Connector Bypass Attempt Blocked")
 		assert.Contains(t, cmd.Long, "Cross-Tenant Leak Doctrine Triggered")
+	})
+}
+
+func TestDoWScenarioDescriptions(t *testing.T) {
+	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
+		cmd := demosRunCmd()
+		assert.Contains(t, cmd.Long, "dow: 1-3")
+		assert.Contains(t, cmd.Long, "Autonomous SIGINT-to-EO/IR Cross-Cueing")
+		assert.Contains(t, cmd.Long, "BFT Spoofing Defense")
+		assert.Contains(t, cmd.Long, "Disconnected Operations")
 	})
 }

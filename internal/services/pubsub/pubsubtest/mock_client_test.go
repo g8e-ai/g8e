@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package pubsub
+package pubsubtest
 
 import (
 	"context"
@@ -53,7 +53,6 @@ func TestMockOperatorPubSubClient_Subscribe(t *testing.T) {
 		ch, err := client.Subscribe(ctx, "test-channel")
 		require.NoError(t, err)
 
-		// Inject a message
 		go func() {
 			time.Sleep(10 * time.Millisecond)
 			client.InjectMessage("test-channel", []byte("test message"))
@@ -102,7 +101,6 @@ func TestMockOperatorPubSubClient_Publish(t *testing.T) {
 		err = client.Publish(ctx, "test-channel", []byte("test message"))
 		require.NoError(t, err)
 
-		// Both subscribers should receive the message
 		msg1 := <-ch1
 		msg2 := <-ch2
 		assert.Equal(t, []byte("test message"), msg1)
@@ -168,7 +166,6 @@ func TestMockOperatorPubSubClient_Published(t *testing.T) {
 		published1 := client.Published()
 		published2 := client.Published()
 
-		// Should be independent copies
 		assert.Equal(t, published1, published2)
 		assert.NotSame(t, &published1[0], &published2[0])
 	})
@@ -246,7 +243,6 @@ func TestMockOperatorPubSubClient_Close(t *testing.T) {
 
 		client.Close()
 
-		// Channel should be closed
 		_, ok := <-ch
 		assert.False(t, ok)
 	})
@@ -263,7 +259,6 @@ func TestMockOperatorPubSubClient_Close(t *testing.T) {
 
 		client.Close()
 
-		// Should be able to subscribe again after close
 		ctx2, cancel2 := context.WithCancel(context.Background())
 		defer cancel2()
 

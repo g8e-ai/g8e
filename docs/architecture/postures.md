@@ -162,7 +162,6 @@ The `TribunalService` (`internal/services/tribunal/service.go`) is the enrolled 
 
 **Deliberation adapters**:
 - **LocalDeliberator** (`tribunal/service.go:171-196`): In-process adapter for single-binary deployments. Calls `TribunalService.Deliberate` directly without HTTP.
-- **HTTPTribunalDeliberator** (`internal/services/mcp/tribunal_deliberator.go`): HTTP client for remote tribunal services. Calls `POST /tribunal/v1/deliberate` with mTLS.
 
 ### L2 Signature Verification
 

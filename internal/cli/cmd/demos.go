@@ -221,6 +221,9 @@ func printDemoEndpoints(org string) {
 		fmt.Println("  Gateway HTTP:  http://localhost:8083")
 		fmt.Println("  Gateway HTTPS: https://localhost:8446")
 		fmt.Println("  Demo UI:       http://localhost:3003")
+	case "dow":
+		fmt.Println("  Gateway HTTP:  http://localhost:8086")
+		fmt.Println("  Gateway HTTPS: https://localhost:8449")
 	default:
 		fmt.Printf("  No endpoint information available for '%s'\n", org)
 	}
@@ -392,6 +395,7 @@ var scenarioCounts = map[string]int{
 	"gov":         1,
 	"finance":     1,
 	"secure-data": 3,
+	"dow":         3,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -414,7 +418,11 @@ Available scenarios:
   secure-data: 1-3
     1 - Governed Migration with Chain-of-Custody Receipts
     2 - Connector Bypass Attempt Blocked
-    3 - Cross-Tenant Leak Doctrine Triggered`,
+    3 - Cross-Tenant Leak Doctrine Triggered
+  dow: 1-3
+    1 - Autonomous SIGINT-to-EO/IR Cross-Cueing (Challenge 5)
+    2 - BFT Spoofing Defense (Challenge 8)
+    3 - Disconnected Operations (Challenge 6)`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runDemosRun,
 	}
@@ -520,6 +528,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runFinanceScenarioWithResult(demoDir, scenario)
 	case "secure-data":
 		return runSecureDataScenarioWithResult(demoDir, scenario)
+	case "dow":
+		return runDoWScenarioWithResult(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}

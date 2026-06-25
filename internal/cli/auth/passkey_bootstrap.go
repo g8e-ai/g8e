@@ -14,7 +14,6 @@
 package auth
 
 import (
-	"bytes"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -33,7 +32,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
@@ -490,76 +488,4 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 	}
 
 	return len(result.Credentials) > 0, nil
-}
-
-// PasskeyAttestationResponse represents the attestation response from the client
-type PasskeyAttestationResponse struct {
-	ID                string   `json:"id"`
-	RawID             string   `json:"rawId"`
-	ClientDataJSON    string   `json:"clientDataJSON"`
-	AttestationObject string   `json:"attestationObject"`
-	Transports        []string `json:"transports,omitempty"`
-}
-
-// RegisterPasskeyDirectly performs passkey registration directly via API calls
-// This is an alternative to the localhost server for automated testing
-func RegisterPasskeyDirectly(cfg *config.Config, userID string) error {
-	// Get current username for passkey registration
-	currentUser, err := user.Current()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrGetCurrentUser, err)
-	}
-	userName := currentUser.Username
-
-	// Get challenge
-	challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli-register/challenge", cfg.OperatorDiscoveryURL())
-	challengeReq := models.PasskeyRegisterChallengeRequest{
-		UserID:   userID,
-		UserName: userName,
-	}
-	challengeBody, err := json.Marshal(challengeReq)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestMarshalFailed, err)
-	}
-
-	resp, err := http.Post(challengeURL, "application/json", bytes.NewReader(challengeBody))
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			return fmt.Errorf("%w: status %d", constants.ErrHTTPStatusError, resp.StatusCode)
-		}
-		return fmt.Errorf("%w: status %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(body))
-	}
-
-	var challengeResp struct {
-		Success bool `json:"success"`
-		Options struct {
-			PublicKey struct {
-				Challenge string `json:"challenge"`
-				User      struct {
-					ID          string `json:"id"`
-					Name        string `json:"name"`
-					DisplayName string `json:"displayName"`
-				} `json:"user"`
-			} `json:"publicKey"`
-		} `json:"options"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&challengeResp); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
-	}
-
-	if !challengeResp.Success {
-		return constants.ErrInternal
-	}
-
-	// Note: This is a placeholder for direct registration
-	// In practice, WebAuthn requires browser interaction for security
-	// This function is mainly for testing infrastructure
-	return constants.ErrPasskeyRequiresBrowser
 }

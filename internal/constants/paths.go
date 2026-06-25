@@ -192,10 +192,12 @@ const (
 	DemosPARequestsFile         = "pa_requests.json"
 	DemosHIPAADoctrineFile      = "phi_hipaa_doctrine.json"
 	DemosSecureDataDoctrineFile = "secure_data_transfer_doctrine.json"
+	DemosDoWDoctrineFile        = "dow_tactical_doctrine.json"
 	DemosOrgHealthcare          = "healthcare"
 	DemosOrgFinance             = "finance"
 	DemosOrgGov                 = "gov"
 	DemosOrgSecureData          = "secure-data"
+	DemosOrgDoW                 = "dow"
 
 	SwaggerFilename          = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"

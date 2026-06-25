@@ -637,6 +637,47 @@ func TestBuildPublicRouter(t *testing.T) {
 	router.ServeHTTP(rr, req)
 	// Endpoint requires mTLS, so we expect 401 Unauthorized, not 404 Not Found
 	assert.NotEqual(t, http.StatusNotFound, rr.Code, "PKIDevicesEnroll should be registered on public router")
+
+	// 1. WebSessionAuth routing tests for authed paths
+	authedPaths := []string{
+		"/api/v1/users/me",
+		"/api/v1/approvals/tx-123/challenge",
+		"/api/v1/approvals/tx-123/verify",
+		"/api/v1/auth/passkeys/cred-123",
+		"/api/v1/auth/sessions/me",
+	}
+	for _, path := range authedPaths {
+		req = httptest.NewRequest(http.MethodGet, path, nil)
+		rr = httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be wrapped in WebSessionAuth and return 401, not 302/404", path)
+		assert.Contains(t, rr.Body.String(), constants.ErrWebSessionCookieRequired.Error(), "Path %s should return web session cookie required error", path)
+	}
+
+	// 2. Browser passkey endpoint accessibility tests (must bypass mTLS check)
+	browserPasskeyPaths := []string{
+		"/api/v1/auth/passkeys/cli-browser-register/challenge",
+		"/api/v1/auth/passkeys/cli-browser-register/verify",
+		"/api/v1/auth/passkeys/browser/authenticate/challenge",
+		"/api/v1/auth/passkeys/browser/authenticate/verify",
+	}
+	for _, path := range browserPasskeyPaths {
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+		rr = httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		// Since these are public, they bypass mTLS and reach the handler.
+		// Since we send nil/empty body, they may fail with 400 or other errors,
+		// but they must NOT return 401 with ErrMTLSCertRequired.
+		assert.NotEqual(t, constants.ErrMTLSCertRequired.Error(), rr.Body.String(), "Path %s should bypass mTLS check", path)
+		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
+	}
+
+	// 3. Landing page redirect test (302 to /console/ directly)
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusFound, rr.Code, "Landing page should redirect with 302")
+	assert.Equal(t, "/console/", rr.Header().Get("Location"), "Landing page should redirect directly to /console/")
 }
 
 type errorReader struct{}

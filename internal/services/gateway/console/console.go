@@ -22,6 +22,15 @@ import (
 //go:embed static
 var staticFS embed.FS
 
+// Handler returns the HTTP handler serving the embedded Console SPA.
+//
+// @Summary		Console SPA
+// @Description	Serves the single-page application dashboard for WebAuthn/passkey operations.
+// @Tags			public
+// @Accept			html
+// @Produce		html
+// @Success		200	{string}	string	"Returns the index.html SPA"
+// @Router			/console/ [get]
 func Handler() http.Handler {
 	sub, err := fs.Sub(staticFS, "static")
 	if err != nil {

@@ -323,6 +323,15 @@ func (c *AuthController) handleCLIBrowserPasskeyRegisterVerify(w http.ResponseWr
 
 // handleCLIBrowserPasskeyAuthenticateChallenge handles passkey authentication challenges for browser-based login.
 // This is a public endpoint (no auth) for browser-based passkey authentication.
+//
+// @Summary		Browser passkey authenticate challenge
+// @Description	Generates a WebAuthn authentication challenge for browser-based login.
+// @Tags			public
+// @Accept			json
+// @Produce		json
+// @Param			request	body		object	true	"User ID request"
+// @Success		200		{object}	object
+// @Router			/api/v1/auth/passkeys/browser/authenticate/challenge [post]
 func (c *AuthController) handleCLIBrowserPasskeyAuthenticateChallenge(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -368,6 +377,15 @@ func (c *AuthController) handleCLIBrowserPasskeyAuthenticateChallenge(w http.Res
 // handleCLIBrowserPasskeyAuthenticateVerify handles passkey authentication verification for browser-based login.
 // This is a public endpoint (no auth) for browser-based passkey authentication.
 // It creates a web session and sets a session cookie on successful authentication.
+//
+// @Summary		Browser passkey authenticate verify
+// @Description	Verifies the WebAuthn authentication assertion and creates a web session cookie.
+// @Tags			public
+// @Accept			json
+// @Produce		json
+// @Param			request	body		object	true	"Assertion response"
+// @Success		200		{object}	object
+// @Router			/api/v1/auth/passkeys/browser/authenticate/verify [post]
 func (c *AuthController) handleCLIBrowserPasskeyAuthenticateVerify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

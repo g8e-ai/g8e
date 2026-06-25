@@ -289,9 +289,8 @@ Comprehensive gateway service testing:
 - `auth_integrity_test.go` - Authentication integrity tests
 - `blob_store_service_test.go` - Blob store service tests
 - `bootstrap_test.go` - Gateway bootstrap tests
-- `cli_l3_notary_test.go` - CLI-based L3 notary tests
+- `cli_session_verifier_test.go` - CLI session verifier and unified L3 notary tests
 - `cli_session_service_test.go` - CLI session service tests
-- `composite_l3_verifier_test.go` - Composite L3 verification tests
 - `db_controller_test.go` - Database controller tests
 - `document_store_service_test.go` - Document store service tests
 - `gateway_auth_bench_test.go` - Gateway authentication benchmark tests
@@ -391,7 +390,7 @@ Authentication and PKI tests:
 - `internal/services/pubsub/command_service_test.go` - Pub/sub command service tests
 - `internal/services/pubsub/file_ops_service_test.go` - Pub/sub file operations service tests
 - `internal/services/pubsub/g8eg_pubsub_client_test.go` - g8e Gateway pub/sub client tests
-- `internal/services/pubsub/g8eg_pubsub_mock_test.go` - g8e Gateway pub/sub mock tests
+- `internal/services/pubsub/pubsubtest/mock_client_test.go` - PubSub mock client tests
 - `internal/services/pubsub/heartbeat_service_test.go` - Pub/sub heartbeat tests
 - `internal/services/pubsub/history_service_test.go` - Pub/sub history service tests
 - `internal/services/pubsub/inprocess_client_test.go` - In-process pub/sub client tests
@@ -451,7 +450,6 @@ CLI command and configuration tests:
 - `cmd/test_paths_test.go` - Test path validation tests
 - `cmd/vault_test.go` - Vault command tests
 - `config/config_test.go` - Configuration loader tests
-- `jsonrpc/types_test.go` - JSON-RPC type tests
 - `platform/browser_test.go` - Browser platform tests
 - `platform/process_identity_test.go` - Process identity tests
 - `platform/process_test.go` - Process tests
@@ -461,11 +459,6 @@ CLI command and configuration tests:
 #### Configuration and Constants Tests
 
 - `internal/config/config_test.go` - Configuration tests
-
-#### Contract Tests
-
-- `internal/contracts/constants_enforcement_test.go` - Constants enforcement tests
-- `internal/contracts/protocol_constants_test.go` - Protocol constants tests
 
 #### Infrastructure Tests
 
@@ -569,7 +562,6 @@ MCP gateway and native tool integration tests:
 - `sys_time_clock_test.go` - Time clock tool tests
 - `sys_tools_test.go` - System tools tests
 - `tls_cert_inspect_test.go` - TLS certificate inspect tool tests
-- `tribunal_deliberator_test.go` - HTTP tribunal deliberator timeout test (CS-6: 1s client timeout fires before 2s server delay)
 - `validation_test.go` - Validation tests
 
 #### Package Tests

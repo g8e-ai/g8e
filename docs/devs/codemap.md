@@ -1,4 +1,4 @@
-# g8e Codemap — Service Dependency Tree
+# g8e Codemap - Service Dependency Tree
 
 ## Top-Level Service Roots
 
@@ -218,7 +218,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
-- **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator` or `HTTPTribunalDeliberator`). The `TribunalStore` interface in `governance.L4Warden` loads `TribunalPolicy` for quorum verification.
+- **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `TribunalStore` interface in `governance.L4Warden` loads `TribunalPolicy` for quorum verification.
 - **L3**: `governance.L3Notary` (gateway mode uses `gateway.CompositeL3Verifier` combining WebAuthn passkey and mTLS CLI proofs; outbound mode uses `governance.outboundL3Notary` for CLI-based approval via suspended transactions)
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
 - **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging)
@@ -242,6 +242,17 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `gateway.HTTPHandler` builds the HTTP/WebSocket surface for gateway mode.
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
+- `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
+
+## MCP Native Tools
+
+All Model Context Protocol (MCP) native tools are registered explicitly in `internal/services/mcp/native_tool_registry.go` inside the `RegisterNativeTools` function, avoiding global state mutation and init-based registrations. The tools are handled and dispatched via `mcp.NativeToolHandler`. Key tool categories include:
+
+- **Database Inspection**: `DBDiscoverTopologyTool`, `DBQueryValidateTool`, `DBIsolatedReadTool`, `DBIndexTriageTool` for database schema discovery and safe read-only querying.
+- **System and Process Profiling**: `SysOOMDetectTool`, `ProcMetricTopTool`, `ProcSignalSafeTool`, `SysInfoTool`, `SysServiceStatusTool`, `SysContainerStatusTool`, `SysTimeClockTool`, `ProcTreeTool` for host system health and telemetry.
+- **Network Inspection**: `NetSocketAuditTool`, `NetEndpointPingTool`, `NetHTTPProbeTool`, `NetDNSResolveTool`, `NetSSHKnownHostsTool` for connectivity and port auditing.
+- **File and Configuration Management**: `FSDiskProfileTool`, `ConfigDiffMaskTool`, `FSFileChecksumTool`, `FSDiskUsageTool`, `FileReadTool` for filesystem verification and config diff masking.
+- **Environment and Cloud Integration**: `SysEnvVarsTool`, `GitOpsTool`, `CloudMetadataTool`, `K8sInspectTool`, `OperatorDeployTool` for metadata discovery and deployment workflows.
 
 ## Critical Data Flows
 
@@ -252,6 +263,13 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 | File mutations | `FileEditService` → `GitLedgerService` → git commit |
 | Suspended transactions | `L4Warden` → `storage.SuspendedTransactionService` (consistent in both gateway and outbound modes) |
 | Action receipts | `L5Actuator` → `SQLAuditStore` (receipts table) + signed return |
+
+## CLI-Invoked Verification & Reporting Service
+
+The reporting system operates as a self-contained, offline verification utility invoked via CLI subcommands.
+
+- **`internal/services/reporting/`**: Reads from database and storage backends (including decrypted execution vault, replay store, and git ledger directory) to write flat, deterministic CSV evidence files.
+- **Cryptographic Verification**: Re-validates receipt signatures, verifies the sequential commitment hash chain, and checks the git ledger Merkle root to ensure system integrity.
 
 ## Test Infrastructure (Not Production)
 
@@ -268,4 +286,9 @@ The following packages are test-only and are not part of the production dependen
 - This is intentional test infrastructure, not production code
 - Located in `test/` to clearly indicate test-only status
 
-**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest` package provides test implementations that should never be used in production code paths.
+**`internal/services/pubsub/pubsubtest/`** - Test-only PubSub client mock
+- `MockOperatorPubSubClient` - In-memory mock implementing the `pubsub.PubSubClient` interface
+- Used by pubsub service tests and g8eo lifecycle/integration tests
+- Follows the same pattern as `storagetest`, which keeps mock infrastructure out of production code
+
+**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest` and `pubsubtest` packages provide test implementations that should never be used in production code paths.

@@ -133,14 +133,4 @@ func RemoveTrailingSeparator(path string) string {
 	return strings.TrimSuffix(path, string(filepath.Separator))
 }
 
-// MakeRelative attempts to make targetPath relative to basePath.
-// If it fails, it returns the original targetPath.
-func MakeRelative(basePath, targetPath string) string {
-	rel, err := filepath.Rel(basePath, targetPath)
-	if err != nil {
-		return targetPath
-	}
-	return rel
-}
-
 // Made with Bob

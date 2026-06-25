@@ -54,10 +54,6 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	return rootCmd
 }
 
-func Execute(version string) {
-	ExecuteWithVersionInfo(version, "", "", "")
-}
-
 func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
 	rootCmd := NewRootCmd(version)
 	rootCmd.SetVersionTemplate(`{{with .Version}}{{printf "g8e version %s\n" .}}{{end}}`)

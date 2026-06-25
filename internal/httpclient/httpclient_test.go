@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -71,19 +70,6 @@ func generateTestCA() []byte {
 	})
 }
 
-func assertEmbeddedCATransport(t *testing.T, transport *http.Transport) {
-	t.Helper()
-	require.NotNil(t, transport.TLSClientConfig)
-	assert.NotNil(t, transport.TLSClientConfig.RootCAs)
-	assert.Equal(t, uint16(tls.VersionTLS13), transport.TLSClientConfig.MinVersion)
-	assert.False(t, transport.TLSClientConfig.InsecureSkipVerify)
-	assert.Empty(t, transport.TLSClientConfig.Certificates)
-	require.Len(t, transport.TLSClientConfig.CurvePreferences, 3)
-	assert.Equal(t, tls.X25519, transport.TLSClientConfig.CurvePreferences[0])
-	assert.Equal(t, tls.CurveP384, transport.TLSClientConfig.CurvePreferences[1])
-	assert.Equal(t, tls.CurveP256, transport.TLSClientConfig.CurvePreferences[2])
-}
-
 func assertBaseTransportTimeouts(t *testing.T, transport *http.Transport) {
 	t.Helper()
 	assert.Equal(t, DefaultTLSTimeout, transport.TLSHandshakeTimeout)
@@ -91,19 +77,6 @@ func assertBaseTransportTimeouts(t *testing.T, transport *http.Transport) {
 	assert.Equal(t, 10, transport.MaxIdleConns)
 	assert.Equal(t, 5, transport.MaxIdleConnsPerHost)
 	assert.NotNil(t, transport.DialContext)
-}
-
-func assertEmbeddedCADialer(t *testing.T, dialer *websocket.Dialer) {
-	t.Helper()
-	require.NotNil(t, dialer.TLSClientConfig)
-	assert.NotNil(t, dialer.TLSClientConfig.RootCAs)
-	assert.Equal(t, uint16(tls.VersionTLS13), dialer.TLSClientConfig.MinVersion)
-	assert.False(t, dialer.TLSClientConfig.InsecureSkipVerify)
-	assert.Empty(t, dialer.TLSClientConfig.Certificates)
-	require.Len(t, dialer.TLSClientConfig.CurvePreferences, 3)
-	assert.Equal(t, tls.X25519, dialer.TLSClientConfig.CurvePreferences[0])
-	assert.Equal(t, tls.CurveP384, dialer.TLSClientConfig.CurvePreferences[1])
-	assert.Equal(t, tls.CurveP256, dialer.TLSClientConfig.CurvePreferences[2])
 }
 
 func TestConstants(t *testing.T) {
@@ -143,4 +116,3 @@ func TestWebSocketDialerWithTLS(t *testing.T) {
 	assert.Equal(t, customTLS, dialer.TLSClientConfig)
 	assert.Equal(t, DefaultTLSTimeout, dialer.HandshakeTimeout)
 }
-

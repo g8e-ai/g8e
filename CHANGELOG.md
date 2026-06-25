@@ -17,6 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-06-25
+
+### Overview
+
+v1.2.1 is a maintenance and stability release addressing critical routing, authentication, and UX bugs identified in the v1.2.0 g8e Console release. This update ensures seamless WebSessionAuth-guarded API routing, resolves browser WebAuthn accessibility without client certificates, and optimizes SPA interactive approval states.
+
+### Fixed
+
+* **WebSessionAuth Router Exact-Match Bug** — Fixed a critical routing bug where outer router `WebSessionAuth` prefix registration patterns used exact-matching patterns (without trailing slashes), causing sub-paths like `/api/v1/users/me` to fall through to the catch-all landing redirect. Now registers proper subtree-matching patterns.
+* **Browser Passkey Endpoints Missing from Public Registry** — Added the four browser-facing WebAuthn endpoints to `PublicRouteRegistry`, resolving a critical bug where browser authentication/registration requests were rejected with 401 Unauthorized by the mTLS middleware.
+* **Landing Page Redirect Extra Hop** — Changed landing page redirect from `/console` to `/console/` to avoid an unnecessary extra HTTP 301 hop.
+* **SPA Approval Auto-Trigger on Sign-In** — Fixed a UX issue where landing-redirected transaction approvals would fail to auto-trigger upon login because the location hash was only evaluated once on initial page load.
+* **SPA Unnecessary Passkeys Requests** — Optimized state loading to avoid wasteful, failing requests to passkey/approval endpoints when the user is logged out.
+
+---
+
 ## [1.2.0] - 2026-06-24
 
 ### Overview

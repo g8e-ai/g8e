@@ -85,6 +85,12 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// Console SPA (public, no auth required)
 	r.addPrefix("/console/")
 
+	// Browser passkey endpoints (public, no mTLS for browser access)
+	r.addExact("/api/v1/auth/passkeys/cli-browser-register/challenge")
+	r.addExact("/api/v1/auth/passkeys/cli-browser-register/verify")
+	r.addExact("/api/v1/auth/passkeys/browser/authenticate/challenge")
+	r.addExact("/api/v1/auth/passkeys/browser/authenticate/verify")
+
 	// JIT passkey bootstrap (only when JWKS is configured)
 	if jwksEnabled {
 		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix)

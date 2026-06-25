@@ -153,6 +153,9 @@ var (
 	ErrFsGrepInvalidPattern = errors.New("fs_grep invalid pattern")
 	ErrFsGrepExecution      = errors.New("fs_grep execution error")
 
+	// PubSub client errors
+	ErrClientClosed = errors.New("client is closed")
+
 	// Execution service errors
 	ErrExecutionServiceStopping = errors.New("execution service is stopping")
 	ErrExecutionNotFound        = errors.New("execution not found")
@@ -633,6 +636,11 @@ var (
 	ErrCLIL3SignatureVerificationFailed   = errors.New("cryptographic signature verification failed")
 	ErrCLIL3PublicKeyMissing              = errors.New("approval public key missing")
 	ErrCLIL3PublicKeyInvalid              = errors.New("invalid approval public key")
+	ErrCLIL3SignatureRequired             = errors.New("cli_signature required for CLI L3 verification")
+	ErrCLIL3SuspendedStoreNotConfigured   = errors.New("suspended transaction store not configured for CLI L3 verification")
+	ErrCLIL3TransactionNotApproved        = errors.New("suspended transaction is not approved")
+	ErrCLIL3ApprovalExpired               = errors.New("CLI L3 approval has expired")
+	ErrCLIL3UserServiceNotConfigured      = errors.New("user service not configured for CLI L3 verification")
 
 	// File edit service errors
 	ErrFileEditUnsupportedOperation   = errors.New("unsupported file operation")

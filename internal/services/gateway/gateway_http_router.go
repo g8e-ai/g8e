@@ -170,10 +170,12 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.authController.handleAuthPasskeysRevoke))
 
 	// Wrap authed routes in WebSessionAuth middleware
-	mux.Handle(constants.APIPaths.Users[:len(constants.APIPaths.Users)-1], h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle(constants.APIPaths.AuthSessionsMe[:len(constants.APIPaths.AuthSessionsMe)-len("/me")], h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle(constants.APIPaths.Approvals, h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle(constants.APIPaths.AuthPasskeysPrefix[:len(constants.APIPaths.AuthPasskeysPrefix)-1], h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/users/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/auth/sessions/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/approvals", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/approvals/", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/auth/passkeys", h.auth.WebSessionAuth(authedMux, h.db))
+	mux.Handle("/api/v1/auth/passkeys/", h.auth.WebSessionAuth(authedMux, h.db))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }

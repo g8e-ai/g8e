@@ -20,6 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
+	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -357,7 +358,7 @@ func TestFileOpsService_HandleFileEditRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -375,7 +376,7 @@ func TestFileOpsService_HandleFileEditRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -396,7 +397,7 @@ func TestFileOpsService_HandleFileEditRequest(t *testing.T) {
 		tmpDir := t.TempDir()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -418,7 +419,7 @@ func TestFileOpsService_HandleFsGrepRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -438,7 +439,7 @@ func TestFileOpsService_HandleFsReadRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -456,7 +457,7 @@ func TestFileOpsService_HandleFsReadRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -482,7 +483,7 @@ func TestFileOpsService_SetAuditStoreForObserved(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -497,7 +498,7 @@ func TestFileOpsService_SetAuditStoreForObserved(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -511,7 +512,7 @@ func TestFileOpsService_HandleFsListRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 
@@ -529,7 +530,7 @@ func TestFileOpsService_HandleFsListRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
-		client := NewMockOperatorPubSubClient()
+		client := pubsubtest.NewMockOperatorPubSubClient()
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 		svc := NewFileOpsService(cfg, logger, fileEditSvc, client)
 

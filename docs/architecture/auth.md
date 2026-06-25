@@ -88,7 +88,21 @@ The **g8e Console** (served exclusively over HTTPS at `/console`) is a zero-depe
 #### L7 mTLS Enforcement Model
 To support browser-based clients that cannot hold mTLS client certificates, the HTTPS server's TLS configuration is set to `tls.VerifyClientCertIfGiven` (rather than strict `RequireAndVerifyClientCert`). Security is rigorously enforced at the application layer:
 - **Centralized Public Registry**: The `PublicRouteRegistry` explicitly allowlists routes that can bypass mTLS (e.g., `/console/`, landing/redirect page, and browser-facing passkey registration/authentication endpoints).
+- **Registered Browser Passkey Endpoints**:
+  - `/api/v1/auth/passkeys/cli-browser-register/challenge`
+  - `/api/v1/auth/passkeys/cli-browser-register/verify`
+  - `/api/v1/auth/passkeys/browser/authenticate/challenge`
+  - `/api/v1/auth/passkeys/browser/authenticate/verify`
 - **Fail-Closed Default**: The `auth.Middleware()` acts as a strict, fail-closed gate. Any request to a non-public route that does not carry a verified mTLS certificate is immediately rejected at Layer 7.
+
+#### WebSessionAuth Subtree Routing
+Web-session authenticated routes (e.g., user profile, approvals, passkey list/revocation) are mounted on the main `mux` via `WebSessionAuth` using standard Go `http.ServeMux` subtree patterns:
+- `/api/v1/users/` (matching `/api/v1/users/me`)
+- `/api/v1/auth/sessions/` (matching `/api/v1/auth/sessions/me`)
+- `/api/v1/approvals` & `/api/v1/approvals/` (matching pending list and action sub-paths)
+- `/api/v1/auth/passkeys` & `/api/v1/auth/passkeys/` (matching listing and individual key revocation)
+
+This subtree-match pattern (defined with trailing slashes) ensures all nested endpoints are seamlessly guarded by the `WebSessionAuth` middleware, while the outer public/mTLS routes (like exact-match `/api/v1/users` or public browser passkey handlers) continue to resolve correctly based on Go's longest-prefix routing rules.
 
 #### Dual-Auth Passkey Endpoints
 To avoid circular dependency during authentication, dedicated browser-facing endpoints are registered on the public `cliPasskeyMux` with CORS support:
