@@ -437,15 +437,15 @@ var (
 	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")
 	ErrPasskeyRequiresBrowser      = errors.New("direct passkey registration requires browser interaction; use RegisterPasskeyViaLocalhost instead")
 	ErrGetCurrentUser              = errors.New("failed to get current user")
-	ErrPasskeyBootstrapServerStart  = errors.New("failed to start passkey bootstrap server")
+	ErrPasskeyBootstrapServerStart = errors.New("failed to start passkey bootstrap server")
 	ErrPasskeyStatusUnauthorized   = errors.New("passkey status endpoint returned unauthorized")
 
 	// Passkey credential validation errors
-	ErrPasskeyCredentialInvalidID         = errors.New("passkey credential ID is empty")
-	ErrPasskeyCredentialIDTooLong         = errors.New("passkey credential ID exceeds 1024 bytes")
-	ErrPasskeyCredentialInvalidPublicKey  = errors.New("passkey credential public key is not a valid CBOR-encoded COSE key")
+	ErrPasskeyCredentialInvalidID          = errors.New("passkey credential ID is empty")
+	ErrPasskeyCredentialIDTooLong          = errors.New("passkey credential ID exceeds 1024 bytes")
+	ErrPasskeyCredentialInvalidPublicKey   = errors.New("passkey credential public key is not a valid CBOR-encoded COSE key")
 	ErrPasskeyCredentialInvalidAttestation = errors.New("passkey credential attestation type is not recognized")
-	ErrPasskeyCredentialInvalidTimestamp  = errors.New("passkey credential created_at_unix_ms is zero")
+	ErrPasskeyCredentialInvalidTimestamp   = errors.New("passkey credential created_at_unix_ms is zero")
 
 	// Windows-specific errors
 	ErrWindowsSpecificEnrollment  = errors.New("windows-specific enrollment is only available on Windows")

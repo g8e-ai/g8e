@@ -20,8 +20,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
@@ -39,7 +37,7 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 		h.muLimiters.Lock()
 		limiter, ok := h.limiters[ip]
 		if !ok {
-			limiter = rate.NewLimiter(rate.Limit(h.cfg.Gateway.RateLimitRPS), h.cfg.Gateway.RateLimitBurst)
+			limiter = newTokenBucket(h.cfg.Gateway.RateLimitRPS, h.cfg.Gateway.RateLimitBurst)
 			h.limiters[ip] = limiter
 		}
 		h.limiterLastUsed[ip] = time.Now()

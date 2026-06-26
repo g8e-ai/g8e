@@ -17,9 +17,9 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/uuid"
-	"github.com/fxamacker/cbor/v2"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 )
@@ -248,9 +248,9 @@ type PasskeyCredential struct {
 // validAttestationTypes is the set of WebAuthn attestation conveyance preferences
 // that may be stored on a credential.
 var validAttestationTypes = map[string]bool{
-	"none":      true,
-	"indirect":  true,
-	"direct":    true,
+	"none":       true,
+	"indirect":   true,
+	"direct":     true,
 	"enterprise": true,
 }
 

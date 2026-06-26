@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -245,7 +243,7 @@ type AuthService struct {
 
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
-	limiters   map[string]*rate.Limiter
+	limiters   map[string]*tokenBucket
 
 	// Auth caching (5-minute TTL)
 	userCache sync.Map // userID -> *cacheEntry[*models.User]
@@ -268,7 +266,7 @@ func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logg
 		jwtAudience:      jwtAudience,
 		publicRoutes:     NewPublicRouteRegistry(jwksEnabled),
 		privilegedRoutes: NewPrivilegedRouteRegistry(),
-		limiters:         make(map[string]*rate.Limiter),
+		limiters:         make(map[string]*tokenBucket),
 	}
 }
 
@@ -689,14 +687,14 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 }
 
 // getLimiter returns a rate limiter for the given app ID, creating one if needed.
-func (s *AuthService) getLimiter(appID string, rps int) *rate.Limiter {
+func (s *AuthService) getLimiter(appID string, rps int) *tokenBucket {
 	s.muLimiters.Lock()
 	defer s.muLimiters.Unlock()
 
 	limiter, exists := s.limiters[appID]
 	if !exists {
 		// Create a new limiter with the configured RPS and a burst of 2x RPS
-		limiter = rate.NewLimiter(rate.Limit(rps), rps*2)
+		limiter = newTokenBucket(float64(rps), rps*2)
 		s.limiters[appID] = limiter
 	}
 	return limiter

@@ -28,7 +28,7 @@ import (
 type passkeyRequestSource int
 
 const (
-	sourceMTLS             passkeyRequestSource = iota
+	sourceMTLS passkeyRequestSource = iota
 	sourceJWT
 	sourceCLIBootstrap
 	sourceBrowserBootstrap
