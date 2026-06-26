@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 )
@@ -30,6 +31,43 @@ var (
 	dangerousShellChars              = []string{";", "&", "|", "$", "`", "(", ")", "<", ">", "\n", "\r"}
 	dangerousShellCharsWithBackslash = []string{"$", "`", "\\", ";", "&", "|", "(", ")", "<", ">", "\n", "\r"}
 )
+
+// privateIPAllowlist holds CIDR ranges that are permitted for internal HTTP
+// probing/actuation despite being private addresses. This supports disconnected
+// edge scenarios where internal endpoints must be reachable.
+var (
+	privateAllowlistMu sync.RWMutex
+	privateAllowlist   []*net.IPNet
+)
+
+// SetPrivateIPAllowlist configures the set of permitted private CIDRs.
+// Pass nil or an empty slice to reset to the default (no private IPs allowed).
+func SetPrivateIPAllowlist(cidrs []string) error {
+	parsed := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, ipNet, err := net.ParseCIDR(c)
+		if err != nil {
+			return fmt.Errorf("mcp: invalid allowlist CIDR %q: %w", c, err)
+		}
+		parsed = append(parsed, ipNet)
+	}
+	privateAllowlistMu.Lock()
+	privateAllowlist = parsed
+	privateAllowlistMu.Unlock()
+	return nil
+}
+
+// isIPAllowed checks whether the given IP falls within the private IP allowlist.
+func isIPAllowed(ip net.IP) bool {
+	privateAllowlistMu.RLock()
+	defer privateAllowlistMu.RUnlock()
+	for _, ipNet := range privateAllowlist {
+		if ipNet.Contains(ip) {
+			return true
+		}
+	}
+	return false
+}
 
 func validateSQLQuery(query string) error {
 	query = strings.TrimSpace(query)
@@ -61,13 +99,18 @@ func validateHTTPRequestURL(rawURL string) (*url.URL, error) {
 
 	host := strings.ToLower(parsedURL.Hostname())
 	if strings.Contains(host, "localhost") || host == "127.0.0.1" || host == "::1" {
-		return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLLoopbackAddress)
+		ip := net.ParseIP(host)
+		if ip == nil || !isIPAllowed(ip) {
+			return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLLoopbackAddress)
+		}
 	}
 
 	ip := net.ParseIP(host)
 	if ip != nil {
 		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() {
-			return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLPrivateAddress)
+			if !isIPAllowed(ip) {
+				return nil, fmt.Errorf("mcp: validate HTTP request URL: %w", constants.ErrMCPValidateURLPrivateAddress)
+			}
 		}
 	}
 

@@ -5,13 +5,18 @@ package client
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Receipt is a lenient view of an Operator-signed ActionReceipt as exposed by
@@ -35,7 +40,7 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 	if len(persona) > 0 {
 		p = persona[0]
 	}
-	u := c.cfg.MTLSBaseURL + "/api/audit/receipts?tx_id=" + url.QueryEscape(transactionID)
+	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceipts + "?tx_id=" + url.QueryEscape(transactionID)
 	status, body, err := c.do(ctx, p, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, body, err
@@ -57,7 +62,7 @@ func (c *Client) GetReceipt(ctx context.Context, transactionID string, persona .
 // AuditReceipts pulls signed receipts from the Operator's local audit vault via
 // the Gateway, optionally scoped to an Operator session.
 func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([]Receipt, []byte, error) {
-	u := c.cfg.MTLSBaseURL + "/api/audit/receipts"
+	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceipts
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
@@ -71,7 +76,7 @@ func (c *Client) AuditReceipts(ctx context.Context, operatorSessionID string) ([
 
 // ExportReceipts pulls the full export bundle for archival alongside the report.
 func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) ([]byte, error) {
-	u := c.cfg.MTLSBaseURL + "/api/audit/receipts/export"
+	u := c.cfg.MTLSBaseURL + constants.APIPaths.AuditReceiptsExport
 	if operatorSessionID != "" {
 		u += "?" + url.Values{"operator_session_id": {operatorSessionID}}.Encode()
 	}
@@ -82,14 +87,38 @@ func (c *Client) ExportReceipts(ctx context.Context, operatorSessionID string) (
 // DiscoverOperatorSession best-effort reads /api/operators to find a live
 // Operator session id when the user didn't pin one.
 func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
+	_, sid := c.DiscoverOperator(ctx)
+	return sid
+}
+
+// DiscoverOperator reads /api/operators to find a live Operator's ID and session ID.
+// Returns ("", "") if none found.
+func (c *Client) DiscoverOperator(ctx context.Context) (operatorID, operatorSessionID string) {
 	// If Operator session ID is already pinned in config, use it
 	if c.cfg.OperatorSessionID != "" {
-		return c.cfg.OperatorSessionID
+		return "", c.cfg.OperatorSessionID
+	}
+
+	// Try to extract directly from the client cert SAN first
+	if c.cfg.Auth.ClientCert != "" {
+		if certBytes, err := os.ReadFile(c.cfg.Auth.ClientCert); err == nil {
+			if block, _ := pem.Decode(certBytes); block != nil && block.Type == "CERTIFICATE" {
+				if cert, err := x509.ParseCertificate(block.Bytes); err == nil {
+					for _, u := range cert.URIs {
+						if u.Scheme == "spiffe" && strings.HasPrefix(u.Path, "/operator/") {
+							parts := strings.Split(strings.TrimPrefix(u.Path, "/operator/"), "/")
+							if len(parts) >= 3 {
+								return parts[1], parts[2]
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Try to load user_id and operator_session_id from CLI credentials
 	userID := ""
-	operatorSessionID := ""
 	if c.cfg.UseCLIConfig {
 		cliCfg, err := config.Load("")
 		if err == nil && cliCfg != nil {
@@ -103,17 +132,17 @@ func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
 
 	// If we already have the Operator session ID from credentials, return it directly
 	if operatorSessionID != "" {
-		return operatorSessionID
+		return "", operatorSessionID
 	}
 
-	url := c.cfg.MTLSBaseURL + "/api/operators"
+	url := c.cfg.MTLSBaseURL + constants.APIPaths.Operators
 	if userID != "" {
 		url += "?user_id=" + userID
 	}
 
 	_, body, err := c.do(ctx, Persona{ID: "agent-harness"}, http.MethodGet, url, nil)
 	if err != nil || !json.Valid(body) {
-		return ""
+		return "", ""
 	}
 	// Tolerate {"operators":[...]} or a bare array.
 	var wrap struct {
@@ -122,7 +151,8 @@ func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
 	if json.Unmarshal(body, &wrap) == nil {
 		for _, o := range wrap.Operators {
 			if s, _ := o["operator_session_id"].(string); s != "" {
-				return s
+				id, _ := o["id"].(string)
+				return id, s
 			}
 		}
 	}
@@ -130,11 +160,12 @@ func (c *Client) DiscoverOperatorSession(ctx context.Context) string {
 	if json.Unmarshal(body, &arr) == nil {
 		for _, o := range arr {
 			if s, _ := o["operator_session_id"].(string); s != "" {
-				return s
+				id, _ := o["id"].(string)
+				return id, s
 			}
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // parseReceipts tolerates {"receipts":[...]} or a bare array of receipts.

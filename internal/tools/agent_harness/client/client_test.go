@@ -343,8 +343,8 @@ func TestClient_RegisterSigner(t *testing.T) {
 				if r.Method != http.MethodPost {
 					t.Errorf("expected POST, got %s", r.Method)
 				}
-				if r.URL.Path != "/api/governance/signers" {
-					t.Errorf("expected path /api/governance/signers, got %s", r.URL.Path)
+				if r.URL.Path != constants.APIPaths.GovernanceSigners {
+					t.Errorf("expected path %s, got %s", constants.APIPaths.GovernanceSigners, r.URL.Path)
 				}
 
 				var req map[string]string
@@ -426,7 +426,7 @@ func TestClient_Approve(t *testing.T) {
 				if r.Method != http.MethodPost {
 					t.Errorf("expected POST, got %s", r.Method)
 				}
-				expectedPath := "/api/approve/" + tt.txHash
+				expectedPath := constants.APIPaths.ApprovePagePrefix + tt.txHash
 				if r.URL.Path != expectedPath {
 					t.Errorf("expected path %s, got %s", expectedPath, r.URL.Path)
 				}

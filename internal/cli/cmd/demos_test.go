@@ -43,6 +43,11 @@ func TestDemos(t *testing.T) {
 		assert.Contains(t, cmd.Long, "hermetically sealed")
 	})
 
+	t.Run("demos command has demo alias", func(t *testing.T) {
+		cmd := demosCmd()
+		assert.Contains(t, cmd.Aliases, "demo")
+	})
+
 	t.Run("demos command has all expected subcommands", func(t *testing.T) {
 		cmd := demosCmd()
 		require.NotNil(t, cmd)
@@ -140,7 +145,7 @@ func TestDemosStatusCmd(t *testing.T) {
 func TestDemosCleanCmd(t *testing.T) {
 	t.Run("clean command has correct structure", func(t *testing.T) {
 		cmd := demosCleanCmd()
-		assert.Equal(t, "clean <org>", cmd.Use)
+		assert.Equal(t, "clean [org]", cmd.Use)
 		assert.Contains(t, cmd.Short, "Remove containers, volumes, and networks")
 		assert.NotNil(t, cmd.RunE)
 	})

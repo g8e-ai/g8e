@@ -267,3 +267,18 @@ The following packages are test-only and are not part of the production dependen
 - Follows the same pattern as `storagetest`, which keeps mock infrastructure out of production code
 
 **Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest` and `pubsubtest` packages provide test implementations that should never be used in production code paths.
+
+## Agent Harness & DoW Demo
+
+**`internal/tools/agent_harness/`** - Reference client for real governance envelope submission
+- `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `Approve` (uses `constants.APIPaths.*`)
+- `client/envelope.go` - `SubmitMaximal`: builds real `GovernanceEnvelope` with L1/L2/L3, submits over mTLS
+- `client/audit.go` - `AuditReceipts`, `ExportReceipts`, `DiscoverOperator` (parses cert SAN for offline session discovery)
+- `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, veto, OOB approval
+- `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
+- `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
+
+**`demos/dow/`** - Department of War tactical edge demo
+- `gimbal.py` - Mock gimbal HTTP server on `net_secure` (records slew commands to `/var/gimbal/slews.jsonl`)
+- `slew.sh` - Demo artifact mounted at `/usr/local/bin/slew` in operator container; wraps gimbal HTTP call
+- `dow_simulator.py` - Display-only sensor narration for `agent-eoir` and `agent-pnt-fusion`

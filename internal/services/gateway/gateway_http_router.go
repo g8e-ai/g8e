@@ -231,6 +231,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthCLIEnroll, h.authController.handleCLIEnrollment)
 	mux.HandleFunc(constants.APIPaths.AuthDeviceEnroll, h.authController.handleDeviceEnrollment)
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
+	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)

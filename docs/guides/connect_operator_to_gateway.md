@@ -6,7 +6,7 @@ parent: Guides
 # Connect g8e Operator to g8e Gateway
 
 Last Updated: 2026-06-25
-Version: v1.2.1
+Version: v1.2.2
 
 ---
 

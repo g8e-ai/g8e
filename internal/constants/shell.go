@@ -139,6 +139,8 @@ var DangerousCommands = []string{
 	"su",
 	"doas",
 	"runuser",
+	"curl",
+	"wget",
 }
 
 // DangerousPatterns is the list of patterns that are blocked by safety policy
@@ -152,8 +154,6 @@ var DangerousPatterns = []string{
 	"> /dev/vda",
 	"chmod 777 /",
 	"chown -R",
-	"wget",
-	"curl",
 	"nc -l",
 	"ncat -l",
 	"ssh",

@@ -128,41 +128,39 @@ Every markdown file below has a `Version: vX.Y.Z` header (and a `Last Updated: Y
 | # | File |
 |---|------|
 | 5 | `docs/architecture/auth.md` |
-| 6 | `docs/architecture/binding.md` |
-| 7 | `docs/architecture/encryption.md` |
-| 8 | `docs/architecture/gateway.md` |
-| 9 | `docs/architecture/network.md` |
-| 10 | `docs/architecture/operator.md` |
-| 11 | `docs/architecture/postures.md` |
-| 12 | `docs/architecture/sse.md` |
-| 13 | `docs/architecture/storage.md` |
-| 14 | `docs/architecture/transaction-process.md` |
+| 6 | `docs/architecture/encryption.md` |
+| 7 | `docs/architecture/gateway.md` |
+| 8 | `docs/architecture/network.md` |
+| 9 | `docs/architecture/operator.md` |
+| 10 | `docs/architecture/governance.md` |
+| 11 | `docs/architecture/sse.md` |
+| 12 | `docs/architecture/storage.md` |
 
 #### Guide Docs (`docs/guides/`)
 
 | # | File |
 |---|------|
-| 15 | `docs/guides/air_gap.md` |
-| 16 | `docs/guides/build_apps.md` |
-| 17 | `docs/guides/build_gateway.md` |
-| 18 | `docs/guides/build_operator.md` |
-| 19 | `docs/guides/cli.md` |
-| 20 | `docs/guides/connect_apps_to_gateway.md` |
-| 21 | `docs/guides/connect_operator_to_gateway.md` |
-| 22 | `docs/guides/docker_gateway.md` |
-| 23 | `docs/guides/getting_started.md` |
+| 14 | `docs/guides/air_gap.md` |
+| 15 | `docs/guides/build_apps.md` |
+| 16 | `docs/guides/build_gateway.md` |
+| 17 | `docs/guides/build_operator.md` |
+| 18 | `docs/guides/cli.md` |
+| 19 | `docs/guides/connect_apps_to_gateway.md` |
+| 20 | `docs/guides/connect_operator_to_gateway.md` |
+| 21 | `docs/guides/docker_gateway.md` |
+| 22 | `docs/guides/getting_started.md` |
 
 #### Reference Docs (`docs/reference/`)
 
 | # | File |
 |---|------|
-| 24 | `docs/reference/glossary.md` |
+| 23 | `docs/reference/glossary.md` |
 
 #### Protocol Docs (`protocol/docs/`)
 
 | # | File |
 |---|------|
-| 25 | `protocol/docs/spec.md` |
+| 24 | `protocol/docs/spec.md` |
 
 #### Update Pattern for Each Doc
 

@@ -76,7 +76,14 @@ EXCLUDE_PKGS := \
 	/internal/services/storage/storagetest
 
 # Files excluded from coverage only (belong to otherwise-tested packages).
-EXCLUDE_FILES := internal/cli/cmd/demos.go
+EXCLUDE_FILES := \
+	internal/cli/cmd/demos.go \
+	internal/cli/cmd/demo_dow.go \
+	internal/cli/cmd/demo_finance.go \
+	internal/cli/cmd/demo_gov.go \
+	internal/cli/cmd/demo_healthcare.go \
+	internal/cli/cmd/demo_secure_data.go \
+	internal/cli/cmd/mcp_backup.go
 
 # Grep chains derived from the lists above — do not edit directly.
 _PKG_GREP  := $(foreach p,$(EXCLUDE_PKGS),| grep -v "$(p)")

@@ -39,7 +39,9 @@ demos/
 │   ├── config/
 │   ├── doctrine/               # Tactical edge L1 rules (spoofing, cross-cue, EW, weapons)
 │   ├── target-data/            # Simulated RF environment, PNT sources, payload manifest
-│   ├── dow_simulator.py        # Sensor agent simulator (SIGINT, EO/IR, PNT fusion)
+│   ├── dow_simulator.py        # Display-only sensor narration (EO/IR, PNT fusion)
+│   ├── gimbal.py               # Mock gimbal HTTP server (records slew commands)
+│   ├── slew.sh                 # Demo artifact: wraps gimbal HTTP call for run_shell_command
 │   └── README.md               # DoW-specific documentation
 └── swarm/                      # Drone swarm battlefield demo
     ├── compose.yml
@@ -75,7 +77,7 @@ Each org deploys five isolated networks:
 
 * Operator appears on net_internal only for its outbound mTLS tunnel to the Gateway. It accepts no inbound connections from net_internal.
 
-The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal. The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, and an EW adversary on net_untrusted, with SWaP resource limits on all g8e containers.
+The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal. The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, an EW adversary on net_untrusted, and a mock gimbal controller on net_secure, with SWaP resource limits on all g8e containers. The `agent-sigint` container is a real g8e binary that submits genuine GovernanceEnvelopes; `agent-eoir` and `agent-pnt-fusion` still use `dow_simulator.py` for display-only narration.
 
 ## Org Differentiation
 

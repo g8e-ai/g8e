@@ -169,6 +169,42 @@ type AuthError struct {
 	Status  int                       `json:"-"`
 }
 
+// PrivilegedRouteRegistry defines routes that require operator or CLI auth.
+// App certificates are blocked from these routes. This centralized registry
+// eliminates fragile HasPrefix duplication in handleAppAuth.
+type PrivilegedRouteRegistry struct {
+	prefixes map[string]struct{}
+}
+
+// NewPrivilegedRouteRegistry creates a registry with the canonical privileged routes.
+func NewPrivilegedRouteRegistry() *PrivilegedRouteRegistry {
+	r := &PrivilegedRouteRegistry{
+		prefixes: make(map[string]struct{}),
+	}
+
+	// Governance envelope submission requires operator/CLI auth
+	r.addPrefix(constants.APIPaths.GovernanceEnvelopes)
+
+	// Query endpoints require operator/CLI auth
+	r.addPrefix(constants.APIPaths.QueryPrefix)
+
+	return r
+}
+
+func (r *PrivilegedRouteRegistry) addPrefix(prefix string) {
+	r.prefixes[prefix] = struct{}{}
+}
+
+// IsPrivileged returns true if the path matches a privileged route prefix.
+func (r *PrivilegedRouteRegistry) IsPrivileged(path string) bool {
+	for prefix := range r.prefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func (e *AuthError) Error() string {
 	b, err := json.Marshal(e)
 	if err != nil {
@@ -203,7 +239,8 @@ type AuthService struct {
 	jwtIssuer   string
 	jwtAudience string
 
-	publicRoutes *PublicRouteRegistry
+	publicRoutes     *PublicRouteRegistry
+	privilegedRoutes *PrivilegedRouteRegistry
 
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
@@ -217,19 +254,20 @@ type AuthService struct {
 func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *response.Writer, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
 	jwksEnabled := jwks != nil
 	return &AuthService{
-		db:           db,
-		pki:          pki,
-		logger:       logger,
-		userSvc:      userSvc,
-		personaSvc:   personaSvc,
-		responder:    responder,
-		secretsDir:   secretsDir,
-		jwks:         jwks,
-		jwtRole:      jwtRole,
-		jwtIssuer:    jwtIssuer,
-		jwtAudience:  jwtAudience,
-		publicRoutes: NewPublicRouteRegistry(jwksEnabled),
-		limiters:     make(map[string]*rate.Limiter),
+		db:               db,
+		pki:              pki,
+		logger:           logger,
+		userSvc:          userSvc,
+		personaSvc:       personaSvc,
+		responder:        responder,
+		secretsDir:       secretsDir,
+		jwks:             jwks,
+		jwtRole:          jwtRole,
+		jwtIssuer:        jwtIssuer,
+		jwtAudience:      jwtAudience,
+		publicRoutes:     NewPublicRouteRegistry(jwksEnabled),
+		privilegedRoutes: NewPrivilegedRouteRegistry(),
+		limiters:         make(map[string]*rate.Limiter),
 	}
 }
 
@@ -612,7 +650,7 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 					return true
 				}
 
-				if strings.HasPrefix(r.URL.Path, constants.APIPaths.QueryPrefix) || strings.HasPrefix(r.URL.Path, constants.APIPaths.GovernanceEnvelopes) {
+				if s.privilegedRoutes.IsPrivileged(r.URL.Path) {
 					s.responder.Error(w, http.StatusForbidden, constants.ErrPrivilegedEndpointAccess.Error())
 					return true
 				}

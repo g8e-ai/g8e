@@ -15,10 +15,11 @@ import (
 // main builds it once (minting keys, registering trusted signers) and injects
 // it before running the consensus/notary block.
 type GovKit struct {
-	Ensemble   *clientpkg.Ensemble
-	Principal  *clientpkg.Principal
-	L3Mode     string // "mock" | "suspend"
-	OperatorID string
+	Ensemble          *clientpkg.Ensemble
+	Principal         *clientpkg.Principal
+	L3Mode            string // "mock" | "suspend"
+	OperatorID        string
+	OperatorSessionID string
 }
 
 var kit *GovKit
@@ -50,13 +51,14 @@ func governanceScenarios() []Scenario {
 					kit.Ensemble.AgentCount(), kit.Ensemble.KeyID)
 
 				txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:     kit.OperatorID,
-					ToolName:       "fs_list",
-					ArgumentsJSON:  `{"path":"."}`,
-					TargetResource: "localhost",
-					StateRoot:      root,
-					Ensemble:       kit.Ensemble, // L2 attached; no L3 (audited in consensus posture)
-					TTL:            c.Config().EnvelopeTTL,
+					OperatorID:        kit.OperatorID,
+					OperatorSessionID: kit.OperatorSessionID,
+					ToolName:          "fs_list",
+					ArgumentsJSON:     `{"path":"."}`,
+					TargetResource:    "localhost",
+					StateRoot:         root,
+					Ensemble:          kit.Ensemble, // L2 attached; no L3 (audited in consensus posture)
+					TTL:               c.Config().EnvelopeTTL,
 				})
 				if err != nil {
 					return err
@@ -79,13 +81,14 @@ func governanceScenarios() []Scenario {
 				r.note("bound to state root %s", short(root))
 
 				m := clientpkg.MaximalEnvelope{
-					OperatorID:     kit.OperatorID,
-					ToolName:       "fs_list",
-					ArgumentsJSON:  `{"path":"."}`,
-					TargetResource: "localhost",
-					StateRoot:      root,
-					Ensemble:       kit.Ensemble,
-					TTL:            c.Config().EnvelopeTTL,
+					OperatorID:        kit.OperatorID,
+					OperatorSessionID: kit.OperatorSessionID,
+					ToolName:          "fs_list",
+					ArgumentsJSON:     `{"path":"."}`,
+					TargetResource:    "localhost",
+					StateRoot:         root,
+					Ensemble:          kit.Ensemble,
+					TTL:               c.Config().EnvelopeTTL,
 				}
 
 				switch kit.L3Mode {
@@ -167,13 +170,14 @@ func governanceScenarios() []Scenario {
 				r.note("ensemble: %d agents, quorum threshold 2-of-3", kit.Ensemble.AgentCount())
 
 				txHash, status, _, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:     kit.OperatorID,
-					ToolName:       "fs_list",
-					ArgumentsJSON:  `{"path":"."}`,
-					TargetResource: "localhost",
-					StateRoot:      root,
-					Ensemble:       kit.Ensemble,
-					TTL:            c.Config().EnvelopeTTL,
+					OperatorID:        kit.OperatorID,
+					OperatorSessionID: kit.OperatorSessionID,
+					ToolName:          "fs_list",
+					ArgumentsJSON:     `{"path":"."}`,
+					TargetResource:    "localhost",
+					StateRoot:         root,
+					Ensemble:          kit.Ensemble,
+					TTL:               c.Config().EnvelopeTTL,
 				})
 				if err != nil {
 					return err
@@ -202,14 +206,15 @@ func governanceScenarios() []Scenario {
 
 				veto := false
 				txHash, status, body, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:     kit.OperatorID,
-					ToolName:       "fs_list",
-					ArgumentsJSON:  `{"path":"."}`,
-					TargetResource: "localhost",
-					StateRoot:      root,
-					Ensemble:       kit.Ensemble,
-					Decision:       &veto,
-					TTL:            c.Config().EnvelopeTTL,
+					OperatorID:        kit.OperatorID,
+					OperatorSessionID: kit.OperatorSessionID,
+					ToolName:          "fs_list",
+					ArgumentsJSON:     `{"path":"."}`,
+					TargetResource:    "localhost",
+					StateRoot:         root,
+					Ensemble:          kit.Ensemble,
+					Decision:          &veto,
+					TTL:               c.Config().EnvelopeTTL,
 				})
 				if err != nil {
 					return err
@@ -239,13 +244,14 @@ func governanceScenarios() []Scenario {
 				r.note("L3 mode=suspend: submit L2-only, then principal authorizes OOB")
 
 				txHash, status, body, err := c.SubmitMaximal(ctx, ensembleProducer, clientpkg.MaximalEnvelope{
-					OperatorID:     kit.OperatorID,
-					ToolName:       "fs_list",
-					ArgumentsJSON:  `{"path":"."}`,
-					TargetResource: "localhost",
-					StateRoot:      root,
-					Ensemble:       kit.Ensemble,
-					TTL:            c.Config().EnvelopeTTL,
+					OperatorID:        kit.OperatorID,
+					OperatorSessionID: kit.OperatorSessionID,
+					ToolName:          "fs_list",
+					ArgumentsJSON:     `{"path":"."}`,
+					TargetResource:    "localhost",
+					StateRoot:         root,
+					Ensemble:          kit.Ensemble,
+					TTL:               c.Config().EnvelopeTTL,
 				})
 				if err != nil {
 					return err

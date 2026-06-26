@@ -20,7 +20,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
@@ -77,16 +76,20 @@ func dataCmd() *cobra.Command {
 }
 
 func dataUsersCmd() *cobra.Command {
+	return dataUsersCmdWithConfig(config.Load, defaultAPIClientFactory)
+}
+
+func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "users",
 		Short: "Manage user accounts",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return err
 			}
@@ -114,16 +117,20 @@ func dataUsersCmd() *cobra.Command {
 }
 
 func dataOperatorsCmd() *cobra.Command {
+	return dataOperatorsCmdWithConfig(config.Load, defaultAPIClientFactory)
+}
+
+func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "operators",
 		Short: "Manage Operator instances",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return err
 			}
@@ -151,16 +158,20 @@ func dataOperatorsCmd() *cobra.Command {
 }
 
 func dataSettingsCmd() *cobra.Command {
+	return dataSettingsCmdWithConfig(config.Load, defaultAPIClientFactory)
+}
+
+func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return err
 			}
@@ -189,6 +200,10 @@ func dataSettingsCmd() *cobra.Command {
 }
 
 func dataStoreCmd() *cobra.Command {
+	return dataStoreCmdWithConfig(config.Load, defaultAPIClientFactory)
+}
+
+func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	var collection string
 	var documentID string
 
@@ -196,12 +211,12 @@ func dataStoreCmd() *cobra.Command {
 		Use:   "store",
 		Short: "Manage document storage",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return err
 			}
@@ -258,6 +273,10 @@ func dataAuditCmd() *cobra.Command {
 }
 
 func dataAuditListCmd() *cobra.Command {
+	return dataAuditListCmdWithConfig(config.Load, defaultAPIClientFactory)
+}
+
+func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 
@@ -265,12 +284,12 @@ func dataAuditListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List audit events for a session",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return err
 			}
