@@ -88,6 +88,20 @@ func (h *HTTPHandler) corsMiddlewareForCLIPasskey(next http.Handler) http.Handle
 	})
 }
 
+// deprecatedPasskeyAlias wraps a passkey handler with a deprecation warning log.
+// Old route aliases use this during the one-minor-version transition window.
+func (h *HTTPHandler) deprecatedPasskeyAlias(oldPath, newPath string, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.logger.Warn("deprecated passkey route alias used",
+			"old_path", oldPath,
+			"new_path", newPath,
+			"method", r.Method,
+			"remote_addr", r.RemoteAddr,
+		)
+		handler(w, r)
+	}
+}
+
 // pathTraversalGuard rejects any request whose raw URL path contains a ".."
 // segment before Go's ServeMux can normalize the path and issue a 301 redirect.
 func (h *HTTPHandler) pathTraversalGuard(next http.Handler) http.Handler {

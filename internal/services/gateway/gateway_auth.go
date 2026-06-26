@@ -86,11 +86,17 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// Console SPA (public, no auth required)
 	r.addPrefix("/console/")
 
-	// Browser passkey endpoints (public, no mTLS for browser access)
-	r.addExact("/api/v1/auth/passkeys/cli-browser-register/challenge")
-	r.addExact("/api/v1/auth/passkeys/cli-browser-register/verify")
-	r.addExact("/api/v1/auth/passkeys/browser/authenticate/challenge")
-	r.addExact("/api/v1/auth/passkeys/browser/authenticate/verify")
+	// Passkey bootstrap and console routes (public, no mTLS for browser/CLI access)
+	// bootstrap/* — CLI-direct passkey registration and authentication
+	// console/*  — Browser-facing passkey registration and authentication
+	r.addPrefix(constants.APIPaths.AuthPasskeysBootstrapPrefix)
+	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix)
+
+	// Deprecated alias exact paths (one-minor-version transition)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify)
+	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify)
 
 	// WebSessionAuth-protected routes (browser-facing, no client cert)
 	// These bypass mTLS middleware; WebSessionAuth provides the auth gate
@@ -105,6 +111,8 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addExcludedPrefix("/api/v1/auth/passkeys/register")
 	r.addExcludedPrefix("/api/v1/auth/passkeys/authenticate")
 	r.addExcludedPrefix("/api/v1/auth/passkeys/cli/")
+	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-register")
+	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-browser-register")
 
 	// Exclude JIT passkey sub-paths when JWKS is not configured.
 	// When JWKS is enabled, the JIT prefix is added below as a public prefix,

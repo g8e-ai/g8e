@@ -9,6 +9,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.3] - 2026-06-26
+
+### Overview
+
+v1.2.3 is a passkey architecture consolidation and dependency reduction release. This version moves all 15 passkey HTTP handlers from `AuthController` into `PasskeyService` with a typed config system, eliminates the `swaggo/swag` and `google/uuid` dependencies, adds a token bucket rate limiter, and introduces a comprehensive guide for building g8e-compliant agentic systems. The release also renames passkey routes to descriptive `bootstrap/*` and `console/*` paths with deprecated aliases for backward compatibility.
+
+### Added
+
+* **PasskeyService HTTP Layer** — Added `passkey_service_http.go` with four factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) using a typed `passkeyHandlerConfig` struct, plus three direct handler methods (`ListCredentials`, `RevokeCredential`, `CLIStatus`). Eliminates 15 copy-pasted handlers from `AuthController`.
+* **Passkey Route Renames** — Renamed `cli-register`, `cli-browser-register`, and `browser/authenticate` passkey paths to descriptive `bootstrap/*` and `console/*` paths. Old paths retained as deprecated aliases with structured deprecation logging for one minor version.
+* **Token Bucket Rate Limiter** — Added `internal/services/gateway/token_bucket.go` with a thread-safe token bucket implementation for rate limiting.
+* **Passkey Credential Validation** — Added `PasskeyCredential.Validate()` method and `encodeCredID`/`decodeCredID` helpers with comprehensive encoding tests.
+* **Build Agentic System Guide** — Added `docs/guides/build_agentic_system.md`, a 727-line comprehensive guide for building g8e-compliant agentic systems.
+* **Demos CLI Command** — Added `g8e demos` command with subcommands for listing and running demo scenarios.
+* **Gateway Startup Output** — Improved gateway startup output with clear connection information and status display.
+* **Passkey Service HTTP Tests** — Added `passkey_service_http_test.go` with table-driven config matrix tests covering all four factory methods and three direct handlers.
+
+### Changed
+
+* **PasskeyService Constructor** — Updated `NewPasskeyService` signature to accept `userSvc`, `webSessionSvc`, `responder`, and `maxPayload` dependencies, enabling the service to own its complete HTTP layer.
+* **Router Rewired** — All passkey route registrations now reference `h.passkey.*` factory methods instead of `h.authController.handleAuthPasskey*` handlers. Config constants defined at route mount time, replacing fragile `strings.Contains(r.URL.Path, "/jit-")` URL sniffing.
+* **PublicRouteRegistry Simplified** — Replaced 4 exact-path entries for browser passkey endpoints with 2 prefix entries (`bootstrap/` and `console/`), with deprecated alias exact paths maintained during transition.
+* **CLI Client Updated** — `PerformNativeWindowsAuth` now uses `constants.APIPaths.AuthPasskeysBootstrapAuthenticate*` constants instead of hardcoded path strings.
+* **Network Identity** — Enhanced `internal/services/network/identity.go` with improved identity resolution.
+* **PKI Controller** — Improved PKI controller with better error handling and response structure.
+
+### Fixed
+
+* **CLI Passkey Status** — Fixed CLI reporting "No passkey registered" for users who enrolled via browser. CLI now uses dedicated mTLS endpoint `/api/v1/auth/passkeys/cli/status` with explicit error classification instead of silent fallback.
+* **DoW Simulator** — Fixed `demos/dow/dow_simulator.py` timing and state management issues.
+* **Agent Harness Client** — Fixed API path references and improved test reliability in agent harness client.
+
+### Removed
+
+* **`auth_controller_passkey.go`** — Deleted entirely (358 lines). All 7 handlers moved to `PasskeyService`.
+* **`auth_controller_bootstrap.go` passkey handlers** — Stripped 8 passkey handlers (535 lines). Non-passkey bootstrap handlers retained.
+* **`auth_controller_passkey_test.go`** — Deleted (467 lines). Replaced by `passkey_service_http_test.go`.
+* **`auth_controller_bootstrap_test.go` passkey tests** — Stripped passkey test functions (506 lines). Non-passkey tests retained.
+* **Swagger dependency eliminated** — Removed `github.com/swaggo/swag` and `github.com/http-swagger` imports from `docs.go`, reducing 661 lines of auto-generated swagger registration code. Swagger UI now served via native embedded HTML handler.
+* **`google/uuid` dependency** — Replaced with native `internal/uuid` package using `crypto/rand`.
+
+---
+
 ## [1.2.2] - 2026-06-25
 
 ### Overview
