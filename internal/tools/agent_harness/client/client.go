@@ -224,7 +224,7 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 		"role":       role, // "consensus" | "principal"
 	})
 	status, _, err := c.do(ctx, Persona{ID: "agent-harness"}, http.MethodPost,
-		c.cfg.MTLSBaseURL+"/api/governance/signers", payload)
+		c.cfg.MTLSBaseURL+constants.APIPaths.GovernanceSigners, payload)
 	if err != nil {
 		return err
 	}
@@ -239,5 +239,5 @@ func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string)
 func (c *Client) Approve(ctx context.Context, p Persona, txHash string) (int, []byte, error) {
 	body, _ := json.Marshal(map[string]string{"action": "approve"})
 	return c.do(ctx, p, http.MethodPost,
-		c.cfg.PublicBaseURL+"/api/approve/"+txHash, body)
+		c.cfg.PublicBaseURL+constants.APIPaths.ApprovePagePrefix+txHash, body)
 }

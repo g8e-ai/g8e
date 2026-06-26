@@ -7,12 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.2.2] - 2026-06-25
+
+### Overview
+
+v1.2.2 is a security hardening, testability, and documentation consolidation release. This version introduces a `PrivilegedRouteRegistry` to prevent app certificates from submitting governance envelopes, adds a private IP allowlist for MCP HTTP probing in disconnected edge environments, and improves shell safety by moving `curl`/`wget` to command-name-based blocking. The release also refactors CLI commands for dependency injection testability, consolidates three architecture docs into two, and adds ~2000 lines of new unit test coverage.
+
+### Added
+
+* **PrivilegedRouteRegistry** — New gateway auth component that blocks app certificates (issued via `/api/v1/pki/apps/enroll`) from submitting governance envelopes via `POST /api/v1/governance/envelopes`. Only operator and CLI mTLS certificates may submit envelopes.
+* **Private IP Allowlist for MCP** — Added `SetPrivateIPAllowlist` and `isIPAllowed` in `internal/services/mcp/validation.go` with a thread-safe CIDR allowlist. MCP HTTP probe and request validation now permit configured private/loopback addresses, supporting disconnected edge scenarios where internal endpoints must be reachable.
+* **PKI CSR Sign Endpoint** — Registered `constants.APIPaths.PKICSRSign` route in the HTTP router for headless CSR signing.
+* **DoW Demo: Real Governance Envelope Submission** — Converted the DoW tactical edge demo Scenario 1 from scripted theater into a genuine end-to-end exercise. The `agent-sigint` container is now a real g8e binary that submits `GovernanceEnvelope`-wrapped `run_shell_command` tool calls through the full L1/L2/L5 pipeline. Added `dow-cross-cue` and `dow-bft-veto` harness scenarios. Added mock gimbal HTTP server (`gimbal.py`), `slew.sh`, `inspect_pnt.py`, `inspect_rf.py`, and `verify_slews.py` demo artifacts.
+* **Operator Cert Sharing for Agent Containers** — Agent containers in demos can now share the operator's enrolled mTLS credentials via a read-only volume mount (`operator_state:/root/.g8e:ro`), eliminating the need for a separate enrollment init container.
+* **Offline Session Discovery** — `DiscoverOperator` in the agent harness now parses the operator's PEM certificate SPIFFE URI SAN to extract operator ID and session ID, enabling headless session recovery in disconnected environments without network calls.
+* **Comprehensive Test Coverage** — Added ~2000 lines of unit tests: approve API/integration tests, audit command tests, data command tests, gateway/operator/report/test command extra tests, reporting csvwriter and rows tests, MCP validation tests, gateway auth registry tests, agent harness dow_cross_cue scenario tests.
+* **Architecture Documentation Consolidation** — Merged `docs/architecture/binding.md`, `docs/architecture/postures.md`, and `docs/architecture/transaction-process.md` into `docs/architecture/governance.md` and `docs/architecture/auth.md`. Added Session & Identity Binding section to `auth.md`. Added `docs/media/jit-mcp-with-receipts.png` diagram.
+
+### Changed
+
+* **Agent Harness Refactored** — Harness now uses `io.Writer` for all output (enabling test capture), returns errors instead of calling `os.Exit(1)`, and `DiscoverOperator` returns both operator ID and session ID. `GovKit` struct updated with `OperatorSessionID` field.
+* **CLI Dependency Injection** — Refactored `approve`, `audit`, and `data` CLI commands to accept injectable config loader and API client factory functions, enabling unit testing without real network or config dependencies.
+* **Shell Safety: curl/wget Blocking** — Moved `curl` and `wget` from `DangerousPatterns` (pattern-matched, easily bypassed) to `DangerousCommands` (command-name-matched) in `internal/constants/shell.go` for more reliable enforcement.
+* **DoW Demo: Python Extraction** — Extracted inline Python scripts from demo compose into standalone files under `demos/dow/`.
+
+### Fixed
+
+* **App Cert Governance Envelope Submission** — Fixed a security issue where app certificates could submit governance envelopes. Now blocked by `PrivilegedRouteRegistry`.
+* **MCP HTTP Probe Private IP Blocking** — Fixed unconditional blocking of private/loopback addresses in MCP HTTP probe, preventing legitimate internal endpoint access in edge deployments.
+* **OperatorSessionId Propagation** — Fixed `SubmitMaximal` in the agent harness not setting `OperatorSessionId` on `GovernanceEnvelope`, causing L5 actuator receipt recording to fail with a FOREIGN KEY constraint.
+* **Agent Harness API Path Hardcoding** — All five harness client methods now use `constants.APIPaths.*` constants instead of hardcoded path strings.
+
 ### Removed
 
+* **`docs/architecture/binding.md`** — Consolidated into `docs/architecture/governance.md` and `docs/architecture/auth.md`.
+* **`docs/architecture/postures.md`** — Consolidated into `docs/architecture/governance.md`.
+* **`docs/architecture/transaction-process.md`** — Consolidated into `docs/architecture/governance.md`.
+* **`demos/dow/enroll.sh`** — Deleted dead code. Replaced by operator cert sharing via volume mount.
 * **Non-native Go dependencies eliminated** — Replaced three non-native Go dependencies with native Go solutions:
   * `github.com/google/uuid` — Replaced with `internal/uuid` package using `crypto/rand` for UUIDv4 generation.
   * `golang.org/x/text` — Replaced `cases.Title(language.English)` with a native `titleCase()` helper using the `strings` package.
-  * `github.com/swaggo/swag` + `github.com/swaggo/http-swagger` — Replaced `httpSwagger.Handler` with a native embedded HTML handler serving Swagger UI from CDN. The `swag` CLI tool is now installed externally (`go install`) rather than via `go run` fallback. Removed 15+ transitive indirect dependencies.
+  * `github.com/swaggo/swag` + `github.com/swaggo/http-swagger` — Replaced with a native embedded HTML handler serving Swagger UI from CDN. Removed 15+ transitive indirect dependencies.
 * **`internal/services/gateway/docs/docs.go`** — Deleted auto-generated Swagger registration file (zero importers, contained `init()` function).
 
 ---
@@ -78,7 +115,7 @@ v1.1.9 is a core architecture realignment release that corrects the governance v
 * **Capability Unit Tests** — New `internal/services/governance/capability_test.go` with comprehensive coverage of minting, verification, dissolution, and expiry.
 * **L3 Notary Unit Tests** — New `internal/services/governance/l3_notary_test.go` with 241 lines covering CLI L3 verification paths.
 * **L3 Proof Hash Exclusion Test** — New `TestGenerateMessageID_L3ProofNotInHash` in `pkg/governance/types_test.go` verifying L3 proof does not affect the transaction hash.
-* **Architecture Documentation** — New `docs/architecture/binding.md` and `docs/architecture/postures.md`; updated `docs/architecture/transaction-process.md` with detailed layer descriptions and transaction flow.
+* **Architecture Documentation** — New `docs/architecture/governance.md` (absorbing `transaction-process.md`); detailed layer descriptions and transaction flow. Session & Identity Binding documentation added to `docs/architecture/auth.md`.
 
 ### Changed
 

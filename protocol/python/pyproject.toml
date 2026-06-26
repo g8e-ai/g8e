@@ -17,7 +17,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "g8e-protocol"
-version = "1.2.1"
+version = "1.2.2"
 description = "g8e Protocol Constants and Models"
 readme = "README.md"
 requires-python = ">=3.10"

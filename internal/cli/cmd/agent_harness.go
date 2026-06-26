@@ -16,6 +16,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,9 +69,9 @@ func agentHarnessListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List available scenarios",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("scenarios (in run order):")
+			cmd.Println("scenarios (in run order):")
 			for _, s := range scenarios.Registry() {
-				fmt.Printf("  %-18s %-9s %-18s %s\n", s.Name, s.RequiresPosture, s.Persona.ID, s.Title)
+				cmd.Printf("  %-18s %-9s %-18s %s\n", s.Name, s.RequiresPosture, s.Persona.ID, s.Title)
 			}
 		},
 	}
@@ -80,7 +81,7 @@ func agentHarnessRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [flags] [scenario ...]",
 		Short: "Run scenarios against a real Gateway/Operator",
-		Run:   runAgentHarness,
+		RunE:  runAgentHarness,
 	}
 
 	cmd.Flags().StringVar(&harnessConfigPath, "config", "", "JSON config overlay")
@@ -105,7 +106,7 @@ func agentHarnessAuditCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit [flags]",
 		Short: "Audit signed receipts from the Operator",
-		Run:   runAgentHarnessAudit,
+		RunE:  runAgentHarnessAudit,
 	}
 
 	cmd.Flags().StringVar(&harnessConfigPath, "config", "", "JSON config overlay")
@@ -122,13 +123,13 @@ func agentHarnessAuditCmd() *cobra.Command {
 	return cmd
 }
 
-func runAgentHarness(cmd *cobra.Command, args []string) {
+func runAgentHarness(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
 	applyAgentHarnessFlags(&cfg)
 
 	if harnessConfigPath != "" {
 		if err := cfg.LoadFile(harnessConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", harnessConfigPath, err)
+			cmd.Printf("warning: config %s: %v\n", harnessConfigPath, err)
 		}
 	}
 
@@ -138,19 +139,17 @@ func runAgentHarness(cmd *cobra.Command, args []string) {
 
 	client, err := clientpkg.New(cfg)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "client:", err)
-		os.Exit(1)
+		return fmt.Errorf("agent-harness run: client: %w", err)
 	}
 
 	selected := selectAgentHarnessScenarios(harnessPhase, names)
 	if len(selected) == 0 {
-		fmt.Fprintln(os.Stderr, "no scenarios selected")
-		os.Exit(1)
+		return fmt.Errorf("agent-harness run: no scenarios selected")
 	}
 
 	if needsGovKit(selected) {
 		if err := setupGovKit(ctx, client, cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: gov kit setup: %v\n", err)
+			cmd.Printf("warning: gov kit setup: %v\n", err)
 		}
 	}
 
@@ -163,24 +162,22 @@ func runAgentHarness(cmd *cobra.Command, args []string) {
 	if opSession == "" {
 		opSession = client.DiscoverOperatorSession(ctx)
 	}
-	// receipts, _, _ := client.AuditReceipts(ctx, opSession)
 	if export, err := client.ExportReceipts(ctx, opSession); err == nil && len(export) > 0 {
 		_ = os.MkdirAll(cfg.OutDir, 0o755)
 		_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsExportFilename), export, 0o644)
 	}
 
-	// report and summary printing would go here if we had internal/agent_harness/report
-	// but for now we just print summary to satisfy the compiler and user
-	printAgentHarnessSummary(results, "", "")
+	printAgentHarnessSummary(cmd.OutOrStdout(), results, "", "")
+	return nil
 }
 
-func runAgentHarnessAudit(cmd *cobra.Command, args []string) {
+func runAgentHarnessAudit(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
 	applyAgentHarnessFlags(&cfg)
 
 	if harnessConfigPath != "" {
 		if err := cfg.LoadFile(harnessConfigPath); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: config %s: %v\n", harnessConfigPath, err)
+			cmd.Printf("warning: config %s: %v\n", harnessConfigPath, err)
 		}
 	}
 
@@ -189,8 +186,7 @@ func runAgentHarnessAudit(cmd *cobra.Command, args []string) {
 
 	client, err := clientpkg.New(cfg)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "client:", err)
-		os.Exit(1)
+		return fmt.Errorf("agent-harness audit: client: %w", err)
 	}
 	opSession := cfg.OperatorSessionID
 	if opSession == "" {
@@ -198,16 +194,17 @@ func runAgentHarnessAudit(cmd *cobra.Command, args []string) {
 	}
 	receipts, raw, err := client.AuditReceipts(ctx, opSession)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "audit:", err)
-		os.Exit(1)
+		return fmt.Errorf("agent-harness audit: %w", err)
 	}
 	_ = os.MkdirAll(cfg.OutDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsFilename), raw, 0o644)
-	fmt.Printf("operator session: %s\n", opSession)
-	fmt.Printf("signed receipts: %d (raw written to %s/receipts.json)\n", len(receipts), cfg.OutDir)
+	w := cmd.OutOrStdout()
+	fmt.Fprintf(w, "operator session: %s\n", opSession)
+	fmt.Fprintf(w, "signed receipts: %d (raw written to %s/receipts.json)\n", len(receipts), cfg.OutDir)
 	for _, r := range receipts {
-		fmt.Printf("  %-12s %-14s %s\n", trunc(r.TransactionHash, 12), r.ActionType, r.Status)
+		fmt.Fprintf(w, "  %-12s %-14s %s\n", trunc(r.TransactionHash, 12), r.ActionType, r.Status)
 	}
+	return nil
 }
 
 func applyAgentHarnessFlags(cfg *config.Config) {
@@ -299,11 +296,15 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 		return err
 	}
 	opID := cfg.OperatorSessionID
+	opSessionID := ""
 	if opID == "" {
-		opID = client.DiscoverOperatorSession(ctx)
+		opID, opSessionID = client.DiscoverOperator(ctx)
+	} else {
+		opSessionID = opID
 	}
 	scenarios.SetGovKit(&scenarios.GovKit{
-		Ensemble: ens, Principal: prin, L3Mode: cfg.L3Mode, OperatorID: opID,
+		Ensemble: ens, Principal: prin, L3Mode: cfg.L3Mode,
+		OperatorID: opID, OperatorSessionID: opSessionID,
 	})
 
 	var errs []string
@@ -319,8 +320,8 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	return nil
 }
 
-func printAgentHarnessSummary(results []scenarios.Result, jsonPath, mdPath string) {
-	fmt.Println("\n── summary ──")
+func printAgentHarnessSummary(w io.Writer, results []scenarios.Result, jsonPath, mdPath string) {
+	fmt.Fprintln(w, "\n── summary ──")
 	ok := 0
 	for _, r := range results {
 		status := "FAIL"
@@ -328,11 +329,11 @@ func printAgentHarnessSummary(results []scenarios.Result, jsonPath, mdPath strin
 			status = string(constants.GatewayModeStatusOK)
 			ok++
 		}
-		fmt.Printf("  %-18s %-9s %-18s %s\n", r.Name, r.RequiresPosture, r.Persona, status)
+		fmt.Fprintf(w, "  %-18s %-9s %-18s %s\n", r.Name, r.RequiresPosture, r.Persona, status)
 	}
-	fmt.Printf("\n%d/%d scenarios ok\n", ok, len(results))
-	fmt.Printf("report:  %s\n", mdPath)
-	fmt.Printf("json:    %s\n", jsonPath)
+	fmt.Fprintf(w, "\n%d/%d scenarios ok\n", ok, len(results))
+	fmt.Fprintf(w, "report:  %s\n", mdPath)
+	fmt.Fprintf(w, "json:    %s\n", jsonPath)
 }
 
 func trunc(s string, n int) string {

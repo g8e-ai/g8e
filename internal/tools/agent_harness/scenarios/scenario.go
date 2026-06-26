@@ -67,6 +67,7 @@ func Registry() []Scenario {
 	s = append(s, mcpScenarios()...)
 	s = append(s, a2aScenarios()...)
 	s = append(s, governanceScenarios()...)
+	s = append(s, dowScenarios()...)
 	return s
 }
 

@@ -112,15 +112,16 @@ func (p *Principal) Sign(txHash string) *commonv1.L3Metadata {
 
 // MaximalEnvelope is the input for an official governance envelope submission.
 type MaximalEnvelope struct {
-	OperatorID     string
-	ToolName       string
-	ArgumentsJSON  string
-	TargetResource string
-	StateRoot      string
-	Ensemble       *Ensemble  // attach L2 when non-nil
-	Principal      *Principal // attach mock L3 when non-nil ("mock" mode)
-	Decision       *bool      // nil or *true = affirmative; *false = veto
-	TTL            time.Duration
+	OperatorID        string
+	OperatorSessionID string
+	ToolName          string
+	ArgumentsJSON     string
+	TargetResource    string
+	StateRoot         string
+	Ensemble          *Ensemble  // attach L2 when non-nil
+	Principal         *Principal // attach mock L3 when non-nil ("mock" mode)
+	Decision          *bool      // nil or *true = affirmative; *false = veto
+	TTL               time.Duration
 }
 
 // SubmitEnvelope submits a pre-built GovernanceEnvelope directly to the admission API.
@@ -168,18 +169,19 @@ func (c *Client) SubmitMaximal(ctx context.Context, p Persona, m MaximalEnvelope
 
 	// 2. The envelope — the "how". GovernanceEnvelope is the canonical type.
 	env := &governance.GovernanceEnvelope{
-		ProtocolVersion: ProtocolVersion,
-		Timestamp:       timestamppb.Now(),
-		ExpiresAt:       timestamppb.New(time.Now().Add(ttl)),
-		SourceComponent: commonv1.Component_COMPONENT_CLIENT,
-		OperatorId:      m.OperatorID,
-		ActionType:      ActionMcpCall,
-		TargetResource:  m.TargetResource,
-		EventType:       "operator.mcp.call.requested",
-		Payload:         payloadBytes,
-		IntentData:      intent,
-		StateMerkleRoot: m.StateRoot,
-		Nonce:           hex.EncodeToString(nonce),
+		ProtocolVersion:   ProtocolVersion,
+		Timestamp:         timestamppb.Now(),
+		ExpiresAt:         timestamppb.New(time.Now().Add(ttl)),
+		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
+		OperatorId:        m.OperatorID,
+		OperatorSessionId: m.OperatorSessionID,
+		ActionType:        ActionMcpCall,
+		TargetResource:    m.TargetResource,
+		EventType:         "operator.mcp.call.requested",
+		Payload:           payloadBytes,
+		IntentData:        intent,
+		StateMerkleRoot:   m.StateRoot,
+		Nonce:             hex.EncodeToString(nonce),
 	}
 
 	// 3. Canonical hash — REAL hasher. id == transaction_hash == SHA256(canonical).

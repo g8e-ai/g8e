@@ -17,15 +17,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/api"
-	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -418,7 +414,7 @@ func TestAuditReceiptsCmd_ConfigLoadFailure(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load config")
+		assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
 	})
 }
 
@@ -483,7 +479,7 @@ func TestAuditReceiptsCmd_CredentialsLoadFailure(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to load credentials")
+		assert.ErrorIs(t, err, constants.ErrFailedToLoadCredentials)
 	})
 }
 
@@ -508,7 +504,7 @@ func TestAuditReceiptsCmd_NoCredentials(t *testing.T) {
 
 		err := cmd.RunE(cmd, []string{})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not authenticated")
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 	})
 }
 
@@ -677,101 +673,215 @@ func TestAuditEventsCmd_JSONOutput(t *testing.T) {
 	})
 }
 
-// Helper functions for injectable config
+// Error path tests for remaining audit subcommands
 
-func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
-	var operatorSessionID string
-	var txID string
-	var jsonOutput bool
+func TestAuditExportCmd_ErrorPaths(t *testing.T) {
+	t.Run("export fails when config load fails", func(t *testing.T) {
+		cmd := auditExportCmdWithConfig(func(_ string) (*config.Config, error) {
+			return nil, errors.New("config load failed")
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
 
-	cmd := &cobra.Command{
-		Use:   "receipts",
-		Short: "List signed receipts from the running Gateway",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := configLoader("")
-			if err != nil {
-				return fmt.Errorf("failed to load config: %w", err)
-			}
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
+	})
 
-			client, err := api.NewClient(cfg)
-			if err != nil {
-				return err
-			}
+	t.Run("export fails when not authenticated", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupAuditTestConfig(t, tmpDir)
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
 
-			if operatorSessionID == "" {
-				creds, err := auth.LoadCredentials(cfg)
-				if err != nil {
-					return fmt.Errorf("failed to load credentials: %w", err)
-				}
-				if creds == nil {
-					return fmt.Errorf("not authenticated; run 'g8e auth login' first")
-				}
-				operatorSessionID = creds.OperatorSessionID
-			}
+		os.Remove(cfg.CredentialsFile())
 
-			path := constants.APIPaths.AuditReceipts
-			query := ""
-			if txID != "" {
-				query = "?tx_id=" + txID
-			} else if operatorSessionID != "" {
-				query = "?operator_session_id=" + operatorSessionID
-			}
-			path += query
+		cmd := auditExportCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
 
-			resp, err := client.Get(path)
-			if err != nil {
-				return err
-			}
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	})
 
-			if jsonOutput {
-				cmd.Println(string(resp))
-				return nil
-			}
+	t.Run("export fails with corrupted credentials", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupAuditTestConfig(t, tmpDir)
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
 
-			var receiptsResp models.AuditReceiptsResponse
-			if err := json.Unmarshal(resp, &receiptsResp); err != nil {
-				return fmt.Errorf("failed to parse response: %w", err)
-			}
+		require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte("invalid json {{{"), 0600))
 
-			if len(receiptsResp.Receipts) == 0 {
-				cmd.Println("No receipts found")
-				return nil
-			}
+		cmd := auditExportCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
 
-			cmd.Printf("Signed receipts — Operator session: %s\n", operatorSessionID)
-			cmd.Println(strings.Repeat("=", 110))
-			cmd.Printf("%-16s %-16s %-40s %-8s %s\n", "TX HASH", "ACTION TYPE", "RESOURCE", "STATUS", "AT")
-			cmd.Println(strings.Repeat("-", 110))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrFailedToLoadCredentials)
+	})
+}
 
-			for _, r := range receiptsResp.Receipts {
-				txHash := r.TransactionHash
-				if len(txHash) > 12 {
-					txHash = txHash[:12] + "…"
-				}
-				resource := r.TargetResource
-				if len(resource) > 38 {
-					resource = resource[:38] + "…"
-				}
-				cmd.Printf("%-16s %-16s %-40s %-8s %s\n",
-					txHash,
-					string(r.ActionType),
-					resource,
-					r.Status.String(),
-					r.ExecutedAt.Format(time.RFC3339))
-			}
+func TestAuditReportCmd_ErrorPaths(t *testing.T) {
+	t.Run("report fails when config load fails", func(t *testing.T) {
+		cmd := auditReportCmdWithConfig(func(_ string) (*config.Config, error) {
+			return nil, errors.New("config load failed")
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
 
-			cmd.Println(strings.Repeat("-", 110))
-			cmd.Printf("%d receipts\n", len(receiptsResp.Receipts))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
+	})
 
-			return nil
-		},
-	}
+	t.Run("report fails when not authenticated", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupAuditTestConfig(t, tmpDir)
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
 
-	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID (auto-discovers if omitted)")
-	cmd.Flags().StringVar(&txID, "tx-id", "", "Get a single receipt by transaction ID")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Raw JSON output")
+		os.Remove(cfg.CredentialsFile())
 
-	return cmd
+		cmd := auditReportCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	})
+}
+
+func TestAuditEventsCmd_ErrorPaths(t *testing.T) {
+	t.Run("events fails when config load fails", func(t *testing.T) {
+		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
+			return nil, errors.New("config load failed")
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
+	})
+
+	t.Run("events fails when not authenticated", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupAuditTestConfig(t, tmpDir)
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		os.Remove(cfg.CredentialsFile())
+
+		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	})
+
+	t.Run("events fails with invalid limit (zero)", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupAuditTestConfig(t, tmpDir)
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
+		cmd.Flags().Set("session", "sess-123")
+		cmd.Flags().Set("limit", "0")
+
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	})
+
+	t.Run("events fails with invalid limit (too high)", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupAuditTestConfig(t, tmpDir)
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		cmd := auditEventsCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
+		cmd.Flags().Set("session", "sess-123")
+		cmd.Flags().Set("limit", "10001")
+
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrValidationFailed)
+	})
+}
+
+func TestAuditSummaryCmd_ErrorPaths(t *testing.T) {
+	t.Run("summary fails when config load fails", func(t *testing.T) {
+		cmd := auditSummaryCmdWithConfig(func(_ string) (*config.Config, error) {
+			return nil, errors.New("config load failed")
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrConfigLoadFailed)
+	})
+
+	t.Run("summary fails when not authenticated", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupAuditTestConfig(t, tmpDir)
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		os.Remove(cfg.CredentialsFile())
+
+		cmd := auditSummaryCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		})
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	})
 }
 
 func setupAuditTestConfig(t *testing.T, tmpDir string) *config.Config {
