@@ -217,11 +217,10 @@ func (c *Client) stateRoot(ctx context.Context, baseURL string) (string, error) 
 // Best-effort: the exact request shape lives in handleTrustedSigners; the call
 // is recorded and non-fatal so the doctrine-posture demos still run if it 404s.
 func (c *Client) RegisterSigner(ctx context.Context, keyID, pubHex, role string) error {
-	payload, _ := json.Marshal(map[string]string{
-		"key_id":     keyID,
-		"public_key": pubHex,
-		"algorithm":  "ed25519",
-		"role":       role, // "consensus" | "principal"
+	payload, _ := json.Marshal(map[string]any{
+		"id":             keyID,
+		"public_key_hex": pubHex,
+		"enabled":        true,
 	})
 	status, _, err := c.do(ctx, Persona{ID: "agent-harness"}, http.MethodPost,
 		c.cfg.MTLSBaseURL+constants.APIPaths.GovernanceSigners, payload)
