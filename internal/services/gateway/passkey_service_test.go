@@ -38,7 +38,7 @@ func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 	user, err := NewUserService(db, logger).CreateUser()
 	require.NoError(t, err)
 
-	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, nil, nil, 0)
 	require.NoError(t, err)
 	return svc, user
 }
@@ -296,7 +296,7 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		creds, err := svc.ListCredentials(user.ID)
+		creds, err := svc.listCredentials(user.ID)
 		require.NoError(t, err)
 		require.Len(t, creds, 2)
 	})
@@ -305,7 +305,7 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
-		creds, err := svc.ListCredentials("non-existent-user")
+		creds, err := svc.listCredentials("non-existent-user")
 		require.NoError(t, err)
 		require.Nil(t, creds)
 	})
@@ -314,7 +314,7 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
-		creds, err := svc.ListCredentials(user.ID)
+		creds, err := svc.listCredentials(user.ID)
 		require.NoError(t, err)
 		require.Empty(t, creds)
 	})
@@ -341,13 +341,13 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 		require.NoError(t, err)
 
 		// Revoke one credential
-		found, remaining, err := svc.RevokeCredential(user.ID, base64.RawURLEncoding.EncodeToString([]byte("cred-1")))
+		found, remaining, err := svc.revokeCredential(user.ID, base64.RawURLEncoding.EncodeToString([]byte("cred-1")))
 		require.NoError(t, err)
 		require.True(t, found)
 		require.Equal(t, 1, remaining)
 
 		// Verify it was revoked
-		creds, err := svc.ListCredentials(user.ID)
+		creds, err := svc.listCredentials(user.ID)
 		require.NoError(t, err)
 		require.Len(t, creds, 1)
 	})
@@ -356,7 +356,7 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
-		found, remaining, err := svc.RevokeCredential(user.ID, "non-existent-cred")
+		found, remaining, err := svc.revokeCredential(user.ID, "non-existent-cred")
 		require.NoError(t, err)
 		require.False(t, found)
 		require.Equal(t, 0, remaining)
@@ -366,7 +366,7 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
-		found, remaining, err := svc.RevokeCredential("non-existent-user", "cred-id")
+		found, remaining, err := svc.revokeCredential("non-existent-user", "cred-id")
 		require.NoError(t, err)
 		require.False(t, found)
 		require.Equal(t, 0, remaining)
@@ -409,7 +409,7 @@ func TestPasskeyService_addCredential(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		creds, err := svc.ListCredentials(user.ID)
+		creds, err := svc.listCredentials(user.ID)
 		require.NoError(t, err)
 		require.Len(t, creds, 1)
 	})
@@ -441,7 +441,7 @@ func TestPasskeyService_setCredentials(t *testing.T) {
 		err := svc.setCredentials(user.ID, creds)
 		require.NoError(t, err)
 
-		retrieved, err := svc.ListCredentials(user.ID)
+		retrieved, err := svc.listCredentials(user.ID)
 		require.NoError(t, err)
 		require.Len(t, retrieved, 2)
 	})

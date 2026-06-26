@@ -437,7 +437,8 @@ var (
 	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")
 	ErrPasskeyRequiresBrowser      = errors.New("direct passkey registration requires browser interaction; use RegisterPasskeyViaLocalhost instead")
 	ErrGetCurrentUser              = errors.New("failed to get current user")
-	ErrPasskeyBootstrapServerStart = errors.New("failed to start passkey bootstrap server")
+	ErrPasskeyBootstrapServerStart  = errors.New("failed to start passkey bootstrap server")
+	ErrPasskeyStatusUnauthorized   = errors.New("passkey status endpoint returned unauthorized")
 
 	// Windows-specific errors
 	ErrWindowsSpecificEnrollment  = errors.New("windows-specific enrollment is only available on Windows")

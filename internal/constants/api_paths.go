@@ -102,6 +102,7 @@ var APIPaths = struct {
 	AuthPasskeysCLIRegisterVerify        string `json:"auth_passkeys_cli_register_verify"`
 	AuthPasskeysCLIAuthenticateChallenge string `json:"auth_passkeys_cli_authenticate_challenge"`
 	AuthPasskeysCLIAuthenticateVerify    string `json:"auth_passkeys_cli_authenticate_verify"`
+	AuthPasskeysCLIStatus                string `json:"auth_passkeys_cli_status"`
 	AuthSessionsMe                       string `json:"auth_sessions_me"`
 	// Approval routes
 	Approvals         string `json:"approvals"`
@@ -230,6 +231,7 @@ var APIPaths = struct {
 	AuthPasskeysCLIRegisterVerify:        "/api/v1/auth/passkeys/cli-register/verify",
 	AuthPasskeysCLIAuthenticateChallenge: "/api/v1/auth/passkeys/cli/authenticate/challenge",
 	AuthPasskeysCLIAuthenticateVerify:    "/api/v1/auth/passkeys/cli/authenticate/verify",
+	AuthPasskeysCLIStatus:                "/api/v1/auth/passkeys/cli/status",
 	AuthSessionsMe:                       "/api/v1/auth/sessions/me",
 	// Approval routes
 	Approvals:         "/api/v1/approvals",

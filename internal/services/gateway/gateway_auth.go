@@ -106,6 +106,7 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// These routes require client certificates and must NOT bypass mTLS.
 	r.addExcludedPrefix("/api/v1/auth/passkeys/register")
 	r.addExcludedPrefix("/api/v1/auth/passkeys/authenticate")
+	r.addExcludedPrefix("/api/v1/auth/passkeys/cli/")
 
 	// Exclude JIT passkey sub-paths when JWKS is not configured.
 	// When JWKS is enabled, the JIT prefix is added below as a public prefix,

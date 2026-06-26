@@ -67,12 +67,18 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mcpHandler := h.buildMCPHandler()
 	registerMCPRoutes(mux, mcpHandler)
 
+	jitCfg := passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
+	cliBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}
+	cliBootstrapAuthCfg := passkeyHandlerConfig{source: sourceCLIBootstrap}
+	browserBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true}
+	browserBootstrapAuthCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}
+
 	// JIT passkey bootstrap: allow first-credential registration via JWT
 	// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
 	if h.auth != nil && h.auth.HasJWKS() {
 		jwtPasskeyMux := http.NewServeMux()
-		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
-		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
+		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.passkey.RegisterChallenge(jitCfg))
+		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.passkey.RegisterVerify(jitCfg))
 		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 	}
@@ -80,16 +86,16 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// CLI passkey bootstrap: allow first-credential registration for CLI bootstrap flow
 	// This is a public endpoint (no auth) for the initial bootstrap where no credentials exist yet
 	cliPasskeyMux := http.NewServeMux()
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.authController.handleCLIPasskeyRegisterChallenge)
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.authController.handleCLIPasskeyRegisterVerify)
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, h.authController.handleCLIPasskeyAuthenticateChallenge)
-	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, h.authController.handleCLIPasskeyAuthenticateVerify)
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, h.passkey.RegisterChallenge(cliBootstrapRegisterCfg))
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify, h.passkey.RegisterVerify(cliBootstrapRegisterCfg))
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, h.passkey.AuthenticateChallenge(cliBootstrapAuthCfg))
+	cliPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, h.passkey.AuthenticateVerify(cliBootstrapAuthCfg))
 	// Browser-based CLI bootstrap endpoints (create web session after registration)
-	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.authController.handleCLIBrowserPasskeyRegisterChallenge)
-	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.authController.handleCLIBrowserPasskeyRegisterVerify)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/challenge", h.passkey.RegisterChallenge(browserBootstrapRegisterCfg))
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/cli-browser-register/verify", h.passkey.RegisterVerify(browserBootstrapRegisterCfg))
 	// Browser-based passkey authenticate endpoints (create web session after auth)
-	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/browser/authenticate/challenge", h.authController.handleCLIBrowserPasskeyAuthenticateChallenge)
-	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/browser/authenticate/verify", h.authController.handleCLIBrowserPasskeyAuthenticateVerify)
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/browser/authenticate/challenge", h.passkey.AuthenticateChallenge(browserBootstrapAuthCfg))
+	cliPasskeyMux.HandleFunc("/api/v1/auth/passkeys/browser/authenticate/verify", h.passkey.AuthenticateVerify(browserBootstrapAuthCfg))
 	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(cliPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
 	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
@@ -149,11 +155,15 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// User management routes (require mTLS)
 	mux.HandleFunc(constants.APIPaths.Users, h.authController.handleUsers)
 
+	mtlsCfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
+	mtlsAuthVerifyCfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true, createWebSession: true}
+
 	// Passkey / L3 Brokerage Routes (require mTLS) - register/challenge/verify variants
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterChallenge, h.authController.handleAuthPasskeysRegisterChallenge)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterVerify, h.authController.handleAuthPasskeysRegisterVerify)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateChallenge, h.authController.handleAuthPasskeysAuthenticateChallenge)
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateVerify, h.authController.handleAuthPasskeysAuthenticateVerify)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterChallenge, h.passkey.RegisterChallenge(mtlsCfg))
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterVerify, h.passkey.RegisterVerify(mtlsCfg))
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateChallenge, h.passkey.AuthenticateChallenge(mtlsCfg))
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateVerify, h.passkey.AuthenticateVerify(mtlsAuthVerifyCfg))
+	mux.HandleFunc(constants.APIPaths.AuthPasskeysCLIStatus, h.passkey.CLIStatus)
 
 	// Browser-facing data routes (require web session cookie)
 	authedMux := http.NewServeMux()
@@ -166,8 +176,8 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.HandleFunc(constants.APIPaths.Approvals, h.authController.handleListSuspendedTransactions)
 
 	// Passkey management (list, revoke) under WebSessionAuth
-	authedMux.HandleFunc(constants.APIPaths.AuthPasskeys, h.authController.handleAuthPasskeys)
-	authedMux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.authController.handleAuthPasskeysRevoke))
+	authedMux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)
+	authedMux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkey.RevokeCredential))
 
 	// Wrap authed routes in WebSessionAuth middleware
 	mux.Handle("/api/v1/users/", h.auth.WebSessionAuth(authedMux, h.db))
