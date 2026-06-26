@@ -29,11 +29,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func approveCmd() *cobra.Command {
-	return approveCmdWithConfig(config.Load)
+type apiClient interface {
+	Get(path string) ([]byte, error)
+	Post(path string, body interface{}) ([]byte, error)
+	Put(path string, body interface{}) ([]byte, error)
+	Delete(path string) ([]byte, error)
 }
 
-func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+type apiClientFactory func(*config.Config) (apiClient, error)
+
+func defaultAPIClientFactory(cfg *config.Config) (apiClient, error) {
+	return api.NewClient(cfg)
+}
+
+func approveCmd() *cobra.Command {
+	return approveCmdWithConfig(config.Load, defaultAPIClientFactory)
+}
+
+func approveCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approve <transaction_hash>",
 		Short: "Approve a suspended L3 transaction with CLI signature",
@@ -119,7 +132,7 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error)) *co
 			}
 
 			// Call approval API
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("approve: create API client: %w", err)
 			}

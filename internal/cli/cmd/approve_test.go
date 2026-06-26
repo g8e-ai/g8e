@@ -51,7 +51,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		failLoader := func(string) (*config.Config, error) {
 			return nil, errors.New("config load error")
 		}
-		cmd := approveCmdWithConfig(failLoader)
+		cmd := approveCmdWithConfig(failLoader, defaultAPIClientFactory)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -66,7 +66,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -83,7 +83,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -101,7 +101,7 @@ func TestApproveCmdWithConfig(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
@@ -125,7 +125,7 @@ func TestApproveCmdWithValidKeyFile(t *testing.T) {
 		loader := func(string) (*config.Config, error) {
 			return cfg, nil
 		}
-		cmd := approveCmdWithConfig(loader)
+		cmd := approveCmdWithConfig(loader, defaultAPIClientFactory)
 		var buf bytes.Buffer
 		cmd.SetOut(&buf)
 		cmd.SetErr(&buf)
