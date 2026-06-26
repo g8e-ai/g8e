@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestApproveCmd(t *testing.T) {
+func TestApproveCmdStructure(t *testing.T) {
 	t.Run("approve command has correct use and description", func(t *testing.T) {
 		cmd := approveCmd()
 		assert.Contains(t, cmd.Use, "approve")

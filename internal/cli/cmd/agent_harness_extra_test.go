@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"io"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
@@ -112,13 +113,13 @@ func TestPrintAgentHarnessSummary(t *testing.T) {
 		}
 
 		assert.NotPanics(t, func() {
-			printAgentHarnessSummary(results, "/path/to/json", "/path/to/md")
+			printAgentHarnessSummary(io.Discard, results, "/path/to/json", "/path/to/md")
 		})
 	})
 
 	t.Run("prints summary with empty results without panic", func(t *testing.T) {
 		assert.NotPanics(t, func() {
-			printAgentHarnessSummary(nil, "", "")
+			printAgentHarnessSummary(io.Discard, nil, "", "")
 		})
 	})
 }

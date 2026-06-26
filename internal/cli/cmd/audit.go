@@ -48,6 +48,10 @@ func auditCmd() *cobra.Command {
 }
 
 func auditReceiptsCmd() *cobra.Command {
+	return auditReceiptsCmdWithConfig(config.Load)
+}
+
+func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	var operatorSessionID string
 	var txID string
 	var jsonOutput bool
@@ -56,7 +60,7 @@ func auditReceiptsCmd() *cobra.Command {
 		Use:   "receipts",
 		Short: "List signed receipts from the running Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
@@ -159,6 +163,10 @@ func auditReceiptsCmd() *cobra.Command {
 }
 
 func auditExportCmd() *cobra.Command {
+	return auditExportCmdWithConfig(config.Load)
+}
+
+func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	var operatorSessionID string
 	var outPath string
 
@@ -166,7 +174,7 @@ func auditExportCmd() *cobra.Command {
 		Use:   "export",
 		Short: "Export the full receipts bundle for archival",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
@@ -219,6 +227,10 @@ func auditExportCmd() *cobra.Command {
 }
 
 func auditReportCmd() *cobra.Command {
+	return auditReportCmdWithConfig(config.Load)
+}
+
+func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	var operatorSessionID string
 	var outDir string
 
@@ -226,7 +238,7 @@ func auditReportCmd() *cobra.Command {
 		Use:   "report",
 		Short: "Generate a compliance report (JSON + Markdown)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
@@ -302,6 +314,10 @@ func auditReportCmd() *cobra.Command {
 }
 
 func auditEventsCmd() *cobra.Command {
+	return auditEventsCmdWithConfig(config.Load)
+}
+
+func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 	var jsonOutput bool
@@ -310,9 +326,14 @@ func auditEventsCmd() *cobra.Command {
 		Use:   "events",
 		Short: "Query raw audit events from the Gateway audit store",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+			}
+
+			// Validate limit before network calls
+			if limit < 1 || limit > 10000 {
+				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -330,11 +351,6 @@ func auditEventsCmd() *cobra.Command {
 					return constants.ErrNotAuthenticated
 				}
 				operatorSessionID = creds.OperatorSessionID
-			}
-
-			// Validate limit
-			if limit < 1 || limit > 10000 {
-				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
 			// Build query path
@@ -420,13 +436,17 @@ func auditEventsCmd() *cobra.Command {
 }
 
 func auditSummaryCmd() *cobra.Command {
+	return auditSummaryCmdWithConfig(config.Load)
+}
+
+func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	var operatorSessionID string
 
 	cmd := &cobra.Command{
 		Use:   "summary",
 		Short: "Aggregate audit events and receipts by type",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 			}
