@@ -19,6 +19,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 )
 
@@ -35,7 +36,16 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			endpoint, _ := cmd.Flags().GetString("endpoint")
+			if endpoint != "" {
+				config.SetEndpointOverride(endpoint)
+			}
+			return nil
+		},
 	}
+
+	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port) for remote enrollment")
 
 	rootCmd.AddCommand(
 		gatewayCmd(),

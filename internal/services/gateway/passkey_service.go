@@ -177,11 +177,17 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 		rpName = "g8e"
 	}
 
-	// For localhost and 127.0.0.1, include both as valid origins
-	// since WebAuthn treats them as different origins
+	// For localhost and 127.0.0.1, include both HTTP and HTTPS origins
+	// since the console is served on both ports (8080 HTTP, 8443 HTTPS)
+	// and WebAuthn treats each scheme+host+port as a distinct origin.
 	rpOrigins := []string{cfg.RpID}
 	if cfg.RpID == "localhost" || cfg.RpID == "127.0.0.1" {
-		rpOrigins = append(rpOrigins, "http://127.0.0.1", "http://localhost")
+		rpOrigins = append(rpOrigins,
+			"http://localhost", "http://localhost:8080",
+			"http://127.0.0.1", "http://127.0.0.1:8080",
+			"https://localhost", "https://localhost:8443",
+			"https://127.0.0.1", "https://127.0.0.1:8443",
+		)
 	} else {
 		rpOrigins = []string{"https://" + cfg.RpID}
 	}
@@ -251,8 +257,32 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 		return nil, err
 	}
 
-	// Reconstruct request with the response body
-	r, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	// The flat WebAuthnAttestationResponse JSON must be re-serialized into the
+	// nested CredentialCreationResponse format expected by go-webauthn:
+	//   {"id":"...","type":"public-key","rawId":"...","response":{"clientDataJSON":"...","attestationObject":"...","transports":[...]}}
+	var att models.WebAuthnAttestationResponse
+	if err := json.Unmarshal(responseJSON, &att); err != nil {
+		return nil, fmt.Errorf("failed to parse attestation response: %w", err)
+	}
+
+	creationResponse := struct {
+		ID       string                             `json:"id"`
+		Type     string                             `json:"type"`
+		RawID    string                             `json:"rawId"`
+		Response models.WebAuthnAttestationResponse `json:"response"`
+	}{
+		ID:       att.ID,
+		Type:     "public-key",
+		RawID:    att.RawID,
+		Response: att,
+	}
+
+	nestedJSON, err := json.Marshal(creationResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal creation response: %w", err)
+	}
+
+	r, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(nestedJSON))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
