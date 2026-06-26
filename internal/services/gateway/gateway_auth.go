@@ -239,7 +239,7 @@ type AuthService struct {
 	jwtIssuer   string
 	jwtAudience string
 
-	publicRoutes    *PublicRouteRegistry
+	publicRoutes     *PublicRouteRegistry
 	privilegedRoutes *PrivilegedRouteRegistry
 
 	// Rate limiting state for app policies
@@ -254,17 +254,17 @@ type AuthService struct {
 func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logger, userSvc *UserService, personaSvc *PersonaService, responder *response.Writer, secretsDir string, jwks *JWKSProvider, jwtRole, jwtIssuer, jwtAudience string) *AuthService {
 	jwksEnabled := jwks != nil
 	return &AuthService{
-		db:           db,
-		pki:          pki,
-		logger:       logger,
-		userSvc:      userSvc,
-		personaSvc:   personaSvc,
-		responder:    responder,
-		secretsDir:   secretsDir,
-		jwks:         jwks,
-		jwtRole:      jwtRole,
-		jwtIssuer:    jwtIssuer,
-		jwtAudience:  jwtAudience,
+		db:               db,
+		pki:              pki,
+		logger:           logger,
+		userSvc:          userSvc,
+		personaSvc:       personaSvc,
+		responder:        responder,
+		secretsDir:       secretsDir,
+		jwks:             jwks,
+		jwtRole:          jwtRole,
+		jwtIssuer:        jwtIssuer,
+		jwtAudience:      jwtAudience,
 		publicRoutes:     NewPublicRouteRegistry(jwksEnabled),
 		privilegedRoutes: NewPrivilegedRouteRegistry(),
 		limiters:         make(map[string]*rate.Limiter),
