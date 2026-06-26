@@ -93,10 +93,14 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix)
 
 	// Deprecated alias exact paths (one-minor-version transition)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIRegisterChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIRegisterVerify)
 	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge)
 	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify)
 	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge)
 	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify)
 
 	// WebSessionAuth-protected routes (browser-facing, no client cert)
 	// These bypass mTLS middleware; WebSessionAuth provides the auth gate

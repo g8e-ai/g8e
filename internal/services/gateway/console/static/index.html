@@ -198,7 +198,7 @@ async function registerPasskey() {
   var uid = uidEl ? uidEl.value.trim() : '';
   var uname = unameEl ? unameEl.value.trim() : '';
 
-  var cr = await fetch('/api/v1/auth/passkeys/cli-browser-register/challenge', {
+  var cr = await fetch('/api/v1/auth/passkeys/console/register/challenge', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ user_id: uid, user_name: uname || uid, cli_session_id: 'browser' })
   });
@@ -214,7 +214,7 @@ async function registerPasskey() {
   showMsg('info', 'Follow your browser prompt to register your passkey...');
   var cred = await navigator.credentials.create({ publicKey: pk });
 
-  var vr = await fetch('/api/v1/auth/passkeys/cli-browser-register/verify', {
+  var vr = await fetch('/api/v1/auth/passkeys/console/register/verify', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       user_id: uid, cli_session_id: 'browser',
@@ -236,7 +236,7 @@ async function authenticatePasskey() {
   var uid = uidEl ? uidEl.value.trim() : '';
   if (!uid) { showMsg('error', 'User ID required'); return; }
 
-  var cr = await fetch('/api/v1/auth/passkeys/browser/authenticate/challenge', {
+  var cr = await fetch('/api/v1/auth/passkeys/console/authenticate/challenge', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ user_id: uid })
   });
@@ -250,7 +250,7 @@ async function authenticatePasskey() {
   showMsg('info', 'Follow your browser prompt to sign in...');
   var assertion = await navigator.credentials.get({ publicKey: pk });
 
-  var vr = await fetch('/api/v1/auth/passkeys/browser/authenticate/verify', {
+  var vr = await fetch('/api/v1/auth/passkeys/console/authenticate/verify', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({
       user_id: uid,

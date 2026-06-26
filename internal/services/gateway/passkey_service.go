@@ -94,6 +94,12 @@ func decodeCredID(s string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(s)
 }
 
+// encodeChallenge encodes arbitrary challenge bytes (e.g. transaction hashes) as
+// base64 URL. Semantically distinct from encodeCredID but uses the same encoding.
+func encodeChallenge(challenge []byte) string {
+	return base64.RawURLEncoding.EncodeToString(challenge)
+}
+
 // dbUserStore implements userStore using CanonicalDBService.
 type dbUserStore struct {
 	db *CanonicalDBService
@@ -423,7 +429,7 @@ func (s *PasskeyService) GenerateApprovalChallenge(userID, transactionHash strin
 
 	options := &protocol.CredentialAssertion{
 		Response: protocol.PublicKeyCredentialRequestOptions{
-			Challenge:          protocol.URLEncodedBase64(base64.RawURLEncoding.EncodeToString([]byte(transactionHash))),
+			Challenge:          protocol.URLEncodedBase64(encodeChallenge([]byte(transactionHash))),
 			Timeout:            60000,
 			RelyingPartyID:     s.rpID,
 			AllowedCredentials: allowedCredentials,
@@ -577,7 +583,7 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 	}
 
 	session := webauthn.SessionData{
-		Challenge:            base64.RawURLEncoding.EncodeToString([]byte(transactionHash)),
+		Challenge:            encodeChallenge([]byte(transactionHash)),
 		RelyingPartyID:       s.rpID,
 		UserID:               []byte(userID),
 		AllowedCredentialIDs: allowedCredentialIDs,

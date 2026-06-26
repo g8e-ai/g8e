@@ -46,6 +46,18 @@ const (
 	WEBAUTHN_API_VERSION_8                                         = 8
 	WEBAUTHN_API_VERSION_9                                         = 9
 	WEBAUTHN_API_CURRENT_VERSION                                   = WEBAUTHN_API_VERSION_9
+
+	// WebAuthn v4 requires a 16-byte GUID for user entity ID
+	webauthnUserIDSize = 16
+	// Maximum allowed size for WebAuthn response data (64 KB)
+	webauthnMaxResponseSize = 64 * 1024
+
+	// Windows HRESULT codes for WebAuthn diagnostics
+	HRESULT_NTE_USER_CANCELLED   = 0x80090040
+	HRESULT_NTE_NOT_FOUND        = 0x80090022
+	HRESULT_NTE_DEVICE_NOT_READY = 0x80090030
+	HRESULT_NTE_NOT_SUPPORTED    = 0x80090029
+	HRESULT_FROM_WIN32_TIMEOUT   = 0x80070079
 	WEBAUTHN_RP_ENTITY_INFORMATION_CURRENT_VERSION                 = 1
 	WEBAUTHN_USER_ENTITY_INFORMATION_CURRENT_VERSION               = 1
 	WEBAUTHN_CLIENT_DATA_CURRENT_VERSION                           = 1
@@ -394,6 +406,24 @@ type WebAuthnAttestationResponse struct {
 	AttestationObject []byte
 }
 
+// mapWebAuthnHRESULT translates a Windows WebAuthn HRESULT to a typed error constant.
+func mapWebAuthnHRESULT(hresult uint32, baseErr error) error {
+	switch hresult {
+	case HRESULT_NTE_USER_CANCELLED:
+		return fmt.Errorf("%w: %v", constants.ErrWindowsHelloUserCancelled, baseErr)
+	case HRESULT_NTE_NOT_FOUND:
+		return fmt.Errorf("%w: %v", constants.ErrWindowsHelloDeviceNotFound, baseErr)
+	case HRESULT_NTE_DEVICE_NOT_READY:
+		return fmt.Errorf("%w: %v", constants.ErrWindowsHelloDeviceNotReady, baseErr)
+	case HRESULT_NTE_NOT_SUPPORTED:
+		return fmt.Errorf("%w: %v", constants.ErrWindowsHelloNotSupported, baseErr)
+	case HRESULT_FROM_WIN32_TIMEOUT:
+		return fmt.Errorf("%w: %v", constants.ErrWindowsHelloTimeout, baseErr)
+	default:
+		return fmt.Errorf("%w: HRESULT 0x%x", baseErr, hresult)
+	}
+}
+
 // RegisterWithWindowsHello performs native WebAuthn/FIDO2 registration using webauthn.dll.
 // Updated to use WEBAUTHN_API_VERSION_4 for better compatibility with modern Windows versions.
 func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName string, challenge []byte) (*WebAuthnAttestationResponse, error) {
@@ -408,7 +438,18 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 		return nil, fmt.Errorf("%w: version %d, minimum required is 4", constants.ErrWindowsWebAuthnAPIVersion, apiVersion)
 	}
 
-	// 3. Prepare RP info
+	// 3. Validate inputs for memory safety
+	if len(userIDBytes) == 0 {
+		return nil, constants.ErrWindowsHelloEmptyInput
+	}
+	if len(userIDBytes) != webauthnUserIDSize {
+		return nil, fmt.Errorf("%w: got %d bytes, expected %d", constants.ErrWindowsHelloInvalidUserID, len(userIDBytes), webauthnUserIDSize)
+	}
+	if len(challenge) == 0 {
+		return nil, constants.ErrWindowsHelloEmptyInput
+	}
+
+	// 4. Prepare RP info
 	rpIDPtr, _ := syscall.UTF16PtrFromString(rpID)
 	rpNamePtr, _ := syscall.UTF16PtrFromString(rpName)
 	rpInfo := webauthnRpEntityInformation{
@@ -417,7 +458,7 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 		Name:          rpNamePtr,
 	}
 
-	// 4. Prepare User info
+	// 5. Prepare User info
 	userNamePtr, _ := syscall.UTF16PtrFromString(userName)
 	userInfo := webauthnUserEntityInformation{
 		StructVersion: WEBAUTHN_USER_ENTITY_INFORMATION_CURRENT_VERSION,
@@ -427,7 +468,7 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 		DisplayName:   userNamePtr,
 	}
 
-	// 5. Prepare Credential Parameters (ES256)
+	// 6. Prepare Credential Parameters (ES256)
 	pubKeyCredType, _ := syscall.UTF16PtrFromString("public-key")
 	credParam := webauthnCoseCredentialParameter{
 		StructVersion:  WEBAUTHN_COSE_CREDENTIAL_PARAMETER_CURRENT_VERSION,
@@ -439,7 +480,7 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 		Parameters: &credParam,
 	}
 
-	// 6. Prepare Client Data
+	// 7. Prepare Client Data
 	// Windows Hello expects the full clientDataJSON as a UTF-8 string
 	// The challenge parameter should already be the JSON-encoded clientDataJSON
 	hashAlgId, _ := syscall.UTF16PtrFromString("SHA-256")
@@ -450,7 +491,7 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 		HashAlgId:      hashAlgId,
 	}
 
-	// 7. Prepare Options with API version 4
+	// 8. Prepare Options with API version 4
 	options := webauthnAuthenticatorMakeCredentialOptions{
 		StructVersion:                   WEBAUTHN_AUTHENTICATOR_MAKE_CREDENTIAL_OPTIONS_CURRENT_VERSION,
 		TimeoutMilliseconds:             60000,
@@ -460,7 +501,7 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 		AttestationConveyancePreference: WEBAUTHN_ATTESTATION_CONVEYANCE_PREFERENCE_NONE,
 	}
 
-	// 8. Call WebAuthNAuthenticatorMakeCredential
+	// 9. Call WebAuthNAuthenticatorMakeCredential
 	var pAttestation *webauthnCredentialAttestation
 	ret, _, _ := procWebAuthNAuthenticatorMakeCredential.Call(
 		0,
@@ -473,11 +514,24 @@ func RegisterWithWindowsHello(rpID, rpName string, userIDBytes []byte, userName 
 	)
 
 	if int32(ret) != 0 {
-		return nil, fmt.Errorf("%w: HRESULT 0x%x", constants.ErrWindowsHelloRegistration, uint32(ret))
+		return nil, mapWebAuthnHRESULT(uint32(ret), constants.ErrWindowsHelloRegistration)
 	}
 	defer procWebAuthNFreeCredentialAttestation.Call(uintptr(unsafe.Pointer(pAttestation)))
 
-	// 9. Extract result
+	// 10. Validate response pointers and sizes before extraction
+	if pAttestation == nil {
+		return nil, fmt.Errorf("%w: null attestation pointer", constants.ErrWindowsHelloRegistration)
+	}
+	if pAttestation.CredentialIdSize > webauthnMaxResponseSize ||
+		pAttestation.AuthenticatorDataSize > webauthnMaxResponseSize ||
+		pAttestation.AttestationObjectSize > webauthnMaxResponseSize {
+		return nil, constants.ErrWindowsHelloResponseTooLarge
+	}
+	if pAttestation.CredentialId == nil || pAttestation.AuthenticatorData == nil || pAttestation.AttestationObject == nil {
+		return nil, fmt.Errorf("%w: null response data pointer", constants.ErrWindowsHelloRegistration)
+	}
+
+	// 11. Extract result
 	response := &WebAuthnAttestationResponse{
 		RawId:             make([]byte, pAttestation.CredentialIdSize),
 		AuthenticatorData: make([]byte, pAttestation.AuthenticatorDataSize),
@@ -506,13 +560,18 @@ func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAsser
 		return nil, fmt.Errorf("%w: version %d, minimum required is 4", constants.ErrWindowsWebAuthnAPIVersion, apiVersion)
 	}
 
-	// 3. Prepare RP ID
+	// 3. Validate inputs for memory safety
+	if len(challenge) == 0 {
+		return nil, constants.ErrWindowsHelloEmptyInput
+	}
+
+	// 4. Prepare RP ID
 	rpIDPtr, err := syscall.UTF16PtrFromString(rpID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", constants.ErrValidationFailed, err)
 	}
 
-	// 4. Prepare Client Data
+	// 5. Prepare Client Data
 	hashAlgId, _ := syscall.UTF16PtrFromString("SHA-256")
 	clientData := webauthnClientData{
 		StructVersion:  WEBAUTHN_CLIENT_DATA_CURRENT_VERSION,
@@ -521,7 +580,7 @@ func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAsser
 		HashAlgId:      hashAlgId,
 	}
 
-	// 5. Prepare Options with API version 4
+	// 6. Prepare Options with API version 4
 	options := webauthnAuthenticatorGetAssertionOptions{
 		StructVersion:               WEBAUTHN_AUTHENTICATOR_GET_ASSERTION_OPTIONS_CURRENT_VERSION,
 		TimeoutMilliseconds:         60000,
@@ -529,7 +588,7 @@ func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAsser
 		UserVerificationRequirement: WEBAUTHN_USER_VERIFICATION_REQUIRED,
 	}
 
-	// 6. Call WebAuthNAuthenticatorGetAssertion
+	// 7. Call WebAuthNAuthenticatorGetAssertion
 	var pAssertion *webauthnAssertion
 	ret, _, _ := procWebAuthNAuthenticatorGetAssertion.Call(
 		0, // hWnd (NULL for no parent window)
@@ -541,11 +600,25 @@ func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAsser
 
 	// HRESULT success is 0 (S_OK)
 	if int32(ret) != 0 {
-		return nil, fmt.Errorf("%w: HRESULT 0x%x", constants.ErrWindowsHelloAuthentication, uint32(ret))
+		return nil, mapWebAuthnHRESULT(uint32(ret), constants.ErrWindowsHelloAuthentication)
 	}
 	defer procWebAuthNFreeAssertion.Call(uintptr(unsafe.Pointer(pAssertion)))
 
-	// 7. Extract result
+	// 8. Validate response pointers and sizes before extraction
+	if pAssertion == nil {
+		return nil, fmt.Errorf("%w: null assertion pointer", constants.ErrWindowsHelloAuthentication)
+	}
+	if pAssertion.CredentialIdSize > webauthnMaxResponseSize ||
+		pAssertion.AuthenticatorDataSize > webauthnMaxResponseSize ||
+		pAssertion.SignatureSize > webauthnMaxResponseSize ||
+		pAssertion.UserHandleSize > webauthnMaxResponseSize {
+		return nil, constants.ErrWindowsHelloResponseTooLarge
+	}
+	if pAssertion.CredentialId == nil || pAssertion.AuthenticatorData == nil || pAssertion.Signature == nil {
+		return nil, fmt.Errorf("%w: null response data pointer", constants.ErrWindowsHelloAuthentication)
+	}
+
+	// 9. Extract result
 	response := &WebAuthnAssertionResponse{
 		RawId:             make([]byte, pAssertion.CredentialIdSize),
 		AuthenticatorData: make([]byte, pAssertion.AuthenticatorDataSize),

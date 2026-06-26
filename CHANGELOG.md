@@ -38,6 +38,8 @@ v1.2.3 is a passkey architecture consolidation and dependency reduction release.
 ### Fixed
 
 * **CLI Passkey Status** — Fixed CLI reporting "No passkey registered" for users who enrolled via browser. CLI now uses dedicated mTLS endpoint `/api/v1/auth/passkeys/cli/status` with explicit error classification instead of silent fallback.
+* **Passkey Credential ID Comparison** — Replaced unsafe `string()` cast with `bytes.Equal` for credential ID matching in `passkey_service.go`, preventing potential timing attack vectors.
+* **Challenge Replay Prevention** — Added `DeleteSession` to the `sessionStore` interface. Both `VerifyRegistration` and `VerifyAuthentication` now proactively purge the stored WebAuthn challenge after successful verification, preventing challenge replay attacks.
 * **DoW Simulator** — Fixed `demos/dow/dow_simulator.py` timing and state management issues.
 * **Agent Harness Client** — Fixed API path references and improved test reliability in agent harness client.
 

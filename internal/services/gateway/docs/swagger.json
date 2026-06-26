@@ -142,6 +142,278 @@
                 }
             }
         },
+        "/api/v1/auth/passkeys": {
+            "get": {
+                "description": "Lists passkey credentials for the authenticated web session user (WebSession-protected)",
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "List passkey credentials",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID (from session context)",
+                        "name": "user_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "401": {"description": "Unauthorized"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/authenticate/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn authentication challenge (mTLS-protected, requires authenticated user)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Authentication challenge (mTLS)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "401": {"description": "Unauthorized"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/authenticate/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn assertion and may mint a web session (mTLS-protected, requires authenticated user)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Authentication verify (mTLS)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "401": {"description": "Unauthorized"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/bootstrap/authenticate/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn authentication challenge for CLI bootstrap (public, CORS-wrapped)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Authentication challenge (CLI bootstrap)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/bootstrap/authenticate/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn assertion for CLI bootstrap (public, CORS-wrapped, no web session created)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Authentication verify (CLI bootstrap)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/bootstrap/register/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn registration challenge for CLI bootstrap (public, CORS-wrapped, first-credential-only enforced)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Registration challenge (CLI bootstrap)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "403": {"description": "First-credential registration only"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/bootstrap/register/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn attestation for CLI bootstrap (public, CORS-wrapped, first-credential-only enforced)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Registration verify (CLI bootstrap)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "403": {"description": "First-credential registration only"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/cli/status": {
+            "get": {
+                "description": "Returns passkey credential status for the mTLS-authenticated user. Identity comes from the mTLS auth context; user_id query params are ignored. (mTLS-protected)",
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "CLI passkey status (mTLS)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "401": {"description": "Unauthorized"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/console/authenticate/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn authentication challenge for the console SPA (public, CORS-wrapped)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Authentication challenge (console)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/console/authenticate/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn assertion for the console SPA and issues a g8e_session cookie (public, CORS-wrapped)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Authentication verify (console)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/console/register/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn registration challenge for the console SPA (public, CORS-wrapped, first-credential-only enforced, may auto-create user)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Registration challenge (console)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "403": {"description": "First-credential registration only"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/console/register/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn attestation for the console SPA and issues a g8e_session cookie (public, CORS-wrapped, first-credential-only enforced)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Registration verify (console)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "403": {"description": "First-credential registration only"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/register/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn registration challenge (mTLS-protected, requires authenticated user, session-user binding enforced)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Registration challenge (mTLS)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "401": {"description": "Unauthorized"},
+                    "403": {"description": "Forbidden"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/register/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn attestation (mTLS-protected, requires authenticated user, session-user binding enforced)",
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey"],
+                "summary": "Registration verify (mTLS)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "401": {"description": "Unauthorized"},
+                    "403": {"description": "Forbidden"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/cli-browser-register/challenge": {
+            "post": {
+                "description": "Deprecated alias for /api/v1/auth/passkeys/console/register/challenge",
+                "deprecated": true,
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey", "deprecated"],
+                "summary": "Registration challenge (deprecated alias)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/cli-browser-register/verify": {
+            "post": {
+                "description": "Deprecated alias for /api/v1/auth/passkeys/console/register/verify",
+                "deprecated": true,
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey", "deprecated"],
+                "summary": "Registration verify (deprecated alias)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/browser/authenticate/challenge": {
+            "post": {
+                "description": "Deprecated alias for /api/v1/auth/passkeys/console/authenticate/challenge",
+                "deprecated": true,
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey", "deprecated"],
+                "summary": "Authentication challenge (deprecated alias)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/browser/authenticate/verify": {
+            "post": {
+                "description": "Deprecated alias for /api/v1/auth/passkeys/console/authenticate/verify",
+                "deprecated": true,
+                "consumes": ["application/json"],
+                "produces": ["application/json"],
+                "tags": ["passkey", "deprecated"],
+                "summary": "Authentication verify (deprecated alias)",
+                "responses": {
+                    "200": {"description": "OK", "schema": {"type": "object"}},
+                    "400": {"description": "Bad request"},
+                    "405": {"description": "Method not allowed"}
+                }
+            }
+        },
         "/api/v1/audit/stream": {
             "get": {
                 "description": "Server-sent events stream of audit events scoped to the authenticated web session.",

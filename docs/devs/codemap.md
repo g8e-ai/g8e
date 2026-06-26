@@ -110,7 +110,10 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.CLISessionService
 │   └── gateway.OperatorSessionService
 ├── gateway.PasskeyService
-│   └── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.UserService (for first-credential checks)
+│   ├── gateway.WebSessionService (for session creation on browser flows)
+│   └── response.Writer (for HTTP responses in passkey_service_http.go)
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
@@ -213,6 +216,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
 - `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode via `NewOutboundL3Notary`; used in gateway mode via `NewGatewayL3Notary` with both `cliSessionVerifier` and `PasskeyService` as delegates).
 - `gateway.cliSessionVerifier` implements: `governance.CLISessionVerifier` (used in gateway mode for mTLS CLI session verification within the L3 notary).
+
+### PasskeyService HTTP Layer Consolidation
+- **`passkey_service_http.go`** — All passkey HTTP handlers now live on `PasskeyService` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). The former `auth_controller_passkey.go` has been deleted entirely. Passkey handlers were stripped from `auth_controller_bootstrap.go` (non-passkey bootstrap handlers retained).
+- **`passkey_service.go`** — Domain logic unchanged. Added `encodeCredID`/`decodeCredID` helpers (lines 85-92) for centralized base64 RawURL encoding of credential IDs. Added `DeleteSession` to the `sessionStore` interface for challenge purge-after-verify. Uses `bytes.Equal` for safe credential ID comparisons (line 435).
+- **`internal/models/auth.go`** — `PasskeyCredential.Validate()` method (line 263) performs on-disk schema validation (COSE key parsing, ID size limits, attestation type validation, timestamp checks) before persistence in `addCredential`.
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
