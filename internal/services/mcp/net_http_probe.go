@@ -109,7 +109,9 @@ func (t *NetHTTPProbeTool) Execute(ctx context.Context, args json.RawMessage) (C
 			}
 			ip := net.ParseIP(host)
 			if ip != nil && (ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()) {
-				return nil, fmt.Errorf("blocked address: %s", host)
+				if !isIPAllowed(ip) {
+					return nil, fmt.Errorf("blocked address: %s", host)
+				}
 			}
 			d := net.Dialer{}
 			return d.DialContext(dialCtx, network, addr)

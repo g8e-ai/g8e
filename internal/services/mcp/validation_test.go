@@ -14,9 +14,11 @@
 package mcp
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateHTTPRequestURL(t *testing.T) {
@@ -749,4 +751,98 @@ func TestValidateProcNetPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSetPrivateIPAllowlist(t *testing.T) {
+	t.Cleanup(func() {
+		_ = SetPrivateIPAllowlist(nil)
+	})
+
+	t.Run("valid CIDRs", func(t *testing.T) {
+		err := SetPrivateIPAllowlist([]string{"10.43.0.0/24", "127.0.0.0/8"})
+		require.NoError(t, err)
+	})
+
+	t.Run("invalid CIDR returns error", func(t *testing.T) {
+		err := SetPrivateIPAllowlist([]string{"not-a-cidr"})
+		require.Error(t, err)
+	})
+
+	t.Run("empty slice resets allowlist", func(t *testing.T) {
+		err := SetPrivateIPAllowlist(nil)
+		require.NoError(t, err)
+		assert.False(t, isIPAllowed(net.ParseIP("10.43.0.40")))
+	})
+}
+
+func TestIsIPAllowed(t *testing.T) {
+	t.Cleanup(func() {
+		_ = SetPrivateIPAllowlist(nil)
+	})
+
+	require.NoError(t, SetPrivateIPAllowlist([]string{"10.43.0.0/24", "127.0.0.0/8"}))
+
+	tests := []struct {
+		name     string
+		ip       string
+		expected bool
+	}{
+		{"allowed private 10.43.0.40", "10.43.0.40", true},
+		{"allowed loopback 127.0.0.1", "127.0.0.1", true},
+		{"not allowed private 10.42.0.1", "10.42.0.1", false},
+		{"not allowed private 192.168.1.1", "192.168.1.1", false},
+		{"not allowed public 8.8.8.8", "8.8.8.8", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ip := net.ParseIP(tt.ip)
+			require.NotNil(t, ip)
+			assert.Equal(t, tt.expected, isIPAllowed(ip))
+		})
+	}
+}
+
+func TestValidateHTTPRequestURL_WithAllowlist(t *testing.T) {
+	t.Cleanup(func() {
+		_ = SetPrivateIPAllowlist(nil)
+	})
+
+	require.NoError(t, SetPrivateIPAllowlist([]string{"10.43.0.0/24"}))
+
+	t.Run("allowlisted private IP passes", func(t *testing.T) {
+		parsed, err := validateHTTPRequestURL("http://10.43.0.40:9000/slew")
+		assert.NoError(t, err)
+		assert.NotNil(t, parsed)
+	})
+
+	t.Run("non-allowlisted private IP still blocked", func(t *testing.T) {
+		_, err := validateHTTPRequestURL("http://10.42.0.1")
+		assert.Error(t, err)
+	})
+
+	t.Run("non-allowlisted loopback still blocked", func(t *testing.T) {
+		_, err := validateHTTPRequestURL("http://127.0.0.1:8080")
+		assert.Error(t, err)
+	})
+
+	t.Run("public URL still allowed", func(t *testing.T) {
+		parsed, err := validateHTTPRequestURL("http://example.com")
+		assert.NoError(t, err)
+		assert.NotNil(t, parsed)
+	})
+}
+
+func TestValidateHTTPRequestURL_DefaultBlocksPrivate(t *testing.T) {
+	t.Cleanup(func() {
+		_ = SetPrivateIPAllowlist(nil)
+	})
+
+	_ = SetPrivateIPAllowlist(nil)
+
+	_, err := validateHTTPRequestURL("http://10.43.0.40")
+	assert.Error(t, err)
+
+	_, err = validateHTTPRequestURL("http://127.0.0.1")
+	assert.Error(t, err)
 }
