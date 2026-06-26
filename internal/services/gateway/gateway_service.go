@@ -144,7 +144,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		RpID:   cfg.Gateway.PasskeyRpID,
 		RpName: cfg.Gateway.PasskeyRpName,
 	}
-	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
+	passkey, err := NewPasskeyService(db, logger, passkeyCfg, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
@@ -313,7 +313,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		RpName: cfg.Gateway.PasskeyRpName,
 	}
 	// Passkey service initialization is optional; ignore errors for test configuration
-	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
+	passkey, _ := NewPasskeyService(db, logger, passkeyCfg, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes) //nolint:errcheck
 
 	// Initialize suspended transaction service for gateway mode (test configuration)
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{

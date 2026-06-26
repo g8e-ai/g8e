@@ -430,7 +430,7 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 
 // VerifyPasskeyRegistration checks if a user has a passkey registered
 func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) {
-	url := fmt.Sprintf("%s/api/v1/auth/passkeys?user_id=%s", cfg.OperatorPublicURL(), userID)
+	url := fmt.Sprintf("%s%s", cfg.OperatorPublicURL(), constants.APIPaths.AuthPasskeysCLIStatus)
 
 	// Load CLI mTLS certificate for authentication
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
@@ -467,8 +467,15 @@ func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return false, nil
+	switch {
+	case resp.StatusCode == http.StatusOK:
+		// Fall through to parse body below
+	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		return false, fmt.Errorf("%w: status %d", constants.ErrPasskeyStatusUnauthorized, resp.StatusCode)
+	case resp.StatusCode >= 500:
+		return false, fmt.Errorf("%w: server returned status %d", constants.ErrHTTPStatusError, resp.StatusCode)
+	default:
+		return false, fmt.Errorf("%w: unexpected status %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(resp.Body)

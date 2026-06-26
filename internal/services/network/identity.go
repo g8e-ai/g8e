@@ -705,7 +705,17 @@ func (ni *NetworkIdentity) FormatForDisplay() string {
 
 	lines = append(lines, "Detected network identity:\n")
 
-	lines = append(lines, "  IPs          "+strings.Join(ni.IPs, ", "))
+	// Show primary external IP first, then remaining IPs collapsed
+	primaryIP := getExternalIP(ni.IPs)
+	if primaryIP != "" {
+		lines = append(lines, "  IP           "+primaryIP)
+		rest := filterOutIP(ni.IPs, primaryIP)
+		if len(rest) > 0 {
+			lines = append(lines, "  Other IPs    "+strings.Join(rest, ", "))
+		}
+	} else if len(ni.IPs) > 0 {
+		lines = append(lines, "  IPs          "+strings.Join(ni.IPs, ", "))
+	}
 
 	lines = append(lines, "  Hostnames    "+strings.Join(ni.Hostnames, ", "))
 
@@ -749,4 +759,30 @@ func (ni *NetworkIdentity) FormatForDisplay() string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// getExternalIP returns the first non-loopback, non-link-local IPv4 from the list.
+func getExternalIP(ips []string) string {
+	for _, ip := range ips {
+		if ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "169.254.") {
+			continue
+		}
+		parsed := net.ParseIP(ip)
+		if parsed == nil || parsed.IsLoopback() || parsed.IsLinkLocalUnicast() {
+			continue
+		}
+		return ip
+	}
+	return ""
+}
+
+// filterOutIP returns ips with the given IP removed.
+func filterOutIP(ips []string, exclude string) []string {
+	var result []string
+	for _, ip := range ips {
+		if ip != exclude {
+			result = append(result, ip)
+		}
+	}
+	return result
 }

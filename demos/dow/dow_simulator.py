@@ -90,7 +90,7 @@ class SigintSensor(TacticalSensor):
                   f"slew to {signal['coordinates']}")
             print(f"  JSON: {json.dumps(detection)}")
 
-    def run(self, duration=60):
+    def run(self, iterations=0):
         env = self.load_tactical_env()
         if not env:
             print(f"[{self.sensor_id}] ERROR - tactical_environment.json not found")
@@ -99,11 +99,11 @@ class SigintSensor(TacticalSensor):
         print(f"[{self.sensor_id}] SIGINT sensor online. Mission: {env.get('mission_id', 'UNKNOWN')}")
         print(f"[{self.sensor_id}] Scanning RF environment...")
 
-        start = time.time()
-        while time.time() - start < duration:
+        while iterations == 0 or self.mission_time < iterations:
             self.mission_time += 1
             self.scan(env)
-            time.sleep(5)
+            if iterations == 0 or self.mission_time < iterations:
+                time.sleep(5)
 
         self.status = "standby"
         print(f"[{self.sensor_id}] Scan complete. {len(self.detections)} detections emitted.")
@@ -146,7 +146,7 @@ class EoirSensor(TacticalSensor):
         print(f"  → Slew complete. Tracking target at {coordinates}")
         print(f"  JSON: {json.dumps(result)}")
 
-    def run(self, duration=60):
+    def run(self, iterations=0):
         env = self.load_tactical_env()
         if not env:
             print(f"[{self.sensor_id}] ERROR - tactical_environment.json not found")
@@ -156,8 +156,7 @@ class EoirSensor(TacticalSensor):
         print(f"[{self.sensor_id}] EO/IR camera online. Camera: {eoir.get('camera_id', 'UNKNOWN')}")
         print(f"[{self.sensor_id}] Status: {eoir.get('status', 'standby')}")
 
-        start = time.time()
-        while time.time() - start < duration:
+        while iterations == 0 or self.mission_time < iterations:
             self.mission_time += 1
 
             # Simulate receiving a cross-cue from SIGINT
@@ -167,7 +166,8 @@ class EoirSensor(TacticalSensor):
                     target = signals[0]["coordinates"]
                     self.slew_to(target, env)
 
-            time.sleep(5)
+            if iterations == 0 or self.mission_time < iterations:
+                time.sleep(5)
 
         self.status = "standby"
         print(f"[{self.sensor_id}] Mission complete. Returning to standby.")
@@ -237,7 +237,7 @@ class PNTFusionSensor(TacticalSensor):
             self.spoofing_detected = False
             print(f"[{self.sensor_id}] All PNT sources in consensus. No spoofing detected.")
 
-    def run(self, duration=60):
+    def run(self, iterations=0):
         env = self.load_tactical_env()
         if not env:
             print(f"[{self.sensor_id}] ERROR - tactical_environment.json not found")
@@ -246,11 +246,11 @@ class PNTFusionSensor(TacticalSensor):
         print(f"[{self.sensor_id}] PNT Fusion engine online.")
         print(f"[{self.sensor_id}] Fusing {len(env.get('pnt_sources', []))} PNT sources...")
 
-        start = time.time()
-        while time.time() - start < duration:
+        while iterations == 0 or self.mission_time < iterations:
             self.mission_time += 1
             self.fuse(env)
-            time.sleep(5)
+            if iterations == 0 or self.mission_time < iterations:
+                time.sleep(5)
 
         self.status = "standby"
         print(f"[{self.sensor_id}] PNT fusion complete.")
@@ -259,6 +259,7 @@ class PNTFusionSensor(TacticalSensor):
 def main():
     sensor_id = sys.argv[1] if len(sys.argv) > 1 else "SIGINT-01"
     sensor_type = sys.argv[2] if len(sys.argv) > 2 else "sigint"
+    iterations = int(sys.argv[3]) if len(sys.argv) > 3 else 0
 
     print(f"=== DoW TACTICAL EDGE SENSOR: {sensor_id} ({sensor_type}) ===")
 
@@ -274,7 +275,7 @@ def main():
         sys.exit(1)
 
     try:
-        sensor.run(duration=300)
+        sensor.run(iterations=iterations)
     except KeyboardInterrupt:
         print(f"\n[{sensor_id}] MISSION ABORTED - Returning to standby")
         sensor.status = "standby"

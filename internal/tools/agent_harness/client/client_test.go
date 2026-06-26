@@ -347,22 +347,19 @@ func TestClient_RegisterSigner(t *testing.T) {
 					t.Errorf("expected path %s, got %s", constants.APIPaths.GovernanceSigners, r.URL.Path)
 				}
 
-				var req map[string]string
+				var req map[string]any
 				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 					t.Errorf("failed to decode request: %v", err)
 				}
 
-				if req["key_id"] != tt.keyID {
-					t.Errorf("expected key_id %s, got %s", tt.keyID, req["key_id"])
+				if req["id"] != tt.keyID {
+					t.Errorf("expected id %s, got %v", tt.keyID, req["id"])
 				}
-				if req["public_key"] != tt.pubHex {
-					t.Errorf("expected public_key %s, got %s", tt.pubHex, req["public_key"])
+				if req["public_key_hex"] != tt.pubHex {
+					t.Errorf("expected public_key_hex %s, got %v", tt.pubHex, req["public_key_hex"])
 				}
-				if req["algorithm"] != "ed25519" {
-					t.Errorf("expected algorithm ed25519, got %s", req["algorithm"])
-				}
-				if req["role"] != tt.role {
-					t.Errorf("expected role %s, got %s", tt.role, req["role"])
+				if req["enabled"] != true {
+					t.Errorf("expected enabled true, got %v", req["enabled"])
 				}
 
 				w.WriteHeader(tt.responseCode)

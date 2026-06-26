@@ -632,7 +632,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 		slog.Debug("Gateway URL", "url", gatewayURL)
 
 		// 1. Get Authentication Challenge
-		challengeURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/challenge", gatewayURL)
+		challengeURL := fmt.Sprintf("%s%s", gatewayURL, constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge)
 		slog.Debug("Requesting authentication challenge", "url", challengeURL)
 		reqBody, err := json.Marshal(models.PasskeyChallengeRequest{UserID: creds.UserID})
 		if err != nil {
@@ -689,7 +689,7 @@ func PerformNativeWindowsAuth(cfg *config.Config) error {
 			}
 
 			// 3. Verify Authentication
-			verifyURL := fmt.Sprintf("%s/api/v1/auth/passkeys/cli/authenticate/verify", gatewayURL)
+			verifyURL := fmt.Sprintf("%s%s", gatewayURL, constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify)
 			verifyReq := cliAssertionVerifyRequest{
 				UserID: creds.UserID,
 				AssertionResponse: models.WebAuthnAssertionResponse{

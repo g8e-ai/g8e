@@ -31,6 +31,11 @@ func TestAgentHarnessCmd(t *testing.T) {
 		assert.Contains(t, cmd.Long, "impersonates arbitrary AI tools")
 	})
 
+	t.Run("agent-harness has agent alias", func(t *testing.T) {
+		cmd := agentHarnessCmd()
+		assert.Contains(t, cmd.Aliases, "agent")
+	})
+
 	t.Run("agent-harness has expected subcommands", func(t *testing.T) {
 		cmd := agentHarnessCmd()
 		require.NotNil(t, cmd)

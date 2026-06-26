@@ -21,8 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
@@ -94,7 +92,7 @@ type HTTPHandler struct {
 
 	// Rate limiting state
 	muLimiters      sync.Mutex
-	limiters        map[string]*rate.Limiter
+	limiters        map[string]*tokenBucket
 	limiterLastUsed map[string]time.Time
 }
 
@@ -118,7 +116,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		appEnrollment:      deps.AppEnrollment,
 		isReady:            deps.IsReady,
 		isGovernanceReady:  deps.IsGovernanceReady,
-		limiters:           make(map[string]*rate.Limiter),
+		limiters:           make(map[string]*tokenBucket),
 		limiterLastUsed:    make(map[string]time.Time),
 	}
 

@@ -179,7 +179,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "pnt fusion bft",
 			false,
 			"docker", "compose", "exec", "-T", "agent-pnt-fusion",
-			"python", "/app/dow_simulator.py", "PNT-FUSION-01", "pnt_fusion",
+			"python", "/app/dow_simulator.py", "PNT-FUSION-01", "pnt_fusion", "1",
 		); err != nil {
 			hasErrors = true
 		}

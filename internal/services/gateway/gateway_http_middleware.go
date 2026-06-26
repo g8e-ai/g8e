@@ -20,8 +20,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
@@ -39,7 +37,7 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 		h.muLimiters.Lock()
 		limiter, ok := h.limiters[ip]
 		if !ok {
-			limiter = rate.NewLimiter(rate.Limit(h.cfg.Gateway.RateLimitRPS), h.cfg.Gateway.RateLimitBurst)
+			limiter = newTokenBucket(h.cfg.Gateway.RateLimitRPS, h.cfg.Gateway.RateLimitBurst)
 			h.limiters[ip] = limiter
 		}
 		h.limiterLastUsed[ip] = time.Now()
@@ -88,6 +86,20 @@ func (h *HTTPHandler) corsMiddlewareForCLIPasskey(next http.Handler) http.Handle
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// deprecatedPasskeyAlias wraps a passkey handler with a deprecation warning log.
+// Old route aliases use this during the one-minor-version transition window.
+func (h *HTTPHandler) deprecatedPasskeyAlias(oldPath, newPath string, handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		h.logger.Warn("deprecated passkey route alias used",
+			"old_path", oldPath,
+			"new_path", newPath,
+			"method", r.Method,
+			"remote_addr", r.RemoteAddr,
+		)
+		handler(w, r)
+	}
 }
 
 // pathTraversalGuard rejects any request whose raw URL path contains a ".."

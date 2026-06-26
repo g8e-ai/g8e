@@ -495,6 +495,8 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
+	binaryName := constants.BinaryNameLinux
+	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
 
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
@@ -503,6 +505,8 @@ GATEWAY_HOST="%s"
 GATEWAY_PORT="%s"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 LOCAL_CA_PATH="%s"
+NODE_BINARY_NAME="%s"
+NODE_BINARY_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 
 echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
 mkdir -p "$(dirname "${LOCAL_CA_PATH}")"
@@ -514,9 +518,20 @@ if [ ! -f "${LOCAL_CA_PATH}" ]; then
 fi
 
 echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
+
+echo "[g8e] Downloading g8e Node from ${NODE_BINARY_URL}..."
+curl -fsSL "${NODE_BINARY_URL}" -o "${NODE_BINARY_NAME}"
+chmod +x "${NODE_BINARY_NAME}"
+
+if [ ! -f "${NODE_BINARY_NAME}" ]; then
+    echo "[g8e] ERROR: Failed to download g8e Node"
+    exit 1
+fi
+
+echo "[g8e] Node Binary downloaded to ${NODE_BINARY_NAME}"
 echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-echo "[g8e] You can now use: ./g8e -e ${GATEWAY_HOST} auth enroll"
-`, gatewayHost, port, caBundleURL, localCAPath)
+echo "[g8e] You can now run: ./${NODE_BINARY_NAME} -e ${GATEWAY_HOST} auth enroll"
+`, gatewayHost, port, caBundleURL, localCAPath, binaryName, binaryURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -552,6 +567,8 @@ func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Re
 
 	port := strconv.Itoa(constants.Ports.OperatorHttp)
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
+	binaryName := constants.BinaryNameDarwin
+	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
 
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
@@ -560,6 +577,8 @@ GATEWAY_HOST="%s"
 GATEWAY_PORT="%s"
 CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 TEMP_CA_PATH="/tmp/g8e-ca.crt"
+NODE_BINARY_NAME="%s"
+NODE_BINARY_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
 
 echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
 curl -fsSL "${CA_BUNDLE_URL}" -o "${TEMP_CA_PATH}"
@@ -574,9 +593,20 @@ echo "[g8e] Sudo password may be required to trust the certificate."
 sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${TEMP_CA_PATH}"
 
 echo "[g8e] CA bundle installed and trusted."
+
+echo "[g8e] Downloading g8e Node from ${NODE_BINARY_URL}..."
+curl -fsSL "${NODE_BINARY_URL}" -o "${NODE_BINARY_NAME}"
+chmod +x "${NODE_BINARY_NAME}"
+
+if [ ! -f "${NODE_BINARY_NAME}" ]; then
+    echo "[g8e] ERROR: Failed to download g8e Node"
+    exit 1
+fi
+
+echo "[g8e] Node Binary downloaded to ${NODE_BINARY_NAME}"
 echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-echo "[g8e] You can now use: ./g8e -e ${GATEWAY_HOST} auth enroll"
-`, gatewayHost, port, caBundleURL)
+echo "[g8e] You can now run: ./${NODE_BINARY_NAME} -e ${GATEWAY_HOST} auth enroll"
+`, gatewayHost, port, caBundleURL, binaryName, binaryURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)

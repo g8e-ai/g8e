@@ -460,10 +460,7 @@ func TestGatewayL3Notary_DelegatesToPasskey(t *testing.T) {
 
 	// Add a dummy credential
 	credID := []byte("real-credential-id")
-	require.NoError(t, passkeyL3.addCredential(userID, models.PasskeyCredential{
-		ID:        credID,
-		PublicKey: []byte("fake-pubkey"),
-	}))
+	require.NoError(t, passkeyL3.addCredential(userID, testCredential("real-credential-id")))
 
 	// Create a WebAuthn proof (no mtls_cert_fingerprint)
 	txHash := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"

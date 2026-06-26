@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/response"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -47,6 +48,7 @@ type userStore interface {
 type sessionStore interface {
 	StoreSession(userID string, session *webauthn.SessionData) error
 	GetSession(userID string) (*webauthn.SessionData, error)
+	DeleteSession(userID string) error
 }
 
 // webauthnClient defines the interface for WebAuthn operations.
@@ -61,18 +63,32 @@ type webauthnClient interface {
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
 type PasskeyService struct {
-	userStore    userStore
-	sessionStore sessionStore
-	webauthn     webauthnClient
-	logger       *slog.Logger
-	rpID         string
-	rpName       string
+	userStore     userStore
+	sessionStore  sessionStore
+	webauthn      webauthnClient
+	logger        *slog.Logger
+	rpID          string
+	rpName        string
+	webSessionSvc *WebSessionService
+	responder     *response.Writer
+	maxPayload    int64
 }
 
 // PasskeyConfig holds configuration for passkey operations.
 type PasskeyConfig struct {
 	RpID   string
 	RpName string
+}
+
+// encodeCredID encodes a WebAuthn credential ID (raw bytes) as a base64 URL string.
+// This is the canonical encoding used across all passkey transports.
+func encodeCredID(id []byte) string {
+	return base64.RawURLEncoding.EncodeToString(id)
+}
+
+// decodeCredID decodes a base64 URL-encoded credential ID back to raw bytes.
+func decodeCredID(s string) ([]byte, error) {
+	return base64.RawURLEncoding.DecodeString(s)
 }
 
 // dbUserStore implements userStore using CanonicalDBService.
@@ -145,6 +161,11 @@ func (s *dbSessionStore) GetSession(userID string) (*webauthn.SessionData, error
 	return &session, nil
 }
 
+func (s *dbSessionStore) DeleteSession(userID string) error {
+	_, err := s.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionPasskeyChallenges), userID)
+	return err
+}
+
 // realWebauthnClient implements webauthnClient using the actual webauthn library.
 type realWebauthnClient struct {
 	w *webauthn.WebAuthn
@@ -171,17 +192,23 @@ func (c *realWebauthnClient) ValidateLogin(user webauthn.User, session webauthn.
 }
 
 // NewPasskeyService creates a new PasskeyService with the given configuration.
-func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
+func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig, webSessionSvc *WebSessionService, responder *response.Writer, maxPayload int64) (*PasskeyService, error) {
 	rpName := cfg.RpName
 	if rpName == "" {
 		rpName = "g8e"
 	}
 
-	// For localhost and 127.0.0.1, include both as valid origins
-	// since WebAuthn treats them as different origins
+	// For localhost and 127.0.0.1, include both HTTP and HTTPS origins
+	// since the console is served on both ports (8080 HTTP, 8443 HTTPS)
+	// and WebAuthn treats each scheme+host+port as a distinct origin.
 	rpOrigins := []string{cfg.RpID}
 	if cfg.RpID == "localhost" || cfg.RpID == "127.0.0.1" {
-		rpOrigins = append(rpOrigins, "http://127.0.0.1", "http://localhost")
+		rpOrigins = append(rpOrigins,
+			"http://localhost", "http://localhost:8080",
+			"http://127.0.0.1", "http://127.0.0.1:8080",
+			"https://localhost", "https://localhost:8443",
+			"https://127.0.0.1", "https://127.0.0.1:8443",
+		)
 	} else {
 		rpOrigins = []string{"https://" + cfg.RpID}
 	}
@@ -196,12 +223,15 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 	}
 
 	return &PasskeyService{
-		userStore:    &dbUserStore{db: db},
-		sessionStore: &dbSessionStore{db: db},
-		webauthn:     &realWebauthnClient{w: w},
-		logger:       logger,
-		rpID:         cfg.RpID,
-		rpName:       rpName,
+		userStore:     &dbUserStore{db: db},
+		sessionStore:  &dbSessionStore{db: db},
+		webauthn:      &realWebauthnClient{w: w},
+		logger:        logger,
+		rpID:          cfg.RpID,
+		rpName:        rpName,
+		webSessionSvc: webSessionSvc,
+		responder:     responder,
+		maxPayload:    maxPayload,
 	}, nil
 }
 
@@ -251,8 +281,32 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 		return nil, err
 	}
 
-	// Reconstruct request with the response body
-	r, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(responseJSON))
+	// The flat WebAuthnAttestationResponse JSON must be re-serialized into the
+	// nested CredentialCreationResponse format expected by go-webauthn:
+	//   {"id":"...","type":"public-key","rawId":"...","response":{"clientDataJSON":"...","attestationObject":"...","transports":[...]}}
+	var att models.WebAuthnAttestationResponse
+	if err := json.Unmarshal(responseJSON, &att); err != nil {
+		return nil, fmt.Errorf("failed to parse attestation response: %w", err)
+	}
+
+	creationResponse := struct {
+		ID       string                             `json:"id"`
+		Type     string                             `json:"type"`
+		RawID    string                             `json:"rawId"`
+		Response models.WebAuthnAttestationResponse `json:"response"`
+	}{
+		ID:       att.ID,
+		Type:     "public-key",
+		RawID:    att.RawID,
+		Response: att,
+	}
+
+	nestedJSON, err := json.Marshal(creationResponse)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal creation response: %w", err)
+	}
+
+	r, err := http.NewRequest(http.MethodPost, "/", bytes.NewReader(nestedJSON))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -278,6 +332,10 @@ func (s *PasskeyService) VerifyRegistration(userID string, responseJSON []byte) 
 
 	if err := s.addCredential(userID, newCred); err != nil {
 		return nil, err
+	}
+
+	if delErr := s.deleteWebAuthnSession(userID); delErr != nil {
+		s.logger.Warn("Failed to delete WebAuthn session after registration", "error", delErr, "userID", userID)
 	}
 
 	return &newCred, nil
@@ -374,7 +432,7 @@ func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte
 	// Update credential counter and last used
 	var storedCred *models.PasskeyCredential
 	for i := range user.PasskeyCredentials {
-		if string(user.PasskeyCredentials[i].ID) == string(credential.ID) {
+		if bytes.Equal(user.PasskeyCredentials[i].ID, credential.ID) {
 			user.PasskeyCredentials[i].Authenticator.SignCount = credential.Authenticator.SignCount
 			user.PasskeyCredentials[i].LastUsedAtUnixMs = time.Now().UnixMilli()
 			storedCred = &user.PasskeyCredentials[i]
@@ -386,11 +444,15 @@ func (s *PasskeyService) VerifyAuthentication(userID string, responseJSON []byte
 		return nil, err
 	}
 
+	if delErr := s.deleteWebAuthnSession(userID); delErr != nil {
+		s.logger.Warn("Failed to delete WebAuthn session after authentication", "error", delErr, "userID", userID)
+	}
+
 	return storedCred, nil
 }
 
-// ListCredentials returns all passkey credentials for a user.
-func (s *PasskeyService) ListCredentials(userID string) ([]models.PasskeyCredential, error) {
+// listCredentials returns all passkey credentials for a user.
+func (s *PasskeyService) listCredentials(userID string) ([]models.PasskeyCredential, error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return nil, err
@@ -401,8 +463,8 @@ func (s *PasskeyService) ListCredentials(userID string) ([]models.PasskeyCredent
 	return user.PasskeyCredentials, nil
 }
 
-// RevokeCredential removes a passkey credential from a user.
-func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bool, remaining int, err error) {
+// revokeCredential removes a passkey credential from a user.
+func (s *PasskeyService) revokeCredential(userID, credentialID string) (found bool, remaining int, err error) {
 	user, err := s.getUser(userID)
 	if err != nil {
 		return false, 0, err
@@ -414,7 +476,7 @@ func (s *PasskeyService) RevokeCredential(userID, credentialID string) (found bo
 	var newCreds []models.PasskeyCredential
 	found = false
 	for _, c := range user.PasskeyCredentials {
-		if base64.RawURLEncoding.EncodeToString(c.ID) != credentialID {
+		if encodeCredID(c.ID) != credentialID {
 			newCreds = append(newCreds, c)
 		} else {
 			found = true
@@ -528,6 +590,9 @@ func (s *PasskeyService) getUser(userID string) (*models.User, error) {
 }
 
 func (s *PasskeyService) addCredential(userID string, cred models.PasskeyCredential) error {
+	if err := cred.Validate(); err != nil {
+		return err
+	}
 	user, err := s.getUser(userID)
 	if err != nil {
 		return err
@@ -564,4 +629,8 @@ func (s *PasskeyService) storeWebAuthnSession(userID string, session *webauthn.S
 
 func (s *PasskeyService) getWebAuthnSession(userID string) (*webauthn.SessionData, error) {
 	return s.sessionStore.GetSession(userID)
+}
+
+func (s *PasskeyService) deleteWebAuthnSession(userID string) error {
+	return s.sessionStore.DeleteSession(userID)
 }

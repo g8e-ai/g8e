@@ -672,7 +672,16 @@ func TestBuildPublicRouter(t *testing.T) {
 		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
 	}
 
-	// 3. Landing page redirect test (302 to /console/ directly)
+	// 3. CLI passkey status endpoint must be mTLS-gated (not bypassed by public passkeys prefix)
+	req = httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPasskeysCLIStatus, nil)
+	rr = httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	// The cli/status path is under /api/v1/auth/passkeys (public prefix) but excluded,
+	// so it must hit the mTLS middleware and return 401, not pass through.
+	assert.NotEqual(t, http.StatusNotFound, rr.Code, "cli/status should be registered on public router")
+	assert.Contains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "cli/status should be mTLS-gated")
+
+	// 4. Landing page redirect test (302 to /console/ directly)
 	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	rr = httptest.NewRecorder()
 	router.ServeHTTP(rr, req)

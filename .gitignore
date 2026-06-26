@@ -138,3 +138,8 @@ GEMINI.md
 
 # --- Integration test results (persisted per run) ---
 test-results/
+
+
+# --- Auditor output (generated during tests) ---
+auditor-out/
+auditor-out/*
