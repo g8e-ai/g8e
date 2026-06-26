@@ -148,6 +148,25 @@ paths:
       summary: Bootstrap CA Windows script (alias)
       tags:
       - bootstrap
+  /api/v1/audit/stream:
+    get:
+      description: Server-sent events stream of audit events scoped to the authenticated
+        web session.
+      parameters:
+      - description: Replay events with id greater than this value
+        in: query
+        name: since_id
+        type: integer
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE event stream
+          schema:
+            type: string
+      summary: Live Audit Stream (SSE)
+      tags:
+      - audit
   /api/v1/data/blobs/{namespace}/{id}:
     get:
       description: Retrieves a blob from the data store
