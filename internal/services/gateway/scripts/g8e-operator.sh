@@ -34,7 +34,7 @@ case "$OS" in
   *)
     echo -e "${RED}Unsupported OS: $OS${NC}"
     echo "This deploy script supports Linux and macOS. For Windows, use PowerShell:"
-    echo "iwr http://${GATEWAY_HOST}:${GATEWAY_PORT}/g8e-operator.ps1 -UseBasicParsing | iex"
+    echo "iwr http://${GATEWAY_HOST}:${GATEWAY_PORT}/g8e-operator.ps1 | iex"
     exit 1
     ;;
 esac

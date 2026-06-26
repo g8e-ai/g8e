@@ -59,6 +59,7 @@ func TestDemos(t *testing.T) {
 			"status",
 			"clean",
 			"reset",
+			"rebuild",
 			"run",
 			"audit",
 		}
@@ -153,6 +154,27 @@ func TestDemosCleanCmd(t *testing.T) {
 	t.Run("clean command requires exactly one argument", func(t *testing.T) {
 		cmd := demosCleanCmd()
 		assert.NotNil(t, cmd.Args)
+	})
+}
+
+func TestDemosRebuildCmd(t *testing.T) {
+	t.Run("rebuild command has correct structure", func(t *testing.T) {
+		cmd := demosRebuildCmd()
+		assert.Equal(t, "rebuild <org>", cmd.Use)
+		assert.Contains(t, cmd.Short, "Rebuild Docker images")
+		assert.NotNil(t, cmd.RunE)
+	})
+
+	t.Run("rebuild command requires exactly one argument", func(t *testing.T) {
+		cmd := demosRebuildCmd()
+		assert.NotNil(t, cmd.Args)
+	})
+
+	t.Run("rebuild command has no-cache flag defaulting to true", func(t *testing.T) {
+		cmd := demosRebuildCmd()
+		flag := cmd.Flag("no-cache")
+		require.NotNil(t, flag)
+		assert.Equal(t, "true", flag.DefValue)
 	})
 }
 

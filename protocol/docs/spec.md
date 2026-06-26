@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-25
-Version: v1.2.2
+Last Updated: 2026-06-26
+Version: v1.2.3
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 

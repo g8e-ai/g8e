@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -88,11 +86,17 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// Console SPA (public, no auth required)
 	r.addPrefix("/console/")
 
-	// Browser passkey endpoints (public, no mTLS for browser access)
-	r.addExact("/api/v1/auth/passkeys/cli-browser-register/challenge")
-	r.addExact("/api/v1/auth/passkeys/cli-browser-register/verify")
-	r.addExact("/api/v1/auth/passkeys/browser/authenticate/challenge")
-	r.addExact("/api/v1/auth/passkeys/browser/authenticate/verify")
+	// Passkey bootstrap and console routes (public, no mTLS for browser/CLI access)
+	// bootstrap/* — CLI-direct passkey registration and authentication
+	// console/*  — Browser-facing passkey registration and authentication
+	r.addPrefix(constants.APIPaths.AuthPasskeysBootstrapPrefix)
+	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix)
+
+	// Deprecated alias exact paths (one-minor-version transition)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify)
+	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify)
 
 	// WebSessionAuth-protected routes (browser-facing, no client cert)
 	// These bypass mTLS middleware; WebSessionAuth provides the auth gate
@@ -106,6 +110,9 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// These routes require client certificates and must NOT bypass mTLS.
 	r.addExcludedPrefix("/api/v1/auth/passkeys/register")
 	r.addExcludedPrefix("/api/v1/auth/passkeys/authenticate")
+	r.addExcludedPrefix("/api/v1/auth/passkeys/cli/")
+	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-register")
+	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-browser-register")
 
 	// Exclude JIT passkey sub-paths when JWKS is not configured.
 	// When JWKS is enabled, the JIT prefix is added below as a public prefix,
@@ -244,7 +251,7 @@ type AuthService struct {
 
 	// Rate limiting state for app policies
 	muLimiters sync.Mutex
-	limiters   map[string]*rate.Limiter
+	limiters   map[string]*tokenBucket
 
 	// Auth caching (5-minute TTL)
 	userCache sync.Map // userID -> *cacheEntry[*models.User]
@@ -267,7 +274,7 @@ func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logg
 		jwtAudience:      jwtAudience,
 		publicRoutes:     NewPublicRouteRegistry(jwksEnabled),
 		privilegedRoutes: NewPrivilegedRouteRegistry(),
-		limiters:         make(map[string]*rate.Limiter),
+		limiters:         make(map[string]*tokenBucket),
 	}
 }
 
@@ -688,14 +695,14 @@ func (s *AuthService) handleAppAuth(w http.ResponseWriter, r *http.Request, next
 }
 
 // getLimiter returns a rate limiter for the given app ID, creating one if needed.
-func (s *AuthService) getLimiter(appID string, rps int) *rate.Limiter {
+func (s *AuthService) getLimiter(appID string, rps int) *tokenBucket {
 	s.muLimiters.Lock()
 	defer s.muLimiters.Unlock()
 
 	limiter, exists := s.limiters[appID]
 	if !exists {
 		// Create a new limiter with the configured RPS and a burst of 2x RPS
-		limiter = rate.NewLimiter(rate.Limit(rps), rps*2)
+		limiter = newTokenBucket(float64(rps), rps*2)
 		s.limiters[appID] = limiter
 	}
 	return limiter

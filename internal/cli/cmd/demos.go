@@ -98,6 +98,7 @@ Each org environment is hermetically sealed with no shared state, volumes, or cr
 		demosStatusCmd(),
 		demosCleanCmd(),
 		demosResetCmd(),
+		demosRebuildCmd(),
 		demosRunCmd(),
 		demosAuditCmd(),
 	)
@@ -489,6 +490,81 @@ func confirmAction(cmd *cobra.Command, prompt string) bool {
 	}
 	answer := strings.TrimSpace(strings.ToLower(input))
 	return answer == "y" || answer == "yes"
+}
+
+func demosRebuildCmd() *cobra.Command {
+	var noCache bool
+
+	cmd := &cobra.Command{
+		Use:   "rebuild <org>",
+		Short: "Rebuild Docker images and restart a demo environment",
+		Long: `Rebuild Docker images for a demo environment and restart it.
+Stops the environment, rebuilds all images, and starts it again.
+
+Use --no-cache=false to reuse the Docker build cache.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDemosRebuild(cmd, args, noCache)
+		},
+	}
+
+	cmd.Flags().BoolVar(&noCache, "no-cache", true, "Rebuild without using Docker cache")
+
+	return cmd
+}
+
+func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
+	org := args[0]
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	}
+	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
+
+	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
+		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	}
+
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
+	if _, err := os.Stat(composePath); os.IsNotExist(err) {
+		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	}
+
+	fmt.Printf("Stopping demo environment: %s\n", org)
+	stopCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down")
+	stopCmd.Dir = demoDir
+	stopCmd.Stdout = os.Stdout
+	stopCmd.Stderr = os.Stderr
+	if err := stopCmd.Run(); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
+	}
+
+	fmt.Printf("\nRebuilding images for: %s\n", org)
+	buildArgs := []string{"compose", "-f", toDockerPath(composePath), "build"}
+	if noCache {
+		buildArgs = append(buildArgs, "--no-cache")
+	}
+	buildCmd := exec.Command("docker", buildArgs...)
+	buildCmd.Dir = demoDir
+	buildCmd.Stdout = os.Stdout
+	buildCmd.Stderr = os.Stderr
+	if err := buildCmd.Run(); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+	}
+
+	fmt.Printf("\nStarting demo environment: %s\n", org)
+	upCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "up", "-d")
+	upCmd.Dir = demoDir
+	upCmd.Stdout = os.Stdout
+	upCmd.Stderr = os.Stderr
+	if err := upCmd.Run(); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+	}
+
+	fmt.Printf("\nDemo environment '%s' rebuilt and started successfully.\n", org)
+	printDemoEndpoints(org)
+
+	return nil
 }
 
 func demosResetCmd() *cobra.Command {

@@ -17,6 +17,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/uuid"
 	"github.com/go-webauthn/webauthn/protocol"
@@ -242,6 +243,47 @@ type PasskeyCredential struct {
 	Authenticator    Authenticator                     `json:"authenticator"`
 	CreatedAtUnixMs  int64                             `json:"created_at_unix_ms"`
 	LastUsedAtUnixMs int64                             `json:"last_used_at_unix_ms,omitempty"`
+}
+
+// validAttestationTypes is the set of WebAuthn attestation conveyance preferences
+// that may be stored on a credential.
+var validAttestationTypes = map[string]bool{
+	"none":       true,
+	"indirect":   true,
+	"direct":     true,
+	"enterprise": true,
+}
+
+// Validate checks that a PasskeyCredential has well-formed fields before it is
+// persisted to disk. It verifies:
+//   - ID is non-empty and within the WebAuthn spec limit of 1024 bytes
+//   - PublicKey is non-empty and parses as a valid CBOR-encoded COSE key
+//   - AttestationType is one of the known values
+//   - CreatedAtUnixMs is non-zero
+func (c PasskeyCredential) Validate() error {
+	if len(c.ID) == 0 {
+		return constants.ErrPasskeyCredentialInvalidID
+	}
+	if len(c.ID) > 1024 {
+		return constants.ErrPasskeyCredentialIDTooLong
+	}
+	if len(c.PublicKey) == 0 {
+		return constants.ErrPasskeyCredentialInvalidPublicKey
+	}
+	var coseKey map[int]any
+	if err := cbor.Unmarshal(c.PublicKey, &coseKey); err != nil {
+		return constants.ErrPasskeyCredentialInvalidPublicKey
+	}
+	if len(coseKey) == 0 {
+		return constants.ErrPasskeyCredentialInvalidPublicKey
+	}
+	if !validAttestationTypes[c.AttestationType] {
+		return constants.ErrPasskeyCredentialInvalidAttestation
+	}
+	if c.CreatedAtUnixMs == 0 {
+		return constants.ErrPasskeyCredentialInvalidTimestamp
+	}
+	return nil
 }
 
 // Authenticator represents the internal WebAuthn authenticator state.
