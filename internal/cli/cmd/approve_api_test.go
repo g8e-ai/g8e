@@ -284,11 +284,11 @@ func (c *httptestApproveClient) Delete(path string) ([]byte, error) {
 func generateApproveTestCertDER(t *testing.T, priv ed25519.PrivateKey) []byte {
 	t.Helper()
 	template := x509.Certificate{
-		SerialNumber:       big.NewInt(1),
-		NotBefore:          time.Now(),
-		NotAfter:           time.Now().Add(24 * time.Hour),
-		KeyUsage:           x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:        []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 	}
 	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, priv.Public(), priv)
