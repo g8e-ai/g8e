@@ -244,7 +244,6 @@ A custom Operator implementation must pass the platform test suite to claim g8e 
 - `make test-unit`, Runs Tier 1 unit tests.
 - `make test-integration`, Runs Tier 2 in-process integration tests.
 - `make test-docker`, Runs Tier 3 E2E tests requiring Docker.
-- `make test-gov`, Runs Tier 3 Government demo E2E tests.
 - `make ci`, Runs the full CI pipeline.
 
 ---

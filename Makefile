@@ -148,13 +148,9 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  test                  Run all tests (unit + integration)"
-	@echo "  test-pkg-<path>       Run tests for a specific package (e.g., make test-pkg-internal/services/auth)"
-	@echo "  test-coverage         Run tests with coverage (enforces 60% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
-	@echo "  test-shuffle          Run all tests with randomized order"
+	@echo "  test-coverage         Run tests with coverage (enforces $(COVERAGE_THRESHOLD)% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output"
 	@echo "  test-integration      Run Tier 2 (In-Process Integration) tests - no external dependencies"
 	@echo "  test-docker           Run Tier 3 (Docker E2E) tests - requires Docker"
-	@echo "  test-gov              Run Tier 3 (Gov Demo E2E) tests - requires Docker"
-	@echo "  test-gateway          Run gateway-specific integration tests"
 	@echo ""
 	@echo "Lint & Quality:"
 	@echo "  lint          Run all linting and quality checks"
@@ -447,12 +443,6 @@ test-docker:
 	@echo "Running Tier 3 (Docker E2E) tests..."
 	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
-
-# Gateway tests (subset of integration tests)
-.PHONY: test-gateway
-test-gateway:
-	@echo "Running gateway-specific tests (no platform required)..."
-	@go test -tags=integration $(TEST_RACE) $(TEST_COUNT) -timeout $(TEST_TIMEOUT) ./test/a2a_gateway_test.go ./test/mcp_gateway_test.go ./test/mcp_stdio_test.go
 
 # Coverage tests
 .PHONY: test-coverage
