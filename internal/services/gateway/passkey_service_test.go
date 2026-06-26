@@ -471,7 +471,7 @@ type mockWebauthnClient struct {
 }
 
 func (m *mockWebauthnClient) BeginRegistration(user webauthn.User) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
-	session := &webauthn.SessionData{Challenge: "mock-challenge", UserID: []byte(user.WebAuthnID())}
+	session := &webauthn.SessionData{Challenge: "mock-challenge", UserID: user.WebAuthnID()}
 	return &protocol.CredentialCreation{}, session, nil
 }
 
@@ -480,7 +480,7 @@ func (m *mockWebauthnClient) FinishRegistration(user webauthn.User, session weba
 }
 
 func (m *mockWebauthnClient) BeginLogin(user webauthn.User) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
-	session := &webauthn.SessionData{Challenge: "mock-challenge", UserID: []byte(user.WebAuthnID())}
+	session := &webauthn.SessionData{Challenge: "mock-challenge", UserID: user.WebAuthnID()}
 	return &protocol.CredentialAssertion{}, session, nil
 }
 

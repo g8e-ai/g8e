@@ -49,8 +49,8 @@ var (
 
 func agentHarnessCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "agent",
-		Aliases: []string{"agent-harness"},
+		Use:     "agent-harness",
+		Aliases: []string{"agent"},
 		Short:   "Universal agent harness for a real g8e Gateway/Operator",
 		Long: `agent-harness impersonates arbitrary AI tools and agents against a REAL g8e
 Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A

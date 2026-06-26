@@ -26,14 +26,14 @@ import (
 func TestAgentHarnessCmd(t *testing.T) {
 	t.Run("agent-harness command has correct Use and description", func(t *testing.T) {
 		cmd := agentHarnessCmd()
-		assert.Equal(t, "agent", cmd.Use)
+		assert.Equal(t, "agent-harness", cmd.Use)
 		assert.Contains(t, cmd.Short, "Universal agent harness")
 		assert.Contains(t, cmd.Long, "impersonates arbitrary AI tools")
 	})
 
-	t.Run("agent-harness has agent-harness alias", func(t *testing.T) {
+	t.Run("agent-harness has agent alias", func(t *testing.T) {
 		cmd := agentHarnessCmd()
-		assert.Contains(t, cmd.Aliases, "agent-harness")
+		assert.Contains(t, cmd.Aliases, "agent")
 	})
 
 	t.Run("agent-harness has expected subcommands", func(t *testing.T) {
