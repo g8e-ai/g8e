@@ -41,6 +41,7 @@ type passkeyHandlerConfig struct {
 	enforceSessionUserBinding  bool
 	createWebSession           bool
 	setCookie                  bool
+	createUserOnBootstrap      bool
 }
 
 func (s *PasskeyService) readBody(r *http.Request) ([]byte, error) {
@@ -106,9 +107,39 @@ func (s *PasskeyService) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 			}
 		}
 
+		var createdUserID string
 		if req.UserID == "" {
-			s.responder.Error(w, http.StatusBadRequest, constants.ErrUserIDRequired.Error())
-			return
+			if !cfg.createUserOnBootstrap {
+				s.responder.Error(w, http.StatusBadRequest, constants.ErrUserIDRequired.Error())
+				return
+			}
+			hasUsers, err := s.userStore.HasAnyUsers()
+			if err != nil {
+				s.logger.Error("Failed to check for existing users during bootstrap", "error", err)
+				if cfg.source == sourceBrowserBootstrap {
+					s.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{Success: false})
+					return
+				}
+				s.responder.Error(w, http.StatusInternalServerError, "failed to check bootstrap status")
+				return
+			}
+			if hasUsers {
+				s.responder.Error(w, http.StatusBadRequest, constants.ErrUserIDRequired.Error())
+				return
+			}
+			newUser, err := s.userStore.CreateUser()
+			if err != nil {
+				s.logger.Error("Failed to create user during bootstrap", "error", err)
+				if cfg.source == sourceBrowserBootstrap {
+					s.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{Success: false})
+					return
+				}
+				s.responder.Error(w, http.StatusInternalServerError, "failed to create user")
+				return
+			}
+			req.UserID = newUser.ID
+			createdUserID = newUser.ID
+			s.logger.Info("[BOOTSTRAP] Auto-created user for browser passkey enrollment", "user_id", newUser.ID)
 		}
 
 		if cfg.enforceFirstCredentialOnly {
@@ -131,6 +162,7 @@ func (s *PasskeyService) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 
 		s.responder.JSON(w, http.StatusOK, models.PasskeyRegisterChallengeResponse{
 			Success: true,
+			UserID:  createdUserID,
 			Options: options,
 		})
 	}
@@ -214,7 +246,7 @@ func (s *PasskeyService) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 			}
 			if cfg.setCookie {
 				http.SetCookie(w, &http.Cookie{
-					Name:     "g8e_session",
+					Name:     constants.WebSessionCookieName,
 					Value:    webSession.ID,
 					Path:     "/",
 					HttpOnly: true,
@@ -364,7 +396,7 @@ func (s *PasskeyService) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 			}
 			if cfg.setCookie {
 				http.SetCookie(w, &http.Cookie{
-					Name:     "g8e_session",
+					Name:     constants.WebSessionCookieName,
 					Value:    webSession.ID,
 					Path:     "/",
 					HttpOnly: true,

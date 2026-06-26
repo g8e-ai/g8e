@@ -469,7 +469,7 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "nonexistent-session"})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "nonexistent-session"})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -494,7 +494,7 @@ func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: ""})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: ""})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -531,7 +531,7 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -578,7 +578,7 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -628,7 +628,7 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)

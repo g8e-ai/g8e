@@ -105,6 +105,7 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addPrefix("/api/v1/auth/sessions/")
 	r.addPrefix("/api/v1/approvals")
 	r.addPrefix("/api/v1/auth/passkeys")
+	r.addExact(constants.APIPaths.AuditStream)
 
 	// Exclude mTLS-protected sub-paths under the passkeys prefix.
 	// These routes require client certificates and must NOT bypass mTLS.
@@ -804,7 +805,7 @@ func (s *AuthService) WebSocketAuth(next http.Handler) http.Handler {
 // This is for browser-based authentication on the public gateway.
 func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("g8e_session")
+		cookie, err := r.Cookie(constants.WebSessionCookieName)
 		if err != nil || cookie == nil {
 			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionCookieRequired.Error())
 			return
