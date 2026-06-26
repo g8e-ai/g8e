@@ -8,6 +8,10 @@
 
 g8e is a reference monitor for agentic infrastructure that provides a fail-closed admission boundary and a sovereign context plane. It is implemented as a single static Go binary. The platform governs state-changing actions on a host and maintains a tamper-evident record of those actions for agent context.
 
+<p align="center">
+  <img src="docs/media/jit-mcp-with-receipts.png" alt="JIT MCP with governance receipts" width="720" />
+</p>
+
 **Quick Links** · [Getting Started](docs/guides/getting_started.md) · [Position Paper](docs/core/position_paper.md) · [Protocol Spec](protocol/docs/spec.md) · [CLI Reference](docs/guides/cli.md) · [MCP Integration](protocol/docs/mcp.md) · [Compliance](docs/reference/compliance-alignment.md)
 
 ## Architectural Model
