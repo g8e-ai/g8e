@@ -19,16 +19,42 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/fxamacker/cbor/v2"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func testValidCOSEKey() []byte {
+	coseKey := map[int]any{
+		1:  2,  // kty: EC2
+		3:  -7, // alg: ES256
+		-1: 1,  // crv: P-256
+		-2: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20}, // x
+		-3: []byte{0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f, 0x40}, // y
+	}
+	data, _ := cbor.Marshal(coseKey)
+	return data
+}
+
+func testCredential(id string) models.PasskeyCredential {
+	return models.PasskeyCredential{
+		ID:              []byte(id),
+		PublicKey:       testValidCOSEKey(),
+		AttestationType: "none",
+		CreatedAtUnixMs: time.Now().UnixMilli(),
+	}
+}
 
 func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 	t.Helper()
@@ -99,11 +125,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) 
 	svc, user := newPasskeyServiceForTest(t)
 
 	// Add a dummy credential
-	credID := []byte("real-credential-id")
-	err := svc.addCredential(user.ID, models.PasskeyCredential{
-		ID:        credID,
-		PublicKey: []byte("fake-pubkey"),
-	})
+	err := svc.addCredential(user.ID, testCredential("real-credential-id"))
 	require.NoError(t, err)
 
 	ok, err := svc.VerifyL3Proof(context.Background(), user.ID, "tx-hash", "", &commonv1.L3Proof{
@@ -124,10 +146,7 @@ func TestPasskeyServiceVerifyL3ProofRejectsMismatchedChallenge(t *testing.T) {
 	// Add a dummy credential (we won't get to signature verification if challenge check fails first)
 	// Wait, webauthn.ValidateLogin checks the challenge inside clientDataJSON against the one in sessionData.
 	credID := []byte("real-credential-id")
-	err := svc.addCredential(user.ID, models.PasskeyCredential{
-		ID:        credID,
-		PublicKey: []byte("fake-pubkey"),
-	})
+	err := svc.addCredential(user.ID, testCredential("real-credential-id"))
 	require.NoError(t, err)
 
 	// Challenge in clientDataJSON is base64 of "tx-hash-1"
@@ -198,10 +217,7 @@ func TestPasskeyService_GenerateAuthenticationChallenge(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add a credential
-		err := svc.addCredential(user.ID, models.PasskeyCredential{
-			ID:        []byte("cred-id"),
-			PublicKey: []byte("pubkey"),
-		})
+		err := svc.addCredential(user.ID, testCredential("cred-id"))
 		require.NoError(t, err)
 
 		challenge, err := svc.GenerateAuthenticationChallenge(user.ID)
@@ -255,10 +271,7 @@ func TestPasskeyService_GenerateApprovalChallenge(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add a credential
-		err := svc.addCredential(user.ID, models.PasskeyCredential{
-			ID:        []byte("cred-id"),
-			PublicKey: []byte("pubkey"),
-		})
+		err := svc.addCredential(user.ID, testCredential("cred-id"))
 		require.NoError(t, err)
 
 		challenge, err := svc.GenerateApprovalChallenge(user.ID, "transaction-hash-123")
@@ -284,16 +297,10 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add credentials
-		err := svc.addCredential(user.ID, models.PasskeyCredential{
-			ID:        []byte("cred-1"),
-			PublicKey: []byte("pubkey-1"),
-		})
+		err := svc.addCredential(user.ID, testCredential("cred-1"))
 		require.NoError(t, err)
 
-		err = svc.addCredential(user.ID, models.PasskeyCredential{
-			ID:        []byte("cred-2"),
-			PublicKey: []byte("pubkey-2"),
-		})
+		err = svc.addCredential(user.ID, testCredential("cred-2"))
 		require.NoError(t, err)
 
 		creds, err := svc.listCredentials(user.ID)
@@ -328,16 +335,10 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add credentials
-		err := svc.addCredential(user.ID, models.PasskeyCredential{
-			ID:        []byte("cred-1"),
-			PublicKey: []byte("pubkey-1"),
-		})
+		err := svc.addCredential(user.ID, testCredential("cred-1"))
 		require.NoError(t, err)
 
-		err = svc.addCredential(user.ID, models.PasskeyCredential{
-			ID:        []byte("cred-2"),
-			PublicKey: []byte("pubkey-2"),
-		})
+		err = svc.addCredential(user.ID, testCredential("cred-2"))
 		require.NoError(t, err)
 
 		// Revoke one credential
@@ -403,10 +404,7 @@ func TestPasskeyService_addCredential(t *testing.T) {
 		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
-		err := svc.addCredential(user.ID, models.PasskeyCredential{
-			ID:        []byte("cred-1"),
-			PublicKey: []byte("pubkey-1"),
-		})
+		err := svc.addCredential(user.ID, testCredential("cred-1"))
 		require.NoError(t, err)
 
 		creds, err := svc.listCredentials(user.ID)
@@ -418,10 +416,7 @@ func TestPasskeyService_addCredential(t *testing.T) {
 		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
-		err := svc.addCredential("non-existent-user", models.PasskeyCredential{
-			ID:        []byte("cred-1"),
-			PublicKey: []byte("pubkey-1"),
-		})
+		err := svc.addCredential("non-existent-user", testCredential("cred-1"))
 		require.Error(t, err)
 	})
 }
@@ -434,8 +429,8 @@ func TestPasskeyService_setCredentials(t *testing.T) {
 		svc, user := newPasskeyServiceForTest(t)
 
 		creds := []models.PasskeyCredential{
-			{ID: []byte("cred-1"), PublicKey: []byte("pubkey-1")},
-			{ID: []byte("cred-2"), PublicKey: []byte("pubkey-2")},
+			testCredential("cred-1"),
+			testCredential("cred-2"),
 		}
 
 		err := svc.setCredentials(user.ID, creds)
@@ -467,6 +462,89 @@ func TestPasskeyService_updateUser(t *testing.T) {
 		require.NoError(t, err)
 	})
 
+}
+
+// mockWebauthnClient implements webauthnClient for testing.
+// It returns predictable challenges and credentials without real crypto.
+type mockWebauthnClient struct {
+	credential *webauthn.Credential
+}
+
+func (m *mockWebauthnClient) BeginRegistration(user webauthn.User) (*protocol.CredentialCreation, *webauthn.SessionData, error) {
+	session := &webauthn.SessionData{Challenge: "mock-challenge", UserID: []byte(user.WebAuthnID())}
+	return &protocol.CredentialCreation{}, session, nil
+}
+
+func (m *mockWebauthnClient) FinishRegistration(user webauthn.User, session webauthn.SessionData, r *http.Request) (*webauthn.Credential, error) {
+	return m.credential, nil
+}
+
+func (m *mockWebauthnClient) BeginLogin(user webauthn.User) (*protocol.CredentialAssertion, *webauthn.SessionData, error) {
+	session := &webauthn.SessionData{Challenge: "mock-challenge", UserID: []byte(user.WebAuthnID())}
+	return &protocol.CredentialAssertion{}, session, nil
+}
+
+func (m *mockWebauthnClient) FinishLogin(user webauthn.User, session webauthn.SessionData, r *http.Request) (*webauthn.Credential, error) {
+	return m.credential, nil
+}
+
+func (m *mockWebauthnClient) ValidateLogin(user webauthn.User, session webauthn.SessionData, parsedResponse *protocol.ParsedCredentialAssertionData) (*webauthn.Credential, error) {
+	return m.credential, nil
+}
+
+func newPasskeyServiceWithMock(t *testing.T) (*PasskeyService, *models.User) {
+	t.Helper()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	user, err := NewUserService(db, logger).CreateUser()
+	require.NoError(t, err)
+	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, nil, nil, 0)
+	require.NoError(t, err)
+	svc.webauthn = &mockWebauthnClient{
+		credential: &webauthn.Credential{
+			ID:              []byte("mock-cred-id"),
+			PublicKey:       testValidCOSEKey(),
+			AttestationType: "none",
+		},
+	}
+	return svc, user
+}
+
+func TestPasskeyService_PurgeSessionAfterVerifyRegistration(t *testing.T) {
+	t.Parallel()
+	svc, user := newPasskeyServiceWithMock(t)
+
+	_, err := svc.GenerateRegistrationChallenge(user.ID, "test-user")
+	require.NoError(t, err)
+
+	_, err = svc.getWebAuthnSession(user.ID)
+	require.NoError(t, err)
+
+	_, err = svc.VerifyRegistration(user.ID, []byte(`{"id":"mock","rawId":"mock","response":{"clientDataJSON":"{}","attestationObject":""}}`))
+	require.NoError(t, err)
+
+	_, err = svc.getWebAuthnSession(user.ID)
+	require.ErrorIs(t, err, constants.ErrExpired)
+}
+
+func TestPasskeyService_PurgeSessionAfterVerifyAuthentication(t *testing.T) {
+	t.Parallel()
+	svc, user := newPasskeyServiceWithMock(t)
+
+	err := svc.addCredential(user.ID, testCredential("mock-cred-id"))
+	require.NoError(t, err)
+
+	_, err = svc.GenerateAuthenticationChallenge(user.ID)
+	require.NoError(t, err)
+
+	_, err = svc.getWebAuthnSession(user.ID)
+	require.NoError(t, err)
+
+	_, err = svc.VerifyAuthentication(user.ID, []byte(`{}`))
+	require.NoError(t, err)
+
+	_, err = svc.getWebAuthnSession(user.ID)
+	require.ErrorIs(t, err, constants.ErrExpired)
 }
 
 func TestPasskeyService_storeWebAuthnSession(t *testing.T) {

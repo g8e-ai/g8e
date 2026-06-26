@@ -80,6 +80,17 @@ type PasskeyConfig struct {
 	RpName string
 }
 
+// encodeCredID encodes a WebAuthn credential ID (raw bytes) as a base64 URL string.
+// This is the canonical encoding used across all passkey transports.
+func encodeCredID(id []byte) string {
+	return base64.RawURLEncoding.EncodeToString(id)
+}
+
+// decodeCredID decodes a base64 URL-encoded credential ID back to raw bytes.
+func decodeCredID(s string) ([]byte, error) {
+	return base64.RawURLEncoding.DecodeString(s)
+}
+
 // dbUserStore implements userStore using CanonicalDBService.
 type dbUserStore struct {
 	db *CanonicalDBService
@@ -465,7 +476,7 @@ func (s *PasskeyService) revokeCredential(userID, credentialID string) (found bo
 	var newCreds []models.PasskeyCredential
 	found = false
 	for _, c := range user.PasskeyCredentials {
-		if base64.RawURLEncoding.EncodeToString(c.ID) != credentialID {
+		if encodeCredID(c.ID) != credentialID {
 			newCreds = append(newCreds, c)
 		} else {
 			found = true
@@ -579,6 +590,9 @@ func (s *PasskeyService) getUser(userID string) (*models.User, error) {
 }
 
 func (s *PasskeyService) addCredential(userID string, cred models.PasskeyCredential) error {
+	if err := cred.Validate(); err != nil {
+		return err
+	}
 	user, err := s.getUser(userID)
 	if err != nil {
 		return err
