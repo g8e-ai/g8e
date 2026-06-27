@@ -101,53 +101,64 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	return string(csrPEM), privKey, nil
 }
 
+// CertPaths holds the filesystem paths needed by enrollment and renewal functions.
+// It decouples these functions from the global paths.Infra singleton.
+type CertPaths struct {
+	PkiTrustDir     string
+	OperatorKeyPath string
+	OperatorCertPath string
+	CaCertPath      string
+	TrustedSignersDir string
+}
+
 // PerformAutomaticEnrollment handles automatic enrollment with a Gateway when -e flag is provided.
 // It fetches the trust bundle, generates a CSR, enrolls with the Gateway, and saves certificates.
-func PerformAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) error {
+// Returns the operator session ID so the caller can set it at the top level.
+func PerformAutomaticEnrollment(gatewayIP, workDir string, certPaths CertPaths, logger *slog.Logger) (sessionID string, err error) {
 	// Create PKI directory
-	if err := os.MkdirAll(paths.Infra.PkiTrustDir, 0700); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+	if err := os.MkdirAll(certPaths.PkiTrustDir, 0700); err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
 	// Remove any stale certs so enrollment always issues fresh ones tied to
 	// the current gateway PKI (e.g. after gateway restart/regen).
-	_ = os.Remove(paths.Infra.OperatorKeyPath)
-	_ = os.Remove(paths.Infra.OperatorCertPath)
+	_ = os.Remove(certPaths.OperatorKeyPath)
+	_ = os.Remove(certPaths.OperatorCertPath)
 
 	// Fetch trust bundle from Gateway HTTP endpoint
 	trustURL := fmt.Sprintf("http://%s:%d%s", gatewayIP, constants.Ports.OperatorHttp, constants.WellKnownPKICABundle)
 	logger.Info("Fetching trust bundle from Gateway", "url", trustURL)
 	trustBundle, err := certs.FetchTrustBundle(context.Background(), trustURL, "")
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 
 	// Save trust bundle
-	if err := os.WriteFile(paths.Infra.CaCertPath, trustBundle, 0644); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
+	if err := os.WriteFile(certPaths.CaCertPath, trustBundle, 0644); err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
-	logger.Info("Trust bundle saved", "path", paths.Infra.CaCertPath)
+	logger.Info("Trust bundle saved", "path", certPaths.CaCertPath)
 
 	// Generate system fingerprint for enrollment
 	systemFp, err := auth.GenerateSystemFingerprint(logger)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrValidationFailed, err)
 	}
 
 	// Generate CSR for enrollment
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
 	opCSR, opKey, err := GenerateCSR(hostname)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Generate CLI CSR (required by device enrollment endpoint even for operator-only deployment)
 	cliCSR, _, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	// Enroll with Gateway
@@ -169,29 +180,29 @@ func PerformAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
 	httpReq, err := http.NewRequest("POST", enrollURL, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrInternal, err)
 	}
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
+		return "", fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
 	}
 
 	var enrollResp struct {
@@ -205,29 +216,29 @@ func PerformAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 		Error             string `json:"error,omitempty"`
 	}
 	if err := json.Unmarshal(respBody, &enrollResp); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
 	}
 
 	if enrollResp.Error != "" {
-		return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
+		return "", fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, enrollResp.Error)
 	}
 
 	if enrollResp.OperatorCert == "" {
-		return fmt.Errorf("%w: operator certificate", constants.ErrMissingCertificate)
+		return "", fmt.Errorf("%w: operator certificate", constants.ErrMissingCertificate)
 	}
 
 	// Save operator private key
 	keyBytes, err := x509.MarshalECPrivateKey(opKey)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "EC PRIVATE KEY",
 		Bytes: keyBytes,
 	})
-	logger.Info("Saving operator private key", "path", paths.Infra.OperatorKeyPath)
-	if err := os.WriteFile(paths.Infra.OperatorKeyPath, keyPEM, 0600); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
+	logger.Info("Saving operator private key", "path", certPaths.OperatorKeyPath)
+	if err := os.WriteFile(certPaths.OperatorKeyPath, keyPEM, 0600); err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
 	}
 	logger.Info("Operator private key saved successfully")
 
@@ -236,50 +247,190 @@ func PerformAutomaticEnrollment(gatewayIP, workDir string, logger *slog.Logger) 
 	if enrollResp.OperatorCertChain != "" {
 		certContent += "\n" + enrollResp.OperatorCertChain
 	}
-	logger.Info("Saving operator certificate", "path", paths.Infra.OperatorCertPath)
-	if err := os.WriteFile(paths.Infra.OperatorCertPath, []byte(certContent), 0600); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	logger.Info("Saving operator certificate", "path", certPaths.OperatorCertPath)
+	if err := os.WriteFile(certPaths.OperatorCertPath, []byte(certContent), 0600); err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 	logger.Info("Operator certificate saved successfully")
 
 	// Update trust bundle if Gateway returned a new one
 	if enrollResp.HubTrustBundle != "" {
-		if err := os.WriteFile(paths.Infra.CaCertPath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
+		if err := os.WriteFile(certPaths.CaCertPath, []byte(enrollResp.HubTrustBundle), 0644); err != nil {
+			return "", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 		logger.Info("Updated trust bundle from Gateway")
 	}
 
 	// Save Actuator public key to trusted_signers so the operator can verify L2 signatures.
 	if enrollResp.ActuatorKeyID != "" && enrollResp.ActuatorPubKey != "" {
-		if err := os.MkdirAll(paths.Infra.TrustedSignersDir, 0700); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		if err := os.MkdirAll(certPaths.TrustedSignersDir, 0700); err != nil {
+			return "", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		signerPath := filepath.Join(paths.Infra.TrustedSignersDir, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
+		signerPath := filepath.Join(certPaths.TrustedSignersDir, enrollResp.ActuatorKeyID+constants.PublicKeySuffix)
 		if err := os.WriteFile(signerPath, []byte(enrollResp.ActuatorPubKey), 0600); err != nil {
-			return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+			return "", fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 		}
 		logger.Info("Actuator public key saved", "path", signerPath)
 	}
 
 	logger.Info("Enrollment successful", "operator_id", enrollResp.OperatorID, "operator_session_id", enrollResp.OperatorSessionID)
 
-	// Set environment variable for operator session ID
-	os.Setenv("G8E_OPERATOR_SESSION_ID", enrollResp.OperatorSessionID)
+	return enrollResp.OperatorSessionID, nil
+}
 
-	return nil
+// checkCertExpiry parses the cert file and returns true if it is expiring within 24h.
+func checkCertExpiry(certFile string) (bool, error) {
+	cert, err := ParseCertPEM(certFile)
+	if err != nil {
+		return false, err
+	}
+	return IsCertExpiringSoon(cert), nil
+}
+
+// fetchAndSaveTrustBundle fetches the trust bundle from the given endpoint URL,
+// saves it to caCertPath, and returns the PEM bytes.
+func fetchAndSaveTrustBundle(ctx context.Context, trustBundleURL, caCertPath string) ([]byte, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, trustBundleURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
+	if len(body) == 0 {
+		return nil, fmt.Errorf("%w: trust bundle response body was empty", constants.ErrEmptyTrustBundle)
+	}
+
+	if err := os.WriteFile(caCertPath, body, 0644); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
+	}
+
+	return body, nil
+}
+
+// buildMTLSClient constructs an http.Client configured for mTLS using the given
+// CA PEM and client certificate.
+func buildMTLSClient(caPEM []byte, cliCert tls.Certificate) (*http.Client, error) {
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("%w: failed to parse CA certificates from trust bundle", constants.ErrCAParseFailed)
+	}
+
+	tlsConfig := &tls.Config{
+		RootCAs:      caPool,
+		Certificates: []tls.Certificate{cliCert},
+		MinVersion:   tls.VersionTLS13,
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	return &http.Client{Transport: transport}, nil
+}
+
+// renewalResponse holds the parsed enrollment response for cert renewal.
+type renewalResponse struct {
+	OperatorCert      string `json:"operator_cert"`
+	OperatorCertChain string `json:"operator_cert_chain,omitempty"`
+	CLICert           string `json:"cli_cert"`
+	CLICertChain      string `json:"cli_cert_chain,omitempty"`
+	HubTrustBundle    string `json:"hub_trust_bundle,omitempty"`
+	Error             string `json:"error,omitempty"`
+}
+
+// submitRenewal POSTs a re-enrollment request and returns the parsed response.
+func submitRenewal(client *http.Client, enrollURL, opCSR, cliCSR, hostname string) (*renewalResponse, error) {
+	reqBody := map[string]string{
+		"csr_pem":            opCSR,
+		"cli_csr_pem":        cliCSR,
+		"system_fingerprint": fmt.Sprintf("g8e-operator-%s", hostname),
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
+	}
+
+	httpReq, err := http.NewRequest(http.MethodPost, enrollURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
+	}
+
+	var regResp renewalResponse
+	if err := json.Unmarshal(respBody, &regResp); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
+	}
+
+	if regResp.Error != "" {
+		return nil, fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
+	}
+
+	if regResp.OperatorCert == "" || regResp.CLICert == "" {
+		return nil, fmt.Errorf("%w: re-enrollment response missing certificates", constants.ErrMissingRequiredField)
+	}
+
+	return &regResp, nil
+}
+
+// saveRenewedCerts writes the renewed operator cert and key to disk and returns
+// the PEM-encoded key and cert content for in-memory reload.
+func saveRenewedCerts(certFile, keyFile string, certContent string, opKey *ecdsa.PrivateKey) (keyPEM []byte, err error) {
+	keyBytes, err := x509.MarshalECPrivateKey(opKey)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
+	}
+
+	keyPEM = pem.EncodeToMemory(&pem.Block{
+		Type:  "EC PRIVATE KEY",
+		Bytes: keyBytes,
+	})
+
+	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
+	}
+
+	if err := os.WriteFile(certFile, []byte(certContent), 0600); err != nil {
+		return nil, fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+
+	return keyPEM, nil
 }
 
 // RenewOperatorCertificate performs automatic re-enrollment for the Operator certificate.
 // This is a fail-closed operation: if renewal fails, it returns an error.
 func RenewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile string, clientIdentity *certs.ClientIdentity) error {
-	expiringSoon, err := func() (bool, error) {
-		cert, err := ParseCertPEM(clientCertFile)
-		if err != nil {
-			return false, err
-		}
-		return IsCertExpiringSoon(cert), nil
-	}()
+	expiringSoon, err := checkCertExpiry(clientCertFile)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertParseFailed, err)
 	}
@@ -309,128 +460,35 @@ func RenewOperatorCertificate(cfg *config.Config, clientCertFile, clientKeyFile 
 		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
-	// Fetch current trust bundle from operator
+	// Fetch and save trust bundle using a timeout client
 	trustBundleURL := fmt.Sprintf("%s%s", cfg.Endpoint, constants.WellKnownPKICABundle)
-	trustBundleResp, err := http.Get(trustBundleURL)
+	caPEM, err := fetchAndSaveTrustBundle(context.Background(), trustBundleURL, paths.Infra.CaCertPath)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
-	}
-	defer trustBundleResp.Body.Close()
-
-	if trustBundleResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, trustBundleResp.StatusCode)
+		return err
 	}
 
-	currentTrustBundle, err := io.ReadAll(trustBundleResp.Body)
+	// Build mTLS client
+	client, err := buildMTLSClient(caPEM, cliCert)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+		return err
 	}
-
-	if len(currentTrustBundle) == 0 {
-		return fmt.Errorf("%w", constants.ErrEmptyTrustBundle)
-	}
-
-	// Update local trust bundle
-	trustBundlePath := paths.Infra.CaCertPath
-	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
-	}
-
-	// Create mTLS client
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(currentTrustBundle) {
-		return fmt.Errorf("%w", constants.ErrCAParseFailed)
-	}
-
-	tlsConfig := &tls.Config{
-		RootCAs:      caPool,
-		Certificates: []tls.Certificate{cliCert},
-		MinVersion:   tls.VersionTLS13,
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	client := &http.Client{Transport: transport}
 
 	// Submit re-enrollment request
-	reqBody := map[string]string{
-		"csr_pem":            opCSR,
-		"cli_csr_pem":        cliCSR,
-		"system_fingerprint": fmt.Sprintf("g8e-operator-%s", hostname),
-	}
-
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
-	}
-
 	enrollURL := fmt.Sprintf("%s%s", cfg.Endpoint, constants.APIPathPKIDevicesEnroll)
-	httpReq, err := http.NewRequest("POST", enrollURL, bytes.NewReader(bodyBytes))
+	regResp, err := submitRenewal(client, enrollURL, opCSR, cliCSR, hostname)
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("%w: HTTP %d: %s", constants.ErrHTTPStatusError, resp.StatusCode, string(respBody))
-	}
-
-	var regResp struct {
-		OperatorCert      string `json:"operator_cert"`
-		OperatorCertChain string `json:"operator_cert_chain,omitempty"`
-		CLICert           string `json:"cli_cert"`
-		CLICertChain      string `json:"cli_cert_chain,omitempty"`
-		HubTrustBundle    string `json:"hub_trust_bundle,omitempty"`
-		Error             string `json:"error,omitempty"`
-	}
-	if err := json.Unmarshal(respBody, &regResp); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
-	}
-
-	if regResp.Error != "" {
-		return fmt.Errorf("%w: %s", constants.ErrEnrollmentFailed, regResp.Error)
-	}
-
-	if regResp.OperatorCert == "" || regResp.CLICert == "" {
-		return fmt.Errorf("%w: re-enrollment response", constants.ErrMissingRequiredField)
+		return err
 	}
 
 	// Save renewed certificates
-	keyBytes, err := x509.MarshalECPrivateKey(opKey)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyParseFailed, err)
-	}
-
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "EC PRIVATE KEY",
-		Bytes: keyBytes,
-	})
-
-	if err := os.WriteFile(clientKeyFile, keyPEM, 0600); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
-	}
-
 	certContent := regResp.OperatorCert
 	if regResp.OperatorCertChain != "" {
 		certContent += "\n" + regResp.OperatorCertChain
 	}
 
-	if err := os.WriteFile(clientCertFile, []byte(certContent), 0600); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	keyPEM, err := saveRenewedCerts(clientCertFile, clientKeyFile, certContent, opKey)
+	if err != nil {
+		return err
 	}
 
 	// Update the client certificate via DI

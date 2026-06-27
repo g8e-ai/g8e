@@ -184,12 +184,21 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	if opts.Endpoint != "" {
 		logger.Info("Performing automatic enrollment with Gateway", "endpoint", opts.Endpoint)
-		if err := PerformAutomaticEnrollment(opts.Endpoint, opts.LaunchDir, logger); err != nil {
+		certPaths := CertPaths{
+			PkiTrustDir:       paths.Infra.PkiTrustDir,
+			OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+			OperatorCertPath:  paths.Infra.OperatorCertPath,
+			CaCertPath:        paths.Infra.CaCertPath,
+			TrustedSignersDir: paths.Infra.TrustedSignersDir,
+		}
+		sessionID, err := PerformAutomaticEnrollment(opts.Endpoint, opts.LaunchDir, certPaths, logger)
+		if err != nil {
 			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
 			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
 			os.Exit(constants.ExitConfigError)
 		}
+		os.Setenv("G8E_OPERATOR_SESSION_ID", sessionID)
 
 		privateKey = paths.Infra.OperatorKeyPath
 		clientCert = paths.Infra.OperatorCertPath

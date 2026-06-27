@@ -696,7 +696,13 @@ func TestPerformAutomaticEnrollment_Success(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
 	require.NoError(t, err)
 
 	_, err = os.Stat(paths.Infra.OperatorKeyPath)
@@ -717,7 +723,13 @@ func TestPerformAutomaticEnrollment_TrustBundleFetchFailure(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrFailedToReadTrustBundle))
 }
@@ -732,7 +744,13 @@ func TestPerformAutomaticEnrollment_EnrollmentHTTPError(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
@@ -748,7 +766,13 @@ func TestPerformAutomaticEnrollment_ErrorFieldInResponse(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
 }
@@ -764,7 +788,13 @@ func TestPerformAutomaticEnrollment_MissingOperatorCert(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrMissingCertificate))
 }
@@ -808,8 +838,15 @@ func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	err = PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	sessionID, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
 	require.NoError(t, err)
+	assert.Equal(t, "sess-001", sessionID)
 
 	signerPath := filepath.Join(paths.Infra.TrustedSignersDir, "act-001"+constants.PublicKeySuffix)
 	_, err = os.Stat(signerPath)
