@@ -286,11 +286,11 @@ func TestGatewayL3Notary_DispatchesToPasskeyVerifierForWebAuthnProofs(t *testing
 	assert.Equal(t, webauthnProof, passkeyMock.calledProof)
 }
 
-func TestGatewayL3Notary_DispatchesToCLIPathForMTLSProofs(t *testing.T) {
+func TestGatewayL3Notary_RejectsMTLSOnlyProofWhenPasskeyRequired(t *testing.T) {
 	t.Parallel()
 
-	txHash := "test-tx-hash-mtls-dispatch"
-	userID := "user-mtls-dispatch"
+	txHash := "test-tx-hash-mtls-only"
+	userID := "user-mtls-only"
 
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -309,9 +309,60 @@ func TestGatewayL3Notary_DispatchesToCLIPathForMTLSProofs(t *testing.T) {
 	}
 
 	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", mtlsProof)
+	require.Error(t, err)
+	assert.False(t, allowed)
+	assert.True(t, errors.Is(err, constants.ErrPasskeyProofRequired))
+	assert.False(t, passkeyMock.called)
+}
+
+func TestGatewayL3Notary_DualLayerPasskeyAndMTLS(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeSuspendedStore{}
+	passkeyMock := &mockL3Notary{result: true}
+	cliVerifier := &mockCLISessionVerifier{result: nil}
+	notary := NewGatewayL3Notary(store, cliVerifier, passkeyMock, slog.Default())
+
+	dualProof := &commonv1.L3Proof{
+		CredentialId:        "cred-id",
+		ClientDataJson:      "client-data",
+		AuthenticatorData:   "auth-data",
+		Signature:           "passkey-sig",
+		CliSignature:        "cli-sig",
+		MtlsCertFingerprint: "abc123",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), "user-1", "tx-hash-1", "cli-session-1", dualProof)
 	require.NoError(t, err)
 	assert.True(t, allowed)
-	assert.False(t, passkeyMock.called)
+	assert.True(t, passkeyMock.called)
+	assert.True(t, cliVerifier.called)
+	assert.Equal(t, "user-1", cliVerifier.calledUserID)
+	assert.Equal(t, "cli-session-1", cliVerifier.calledSessionID)
+	assert.Equal(t, "abc123", cliVerifier.calledFingerprint)
+}
+
+func TestGatewayL3Notary_DualLayerCLISessionDeniedReturnsFalse(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeSuspendedStore{}
+	passkeyMock := &mockL3Notary{result: true}
+	cliVerifier := &mockCLISessionVerifier{result: ErrCLISessionDenied}
+	notary := NewGatewayL3Notary(store, cliVerifier, passkeyMock, slog.Default())
+
+	dualProof := &commonv1.L3Proof{
+		CredentialId:        "cred-id",
+		ClientDataJson:      "client-data",
+		AuthenticatorData:   "auth-data",
+		Signature:           "passkey-sig",
+		MtlsCertFingerprint: "abc123",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), "user-1", "tx-hash-1", "cli-session-1", dualProof)
+	require.NoError(t, err)
+	assert.False(t, allowed)
+	assert.True(t, passkeyMock.called)
+	assert.True(t, cliVerifier.called)
 }
 
 func TestGatewayL3Notary_PasskeyVerifierErrorPropagates(t *testing.T) {
@@ -347,6 +398,23 @@ func TestGatewayL3Notary_NilProofReturnsError(t *testing.T) {
 	assert.False(t, allowed)
 	assert.False(t, passkeyMock.called)
 	assert.True(t, errors.Is(err, constants.ErrGatewayL3ProofRequired))
+}
+
+// mockCLISessionVerifier is a test double for the CLISessionVerifier interface.
+type mockCLISessionVerifier struct {
+	called             bool
+	calledUserID       string
+	calledSessionID    string
+	calledFingerprint  string
+	result             error
+}
+
+func (m *mockCLISessionVerifier) VerifyCLISession(userID, cliSessionID, certFingerprint string) error {
+	m.called = true
+	m.calledUserID = userID
+	m.calledSessionID = cliSessionID
+	m.calledFingerprint = certFingerprint
+	return m.result
 }
 
 func TestGatewayL3Notary_NoPasskeyVerifierFallsBackToCLIPath(t *testing.T) {

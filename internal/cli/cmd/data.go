@@ -86,7 +86,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -127,7 +127,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -168,7 +168,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -213,7 +213,7 @@ func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), c
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -286,7 +286,7 @@ func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)

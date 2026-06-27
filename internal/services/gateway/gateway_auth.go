@@ -85,21 +85,9 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// Console SPA (public, no auth required)
 	r.addPrefix("/console/")
 
-	// Passkey bootstrap and console routes (public, no mTLS for browser/CLI access)
-	// bootstrap/* — CLI-direct passkey registration and authentication
+	// Passkey console routes (public, no mTLS for browser access)
 	// console/*  — Browser-facing passkey registration and authentication
-	r.addPrefix(constants.APIPaths.AuthPasskeysBootstrapPrefix)
 	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix)
-
-	// Deprecated alias exact paths (one-minor-version transition)
-	r.addExact(constants.APIPaths.AuthPasskeysCLIRegisterChallenge)
-	r.addExact(constants.APIPaths.AuthPasskeysCLIRegisterVerify)
-	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge)
-	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify)
-	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge)
-	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify)
-	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge)
-	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify)
 
 	// SSE consumer endpoints (dual auth: mTLS for CLI/operator, web session cookie for browser)
 	// These bypass mTLS middleware; the handlers perform their own auth check.
@@ -121,6 +109,11 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addExcludedPrefix("/api/v1/auth/passkeys/cli/")
 	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-register")
 	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-browser-register")
+
+	// Exclude mTLS-protected CLI approval status endpoint.
+	// The CLI polls this with mTLS; it must NOT bypass mTLS via the
+	// WebSessionAuth public prefix for /api/v1/approvals.
+	r.addExcludedPrefix("/api/v1/approvals/status/")
 
 	// Exclude JIT passkey sub-paths when JWKS is not configured.
 	// When JWKS is enabled, the JIT prefix is added below as a public prefix,

@@ -98,10 +98,6 @@ var APIPaths = struct {
 	AuthPasskeysJITRegisterVerify              string `json:"auth_passkeys_jit_register_verify"`
 	AuthPasskeysJITPrefix                      string `json:"auth_passkeys_jit_prefix"`
 	AuthPasskeysPrefix                         string `json:"auth_passkeys_prefix"`
-	AuthPasskeysCLIRegisterChallenge           string `json:"auth_passkeys_cli_register_challenge"`
-	AuthPasskeysCLIRegisterVerify              string `json:"auth_passkeys_cli_register_verify"`
-	AuthPasskeysCLIAuthenticateChallenge       string `json:"auth_passkeys_cli_authenticate_challenge"`
-	AuthPasskeysCLIAuthenticateVerify          string `json:"auth_passkeys_cli_authenticate_verify"`
 	AuthPasskeysCLIStatus                      string `json:"auth_passkeys_cli_status"`
 	AuthPasskeysBootstrapRegisterChallenge     string `json:"auth_passkeys_bootstrap_register_challenge"`
 	AuthPasskeysBootstrapRegisterVerify        string `json:"auth_passkeys_bootstrap_register_verify"`
@@ -113,17 +109,14 @@ var APIPaths = struct {
 	AuthPasskeysConsoleAuthenticateChallenge   string `json:"auth_passkeys_console_authenticate_challenge"`
 	AuthPasskeysConsoleAuthenticateVerify      string `json:"auth_passkeys_console_authenticate_verify"`
 	AuthPasskeysConsolePrefix                  string `json:"auth_passkeys_console_prefix"`
-	AuthPasskeysCLIBrowserRegisterChallenge    string `json:"auth_passkeys_cli_browser_register_challenge"`
-	AuthPasskeysCLIBrowserRegisterVerify       string `json:"auth_passkeys_cli_browser_register_verify"`
-	AuthPasskeysBrowserAuthenticateChallenge   string `json:"auth_passkeys_browser_authenticate_challenge"`
-	AuthPasskeysBrowserAuthenticateVerify      string `json:"auth_passkeys_browser_authenticate_verify"`
 	AuthSessionsMe                             string `json:"auth_sessions_me"`
 	// Approval routes
-	Approvals         string `json:"approvals"`
-	ApprovalsByID     string `json:"approvals_by_id"`
-	ApprovalsPrefix   string `json:"approvals_prefix"`
-	ApprovePage       string `json:"approve_page"`
-	ApprovePagePrefix string `json:"approve_page_prefix"`
+	Approvals           string `json:"approvals"`
+	ApprovalsByID       string `json:"approvals_by_id"`
+	ApprovalsPrefix     string `json:"approvals_prefix"`
+	ApprovePage         string `json:"approve_page"`
+	ApprovePagePrefix   string `json:"approve_page_prefix"`
+	ApprovalsCLIStatus  string `json:"approvals_cli_status"`
 	// Admin routes
 	AdminAppPoliciesBySigner string `json:"admin_app_policies_by_signer"`
 	AdminAppsRevoke          string `json:"admin_apps_revoke"`
@@ -262,11 +255,12 @@ var APIPaths = struct {
 	AuthPasskeysBrowserAuthenticateVerify:      "/api/v1/auth/passkeys/browser/authenticate/verify",
 	AuthSessionsMe:                             "/api/v1/auth/sessions/me",
 	// Approval routes
-	Approvals:         "/api/v1/approvals",
-	ApprovalsByID:     "/api/v1/approvals/",
-	ApprovalsPrefix:   "/api/v1/approvals/",
-	ApprovePage:       "/api/v1/approve/",
-	ApprovePagePrefix: "/api/v1/approve/",
+	Approvals:          "/api/v1/approvals",
+	ApprovalsByID:      "/api/v1/approvals/",
+	ApprovalsPrefix:    "/api/v1/approvals/",
+	ApprovePage:        "/api/v1/approve/",
+	ApprovePagePrefix:  "/api/v1/approve/",
+	ApprovalsCLIStatus: "/api/v1/approvals/status/",
 	// Admin routes
 	AdminAppPoliciesBySigner: "/api/v1/admin/app-policies/",
 	AdminAppsRevoke:          "/api/v1/admin/apps/revoke",

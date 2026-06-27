@@ -75,7 +75,6 @@ type G8eoService struct {
 // NewG8eoService creates a new Operator service in Outbound Mode.
 // In this mode, the Operator initiates all connections to the platform
 // on port 443 and performs command execution on the local host.
-// If tlsConfig is nil, it falls back to the deprecated global certs.GetTLSConfig().
 func NewG8eoService(cfg *config.Config, logger *slog.Logger, tlsConfig *certs.TLSConfig) (*G8eoService, error) {
 	service := &G8eoService{
 		config:    cfg,

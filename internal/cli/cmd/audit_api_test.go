@@ -49,7 +49,7 @@ func TestAuditReceiptsCmd_API_MockHappyPath(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
 
 	mockClient := &mockAPIClient{
-		getResp: []byte(`{"receipts":[{"transaction_hash":"abc123","action_type":"file_edit","target_resource":"/path/to/file","status":"approved","executed_at":"2026-01-01T00:00:00Z","l2_valid":true,"l3_valid":false}]}`),
+		getResp: []byte(`{"receipts":[{"transaction_hash":"abc123","action_type":"file_edit","target_resource":"/path/to/file","status":2,"executed_at":"2026-01-01T00:00:00Z","l2_valid":true,"l3_valid":false}]}`),
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -116,7 +116,7 @@ func TestAuditReceiptsCmd_API_GetError(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
 
 	mockClient := &mockAPIClient{
-		getErr: errors.New("network failure"),
+		getErr: errMockNetwork,
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -208,7 +208,7 @@ func TestAuditExportCmd_API_GetError(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
 
 	mockClient := &mockAPIClient{
-		getErr: errors.New("network failure"),
+		getErr: errMockNetwork,
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -281,7 +281,7 @@ func TestAuditReportCmd_API_GetError(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	mockClient := &mockAPIClient{
-		getErr: errors.New("network failure"),
+		getErr: errMockNetwork,
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -373,7 +373,7 @@ func TestAuditEventsCmd_API_GetError(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
 
 	mockClient := &mockAPIClient{
-		getErr: errors.New("network failure"),
+		getErr: errMockNetwork,
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -483,7 +483,7 @@ func TestAuditSummaryCmd_API_GetError(t *testing.T) {
 	cfg := setupAuditAPITestEnv(t)
 
 	mockClient := &mockAPIClient{
-		getErr: errors.New("network failure"),
+		getErr: errMockNetwork,
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }

@@ -29,7 +29,7 @@ func NewTestPubSubClient(t *testing.T) *OperatorPubSubClient {
 	t.Helper()
 	testutil.TestPubSubAvailable(t, "")
 	logger := testutil.NewTestLogger()
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	trustStore := testutil.GetTestTrustStore()
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 	client, err := NewOperatorPubSubClient(testutil.GetTestOperatorDirectURL(), "", logger, tlsConfig)

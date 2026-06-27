@@ -29,9 +29,7 @@ import (
 type passkeyRequestSource int
 
 const (
-	sourceMTLS passkeyRequestSource = iota
-	sourceJWT
-	sourceCLIBootstrap
+	sourceJWT passkeyRequestSource = iota
 	sourceBrowserBootstrap
 )
 
@@ -62,9 +60,7 @@ func (s *PasskeyService) setWebSessionCookie(w http.ResponseWriter, webSession *
 	})
 }
 
-// enforceFirstCred checks whether a new registration is allowed. For CLI bootstrap,
-// an existing mTLS-authenticated session for the same user bypasses the check
-// (re-enrollment scenario). Returns (true, code, msg) to signal forbidden.
+// enforceFirstCred checks whether a new registration is allowed. Returns (true, code, msg) to signal forbidden.
 func (s *PasskeyService) enforceFirstCred(r *http.Request, userID string, cfg passkeyHandlerConfig) (forbidden bool, code int, msg string) {
 	user, err := s.getUser(userID)
 	if err != nil {
@@ -75,13 +71,6 @@ func (s *PasskeyService) enforceFirstCred(r *http.Request, userID string, cfg pa
 	}
 	if len(user.PasskeyCredentials) == 0 {
 		return false, 0, ""
-	}
-	if cfg.source == sourceCLIBootstrap {
-		authenticatedUserID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
-		if authenticatedUserID == userID {
-			return false, 0, ""
-		}
-		return true, http.StatusForbidden, "first-credential registration only; user already has credentials"
 	}
 	return true, http.StatusForbidden, "first-credential registration only; user already has credentials, require step-up via existing passkey or mTLS"
 }

@@ -20,7 +20,11 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// loadConfig is a shared helper that wraps config.Load with the standard
+// configLoad is the underlying config loader function. It is a package-level
+// variable so tests can swap it for a mock that returns a controlled error.
+var configLoad = config.Load
+
+// loadConfig is a shared helper that wraps configLoad with the standard
 // ErrConfigLoadFailed error wrapping. It is used by all CLI commands that
 // need a *config.Config, eliminating the repeated 4-line boilerplate.
 //
@@ -28,7 +32,7 @@ import (
 // can also be passed as the default configLoader in injectable command
 // constructors (e.g. dataUsersCmdWithConfig(loadConfig, ...)).
 func loadConfig(projectRoot string) (*config.Config, error) {
-	cfg, err := config.Load(projectRoot)
+	cfg, err := configLoad(projectRoot)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
 	}

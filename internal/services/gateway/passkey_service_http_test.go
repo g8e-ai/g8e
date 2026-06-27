@@ -46,7 +46,7 @@ func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyService, *WebSessionSer
 }
 
 func TestPasskeyRegisterChallenge(t *testing.T) {
-	cfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
+	cfg := passkeyHandlerConfig{source: sourceJWT, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 
 	tests := []struct {
 		name       string
@@ -133,7 +133,7 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 }
 
 func TestPasskeyAuthenticateChallenge(t *testing.T) {
-	cfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
+	cfg := passkeyHandlerConfig{source: sourceJWT, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 
 	tests := []struct {
 		name       string
@@ -398,7 +398,7 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 	}{
 		{
 			name:      "allows registration when user has no credentials",
-			source:    sourceMTLS,
+			source:    sourceJWT,
 			wantAllow: true,
 		},
 	}
@@ -419,29 +419,6 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 	}
 }
 
-func TestPasskeyRegisterChallengeEnforcesFirstCredCLI(t *testing.T) {
-	// CLI bootstrap: already-authenticated user (same ID) must be allowed even if credentials exist.
-	// We can't easily reach that branch in a unit test without a real credential, so we test
-	// the enforcement path: a non-matching mTLS user is rejected.
-	t.Parallel()
-	svc, _, user := newPasskeyServiceHTTPForTest(t)
-	cfg := passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}
-	handler := svc.RegisterChallenge(cfg)
-
-	// Simulate: user_id in body but context has a DIFFERENT authenticated user.
-	// enforceFirstCred is called, user has 0 creds → should allow regardless.
-	body, _ := json.Marshal(map[string]string{"user_id": user.ID})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/register/challenge", bytes.NewReader(body))
-	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "other-user"))
-	rr := httptest.NewRecorder()
-	handler(rr, req)
-
-	// With no existing creds, first-cred check passes regardless of source.
-	assert.Equal(t, http.StatusOK, rr.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.True(t, resp["success"].(bool))
-}
 
 func TestPasskeyConfigInvariants(t *testing.T) {
 	t.Parallel()
@@ -455,12 +432,8 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 	}
 	productionConfigs := []cfgEntry{
 		{"jitCfg", passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}, true},
-		{"cliBootstrapRegisterCfg", passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}, true},
-		{"cliBootstrapAuthCfg", passkeyHandlerConfig{source: sourceCLIBootstrap}, false},
 		{"browserBootstrapRegisterCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}, true},
 		{"browserBootstrapAuthCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}, false},
-		{"mtlsCfg", passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}, true},
-		{"mtlsAuthVerifyCfg", passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true, createWebSession: true}, false},
 	}
 
 	for _, pc := range productionConfigs {

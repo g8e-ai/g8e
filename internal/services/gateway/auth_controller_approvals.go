@@ -45,16 +45,6 @@ func (c *AuthController) handleApprovalAction(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// If no action specified, treat as direct CLI approval (POST with mtls_cert_fingerprint)
-	if action == "" {
-		if r.Method != http.MethodPost {
-			c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-		c.handleCLIApproval(w, r, txHash, userID)
-		return
-	}
-
 	switch action {
 	case "challenge":
 		c.handleApprovalChallenge(w, r, txHash, userID)
@@ -150,83 +140,61 @@ func (c *AuthController) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 	c.responder.JSON(w, http.StatusOK, receipt)
 }
 
-func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Request, txHash, userID string) {
-	// Retrieve suspended transaction to ensure it exists and belongs to the user
-	suspendedTx, ok, err := c.mcp.GetSuspendedTransaction(r.Context(), txHash)
-	if err != nil || !ok {
-		c.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
+// handleCLIApprovalStatus is an mTLS-authenticated endpoint that returns the current
+// status of a suspended transaction. The CLI polls this endpoint after opening the
+// browser approval page to detect when the user has completed the WebAuthn ceremony.
+func (c *AuthController) handleCLIApprovalStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	// Verify the logged-in user is authorized to approve this transaction
+	// Path format: /api/v1/approvals/status/{txHash}
+	txHash := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovalsCLIStatus)
+	if txHash == "" {
+		c.responder.Error(w, http.StatusBadRequest, "transaction hash required")
+		return
+	}
+
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		c.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	suspendedTx, found, err := c.mcp.GetSuspendedTransaction(r.Context(), txHash)
+	if err != nil {
+		c.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
+		c.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
+		return
+	}
+
+	if !found {
+		c.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
+			Status: "expired_or_not_found",
+		})
+		return
+	}
+
 	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
 		c.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
+	if suspendedTx.Approved {
+		c.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
+			Status:   "approved",
+			TxHash:   txHash,
+			ToolName: suspendedTx.ToolName,
+		})
 		return
 	}
 
-	var req struct {
-		CliSignature        string `json:"cli_signature"`
-		MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
-		ApprovalPublicKey   string `json:"approval_public_key"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
-		return
-	}
-
-	if req.CliSignature == "" {
-		c.responder.Error(w, http.StatusBadRequest, "cli_signature required")
-		return
-	}
-
-	if req.MtlsCertFingerprint == "" {
-		c.responder.Error(w, http.StatusBadRequest, "mtls_cert_fingerprint required")
-		return
-	}
-
-	if req.ApprovalPublicKey == "" {
-		c.responder.Error(w, http.StatusBadRequest, "approval_public_key required")
-		return
-	}
-
-	// Persist the approval with signature before resuming
-	approvalProof := models.ApprovalProof{
-		ApprovedBy:        userID,
-		CliSignature:      req.CliSignature,
-		CertFingerprint:   req.MtlsCertFingerprint,
-		ApprovalPublicKey: req.ApprovalPublicKey,
-	}
-	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), txHash, approvalProof); err != nil {
-		c.logger.Error("Failed to approve transaction", "error", err, "txHash", txHash, "userID", userID)
-		c.responder.Error(w, http.StatusInternalServerError, "failed to approve transaction")
-		return
-	}
-
-	// Create L3 proof with mtls_cert_fingerprint and cli_signature for CLI approval
-	proof := &commonv1.L3Proof{
-		MtlsCertFingerprint: req.MtlsCertFingerprint,
-		CliSignature:        req.CliSignature,
-	}
-
-	// Resume the transaction with the proof
-	receipt, err := c.mcp.ResumeWithL3Proof(r.Context(), txHash, userID, proof)
-	if err != nil {
-		// If it's still a verification failure, return the receipt if available
-		if receipt != nil {
-			c.responder.JSON(w, http.StatusForbidden, receipt)
-			return
-		}
-		c.responder.Error(w, http.StatusForbidden, err.Error())
-		return
-	}
-
-	c.responder.JSON(w, http.StatusOK, receipt)
+	c.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
+		Status:   "pending",
+		TxHash:   txHash,
+		ToolName: suspendedTx.ToolName,
+	})
 }
 
 func (c *AuthController) handleApprovalPage(w http.ResponseWriter, r *http.Request) {

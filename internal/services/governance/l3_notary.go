@@ -51,12 +51,13 @@ type CLISessionVerifier interface {
 }
 
 // outboundL3Notary provides L3 verification for CLI-based approval. It supports three modes:
-// - Outbound mode: suspended transaction + signature verification only
-// - Gateway CLI mode: additional CLI session, user active, and certificate revocation checks
-// - Gateway passkey mode: WebAuthn passkey verification for web sessions
+// - Outbound mode: suspended transaction + signature verification only (no passkeyVerifier)
+// - Gateway CLI mode: passkey authorization (required) + CLI session transport authentication
+// - Gateway browser mode: passkey authorization only (no mTLS layer)
 //
-// When a passkeyVerifier is configured, VerifyL3Proof dispatches based on proof type:
-// proofs with mtls_cert_fingerprint use the CLI path; all others use the passkey verifier.
+// When a passkeyVerifier is configured (gateway mode), passkey authorization is always
+// required. CLI callers additionally present mTLS fields for transport-layer authentication.
+// This is a layered model: passkey = authorization (human presence), mTLS = transport auth.
 type outboundL3Notary struct {
 	suspendedStore  storage.SuspendedTransactionStore
 	cliVerifier     CLISessionVerifier
@@ -83,9 +84,10 @@ func NewCLIL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifie
 	}
 }
 
-// NewGatewayL3Notary creates a unified L3 notary that handles both CLI (mTLS) and
-// passkey (WebAuthn) proofs. Proofs with mtls_cert_fingerprint use the CLI verification
-// path; all others delegate to the passkey verifier.
+// NewGatewayL3Notary creates a unified L3 notary that requires passkey authorization
+// for all proofs (browser and CLI). CLI callers additionally present mTLS fields for
+// transport-layer authentication. In outbound mode (no passkeyVerifier), only the
+// Ed25519 signature and suspended transaction checks are performed.
 func NewGatewayL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVerifier CLISessionVerifier, passkeyVerifier L3Notary, logger *slog.Logger) L3Notary {
 	return &outboundL3Notary{
 		suspendedStore:  suspendedStore,
@@ -95,27 +97,48 @@ func NewGatewayL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVer
 	}
 }
 
-// VerifyL3Proof verifies an L3 proof for CLI-based approval.
-// The L3 proof is verified by checking that:
-// 1. (Gateway mode) The user is active, CLI session is valid, and certificate is not revoked
-// 2. The transaction exists in the suspended store and is marked as approved
-// 3. The proof contains a valid Ed25519 signature over the transaction hash
-// 4. The signature was created by the expected certificate (fingerprint match)
-// 5. The approval has not expired (30 minute window)
+// VerifyL3Proof verifies an L3 proof using a layered authorization model.
 //
-// In outbound mode (no cliVerifier), only checks 2-5 are performed.
-// In gateway mode (with cliVerifier), all checks are performed.
+// Gateway mode (passkeyVerifier != nil):
+// 1. Passkey authorization is required — proofs without a credential_id are rejected
+//    with ErrPasskeyProofRequired. The passkey verifier validates the WebAuthn assertion.
+// 2. CLI mTLS session authentication — if the proof includes mtls_cert_fingerprint
+//    (CLI caller), the CLI session is verified as an additional transport-auth layer.
+//
+// Outbound mode (passkeyVerifier == nil):
+// 1. The transaction exists in the suspended store and is marked as approved
+// 2. The proof contains a valid Ed25519 signature over the transaction hash
+// 3. The signature was created by the expected certificate (fingerprint match)
+// 4. The approval has not expired (30 minute window)
 func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactionHash, cliSessionID string, proof *commonv1.L3Proof) (bool, error) {
 	if proof == nil {
 		return false, constants.ErrGatewayL3ProofRequired
 	}
 
-	// Dispatch to passkey verifier for WebAuthn proofs (no mtls_cert_fingerprint)
-	if v.passkeyVerifier != nil && proof.MtlsCertFingerprint == "" {
-		return v.passkeyVerifier.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
+	// Gateway mode: passkey authorization is always required (Layer 1)
+	if v.passkeyVerifier != nil {
+		if proof.CredentialId == "" {
+			return false, constants.ErrPasskeyProofRequired
+		}
+		ok, err := v.passkeyVerifier.VerifyL3Proof(ctx, userID, transactionHash, cliSessionID, proof)
+		if err != nil || !ok {
+			return false, err
+		}
+
+		// Layer 2: CLI mTLS session authentication (additional check for CLI callers)
+		if proof.MtlsCertFingerprint != "" && v.cliVerifier != nil {
+			if err := v.cliVerifier.VerifyCLISession(userID, cliSessionID, proof.MtlsCertFingerprint); err != nil {
+				if errors.Is(err, ErrCLISessionDenied) {
+					return false, nil
+				}
+				return false, err
+			}
+		}
+
+		return true, nil
 	}
 
-	// CLI path: validate required inputs
+	// Outbound mode: CLI path — validate required inputs
 	if userID == "" {
 		return false, constants.ErrUserIDRequired
 	}
@@ -123,7 +146,7 @@ func (v *outboundL3Notary) VerifyL3Proof(ctx context.Context, userID, transactio
 		return false, constants.ErrCLIL3TransactionHashRequired
 	}
 
-	// Gateway mode: perform CLI session, user active, and cert revocation checks
+	// CLI mode (NewCLIL3Notary): perform CLI session, user active, and cert revocation checks
 	if v.cliVerifier != nil {
 		if proof.MtlsCertFingerprint == "" {
 			return false, constants.ErrCLIL3CertFingerprintRequired

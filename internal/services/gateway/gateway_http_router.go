@@ -67,8 +67,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	registerMCPRoutes(mux, mcpHandler)
 
 	jitCfg := passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
-	cliBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}
-	cliBootstrapAuthCfg := passkeyHandlerConfig{source: sourceCLIBootstrap}
 	browserBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}
 	browserBootstrapAuthCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}
 
@@ -82,65 +80,18 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 		mux.Handle(constants.APIPaths.AuthPasskeysJITRegisterVerify, h.auth.JWTAuthMiddleware(jwtPasskeyMux))
 	}
 
-	// Passkey bootstrap and console routes (public, no auth required).
-	// bootstrap/* — CLI-direct passkey registration and authentication (no web session).
+	// Passkey console routes (public, no auth required).
 	// console/*  — Browser-facing passkey registration and authentication (creates web session, sets cookie).
 	passkeyMux := http.NewServeMux()
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysBootstrapRegisterChallenge, h.passkey.RegisterChallenge(cliBootstrapRegisterCfg))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysBootstrapRegisterVerify, h.passkey.RegisterVerify(cliBootstrapRegisterCfg))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge, h.passkey.AuthenticateChallenge(cliBootstrapAuthCfg))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify, h.passkey.AuthenticateVerify(cliBootstrapAuthCfg))
 	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleRegisterChallenge, h.passkey.RegisterChallenge(browserBootstrapRegisterCfg))
 	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleRegisterVerify, h.passkey.RegisterVerify(browserBootstrapRegisterCfg))
 	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge, h.passkey.AuthenticateChallenge(browserBootstrapAuthCfg))
 	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, h.passkey.AuthenticateVerify(browserBootstrapAuthCfg))
 
-	// Deprecated alias routes (one-minor-version transition).
-	// Old: cli-register/*, cli/authenticate/*, cli-browser-register/*, browser/authenticate/*
-	// New: bootstrap/register/*, bootstrap/authenticate/*, console/register/*, console/authenticate/*
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterChallenge,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, constants.APIPaths.AuthPasskeysBootstrapRegisterChallenge,
-			h.passkey.RegisterChallenge(cliBootstrapRegisterCfg)))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIRegisterVerify,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysCLIRegisterVerify, constants.APIPaths.AuthPasskeysBootstrapRegisterVerify,
-			h.passkey.RegisterVerify(cliBootstrapRegisterCfg)))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge,
-			h.passkey.AuthenticateChallenge(cliBootstrapAuthCfg)))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify,
-			h.passkey.AuthenticateVerify(cliBootstrapAuthCfg)))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge, constants.APIPaths.AuthPasskeysConsoleRegisterChallenge,
-			h.passkey.RegisterChallenge(browserBootstrapRegisterCfg)))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify, constants.APIPaths.AuthPasskeysConsoleRegisterVerify,
-			h.passkey.RegisterVerify(browserBootstrapRegisterCfg)))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge, constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge,
-			h.passkey.AuthenticateChallenge(browserBootstrapAuthCfg)))
-	passkeyMux.HandleFunc(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify,
-		h.deprecatedPasskeyAlias(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify, constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify,
-			h.passkey.AuthenticateVerify(browserBootstrapAuthCfg)))
-
-	corsCLIPasskeyMux := h.corsMiddlewareForCLIPasskey(passkeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysBootstrapRegisterChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysBootstrapRegisterVerify, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysConsoleRegisterChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysConsoleRegisterVerify, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, corsCLIPasskeyMux)
-	// Deprecated alias route registrations
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIRegisterVerify, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge, corsCLIPasskeyMux)
-	mux.Handle(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify, corsCLIPasskeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysConsoleRegisterChallenge, passkeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysConsoleRegisterVerify, passkeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge, passkeyMux)
+	mux.Handle(constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify, passkeyMux)
 
 	// mTLS-only routes (merged from buildRouter)
 	mux.HandleFunc(constants.APIPaths.DataSettings, h.dbController.handleDataSettings)
@@ -191,14 +142,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// User management routes (require mTLS)
 	mux.HandleFunc(constants.APIPaths.Users, h.authController.handleUsers)
 
-	mtlsCfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
-	mtlsAuthVerifyCfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true, createWebSession: true}
-
-	// Passkey / L3 Brokerage Routes (require mTLS) - register/challenge/verify variants
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterChallenge, h.passkey.RegisterChallenge(mtlsCfg))
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysRegisterVerify, h.passkey.RegisterVerify(mtlsCfg))
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateChallenge, h.passkey.AuthenticateChallenge(mtlsCfg))
-	mux.HandleFunc(constants.APIPaths.AuthPasskeysAuthenticateVerify, h.passkey.AuthenticateVerify(mtlsAuthVerifyCfg))
+	// Passkey CLI status (require mTLS)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeysCLIStatus, h.passkey.CLIStatus)
 
 	// Browser-facing data routes (require web session cookie)
@@ -208,6 +152,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// OOB Approval UI for suspended MCP/A2A transactions
 	mux.HandleFunc(constants.APIPaths.ApprovePage, h.authController.handleApprovalPage)
+	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.authController.handleCLIApprovalStatus)
 	authedMux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.authController.handleApprovalAction))
 	authedMux.HandleFunc(constants.APIPaths.Approvals, h.authController.handleListSuspendedTransactions)
 

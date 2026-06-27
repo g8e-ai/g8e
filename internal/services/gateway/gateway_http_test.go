@@ -25,7 +25,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math/big"
 	"net"
 	"net/http"
@@ -44,56 +43,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/protocol"
 )
-
-func TestIsLocalNetworkOrigin(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		origin   string
-		expected bool
-	}{
-		// Loopback addresses
-		{"http://localhost:8080", true},
-		{"http://localhost", true},
-		{"https://localhost:443", true},
-		{"http://127.0.0.1:8080", true},
-		{"http://127.0.0.1", true},
-		{"http://127.0.0.2:8080", true},
-		{"http://[::1]:8080", true},
-		{"http://[::1]", true},
-		// Private network IPs (RFC 1918)
-		{"http://192.168.1.1:8080", true},
-		{"http://192.168.0.1:8080", true},
-		{"http://192.168.255.255:8080", true},
-		{"http://10.0.0.1:8080", true},
-		{"http://10.255.255.255:8080", true},
-		{"http://172.16.0.1:8080", true},
-		{"http://172.31.255.255:8080", true},
-		{"http://172.20.0.1:8080", true},
-		// Public IPs should be rejected
-		{"http://8.8.8.8:8080", false},
-		{"http://1.1.1.1:8080", false},
-		{"http://172.32.0.1:8080", false},     // Outside 172.16.0.0/12
-		{"http://172.15.255.255:8080", false}, // Outside 172.16.0.0/12
-		{"http://192.169.0.1:8080", false},    // Outside 192.168.0.0/16
-		{"http://11.0.0.1:8080", false},       // Outside 10.0.0.0/8
-		// Domain names should be rejected
-		{"http://example.com:8080", false},
-		{"http://google.com:8080", false},
-		// Invalid URLs
-		{"invalid-url", false},
-		{"", false},
-		{"not-a-url", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.origin, func(t *testing.T) {
-			t.Parallel()
-			result := isLocalNetworkOrigin(tc.origin)
-			assert.Equal(t, tc.expected, result, "Origin %s should return %v", tc.origin, tc.expected)
-		})
-	}
-}
 
 func TestIsPrivateIP(t *testing.T) {
 	t.Parallel()
@@ -689,22 +638,7 @@ func TestBuildPublicRouter(t *testing.T) {
 	assert.Equal(t, http.StatusFound, rr.Code, "Landing page should redirect with 302")
 	assert.Equal(t, "/console/", rr.Header().Get("Location"), "Landing page should redirect directly to /console/")
 
-	// 5. New bootstrap/* routes bypass mTLS (public, CLI bootstrap)
-	bootstrapPaths := []string{
-		constants.APIPaths.AuthPasskeysBootstrapRegisterChallenge,
-		constants.APIPaths.AuthPasskeysBootstrapRegisterVerify,
-		constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify,
-	}
-	for _, path := range bootstrapPaths {
-		req = httptest.NewRequest(http.MethodPost, path, nil)
-		rr = httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
-		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
-		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should bypass mTLS check", path)
-	}
-
-	// 6. New console/* routes bypass mTLS (public, browser bootstrap)
+	// 5. console/* routes bypass mTLS (public, browser bootstrap)
 	consolePaths := []string{
 		constants.APIPaths.AuthPasskeysConsoleRegisterChallenge,
 		constants.APIPaths.AuthPasskeysConsoleRegisterVerify,
@@ -719,31 +653,9 @@ func TestBuildPublicRouter(t *testing.T) {
 		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should bypass mTLS check", path)
 	}
 
-	// 7. Deprecated alias routes still function and bypass mTLS
-	deprecatedAliasPaths := []string{
-		constants.APIPaths.AuthPasskeysCLIRegisterChallenge,
-		constants.APIPaths.AuthPasskeysCLIRegisterVerify,
-		constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysCLIAuthenticateVerify,
-		constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge,
-		constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify,
-		constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify,
-	}
-	for _, path := range deprecatedAliasPaths {
-		req = httptest.NewRequest(http.MethodPost, path, nil)
-		rr = httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
-		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Deprecated alias %s should be registered", path)
-		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Deprecated alias %s should bypass mTLS check", path)
-	}
-
-	// 8. mTLS-protected passkey routes must NOT bypass mTLS
+	// 6. mTLS-protected passkey CLI status must NOT bypass mTLS
 	mtlsPasskeyPaths := []string{
-		constants.APIPaths.AuthPasskeysRegisterChallenge,
-		constants.APIPaths.AuthPasskeysRegisterVerify,
-		constants.APIPaths.AuthPasskeysAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysAuthenticateVerify,
+		constants.APIPaths.AuthPasskeysCLIStatus,
 	}
 	for _, path := range mtlsPasskeyPaths {
 		req = httptest.NewRequest(http.MethodPost, path, nil)
@@ -752,37 +664,6 @@ func TestBuildPublicRouter(t *testing.T) {
 		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
 		assert.Contains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should be mTLS-gated", path)
 	}
-}
-
-// TestDeprecatedPasskeyAlias verifies that the deprecatedPasskeyAlias middleware
-// logs a Warn-level message with old_path and new_path fields, then delegates
-// to the wrapped handler.
-func TestDeprecatedPasskeyAlias(t *testing.T) {
-	t.Parallel()
-
-	var logBuf bytes.Buffer
-	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
-	h := &HTTPHandler{logger: logger}
-
-	called := false
-	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called = true
-		w.WriteHeader(http.StatusOK)
-	})
-
-	handler := h.deprecatedPasskeyAlias("/old/path", "/new/path", wrapped)
-
-	req := httptest.NewRequest(http.MethodPost, "/old/path", nil)
-	rr := httptest.NewRecorder()
-	handler(rr, req)
-
-	assert.True(t, called, "wrapped handler should be called")
-	assert.Equal(t, http.StatusOK, rr.Code, "response should pass through from wrapped handler")
-
-	logOutput := logBuf.String()
-	assert.Contains(t, logOutput, "deprecated passkey route alias used", "log should contain deprecation message")
-	assert.Contains(t, logOutput, "old_path=/old/path", "log should contain old_path")
-	assert.Contains(t, logOutput, "new_path=/new/path", "log should contain new_path")
 }
 
 type errorReader struct{}
@@ -1080,139 +961,6 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 		h.handleInternalSSEStream(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
-	})
-}
-
-func TestHTTPHandler_corsMiddlewareForCLIPasskey(t *testing.T) {
-	t.Parallel()
-	h, _ := setupTestHTTPHandler(t)
-
-	t.Run("No origin header - passes through", func(t *testing.T) {
-		t.Parallel()
-		var nextCalled bool
-		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("next"))
-		})
-		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
-
-		req := httptest.NewRequest(http.MethodPost, "/test", nil)
-		rr := httptest.NewRecorder()
-
-		middleware.ServeHTTP(rr, req)
-
-		assert.True(t, nextCalled, "next handler should be called")
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Empty(t, rr.Header().Get("Access-Control-Allow-Origin"))
-	})
-
-	t.Run("Local network origin - sets CORS headers", func(t *testing.T) {
-		t.Parallel()
-		var nextCalled bool
-		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("next"))
-		})
-		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
-
-		req := httptest.NewRequest(http.MethodPost, "/test", nil)
-		req.Header.Set("Origin", "http://localhost:8080")
-		rr := httptest.NewRecorder()
-
-		middleware.ServeHTTP(rr, req)
-
-		assert.True(t, nextCalled, "next handler should be called")
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "http://localhost:8080", rr.Header().Get("Access-Control-Allow-Origin"))
-		assert.Equal(t, "true", rr.Header().Get("Access-Control-Allow-Credentials"))
-		assert.Equal(t, "POST, OPTIONS", rr.Header().Get("Access-Control-Allow-Methods"))
-		assert.Equal(t, "Content-Type, Authorization", rr.Header().Get("Access-Control-Allow-Headers"))
-	})
-
-	t.Run("Private IP origin - sets CORS headers", func(t *testing.T) {
-		t.Parallel()
-		var nextCalled bool
-		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("next"))
-		})
-		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
-
-		req := httptest.NewRequest(http.MethodPost, "/test", nil)
-		req.Header.Set("Origin", "http://192.168.1.1:8080")
-		rr := httptest.NewRecorder()
-
-		middleware.ServeHTTP(rr, req)
-
-		assert.True(t, nextCalled, "next handler should be called")
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "http://192.168.1.1:8080", rr.Header().Get("Access-Control-Allow-Origin"))
-	})
-
-	t.Run("Non-local origin - rejected", func(t *testing.T) {
-		t.Parallel()
-		var nextCalled bool
-		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("next"))
-		})
-		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
-
-		req := httptest.NewRequest(http.MethodPost, "/test", nil)
-		req.Header.Set("Origin", "http://example.com:8080")
-		rr := httptest.NewRecorder()
-
-		middleware.ServeHTTP(rr, req)
-
-		assert.False(t, nextCalled, "next handler should not be called")
-		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.JSONEq(t, `{"error":"origin not allowed"}`, rr.Body.String())
-	})
-
-	t.Run("OPTIONS request - returns 204", func(t *testing.T) {
-		t.Parallel()
-		var nextCalled bool
-		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("next"))
-		})
-		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
-
-		req := httptest.NewRequest(http.MethodOptions, "/test", nil)
-		req.Header.Set("Origin", "http://localhost:8080")
-		rr := httptest.NewRecorder()
-
-		middleware.ServeHTTP(rr, req)
-
-		assert.False(t, nextCalled, "next handler should not be called for OPTIONS")
-		assert.Equal(t, http.StatusNoContent, rr.Code)
-		assert.Equal(t, "http://localhost:8080", rr.Header().Get("Access-Control-Allow-Origin"))
-	})
-
-	t.Run("127.0.0.1 origin - sets CORS headers", func(t *testing.T) {
-		t.Parallel()
-		var nextCalled bool
-		nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			nextCalled = true
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("next"))
-		})
-		middleware := h.corsMiddlewareForCLIPasskey(nextHandler)
-
-		req := httptest.NewRequest(http.MethodPost, "/test", nil)
-		req.Header.Set("Origin", "http://127.0.0.1:8080")
-		rr := httptest.NewRecorder()
-
-		middleware.ServeHTTP(rr, req)
-
-		assert.True(t, nextCalled, "next handler should be called")
-		assert.Equal(t, http.StatusOK, rr.Code)
-		assert.Equal(t, "http://127.0.0.1:8080", rr.Header().Get("Access-Control-Allow-Origin"))
 	})
 }
 

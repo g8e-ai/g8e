@@ -39,7 +39,7 @@ import (
 
 func newTestTLSConfig(t *testing.T) *certs.TLSConfig {
 	t.Helper()
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	trustStore := testutil.GetTestTrustStore()
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	return certs.NewTLSConfig(trustStore, clientIdentity)
 }

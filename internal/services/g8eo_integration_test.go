@@ -35,7 +35,7 @@ func TestG8eoService_Start_BootstrapFailure(t *testing.T) {
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	trustStore := testutil.GetTestTrustStore()
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsCfg := certs.NewTLSConfig(trustStore, clientIdentity)
 

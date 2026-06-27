@@ -327,6 +327,14 @@ type SuspendedTxResponse struct {
 	OperatorID      string    `json:"operator_id"`
 }
 
+// ApprovalStatusResponse is the typed response for GET /api/v1/approvals/status/{txHash}.
+// The CLI polls this mTLS-authenticated endpoint after opening the browser approval page.
+type ApprovalStatusResponse struct {
+	Status   string `json:"status"`
+	TxHash   string `json:"tx_hash,omitempty"`
+	ToolName string `json:"tool_name,omitempty"`
+}
+
 // BootstrapResponse is the typed response for POST /api/auth/bootstrap.
 type BootstrapResponse struct {
 	Success           bool            `json:"success"`

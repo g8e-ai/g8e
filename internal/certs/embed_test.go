@@ -52,13 +52,6 @@ func generateTestCAPEM(t *testing.T) []byte {
 	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 }
 
-// saveAndRestoreCA saves the current CA value and restores it after the test.
-func saveAndRestoreCA(t *testing.T) {
-	t.Helper()
-	original := GetRawCA()
-	t.Cleanup(func() { SetCA(original) })
-}
-
 // Tests for new DI types
 
 func TestTrustStore_GetRawCA_ReturnsStoredValue(t *testing.T) {
@@ -198,94 +191,4 @@ func TestTLSConfig_GetTLSConfig_WithoutClientCert(t *testing.T) {
 	cfg, err := tc.GetTLSConfig()
 	require.NoError(t, err)
 	assert.Empty(t, cfg.Certificates)
-}
-
-// Tests for legacy global functions (deprecated, kept for migration compatibility)
-
-func TestGetRawCA_ReturnsStoredValue(t *testing.T) {
-	saveAndRestoreCA(t)
-	SetCA(nil)
-	assert.Nil(t, GetRawCA())
-}
-
-func TestSetCA_StoresBytes(t *testing.T) {
-	saveAndRestoreCA(t)
-	pem := []byte("fake-pem-data")
-	SetCA(pem)
-	assert.Equal(t, pem, GetRawCA())
-}
-
-func TestSetCA_OverwritesPreviousValue(t *testing.T) {
-	saveAndRestoreCA(t)
-	SetCA([]byte("first"))
-	SetCA([]byte("second"))
-	assert.Equal(t, []byte("second"), GetRawCA())
-}
-
-func TestSetCA_NilClearsValue(t *testing.T) {
-	saveAndRestoreCA(t)
-	SetCA([]byte("some-ca"))
-	SetCA(nil)
-	assert.Nil(t, GetRawCA())
-}
-
-func TestGetServerCARootCAs_WhenCANotSet(t *testing.T) {
-	saveAndRestoreCA(t)
-	SetCA(nil)
-	pool, err := GetServerCARootCAs()
-	assert.Nil(t, pool)
-	require.Error(t, err)
-	assert.Error(t, err)
-}
-
-func TestGetServerCARootCAs_InvalidPEM(t *testing.T) {
-	saveAndRestoreCA(t)
-	SetCA([]byte("not-a-valid-pem-block"))
-	pool, err := GetServerCARootCAs()
-	assert.Nil(t, pool)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to parse")
-}
-
-func TestGetServerCARootCAs_ValidPEM(t *testing.T) {
-	saveAndRestoreCA(t)
-	caBytes := generateTestCAPEM(t)
-	SetCA(caBytes)
-
-	pool, err := GetServerCARootCAs()
-	require.NoError(t, err)
-	assert.NotNil(t, pool)
-}
-
-func TestGetTLSConfig_WhenCANotSet(t *testing.T) {
-	saveAndRestoreCA(t)
-	SetCA(nil)
-	cfg, err := GetTLSConfig()
-	assert.Nil(t, cfg)
-	require.Error(t, err)
-	assert.Error(t, err)
-}
-
-func TestGetTLSConfig_InvalidPEM(t *testing.T) {
-	saveAndRestoreCA(t)
-	SetCA([]byte("not-pem"))
-	cfg, err := GetTLSConfig()
-	assert.Nil(t, cfg)
-	require.Error(t, err)
-}
-
-func TestGetTLSConfig_MinVersionAndCurves(t *testing.T) {
-	saveAndRestoreCA(t)
-	caBytes := generateTestCAPEM(t)
-	SetCA(caBytes)
-
-	cfg, err := GetTLSConfig()
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
-
-	assert.Equal(t, uint16(tls.VersionTLS13), cfg.MinVersion)
-	assert.NotNil(t, cfg.RootCAs)
-	assert.Contains(t, cfg.CurvePreferences, tls.X25519)
-	assert.Contains(t, cfg.CurvePreferences, tls.CurveP384)
-	assert.Contains(t, cfg.CurvePreferences, tls.CurveP256)
 }

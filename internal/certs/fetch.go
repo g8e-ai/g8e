@@ -79,20 +79,6 @@ func FetchTrustBundle(ctx context.Context, caURL string, caFingerprint string) (
 	return pem, nil
 }
 
-// FetchAndSetCA fetches the hub trust bundle and stores it via SetCA for use by
-// all subsequent TLS connections.
-//
-// Deprecated: Use FetchTrustBundle together with TrustStore.SetCA instead.
-// This function mutates global state and is retained only for backward compatibility.
-func FetchAndSetCA(ctx context.Context, caURL string, caFingerprint string) error {
-	pem, err := FetchTrustBundle(ctx, caURL, caFingerprint)
-	if err != nil {
-		return err
-	}
-	SetCA(pem)
-	return nil
-}
-
 // verifyCAFingerprint verifies that a PEM-encoded CA bundle matches the expected fingerprint.
 // This is a copy of the auth package function to avoid circular dependencies.
 func verifyCAFingerprint(caPEM []byte, expectedFingerprint string) error {

@@ -61,7 +61,7 @@ func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -175,7 +175,7 @@ func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -239,7 +239,7 @@ func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -327,7 +327,7 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			// Validate limit before network calls
@@ -447,7 +447,7 @@ func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error)
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)

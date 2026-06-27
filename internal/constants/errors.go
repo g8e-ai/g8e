@@ -435,9 +435,7 @@ var (
 	// Passkey bootstrap errors
 	ErrPasskeyRegistrationTimedOut = errors.New("passkey registration timed out")
 	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")
-	ErrPasskeyRequiresBrowser      = errors.New("direct passkey registration requires browser interaction; use RegisterPasskeyViaLocalhost instead")
 	ErrGetCurrentUser              = errors.New("failed to get current user")
-	ErrPasskeyBootstrapServerStart = errors.New("failed to start passkey bootstrap server")
 	ErrPasskeyStatusUnauthorized   = errors.New("passkey status endpoint returned unauthorized")
 
 	// Passkey credential validation errors
@@ -659,6 +657,7 @@ var (
 	ErrCLIL3TransactionNotApproved        = errors.New("suspended transaction is not approved")
 	ErrCLIL3ApprovalExpired               = errors.New("CLI L3 approval has expired")
 	ErrCLIL3UserServiceNotConfigured      = errors.New("user service not configured for CLI L3 verification")
+	ErrPasskeyProofRequired               = errors.New("passkey proof required for L3 authorization")
 
 	// File edit service errors
 	ErrFileEditUnsupportedOperation   = errors.New("unsupported file operation")

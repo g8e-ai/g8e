@@ -16,7 +16,6 @@
 package gateway
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -45,7 +44,7 @@ func TestHandleApprovalAction(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), constants.ErrGatewayUnauthorized.Error())
 	})
 
-	t.Run("Failure - transaction not found", func(t *testing.T) {
+	t.Run("Failure - unknown action returns 400", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
@@ -57,8 +56,8 @@ func TestHandleApprovalAction(t *testing.T) {
 
 		c.handleApprovalAction(rr, req)
 
-		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Contains(t, rr.Body.String(), "unknown action")
 	})
 }
 
@@ -174,30 +173,63 @@ func TestHandleApprovalVerify(t *testing.T) {
 	})
 }
 
-func TestHandleCLIApproval(t *testing.T) {
-	t.Run("Failure - transaction not found", func(t *testing.T) {
+func TestHandleCLIApprovalStatus(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/status/txhash123", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIApprovalStatus(rr, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+	})
+
+	t.Run("Failure - missing transaction hash", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 
-		body := map[string]string{
-			"cli_signature":         "sig123",
-			"mtls_cert_fingerprint": "fp123",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/nonexistent", bytes.NewReader(b))
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/status/", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
-		c.handleCLIApproval(rr, req, "nonexistent", user.ID)
+		c.handleCLIApprovalStatus(rr, req)
 
-		assert.Equal(t, http.StatusNotFound, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrGatewayTransactionNotFound.Error())
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
-	t.Run("Failure - missing cli_signature", func(t *testing.T) {
+	t.Run("Failure - unauthorized", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/status/txhash123", nil)
+		rr := httptest.NewRecorder()
+
+		c.handleCLIApprovalStatus(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+
+	t.Run("Success - expired or not found", func(t *testing.T) {
+		t.Parallel()
+		c, _ := setupTestAuthController(t)
+		user, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/status/nonexistent", nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+
+		c.handleCLIApprovalStatus(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Equal(t, "expired_or_not_found", resp["status"])
+	})
+
+	t.Run("Success - pending", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
@@ -211,84 +243,46 @@ func TestHandleCLIApproval(t *testing.T) {
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
+		require.NoError(t, c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx))
 
-		body := map[string]string{
-			"mtls_cert_fingerprint": "fp123",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/status/"+txHash, nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 
-		c.handleCLIApproval(rr, req, txHash, user.ID)
+		c.handleCLIApprovalStatus(rr, req)
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrGatewayCLISignatureRequired.Error())
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp map[string]interface{}
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Equal(t, "pending", resp["status"])
+		assert.Equal(t, txHash, resp["tx_hash"])
 	})
 
-	t.Run("Failure - missing mtls_cert_fingerprint", func(t *testing.T) {
+	t.Run("Failure - transaction belongs to another user", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		user, err := c.userSvc.CreateUser()
+		user1, err := c.userSvc.CreateUser()
+		require.NoError(t, err)
+		user2, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 
 		txHash := "txhash123"
 		suspendedTx := &models.SuspendedTransaction{
 			TransactionHash: txHash,
-			UserID:          user.ID,
+			UserID:          user1.ID,
 			ToolName:        "test-tool",
 			ToolArguments:   []byte("{}"),
 			ExpiresAt:       time.Now().Add(5 * time.Minute),
 		}
-		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
+		require.NoError(t, c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx))
 
-		body := map[string]string{
-			"cli_signature": "sig123",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/status/"+txHash, nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user2.ID))
 		rr := httptest.NewRecorder()
 
-		c.handleCLIApproval(rr, req, txHash, user.ID)
+		c.handleCLIApprovalStatus(rr, req)
 
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrGatewayMTLSCertFingerprintRequired.Error())
-	})
-
-	t.Run("Failure - missing approval_public_key", func(t *testing.T) {
-		t.Parallel()
-		c, _ := setupTestAuthController(t)
-		user, err := c.userSvc.CreateUser()
-		require.NoError(t, err)
-
-		txHash := "txhash123"
-		suspendedTx := &models.SuspendedTransaction{
-			TransactionHash: txHash,
-			UserID:          user.ID,
-			ToolName:        "test-tool",
-			ToolArguments:   []byte("{}"),
-			ExpiresAt:       time.Now().Add(5 * time.Minute),
-		}
-		c.suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx)
-
-		body := map[string]string{
-			"cli_signature":         "sig123",
-			"mtls_cert_fingerprint": "fp123",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash, bytes.NewReader(b))
-		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
-		rr := httptest.NewRecorder()
-
-		c.handleCLIApproval(rr, req, txHash, user.ID)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-		assert.Contains(t, rr.Body.String(), "approval_public_key required")
+		assert.Equal(t, http.StatusForbidden, rr.Code)
 	})
 }
 

@@ -39,10 +39,6 @@ func TestCollectionName(t *testing.T) {
 	}
 }
 
-func TestEnvVar(t *testing.T) {
-	// g8e uses ZERO environment variables - this test is deprecated
-	t.Skip("g8e uses ZERO environment variables")
-}
 
 func TestDocumentID(t *testing.T) {
 	tests := []struct {

@@ -16,7 +16,6 @@ package gateway
 import (
 	"net"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -62,46 +61,6 @@ func (h *HTTPHandler) rateLimitMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// corsMiddlewareForCLIPasskey is a more permissive CORS middleware that allows
-// local network IPs to support port forwarding scenarios for CLI passkey bootstrap.
-func (h *HTTPHandler) corsMiddlewareForCLIPasskey(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			// Security: validate origin is loopback or local network IP for CLI bootstrap
-			// This allows port forwarding scenarios while still preventing external CSRF attacks
-			if !isLocalNetworkOrigin(origin) {
-				h.logger.Warn("CORS request rejected: non-local network Origin", "origin", origin, "path", r.URL.Path)
-				h.responder.Error(w, http.StatusForbidden, "origin not allowed")
-				return
-			}
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		}
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-// deprecatedPasskeyAlias wraps a passkey handler with a deprecation warning log.
-// Old route aliases use this during the one-minor-version transition window.
-func (h *HTTPHandler) deprecatedPasskeyAlias(oldPath, newPath string, handler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		h.logger.Warn("deprecated passkey route alias used",
-			"old_path", oldPath,
-			"new_path", newPath,
-			"method", r.Method,
-			"remote_addr", r.RemoteAddr,
-		)
-		handler(w, r)
-	}
-}
-
 // pathTraversalGuard rejects any request whose raw URL path contains a ".."
 // segment before Go's ServeMux can normalize the path and issue a 301 redirect.
 func (h *HTTPHandler) pathTraversalGuard(next http.Handler) http.Handler {
@@ -121,32 +80,6 @@ func (h *HTTPHandler) pathTraversalGuard(next http.Handler) http.Handler {
 func (h *HTTPHandler) containsTraversal(path string) bool {
 	for _, seg := range strings.Split(path, "/") {
 		if seg == ".." {
-			return true
-		}
-	}
-	return false
-}
-
-// isLocalNetworkOrigin reports whether an Origin header value refers to a
-// loopback host or a local network IP (same subnet as the gateway).
-// This is used for CLI passkey bootstrap to support port forwarding scenarios.
-func isLocalNetworkOrigin(origin string) bool {
-	u, err := url.Parse(origin)
-	if err != nil {
-		return false
-	}
-	host := u.Hostname()
-
-	// Allow loopback addresses
-	if host == "localhost" {
-		return true
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		if ip.IsLoopback() {
-			return true
-		}
-		// Allow private network IPs (RFC 1918)
-		if isPrivateIP(ip) {
 			return true
 		}
 	}
