@@ -168,7 +168,8 @@ async function loadState() {
       api('/api/v1/users/me'),
       uid ? api('/api/v1/auth/passkeys?user_id=' + uid) : null,
       uid ? api('/api/v1/approvals') : null,
-      api('/api/v1/health')
+      api('/api/v1/health'),
+      api('/api/v1/auth/sessions/me')
     ]);
     if (results[0] && results[0].ok) {
       var d = await results[0].json();
@@ -187,6 +188,7 @@ async function loadState() {
     if (uid && results[1] && results[1].ok) { var pd = await results[1].json(); passkeys = pd.credentials || []; }
     if (uid && results[2] && results[2].ok) { var ad = await results[2].json(); approvals = ad.transactions || []; }
     if (results[3] && results[3].ok) health = await results[3].json();
+    if (results[4] && results[4].ok) { var sd = await results[4].json(); if (user && sd.web_session_id) user.web_session_id = sd.web_session_id; }
     var br = await fetch('/api/v1/auth/bootstrap/status', { credentials: 'same-origin' });
     if (br && br.ok) { var bd = await br.json(); bootstrapped = !!bd.bootstrapped; }
   } catch (e) { user = null; }
@@ -318,11 +320,13 @@ function connectAuditStream() {
   if (auditEs) return;
   auditConnected = false;
   updateAuditStatus('connecting');
-  var url = '/api/v1/audit/stream';
+  var params = new URLSearchParams();
+  if (user && user.web_session_id) params.set('web_session_id', user.web_session_id);
   if (auditEvents.length > 0) {
     var last = auditEvents[auditEvents.length - 1];
-    if (last && last.id) url += '?since_id=' + last.id;
+    if (last && last.id) params.set('since_id', last.id);
   }
+  var url = '/api/v1/sse/stream' + (params.toString() ? '?' + params.toString() : '');
   auditEs = new EventSource(url);
   auditEs.onopen = function() {
     auditConnected = true;

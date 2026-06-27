@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.4] - 2026-06-26
+
+### Overview
+
+v1.2.4 is a console UX and passkey bootstrap refinement release. This version adds a browser-facing SSE audit stream to the console, introduces automatic user creation during browser passkey bootstrap, hardens Windows Hello WebAuthn with HRESULT mapping and input validation, replaces hardcoded cookie name strings with a shared constant, and regenerates the Swagger/OpenAPI specification with full passkey and audit endpoint annotations.
+
+### Added
+
+* **Browser-Facing SSE Audit Stream** — Added `GET /api/v1/audit/stream` endpoint (`gateway_http_sse_web.go`) that streams real-time audit events to the console via Server-Sent Events, scoped to the authenticated web session. Supports `since_id` replay and `Last-Event-ID` header for reconnection.
+* **Automatic User Creation on Browser Bootstrap** — Added `CreateUser` and `HasAnyUsers` methods to the `userStore` interface with `createUserOnBootstrap` config flag. Browser passkey bootstrap now auto-creates a user when no users exist, enabling true zero-config first-run enrollment.
+* **Windows Hello HRESULT Mapping** — Added `mapWebAuthnHRESULT` function to translate Windows WebAuthn HRESULT codes to descriptive error messages (user cancelled, device not found, timeout, etc.). Added 8 new typed error constants in `internal/constants/errors.go`.
+* **Windows Hello Input Validation** — Added input validation for challenge emptiness, user ID size (16-byte GUID for WebAuthn v4), and response pointer/size bounds checking before extraction, preventing potential memory safety issues.
+* **Windows Crypto Mock Tests** — Added `internal/cli/auth/windows_crypto_mock_test.go` with comprehensive unit tests for Windows Hello WebAuthn flows using mock syscall interfaces.
+* **Swagger/OpenAPI Regeneration** — Regenerated `swagger.json` and `swagger.yaml` with full annotations for all passkey endpoints, audit stream, and session management routes.
+* **L3 Notary Tests** — Added `internal/services/governance/l3_notary_test.go` with comprehensive tests for L3 notary proof verification.
+* **Passkey Register Challenge Response** — Added `user_id` field to `PasskeyRegisterChallengeResponse` model for client-side user tracking.
+
+### Changed
+
+* **WebSession Cookie Name Constant** — Replaced all hardcoded `"g8e_session"` string literals with `constants.WebSessionCookieName` across `auth_controller_session.go`, `passkey_service_http.go`, and `gateway_auth.go`.
+* **Passkey Bootstrap CLI Path** — Updated `passkey_bootstrap.go` to use `constants.APIPaths.AuthPasskeysConsoleRegisterVerify` instead of hardcoded path string.
+* **Gateway Serve Command Hidden** — Marked `g8e gateway serve` CLI command as hidden since it is an internal re-exec target, not user-facing.
+* **Encode Challenge Helper** — Extracted `encodeChallenge` helper in `passkey_service.go` for semantic clarity over inline `base64.RawURLEncoding.EncodeToString` calls.
+* **Deprecated Passkey Route Aliases** — Added `AuthPasskeysCLIRegisterChallenge`, `AuthPasskeysCLIRegisterVerify`, `AuthPasskeysCLIAuthenticateChallenge`, and `AuthPasskeysCLIAuthenticateVerify` to `PublicRouteRegistry` deprecated alias list for backward compatibility during route transition.
+
+### Fixed
+
+* **Audit Stream Route Registration** — Registered `/api/v1/audit/stream` in both the `PublicRouteRegistry` (mTLS bypass) and `WebSessionAuth` middleware chain, ensuring the SSE endpoint is accessible to browser sessions without client certificates.
+* **Console SPA Enhancements** — Updated console `index.html` with improved audit stream integration, session management, and error handling.
+
+### Removed
+
+* **Terminal Linux Package** — Deleted `internal/cli/serve/terminal_linux.go` and `terminal_linux_test.go` (262 lines). The obfuscated input reader was unused after the serve command was simplified.
+
+---
+
 ## [1.2.3] - 2026-06-26
 
 ### Overview

@@ -23,6 +23,9 @@ package gateway
 //                            web_session_id, cli_session_id, user_id,
 //                            plus since_id=N and limit=K.
 // GET  /api/v1/sse/stream   → Consumer streams events via SSE.
+//                            Auth: mTLS (Operator session) or web session cookie.
+//                            mTLS clients pass routing target via query params;
+//                            cookie clients are scoped to their web_session_id.
 //
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
@@ -364,7 +367,6 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	}
 	sinceID, _ := strconv.ParseInt(sinceIDStr, 10, 64)
 
-	// 1. Authorization (re-use logic from handleInternalSSEEvents)
 	operatorSessionID := h.auth.extractOperatorSessionIDFromMTLS(r)
 	if operatorSessionID == "" {
 		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
@@ -413,8 +415,9 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		h.responder.Error(w, http.StatusBadRequest, "exactly one routing target required")
 		return
 	}
+	clientLabel := "operator_session_id=" + operatorSessionID
 
-	// 2. Set SSE Headers
+	// Set SSE Headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -433,7 +436,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// 3. Subscribe to real-time events FIRST to avoid missing any during replay
+	// Subscribe to real-time events FIRST to avoid missing any during replay
 	eventCh := make(chan []byte, 100)
 	unregister := h.pubsub.RegisterHandler(channel, func(ch string, data []byte) {
 		select {
@@ -444,7 +447,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	})
 	defer unregister()
 
-	// 4. Replay from DB if sinceID is provided
+	// Replay from DB if sinceID is provided
 	if sinceID > 0 {
 		rows, err := h.db.SSEStore.SSEEventsListSince(route, sinceID, 1000)
 		if err == nil {
@@ -455,12 +458,12 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	// 5. Stream from pubsub
+	// Stream from pubsub
 	ctx := r.Context()
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	h.logger.Info("SSE Stream: client connected", "channel", channel, "operator_session_id", operatorSessionID)
+	h.logger.Info("SSE Stream: client connected", "channel", channel, "client", clientLabel)
 
 	for {
 		select {
@@ -468,20 +471,11 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 			h.logger.Info("SSE Stream: client disconnected", "channel", channel)
 			return
 		case <-ticker.C:
-			// Heartbeat
 			fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 		case raw := <-eventCh:
-			// The raw data from internalSSEPush is the full JSON payload
 			var p internalSSEPushPayload
 			if err := json.Unmarshal(raw, &p); err == nil {
-				// We need the ID from the DB append, but we don't have it here easily
-				// without doing another query. For now, we use a 0 or skip ID for real-time.
-				// Actually, we can just omit 'id:' for real-time pushes and let the client
-				// rely on the sequence. Or we can have SSEEventsAppend return the ID and
-				// pass it through pubsub.
-
-				// Re-extract type
 				var inner struct {
 					Type string `json:"type"`
 				}

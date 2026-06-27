@@ -1,7 +1,7 @@
 # Encryption Architecture
 
 Last Updated: 2026-06-26
-Version: v1.2.3
+Version: v1.2.4
 
 ## Overview
 
@@ -75,7 +75,7 @@ Private Key (32-byte hex-encoded, user-provided or generated)
 ### Vault Components
 
 - **Vault Header**: Metadata including key derivation parameters, wrapped DEK, and key fingerprint. Stored at `.g8e/vault/vault.header` as JSON.
-- **Vault Database**: SQLite database (`g8e.db`) in the vault directory, storing encrypted data records.
+- **Vault Database**: The vault service holds a `dbPath` referencing `g8e.db` in the vault directory, used only for cleanup during `Reset()`. The vault service itself does not write to a database; encrypted data records are stored by individual storage services in their own databases.
 - **Vault Key**: Private key (32-byte hex-encoded) used to unlock the vault, stored at `.g8e/vault/key`.
 
 ### Vault Header Structure
@@ -223,7 +223,7 @@ export G8E_VAULT_KEY=/path/to/vault/key
 
 - `--vault-dir`: Directory for vault data (default: `.g8e/vault`).
 - `--key-path`: Path to vault key (used in vault commands).
-- `--new-key-path`: Path to save new vault key during rekey (default: `<key-path>.new`).
+- `--new-key-path`: Path to save new vault key during rekey (default: `<vault-dir>/key.new`).
 - `--confirm`: Skip interactive confirmation for vault reset.
 - `--key-hex`: Vault key as hex string for import command.
 
@@ -316,7 +316,7 @@ Platform implementations:
 | Windows | `fileKeyring` | `internal/services/keystore/keyring_file.go` | None |
 | Tests | `memoryKeyring` | `internal/services/keystore/keyring_memory.go` | N/A |
 
-The `fileKeyring` implementation (`internal/services/keystore/keyring_file.go`) stores the master key as a file on disk with `0600` permissions.
+The `fileKeyring` implementation (`internal/services/keystore/keyring_file.go`) stores the master key as a base64-encoded file on disk with `0600` permissions. Atomic writes are performed via temp file rename.
 
 #### EncryptedSecret Structure
 
@@ -332,7 +332,7 @@ The `EncryptedSecret` struct represents an encrypted secret value on disk:
 
 | Method | Description |
 |--------|-------------|
-| `New(secretsDir, logger)` | Create keystore with platform-default keyring (platform-specific files) |
+| `New(secretsDir, logger)` | Create keystore with platform-default keyring (libsecret with file fallback on Linux, Keychain on macOS, file on Windows) |
 | `NewWithKeyring(secretsDir, logger, keyring)` | Create keystore with custom keyring (used for testing) |
 | `Initialize()` | Retrieve or generate master encryption key from OS keyring |
 | `EncryptSecret(name, plaintext)` | Encrypt plaintext and write to disk as JSON file |

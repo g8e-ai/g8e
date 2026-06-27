@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-06-26
-Version: v1.2.3
+Last Updated: 2026-07-14
+Version: v1.2.4
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
@@ -19,7 +19,7 @@ The g8e Protocol platform is composed of two logically distinct roles, both impl
 - **5-Layer Governance Bedrock**: Every transaction must pass through five mandatory, fail-closed layers sequentially:
     - **L1 Doctrine**: Technical Bedrock (Hard Gates) code pattern matching and threat analysis defined in `internal/services/governance/l1_doctrine.go`.
     - **L2 Consensus**: Tribunal-based deliberation producing L2 votes (Ed25519 signatures) over the transaction hash, defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal rather than self-signing.
-    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`.
+    - **L3 Notary**: Human-in-the-loop authorization (utilizing WebAuthn or cryptographically signed CLI proofs) defined in `internal/services/governance/l3_notary.go` with CLI session verification in `internal/services/gateway/cli_session_verifier.go`.
     - **L4 Warden**: Pre-dispatch verification gating (validating signatures, replay prevention, expiry, nonces, and state Merkle root) defined in `internal/services/governance/l4_warden.go`.
     - **L5 Actuator**: Isolated boundary tool dispatch (via MCP/A2A) and signed receipt production defined in `internal/services/governance/l5_actuator.go`.
 - **mTLS-Everywhere**: All communication is strictly gated by Gateway-owned mutual TLS. No inbound ports are required on managed hosts. The platform uses `g8e.local` as its canonical SPIFFE trust domain for workload identities. See [Network Architecture](./network.md) for detailed mTLS enforcement, PKI hierarchy, and identity management.
@@ -102,6 +102,46 @@ The g8e Gateway exposes two logical protocol surfaces. To maintain the mTLS exec
 **HTTP Port (8080)**: Plain HTTP for bootstrap enrollment and PKI discovery endpoints only. This port serves the platform trust scripts (e.g., `/bootstrap-ca`, `/bootstrap-ca-macos`, `/bootstrap-ca.ps1`) required for self-signed CA trust. No MCP routes are available on this port.
 
 **HTTPS Port (8443)**: mTLS for all routes including API, public, enrollment, and MCP endpoints. MCP endpoints require mTLS authentication (or JWT when JWKS is configured). The public HTTPS router also serves Swagger UI at `/swagger/*` and the OpenAPI specification at `/swagger/doc.json`, providing interactive API documentation.
+
+---
+
+## HTTP Router Architecture
+
+The gateway builds two distinct HTTP routers in `internal/services/gateway/gateway_http_router.go`, one per protocol surface. The `HTTPHandler` struct (`internal/services/gateway/gateway_http.go`) orchestrates both routers and their controllers.
+
+### Bootstrap HTTP Router (`buildHTTPRouter`)
+
+Served on the HTTP port (8080), this router handles only bootstrap and PKI discovery endpoints. It registers health, state, bootstrap enrollment, CSR signing, CA bundle discovery, trust script download, node binary download, and deploy script routes. All other requests are redirected to HTTPS with a `301 Moved Permanently` response. The redirect validates the host via `isSafeHost` to prevent open redirect vulnerabilities and normalizes path components to prevent path traversal. The router is wrapped with `pathTraversalGuard` and `rateLimitMiddleware`.
+
+### Public HTTPS Router (`buildPublicRouter`)
+
+Served on the HTTPS port (8443), this router handles all API, MCP, passkey, console, and management routes. It is wrapped with `pathTraversalGuard` and `auth.Middleware` at the outermost layer. The `PublicRouteRegistry` in `internal/services/gateway/gateway_auth.go` determines which routes bypass mTLS authentication.
+
+The public HTTPS router registers the following route categories:
+
+**Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, blob store, console SPA (`/console/`), landing page, login/logout, bootstrap enrollment, CLI and device enrollment, PKI apps and devices enrollment.
+
+**MCP/A2A Routes**: Registered via `registerMCPRoutes` on the public mux. When JWKS is configured, MCP routes are wrapped with `JWTAuthMiddleware`; otherwise they rely on mTLS via the outer `auth.Middleware`. Registered paths include `/api/v1/mcp` (unified endpoint), `/api/v1/mcp/tools/list`, `/api/v1/mcp/tools/call`, `/api/v1/mcp/tools/call/sse`, `/api/v1/mcp/resources/list`, `/api/v1/mcp/resources/read`, `/api/v1/mcp/prompts/list`, `/api/v1/mcp/prompts/get`, and `/api/v1/a2a/call`.
+
+**Passkey Bootstrap Routes (public, no auth)**: CLI-direct passkey registration and authentication under `/api/v1/auth/passkeys/bootstrap/*` and browser-facing passkey registration and authentication under `/api/v1/auth/passkeys/console/*`. These routes use distinct `passkeyHandlerConfig` values: bootstrap configs use `sourceCLIBootstrap` (no web session), while console configs use `sourceBrowserBootstrap` with `createWebSession` and `setCookie` enabled. A CORS middleware (`corsMiddlewareForCLIPasskey`) wraps the passkey mux.
+
+**JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit/register/challenge` and `/api/v1/auth/passkeys/jit/register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with `JWTAuthMiddleware`.
+
+**Deprecated Passkey Alias Routes**: Old CLI and browser passkey paths (`cli-register/*`, `cli/authenticate/*`, `cli-browser-register/*`, `browser/authenticate/*`) are registered as aliases that log a deprecation warning and forward to the new `bootstrap/*` and `console/*` handlers.
+
+**mTLS-Only Routes**: Data settings, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, tribunal deliberate, governance envelopes (rate-limited), audit receipts and events, SSE push/events/stream, database, KV store, pub/sub publish and stream, PKI management (CSR sign, apps delegated, certificates revoke, revocation bundle), user management, and passkey management operations (register, authenticate, CLI status).
+
+**WebSessionAuth-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys`, and `/api/v1/audit/stream` are wrapped with `WebSessionAuth` middleware, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, passkey credential listing and revocation, and the live audit SSE stream.
+
+**OOB Approval UI**: The `/approve/{txHash}` page route redirects to the console SPA with an approval hash fragment (`/console/#approve={txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
+
+### PublicRouteRegistry
+
+The `PublicRouteRegistry` in `internal/services/gateway/gateway_auth.go` manages routes that bypass authentication. It maintains exact paths, public prefixes, and excluded prefixes. The `IsPublic` method checks exact matches first (highest priority), then excluded prefixes (mTLS-protected sub-paths under WebSessionAuth prefixes), and finally prefix matches. This ensures that broad public prefixes do not override more specific mTLS-protected sub-paths.
+
+### Console SPA
+
+The console SPA is an embedded single-page application served at `/console/` from `internal/services/gateway/console/console.go`. The SPA provides browser-based passkey registration, authentication, credential management, OOB transaction approval, and a live audit stream. The SPA auto-detects approval hash fragments in the URL and triggers the WebAuthn approval flow after successful authentication.
 
 ---
 
@@ -245,13 +285,11 @@ Defined in `internal/services/governance/l1_doctrine.go`. Enforces forbidden pat
 Defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` posture, the gateway calls the Tribunal's `Deliberate` endpoint (via `LocalDeliberator` for in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the `TribunalStoreService`.
 
 ### L3 Notary (Human Authorization)
-Defined in `internal/services/governance/l3_notary.go` and `internal/services/gateway/composite_l3_verifier.go`. Enforces human-in-the-loop authorization using a cryptographic proof of human intent:
+Defined in `internal/services/governance/l3_notary.go` with CLI session verification in `internal/services/gateway/cli_session_verifier.go`. The `outboundL3Notary` struct, created by `NewGatewayL3Notary`, enforces human-in-the-loop authorization using a cryptographic proof of human intent. It dispatches based on proof type: proofs with `mtls_cert_fingerprint` use the CLI verification path; all others delegate to the passkey verifier.
 - **Web Sessions**: Use WebAuthn or Passkey proofs (FIDO2) via `internal/services/gateway/passkey_service.go`.
-- **CLI Sessions**: Use mTLS certificate fingerprints and Ed25519 signatures bound to the session via `internal/services/gateway/cli_l3_notary.go`. The CLI `approve` command derives the Ed25519 public key from the approver's private key and sends it alongside the signature. The gateway stores this public key in the `suspended_transactions` table at approval time. `VerifyL3Proof` then calls `ed25519.Verify` against the stored public key to cryptographically prove the approver holds the private key — not merely that the stored signature value matches.
+- **CLI Sessions**: Use mTLS certificate fingerprints and Ed25519 signatures bound to the session via `internal/services/gateway/cli_session_verifier.go`. The CLI `approve` command derives the Ed25519 public key from the approver's private key and sends it alongside the signature. The gateway stores this public key in the `suspended_transactions` table at approval time. `VerifyL3Proof` then calls `ed25519.Verify` against the stored public key to cryptographically prove the approver holds the private key — not merely that the stored signature value matches.
 - **Operator Sessions**: Use mTLS certificate fingerprints only (passkey auth is not available for operators).
 - **JWT Sessions**: Use JWT tokens validated at the gateway with JIT user provisioning.
-
-The `CompositeL3Verifier` handles delegation between WebAuthn and mTLS proofs based on the session type.
 
 ### L4 Warden (Pre-Dispatch Gating)
 Defined in `internal/services/governance/l4_warden.go`. Enforces final pre-execution verification gates:
@@ -346,7 +384,14 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | L2 Consensus (Tribunal) | `internal/services/tribunal/service.go` |
 | Tribunal Store | `internal/services/gateway/tribunal_store_service.go` |
 | L3 Notary | `internal/services/governance/l3_notary.go` |
-| L3 Notary (Composite) | `internal/services/gateway/composite_l3_verifier.go` |
+| CLI Session Verifier | `internal/services/gateway/cli_session_verifier.go` |
+| HTTP Handler | `internal/services/gateway/gateway_http.go` |
+| HTTP Router | `internal/services/gateway/gateway_http_router.go` |
+| Public Route Registry | `internal/services/gateway/gateway_auth.go` |
+| Passkey Service | `internal/services/gateway/passkey_service.go` |
+| Passkey HTTP Handlers | `internal/services/gateway/passkey_service_http.go` |
+| Console SPA | `internal/services/gateway/console/console.go` |
+| OOB Approval Controller | `internal/services/gateway/auth_controller_approvals.go` |
 | L4 Warden | `internal/services/governance/l4_warden.go` |
 | L5 Actuator | `internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
@@ -371,7 +416,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | **Audit & Security** | `login_audit`, `auth_admin_audit`, `account_locks`, `console_audit`, `revoked_certificates` |
 | **Operators & Usage** | `operators`, `operator_usage` |
 | **Cases & Investigations** | `cases`, `investigations`, `tasks` |
-| **Governance & Reputation** | `reputation_state`, `reputation_commitments`, `stake_resolutions`, `trusted_signers`, `app_policies` |
+| **Governance & Reputation** | `reputation_state`, `reputation_commitments`, `stake_resolutions`, `trusted_signers`, `app_policies`, `tribunals` |
 | **AI & Context** | `memories`, `agent_activity_metadata`, `personas` |
 | **Configuration** | `settings` |
 

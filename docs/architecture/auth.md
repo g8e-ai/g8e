@@ -100,6 +100,7 @@ Web-session authenticated routes (e.g., user profile, approvals, passkey list/re
 - `/api/v1/auth/sessions/` (matching `/api/v1/auth/sessions/me`)
 - `/api/v1/approvals` & `/api/v1/approvals/` (matching pending list and action sub-paths)
 - `/api/v1/auth/passkeys` & `/api/v1/auth/passkeys/` (matching listing and individual key revocation)
+- `/api/v1/users/` also matches `/api/v1/audit/stream` via the nested `authedMux` registration
 
 This subtree-match pattern (defined with trailing slashes) ensures all nested endpoints are seamlessly guarded by the `WebSessionAuth` middleware, while the outer public/mTLS routes (like exact-match `/api/v1/users` or public browser passkey handlers) continue to resolve correctly based on Go's longest-prefix routing rules.
 
@@ -113,6 +114,11 @@ The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management r
 - `/api/v1/auth/passkeys/cli-browser-register` — deprecated alias, mTLS-gated for non-alias sub-paths
 
 The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes. The 8 deprecated alias exact paths are registered via `addExact` to maintain public access during the transition window, since `addExact` entries take priority over excluded prefixes.
+
+#### Browser-Facing Audit Stream
+The `GET /api/v1/audit/stream` endpoint (`internal/services/gateway/gateway_http_sse_web.go:45`) streams real-time audit events to the console via Server-Sent Events, scoped to the authenticated web session. It is registered in the `PublicRouteRegistry` for mTLS bypass and protected by `WebSessionAuth` middleware, ensuring browser sessions can access it without client certificates while still requiring authentication.
+
+The handler extracts the `web_session_id` from the session cookie and uses it as the SSE routing target. It supports the `since_id` query parameter and `Last-Event-ID` header for replay and reconnection. A 30-second heartbeat keepalive prevents proxy timeouts. Back-pressure is handled by dropping events when the client buffer is full, with a structured warning log.
 
 #### Approval Page Redirect
 The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={txHash}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.
@@ -142,7 +148,7 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 | `enforceSessionUserBinding` | Prevents `user_id` spoofing across an existing session |
 | `createWebSession` | Mints a `g8e_session` on successful verification |
 | `setCookie` | Sets the `g8e_session` browser cookie (implies `createWebSession`) |
-| `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment |
+| `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment; gated by `userStore.HasAnyUsers()` check — only fires when no users exist, preventing unauthorized user creation (`passkey_service_http.go:123-136`) |
 
 This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these.
 
@@ -182,11 +188,11 @@ The dedicated `GET /api/v1/auth/passkeys/cli/status` endpoint allows the CLI to 
 - `AttestationType` is one of `"none"`, `"indirect"`, `"direct"`, `"enterprise"`
 - `CreatedAtUnixMs` is non-zero
 
-Called in `addCredential` at `passkey_service.go:593` before writing to disk. Typed error constants: `ErrPasskeyCredentialInvalidID`, `ErrPasskeyCredentialIDTooLong`, `ErrPasskeyCredentialInvalidPublicKey`, `ErrPasskeyCredentialInvalidAttestation`, `ErrPasskeyCredentialInvalidTimestamp`.
+Called in `addCredential` at `passkey_service.go:631` before writing to disk. Typed error constants: `ErrPasskeyCredentialInvalidID`, `ErrPasskeyCredentialIDTooLong`, `ErrPasskeyCredentialInvalidPublicKey`, `ErrPasskeyCredentialInvalidAttestation`, `ErrPasskeyCredentialInvalidTimestamp`.
 
-`encodeCredID([]byte) string` and `decodeCredID(string) ([]byte, error)` helpers (`passkey_service.go:85-92`) provide centralized base64 RawURL encoding/decoding for credential IDs, replacing scattered ad-hoc `base64.RawURLEncoding` calls.
+`encodeCredID([]byte) string` and `decodeCredID(string) ([]byte, error)` helpers (`passkey_service.go:86-94`) provide centralized base64 RawURL encoding/decoding for credential IDs, replacing scattered ad-hoc `base64.RawURLEncoding` calls.
 
-Safe byte comparisons use `bytes.Equal` instead of unsafe `string()` casts for credential ID matching (`passkey_service.go:435`).
+Safe byte comparisons use `bytes.Equal` instead of unsafe `string()` casts for credential ID matching (`passkey_service.go:474`).
 
 #### Challenge Lifecycle (Purge After Verify)
 
@@ -256,7 +262,7 @@ L3 ensures explicit human authorization for mutations.
 - **Out-of-Band (OOB) Approval**: The user approves via CLI command (`g8e approve <tx_hash>`) with a cryptographic Ed25519 signature over the transaction hash, or via WebAuthn passkey for web sessions.
 - **Approval Window**: CLI-based approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
 - **Cryptographic Binding**: The CLI proof requires a hex-encoded Ed25519 signature of exactly 64 bytes (`cli_signature`) and, when configured, an mTLS certificate fingerprint (`mtls_cert_fingerprint`) that must match the fingerprint recorded at suspension time.
-- **Gateway L3 Verification**: The `outboundL3Notary` (`internal/services/governance/l3_notary.go:60`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:89`), routes L3 proof verification based on proof type. If the proof contains `mtls_cert_fingerprint`, it uses the CLI verification path with the `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) for CLI mTLS session verification. Otherwise, it delegates to the `PasskeyService` (`internal/services/gateway/passkey_service.go:63`) for WebAuthn assertion verification.
+- **Gateway L3 Verification**: The `outboundL3Notary` (`internal/services/governance/l3_notary.go:60`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:89`), routes L3 proof verification based on proof type. If the proof contains `mtls_cert_fingerprint`, it uses the CLI verification path with the `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) for CLI mTLS session verification. Otherwise, it delegates to the `PasskeyService` (`internal/services/gateway/passkey_service.go:68`) for WebAuthn assertion verification.
 - **CLI Session Verifier**: The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) implements the `governance.CLISessionVerifier` interface and verifies that the user is active, the CLI session exists and belongs to the user, the certificate fingerprint matches the session's stored fingerprint (constant-time comparison), the session is active and not expired, and the certificate is not revoked via the PKI authority.
 - **Passkey Service**: The `PasskeyService` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
 - **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:64`) containing the cryptographic signature and certificate fingerprint, cryptographically bound to the `transaction_hash`.
@@ -502,7 +508,7 @@ CLI mTLS cert (SPIFFE URI) → CLI session → OperatorSessionID → Operator se
 
 #### 7.2.2 `cliCertBoundToOperator`
 
-Location: `internal/services/gateway/gateway_auth.go:706`
+Location: `internal/services/gateway/gateway_auth.go:761`
 
 This function verifies that a presented client certificate belongs to a CLI session whose `OperatorSessionID` matches the claimed operator session. It is used during authentication to allow CLI clients to call internal APIs scoped by `cli_session_id` while presenting their CLI mTLS cert and the linked operator session as a Bearer token.
 
@@ -542,7 +548,7 @@ When external Identity Provider (IdP) JWT tokens are used for authentication, th
 
 #### 7.3.2 Flow
 
-Location: `internal/services/gateway/gateway_auth.go:903-919`
+Location: `internal/services/gateway/gateway_auth.go:890-974`
 
 1. JWT is validated against the configured JWKS endpoint.
 2. `PersonaService.MapRolesToPersona(jwt.Roles)` maps the JWT roles to a persona string. If mapping fails, `"default"` is used.
@@ -601,7 +607,7 @@ This ensures every governance envelope carries the full identity chain: who requ
 
 #### 7.5.1 Push Authorization (App → Target)
 
-Location: `internal/services/gateway/gateway_http_sse.go:126-224`
+Location: `internal/services/gateway/gateway_http_sse.go:126-232`
 
 When an app workload pushes an SSE event to a target session, the Gateway verifies the app is authorized for that target by checking the binding:
 

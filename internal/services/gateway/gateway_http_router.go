@@ -216,9 +216,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)
 	authedMux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkey.RevokeCredential))
 
-	// Live Audit SSE stream (browser-facing, WebSessionAuth-protected)
-	authedMux.HandleFunc(constants.APIPaths.AuditStream, h.handleWebAuditStream)
-
 	// Wrap authed routes in WebSessionAuth middleware
 	mux.Handle("/api/v1/users/", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/v1/auth/sessions/", h.auth.WebSessionAuth(authedMux, h.db))
@@ -226,7 +223,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle("/api/v1/approvals/", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/v1/auth/passkeys", h.auth.WebSessionAuth(authedMux, h.db))
 	mux.Handle("/api/v1/auth/passkeys/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle(constants.APIPaths.AuditStream, h.auth.WebSessionAuth(authedMux, h.db))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }

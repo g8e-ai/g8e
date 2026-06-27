@@ -6,7 +6,7 @@ parent: Guides
 # Build a g8e Operator
 
 Last Updated: 2026-06-26
-Version: v1.2.3
+Version: v1.2.4
 
 ---
 
