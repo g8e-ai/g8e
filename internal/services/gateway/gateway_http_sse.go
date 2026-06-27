@@ -23,9 +23,9 @@ package gateway
 //                            web_session_id, cli_session_id, user_id,
 //                            plus since_id=N and limit=K.
 // GET  /api/v1/sse/stream   → Consumer streams events via SSE.
-//                            Auth: mTLS (Operator session) or web session cookie.
-//                            mTLS clients pass routing target via query params;
-//                            cookie clients are scoped to their web_session_id.
+//                            Auth: mTLS (Operator session).
+//                            All clients (CLI, browser, dashboard) use this
+//                            single endpoint with mTLS authentication.
 //
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be

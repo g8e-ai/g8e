@@ -100,7 +100,6 @@ Web-session authenticated routes (e.g., user profile, approvals, passkey list/re
 - `/api/v1/auth/sessions/` (matching `/api/v1/auth/sessions/me`)
 - `/api/v1/approvals` & `/api/v1/approvals/` (matching pending list and action sub-paths)
 - `/api/v1/auth/passkeys` & `/api/v1/auth/passkeys/` (matching listing and individual key revocation)
-- `/api/v1/users/` also matches `/api/v1/audit/stream` via the nested `authedMux` registration
 
 This subtree-match pattern (defined with trailing slashes) ensures all nested endpoints are seamlessly guarded by the `WebSessionAuth` middleware, while the outer public/mTLS routes (like exact-match `/api/v1/users` or public browser passkey handlers) continue to resolve correctly based on Go's longest-prefix routing rules.
 
@@ -114,11 +113,6 @@ The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management r
 - `/api/v1/auth/passkeys/cli-browser-register` — deprecated alias, mTLS-gated for non-alias sub-paths
 
 The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes. The 8 deprecated alias exact paths are registered via `addExact` to maintain public access during the transition window, since `addExact` entries take priority over excluded prefixes.
-
-#### Browser-Facing Audit Stream
-The `GET /api/v1/audit/stream` endpoint (`internal/services/gateway/gateway_http_sse_web.go:45`) streams real-time audit events to the console via Server-Sent Events, scoped to the authenticated web session. It is registered in the `PublicRouteRegistry` for mTLS bypass and protected by `WebSessionAuth` middleware, ensuring browser sessions can access it without client certificates while still requiring authentication.
-
-The handler extracts the `web_session_id` from the session cookie and uses it as the SSE routing target. It supports the `since_id` query parameter and `Last-Event-ID` header for replay and reconnection. A 30-second heartbeat keepalive prevents proxy timeouts. Back-pressure is handled by dropping events when the client buffer is full, with a structured warning log.
 
 #### Approval Page Redirect
 The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={txHash}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.

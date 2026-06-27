@@ -13,12 +13,11 @@ The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastru
 
 ## Overview
 
-The SSE system provides four endpoints:
+The SSE system provides three endpoints:
 
 - **`POST /api/v1/sse/push`**: App workloads push events (authenticated via mTLS)
 - **`GET /api/v1/sse/events`**: Poll for historical events (with `since_id` and `limit` params)
-- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery (mTLS authenticated)
-- **`GET /api/v1/audit/stream`**: Browser-facing real-time SSE stream scoped to the authenticated web session (cookie-based WebSessionAuth)
+- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery (mTLS authenticated). All clients — CLI, browser, dashboard — use this single endpoint.
 
 Events are stored in the `sse_events` table and routed by one of three identifiers:
 - `web_session_id`: Web UI session events
@@ -40,7 +39,6 @@ flowchart TD
         db[("sse_events table")]
         events["GET /api/v1/sse/events"]
         stream["GET /api/v1/sse/stream"]
-        audit["GET /api/v1/audit/stream"]
         pubsub[["Pub/Sub Broker"]]
     end
 
@@ -53,12 +51,9 @@ flowchart TD
     push --> pubsub
     db --> events
     db --> stream
-    db --> audit
     pubsub --> stream
-    pubsub --> audit
     browser -- "mTLS GET /api/v1/sse/stream" --> stream
     browser -- "mTLS GET /api/v1/sse/events" --> events
-    browser -- "Cookie GET /api/v1/audit/stream" --> audit
 ```
 
 ---
@@ -141,7 +136,7 @@ Unset routing fields are omitted from the JSON response (the `SSEEventRow` model
 
 ### GET /api/v1/sse/stream
 
-**Authentication**: mTLS with Operator session
+**Authentication**: mTLS with Operator session. All clients (CLI, browser, dashboard) authenticate via mTLS client certificate. There is no cookie-based auth path — the transport determines identity, not the browser session.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session
@@ -172,41 +167,6 @@ data: {"type":"...","data":{...}}
 3. Subscribes to the Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`) using a buffered channel of 100 entries. If the buffer is full, incoming events are dropped with a back-pressure warning log.
 4. If `since_id` is greater than 0, replays historical events from the `sse_events` table since `since_id` (up to 1000 rows) in SSE format, including the `id:` field for each row. If `since_id` is 0 or absent, no replay occurs and the stream begins with only real-time events.
 5. Streams new events as they arrive from Pub/Sub. Real-time events are emitted without an `id:` field; the `event:` field carries the extracted type and the `data:` field carries the full push payload.
-6. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
-
----
-
-### GET /api/v1/audit/stream
-
-**Authentication**: Cookie-based WebSessionAuth (browser session cookie). This endpoint bypasses mTLS via the PublicRouteRegistry and relies solely on the web session cookie for identity.
-
-**Query Parameters**:
-- `since_id`: Start from event ID (supports `Last-Event-ID` header)
-
-**Response**: SSE stream scoped to the authenticated web session. The `web_session_id` routing target is extracted from the session cookie, not from query parameters.
-
-Replayed historical events include the `id:` field but omit the `event:` field:
-```
-id: 1
-data: {"type":"...","data":{...}}
-
-id: 2
-data: {"type":"...","data":{...}}
-```
-
-Real-time events from Pub/Sub omit both the `id:` and `event:` fields:
-```
-data: {"type":"...","data":{...}}
-```
-
-The `event:` field is deliberately omitted so that browser clients receive all events through the default `onmessage` handler, avoiding the need for per-type `addEventListener` registrations.
-
-**Behavior**:
-1. Extracts `web_session_id` from the `g8e_session` cookie. Returns 401 if the cookie is absent.
-2. Sets SSE response headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no` (for Nginx), and permissive CORS headers based on the request `Origin`.
-3. Subscribes to the `sse:web:<web_session_id>` Pub/Sub channel using a buffered channel of 100 entries. If the buffer is full, incoming events are dropped with a back-pressure warning log.
-4. If `since_id` is greater than 0 (or `Last-Event-ID` header is present), replays historical events from the `sse_events` table since `since_id` (up to 1000 rows) in SSE format, including the `id:` field for each row. If `since_id` is 0 or absent, no replay occurs and the stream begins with only real-time events.
-5. Streams new events as they arrive from Pub/Sub. Real-time events are emitted as `data:` lines only, without `id:` or `event:` fields.
 6. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
 
 ---
@@ -277,18 +237,15 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 - The app identity must be associated with the target session or user. Ownership is verified via `protocol.WorkloadIdentity.MatchesApp` against bound Operator sessions. The event is appended to the database before the ownership check; if ownership verification fails, the handler returns 403 but the row remains persisted.
 
 ### Consumer Authorization
-- The internal SSE endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS with an authenticated Operator session.
-- The browser-facing audit stream (`/api/v1/audit/stream`) uses cookie-based WebSessionAuth and bypasses mTLS via the PublicRouteRegistry.
-- For mTLS endpoints, the Operator must be authorized for the requested route:
+- All SSE endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS with an authenticated Operator session. There is no cookie-based auth path.
+- The Operator must be authorized for the requested route:
   - For `web_session_id`: Must own the web session.
   - For `cli_session_id`: Must own the CLI session.
   - For `user_id`: Must be the user.
-- For the browser-facing audit stream, the `web_session_id` is extracted from the `g8e_session` cookie; no explicit route authorization is needed because the route is implicitly scoped to the cookie's session.
 - Multi-tenant isolation is enforced at the database query level.
 
 ### Transport Security
-- Internal SSE endpoints (`/api/v1/sse/push`, `/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS (HTTPS port 8443).
-- The browser-facing audit stream (`/api/v1/audit/stream`) is served on HTTPS port 8443 but bypasses mTLS via the PublicRouteRegistry; authentication is via the `g8e_session` cookie.
+- All SSE endpoints (`/api/v1/sse/push`, `/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS (HTTPS port 8443).
 - Not available on HTTP bootstrap port (8080).
 - Pub/Sub channels are scoped to routing targets (format: `sse:cli:<id>`, `sse:web:<id>`, `sse:user:<id>`)
 
@@ -351,8 +308,7 @@ POST /api/v1/sse/push
 ## Implementation Details
 
 ### Core Files
-- `internal/services/gateway/gateway_http_sse.go`: HTTP handlers for internal SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`).
-- `internal/services/gateway/gateway_http_sse_web.go`: Browser-facing SSE audit stream handler (`handleWebAuditStream`).
+- `internal/services/gateway/gateway_http_sse.go`: HTTP handlers for SSE endpoints (`handleInternalSSEPush`, `handleInternalSSEEvents`, `handleInternalSSEStream`).
 - `internal/services/gateway/sse_event_service.go`: SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsListAllSince`, `SSEEventsCleanup`, `SSEEventsWipe`, `SSEEventsCount`).
 - `internal/services/gateway/gateway_pubsub.go`: Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`).
 - `internal/services/gateway/db_controller.go`: Admin endpoints for SSE event management (`handleSSEEvents`).

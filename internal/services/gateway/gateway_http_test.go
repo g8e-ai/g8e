@@ -646,7 +646,6 @@ func TestBuildPublicRouter(t *testing.T) {
 		"/api/v1/approvals/tx-123/verify",
 		"/api/v1/auth/passkeys/cred-123",
 		"/api/v1/auth/sessions/me",
-		"/api/v1/audit/stream",
 	}
 	for _, path := range authedPaths {
 		req = httptest.NewRequest(http.MethodGet, path, nil)

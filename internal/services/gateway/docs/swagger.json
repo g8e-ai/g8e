@@ -142,34 +142,6 @@
                 }
             }
         },
-        "/api/v1/audit/stream": {
-            "get": {
-                "description": "Server-sent events stream of audit events scoped to the authenticated web session.",
-                "produces": [
-                    "text/event-stream"
-                ],
-                "tags": [
-                    "audit"
-                ],
-                "summary": "Live Audit Stream (SSE)",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Replay events with id greater than this value",
-                        "name": "since_id",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "SSE event stream",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/auth/passkeys": {
             "get": {
                 "description": "Lists all WebAuthn credentials for the authenticated user (WebSession-protected).",

@@ -169,7 +169,7 @@ async function loadState() {
       uid ? api('/api/v1/auth/passkeys?user_id=' + uid) : null,
       uid ? api('/api/v1/approvals') : null,
       api('/api/v1/health'),
-      api('/api/v1/auth/sessions/me')
+      uid ? api('/api/v1/auth/sessions/me') : null
     ]);
     if (results[0] && results[0].ok) {
       var d = await results[0].json();
@@ -177,10 +177,12 @@ async function loadState() {
       if (!uid && user && user.id) {
         var results2 = await Promise.all([
           api('/api/v1/auth/passkeys?user_id=' + user.id),
-          api('/api/v1/approvals')
+          api('/api/v1/approvals'),
+          api('/api/v1/auth/sessions/me')
         ]);
         if (results2[0] && results2[0].ok) { var pd = await results2[0].json(); passkeys = pd.credentials || []; }
         if (results2[1] && results2[1].ok) { var ad = await results2[1].json(); approvals = ad.transactions || []; }
+        if (results2[2] && results2[2].ok) { var sd = await results2[2].json(); if (sd.web_session_id) user.web_session_id = sd.web_session_id; }
       }
     } else {
       user = null;

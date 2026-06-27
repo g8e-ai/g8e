@@ -13,11 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Overview
 
-v1.2.4 is a console UX and passkey bootstrap refinement release. This version adds a browser-facing SSE audit stream to the console, introduces automatic user creation during browser passkey bootstrap, hardens Windows Hello WebAuthn with HRESULT mapping and input validation, replaces hardcoded cookie name strings with a shared constant, and regenerates the Swagger/OpenAPI specification with full passkey and audit endpoint annotations.
+v1.2.4 is a console UX and passkey bootstrap refinement release. This version adds a browser-facing SSE audit stream to the console via the unified `/api/v1/sse/stream` endpoint, introduces automatic user creation during browser passkey bootstrap, hardens Windows Hello WebAuthn with HRESULT mapping and input validation, replaces hardcoded cookie name strings with a shared constant, and regenerates the Swagger/OpenAPI specification with full passkey and session management annotations.
 
 ### Added
 
-* **Browser-Facing SSE Audit Stream** — Added `GET /api/v1/audit/stream` endpoint (`gateway_http_sse_web.go`) that streams real-time audit events to the console via Server-Sent Events, scoped to the authenticated web session. Supports `since_id` replay and `Last-Event-ID` header for reconnection.
+* **Unified SSE Streaming for Browser** — The console SPA now connects to `/api/v1/sse/stream` (mTLS authenticated) with `web_session_id` as a query parameter, using the same endpoint as CLI and dashboard clients. No separate browser streaming endpoint, no mTLS bypass, no cookie-based auth for SSE.
 * **Automatic User Creation on Browser Bootstrap** — Added `CreateUser` and `HasAnyUsers` methods to the `userStore` interface with `createUserOnBootstrap` config flag. Browser passkey bootstrap now auto-creates a user when no users exist, enabling true zero-config first-run enrollment.
 * **Windows Hello HRESULT Mapping** — Added `mapWebAuthnHRESULT` function to translate Windows WebAuthn HRESULT codes to descriptive error messages (user cancelled, device not found, timeout, etc.). Added 8 new typed error constants in `internal/constants/errors.go`.
 * **Windows Hello Input Validation** — Added input validation for challenge emptiness, user ID size (16-byte GUID for WebAuthn v4), and response pointer/size bounds checking before extraction, preventing potential memory safety issues.
@@ -36,11 +36,11 @@ v1.2.4 is a console UX and passkey bootstrap refinement release. This version ad
 
 ### Fixed
 
-* **Audit Stream Route Registration** — Registered `/api/v1/audit/stream` in both the `PublicRouteRegistry` (mTLS bypass) and `WebSessionAuth` middleware chain, ensuring the SSE endpoint is accessible to browser sessions without client certificates.
 * **Console SPA Enhancements** — Updated console `index.html` with improved audit stream integration, session management, and error handling.
 
 ### Removed
 
+* **Browser SSE Web Handler** — Deleted `internal/services/gateway/gateway_http_sse_web.go` and the `/api/v1/audit/stream` endpoint. Browser SSE streaming is now handled by the unified `/api/v1/sse/stream` endpoint with mTLS authentication.
 * **Terminal Linux Package** — Deleted `internal/cli/serve/terminal_linux.go` and `terminal_linux_test.go` (262 lines). The obfuscated input reader was unused after the serve command was simplified.
 
 ---

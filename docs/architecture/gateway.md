@@ -131,7 +131,7 @@ The public HTTPS router registers the following route categories:
 
 **mTLS-Only Routes**: Data settings, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, tribunal deliberate, governance envelopes (rate-limited), audit receipts and events, SSE push/events/stream, database, KV store, pub/sub publish and stream, PKI management (CSR sign, apps delegated, certificates revoke, revocation bundle), user management, and passkey management operations (register, authenticate, CLI status).
 
-**WebSessionAuth-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys`, and `/api/v1/audit/stream` are wrapped with `WebSessionAuth` middleware, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, passkey credential listing and revocation, and the live audit SSE stream.
+**WebSessionAuth-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` are wrapped with `WebSessionAuth` middleware, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
 
 **OOB Approval UI**: The `/approve/{txHash}` page route redirects to the console SPA with an approval hash fragment (`/console/#approve={txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
 
