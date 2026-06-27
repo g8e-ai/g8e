@@ -29,6 +29,9 @@ import (
 	"io"
 	"log/slog"
 	"math/big"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -100,6 +103,73 @@ func generateTestCertPEM(t *testing.T, notBefore, notAfter time.Time) []byte {
 		Type:  "CERTIFICATE",
 		Bytes: derBytes,
 	})
+}
+
+// restorePorts snapshots constants.Ports and restores it after the test.
+func restorePorts(t *testing.T) {
+	t.Helper()
+	snapshot := constants.Ports
+	t.Cleanup(func() {
+		constants.Ports = snapshot
+	})
+}
+
+// getServerPort extracts the TCP port from an httptest.Server listener.
+func getServerPort(t *testing.T, srv *httptest.Server) int {
+	t.Helper()
+	addr, ok := srv.Listener.Addr().(*net.TCPAddr)
+	require.True(t, ok, "expected *net.TCPAddr from httptest listener")
+	return addr.Port
+}
+
+// generateTestCA creates a self-signed CA certificate and key pair.
+// Returns (caPEM, caKey, caCert).
+func generateTestCA(t *testing.T) ([]byte, *ecdsa.PrivateKey, *x509.Certificate) {
+	t.Helper()
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "test-ca"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &caKey.PublicKey, caKey)
+	require.NoError(t, err)
+
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+	caCert, err := x509.ParseCertificate(derBytes)
+	require.NoError(t, err)
+
+	return caPEM, caKey, caCert
+}
+
+// signCSR parses a CSR PEM, signs it with the given CA, and returns the PEM-encoded certificate.
+func signCSR(t *testing.T, csrPEM []byte, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, commonName string, notAfter time.Time) []byte {
+	t.Helper()
+	block, _ := pem.Decode(csrPEM)
+	require.NotNil(t, block)
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber:          big.NewInt(2),
+		Subject:               pkix.Name{CommonName: commonName},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		BasicConstraintsValid: true,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, csr.PublicKey, caKey)
+	require.NoError(t, err)
+
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 }
 
 // ---------------------------------------------------------------------------
@@ -561,4 +631,185 @@ func TestRunClientCertRenewalLoop_ContextCancellation(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("RunClientCertRenewalLoop did not stop after context cancellation")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// PerformAutomaticEnrollment
+// ---------------------------------------------------------------------------
+
+// enrollmentTestServer creates an httptest.Server that handles the trust bundle
+// and device enrollment endpoints. The trustStatus and enrollStatus control the
+// HTTP status codes returned. The enrollBody is returned as-is for the enrollment
+// endpoint. If enrollBody is nil, a valid success response is generated using the
+// CA to sign the CSR from the request.
+func enrollmentTestServer(t *testing.T, caPEM []byte, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, trustStatus, enrollStatus int, enrollBody []byte) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.WellKnownPKICABundle:
+			w.WriteHeader(trustStatus)
+			if trustStatus == http.StatusOK {
+				w.Write(caPEM) //nolint:errcheck
+			}
+		case constants.APIPathAuthDeviceEnroll:
+			if enrollStatus == http.StatusOK || enrollStatus == http.StatusCreated {
+				if enrollBody != nil {
+					w.WriteHeader(enrollStatus)
+					w.Write(enrollBody) //nolint:errcheck
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				var req struct {
+					CSRPEM    string `json:"csr_pem"`
+					CLICSRPEM string `json:"cli_csr_pem"`
+				}
+				require.NoError(t, json.Unmarshal(body, &req))
+				opCert := signCSR(t, []byte(req.CSRPEM), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
+				resp := map[string]string{
+					"operator_cert":       string(opCert),
+					"operator_id":         "op-001",
+					"operator_session_id": "sess-001",
+				}
+				respBytes, _ := json.Marshal(resp)
+				w.WriteHeader(enrollStatus)
+				w.Write(respBytes) //nolint:errcheck
+			} else {
+				w.WriteHeader(enrollStatus)
+				w.Write([]byte(`{"error":"server error"}`)) //nolint:errcheck
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+func TestPerformAutomaticEnrollment_Success(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	srv := enrollmentTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, nil)
+	defer srv.Close()
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	require.NoError(t, err)
+
+	_, err = os.Stat(paths.Infra.OperatorKeyPath)
+	assert.NoError(t, err, "operator key should be saved")
+	_, err = os.Stat(paths.Infra.OperatorCertPath)
+	assert.NoError(t, err, "operator cert should be saved")
+	_, err = os.Stat(paths.Infra.CaCertPath)
+	assert.NoError(t, err, "CA bundle should be saved")
+}
+
+func TestPerformAutomaticEnrollment_TrustBundleFetchFailure(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	srv := enrollmentTestServer(t, caPEM, caCert, caKey, http.StatusInternalServerError, http.StatusOK, nil)
+	defer srv.Close()
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrFailedToReadTrustBundle))
+}
+
+func TestPerformAutomaticEnrollment_EnrollmentHTTPError(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	srv := enrollmentTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusInternalServerError, nil)
+	defer srv.Close()
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
+}
+
+func TestPerformAutomaticEnrollment_ErrorFieldInResponse(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	errorBody, _ := json.Marshal(map[string]string{"error": "enrollment denied"})
+	srv := enrollmentTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, errorBody)
+	defer srv.Close()
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
+}
+
+func TestPerformAutomaticEnrollment_MissingOperatorCert(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	emptyBody, _ := json.Marshal(map[string]string{"operator_id": "op-001", "operator_session_id": "sess-001"})
+	srv := enrollmentTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, emptyBody)
+	defer srv.Close()
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrMissingCertificate))
+}
+
+func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	actuatorPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	actuatorPubB64 := hex.EncodeToString(actuatorPub)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.WellKnownPKICABundle:
+			w.WriteHeader(http.StatusOK)
+			w.Write(caPEM) //nolint:errcheck
+		case constants.APIPathAuthDeviceEnroll:
+			body, _ := io.ReadAll(r.Body)
+			var req struct {
+				CSRPEM string `json:"csr_pem"`
+			}
+			_ = json.Unmarshal(body, &req)
+			opCert := signCSR(t, []byte(req.CSRPEM), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
+			resp := map[string]string{
+				"operator_cert":       string(opCert),
+				"operator_id":         "op-001",
+				"operator_session_id": "sess-001",
+				"actuator_key_id":     "act-001",
+				"actuator_pub_key":    actuatorPubB64,
+			}
+			respBytes, _ := json.Marshal(resp)
+			w.WriteHeader(http.StatusOK)
+			w.Write(respBytes) //nolint:errcheck
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	err = PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), testLogger())
+	require.NoError(t, err)
+
+	signerPath := filepath.Join(paths.Infra.TrustedSignersDir, "act-001"+constants.PublicKeySuffix)
+	_, err = os.Stat(signerPath)
+	assert.NoError(t, err, "actuator public key should be saved to trusted_signers")
 }
