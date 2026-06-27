@@ -93,10 +93,14 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix)
 
 	// Deprecated alias exact paths (one-minor-version transition)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIRegisterChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIRegisterVerify)
 	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge)
 	r.addExact(constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify)
 	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge)
 	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge)
+	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify)
 
 	// WebSessionAuth-protected routes (browser-facing, no client cert)
 	// These bypass mTLS middleware; WebSessionAuth provides the auth gate
@@ -800,77 +804,76 @@ func (s *AuthService) WebSocketAuth(next http.Handler) http.Handler {
 	return s.Middleware(next)
 }
 
+// ValidateWebSessionCookie extracts and validates the web session cookie from
+// the request, returning the web session ID and user ID if valid. This is used
+// by both WebSessionAuth middleware and the unified SSE stream handler.
+func (s *AuthService) ValidateWebSessionCookie(r *http.Request, db *CanonicalDBService) (webSessionID, userID string, err error) {
+	cookie, err := r.Cookie(constants.WebSessionCookieName)
+	if err != nil || cookie == nil {
+		return "", "", constants.ErrWebSessionCookieRequired
+	}
+
+	webSessionID = cookie.Value
+	if webSessionID == "" {
+		return "", "", constants.ErrWebSessionCookieInvalid
+	}
+
+	doc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+	if err != nil {
+		s.logger.Error("gateway: auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load web session %s: %w", webSessionID, constants.ErrNotFound))
+		return "", "", constants.ErrWebSessionValidationFailed
+	}
+	if doc == nil {
+		return "", "", constants.ErrWebSessionNotFound
+	}
+
+	var webSession models.WebSession
+	data, err := json.Marshal(doc.Data)
+	if err != nil {
+		s.logger.Error("gateway: auth: marshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: marshal web session %s: %w", webSessionID, constants.ErrRequestMarshalFailed))
+		return "", "", constants.ErrSessionParseFailed
+	}
+	if err := json.Unmarshal(data, &webSession); err != nil {
+		s.logger.Error("gateway: auth: unmarshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: unmarshal web session %s: %w", webSessionID, constants.ErrResponseParseFailed))
+		return "", "", constants.ErrSessionParseFailed
+	}
+
+	if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
+		return "", "", constants.ErrWebSessionExpired
+	}
+
+	if s.userSvc != nil {
+		user := s.getCachedUser(webSession.UserID)
+		if user == nil {
+			user, err = s.userSvc.GetByID(webSession.UserID)
+			if err != nil {
+				s.logger.Error("gateway: auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load user %s for web session: %w", webSession.UserID, constants.ErrUserNotFound))
+				return "", "", constants.ErrIdentityValidationFailed
+			}
+			if user != nil {
+				s.cacheUser(webSession.UserID, user)
+			}
+		}
+		if user != nil && !user.IsActive() {
+			return "", "", constants.ErrIdentityDisabled
+		}
+	}
+
+	return webSessionID, webSession.UserID, nil
+}
+
 // WebSessionAuth validates web session cookies and stamps context with user_id.
 // This is for browser-based authentication on the public gateway.
 func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie("g8e_session")
-		if err != nil || cookie == nil {
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionCookieRequired.Error())
-			return
-		}
-
-		webSessionID := cookie.Value
-		if webSessionID == "" {
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionCookieInvalid.Error())
-			return
-		}
-
-		// Validate web session
-		doc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+		webSessionID, userID, err := s.ValidateWebSessionCookie(r, db)
 		if err != nil {
-			s.logger.Error("gateway: auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load web session %s: %w", webSessionID, constants.ErrNotFound))
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionValidationFailed.Error())
+			s.responder.Error(w, http.StatusUnauthorized, err.Error())
 			return
 		}
-		if doc == nil {
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionNotFound.Error())
-			return
-		}
+		_ = webSessionID
 
-		// Check expiry
-		var webSession models.WebSession
-		data, err := json.Marshal(doc.Data)
-		if err != nil {
-			s.logger.Error("gateway: auth: marshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: marshal web session %s: %w", webSessionID, constants.ErrRequestMarshalFailed))
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrSessionParseFailed.Error())
-			return
-		}
-		if err := json.Unmarshal(data, &webSession); err != nil {
-			s.logger.Error("gateway: auth: unmarshal web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: unmarshal web session %s: %w", webSessionID, constants.ErrResponseParseFailed))
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrSessionParseFailed.Error())
-			return
-		}
-
-		if time.Now().UnixMilli() > webSession.ExpiresAtUnixMs {
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrWebSessionExpired.Error())
-			return
-		}
-
-		// Check if the user is active (plan §4.6)
-		if s.userSvc != nil {
-			// Try cache first
-			user := s.getCachedUser(webSession.UserID)
-			if user == nil {
-				var err error
-				user, err = s.userSvc.GetByID(webSession.UserID)
-				if err != nil {
-					s.logger.Error("gateway: auth: load user for web session", "user_id", webSession.UserID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load user %s for web session: %w", webSession.UserID, constants.ErrUserNotFound))
-					s.responder.Error(w, http.StatusUnauthorized, constants.ErrIdentityValidationFailed.Error())
-					return
-				}
-				if user != nil {
-					s.cacheUser(webSession.UserID, user)
-				}
-			}
-			if user != nil && !user.IsActive() {
-				s.responder.Error(w, http.StatusUnauthorized, constants.ErrIdentityDisabled.Error())
-				return
-			}
-		}
-
-		// Stamp context with user_id
-		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, webSession.UserID)
+		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

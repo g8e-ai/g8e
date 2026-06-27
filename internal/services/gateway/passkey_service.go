@@ -30,6 +30,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
@@ -42,6 +43,8 @@ const (
 type userStore interface {
 	GetUser(userID string) (*models.User, error)
 	UpdateUser(userID string, user *models.User) error
+	CreateUser() (*models.User, error)
+	HasAnyUsers() (bool, error)
 }
 
 // sessionStore defines the interface for WebAuthn session storage.
@@ -91,6 +94,12 @@ func decodeCredID(s string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(s)
 }
 
+// encodeChallenge encodes arbitrary challenge bytes (e.g. transaction hashes) as
+// base64 URL. Semantically distinct from encodeCredID but uses the same encoding.
+func encodeChallenge(challenge []byte) string {
+	return base64.RawURLEncoding.EncodeToString(challenge)
+}
+
 // dbUserStore implements userStore using CanonicalDBService.
 type dbUserStore struct {
 	db *CanonicalDBService
@@ -125,6 +134,36 @@ func (s *dbUserStore) UpdateUser(userID string, user *models.User) error {
 	}
 	_, err = s.db.DocStore.DocUpdate(marshaler.CollectionName(constants.CollectionUsers), userID, data)
 	return err
+}
+
+func (s *dbUserStore) CreateUser() (*models.User, error) {
+	userID := uuid.NewString()
+	webAuthnUserID := uuid.NewString()
+
+	u := &models.User{
+		ID:                 userID,
+		PasskeyCredentials: []models.PasskeyCredential{},
+		Provider:           string(constants.AuthProviderPasskey),
+		Status:             constants.UserStatusActive,
+		WebAuthnUserID:     webAuthnUserID,
+	}
+
+	data, err := json.Marshal(u)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal user: %w", err)
+	}
+	if err := s.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionUsers), userID, data); err != nil {
+		return nil, fmt.Errorf("failed to store user: %w", err)
+	}
+	return u, nil
+}
+
+func (s *dbUserStore) HasAnyUsers() (bool, error) {
+	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionUsers), []models.DocFilter{}, "", 1)
+	if err != nil {
+		return false, err
+	}
+	return len(docs) > 0, nil
 }
 
 // dbSessionStore implements sessionStore using CanonicalDBService.
@@ -390,7 +429,7 @@ func (s *PasskeyService) GenerateApprovalChallenge(userID, transactionHash strin
 
 	options := &protocol.CredentialAssertion{
 		Response: protocol.PublicKeyCredentialRequestOptions{
-			Challenge:          protocol.URLEncodedBase64(base64.RawURLEncoding.EncodeToString([]byte(transactionHash))),
+			Challenge:          protocol.URLEncodedBase64(encodeChallenge([]byte(transactionHash))),
 			Timeout:            60000,
 			RelyingPartyID:     s.rpID,
 			AllowedCredentials: allowedCredentials,
@@ -544,7 +583,7 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 	}
 
 	session := webauthn.SessionData{
-		Challenge:            base64.RawURLEncoding.EncodeToString([]byte(transactionHash)),
+		Challenge:            encodeChallenge([]byte(transactionHash)),
 		RelyingPartyID:       s.rpID,
 		UserID:               []byte(userID),
 		AllowedCredentialIDs: allowedCredentialIDs,

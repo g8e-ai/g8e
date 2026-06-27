@@ -406,3 +406,44 @@ func TestPasskeyRegisterChallengeEnforcesFirstCredCLI(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 	assert.True(t, resp["success"].(bool))
 }
+
+func TestPasskeyConfigInvariants(t *testing.T) {
+	t.Parallel()
+
+	// Enumerate all production passkey handler configs used in buildPublicRouter.
+	// These must be kept in sync with gateway_http_router.go.
+	type cfgEntry struct {
+		name       string
+		cfg        passkeyHandlerConfig
+		isRegister bool // true if used with RegisterChallenge/RegisterVerify
+	}
+	productionConfigs := []cfgEntry{
+		{"jitCfg", passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}, true},
+		{"cliBootstrapRegisterCfg", passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}, true},
+		{"cliBootstrapAuthCfg", passkeyHandlerConfig{source: sourceCLIBootstrap}, false},
+		{"browserBootstrapRegisterCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}, true},
+		{"browserBootstrapAuthCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}, false},
+		{"mtlsCfg", passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}, true},
+		{"mtlsAuthVerifyCfg", passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true, createWebSession: true}, false},
+	}
+
+	for _, pc := range productionConfigs {
+		t.Run(pc.name, func(t *testing.T) {
+			t.Parallel()
+			// Invariant 1: setCookie must imply createWebSession
+			if pc.cfg.setCookie {
+				assert.True(t, pc.cfg.createWebSession,
+					"%s: setCookie=true must imply createWebSession=true", pc.name)
+			}
+			// Invariant 2: For registration configs, !enforceFirstCredentialOnly &&
+			// !requireAuthenticatedUser should never appear in production wiring —
+			// it would allow anonymous, unrestricted passkey registration.
+			// Authentication configs are exempt: the user is not yet authenticated
+			// and first-credential enforcement is irrelevant.
+			if pc.isRegister && !pc.cfg.enforceFirstCredentialOnly && !pc.cfg.requireAuthenticatedUser {
+				t.Errorf("%s: registration config with enforceFirstCredentialOnly=false and requireAuthenticatedUser=false — "+
+					"this allows anonymous unrestricted registration and must not be used in production", pc.name)
+			}
+		})
+	}
+}

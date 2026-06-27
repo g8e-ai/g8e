@@ -103,7 +103,7 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 
 	// Set HttpOnly Secure SameSite=Lax cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "g8e_session",
+		Name:     constants.WebSessionCookieName,
 		Value:    webSession.ID,
 		Path:     constants.PathRoot,
 		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
@@ -120,7 +120,7 @@ func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *h
 }
 
 func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("g8e_session")
+	cookie, err := r.Cookie(constants.WebSessionCookieName)
 	if err == nil {
 		// Best effort delete web session from DB
 		if _, err := c.db.DocStore.DocDelete(marshaler.CollectionName(constants.CollectionWebSessions), cookie.Value); err != nil {
@@ -130,7 +130,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 
 	// Clear cookie
 	http.SetCookie(w, &http.Cookie{
-		Name:     "g8e_session",
+		Name:     constants.WebSessionCookieName,
 		Value:    "",
 		Path:     constants.PathRoot,
 		MaxAge:   -1,
@@ -172,7 +172,7 @@ func (c *AuthController) handleWebSession(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	cookie, _ := r.Cookie("g8e_session")
+	cookie, _ := r.Cookie(constants.WebSessionCookieName)
 	webSessionID := ""
 	if cookie != nil {
 		webSessionID = cookie.Value

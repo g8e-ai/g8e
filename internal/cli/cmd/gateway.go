@@ -365,9 +365,10 @@ func gatewayServeCmd() *cobra.Command {
 	var a2aDownstreamURL string
 
 	cmd := &cobra.Command{
-		Use:   "serve",
-		Short: "Run the g8e Gateway in foreground (worker mode)",
-		Long:  `Run the g8e Gateway in foreground as a worker. This is the re-exec target for 'gw start' and can also be run directly for debugging or Docker environments.`,
+		Use:    "serve",
+		Short:  "Run the g8e Gateway in foreground (worker mode)",
+		Long:   `Run the g8e Gateway in foreground as a worker. This is the re-exec target for 'gw start' and can also be run directly for debugging or Docker environments.`,
+		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Validate posture
 			if _, err := governance.ParseGovernancePosture(posture); err != nil {

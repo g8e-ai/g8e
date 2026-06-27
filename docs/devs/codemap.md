@@ -110,7 +110,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.CLISessionService
 │   └── gateway.OperatorSessionService
 ├── gateway.PasskeyService
-│   └── gateway.CanonicalDBService [SHARED]
+│   ├── gateway.CanonicalDBService [SHARED] (via dbUserStore and dbSessionStore wrappers)
+│   ├── gateway.WebSessionService (for session creation on browser flows)
+│   └── response.Writer (for HTTP responses in passkey_service_http.go)
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
@@ -135,9 +137,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   └── gateway.PKIAuthority
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
-│   ├── tribunal.TribunalService [SHARED]
+│   ├── tribunal.TribunalService (set post-construction by boot sequence via SetTribunal)
 │   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
-│   ├── governance.EnvelopeProcessor (set post-construction by boot sequence)
+│   ├── governance.EnvelopeProcessor (set post-construction by boot sequence via SetEnvelopeProcessor)
 │   └── response.Writer
 ├── governance.outboundL3Notary (gateway variant via governance.NewGatewayL3Notary, implements governance.L3Notary)
 │   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore)
@@ -151,8 +153,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ├── tribunal.TribunalService
 │   ├── governance.L1Doctrine
 │   ├── tribunal.TribunalMember (one or more enrolled members with Ed25519 keys)
-│   ├── response.Writer
-│   └── tribunal.LocalDeliberator (in-process deliberation)
+│   └── response.Writer
 ├── mcp.GatewayService [SHARED]
 │   ├── response.Writer
 │   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
@@ -162,7 +163,13 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── mcp.FieldReader (gateway.DocumentStoreService) [SHARED]
 │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in both modes)
 │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in both modes)
-│   └── tribunal.TribunalDeliberator (tribunal.LocalDeliberator in gateway mode, nil in outbound)
+│   ├── tribunal.TribunalDeliberator (tribunal.LocalDeliberator in gateway mode, nil in outbound)
+│   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService via SetDependencies in both modes)
+│   ├── StateRootProvider (set by in-process OperatorPubSubService via SetDependencies in both modes)
+│   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService via SetDependencies in both modes)
+│   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService via SetDependencies in both modes)
+│   ├── a2aDownstreamURL (A2A egress, set by GatewayModeService.initHandlersAndServers in gateway mode only)
+│   └── publicBaseURL (set by GatewayModeService.initHandlersAndServers in gateway mode only)
 └── response.Writer
 ```
 
@@ -213,6 +220,12 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
 - `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode via `NewOutboundL3Notary`; used in gateway mode via `NewGatewayL3Notary` with both `cliSessionVerifier` and `PasskeyService` as delegates).
 - `gateway.cliSessionVerifier` implements: `governance.CLISessionVerifier` (used in gateway mode for mTLS CLI session verification within the L3 notary).
+
+### PasskeyService HTTP Layer Consolidation
+- **`passkey_service_http.go`** — All passkey HTTP handlers now live on `PasskeyService` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). The former `auth_controller_passkey.go` has been deleted entirely. Passkey handlers were stripped from `auth_controller_bootstrap.go` (non-passkey bootstrap handlers retained). All 7 methods have Swagger annotations (`@Summary`/`@Router`/`@Success`/`@Failure`).
+- **`passkey_service.go`** — Domain logic unchanged. Added `encodeCredID`/`decodeCredID` helpers (lines 86-95) and `encodeChallenge` helper (lines 97-100) for centralized base64 RawURL encoding of credential IDs and challenge bytes. The `userStore` interface includes `CreateUser` and `HasAnyUsers` methods (lines 43-48) for browser bootstrap auto-creation. The `sessionStore` interface includes `DeleteSession` (line 54) for challenge purge-after-verify. Uses `bytes.Equal` for safe credential ID comparisons (line 474).
+- **`internal/models/auth.go`** — `PasskeyCredential.Validate()` method (line 263) performs on-disk schema validation (COSE key parsing, ID size limits, attestation type validation, timestamp checks) before persistence in `addCredential`.
+- **`internal/cli/auth/windows_crypto_mock_test.go`** — Cross-platform crypto mock tests (6 tests, 9 subtests) that construct synthetic `WebAuthnAttestationResponse` and `WebAuthnAssertionResponse` structs and verify the full client-side encoding/decoding pathway without requiring `webauthn.dll`. Covers edge cases: empty `UserHandle`, large credential IDs (1024 bytes), empty `RawId`, binary data with special bytes, JSON field name shape, `omitempty` behavior, and CLI encoding pathway consistency.
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
@@ -274,11 +287,17 @@ The following packages are test-only and are not part of the production dependen
 - `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `Approve` (uses `constants.APIPaths.*`)
 - `client/envelope.go` - `SubmitMaximal`: builds real `GovernanceEnvelope` with L1/L2/L3, submits over mTLS
 - `client/audit.go` - `AuditReceipts`, `ExportReceipts`, `DiscoverOperator` (parses cert SAN for offline session discovery)
+- `client/protocols.go` - JSON-RPC request/response types and A2A protobuf envelope encoding for MCP/A2A protocol ingress
+- `config/config.go` - Harness configuration: auth material (client cert/key/CA bundle), gateway URL, posture selection
 - `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, veto, OOB approval
 - `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
+- `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 
 **`demos/dow/`** - Department of War tactical edge demo
 - `gimbal.py` - Mock gimbal HTTP server on `net_secure` (records slew commands to `/var/gimbal/slews.jsonl`)
 - `slew.sh` - Demo artifact mounted at `/usr/local/bin/slew` in operator container; wraps gimbal HTTP call
+- `inspect_pnt.py` - Demo artifact for PNT inspection in `agent-pnt-fusion` container
+- `inspect_rf.py` - Demo artifact for RF spectrum inspection in `agent-eoir` container
+- `verify_slews.py` - Demo artifact for verifying gimbal slew results
 - `dow_simulator.py` - Display-only sensor narration for `agent-eoir` and `agent-pnt-fusion`

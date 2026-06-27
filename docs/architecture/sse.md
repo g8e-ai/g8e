@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-06-26
-Version: v1.2.3
+Last Updated: 2026-06-27
+Version: v1.2.4
 
 The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
 
@@ -13,11 +13,11 @@ The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastru
 
 ## Overview
 
-The SSE system provides three core endpoints:
+The SSE system provides three endpoints:
 
 - **`POST /api/v1/sse/push`**: App workloads push events (authenticated via mTLS)
 - **`GET /api/v1/sse/events`**: Poll for historical events (with `since_id` and `limit` params)
-- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery
+- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery (mTLS authenticated). All clients — CLI, browser, dashboard — use this single endpoint.
 
 Events are stored in the `sse_events` table and routed by one of three identifiers:
 - `web_session_id`: Web UI session events
@@ -52,8 +52,8 @@ flowchart TD
     db --> events
     db --> stream
     pubsub --> stream
-    browser -- "GET /api/v1/sse/stream" --> stream
-    browser -- "GET /api/v1/sse/events" --> events
+    browser -- "mTLS GET /api/v1/sse/stream" --> stream
+    browser -- "mTLS GET /api/v1/sse/events" --> events
 ```
 
 ---
@@ -136,7 +136,7 @@ Unset routing fields are omitted from the JSON response (the `SSEEventRow` model
 
 ### GET /api/v1/sse/stream
 
-**Authentication**: mTLS with Operator session
+**Authentication**: mTLS with Operator session. All clients (CLI, browser, dashboard) authenticate via mTLS client certificate. There is no cookie-based auth path — the transport determines identity, not the browser session.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session
@@ -237,15 +237,15 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 - The app identity must be associated with the target session or user. Ownership is verified via `protocol.WorkloadIdentity.MatchesApp` against bound Operator sessions. The event is appended to the database before the ownership check; if ownership verification fails, the handler returns 403 but the row remains persisted.
 
 ### Consumer Authorization
-- Only authenticated Operator sessions can consume events.
-- Operator must be authorized for the requested route:
+- All SSE endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS with an authenticated Operator session. There is no cookie-based auth path.
+- The Operator must be authorized for the requested route:
   - For `web_session_id`: Must own the web session.
   - For `cli_session_id`: Must own the CLI session.
   - For `user_id`: Must be the user.
 - Multi-tenant isolation is enforced at the database query level.
 
 ### Transport Security
-- All SSE endpoints require mTLS (HTTPS port 8443).
+- All SSE endpoints (`/api/v1/sse/push`, `/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS (HTTPS port 8443).
 - Not available on HTTP bootstrap port (8080).
 - Pub/Sub channels are scoped to routing targets (format: `sse:cli:<id>`, `sse:web:<id>`, `sse:user:<id>`)
 

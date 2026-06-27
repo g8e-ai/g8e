@@ -219,7 +219,7 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
                 statusDiv.textContent = 'Requesting registration challenge...';
 
                 // 1. Get Registration Challenge (use browser CLI bootstrap endpoint - public, no auth required)
-                const challengeResp = await fetch(gatewayURL + "/api/v1/auth/passkeys/cli-browser-register/challenge", {
+                const challengeResp = await fetch(gatewayURL + "` + constants.APIPaths.AuthPasskeysConsoleRegisterChallenge + `", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -256,7 +256,7 @@ func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Requ
                 statusDiv.textContent = 'Verifying registration...';
 
                 // 3. Verify Registration (use browser CLI bootstrap endpoint - public, no auth required)
-                const verifyResp = await fetch(gatewayURL + "/api/v1/auth/passkeys/cli-browser-register/verify", {
+                const verifyResp = await fetch(gatewayURL + "` + constants.APIPaths.AuthPasskeysConsoleRegisterVerify + `", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({

@@ -5,11 +5,11 @@ title: g8e Operator
 # g8e Operator
 
 Last Updated: 2026-06-26
-Version: v1.2.3
+Version: v1.2.4
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e Node. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by runtime configuration as seen in `cmd/operator/main.go`:
+The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e Node. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by CLI subcommands (`gw serve` vs `operator run`) with worker bodies in `internal/cli/serve/`:
 
 - **g8e Gateway (PDP)**: When run in Gateway mode (utilizing `L1Doctrine`, `L2Consensus`, and `L3Notary` as a central authority), it acts as the central Policy Decision Point (PDP) with platform persistence and pub/sub brokering.
 - **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation.

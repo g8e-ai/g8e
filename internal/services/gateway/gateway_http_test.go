@@ -25,6 +25,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net"
 	"net/http"
@@ -687,6 +688,101 @@ func TestBuildPublicRouter(t *testing.T) {
 	router.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusFound, rr.Code, "Landing page should redirect with 302")
 	assert.Equal(t, "/console/", rr.Header().Get("Location"), "Landing page should redirect directly to /console/")
+
+	// 5. New bootstrap/* routes bypass mTLS (public, CLI bootstrap)
+	bootstrapPaths := []string{
+		constants.APIPaths.AuthPasskeysBootstrapRegisterChallenge,
+		constants.APIPaths.AuthPasskeysBootstrapRegisterVerify,
+		constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify,
+	}
+	for _, path := range bootstrapPaths {
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+		rr = httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
+		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should bypass mTLS check", path)
+	}
+
+	// 6. New console/* routes bypass mTLS (public, browser bootstrap)
+	consolePaths := []string{
+		constants.APIPaths.AuthPasskeysConsoleRegisterChallenge,
+		constants.APIPaths.AuthPasskeysConsoleRegisterVerify,
+		constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify,
+	}
+	for _, path := range consolePaths {
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+		rr = httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
+		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should bypass mTLS check", path)
+	}
+
+	// 7. Deprecated alias routes still function and bypass mTLS
+	deprecatedAliasPaths := []string{
+		constants.APIPaths.AuthPasskeysCLIRegisterChallenge,
+		constants.APIPaths.AuthPasskeysCLIRegisterVerify,
+		constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysCLIAuthenticateVerify,
+		constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge,
+		constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify,
+		constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify,
+	}
+	for _, path := range deprecatedAliasPaths {
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+		rr = httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Deprecated alias %s should be registered", path)
+		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Deprecated alias %s should bypass mTLS check", path)
+	}
+
+	// 8. mTLS-protected passkey routes must NOT bypass mTLS
+	mtlsPasskeyPaths := []string{
+		constants.APIPaths.AuthPasskeysRegisterChallenge,
+		constants.APIPaths.AuthPasskeysRegisterVerify,
+		constants.APIPaths.AuthPasskeysAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysAuthenticateVerify,
+	}
+	for _, path := range mtlsPasskeyPaths {
+		req = httptest.NewRequest(http.MethodPost, path, nil)
+		rr = httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
+		assert.Contains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should be mTLS-gated", path)
+	}
+}
+
+// TestDeprecatedPasskeyAlias verifies that the deprecatedPasskeyAlias middleware
+// logs a Warn-level message with old_path and new_path fields, then delegates
+// to the wrapped handler.
+func TestDeprecatedPasskeyAlias(t *testing.T) {
+	t.Parallel()
+
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+	h := &HTTPHandler{logger: logger}
+
+	called := false
+	wrapped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := h.deprecatedPasskeyAlias("/old/path", "/new/path", wrapped)
+
+	req := httptest.NewRequest(http.MethodPost, "/old/path", nil)
+	rr := httptest.NewRecorder()
+	handler(rr, req)
+
+	assert.True(t, called, "wrapped handler should be called")
+	assert.Equal(t, http.StatusOK, rr.Code, "response should pass through from wrapped handler")
+
+	logOutput := logBuf.String()
+	assert.Contains(t, logOutput, "deprecated passkey route alias used", "log should contain deprecation message")
+	assert.Contains(t, logOutput, "old_path=/old/path", "log should contain old_path")
+	assert.Contains(t, logOutput, "new_path=/new/path", "log should contain new_path")
 }
 
 type errorReader struct{}

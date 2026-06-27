@@ -560,7 +560,6 @@ Storage service tests and test-only audit storage implementations separated from
 - `internal/cli/serve/gateway_test.go` - Serve gateway command tests
 - `internal/cli/serve/logger_test.go` - Serve logger tests
 - `internal/cli/serve/operator_test.go` - Serve operator command tests
-- `internal/cli/serve/terminal_linux_test.go` - Linux terminal tests
 - `internal/cli/serve/version_test.go` - Serve version tests
 - `internal/cli/stream/stream_ssh_test.go` - SSH stream tests
 - `internal/cli/stream/stream_ssh_utils_test.go` - SSH stream utility tests
@@ -746,8 +745,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make test-unit`** - Runs Tier 1 (Unit) tests without build tags. No external dependencies.
 - **`make test-integration`** - Runs Tier 2 (In-Process Integration) tests with `integration` build tag. Uses on-disk SQLite, local PKI, local pubsub.
 - **`make test-docker`** - Runs Tier 3 (Docker E2E) tests with `e2e` build tag. Requires Docker.
-- **`make test-coverage`** - Runs tests with coverage (enforces 70% threshold). Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
-- **`make test-gateway`** - Runs gateway-specific integration tests (A2A gateway, MCP gateway). Targets `test/a2a_gateway_test.go`, `test/mcp_gateway_test.go`, and `test/mcp_stdio_test.go` with the `integration` build tag.
+- **`make test-coverage`** - Runs tests with coverage. Use PKG=./path/to/pkg for specific package, VERBOSE=true for verbose output.
 - **`make ci`** - Runs the full CI pipeline locally (proto verification, swagger generation, lint, vulncheck, tests). Equivalent to the GitHub Actions workflow.
 
 ### Lints
