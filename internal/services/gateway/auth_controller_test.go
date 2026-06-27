@@ -191,8 +191,9 @@ func TestAuthControllerReadBody(t *testing.T) {
 		c, _ := setupTestAuthController(t)
 		body := `{"test":"data"}`
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(body))
+		rr := httptest.NewRecorder()
 
-		data, err := c.readBody(req)
+		data, err := c.readBody(rr, req)
 		require.NoError(t, err)
 		assert.Equal(t, []byte(body), data)
 	})
@@ -201,8 +202,9 @@ func TestAuthControllerReadBody(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(""))
+		rr := httptest.NewRecorder()
 
-		data, err := c.readBody(req)
+		data, err := c.readBody(rr, req)
 		require.NoError(t, err)
 		assert.Equal(t, []byte{}, data)
 	})
@@ -214,8 +216,9 @@ func TestAuthControllerReadBody(t *testing.T) {
 		c.cfg.Gateway.MaxPayloadBytes = 100
 		largeBody := strings.Repeat("a", 200)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(largeBody))
+		rr := httptest.NewRecorder()
 
-		_, err := c.readBody(req)
+		_, err := c.readBody(rr, req)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "http: request body too large")
 	})

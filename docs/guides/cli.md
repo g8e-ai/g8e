@@ -193,7 +193,7 @@ Available Commands:
   enroll          Enroll CLI with the running Gateway and register a passkey
   logout          Clear local Operator session and credentials
   enroll-windows  Enroll via Windows Certificate Store (Windows only - advanced)
-  approve         Approve a suspended L3 transaction with CLI signature
+  approve         Approve a suspended L3 transaction via browser WebAuthn
 
 Flags:
   -h, --help   help for auth
@@ -239,7 +239,7 @@ Flags:
 
 ### auth approve
 ```
-Approve a suspended L3 transaction with CLI signature. Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the Gateway.
+Approve a suspended L3 transaction via browser WebAuthn. Opens the gateway's browser-based approval page. The browser handles the WebAuthn/passkey ceremony; the CLI polls the gateway's mTLS status endpoint until the transaction is approved or times out.
 
 Usage:
   g8e auth approve <transaction_hash> [flags]

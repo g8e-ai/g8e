@@ -130,7 +130,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.OperatorSessionService
 │   ├── gateway.WebSessionService
 │   ├── gateway.RegistrationService
-│   ├── gateway.PasskeyService
+│   ├── gateway.PasskeyService (includes approval handlers via passkey_service_approvals.go)
+│   │   ├── gateway.MCPServiceProvider (set post-construction via SetApprovalDependencies)
+│   │   └── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
 │   │   ├── gateway.CanonicalDBService [SHARED]
@@ -138,7 +140,6 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
 │   ├── tribunal.TribunalService (set post-construction by boot sequence via SetTribunal)
-│   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
 │   ├── governance.EnvelopeProcessor (set post-construction by boot sequence via SetEnvelopeProcessor)
 │   └── response.Writer
 ├── governance.outboundL3Notary (gateway variant via governance.NewGatewayL3Notary, implements governance.L3Notary)
@@ -223,9 +224,11 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### PasskeyService HTTP Layer Consolidation
 - **`passkey_service_http.go`** — All passkey HTTP handlers now live on `PasskeyService` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). The former `auth_controller_passkey.go` has been deleted entirely. Passkey handlers were stripped from `auth_controller_bootstrap.go` (non-passkey bootstrap handlers retained). All 7 methods have Swagger annotations (`@Summary`/`@Router`/`@Success`/`@Failure`).
-- **`passkey_service.go`** — Domain logic unchanged. Added `encodeCredID`/`decodeCredID` helpers (lines 86-95) and `encodeChallenge` helper (lines 97-100) for centralized base64 RawURL encoding of credential IDs and challenge bytes. The `userStore` interface includes `CreateUser` and `HasAnyUsers` methods (lines 43-48) for browser bootstrap auto-creation. The `sessionStore` interface includes `DeleteSession` (line 54) for challenge purge-after-verify. Uses `bytes.Equal` for safe credential ID comparisons (line 474).
+- **`passkey_service_approvals.go`** — All 6 approval handlers (`handleApprovalChallenge`, `handleApprovalVerify`, `handleCLIApprovalStatus`, `handleListSuspendedTransactions`, `handleApproveRedirect`, `handleApprovalChallengeFromConsole`) now live on `*PasskeyService`. The former `auth_controller_approvals.go` has been deleted. Dependencies are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` after construction.
+- **`passkey_service_approvals_test.go`** — Ported approval tests from the deleted `auth_controller_approvals_test.go`, testing all handlers on `*PasskeyService` with mocked dependencies.
+- **`passkey_service.go`** — Domain logic unchanged. Added `MCPServiceProvider` interface and `SetApprovalDependencies` setter for approval handler dependency injection. Added `encodeCredID`/`decodeCredID` helpers (lines 86-95) and `encodeChallenge` helper (lines 97-100) for centralized base64 RawURL encoding of credential IDs and challenge bytes. The `userStore` interface includes `CreateUser` and `HasAnyUsers` methods (lines 43-48) for browser bootstrap auto-creation. The `sessionStore` interface includes `DeleteSession` (line 54) for challenge purge-after-verify. Uses `bytes.Equal` for safe credential ID comparisons (line 474).
+- **`auth_controller.go`** — No longer has `mcp` or `suspendedStore` fields. `newAuthController` signature simplified to remove those parameters. `readBody` now accepts `http.ResponseWriter` to fix nil ResponseWriter bug.
 - **`internal/models/auth.go`** — `PasskeyCredential.Validate()` method (line 263) performs on-disk schema validation (COSE key parsing, ID size limits, attestation type validation, timestamp checks) before persistence in `addCredential`.
-- **`internal/cli/auth/windows_crypto_mock_test.go`** — Cross-platform crypto mock tests (6 tests, 9 subtests) that construct synthetic `WebAuthnAttestationResponse` and `WebAuthnAssertionResponse` structs and verify the full client-side encoding/decoding pathway without requiring `webauthn.dll`. Covers edge cases: empty `UserHandle`, large credential IDs (1024 bytes), empty `RawId`, binary data with special bytes, JSON field name shape, `omitempty` behavior, and CLI encoding pathway consistency.
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).

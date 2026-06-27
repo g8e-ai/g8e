@@ -27,7 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
@@ -49,7 +48,6 @@ type HTTPHandlerDependencies struct {
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
 	Tribunal           *tribunal.TribunalService
-	SuspendedStore     storage.SuspendedTransactionStore
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
 }

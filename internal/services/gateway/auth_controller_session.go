@@ -28,7 +28,7 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := c.readBody(r)
+	body, err := c.readBody(w, r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return

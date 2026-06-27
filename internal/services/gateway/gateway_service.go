@@ -413,7 +413,6 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 		MCPGateway:         ls.mcpGateway,
 		AppEnrollment:      appEnrollment,
 		Tribunal:           ls.tribunal,
-		SuspendedStore:     ls.suspendedTxService,
 		IsReady:            ls.IsReady,
 		IsGovernanceReady:  ls.IsGovernanceReady,
 	})

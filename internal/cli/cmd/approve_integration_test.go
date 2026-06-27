@@ -17,9 +17,7 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"crypto/ed25519"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -55,329 +53,6 @@ func TestApproveCmd(t *testing.T) {
 		// So we test the validation directly
 		err := cmd.Args(cmd, []string{})
 		require.Error(t, err)
-	})
-
-	t.Run("approve fails with invalid config", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Don't create CLI key file
-		err := cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "read CLI private key")
-	})
-
-	t.Run("approve fails when CLI private key missing", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Don't create CLI key file
-		err := cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "read CLI private key")
-	})
-
-	t.Run("approve fails with invalid PEM private key", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Write invalid PEM
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), []byte("invalid pem"), 0600))
-
-		err := cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrPEMDecodeFailed)
-	})
-
-	t.Run("approve fails with extra data after PEM block", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Create valid Ed25519 key
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-
-		privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-		require.NoError(t, err)
-
-		privPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: privBytes,
-		})
-		// Append extra data after PEM block
-		extraData := append(privPEM, []byte("\nextra data")...)
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), extraData, 0600))
-
-		err = cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "extra data after PEM block")
-	})
-
-	t.Run("approve fails with invalid PKCS8 private key", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Write valid PEM but invalid PKCS8 data
-		privPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: []byte("invalid pkcs8 data"),
-		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
-
-		err := cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "parse private key")
-	})
-
-	t.Run("approve fails with non-Ed25519 key type", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Create ECDSA key (not Ed25519)
-		ecdsaKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		require.NoError(t, err)
-
-		privBytes, err := x509.MarshalPKCS8PrivateKey(ecdsaKey)
-		require.NoError(t, err)
-
-		privPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: privBytes,
-		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
-
-		err = cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrInvalidKeyType)
-	})
-
-	t.Run("approve requires CLI certificate", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Create valid Ed25519 key
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-
-		privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-		require.NoError(t, err)
-
-		privPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: privBytes,
-		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
-
-		// Don't create cert file
-		err = cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "read CLI certificate")
-	})
-
-	t.Run("approve fails with invalid PEM certificate", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Create valid Ed25519 key
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-
-		privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-		require.NoError(t, err)
-
-		privPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: privBytes,
-		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
-
-		// Write invalid PEM certificate
-		require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("invalid pem"), 0600))
-
-		err = cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.ErrorIs(t, err, constants.ErrPEMDecodeFailed)
-	})
-
-	t.Run("approve fails with extra data after PEM certificate block", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Create valid Ed25519 key
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-
-		privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-		require.NoError(t, err)
-
-		privPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: privBytes,
-		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
-
-		// Create valid certificate
-		cert := generateTestCertificate(t, priv)
-		certPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: cert,
-		})
-		// Append extra data after PEM block
-		extraData := append(certPEM, []byte("\nextra data")...)
-		require.NoError(t, os.WriteFile(cfg.CLICertFile(), extraData, 0600))
-
-		err = cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "extra data after PEM certificate block")
-	})
-
-	t.Run("approve fails with invalid certificate data", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		cfg := setupApproveTestConfig(t, tmpDir)
-
-		// Use injectable config loader for hermetic test
-		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
-			return cfg, nil
-		}, defaultAPIClientFactory)
-		var buf bytes.Buffer
-		cmd.SetOut(&buf)
-		cmd.SetErr(&buf)
-
-		originalWd, _ := os.Getwd()
-		os.Chdir(tmpDir)
-		defer os.Chdir(originalWd)
-
-		// Create valid Ed25519 key
-		_, priv, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-
-		privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
-		require.NoError(t, err)
-
-		privPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "PRIVATE KEY",
-			Bytes: privBytes,
-		})
-		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
-
-		// Write valid PEM but invalid certificate data
-		certPEM := pem.EncodeToMemory(&pem.Block{
-			Type:  "CERTIFICATE",
-			Bytes: []byte("invalid certificate data"),
-		})
-		require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
-
-		err = cmd.RunE(cmd, []string{"abc123"})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "parse certificate")
 	})
 
 	t.Run("approve fails when not authenticated", func(t *testing.T) {
@@ -420,6 +95,118 @@ func TestApproveCmd(t *testing.T) {
 		err = cmd.RunE(cmd, []string{"abc123"})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	})
+
+	t.Run("approve fails with missing CLI key file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupApproveTestConfig(t, tmpDir)
+
+		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		}, defaultAPIClientFactory)
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		// Save credentials so LoadCredentials passes, but don't create key/cert files
+		creds := &auth.Credentials{
+			OperatorSessionID: "op-sess-123",
+			UserID:            "user-456",
+			OperatorID:        "op-789",
+			CLISessionID:      "cli-sess-abc",
+		}
+		require.NoError(t, auth.SaveCredentials(cfg, creds))
+
+		err := cmd.RunE(cmd, []string{"abc123"})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
+	})
+
+	t.Run("approve fails with missing CLI cert file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupApproveTestConfig(t, tmpDir)
+
+		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		}, defaultAPIClientFactory)
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		// Save credentials and write valid key, but no cert
+		creds := &auth.Credentials{
+			OperatorSessionID: "op-sess-123",
+			UserID:            "user-456",
+			OperatorID:        "op-789",
+			CLISessionID:      "cli-sess-abc",
+		}
+		require.NoError(t, auth.SaveCredentials(cfg, creds))
+
+		_, priv, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+
+		privBytes, err := x509.MarshalPKCS8PrivateKey(priv)
+		require.NoError(t, err)
+
+		privPEM := pem.EncodeToMemory(&pem.Block{
+			Type:  "PRIVATE KEY",
+			Bytes: privBytes,
+		})
+		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
+
+		err = cmd.RunE(cmd, []string{"abc123"})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
+	})
+
+	t.Run("approve fails with invalid key/cert pair", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		cfg := setupApproveTestConfig(t, tmpDir)
+
+		cmd := approveCmdWithConfig(func(_ string) (*config.Config, error) {
+			return cfg, nil
+		}, defaultAPIClientFactory)
+		var buf bytes.Buffer
+		cmd.SetOut(&buf)
+		cmd.SetErr(&buf)
+
+		originalWd, _ := os.Getwd()
+		os.Chdir(tmpDir)
+		defer os.Chdir(originalWd)
+
+		// Save credentials and write key/cert that don't match
+		creds := &auth.Credentials{
+			OperatorSessionID: "op-sess-123",
+			UserID:            "user-456",
+			OperatorID:        "op-789",
+			CLISessionID:      "cli-sess-abc",
+		}
+		require.NoError(t, auth.SaveCredentials(cfg, creds))
+
+		_, priv1, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		privBytes, err := x509.MarshalPKCS8PrivateKey(priv1)
+		require.NoError(t, err)
+		privPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: privBytes})
+		require.NoError(t, os.WriteFile(cfg.CLIKeyFile(), privPEM, 0600))
+
+		_, priv2, err := ed25519.GenerateKey(nil)
+		require.NoError(t, err)
+		cert := generateTestCertificate(t, priv2)
+		certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert})
+		require.NoError(t, os.WriteFile(cfg.CLICertFile(), certPEM, 0600))
+
+		err = cmd.RunE(cmd, []string{"abc123"})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrFailedToLoadClientCertificate)
 	})
 
 	t.Run("approve fails with missing trust bundle", func(t *testing.T) {

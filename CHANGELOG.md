@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+* **Passkey Unification** — Eliminated duplicate login path (`handlePublicAuthLoginVerify`) and unified cookie creation via `setWebSessionCookie` helper. Fixed IDOR vulnerabilities in `ListCredentials`, `RevokeCredential`, and `handleListSuspendedTransactions`. Fixed `readBody` nil `ResponseWriter` bug in `AuthController`.
+* **Layered L3 Authorization Model** — Redesigned L3 notary to a two-layer model: passkey authorization (Layer 1, always required in gateway mode) and mTLS transport authentication (Layer 2, additional for CLI callers). `ErrPasskeyProofRequired` is returned when passkey proof is missing, providing a clear error for old CLI binaries.
+* **Approval Handler Consolidation** — Moved all 6 approval handlers from `AuthController` to `PasskeyService` (`passkey_service_approvals.go`). Added `MCPServiceProvider` interface and `SetApprovalDependencies` setter. Removed `mcp` and `suspendedStore` fields from `AuthController`.
+* **Unified CLI Enrollment** — `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens console UI for passkey registration and polls `VerifyPasskeyRegistration` (mTLS) until complete.
+* **Browser-Based Approval Flow** — Rewrote `approve` command to browser + mTLS polling flow. CLI opens browser to `/api/v1/approve/{txHash}`, browser handles WebAuthn ceremony, CLI polls `GET /api/v1/approvals/status/{txHash}` via mTLS.
+* **Console SPA** — Handles `NeedsSetup: true` for first-login passkey registration. Auto-triggers URL-encoded approvals upon successful login.
+* **DB Migration** — Added `migratePasskeyColumns` to `SuspendedTransactionService` for backward-compatible schema migration of passkey fields.
+* **Dead Code Removal** — Removed `HTTPHandlerDependencies.SuspendedStore` field (unused after Phase D). Removed `ErrGatewayCLISignatureRequired` and `ErrGatewayMTLSCertFingerprintRequired` error constants.
+
 ### Removed
 
 * **PasskeyBootstrapServer** — Removed the deprecated localhost bootstrap server (`internal/cli/auth/passkey_bootstrap.go`). Browser-based console flow is now the sole passkey registration path.

@@ -101,7 +101,7 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
 
-		subTrustStore := certs.NewTrustStore(certs.GetRawCA())
+		subTrustStore := testutil.GetTestTrustStore()
 		subClientIdentity := certs.NewClientIdentity(tls.Certificate{})
 		subTLSCfg := certs.NewTLSConfig(subTrustStore, subClientIdentity)
 

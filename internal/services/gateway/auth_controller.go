@@ -84,7 +84,7 @@ func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBS
 	}
 }
 
-func (c *AuthController) readBody(r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, c.cfg.Gateway.MaxPayloadBytes)
+func (c *AuthController) readBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, c.cfg.Gateway.MaxPayloadBytes)
 	return io.ReadAll(r.Body)
 }
