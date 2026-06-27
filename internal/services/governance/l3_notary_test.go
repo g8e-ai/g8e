@@ -58,13 +58,17 @@ func (f *fakeSuspendedStore) ListSuspendedTransactions(_ context.Context, userID
 	return result, nil
 }
 
-func (f *fakeSuspendedStore) ApproveSuspendedTransaction(_ context.Context, txHash, approvedBy, approvalSignature, expectedCertFingerprint, approvalPublicKey string) error {
+func (f *fakeSuspendedStore) ApproveSuspendedTransaction(_ context.Context, txHash string, proof models.ApprovalProof) error {
 	if tx, ok := f.txs[txHash]; ok {
 		tx.Approved = true
-		tx.ApprovedBy = approvedBy
-		tx.ApprovalSignature = approvalSignature
-		tx.ExpectedCertFingerprint = expectedCertFingerprint
-		tx.ApprovalPublicKey = approvalPublicKey
+		tx.ApprovedBy = proof.ApprovedBy
+		tx.ApprovalSignature = proof.CliSignature
+		tx.ExpectedCertFingerprint = proof.CertFingerprint
+		tx.ApprovalPublicKey = proof.ApprovalPublicKey
+		tx.PasskeyCredentialID = proof.CredentialID
+		tx.PasskeyClientDataJSON = proof.ClientDataJSON
+		tx.PasskeyAuthenticatorData = proof.AuthenticatorData
+		tx.PasskeySignature = proof.Signature
 		now := time.Now().UTC()
 		tx.ApprovedAt = &now
 	}

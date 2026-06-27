@@ -51,4 +51,4 @@ where = ["."]
 include = ["g8e*"]
 
 [tool.setuptools.package-data]
-g8e = ["*.json"]
+g8e = ["*.json", "**/*.json"]

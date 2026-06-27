@@ -20,6 +20,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
@@ -44,9 +45,21 @@ type passkeyHandlerConfig struct {
 	createUserOnBootstrap      bool
 }
 
-func (s *PasskeyService) readBody(r *http.Request) ([]byte, error) {
-	r.Body = http.MaxBytesReader(nil, r.Body, s.maxPayload)
+func (s *PasskeyService) readBody(w http.ResponseWriter, r *http.Request) ([]byte, error) {
+	r.Body = http.MaxBytesReader(w, r.Body, s.maxPayload)
 	return io.ReadAll(r.Body)
+}
+
+func (s *PasskeyService) setWebSessionCookie(w http.ResponseWriter, webSession *models.WebSession) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     constants.WebSessionCookieName,
+		Value:    webSession.ID,
+		Path:     constants.PathRoot,
+		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // enforceFirstCred checks whether a new registration is allowed. For CLI bootstrap,
@@ -88,7 +101,7 @@ func (s *PasskeyService) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 			return
 		}
 
-		body, err := s.readBody(r)
+		body, err := s.readBody(w, r)
 		if err != nil {
 			s.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
@@ -190,7 +203,7 @@ func (s *PasskeyService) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 			return
 		}
 
-		body, err := s.readBody(r)
+		body, err := s.readBody(w, r)
 		if err != nil {
 			s.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
@@ -259,14 +272,7 @@ func (s *PasskeyService) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 				return
 			}
 			if cfg.setCookie {
-				http.SetCookie(w, &http.Cookie{
-					Name:     constants.WebSessionCookieName,
-					Value:    webSession.ID,
-					Path:     "/",
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteStrictMode,
-				})
+				s.setWebSessionCookie(w, webSession)
 			}
 		}
 
@@ -292,7 +298,7 @@ func (s *PasskeyService) AuthenticateChallenge(cfg passkeyHandlerConfig) http.Ha
 			return
 		}
 
-		body, err := s.readBody(r)
+		body, err := s.readBody(w, r)
 		if err != nil {
 			s.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
@@ -355,7 +361,7 @@ func (s *PasskeyService) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 			return
 		}
 
-		body, err := s.readBody(r)
+		body, err := s.readBody(w, r)
 		if err != nil {
 			s.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 			return
@@ -423,14 +429,7 @@ func (s *PasskeyService) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 				return
 			}
 			if cfg.setCookie {
-				http.SetCookie(w, &http.Cookie{
-					Name:     constants.WebSessionCookieName,
-					Value:    webSession.ID,
-					Path:     "/",
-					HttpOnly: true,
-					Secure:   true,
-					SameSite: http.SameSiteStrictMode,
-				})
+				s.setWebSessionCookie(w, webSession)
 			} else {
 				// mTLS step-up: return session in body for the CLI to consume; no browser cookie.
 				resp.WebSession = &models.WebSessionInfo{
@@ -445,11 +444,10 @@ func (s *PasskeyService) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 }
 
 // @Summary		List passkey credentials
-// @Description	Lists all WebAuthn credentials for the authenticated user (WebSession-protected).
+// @Description	Lists all WebAuthn credentials for the authenticated user. Identity comes from the auth context.
 // @Tags			passkey
 // @Accept			json
 // @Produce		json
-// @Param			user_id		query		string		true		"User ID"
 // @Success		200		{object}	models.PasskeyCredentialsResponse
 // @Router			/api/v1/auth/passkeys [get]
 func (s *PasskeyService) ListCredentials(w http.ResponseWriter, r *http.Request) {
@@ -458,9 +456,9 @@ func (s *PasskeyService) ListCredentials(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		s.responder.Error(w, http.StatusBadRequest, constants.ErrUserIDRequired.Error())
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		s.responder.Error(w, http.StatusUnauthorized, constants.ErrUserIDRequired.Error())
 		return
 	}
 
@@ -478,11 +476,10 @@ func (s *PasskeyService) ListCredentials(w http.ResponseWriter, r *http.Request)
 }
 
 // @Summary		Revoke passkey credential
-// @Description	Revokes a WebAuthn credential by ID (WebSession-protected).
+// @Description	Revokes a WebAuthn credential by ID. Identity comes from the auth context.
 // @Tags			passkey
 // @Accept			json
 // @Produce		json
-// @Param			user_id		query		string		true		"User ID"
 // @Param			id			path		string		true		"Credential ID"
 // @Success		200		{object}	models.PasskeyRevokeResponse
 // @Router			/api/v1/auth/passkeys/{id} [delete]
@@ -492,9 +489,9 @@ func (s *PasskeyService) RevokeCredential(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		s.responder.Error(w, http.StatusBadRequest, constants.ErrUserIDRequired.Error())
+	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		s.responder.Error(w, http.StatusUnauthorized, constants.ErrUserIDRequired.Error())
 		return
 	}
 

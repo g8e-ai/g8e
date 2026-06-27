@@ -93,7 +93,7 @@ reports/
 reports/*
 
 # Binaries
-*g8e
+/g8e
 *buf
 *operator
 

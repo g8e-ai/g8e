@@ -202,7 +202,6 @@ func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
 		constants.APIPaths.PKIDevicesEnroll,
 		constants.APIPaths.AuthBootstrap,
 		constants.APIPaths.AuthBootstrapStatus,
-		constants.APIPaths.AuthLoginVerify,
 		constants.APIPaths.AuthLogout,
 	}
 
@@ -315,7 +314,6 @@ func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
 	assert.True(t, registry.IsPublic("/api/v1/pki/devices/enroll"), "Device enrollment must be public")
 	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap"), "Bootstrap must be public")
 	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap/status"), "Bootstrap status must be public")
-	assert.True(t, registry.IsPublic("/api/v1/auth/login/verify"), "Login verify must be public")
 	assert.True(t, registry.IsPublic("/api/v1/auth/logout"), "Logout must be public")
 }
 

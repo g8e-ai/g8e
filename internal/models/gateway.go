@@ -266,14 +266,6 @@ type AuthLoginChallengeResponse struct {
 	Options *protocol.CredentialAssertion `json:"options,omitempty"`
 }
 
-// AuthLoginVerifyResponse is the typed response for POST /api/auth/login/verify.
-type AuthLoginVerifyResponse struct {
-	Success      bool   `json:"success"`
-	UserID       string `json:"user_id,omitempty"`
-	WebSessionID string `json:"web_session_id,omitempty"`
-	Error        string `json:"error,omitempty"`
-}
-
 // BootstrapStatusResponse is the typed response for GET /api/auth/bootstrap/status.
 type BootstrapStatusResponse struct {
 	Bootstrapped bool `json:"bootstrapped"`

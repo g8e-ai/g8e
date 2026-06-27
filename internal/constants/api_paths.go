@@ -83,7 +83,6 @@ var APIPaths = struct {
 	Users   string `json:"users"`
 	UsersMe string `json:"users_me"`
 	// Auth routes
-	AuthLoginVerify                            string `json:"auth_login_verify"`
 	AuthLogout                                 string `json:"auth_logout"`
 	AuthBootstrap                              string `json:"auth_bootstrap"`
 	AuthBootstrapStatus                        string `json:"auth_bootstrap_status"`
@@ -227,7 +226,6 @@ var APIPaths = struct {
 	Users:   "/api/v1/users",
 	UsersMe: "/api/v1/users/me",
 	// Auth routes
-	AuthLoginVerify:                            "/api/v1/auth/login/verify",
 	AuthLogout:                                 "/api/v1/auth/logout",
 	AuthBootstrap:                              "/api/v1/auth/bootstrap",
 	AuthBootstrapStatus:                        "/api/v1/auth/bootstrap/status",

@@ -79,7 +79,6 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addExact(constants.APIPaths.PKIDevicesEnroll)
 	r.addExact(constants.APIPaths.AuthBootstrap)
 	r.addExact(constants.APIPaths.AuthBootstrapStatus)
-	r.addExact(constants.APIPaths.AuthLoginVerify)
 	r.addExact(constants.APIPaths.AuthLogout)
 	r.addPrefix(constants.APIPaths.ApprovePage)
 
@@ -101,6 +100,11 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	r.addExact(constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify)
 	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge)
 	r.addExact(constants.APIPaths.AuthPasskeysCLIAuthenticateVerify)
+
+	// SSE consumer endpoints (dual auth: mTLS for CLI/operator, web session cookie for browser)
+	// These bypass mTLS middleware; the handlers perform their own auth check.
+	r.addExact(constants.APIPaths.SSEStream)
+	r.addExact(constants.APIPaths.SSEEvents)
 
 	// WebSessionAuth-protected routes (browser-facing, no client cert)
 	// These bypass mTLS middleware; WebSessionAuth provides the auth gate

@@ -382,13 +382,13 @@ func TestHandleListSuspendedTransactions(t *testing.T) {
 		}
 	})
 
-	t.Run("Success - with query user_id", func(t *testing.T) {
+	t.Run("Success - ignores query user_id (IDOR fix)", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
 
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals?user_id="+user.ID, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals?user_id=other-user", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
 		rr := httptest.NewRecorder()
 

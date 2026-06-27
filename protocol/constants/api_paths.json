@@ -51,7 +51,6 @@
   "audit_stream": "/api/v1/audit/stream",
   "users": "/api/v1/users",
   "users_me": "/api/v1/users/me",
-  "auth_login_verify": "/api/v1/auth/login/verify",
   "auth_logout": "/api/v1/auth/logout",
   "auth_bootstrap": "/api/v1/auth/bootstrap",
   "auth_bootstrap_status": "/api/v1/auth/bootstrap/status",

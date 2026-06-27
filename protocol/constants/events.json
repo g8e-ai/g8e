@@ -1063,6 +1063,118 @@
     "SourceUserTerminal": {
       "_go_const": "EventSourceUserTerminal",
       "value": "g8e.v1.source.user.terminal"
+    },
+    "AiTribunalSessionStarted": {
+      "_go_const": "EventAiTribunalSessionStarted",
+      "value": "g8e.v1.ai.tribunal.session.started"
+    },
+    "AiTribunalSessionCompleted": {
+      "_go_const": "EventAiTribunalSessionCompleted",
+      "value": "g8e.v1.ai.tribunal.session.completed"
+    },
+    "AiTribunalSessionDisabled": {
+      "_go_const": "EventAiTribunalSessionDisabled",
+      "value": "g8e.v1.ai.tribunal.session.disabled"
+    },
+    "AiTribunalSessionGenerationFailed": {
+      "_go_const": "EventAiTribunalSessionGenerationFailed",
+      "value": "g8e.v1.ai.tribunal.session.generation.failed"
+    },
+    "AiTribunalSessionModelNotConfigured": {
+      "_go_const": "EventAiTribunalSessionModelNotConfigured",
+      "value": "g8e.v1.ai.tribunal.session.model.not.configured"
+    },
+    "AiTribunalSessionProviderUnavailable": {
+      "_go_const": "EventAiTribunalSessionProviderUnavailable",
+      "value": "g8e.v1.ai.tribunal.session.provider.unavailable"
+    },
+    "AiTribunalSessionSystemError": {
+      "_go_const": "EventAiTribunalSessionSystemError",
+      "value": "g8e.v1.ai.tribunal.session.system.error"
+    },
+    "AiTribunalSessionAuditorFailed": {
+      "_go_const": "EventAiTribunalSessionAuditorFailed",
+      "value": "g8e.v1.ai.tribunal.session.auditor.failed"
+    },
+    "AiTribunalSessionWardenBlocked": {
+      "_go_const": "EventAiTribunalSessionWardenBlocked",
+      "value": "g8e.v1.ai.tribunal.session.warden.blocked"
+    },
+    "AiTribunalVotingPassCompleted": {
+      "_go_const": "EventAiTribunalVotingPassCompleted",
+      "value": "g8e.v1.ai.tribunal.voting.pass.completed"
+    },
+    "AiTribunalVotingConsensusReached": {
+      "_go_const": "EventAiTribunalVotingConsensusReached",
+      "value": "g8e.v1.ai.tribunal.voting.consensus.reached"
+    },
+    "AiTribunalVotingConsensusNotReached": {
+      "_go_const": "EventAiTribunalVotingConsensusNotReached",
+      "value": "g8e.v1.ai.tribunal.voting.consensus.not.reached"
+    },
+    "AiTribunalVotingConsensusFailed": {
+      "_go_const": "EventAiTribunalVotingConsensusFailed",
+      "value": "g8e.v1.ai.tribunal.voting.consensus.failed"
+    },
+    "AiTribunalVotingRoundStarted": {
+      "_go_const": "EventAiTribunalVotingRoundStarted",
+      "value": "g8e.v1.ai.tribunal.voting.round.started"
+    },
+    "AiTribunalVotingRoundCompleted": {
+      "_go_const": "EventAiTribunalVotingRoundCompleted",
+      "value": "g8e.v1.ai.tribunal.voting.round.completed"
+    },
+    "AiTribunalVotingRound2Started": {
+      "_go_const": "EventAiTribunalVotingRound2Started",
+      "value": "g8e.v1.ai.tribunal.voting.round.2.started"
+    },
+    "AiTribunalVotingRound2ConsensusReached": {
+      "_go_const": "EventAiTribunalVotingRound2ConsensusReached",
+      "value": "g8e.v1.ai.tribunal.voting.round.2.consensus.reached"
+    },
+    "AiTribunalVotingRound2ConsensusFailed": {
+      "_go_const": "EventAiTribunalVotingRound2ConsensusFailed",
+      "value": "g8e.v1.ai.tribunal.voting.round.2.consensus.failed"
+    },
+    "AiTribunalVotingDissentRecorded": {
+      "_go_const": "EventAiTribunalVotingDissentRecorded",
+      "value": "g8e.v1.ai.tribunal.voting.dissent.recorded"
+    },
+    "AiTribunalVotingAuditStarted": {
+      "_go_const": "EventAiTribunalVotingAuditStarted",
+      "value": "g8e.v1.ai.tribunal.voting.audit.started"
+    },
+    "AiTribunalVotingAuditCompleted": {
+      "_go_const": "EventAiTribunalVotingAuditCompleted",
+      "value": "g8e.v1.ai.tribunal.voting.audit.completed"
+    },
+    "AiLlmChatIterationThinkingStopped": {
+      "_go_const": "EventAiLLMChatIterationThinkingStopped",
+      "value": "g8e.v1.ai.llm.chat.iteration.thinking.stopped"
+    },
+    "AiReputationStateUpdated": {
+      "_go_const": "EventAiReputationStateUpdated",
+      "value": "g8e.v1.ai.reputation.state.updated"
+    },
+    "AppCaseDeleted": {
+      "_go_const": "EventAppCaseDeleted",
+      "value": "g8e.v1.app.case.deleted"
+    },
+    "AppInvestigationDeleted": {
+      "_go_const": "EventAppInvestigationDeleted",
+      "value": "g8e.v1.app.investigation.deleted"
+    },
+    "AppMemoryCreated": {
+      "_go_const": "EventAppMemoryCreated",
+      "value": "g8e.v1.app.memory.created"
+    },
+    "AppMemoryUpdated": {
+      "_go_const": "EventAppMemoryUpdated",
+      "value": "g8e.v1.app.memory.updated"
+    },
+    "OperatorPortCheckRequested": {
+      "_go_const": "EventOperatorPortCheckRequested",
+      "value": "g8e.v1.operator.port.check.requested"
     }
   }
 }

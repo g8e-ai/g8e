@@ -44,12 +44,12 @@ func authCmd() *cobra.Command {
 }
 
 func enrollCmd() *cobra.Command {
-	return enrollCmdWithConfig(config.Load)
+	return enrollCmdWithConfig(loadConfig)
 }
 
 // loginCmd is a hidden backward-compatible alias for enrollCmd.
 func loginCmd() *cobra.Command {
-	cmd := enrollCmdWithConfig(config.Load)
+	cmd := enrollCmdWithConfig(loadConfig)
 	cmd.Use = "login"
 	cmd.Hidden = true
 	return cmd

@@ -196,7 +196,13 @@ func (c *AuthController) handleCLIApproval(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Persist the approval with signature before resuming
-	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), txHash, userID, req.CliSignature, req.MtlsCertFingerprint, req.ApprovalPublicKey); err != nil {
+	approvalProof := models.ApprovalProof{
+		ApprovedBy:        userID,
+		CliSignature:      req.CliSignature,
+		CertFingerprint:   req.MtlsCertFingerprint,
+		ApprovalPublicKey: req.ApprovalPublicKey,
+	}
+	if err := c.suspendedStore.ApproveSuspendedTransaction(r.Context(), txHash, approvalProof); err != nil {
 		c.logger.Error("Failed to approve transaction", "error", err, "txHash", txHash, "userID", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to approve transaction")
 		return
@@ -250,16 +256,10 @@ func (c *AuthController) handleListSuspendedTransactions(w http.ResponseWriter, 
 		return
 	}
 
-	// Query the user ID from the URL if provided (for admin access)
-	queryUserID := r.URL.Query().Get("user_id")
-	if queryUserID == "" {
-		queryUserID = userID
-	}
-
 	// Get suspended transactions from the suspended transaction store
-	transactions, err := c.suspendedStore.ListSuspendedTransactions(r.Context(), queryUserID)
+	transactions, err := c.suspendedStore.ListSuspendedTransactions(r.Context(), userID)
 	if err != nil {
-		c.logger.Error("Failed to list suspended transactions", "error", err, "userID", queryUserID)
+		c.logger.Error("Failed to list suspended transactions", "error", err, "userID", userID)
 		c.responder.Error(w, http.StatusInternalServerError, "failed to list suspended transactions")
 		return
 	}

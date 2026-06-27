@@ -54,7 +54,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 
 	// Landing page and health
 	mux.HandleFunc(constants.APIPaths.Landing, h.handleLandingPage)
-	mux.HandleFunc(constants.APIPaths.AuthLoginVerify, h.authController.handlePublicAuthLoginVerify)
 	mux.HandleFunc(constants.APIPaths.AuthLogout, h.authController.handlePublicAuthLogout)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrap, h.authController.handleLocalBootstrapWithURL)
 	mux.HandleFunc(constants.APIPaths.AuthBootstrapStatus, h.authController.handleBootstrapStatus)

@@ -317,7 +317,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: constants.Suspend
 - `StoreSuspendedTransaction(ctx, tx)`: Upsert a transaction awaiting approval.
 - `GetSuspendedTransaction(ctx, txHash)`: Retrieve a transaction by hash. Returns `(nil, false, nil)` if not found or expired.
 - `ListSuspendedTransactions(ctx, userID)`: List non-expired transactions, optionally filtered by user.
-- `ApproveSuspendedTransaction(ctx, txHash, approvedBy, approvalSignature, certFingerprint, approvalPublicKey)`: Mark a transaction as approved with cryptographic signature and Ed25519 public key.
+- `ApproveSuspendedTransaction(ctx, txHash, proof)`: Mark a transaction as approved with an `ApprovalProof` struct containing both Ed25519 CLI fields and passkey WebAuthn fields.
 - `DeleteSuspendedTransaction(ctx, txHash)`: Remove a transaction after approval or rejection.
 - `CleanupExpiredSuspendedTransactions(ctx)`: Delete expired records; returns the count deleted and any error.
 - `GetExpiredSuspendedTransactions(ctx)`: Retrieve expired transactions for audit purposes.

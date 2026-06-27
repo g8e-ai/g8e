@@ -43,7 +43,7 @@ func defaultAPIClientFactory(cfg *config.Config) (apiClient, error) {
 }
 
 func approveCmd() *cobra.Command {
-	return approveCmdWithConfig(config.Load, defaultAPIClientFactory)
+	return approveCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
 func approveCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
