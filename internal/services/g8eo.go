@@ -57,7 +57,6 @@ type G8eoService struct {
 	pubSubClient pubsub.PubSubClient
 	tlsConfig    *certs.TLSConfig
 
-	auditStore     *storage.SQLAuditStore
 	ledger         *storage.GitLedgerService
 	historyHandler *storage.HistoryHandler
 
@@ -201,29 +200,25 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	vs.config.GitPath = gitPath
 	vs.config.GitAvailable = gitPath != ""
 
-	// Initialize SQLAuditStore for history handler
-	auditStoreConfig := storage.DefaultAuditStoreConfig()
-	auditStoreConfig.DataDir = dataDir
-	auditStoreConfig.EncryptionVault = encryptionVault
-	vs.auditStore, err = storage.NewSQLAuditStore(auditStoreConfig, vs.logger)
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-	}
+	// Reuse the SQLAuditStore from CanonicalDBService — both the standalone
+	// and canonical instances open the same g8e.db file, so a separate connection
+	// pool and pruner are redundant. CanonicalDBService.Close() handles lifecycle.
+	auditStore := vs.gatewayDB.AuditStore
 
 	if vs.config.OperatorSessionId == "" {
 		return fmt.Errorf("%w: operator session ID required before audit store can accept events", constants.ErrGatewayOperatorSessionIDRequired)
 	}
-	operator_session, err := vs.auditStore.GetOperatorSession(vs.config.OperatorSessionId)
+	operator_session, err := auditStore.GetOperatorSession(vs.config.OperatorSessionId)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayOperatorSessionInvalid, err)
 	}
 	if operator_session == nil {
-		if err := vs.auditStore.CreateSession(vs.config.OperatorSessionId, string(constants.UserRoleOperator), "Operator Session", vs.config.OperatorID); err != nil {
+		if err := auditStore.CreateSession(vs.config.OperatorSessionId, string(constants.UserRoleOperator), "Operator Session", vs.config.OperatorID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrAuditRecordUserMsg, err)
 		}
 	}
 
-	if vs.auditStore != nil && gitPath != "" {
+	if auditStore != nil && gitPath != "" {
 		ledgerConfig := &storage.LedgerConfig{
 			BaseDir:         paths.Infra.LedgerDir,
 			GitPath:         gitPath,
@@ -235,11 +230,11 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		}
 		vs.ledger = ledger
 		vs.logger.Info("Ledger initialized")
-		vs.historyHandler = storage.NewHistoryHandler(vs.auditStore, vs.ledger, vs.logger)
+		vs.historyHandler = storage.NewHistoryHandler(auditStore, vs.ledger, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready)")
-	} else if vs.auditStore != nil {
+	} else if auditStore != nil {
 		vs.logger.Warn("Ledger disabled - audit store active without git-backed file versioning")
-		vs.historyHandler = storage.NewHistoryHandler(vs.auditStore, nil, vs.logger)
+		vs.historyHandler = storage.NewHistoryHandler(auditStore, nil, vs.logger)
 		vs.logger.Info("History Handler initialized (FETCH_HISTORY ready, file history unavailable)")
 	}
 
@@ -272,7 +267,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 	// Create governance dependencies for transaction verification
 	// Use CanonicalDBService for canonical state root calculation (same schema as gateway mode)
 	stateRootProvider := vs.gatewayDB.StateRootSvc
-	transactionAudit := &auditStoreTransactionStore{store: vs.auditStore}
+	transactionAudit := &auditStoreTransactionStore{store: auditStore}
 	// L3Notary for outbound mode: CLI-based approval via suspended transactions
 	// Mutations requiring L3 are suspended and must be approved via CLI command
 	cliL3Notary := governance.NewOutboundL3Notary(vs.suspendedTxStore, vs.logger)
@@ -307,7 +302,7 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		PubSubClient:       vs.pubSubClient,
 		ResultsService:     vs.pubSubResults,
 		ExecutionVault:     vs.executionVault,
-		AuditStore:         vs.auditStore,
+		AuditStore:         auditStore,
 		Ledger:             vs.ledger,
 		HistoryHandler:     vs.historyHandler,
 		Scrubbing:          scrubbingService,
@@ -392,10 +387,10 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 		vs.execution.Stop()
 	}
 
-	// Drain audit store writes
-	if vs.auditStore != nil {
+	// Drain audit store writes (CanonicalDBService.Close() handles final close)
+	if vs.gatewayDB != nil && vs.gatewayDB.AuditStore != nil {
 		vs.logger.Info("Waiting for audit writes to drain...")
-		vs.auditStore.Wait()
+		vs.gatewayDB.AuditStore.Wait()
 	}
 
 	// Wait for shutdown handler goroutine to complete
@@ -423,12 +418,6 @@ func (vs *G8eoService) Stop(ctx context.Context) error {
 	if vs.replayStore != nil {
 		if err := vs.replayStore.Close(); err != nil {
 			vs.logger.Error("g8eo: failed to close replay store", "error", err)
-		}
-	}
-
-	if vs.auditStore != nil {
-		if err := vs.auditStore.Close(); err != nil {
-			vs.logger.Error("g8eo: failed to close audit store", "error", err)
 		}
 	}
 
