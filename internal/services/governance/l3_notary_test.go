@@ -243,12 +243,12 @@ func TestVerifyL3Proof_InvalidPublicKeyEncoding(t *testing.T) {
 // mockL3Notary is a test double for the L3Notary interface, used to verify
 // the dispatch logic in NewGatewayL3Notary.
 type mockL3Notary struct {
-	called        bool
-	calledUserID  string
-	calledTxHash  string
-	calledProof   *commonv1.L3Proof
-	result        bool
-	err           error
+	called       bool
+	calledUserID string
+	calledTxHash string
+	calledProof  *commonv1.L3Proof
+	result       bool
+	err          error
 }
 
 func (m *mockL3Notary) VerifyL3Proof(_ context.Context, userID, transactionHash, _ string, proof *commonv1.L3Proof) (bool, error) {

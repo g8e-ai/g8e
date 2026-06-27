@@ -24,6 +24,17 @@ definitions:
       trust_bundle:
         type: string
     type: object
+  models.Authenticator:
+    properties:
+      aaguid:
+        items:
+          type: integer
+        type: array
+      clone_warning:
+        type: boolean
+      sign_count:
+        type: integer
+    type: object
   models.HealthResponse:
     properties:
       governance_ready:
@@ -44,6 +55,93 @@ definitions:
       certificate_pem:
         type: string
     type: object
+  models.PasskeyAuthVerifyResponse:
+    properties:
+      credential:
+        $ref: '#/definitions/models.PasskeyCredential'
+      error:
+        type: string
+      success:
+        type: boolean
+      user_id:
+        type: string
+      web_session:
+        $ref: '#/definitions/models.WebSessionInfo'
+    type: object
+  models.PasskeyChallengeResponse:
+    properties:
+      error:
+        type: string
+      needs_setup:
+        type: boolean
+      options:
+        $ref: '#/definitions/protocol.CredentialAssertion'
+      success:
+        type: boolean
+    type: object
+  models.PasskeyCredential:
+    properties:
+      attestation_type:
+        type: string
+      authenticator:
+        $ref: '#/definitions/models.Authenticator'
+      created_at_unix_ms:
+        type: integer
+      id:
+        items:
+          type: integer
+        type: array
+      last_used_at_unix_ms:
+        type: integer
+      public_key:
+        items:
+          type: integer
+        type: array
+      transport:
+        items:
+          $ref: '#/definitions/protocol.AuthenticatorTransport'
+        type: array
+    type: object
+  models.PasskeyCredentialsResponse:
+    properties:
+      credentials:
+        items:
+          $ref: '#/definitions/models.PasskeyCredential'
+        type: array
+      success:
+        type: boolean
+    type: object
+  models.PasskeyRegisterChallengeResponse:
+    properties:
+      options:
+        $ref: '#/definitions/protocol.CredentialCreation'
+      success:
+        type: boolean
+      user_id:
+        type: string
+    type: object
+  models.PasskeyRevokeResponse:
+    properties:
+      found:
+        type: boolean
+      remaining:
+        type: integer
+      success:
+        type: boolean
+    type: object
+  models.PasskeyVerifyResponse:
+    properties:
+      credential:
+        $ref: '#/definitions/models.PasskeyCredential'
+      error:
+        type: string
+      success:
+        type: boolean
+      user_id:
+        type: string
+      web_session_id:
+        type: string
+    type: object
   models.StateResponse:
     properties:
       state_merkle_root:
@@ -54,6 +152,338 @@ definitions:
       status:
         $ref: '#/definitions/constants.GatewayMode'
     type: object
+  models.WebSessionInfo:
+    properties:
+      expires_at_unix_ms:
+        type: integer
+      id:
+        type: string
+    type: object
+  protocol.AttestationFormat:
+    enum:
+    - packed
+    - tpm
+    - android-key
+    - android-safetynet
+    - fido-u2f
+    - apple
+    - compound
+    - none
+    type: string
+    x-enum-varnames:
+    - AttestationFormatPacked
+    - AttestationFormatTPM
+    - AttestationFormatAndroidKey
+    - AttestationFormatAndroidSafetyNet
+    - AttestationFormatFIDOUniversalSecondFactor
+    - AttestationFormatApple
+    - AttestationFormatCompound
+    - AttestationFormatNone
+  protocol.AuthenticationExtensions:
+    additionalProperties: {}
+    type: object
+  protocol.AuthenticatorAttachment:
+    enum:
+    - platform
+    - cross-platform
+    type: string
+    x-enum-varnames:
+    - Platform
+    - CrossPlatform
+  protocol.AuthenticatorSelection:
+    properties:
+      authenticatorAttachment:
+        allOf:
+        - $ref: '#/definitions/protocol.AuthenticatorAttachment'
+        description: |-
+          AuthenticatorAttachment If this member is present, eligible authenticators are filtered to only
+          authenticators attached with the specified AuthenticatorAttachment enum.
+      requireResidentKey:
+        description: |-
+          RequireResidentKey this member describes the Relying Party's requirements regarding resident
+          credentials. If the parameter is set to true, the authenticator MUST create a client-side-resident
+          public key credential source when creating a public key credential.
+        type: boolean
+      residentKey:
+        allOf:
+        - $ref: '#/definitions/protocol.ResidentKeyRequirement'
+        description: |-
+          ResidentKey this member describes the Relying Party's requirements regarding resident
+          credentials per Webauthn Level 2.
+      userVerification:
+        allOf:
+        - $ref: '#/definitions/protocol.UserVerificationRequirement'
+        description: |-
+          UserVerification This member describes the Relying Party's requirements regarding user verification for
+          the create() operation. Eligible authenticators are filtered to only those capable of satisfying this
+          requirement.
+    type: object
+  protocol.AuthenticatorTransport:
+    enum:
+    - usb
+    - nfc
+    - ble
+    - smart-card
+    - hybrid
+    - internal
+    type: string
+    x-enum-varnames:
+    - USB
+    - NFC
+    - BLE
+    - SmartCard
+    - Hybrid
+    - Internal
+  protocol.ConveyancePreference:
+    enum:
+    - none
+    - indirect
+    - direct
+    - enterprise
+    type: string
+    x-enum-varnames:
+    - PreferNoAttestation
+    - PreferIndirectAttestation
+    - PreferDirectAttestation
+    - PreferEnterpriseAttestation
+  protocol.CredentialAssertion:
+    properties:
+      mediation:
+        $ref: '#/definitions/protocol.CredentialMediationRequirement'
+      publicKey:
+        $ref: '#/definitions/protocol.PublicKeyCredentialRequestOptions'
+    type: object
+  protocol.CredentialCreation:
+    properties:
+      mediation:
+        $ref: '#/definitions/protocol.CredentialMediationRequirement'
+      publicKey:
+        $ref: '#/definitions/protocol.PublicKeyCredentialCreationOptions'
+    type: object
+  protocol.CredentialDescriptor:
+    properties:
+      id:
+        description: CredentialID The ID of a credential to allow/disallow.
+        items:
+          type: integer
+        type: array
+      transports:
+        description: The authenticator transports that can be used.
+        items:
+          $ref: '#/definitions/protocol.AuthenticatorTransport'
+        type: array
+      type:
+        allOf:
+        - $ref: '#/definitions/protocol.CredentialType'
+        description: The valid credential types.
+    type: object
+  protocol.CredentialMediationRequirement:
+    enum:
+    - ""
+    - silent
+    - optional
+    - conditional
+    - required
+    type: string
+    x-enum-varnames:
+    - MediationDefault
+    - MediationSilent
+    - MediationOptional
+    - MediationConditional
+    - MediationRequired
+  protocol.CredentialParameter:
+    properties:
+      alg:
+        $ref: '#/definitions/webauthncose.COSEAlgorithmIdentifier'
+      type:
+        $ref: '#/definitions/protocol.CredentialType'
+    type: object
+  protocol.CredentialType:
+    enum:
+    - public-key
+    type: string
+    x-enum-varnames:
+    - PublicKeyCredentialType
+  protocol.PublicKeyCredentialCreationOptions:
+    properties:
+      attestation:
+        $ref: '#/definitions/protocol.ConveyancePreference'
+      attestationFormats:
+        items:
+          $ref: '#/definitions/protocol.AttestationFormat'
+        type: array
+      authenticatorSelection:
+        $ref: '#/definitions/protocol.AuthenticatorSelection'
+      challenge:
+        items:
+          type: integer
+        type: array
+      excludeCredentials:
+        items:
+          $ref: '#/definitions/protocol.CredentialDescriptor'
+        type: array
+      extensions:
+        $ref: '#/definitions/protocol.AuthenticationExtensions'
+      hints:
+        items:
+          $ref: '#/definitions/protocol.PublicKeyCredentialHints'
+        type: array
+      pubKeyCredParams:
+        items:
+          $ref: '#/definitions/protocol.CredentialParameter'
+        type: array
+      rp:
+        $ref: '#/definitions/protocol.RelyingPartyEntity'
+      timeout:
+        type: integer
+      user:
+        $ref: '#/definitions/protocol.UserEntity'
+    type: object
+  protocol.PublicKeyCredentialHints:
+    enum:
+    - security-key
+    - client-device
+    - hybrid
+    type: string
+    x-enum-varnames:
+    - PublicKeyCredentialHintSecurityKey
+    - PublicKeyCredentialHintClientDevice
+    - PublicKeyCredentialHintHybrid
+  protocol.PublicKeyCredentialRequestOptions:
+    properties:
+      allowCredentials:
+        items:
+          $ref: '#/definitions/protocol.CredentialDescriptor'
+        type: array
+      challenge:
+        items:
+          type: integer
+        type: array
+      extensions:
+        $ref: '#/definitions/protocol.AuthenticationExtensions'
+      hints:
+        items:
+          $ref: '#/definitions/protocol.PublicKeyCredentialHints'
+        type: array
+      rpId:
+        type: string
+      timeout:
+        type: integer
+      userVerification:
+        $ref: '#/definitions/protocol.UserVerificationRequirement'
+    type: object
+  protocol.RelyingPartyEntity:
+    properties:
+      id:
+        description: A unique identifier for the Relying Party entity, which sets
+          the RP ID.
+        type: string
+      name:
+        description: |-
+          A human-palatable name for the entity. Its function depends on what the PublicKeyCredentialEntity represents:
+
+          When inherited by PublicKeyCredentialRpEntity it is a human-palatable identifier for the Relying Party,
+          intended only for display. For example, "ACME Corporation", "Wonderful Widgets, Inc." or "ОАО Примертех".
+
+          When inherited by PublicKeyCredentialUserEntity, it is a human-palatable identifier for a user account. It is
+          intended only for display, i.e., aiding the user in determining the difference between user accounts with similar
+          displayNames. For example, "alexm", "alex.p.mueller@example.com" or "+14255551234".
+        type: string
+    type: object
+  protocol.ResidentKeyRequirement:
+    enum:
+    - discouraged
+    - preferred
+    - required
+    type: string
+    x-enum-varnames:
+    - ResidentKeyRequirementDiscouraged
+    - ResidentKeyRequirementPreferred
+    - ResidentKeyRequirementRequired
+  protocol.UserEntity:
+    properties:
+      displayName:
+        description: |-
+          A human-palatable name for the user account, intended only for display.
+          For example, "Alex P. Müller" or "田中 倫". The Relying Party SHOULD let
+          the user choose this, and SHOULD NOT restrict the choice more than necessary.
+        type: string
+      id:
+        description: |-
+          ID is the user handle of the user account entity. To ensure secure operation,
+          authentication and authorization decisions MUST be made on the basis of this id
+          member, not the displayName nor name members. See Section 6.1 of
+          [RFC8266](https://www.w3.org/TR/webauthn/#biblio-rfc8266).
+      name:
+        description: |-
+          A human-palatable name for the entity. Its function depends on what the PublicKeyCredentialEntity represents:
+
+          When inherited by PublicKeyCredentialRpEntity it is a human-palatable identifier for the Relying Party,
+          intended only for display. For example, "ACME Corporation", "Wonderful Widgets, Inc." or "ОАО Примертех".
+
+          When inherited by PublicKeyCredentialUserEntity, it is a human-palatable identifier for a user account. It is
+          intended only for display, i.e., aiding the user in determining the difference between user accounts with similar
+          displayNames. For example, "alexm", "alex.p.mueller@example.com" or "+14255551234".
+        type: string
+    type: object
+  protocol.UserVerificationRequirement:
+    enum:
+    - required
+    - preferred
+    - discouraged
+    type: string
+    x-enum-comments:
+      VerificationPreferred: This is the default.
+    x-enum-descriptions:
+    - ""
+    - This is the default.
+    - ""
+    x-enum-varnames:
+    - VerificationRequired
+    - VerificationPreferred
+    - VerificationDiscouraged
+  webauthncose.COSEAlgorithmIdentifier:
+    enum:
+    - -7
+    - -8
+    - -9
+    - -19
+    - -35
+    - -36
+    - -37
+    - -38
+    - -39
+    - -47
+    - -48
+    - -49
+    - -50
+    - -51
+    - -52
+    - -257
+    - -258
+    - -259
+    - -65535
+    type: integer
+    x-enum-varnames:
+    - AlgES256
+    - AlgEdDSA
+    - AlgESP256
+    - AlgEd25519
+    - AlgES384
+    - AlgES512
+    - AlgPS256
+    - AlgPS384
+    - AlgPS512
+    - AlgES256K
+    - AlgMLDSA44
+    - AlgMLDSA65
+    - AlgMLDSA87
+    - AlgESP384
+    - AlgESP512
+    - AlgRS256
+    - AlgRS384
+    - AlgRS512
+    - AlgRS1
 info:
   contact: {}
 paths:
@@ -167,6 +597,138 @@ paths:
       summary: Live Audit Stream (SSE)
       tags:
       - audit
+  /api/v1/auth/passkeys:
+    get:
+      consumes:
+      - application/json
+      description: Lists all WebAuthn credentials for the authenticated user (WebSession-protected).
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasskeyCredentialsResponse'
+      summary: List passkey credentials
+      tags:
+      - passkey
+  /api/v1/auth/passkeys/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Revokes a WebAuthn credential by ID (WebSession-protected).
+      parameters:
+      - description: User ID
+        in: query
+        name: user_id
+        required: true
+        type: string
+      - description: Credential ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasskeyRevokeResponse'
+      summary: Revoke passkey credential
+      tags:
+      - passkey
+  /api/v1/auth/passkeys/authenticate/challenge:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Generates a WebAuthn authentication challenge. Config-driven trust posture:
+        mTLS (session-user binding), CLI bootstrap (public), or console (public).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasskeyChallengeResponse'
+      summary: Generate WebAuthn authentication challenge
+      tags:
+      - passkey
+  /api/v1/auth/passkeys/authenticate/verify:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Verifies a WebAuthn assertion response. Config-driven trust posture:
+        mTLS (session-user binding, may mint web session in body), CLI bootstrap (public), or console (public, may mint web session + cookie).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasskeyAuthVerifyResponse'
+      summary: Verify WebAuthn authentication
+      tags:
+      - passkey
+  /api/v1/auth/passkeys/cli/status:
+    get:
+      consumes:
+      - application/json
+      description: Returns the passkey credential list for the mTLS-authenticated
+        user. Identity comes from the mTLS auth context; user_id query params are
+        ignored.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasskeyCredentialsResponse'
+      summary: CLI passkey status
+      tags:
+      - passkey
+  /api/v1/auth/passkeys/register/challenge:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Generates a WebAuthn registration challenge. Config-driven trust posture:
+        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasskeyRegisterChallengeResponse'
+      summary: Generate WebAuthn registration challenge
+      tags:
+      - passkey
+  /api/v1/auth/passkeys/register/verify:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:
+        mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.PasskeyVerifyResponse'
+      summary: Verify WebAuthn registration
+      tags:
+      - passkey
   /api/v1/data/blobs/{namespace}/{id}:
     get:
       description: Retrieves a blob from the data store

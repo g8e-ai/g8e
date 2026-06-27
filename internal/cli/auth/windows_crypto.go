@@ -36,16 +36,16 @@ import (
 
 // Windows WebAuthn API constants - Using API Version 4 (stable, modern version)
 const (
-	WEBAUTHN_API_VERSION_1                                         = 1
-	WEBAUTHN_API_VERSION_2                                         = 2
-	WEBAUTHN_API_VERSION_3                                         = 3
-	WEBAUTHN_API_VERSION_4                                         = 4
-	WEBAUTHN_API_VERSION_5                                         = 5
-	WEBAUTHN_API_VERSION_6                                         = 6
-	WEBAUTHN_API_VERSION_7                                         = 7
-	WEBAUTHN_API_VERSION_8                                         = 8
-	WEBAUTHN_API_VERSION_9                                         = 9
-	WEBAUTHN_API_CURRENT_VERSION                                   = WEBAUTHN_API_VERSION_9
+	WEBAUTHN_API_VERSION_1       = 1
+	WEBAUTHN_API_VERSION_2       = 2
+	WEBAUTHN_API_VERSION_3       = 3
+	WEBAUTHN_API_VERSION_4       = 4
+	WEBAUTHN_API_VERSION_5       = 5
+	WEBAUTHN_API_VERSION_6       = 6
+	WEBAUTHN_API_VERSION_7       = 7
+	WEBAUTHN_API_VERSION_8       = 8
+	WEBAUTHN_API_VERSION_9       = 9
+	WEBAUTHN_API_CURRENT_VERSION = WEBAUTHN_API_VERSION_9
 
 	// WebAuthn v4 requires a 16-byte GUID for user entity ID
 	webauthnUserIDSize = 16
@@ -53,11 +53,11 @@ const (
 	webauthnMaxResponseSize = 64 * 1024
 
 	// Windows HRESULT codes for WebAuthn diagnostics
-	HRESULT_NTE_USER_CANCELLED   = 0x80090040
-	HRESULT_NTE_NOT_FOUND        = 0x80090022
-	HRESULT_NTE_DEVICE_NOT_READY = 0x80090030
-	HRESULT_NTE_NOT_SUPPORTED    = 0x80090029
-	HRESULT_FROM_WIN32_TIMEOUT   = 0x80070079
+	HRESULT_NTE_USER_CANCELLED                                     = 0x80090040
+	HRESULT_NTE_NOT_FOUND                                          = 0x80090022
+	HRESULT_NTE_DEVICE_NOT_READY                                   = 0x80090030
+	HRESULT_NTE_NOT_SUPPORTED                                      = 0x80090029
+	HRESULT_FROM_WIN32_TIMEOUT                                     = 0x80070079
 	WEBAUTHN_RP_ENTITY_INFORMATION_CURRENT_VERSION                 = 1
 	WEBAUTHN_USER_ENTITY_INFORMATION_CURRENT_VERSION               = 1
 	WEBAUTHN_CLIENT_DATA_CURRENT_VERSION                           = 1

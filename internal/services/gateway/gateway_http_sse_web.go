@@ -35,10 +35,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// handleWebAuditStream streams SSE events to the browser console, scoped to
-// the authenticated web session.  This handler is mounted under WebSessionAuth
-// so the cookie has already been validated and user_id is stamped in context.
-//
 // @Summary		Live Audit Stream (SSE)
 // @Description	Server-sent events stream of audit events scoped to the authenticated web session.
 // @Tags			audit

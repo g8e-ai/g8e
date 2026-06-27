@@ -73,7 +73,14 @@ func (s *PasskeyService) enforceFirstCred(r *http.Request, userID string, cfg pa
 	return true, http.StatusForbidden, "first-credential registration only; user already has credentials, require step-up via existing passkey or mTLS"
 }
 
-// RegisterChallenge returns an http.HandlerFunc for passkey registration challenge.
+// @Summary		Generate WebAuthn registration challenge
+// @Description	Generates a WebAuthn registration challenge. Config-driven trust posture:
+// @Description	mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).
+// @Tags			passkey
+// @Accept			json
+// @Produce		json
+// @Success		200			{object}	models.PasskeyRegisterChallengeResponse
+// @Router			/api/v1/auth/passkeys/register/challenge [post]
 func (s *PasskeyService) RegisterChallenge(cfg passkeyHandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -168,7 +175,14 @@ func (s *PasskeyService) RegisterChallenge(cfg passkeyHandlerConfig) http.Handle
 	}
 }
 
-// RegisterVerify returns an http.HandlerFunc for passkey registration verification.
+// @Summary		Verify WebAuthn registration
+// @Description	Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:
+// @Description	mTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).
+// @Tags			passkey
+// @Accept			json
+// @Produce		json
+// @Success		200			{object}	models.PasskeyVerifyResponse
+// @Router			/api/v1/auth/passkeys/register/verify [post]
 func (s *PasskeyService) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -263,7 +277,14 @@ func (s *PasskeyService) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 	}
 }
 
-// AuthenticateChallenge returns an http.HandlerFunc for passkey authentication challenge.
+// @Summary		Generate WebAuthn authentication challenge
+// @Description	Generates a WebAuthn authentication challenge. Config-driven trust posture:
+// @Description	mTLS (session-user binding), CLI bootstrap (public), or console (public).
+// @Tags			passkey
+// @Accept			json
+// @Produce		json
+// @Success		200			{object}	models.PasskeyChallengeResponse
+// @Router			/api/v1/auth/passkeys/authenticate/challenge [post]
 func (s *PasskeyService) AuthenticateChallenge(cfg passkeyHandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -319,7 +340,14 @@ func (s *PasskeyService) AuthenticateChallenge(cfg passkeyHandlerConfig) http.Ha
 	}
 }
 
-// AuthenticateVerify returns an http.HandlerFunc for passkey authentication verification.
+// @Summary		Verify WebAuthn authentication
+// @Description	Verifies a WebAuthn assertion response. Config-driven trust posture:
+// @Description	mTLS (session-user binding, may mint web session in body), CLI bootstrap (public), or console (public, may mint web session + cookie).
+// @Tags			passkey
+// @Accept			json
+// @Produce		json
+// @Success		200			{object}	models.PasskeyAuthVerifyResponse
+// @Router			/api/v1/auth/passkeys/authenticate/verify [post]
 func (s *PasskeyService) AuthenticateVerify(cfg passkeyHandlerConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -416,7 +444,14 @@ func (s *PasskeyService) AuthenticateVerify(cfg passkeyHandlerConfig) http.Handl
 	}
 }
 
-// ListCredentials handles GET /api/v1/auth/passkeys (WebSession-protected).
+// @Summary		List passkey credentials
+// @Description	Lists all WebAuthn credentials for the authenticated user (WebSession-protected).
+// @Tags			passkey
+// @Accept			json
+// @Produce		json
+// @Param			user_id		query		string		true		"User ID"
+// @Success		200		{object}	models.PasskeyCredentialsResponse
+// @Router			/api/v1/auth/passkeys [get]
 func (s *PasskeyService) ListCredentials(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		s.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -442,7 +477,15 @@ func (s *PasskeyService) ListCredentials(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// RevokeCredential handles DELETE /api/v1/auth/passkeys/{id} (WebSession-protected).
+// @Summary		Revoke passkey credential
+// @Description	Revokes a WebAuthn credential by ID (WebSession-protected).
+// @Tags			passkey
+// @Accept			json
+// @Produce		json
+// @Param			user_id		query		string		true		"User ID"
+// @Param			id			path		string		true		"Credential ID"
+// @Success		200		{object}	models.PasskeyRevokeResponse
+// @Router			/api/v1/auth/passkeys/{id} [delete]
 func (s *PasskeyService) RevokeCredential(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
 		s.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -475,8 +518,13 @@ func (s *PasskeyService) RevokeCredential(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// CLIStatus handles GET /api/v1/auth/passkeys/cli/status (mTLS-protected).
-// Identity comes exclusively from the mTLS auth context; user_id query params are ignored.
+// @Summary		CLI passkey status
+// @Description	Returns the passkey credential list for the mTLS-authenticated user. Identity comes from the mTLS auth context; user_id query params are ignored.
+// @Tags			passkey
+// @Accept			json
+// @Produce		json
+// @Success		200		{object}	models.PasskeyCredentialsResponse
+// @Router			/api/v1/auth/passkeys/cli/status [get]
 func (s *PasskeyService) CLIStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		s.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())

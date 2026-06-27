@@ -142,278 +142,6 @@
                 }
             }
         },
-        "/api/v1/auth/passkeys": {
-            "get": {
-                "description": "Lists passkey credentials for the authenticated web session user (WebSession-protected)",
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "List passkey credentials",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID (from session context)",
-                        "name": "user_id",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "401": {"description": "Unauthorized"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/authenticate/challenge": {
-            "post": {
-                "description": "Generates a WebAuthn authentication challenge (mTLS-protected, requires authenticated user)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Authentication challenge (mTLS)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "401": {"description": "Unauthorized"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/authenticate/verify": {
-            "post": {
-                "description": "Verifies a WebAuthn assertion and may mint a web session (mTLS-protected, requires authenticated user)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Authentication verify (mTLS)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "401": {"description": "Unauthorized"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/bootstrap/authenticate/challenge": {
-            "post": {
-                "description": "Generates a WebAuthn authentication challenge for CLI bootstrap (public, CORS-wrapped)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Authentication challenge (CLI bootstrap)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/bootstrap/authenticate/verify": {
-            "post": {
-                "description": "Verifies a WebAuthn assertion for CLI bootstrap (public, CORS-wrapped, no web session created)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Authentication verify (CLI bootstrap)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/bootstrap/register/challenge": {
-            "post": {
-                "description": "Generates a WebAuthn registration challenge for CLI bootstrap (public, CORS-wrapped, first-credential-only enforced)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Registration challenge (CLI bootstrap)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "403": {"description": "First-credential registration only"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/bootstrap/register/verify": {
-            "post": {
-                "description": "Verifies a WebAuthn attestation for CLI bootstrap (public, CORS-wrapped, first-credential-only enforced)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Registration verify (CLI bootstrap)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "403": {"description": "First-credential registration only"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/cli/status": {
-            "get": {
-                "description": "Returns passkey credential status for the mTLS-authenticated user. Identity comes from the mTLS auth context; user_id query params are ignored. (mTLS-protected)",
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "CLI passkey status (mTLS)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "401": {"description": "Unauthorized"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/console/authenticate/challenge": {
-            "post": {
-                "description": "Generates a WebAuthn authentication challenge for the console SPA (public, CORS-wrapped)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Authentication challenge (console)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/console/authenticate/verify": {
-            "post": {
-                "description": "Verifies a WebAuthn assertion for the console SPA and issues a g8e_session cookie (public, CORS-wrapped)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Authentication verify (console)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/console/register/challenge": {
-            "post": {
-                "description": "Generates a WebAuthn registration challenge for the console SPA (public, CORS-wrapped, first-credential-only enforced, may auto-create user)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Registration challenge (console)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "403": {"description": "First-credential registration only"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/console/register/verify": {
-            "post": {
-                "description": "Verifies a WebAuthn attestation for the console SPA and issues a g8e_session cookie (public, CORS-wrapped, first-credential-only enforced)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Registration verify (console)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "403": {"description": "First-credential registration only"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/register/challenge": {
-            "post": {
-                "description": "Generates a WebAuthn registration challenge (mTLS-protected, requires authenticated user, session-user binding enforced)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Registration challenge (mTLS)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "401": {"description": "Unauthorized"},
-                    "403": {"description": "Forbidden"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/register/verify": {
-            "post": {
-                "description": "Verifies a WebAuthn attestation (mTLS-protected, requires authenticated user, session-user binding enforced)",
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey"],
-                "summary": "Registration verify (mTLS)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "401": {"description": "Unauthorized"},
-                    "403": {"description": "Forbidden"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/cli-browser-register/challenge": {
-            "post": {
-                "description": "Deprecated alias for /api/v1/auth/passkeys/console/register/challenge",
-                "deprecated": true,
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey", "deprecated"],
-                "summary": "Registration challenge (deprecated alias)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/cli-browser-register/verify": {
-            "post": {
-                "description": "Deprecated alias for /api/v1/auth/passkeys/console/register/verify",
-                "deprecated": true,
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey", "deprecated"],
-                "summary": "Registration verify (deprecated alias)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/browser/authenticate/challenge": {
-            "post": {
-                "description": "Deprecated alias for /api/v1/auth/passkeys/console/authenticate/challenge",
-                "deprecated": true,
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey", "deprecated"],
-                "summary": "Authentication challenge (deprecated alias)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
-        "/api/v1/auth/passkeys/browser/authenticate/verify": {
-            "post": {
-                "description": "Deprecated alias for /api/v1/auth/passkeys/console/authenticate/verify",
-                "deprecated": true,
-                "consumes": ["application/json"],
-                "produces": ["application/json"],
-                "tags": ["passkey", "deprecated"],
-                "summary": "Authentication verify (deprecated alias)",
-                "responses": {
-                    "200": {"description": "OK", "schema": {"type": "object"}},
-                    "400": {"description": "Bad request"},
-                    "405": {"description": "Method not allowed"}
-                }
-            }
-        },
         "/api/v1/audit/stream": {
             "get": {
                 "description": "Server-sent events stream of audit events scoped to the authenticated web session.",
@@ -437,6 +165,192 @@
                         "description": "SSE event stream",
                         "schema": {
                             "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys": {
+            "get": {
+                "description": "Lists all WebAuthn credentials for the authenticated user (WebSession-protected).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "passkey"
+                ],
+                "summary": "List passkey credentials",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasskeyCredentialsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/authenticate/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn authentication challenge. Config-driven trust posture:\nmTLS (session-user binding), CLI bootstrap (public), or console (public).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "passkey"
+                ],
+                "summary": "Generate WebAuthn authentication challenge",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasskeyChallengeResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/authenticate/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn assertion response. Config-driven trust posture:\nmTLS (session-user binding, may mint web session in body), CLI bootstrap (public), or console (public, may mint web session + cookie).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "passkey"
+                ],
+                "summary": "Verify WebAuthn authentication",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasskeyAuthVerifyResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/cli/status": {
+            "get": {
+                "description": "Returns the passkey credential list for the mTLS-authenticated user. Identity comes from the mTLS auth context; user_id query params are ignored.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "passkey"
+                ],
+                "summary": "CLI passkey status",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasskeyCredentialsResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/register/challenge": {
+            "post": {
+                "description": "Generates a WebAuthn registration challenge. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may auto-create user).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "passkey"
+                ],
+                "summary": "Generate WebAuthn registration challenge",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasskeyRegisterChallengeResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/register/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn attestation response and stores the credential. Config-driven trust posture:\nmTLS (session-user binding), JIT (first-credential-only), CLI bootstrap (public), or console (public, may mint web session + cookie).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "passkey"
+                ],
+                "summary": "Verify WebAuthn registration",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasskeyVerifyResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/passkeys/{id}": {
+            "delete": {
+                "description": "Revokes a WebAuthn credential by ID (WebSession-protected).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "passkey"
+                ],
+                "summary": "Revoke passkey credential",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Credential ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.PasskeyRevokeResponse"
                         }
                     }
                 }
@@ -811,6 +725,23 @@
                 }
             }
         },
+        "models.Authenticator": {
+            "type": "object",
+            "properties": {
+                "aaguid": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "clone_warning": {
+                    "type": "boolean"
+                },
+                "sign_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "models.HealthResponse": {
             "type": "object",
             "properties": {
@@ -842,6 +773,140 @@
                 }
             }
         },
+        "models.PasskeyAuthVerifyResponse": {
+            "type": "object",
+            "properties": {
+                "credential": {
+                    "$ref": "#/definitions/models.PasskeyCredential"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "web_session": {
+                    "$ref": "#/definitions/models.WebSessionInfo"
+                }
+            }
+        },
+        "models.PasskeyChallengeResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "needs_setup": {
+                    "type": "boolean"
+                },
+                "options": {
+                    "$ref": "#/definitions/protocol.CredentialAssertion"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.PasskeyCredential": {
+            "type": "object",
+            "properties": {
+                "attestation_type": {
+                    "type": "string"
+                },
+                "authenticator": {
+                    "$ref": "#/definitions/models.Authenticator"
+                },
+                "created_at_unix_ms": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "last_used_at_unix_ms": {
+                    "type": "integer"
+                },
+                "public_key": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "transport": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.AuthenticatorTransport"
+                    }
+                }
+            }
+        },
+        "models.PasskeyCredentialsResponse": {
+            "type": "object",
+            "properties": {
+                "credentials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.PasskeyCredential"
+                    }
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.PasskeyRegisterChallengeResponse": {
+            "type": "object",
+            "properties": {
+                "options": {
+                    "$ref": "#/definitions/protocol.CredentialCreation"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PasskeyRevokeResponse": {
+            "type": "object",
+            "properties": {
+                "found": {
+                    "type": "boolean"
+                },
+                "remaining": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.PasskeyVerifyResponse": {
+            "type": "object",
+            "properties": {
+                "credential": {
+                    "$ref": "#/definitions/models.PasskeyCredential"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
         "models.StateResponse": {
             "type": "object",
             "properties": {
@@ -857,6 +922,417 @@
                     "$ref": "#/definitions/constants.GatewayMode"
                 }
             }
+        },
+        "models.WebSessionInfo": {
+            "type": "object",
+            "properties": {
+                "expires_at_unix_ms": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "protocol.AttestationFormat": {
+            "type": "string",
+            "enum": [
+                "packed",
+                "tpm",
+                "android-key",
+                "android-safetynet",
+                "fido-u2f",
+                "apple",
+                "compound",
+                "none"
+            ],
+            "x-enum-varnames": [
+                "AttestationFormatPacked",
+                "AttestationFormatTPM",
+                "AttestationFormatAndroidKey",
+                "AttestationFormatAndroidSafetyNet",
+                "AttestationFormatFIDOUniversalSecondFactor",
+                "AttestationFormatApple",
+                "AttestationFormatCompound",
+                "AttestationFormatNone"
+            ]
+        },
+        "protocol.AuthenticationExtensions": {
+            "type": "object",
+            "additionalProperties": {}
+        },
+        "protocol.AuthenticatorAttachment": {
+            "type": "string",
+            "enum": [
+                "platform",
+                "cross-platform"
+            ],
+            "x-enum-varnames": [
+                "Platform",
+                "CrossPlatform"
+            ]
+        },
+        "protocol.AuthenticatorSelection": {
+            "type": "object",
+            "properties": {
+                "authenticatorAttachment": {
+                    "description": "AuthenticatorAttachment If this member is present, eligible authenticators are filtered to only\nauthenticators attached with the specified AuthenticatorAttachment enum.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.AuthenticatorAttachment"
+                        }
+                    ]
+                },
+                "requireResidentKey": {
+                    "description": "RequireResidentKey this member describes the Relying Party's requirements regarding resident\ncredentials. If the parameter is set to true, the authenticator MUST create a client-side-resident\npublic key credential source when creating a public key credential.",
+                    "type": "boolean"
+                },
+                "residentKey": {
+                    "description": "ResidentKey this member describes the Relying Party's requirements regarding resident\ncredentials per Webauthn Level 2.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.ResidentKeyRequirement"
+                        }
+                    ]
+                },
+                "userVerification": {
+                    "description": "UserVerification This member describes the Relying Party's requirements regarding user verification for\nthe create() operation. Eligible authenticators are filtered to only those capable of satisfying this\nrequirement.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.UserVerificationRequirement"
+                        }
+                    ]
+                }
+            }
+        },
+        "protocol.AuthenticatorTransport": {
+            "type": "string",
+            "enum": [
+                "usb",
+                "nfc",
+                "ble",
+                "smart-card",
+                "hybrid",
+                "internal"
+            ],
+            "x-enum-varnames": [
+                "USB",
+                "NFC",
+                "BLE",
+                "SmartCard",
+                "Hybrid",
+                "Internal"
+            ]
+        },
+        "protocol.ConveyancePreference": {
+            "type": "string",
+            "enum": [
+                "none",
+                "indirect",
+                "direct",
+                "enterprise"
+            ],
+            "x-enum-varnames": [
+                "PreferNoAttestation",
+                "PreferIndirectAttestation",
+                "PreferDirectAttestation",
+                "PreferEnterpriseAttestation"
+            ]
+        },
+        "protocol.CredentialAssertion": {
+            "type": "object",
+            "properties": {
+                "mediation": {
+                    "$ref": "#/definitions/protocol.CredentialMediationRequirement"
+                },
+                "publicKey": {
+                    "$ref": "#/definitions/protocol.PublicKeyCredentialRequestOptions"
+                }
+            }
+        },
+        "protocol.CredentialCreation": {
+            "type": "object",
+            "properties": {
+                "mediation": {
+                    "$ref": "#/definitions/protocol.CredentialMediationRequirement"
+                },
+                "publicKey": {
+                    "$ref": "#/definitions/protocol.PublicKeyCredentialCreationOptions"
+                }
+            }
+        },
+        "protocol.CredentialDescriptor": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "CredentialID The ID of a credential to allow/disallow.",
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "transports": {
+                    "description": "The authenticator transports that can be used.",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.AuthenticatorTransport"
+                    }
+                },
+                "type": {
+                    "description": "The valid credential types.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/protocol.CredentialType"
+                        }
+                    ]
+                }
+            }
+        },
+        "protocol.CredentialMediationRequirement": {
+            "type": "string",
+            "enum": [
+                "",
+                "silent",
+                "optional",
+                "conditional",
+                "required"
+            ],
+            "x-enum-varnames": [
+                "MediationDefault",
+                "MediationSilent",
+                "MediationOptional",
+                "MediationConditional",
+                "MediationRequired"
+            ]
+        },
+        "protocol.CredentialParameter": {
+            "type": "object",
+            "properties": {
+                "alg": {
+                    "$ref": "#/definitions/webauthncose.COSEAlgorithmIdentifier"
+                },
+                "type": {
+                    "$ref": "#/definitions/protocol.CredentialType"
+                }
+            }
+        },
+        "protocol.CredentialType": {
+            "type": "string",
+            "enum": [
+                "public-key"
+            ],
+            "x-enum-varnames": [
+                "PublicKeyCredentialType"
+            ]
+        },
+        "protocol.PublicKeyCredentialCreationOptions": {
+            "type": "object",
+            "properties": {
+                "attestation": {
+                    "$ref": "#/definitions/protocol.ConveyancePreference"
+                },
+                "attestationFormats": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.AttestationFormat"
+                    }
+                },
+                "authenticatorSelection": {
+                    "$ref": "#/definitions/protocol.AuthenticatorSelection"
+                },
+                "challenge": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "excludeCredentials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.CredentialDescriptor"
+                    }
+                },
+                "extensions": {
+                    "$ref": "#/definitions/protocol.AuthenticationExtensions"
+                },
+                "hints": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.PublicKeyCredentialHints"
+                    }
+                },
+                "pubKeyCredParams": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.CredentialParameter"
+                    }
+                },
+                "rp": {
+                    "$ref": "#/definitions/protocol.RelyingPartyEntity"
+                },
+                "timeout": {
+                    "type": "integer"
+                },
+                "user": {
+                    "$ref": "#/definitions/protocol.UserEntity"
+                }
+            }
+        },
+        "protocol.PublicKeyCredentialHints": {
+            "type": "string",
+            "enum": [
+                "security-key",
+                "client-device",
+                "hybrid"
+            ],
+            "x-enum-varnames": [
+                "PublicKeyCredentialHintSecurityKey",
+                "PublicKeyCredentialHintClientDevice",
+                "PublicKeyCredentialHintHybrid"
+            ]
+        },
+        "protocol.PublicKeyCredentialRequestOptions": {
+            "type": "object",
+            "properties": {
+                "allowCredentials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.CredentialDescriptor"
+                    }
+                },
+                "challenge": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "extensions": {
+                    "$ref": "#/definitions/protocol.AuthenticationExtensions"
+                },
+                "hints": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/protocol.PublicKeyCredentialHints"
+                    }
+                },
+                "rpId": {
+                    "type": "string"
+                },
+                "timeout": {
+                    "type": "integer"
+                },
+                "userVerification": {
+                    "$ref": "#/definitions/protocol.UserVerificationRequirement"
+                }
+            }
+        },
+        "protocol.RelyingPartyEntity": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "description": "A unique identifier for the Relying Party entity, which sets the RP ID.",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "A human-palatable name for the entity. Its function depends on what the PublicKeyCredentialEntity represents:\n\nWhen inherited by PublicKeyCredentialRpEntity it is a human-palatable identifier for the Relying Party,\nintended only for display. For example, \"ACME Corporation\", \"Wonderful Widgets, Inc.\" or \"ОАО Примертех\".\n\nWhen inherited by PublicKeyCredentialUserEntity, it is a human-palatable identifier for a user account. It is\nintended only for display, i.e., aiding the user in determining the difference between user accounts with similar\ndisplayNames. For example, \"alexm\", \"alex.p.mueller@example.com\" or \"+14255551234\".",
+                    "type": "string"
+                }
+            }
+        },
+        "protocol.ResidentKeyRequirement": {
+            "type": "string",
+            "enum": [
+                "discouraged",
+                "preferred",
+                "required"
+            ],
+            "x-enum-varnames": [
+                "ResidentKeyRequirementDiscouraged",
+                "ResidentKeyRequirementPreferred",
+                "ResidentKeyRequirementRequired"
+            ]
+        },
+        "protocol.UserEntity": {
+            "type": "object",
+            "properties": {
+                "displayName": {
+                    "description": "A human-palatable name for the user account, intended only for display.\nFor example, \"Alex P. Müller\" or \"田中 倫\". The Relying Party SHOULD let\nthe user choose this, and SHOULD NOT restrict the choice more than necessary.",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the user handle of the user account entity. To ensure secure operation,\nauthentication and authorization decisions MUST be made on the basis of this id\nmember, not the displayName nor name members. See Section 6.1 of\n[RFC8266](https://www.w3.org/TR/webauthn/#biblio-rfc8266)."
+                },
+                "name": {
+                    "description": "A human-palatable name for the entity. Its function depends on what the PublicKeyCredentialEntity represents:\n\nWhen inherited by PublicKeyCredentialRpEntity it is a human-palatable identifier for the Relying Party,\nintended only for display. For example, \"ACME Corporation\", \"Wonderful Widgets, Inc.\" or \"ОАО Примертех\".\n\nWhen inherited by PublicKeyCredentialUserEntity, it is a human-palatable identifier for a user account. It is\nintended only for display, i.e., aiding the user in determining the difference between user accounts with similar\ndisplayNames. For example, \"alexm\", \"alex.p.mueller@example.com\" or \"+14255551234\".",
+                    "type": "string"
+                }
+            }
+        },
+        "protocol.UserVerificationRequirement": {
+            "type": "string",
+            "enum": [
+                "required",
+                "preferred",
+                "discouraged"
+            ],
+            "x-enum-comments": {
+                "VerificationPreferred": "This is the default."
+            },
+            "x-enum-descriptions": [
+                "",
+                "This is the default.",
+                ""
+            ],
+            "x-enum-varnames": [
+                "VerificationRequired",
+                "VerificationPreferred",
+                "VerificationDiscouraged"
+            ]
+        },
+        "webauthncose.COSEAlgorithmIdentifier": {
+            "type": "integer",
+            "enum": [
+                -7,
+                -8,
+                -9,
+                -19,
+                -35,
+                -36,
+                -37,
+                -38,
+                -39,
+                -47,
+                -48,
+                -49,
+                -50,
+                -51,
+                -52,
+                -257,
+                -258,
+                -259,
+                -65535
+            ],
+            "x-enum-varnames": [
+                "AlgES256",
+                "AlgEdDSA",
+                "AlgESP256",
+                "AlgEd25519",
+                "AlgES384",
+                "AlgES512",
+                "AlgPS256",
+                "AlgPS384",
+                "AlgPS512",
+                "AlgES256K",
+                "AlgMLDSA44",
+                "AlgMLDSA65",
+                "AlgMLDSA87",
+                "AlgESP384",
+                "AlgESP512",
+                "AlgRS256",
+                "AlgRS384",
+                "AlgRS512",
+                "AlgRS1"
+            ]
         }
     }
 }
