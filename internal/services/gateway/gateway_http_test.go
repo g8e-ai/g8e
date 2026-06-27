@@ -756,12 +756,12 @@ func TestHTTPHandler_GetMCPGateway(t *testing.T) {
 	assert.NotNil(t, mcpGateway, "GetMCPGateway should return non-nil service")
 }
 
-func TestHTTPHandler_GetPasskeyService(t *testing.T) {
+func TestHTTPHandler_GetPasskeyHandler(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
-	passkey := h.GetPasskeyService()
-	assert.NotNil(t, passkey, "GetPasskeyService should return non-nil service")
+	passkey := h.GetPasskeyHandler()
+	assert.NotNil(t, passkey, "GetPasskeyHandler should return non-nil service")
 }
 
 func TestHTTPHandler_GetGatewayWebSocketHandler(t *testing.T) {

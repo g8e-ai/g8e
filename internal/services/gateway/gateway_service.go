@@ -59,7 +59,7 @@ type GatewayModeService struct {
 	auth               *AuthService
 	pki                *PKIAuthority
 	reg                *RegistrationService
-	passkey            *PasskeyService
+	passkey            *PasskeyHandler
 	userSvc            *UserService
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
@@ -145,10 +145,11 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		RpID:   cfg.Gateway.PasskeyRpID,
 		RpName: cfg.Gateway.PasskeyRpName,
 	}
-	passkey, err := NewPasskeyService(db, logger, passkeyCfg, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes)
+	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes)
 
 	// Initialize suspended transaction service for gateway mode
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -178,7 +179,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
 
 	ls := &GatewayModeService{
 		cfg:                cfg,
@@ -188,7 +189,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		auth:               auth,
 		pki:                pki,
 		reg:                reg,
-		passkey:            passkey,
+		passkey:            passkeyHandler,
 		userSvc:            userSvc,
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
@@ -317,7 +318,8 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		RpName: cfg.Gateway.PasskeyRpName,
 	}
 	// Passkey service initialization is optional; ignore errors for test configuration
-	passkey, _ := NewPasskeyService(db, logger, passkeyCfg, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes) //nolint:errcheck
+	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes)
 
 	// Initialize suspended transaction service for gateway mode (test configuration)
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -347,7 +349,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
 
 	ls := &GatewayModeService{
 		cfg:                cfg,
@@ -357,7 +359,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		auth:               auth,
 		pki:                pki,
 		reg:                reg,
-		passkey:            passkey,
+		passkey:            passkeyHandler,
 		userSvc:            userSvc,
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
@@ -594,7 +596,7 @@ type GovernanceDeps struct {
 func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
 	// Create unified L3 notary that handles both CLI (mTLS) and passkey (WebAuthn) proofs
 	cliVerifier := NewCLISessionVerifier(ls.db, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
-	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey, ls.logger)
+	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
 	return &GovernanceDeps{
 		ReplayStore:       ls.db.ReplayStore,

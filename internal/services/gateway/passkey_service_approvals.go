@@ -24,11 +24,11 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
-func (s *PasskeyService) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
+func (h *PasskeyHandler) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovalsPrefix)
 	parts := strings.Split(path, "/")
 	if len(parts) < 1 {
-		s.responder.Error(w, http.StatusBadRequest, "invalid request path")
+		h.responder.Error(w, http.StatusBadRequest, "invalid request path")
 		return
 	}
 
@@ -40,72 +40,72 @@ func (s *PasskeyService) handleApprovalAction(w http.ResponseWriter, r *http.Req
 
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
-		s.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	switch action {
 	case "challenge":
-		s.handleApprovalChallenge(w, r, txHash, userID)
+		h.handleApprovalChallenge(w, r, txHash, userID)
 	case "verify":
-		s.handleApprovalVerify(w, r, txHash, userID)
+		h.handleApprovalVerify(w, r, txHash, userID)
 	default:
-		s.responder.Error(w, http.StatusBadRequest, "unknown action")
+		h.responder.Error(w, http.StatusBadRequest, "unknown action")
 	}
 }
 
-func (s *PasskeyService) handleApprovalChallenge(w http.ResponseWriter, r *http.Request, txHash, userID string) {
+func (h *PasskeyHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	if r.Method != http.MethodGet {
-		s.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	suspendedTx, ok, err := s.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
+	suspendedTx, ok, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
 	if err != nil || !ok {
-		s.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
+		h.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
 
 	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
-		s.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
+		h.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
-	options, err := s.GenerateApprovalChallenge(userID, txHash)
+	options, err := h.GenerateApprovalChallenge(userID, txHash)
 	if err != nil {
-		s.responder.Error(w, http.StatusInternalServerError, err.Error())
+		h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	s.responder.JSON(w, http.StatusOK, options)
+	h.responder.JSON(w, http.StatusOK, options)
 }
 
-func (s *PasskeyService) handleApprovalVerify(w http.ResponseWriter, r *http.Request, txHash, userID string) {
+func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	if r.Method != http.MethodPost {
-		s.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
-	suspendedTx, ok, err := s.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
+	suspendedTx, ok, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
 	if err != nil || !ok {
-		s.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
+		h.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
 
 	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
-		s.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
+		h.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
-	body, err := s.readBody(w, r)
+	body, err := h.readBody(w, r)
 	if err != nil {
-		s.responder.Error(w, http.StatusBadRequest, "failed to read body")
+		h.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
 	}
 
 	var req models.WebAuthnAssertionResponse
 	if err := json.Unmarshal(body, &req); err != nil {
-		s.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
+		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
@@ -116,61 +116,61 @@ func (s *PasskeyService) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 		CredentialId:      req.ID,
 	}
 
-	receipt, err := s.mcpSvc.ResumeWithL3Proof(r.Context(), txHash, userID, proof)
+	receipt, err := h.mcpSvc.ResumeWithL3Proof(r.Context(), txHash, userID, proof)
 	if err != nil {
 		if receipt != nil {
-			s.responder.JSON(w, http.StatusForbidden, receipt)
+			h.responder.JSON(w, http.StatusForbidden, receipt)
 			return
 		}
-		s.responder.Error(w, http.StatusForbidden, err.Error())
+		h.responder.Error(w, http.StatusForbidden, err.Error())
 		return
 	}
 
-	s.responder.JSON(w, http.StatusOK, receipt)
+	h.responder.JSON(w, http.StatusOK, receipt)
 }
 
 // handleCLIApprovalStatus is an mTLS-authenticated endpoint that returns the current
 // status of a suspended transaction. The CLI polls this endpoint after opening the
 // browser approval page to detect when the user has completed the WebAuthn ceremony.
-func (s *PasskeyService) handleCLIApprovalStatus(w http.ResponseWriter, r *http.Request) {
+func (h *PasskeyHandler) handleCLIApprovalStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	txHash := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovalsCLIStatus)
 	if txHash == "" {
-		s.responder.Error(w, http.StatusBadRequest, "transaction hash required")
+		h.responder.Error(w, http.StatusBadRequest, "transaction hash required")
 		return
 	}
 
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
-		s.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	suspendedTx, found, err := s.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
+	suspendedTx, found, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
 	if err != nil {
-		s.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
-		s.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
+		h.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
+		h.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
 		return
 	}
 
 	if !found {
-		s.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
+		h.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
 			Status: "expired_or_not_found",
 		})
 		return
 	}
 
 	if suspendedTx.UserID != "" && suspendedTx.UserID != userID {
-		s.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
+		h.responder.Error(w, http.StatusForbidden, "transaction belongs to another user")
 		return
 	}
 
 	if suspendedTx.Approved {
-		s.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
+		h.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
 			Status:   "approved",
 			TxHash:   txHash,
 			ToolName: suspendedTx.ToolName,
@@ -178,16 +178,16 @@ func (s *PasskeyService) handleCLIApprovalStatus(w http.ResponseWriter, r *http.
 		return
 	}
 
-	s.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
+	h.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
 		Status:   "pending",
 		TxHash:   txHash,
 		ToolName: suspendedTx.ToolName,
 	})
 }
 
-func (s *PasskeyService) handleApprovalPage(w http.ResponseWriter, r *http.Request) {
+func (h *PasskeyHandler) handleApprovalPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
@@ -200,22 +200,22 @@ func (s *PasskeyService) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 	http.Redirect(w, r, "/console/#approve="+url.QueryEscape(txHash), http.StatusFound)
 }
 
-func (s *PasskeyService) handleListSuspendedTransactions(w http.ResponseWriter, r *http.Request) {
+func (h *PasskeyHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		s.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
+		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
 
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok || userID == "" {
-		s.responder.Error(w, http.StatusUnauthorized, "unauthorized")
+		h.responder.Error(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
-	transactions, err := s.suspendedStore.ListSuspendedTransactions(r.Context(), userID)
+	transactions, err := h.suspendedStore.ListSuspendedTransactions(r.Context(), userID)
 	if err != nil {
-		s.logger.Error("Failed to list suspended transactions", "error", err, "userID", userID)
-		s.responder.Error(w, http.StatusInternalServerError, "failed to list suspended transactions")
+		h.logger.Error("Failed to list suspended transactions", "error", err, "userID", userID)
+		h.responder.Error(w, http.StatusInternalServerError, "failed to list suspended transactions")
 		return
 	}
 
@@ -231,7 +231,7 @@ func (s *PasskeyService) handleListSuspendedTransactions(w http.ResponseWriter, 
 		})
 	}
 
-	s.responder.JSON(w, http.StatusOK, models.SuspendedTransactionsResponse{
+	h.responder.JSON(w, http.StatusOK, models.SuspendedTransactionsResponse{
 		Transactions: txResponses,
 	})
 }

@@ -42,7 +42,7 @@ type HTTPHandlerDependencies struct {
 	OperatorSessionSvc *OperatorSessionService
 	WebSessionSvc      *WebSessionService
 	Reg                *RegistrationService
-	Passkey            *PasskeyService
+	Passkey            *PasskeyHandler
 	UserSvc            *UserService
 	Responder          *response.Writer
 	MCPGateway         *mcp.GatewayService
@@ -64,7 +64,7 @@ type HTTPHandler struct {
 	operatorSessionSvc *OperatorSessionService
 	webSessionSvc      *WebSessionService
 	reg                *RegistrationService
-	passkey            *PasskeyService
+	passkey            *PasskeyHandler
 	userSvc            *UserService
 	responder          *response.Writer
 	mcp                *mcp.GatewayService
@@ -160,7 +160,7 @@ func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
 	h.router = h.buildPublicRouter()
 }
 
-func (h *HTTPHandler) GetPasskeyService() *PasskeyService {
+func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {
 	return h.passkey
 }
 

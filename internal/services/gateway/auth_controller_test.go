@@ -85,7 +85,8 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -112,13 +113,13 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, resp, nil)
-	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	authController := newAuthController(cfg, logger, db, auth, passkeyHandler, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, resp, nil)
+	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
 	return authController, cfg
 }
 
-// setupTestPasskeyService creates a PasskeyService with approval dependencies for testing.
-func setupTestPasskeyService(t *testing.T) (*PasskeyService, *UserService, storage.SuspendedTransactionStore) {
+// setupTestPasskeyService creates a PasskeyHandler with approval dependencies for testing.
+func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, storage.SuspendedTransactionStore) {
 	t.Helper()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -131,7 +132,7 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyService, *UserService, stora
 	userSvc := NewUserService(db, logger)
 	resp := response.NewWriter(logger)
 	webSessionSvc := NewWebSessionService(db, logger)
-	passkey, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkey, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -154,8 +155,9 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyService, *UserService, stora
 	})
 	require.NoError(t, err)
 
-	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
-	return passkey, userSvc, suspendedTxService
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	return passkeyHandler, userSvc, suspendedTxService
 }
 
 // Test Helpers

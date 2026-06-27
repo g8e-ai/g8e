@@ -32,7 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyService, *WebSessionService, *models.User) {
+func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionService, *models.User) {
 	t.Helper()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
@@ -40,9 +40,10 @@ func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyService, *WebSessionSer
 	require.NoError(t, err)
 	webSessionSvc := NewWebSessionService(db, logger)
 	resp := response.NewWriter(logger)
-	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, 10*1024*1024)
+	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	return svc, webSessionSvc, user
+	handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+	return handler, webSessionSvc, user
 }
 
 func TestPasskeyRegisterChallenge(t *testing.T) {

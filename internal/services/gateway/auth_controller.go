@@ -55,7 +55,7 @@ type AuthController struct {
 	logger             *slog.Logger
 	db                 *CanonicalDBService
 	auth               *AuthService
-	passkey            *PasskeyService
+	passkey            *PasskeyHandler
 	userSvc            *UserService
 	reg                *RegistrationService
 	pki                *PKIAuthority
@@ -66,7 +66,7 @@ type AuthController struct {
 	actuatorKeyReader  actuatorKeyReader
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyHandler, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
 	return &AuthController{
 		cfg:                cfg,
 		logger:             logger,

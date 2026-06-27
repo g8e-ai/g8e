@@ -75,17 +75,12 @@ type webauthnClient interface {
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
 type PasskeyService struct {
-	userStore      userStore
-	sessionStore   sessionStore
-	webauthn       webauthnClient
-	logger         *slog.Logger
-	rpID           string
-	rpName         string
-	webSessionSvc  *WebSessionService
-	responder      *response.Writer
-	maxPayload     int64
-	mcpSvc         MCPServiceProvider
-	suspendedStore storage.SuspendedTransactionStore
+	userStore    userStore
+	sessionStore sessionStore
+	webauthn     webauthnClient
+	logger       *slog.Logger
+	rpID         string
+	rpName       string
 }
 
 // PasskeyConfig holds configuration for passkey operations.
@@ -242,7 +237,7 @@ func (c *realWebauthnClient) ValidateLogin(user webauthn.User, session webauthn.
 }
 
 // NewPasskeyService creates a new PasskeyService with the given configuration.
-func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig, webSessionSvc *WebSessionService, responder *response.Writer, maxPayload int64) (*PasskeyService, error) {
+func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
 	rpName := cfg.RpName
 	if rpName == "" {
 		rpName = "g8e"
@@ -273,25 +268,45 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 	}
 
 	return &PasskeyService{
-		userStore:     &dbUserStore{db: db},
-		sessionStore:  &dbSessionStore{db: db},
-		webauthn:      &realWebauthnClient{w: w},
-		logger:        logger,
-		rpID:          cfg.RpID,
-		rpName:        rpName,
-		webSessionSvc: webSessionSvc,
-		responder:     responder,
-		maxPayload:    maxPayload,
+		userStore:    &dbUserStore{db: db},
+		sessionStore: &dbSessionStore{db: db},
+		webauthn:     &realWebauthnClient{w: w},
+		logger:       logger,
+		rpID:         cfg.RpID,
+		rpName:       rpName,
 	}, nil
 }
 
+// PasskeyHandler handles HTTP endpoints for passkey registration, authentication,
+// credential management, and OOB approval flows. It wraps a PasskeyService for
+// domain logic and adds HTTP-specific concerns (web sessions, responder, payload limits).
+type PasskeyHandler struct {
+	*PasskeyService
+	webSessionSvc  *WebSessionService
+	responder      *response.Writer
+	maxPayload     int64
+	mcpSvc         MCPServiceProvider
+	suspendedStore storage.SuspendedTransactionStore
+}
+
+// NewPasskeyHandler creates a new PasskeyHandler wrapping the given PasskeyService
+// with HTTP-specific dependencies.
+func NewPasskeyHandler(svc *PasskeyService, webSessionSvc *WebSessionService, responder *response.Writer, maxPayload int64) *PasskeyHandler {
+	return &PasskeyHandler{
+		PasskeyService: svc,
+		webSessionSvc:  webSessionSvc,
+		responder:      responder,
+		maxPayload:     maxPayload,
+	}
+}
+
 // SetApprovalDependencies injects the MCP service provider and suspended transaction
-// store needed by the approval handlers. This is called after both the PasskeyService
+// store needed by the approval handlers. This is called after both the PasskeyHandler
 // and MCP GatewayService are constructed, since the MCP gateway is created later
 // in the startup sequence.
-func (s *PasskeyService) SetApprovalDependencies(mcpSvc MCPServiceProvider, suspendedStore storage.SuspendedTransactionStore) {
-	s.mcpSvc = mcpSvc
-	s.suspendedStore = suspendedStore
+func (h *PasskeyHandler) SetApprovalDependencies(mcpSvc MCPServiceProvider, suspendedStore storage.SuspendedTransactionStore) {
+	h.mcpSvc = mcpSvc
+	h.suspendedStore = suspendedStore
 }
 
 // ChallengeData stores a pending challenge for registration or authentication.
