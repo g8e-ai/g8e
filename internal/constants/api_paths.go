@@ -88,10 +88,6 @@ var APIPaths = struct {
 	AuthBootstrapStatus                        string `json:"auth_bootstrap_status"`
 	AuthCLIEnroll                              string `json:"auth_cli_enroll"`
 	AuthDeviceEnroll                           string `json:"auth_device_enroll"`
-	AuthPasskeysRegisterChallenge              string `json:"auth_passkeys_register_challenge"`
-	AuthPasskeysRegisterVerify                 string `json:"auth_passkeys_register_verify"`
-	AuthPasskeysAuthenticateChallenge          string `json:"auth_passkeys_authenticate_challenge"`
-	AuthPasskeysAuthenticateVerify             string `json:"auth_passkeys_authenticate_verify"`
 	AuthPasskeys                               string `json:"auth_passkeys"`
 	AuthPasskeysByID                           string `json:"auth_passkeys_by_id"`
 	AuthPasskeysJITRegisterChallenge           string `json:"auth_passkeys_jit_register_challenge"`
@@ -99,11 +95,6 @@ var APIPaths = struct {
 	AuthPasskeysJITPrefix                      string `json:"auth_passkeys_jit_prefix"`
 	AuthPasskeysPrefix                         string `json:"auth_passkeys_prefix"`
 	AuthPasskeysCLIStatus                      string `json:"auth_passkeys_cli_status"`
-	AuthPasskeysBootstrapRegisterChallenge     string `json:"auth_passkeys_bootstrap_register_challenge"`
-	AuthPasskeysBootstrapRegisterVerify        string `json:"auth_passkeys_bootstrap_register_verify"`
-	AuthPasskeysBootstrapAuthenticateChallenge string `json:"auth_passkeys_bootstrap_authenticate_challenge"`
-	AuthPasskeysBootstrapAuthenticateVerify    string `json:"auth_passkeys_bootstrap_authenticate_verify"`
-	AuthPasskeysBootstrapPrefix                string `json:"auth_passkeys_bootstrap_prefix"`
 	AuthPasskeysConsoleRegisterChallenge       string `json:"auth_passkeys_console_register_challenge"`
 	AuthPasskeysConsoleRegisterVerify          string `json:"auth_passkeys_console_register_verify"`
 	AuthPasskeysConsoleAuthenticateChallenge   string `json:"auth_passkeys_console_authenticate_challenge"`
@@ -224,35 +215,18 @@ var APIPaths = struct {
 	AuthBootstrapStatus:                        "/api/v1/auth/bootstrap/status",
 	AuthCLIEnroll:                              "/api/v1/auth/cli/enroll",
 	AuthDeviceEnroll:                           "/api/v1/auth/device/enroll",
-	AuthPasskeysRegisterChallenge:              "/api/v1/auth/passkeys/register/challenge",
-	AuthPasskeysRegisterVerify:                 "/api/v1/auth/passkeys/register/verify",
-	AuthPasskeysAuthenticateChallenge:          "/api/v1/auth/passkeys/authenticate/challenge",
-	AuthPasskeysAuthenticateVerify:             "/api/v1/auth/passkeys/authenticate/verify",
 	AuthPasskeys:                               "/api/v1/auth/passkeys",
 	AuthPasskeysByID:                           "/api/v1/auth/passkeys/",
 	AuthPasskeysJITRegisterChallenge:           "/api/v1/auth/passkeys/jit-register/challenge",
 	AuthPasskeysJITRegisterVerify:              "/api/v1/auth/passkeys/jit-register/verify",
 	AuthPasskeysJITPrefix:                      "/api/v1/auth/passkeys/jit-",
 	AuthPasskeysPrefix:                         "/api/v1/auth/passkeys/",
-	AuthPasskeysCLIRegisterChallenge:           "/api/v1/auth/passkeys/cli-register/challenge",
-	AuthPasskeysCLIRegisterVerify:              "/api/v1/auth/passkeys/cli-register/verify",
-	AuthPasskeysCLIAuthenticateChallenge:       "/api/v1/auth/passkeys/cli/authenticate/challenge",
-	AuthPasskeysCLIAuthenticateVerify:          "/api/v1/auth/passkeys/cli/authenticate/verify",
 	AuthPasskeysCLIStatus:                      "/api/v1/auth/passkeys/cli/status",
-	AuthPasskeysBootstrapRegisterChallenge:     "/api/v1/auth/passkeys/bootstrap/register/challenge",
-	AuthPasskeysBootstrapRegisterVerify:        "/api/v1/auth/passkeys/bootstrap/register/verify",
-	AuthPasskeysBootstrapAuthenticateChallenge: "/api/v1/auth/passkeys/bootstrap/authenticate/challenge",
-	AuthPasskeysBootstrapAuthenticateVerify:    "/api/v1/auth/passkeys/bootstrap/authenticate/verify",
-	AuthPasskeysBootstrapPrefix:                "/api/v1/auth/passkeys/bootstrap/",
 	AuthPasskeysConsoleRegisterChallenge:       "/api/v1/auth/passkeys/console/register/challenge",
 	AuthPasskeysConsoleRegisterVerify:          "/api/v1/auth/passkeys/console/register/verify",
 	AuthPasskeysConsoleAuthenticateChallenge:   "/api/v1/auth/passkeys/console/authenticate/challenge",
 	AuthPasskeysConsoleAuthenticateVerify:      "/api/v1/auth/passkeys/console/authenticate/verify",
 	AuthPasskeysConsolePrefix:                  "/api/v1/auth/passkeys/console/",
-	AuthPasskeysCLIBrowserRegisterChallenge:    "/api/v1/auth/passkeys/cli-browser-register/challenge",
-	AuthPasskeysCLIBrowserRegisterVerify:       "/api/v1/auth/passkeys/cli-browser-register/verify",
-	AuthPasskeysBrowserAuthenticateChallenge:   "/api/v1/auth/passkeys/browser/authenticate/challenge",
-	AuthPasskeysBrowserAuthenticateVerify:      "/api/v1/auth/passkeys/browser/authenticate/verify",
 	AuthSessionsMe:                             "/api/v1/auth/sessions/me",
 	// Approval routes
 	Approvals:          "/api/v1/approvals",

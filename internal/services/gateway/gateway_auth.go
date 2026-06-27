@@ -104,11 +104,7 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 
 	// Exclude mTLS-protected sub-paths under the passkeys prefix.
 	// These routes require client certificates and must NOT bypass mTLS.
-	r.addExcludedPrefix("/api/v1/auth/passkeys/register")
-	r.addExcludedPrefix("/api/v1/auth/passkeys/authenticate")
 	r.addExcludedPrefix("/api/v1/auth/passkeys/cli/")
-	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-register")
-	r.addExcludedPrefix("/api/v1/auth/passkeys/cli-browser-register")
 
 	// Exclude mTLS-protected CLI approval status endpoint.
 	// The CLI polls this with mTLS; it must NOT bypass mTLS via the

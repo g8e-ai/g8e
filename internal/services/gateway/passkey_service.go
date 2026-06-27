@@ -30,14 +30,23 @@ import (
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
+	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/uuid"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
 const (
 	passkeyChallengeTTL = 5 * time.Minute
 	challengeBytes      = 32
 )
+
+// MCPServiceProvider provides access to suspended transaction operations needed
+// by the approval handlers. This interface is satisfied by *mcp.GatewayService.
+type MCPServiceProvider interface {
+	GetSuspendedTransaction(ctx context.Context, txHash string) (*models.SuspendedTransaction, bool, error)
+	ResumeWithL3Proof(ctx context.Context, txHash, userID string, proof *commonv1.L3Proof) (*operatorv1.ActionReceipt, error)
+}
 
 // userStore defines the interface for user storage operations.
 type userStore interface {
@@ -66,15 +75,17 @@ type webauthnClient interface {
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
 type PasskeyService struct {
-	userStore     userStore
-	sessionStore  sessionStore
-	webauthn      webauthnClient
-	logger        *slog.Logger
-	rpID          string
-	rpName        string
-	webSessionSvc *WebSessionService
-	responder     *response.Writer
-	maxPayload    int64
+	userStore       userStore
+	sessionStore    sessionStore
+	webauthn        webauthnClient
+	logger          *slog.Logger
+	rpID            string
+	rpName          string
+	webSessionSvc   *WebSessionService
+	responder       *response.Writer
+	maxPayload      int64
+	mcpSvc          MCPServiceProvider
+	suspendedStore  storage.SuspendedTransactionStore
 }
 
 // PasskeyConfig holds configuration for passkey operations.
@@ -272,6 +283,15 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 		responder:     responder,
 		maxPayload:    maxPayload,
 	}, nil
+}
+
+// SetApprovalDependencies injects the MCP service provider and suspended transaction
+// store needed by the approval handlers. This is called after both the PasskeyService
+// and MCP GatewayService are constructed, since the MCP gateway is created later
+// in the startup sequence.
+func (s *PasskeyService) SetApprovalDependencies(mcpSvc MCPServiceProvider, suspendedStore storage.SuspendedTransactionStore) {
+	s.mcpSvc = mcpSvc
+	s.suspendedStore = suspendedStore
 }
 
 // ChallengeData stores a pending challenge for registration or authentication.

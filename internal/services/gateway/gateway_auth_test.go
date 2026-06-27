@@ -342,10 +342,7 @@ func TestPublicRouteRegistry_PasskeyRoutes(t *testing.T) {
 	}
 
 	// Non-alias sub-paths under excluded prefixes must NOT be public
-	// (e.g., /api/v1/auth/passkeys/cli-register/some-other-endpoint)
 	nonAliasExcludedPaths := []string{
-		"/api/v1/auth/passkeys/cli-register/other",
-		"/api/v1/auth/passkeys/cli-browser-register/other",
 		"/api/v1/auth/passkeys/cli/other",
 	}
 	for _, path := range nonAliasExcludedPaths {

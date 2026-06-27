@@ -18,11 +18,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -39,12 +37,8 @@ import (
 
 // mockAPIClient implements apiClient for testing.
 type mockAPIClient struct {
-	getResp  []byte
-	getErr   error
-	postResp []byte
-	postErr  error
-	postPath string
-	postBody interface{}
+	getResp []byte
+	getErr  error
 }
 
 func (m *mockAPIClient) Get(path string) ([]byte, error) {
@@ -52,9 +46,7 @@ func (m *mockAPIClient) Get(path string) ([]byte, error) {
 }
 
 func (m *mockAPIClient) Post(path string, body interface{}) ([]byte, error) {
-	m.postPath = path
-	m.postBody = body
-	return m.postResp, m.postErr
+	return nil, nil
 }
 
 func (m *mockAPIClient) Put(path string, body interface{}) ([]byte, error) {
@@ -94,11 +86,26 @@ func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
 	return cfg, priv
 }
 
+// overrideApprovePollingForTest sets fast polling intervals for tests that
+// exercise the approve command's polling loop, preventing 5-minute hangs.
+func overrideApprovePollingForTest(t *testing.T) {
+	t.Helper()
+	origInterval := approvePollInterval
+	origMaxIter := approveMaxIterations
+	approvePollInterval = 1 * time.Millisecond
+	approveMaxIterations = 10
+	t.Cleanup(func() {
+		approvePollInterval = origInterval
+		approveMaxIterations = origMaxIter
+	})
+}
+
 func TestApproveCmd_APIInjection_HappyPath(t *testing.T) {
 	cfg, _ := setupApproveAPITestEnv(t)
+	overrideApprovePollingForTest(t)
 
 	mockClient := &mockAPIClient{
-		postResp: []byte(`{"status":"approved","result_summary":"success"}`),
+		getResp: []byte(`{"status":"approved","result_summary":"success"}`),
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -113,16 +120,15 @@ func TestApproveCmd_APIInjection_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Contains(t, buf.String(), "approved successfully")
-	assert.Contains(t, buf.String(), "approved")
 	assert.Contains(t, buf.String(), "txhash123")
-	assert.Contains(t, mockClient.postPath, "/api/v1/approve/txhash123")
 }
 
-func TestApproveCmd_APIInjection_PostError(t *testing.T) {
+func TestApproveCmd_GetError(t *testing.T) {
 	cfg, _ := setupApproveAPITestEnv(t)
+	overrideApprovePollingForTest(t)
 
 	mockClient := &mockAPIClient{
-		postErr: errors.New("network failure"),
+		getErr: errors.New("network failure"),
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -135,14 +141,15 @@ func TestApproveCmd_APIInjection_PostError(t *testing.T) {
 
 	err := cmd.RunE(cmd, []string{"txhash123"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrTransactionApproveFailed)
+	assert.Contains(t, err.Error(), "timed out")
 }
 
-func TestApproveCmd_APIInjection_InvalidJSONResponse(t *testing.T) {
+func TestApproveCmd_InvalidGetJSONResponse(t *testing.T) {
 	cfg, _ := setupApproveAPITestEnv(t)
+	overrideApprovePollingForTest(t)
 
 	mockClient := &mockAPIClient{
-		postResp: []byte(`not json {{{`),
+		getResp: []byte(`not json {{{`),
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -155,7 +162,7 @@ func TestApproveCmd_APIInjection_InvalidJSONResponse(t *testing.T) {
 
 	err := cmd.RunE(cmd, []string{"txhash123"})
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrResponseParseFailed)
+	assert.Contains(t, err.Error(), "timed out")
 }
 
 func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
@@ -176,11 +183,12 @@ func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 }
 
-func TestApproveCmd_APIInjection_EmptyStatusInResponse(t *testing.T) {
+func TestApproveCmd_EmptyStatusInResponse(t *testing.T) {
 	cfg, _ := setupApproveAPITestEnv(t)
+	overrideApprovePollingForTest(t)
 
 	mockClient := &mockAPIClient{
-		postResp: []byte(`{}`),
+		getResp: []byte(`{}`),
 	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -192,7 +200,8 @@ func TestApproveCmd_APIInjection_EmptyStatusInResponse(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, []string{"txhash456"})
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
 	assert.Contains(t, buf.String(), "txhash456")
 }
 
@@ -200,25 +209,14 @@ func TestApproveCmd_APIInjection_EmptyStatusInResponse(t *testing.T) {
 // using the real api.Client (via NewClientWithURL with the test server URL).
 func TestApproveCmd_HTTPTestServer(t *testing.T) {
 	cfg, _ := setupApproveAPITestEnv(t)
+	overrideApprovePollingForTest(t)
 
-	// Create a trust bundle that the API client will accept.
-	// Since we're using httptest.Server with default TLS, we need to provide
-	// a CA bundle. Instead, use an httptest.Server without TLS and inject
-	// a mock factory that wraps the real client logic against the test server.
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Contains(t, r.URL.Path, "/api/v1/approve/")
-
-		// Body is pre-marshaled JSON bytes; just verify it's non-empty
-		bodyBytes, err := io.ReadAll(r.Body)
-		require.NoError(t, err)
-		assert.NotEmpty(t, bodyBytes)
-
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"status":"approved","result_summary":"execution completed"}`)
 	}))
 	t.Cleanup(srv.Close)
 
-	// Use a mock client that posts to the test server directly.
 	mockClient := &httptestApproveClient{serverURL: srv.URL}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
@@ -232,11 +230,10 @@ func TestApproveCmd_HTTPTestServer(t *testing.T) {
 	err := cmd.RunE(cmd, []string{"txhash789"})
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "approved successfully")
-	assert.Contains(t, buf.String(), "approved")
-	assert.Contains(t, buf.String(), "execution completed")
+	assert.Contains(t, buf.String(), "txhash789")
 }
 
-// httptestApproveClient implements apiClient by forwarding Post calls to the httptest.Server.
+// httptestApproveClient implements apiClient by forwarding Get calls to the httptest.Server.
 type httptestApproveClient struct {
 	serverURL string
 }
@@ -253,24 +250,7 @@ func (c *httptestApproveClient) Get(path string) ([]byte, error) {
 }
 
 func (c *httptestApproveClient) Post(path string, body interface{}) ([]byte, error) {
-	var bodyReader io.Reader
-	if bodyBytes, ok := body.([]byte); ok {
-		bodyReader = bytes.NewReader(bodyBytes)
-	} else {
-		bodyBytes, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		bodyReader = bytes.NewReader(bodyBytes)
-	}
-	resp, err := http.Post(c.serverURL+path, "application/json", bodyReader)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
-	return buf.Bytes(), nil
+	return nil, nil
 }
 
 func (c *httptestApproveClient) Put(path string, body interface{}) ([]byte, error) {

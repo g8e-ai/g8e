@@ -123,6 +123,11 @@ func NewSuspendedTransactionService(config *SuspendedTransactionConfig, logger *
 		db:     db,
 	}
 
+	if err := sts.migratePasskeyColumns(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to migrate passkey columns: %w", err)
+	}
+
 	interval := time.Duration(config.PruneIntervalMinutes) * time.Minute
 	sts.pruner = sqliteutil.NewPruner(db, logger, interval, suspendedTransactionPrune(config))
 	sts.pruner.Start()
@@ -157,6 +162,48 @@ CREATE TABLE IF NOT EXISTS suspended_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_suspended_expires_at ON suspended_transactions(expires_at);
 `
+
+// migratePasskeyColumns adds passkey-related columns to existing databases that
+// predate the passkey unification feature. CREATE TABLE IF NOT EXISTS does not
+// add columns to an existing table, so we use ALTER TABLE for migration.
+func (sts *SuspendedTransactionService) migratePasskeyColumns() error {
+	passkeyColumns := []string{
+		"passkey_credential_id",
+		"passkey_client_data_json",
+		"passkey_authenticator_data",
+		"passkey_signature",
+	}
+
+	rows, err := sts.db.QueryWithRetry("PRAGMA table_info(suspended_transactions)")
+	if err != nil {
+		return fmt.Errorf("pragma: %w", err)
+	}
+	defer rows.Close()
+
+	existing := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return fmt.Errorf("scan: %w", err)
+		}
+		existing[name] = true
+	}
+
+	for _, col := range passkeyColumns {
+		if !existing[col] {
+			if _, err := sts.db.ExecWithRetry(
+				fmt.Sprintf("ALTER TABLE suspended_transactions ADD COLUMN %s TEXT", col),
+			); err != nil {
+				return fmt.Errorf("add %s: %w", col, err)
+			}
+			sts.logger.Info("Added passkey column to suspended_transactions", "column", col)
+		}
+	}
+	return nil
+}
 
 // StoreSuspendedTransaction stores a transaction awaiting L3 approval.
 func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Context, tx *models.SuspendedTransaction) error {

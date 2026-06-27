@@ -604,21 +604,21 @@ func TestBuildPublicRouter(t *testing.T) {
 		assert.Contains(t, rr.Body.String(), constants.ErrWebSessionCookieRequired.Error(), "Path %s should return web session cookie required error", path)
 	}
 
-	// 2. Browser passkey endpoint accessibility tests (must bypass mTLS check)
-	browserPasskeyPaths := []string{
-		"/api/v1/auth/passkeys/cli-browser-register/challenge",
-		"/api/v1/auth/passkeys/cli-browser-register/verify",
-		"/api/v1/auth/passkeys/browser/authenticate/challenge",
-		"/api/v1/auth/passkeys/browser/authenticate/verify",
+	// 2. Console passkey endpoint accessibility tests (must bypass mTLS check)
+	consolePasskeyPaths := []string{
+		constants.APIPaths.AuthPasskeysConsoleRegisterChallenge,
+		constants.APIPaths.AuthPasskeysConsoleRegisterVerify,
+		constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify,
 	}
-	for _, path := range browserPasskeyPaths {
+	for _, path := range consolePasskeyPaths {
 		req = httptest.NewRequest(http.MethodPost, path, nil)
 		rr = httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
 		// Since these are public, they bypass mTLS and reach the handler.
 		// Since we send nil/empty body, they may fail with 400 or other errors,
 		// but they must NOT return 401 with ErrMTLSCertRequired.
-		assert.NotEqual(t, constants.ErrMTLSCertRequired.Error(), rr.Body.String(), "Path %s should bypass mTLS check", path)
+		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should bypass mTLS check", path)
 		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
 	}
 
@@ -638,22 +638,7 @@ func TestBuildPublicRouter(t *testing.T) {
 	assert.Equal(t, http.StatusFound, rr.Code, "Landing page should redirect with 302")
 	assert.Equal(t, "/console/", rr.Header().Get("Location"), "Landing page should redirect directly to /console/")
 
-	// 5. console/* routes bypass mTLS (public, browser bootstrap)
-	consolePaths := []string{
-		constants.APIPaths.AuthPasskeysConsoleRegisterChallenge,
-		constants.APIPaths.AuthPasskeysConsoleRegisterVerify,
-		constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify,
-	}
-	for _, path := range consolePaths {
-		req = httptest.NewRequest(http.MethodPost, path, nil)
-		rr = httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
-		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
-		assert.NotContains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "Path %s should bypass mTLS check", path)
-	}
-
-	// 6. mTLS-protected passkey CLI status must NOT bypass mTLS
+	// 5. mTLS-protected passkey CLI status must NOT bypass mTLS
 	mtlsPasskeyPaths := []string{
 		constants.APIPaths.AuthPasskeysCLIStatus,
 	}

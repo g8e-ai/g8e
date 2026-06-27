@@ -112,8 +112,50 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, suspendedTxService, mcpGateway, resp, nil)
+	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, resp, nil)
+	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
 	return authController, cfg
+}
+
+// setupTestPasskeyService creates a PasskeyService with approval dependencies for testing.
+func setupTestPasskeyService(t *testing.T) (*PasskeyService, *UserService, storage.SuspendedTransactionStore) {
+	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, t.TempDir(), filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	userSvc := NewUserService(db, logger)
+	resp := response.NewWriter(logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	passkey, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	require.NoError(t, err)
+
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { suspendedTxService.Close() })
+
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
+	})
+	require.NoError(t, err)
+
+	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	return passkey, userSvc, suspendedTxService
 }
 
 // Test Helpers

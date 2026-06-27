@@ -115,13 +115,13 @@ status endpoint until the transaction is approved or times out.`,
 					return fmt.Errorf("approve: transaction %s expired or not found", txHash)
 				case "pending":
 					if i%10 == 0 && i > 0 {
-						cmd.Printf("  Still waiting... (%ds elapsed)\n", i*3)
+						cmd.Printf("  Still waiting... (%ds elapsed)\n", i*int(approvePollInterval.Seconds()))
 					}
 					continue
 				}
 			}
 
-			return fmt.Errorf("approve: timed out waiting for browser approval after %d seconds", approveMaxIterations*3)
+			return fmt.Errorf("approve: timed out waiting for browser approval after %d seconds", approveMaxIterations*int(approvePollInterval.Seconds()))
 		},
 	}
 

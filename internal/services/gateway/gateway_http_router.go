@@ -151,10 +151,10 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	authedMux.HandleFunc(constants.APIPaths.AuthSessionsMe, h.authController.handleWebSession)
 
 	// OOB Approval UI for suspended MCP/A2A transactions
-	mux.HandleFunc(constants.APIPaths.ApprovePage, h.authController.handleApprovalPage)
-	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.authController.handleCLIApprovalStatus)
-	authedMux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.authController.handleApprovalAction))
-	authedMux.HandleFunc(constants.APIPaths.Approvals, h.authController.handleListSuspendedTransactions)
+	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkey.handleApprovalPage)
+	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.passkey.handleCLIApprovalStatus)
+	authedMux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.passkey.handleApprovalAction))
+	authedMux.HandleFunc(constants.APIPaths.Approvals, h.passkey.handleListSuspendedTransactions)
 
 	// Passkey management (list, revoke) under WebSessionAuth
 	authedMux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)

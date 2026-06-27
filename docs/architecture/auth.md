@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
@@ -87,11 +87,9 @@ The **g8e Console** (served exclusively over HTTPS at `/console`) is a zero-depe
 
 #### L7 mTLS Enforcement Model
 To support browser-based clients that cannot hold mTLS client certificates, the HTTPS server's TLS configuration is set to `tls.VerifyClientCertIfGiven` (rather than strict `RequireAndVerifyClientCert`). Security is rigorously enforced at the application layer:
-- **Centralized Public Registry**: The `PublicRouteRegistry` explicitly allowlists routes that can bypass mTLS (e.g., `/console/`, landing/redirect page, and browser-facing passkey registration/authentication endpoints under `bootstrap/*` and `console/*` prefixes).
-- **Registered Browser Passkey Endpoint Prefixes**:
-  - `/api/v1/auth/passkeys/bootstrap/` — CLI bootstrap passkey registration and authentication (public, CORS-wrapped)
+- **Centralized Public Registry**: The `PublicRouteRegistry` explicitly allowlists routes that can bypass mTLS (e.g., `/console/`, landing/redirect page, and browser-facing passkey registration/authentication endpoints under the `console/*` prefix).
+- **Registered Browser Passkey Endpoint Prefix**:
   - `/api/v1/auth/passkeys/console/` — Console SPA passkey registration and authentication (public, CORS-wrapped)
-  - 8 deprecated alias exact paths (e.g., `cli-browser-register/*`, `browser/authenticate/*`) maintained for one minor version with structured deprecation logging; removal targeted for v1.4.x.
 - **Fail-Closed Default**: The `auth.Middleware()` acts as a strict, fail-closed gate. Any request to a non-public route that does not carry a verified mTLS certificate is immediately rejected at Layer 7.
 
 #### WebSessionAuth Subtree Routing
@@ -104,22 +102,18 @@ Web-session authenticated routes (e.g., user profile, approvals, passkey list/re
 This subtree-match pattern (defined with trailing slashes) ensures all nested endpoints are seamlessly guarded by the `WebSessionAuth` middleware, while the outer public/mTLS routes (like exact-match `/api/v1/users` or public browser passkey handlers) continue to resolve correctly based on Go's longest-prefix routing rules.
 
 #### Excluded Prefixes for mTLS-Protected Sub-Paths
-The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management routes (list, revoke by credential ID) and mTLS-only routes (register, authenticate, CLI status). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as public, `PublicRouteRegistry` supports **excluded prefixes**:
-- `/api/v1/auth/passkeys/register` — mTLS-only passkey registration challenge/verify
-- `/api/v1/auth/passkeys/authenticate` — mTLS-only passkey authentication challenge/verify
+The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management routes (list, revoke by credential ID) and mTLS-only routes (CLI status). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as public, `PublicRouteRegistry` supports **excluded prefixes**:
 - `/api/v1/auth/passkeys/cli/` — mTLS-only CLI status endpoint (`cli/status`)
 - `/api/v1/auth/passkeys/jit-` — JIT passkey bootstrap (excluded only when JWKS is not configured)
-- `/api/v1/auth/passkeys/cli-register` — deprecated alias, mTLS-gated
-- `/api/v1/auth/passkeys/cli-browser-register` — deprecated alias, mTLS-gated for non-alias sub-paths
 
-The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes. The 8 deprecated alias exact paths are registered via `addExact` to maintain public access during the transition window, since `addExact` entries take priority over excluded prefixes.
+The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes.
 
 #### Approval Page Redirect
 The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={txHash}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.
 
 #### Passkey Service HTTP Architecture
 
-`PasskeyService` owns its complete HTTP layer via `passkey_service_http.go`. All 15 former `AuthController` passkey handlers have been consolidated into 4 factory methods and 3 direct handler methods on `PasskeyService`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
+`PasskeyService` owns its complete HTTP layer via `passkey_service_http.go`. All former `AuthController` passkey handlers have been consolidated into 4 factory methods and 3 direct handler methods on `PasskeyService`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
 
 **Factory Methods** (return `http.HandlerFunc`):
 - `RegisterChallenge(cfg)` — WebAuthn registration challenge
@@ -136,7 +130,7 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 
 | Field | Purpose |
 | :--- | :--- |
-| `source` | Request source enum (`sourceMTLS`, `sourceJWT`, `sourceCLIBootstrap`, `sourceBrowserBootstrap`) |
+| `source` | Request source enum (`sourceJWT`, `sourceBrowserBootstrap`) |
 | `enforceFirstCredentialOnly` | Bootstrap protection — rejects registration if user already has credentials |
 | `requireAuthenticatedUser` | Requires `ContextKeyUserID` to be present |
 | `enforceSessionUserBinding` | Prevents `user_id` spoofing across an existing session |
@@ -154,16 +148,8 @@ The dedicated `GET /api/v1/auth/passkeys/cli/status` endpoint allows the CLI to 
 
 | Route | Auth | Handler Config |
 | :--- | :--- | :--- |
-| `POST /api/v1/auth/passkeys/register/challenge` | mTLS | mTLS / requireAuth / sessionBinding |
-| `POST /api/v1/auth/passkeys/register/verify` | mTLS | mTLS / requireAuth / sessionBinding |
-| `POST /api/v1/auth/passkeys/authenticate/challenge` | mTLS | mTLS / requireAuth / sessionBinding |
-| `POST /api/v1/auth/passkeys/authenticate/verify` | mTLS | mTLS / requireAuth / sessionBinding / createSession |
 | `POST /api/v1/auth/passkeys/jit-register/challenge` | JWT | jwt / firstCred / requireAuth / sessionBinding |
 | `POST /api/v1/auth/passkeys/jit-register/verify` | JWT | jwt / firstCred / requireAuth / sessionBinding |
-| `POST /api/v1/auth/passkeys/bootstrap/register/challenge` | public | cliBootstrap / firstCred |
-| `POST /api/v1/auth/passkeys/bootstrap/register/verify` | public | cliBootstrap / firstCred |
-| `POST /api/v1/auth/passkeys/bootstrap/authenticate/challenge` | public | cliBootstrap |
-| `POST /api/v1/auth/passkeys/bootstrap/authenticate/verify` | public | cliBootstrap |
 | `POST /api/v1/auth/passkeys/console/register/challenge` | public | browserBootstrap / firstCred / createUser / cookie |
 | `POST /api/v1/auth/passkeys/console/register/verify` | public | browserBootstrap / firstCred / cookie |
 | `POST /api/v1/auth/passkeys/console/authenticate/challenge` | public | browserBootstrap |
@@ -172,7 +158,7 @@ The dedicated `GET /api/v1/auth/passkeys/cli/status` endpoint allows the CLI to 
 | `DELETE /api/v1/auth/passkeys/{id}` | WebSession | revoke |
 | `GET /api/v1/auth/passkeys/cli/status` | mTLS | CLI status |
 
-8 deprecated alias routes (`cli-register/*`, `cli-browser-register/*`, `cli/authenticate/*`, `browser/authenticate/*`) are maintained with `deprecatedPasskeyAlias` middleware that logs structured `Warn`-level deprecation messages. Removal targeted for v1.4.x.
+The browser-based console flow (`/api/v1/auth/passkeys/console/*`) is the sole passkey registration and authentication path. The former mTLS register/authenticate routes, localhost bootstrap server, CLI bootstrap routes, and deprecated alias routes have been removed.
 
 #### Credential Validation & Encoding Helpers
 

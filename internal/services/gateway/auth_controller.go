@@ -22,8 +22,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/services/mcp"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 )
 
 // actuatorKeyReader reads the actuator public key from storage.
@@ -64,13 +62,11 @@ type AuthController struct {
 	webSessionSvc      *WebSessionService
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
-	suspendedStore     storage.SuspendedTransactionStore
-	mcp                *mcp.GatewayService
 	responder          *response.Writer
 	actuatorKeyReader  actuatorKeyReader
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, suspendedStore storage.SuspendedTransactionStore, mcp *mcp.GatewayService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyService, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
 	return &AuthController{
 		cfg:                cfg,
 		logger:             logger,
@@ -83,8 +79,6 @@ func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBS
 		webSessionSvc:      webSessionSvc,
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
-		suspendedStore:     suspendedStore,
-		mcp:                mcp,
 		responder:          responder,
 		actuatorKeyReader:  actuatorKeyReader,
 	}

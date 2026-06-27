@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+* **PasskeyBootstrapServer** — Removed the deprecated localhost bootstrap server (`internal/cli/auth/passkey_bootstrap.go`). Browser-based console flow is now the sole passkey registration path.
+* **RegisterPasskeyViaLocalhost** — Removed the CLI-side localhost passkey registration function. All passkey registration goes through the console SPA.
+* **Windows Hello WebAuthn Syscalls** — Removed `internal/cli/auth/windows_crypto.go` and related test files. Windows Hello WebAuthn was only used by the localhost bootstrap path. Standard browser WebAuthn via the console SPA is the replacement.
+* **sourceMTLS / sourceCLIBootstrap Enum Values** — Removed deprecated `passkeyRequestSource` enum values from `passkey_service_http.go`. Only `sourceJWT` and `sourceBrowserBootstrap` remain.
+* **mTLS Passkey Register/Authenticate Routes** — Removed `/api/v1/auth/passkeys/register/*` and `/api/v1/auth/passkeys/authenticate/*` routes and their API path constants. These mTLS-only passkey routes were superseded by the browser-based console flow.
+* **Localhost Bootstrap Passkey Routes** — Removed `/api/v1/auth/passkeys/bootstrap/*` routes and their API path constants.
+* **Deprecated Passkey Alias Routes** — Removed all 8 deprecated alias routes (`cli-register/*`, `cli-browser-register/*`, `cli/authenticate/*`, `browser/authenticate/*`) and the `deprecatedPasskeyAlias` middleware.
+* **Dangling Error Constants** — Removed 12 unused error constants from `internal/constants/errors.go`: `ErrGetCurrentUser`, 9 `ErrWindowsHello*` constants, and 2 `ErrWindowsWebAuthn*` constants.
+* **Dead API Path Constants** — Removed 13 deprecated API path struct fields and orphaned values from `internal/constants/api_paths.go` and synced `protocol/constants/api_paths.json`.
+* **Dead Excluded Prefixes** — Removed 4 deprecated excluded prefix entries from `PublicRouteRegistry` in `gateway_auth.go` for routes that no longer exist.
+* **Windows Hello References in Docs** — Updated `docs/architecture/auth.md` and `docs/architecture/gateway.md` to reflect the unified browser-based passkey flow.
+
 ---
 
 ## [1.2.4] - 2026-06-26

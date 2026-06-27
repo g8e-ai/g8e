@@ -177,6 +177,8 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
+	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
+
 	ls := &GatewayModeService{
 		cfg:                cfg,
 		logger:             logger,
@@ -342,6 +344,8 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
+
+	passkey.SetApprovalDependencies(mcpGateway, suspendedTxService)
 
 	ls := &GatewayModeService{
 		cfg:                cfg,

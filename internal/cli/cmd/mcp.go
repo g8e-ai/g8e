@@ -338,7 +338,7 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
+func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 	cfg, err := loadConfig("")
 	if err != nil {
 		return err
@@ -389,7 +389,7 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 		logger.Info("Proxying MCP request", "method", req.Method, "id", req.ID)
 
-		resp, err := proxySessionToGatewayWithRetry(conn, req, logger)
+		resp, err := proxySessionToGatewayWithRetryContext(cmd.Context(), conn, req, logger)
 		if err != nil {
 			logger.Error("Failed to proxy to gateway", "error", err)
 			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
