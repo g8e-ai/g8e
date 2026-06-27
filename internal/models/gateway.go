@@ -295,6 +295,7 @@ type WebSessionResponse struct {
 // PasskeyRegisterChallengeResponse is the typed response for POST /api/auth/passkeys/register/challenge.
 type PasskeyRegisterChallengeResponse struct {
 	Success bool                         `json:"success"`
+	UserID  string                       `json:"user_id,omitempty"`
 	Options *protocol.CredentialCreation `json:"options,omitempty"`
 }
 

@@ -239,3 +239,138 @@ func TestVerifyL3Proof_InvalidPublicKeyEncoding(t *testing.T) {
 	assert.False(t, allowed)
 	assert.True(t, errors.Is(err, constants.ErrCLIL3PublicKeyInvalid))
 }
+
+// mockL3Notary is a test double for the L3Notary interface, used to verify
+// the dispatch logic in NewGatewayL3Notary.
+type mockL3Notary struct {
+	called       bool
+	calledUserID string
+	calledTxHash string
+	calledProof  *commonv1.L3Proof
+	result       bool
+	err          error
+}
+
+func (m *mockL3Notary) VerifyL3Proof(_ context.Context, userID, transactionHash, _ string, proof *commonv1.L3Proof) (bool, error) {
+	m.called = true
+	m.calledUserID = userID
+	m.calledTxHash = transactionHash
+	m.calledProof = proof
+	return m.result, m.err
+}
+
+func TestGatewayL3Notary_DispatchesToPasskeyVerifierForWebAuthnProofs(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeSuspendedStore{}
+	passkeyMock := &mockL3Notary{result: true}
+	notary := NewGatewayL3Notary(store, nil, passkeyMock, slog.Default())
+
+	webauthnProof := &commonv1.L3Proof{
+		CredentialId:      "cred-id",
+		ClientDataJson:    "client-data",
+		AuthenticatorData: "auth-data",
+		Signature:         "sig",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), "user-1", "tx-hash-1", "session-1", webauthnProof)
+	require.NoError(t, err)
+	assert.True(t, allowed)
+	assert.True(t, passkeyMock.called)
+	assert.Equal(t, "user-1", passkeyMock.calledUserID)
+	assert.Equal(t, "tx-hash-1", passkeyMock.calledTxHash)
+	assert.Equal(t, webauthnProof, passkeyMock.calledProof)
+}
+
+func TestGatewayL3Notary_DispatchesToCLIPathForMTLSProofs(t *testing.T) {
+	t.Parallel()
+
+	txHash := "test-tx-hash-mtls-dispatch"
+	userID := "user-mtls-dispatch"
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
+
+	store := &fakeSuspendedStore{}
+	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
+
+	passkeyMock := &mockL3Notary{result: false, err: errors.New("should not be called")}
+	notary := NewGatewayL3Notary(store, nil, passkeyMock, slog.Default())
+
+	mtlsProof := &commonv1.L3Proof{
+		CliSignature:        signature,
+		MtlsCertFingerprint: "abc123",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", mtlsProof)
+	require.NoError(t, err)
+	assert.True(t, allowed)
+	assert.False(t, passkeyMock.called)
+}
+
+func TestGatewayL3Notary_PasskeyVerifierErrorPropagates(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeSuspendedStore{}
+	expectedErr := errors.New("passkey verification failed")
+	passkeyMock := &mockL3Notary{result: false, err: expectedErr}
+	notary := NewGatewayL3Notary(store, nil, passkeyMock, slog.Default())
+
+	webauthnProof := &commonv1.L3Proof{
+		CredentialId:      "cred-id",
+		ClientDataJson:    "client-data",
+		AuthenticatorData: "auth-data",
+		Signature:         "sig",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), "user-1", "tx-hash-1", "session-1", webauthnProof)
+	assert.False(t, allowed)
+	assert.ErrorIs(t, err, expectedErr)
+	assert.True(t, passkeyMock.called)
+}
+
+func TestGatewayL3Notary_NilProofReturnsError(t *testing.T) {
+	t.Parallel()
+
+	store := &fakeSuspendedStore{}
+	passkeyMock := &mockL3Notary{}
+	notary := NewGatewayL3Notary(store, nil, passkeyMock, slog.Default())
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), "user-1", "tx-hash-1", "session-1", nil)
+	require.Error(t, err)
+	assert.False(t, allowed)
+	assert.False(t, passkeyMock.called)
+	assert.True(t, errors.Is(err, constants.ErrGatewayL3ProofRequired))
+}
+
+func TestGatewayL3Notary_NoPasskeyVerifierFallsBackToCLIPath(t *testing.T) {
+	t.Parallel()
+
+	txHash := "test-tx-hash-no-passkey-verifier"
+	userID := "user-no-passkey-verifier"
+
+	pubKey, privKey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
+	signature := hex.EncodeToString(ed25519.Sign(privKey, []byte(txHash)))
+	pubKeyHex := hex.EncodeToString(pubKey)
+
+	store := &fakeSuspendedStore{}
+	store.StoreSuspendedTransaction(context.Background(), setupApprovedTx(txHash, userID, pubKeyHex, signature))
+
+	notary := NewCLIL3Notary(store, nil, slog.Default())
+
+	// Proof without mtls_cert_fingerprint — without a passkey verifier, the CLI path
+	// should handle it (and fail because cliVerifier is nil but fingerprint is required).
+	webauthnProof := &commonv1.L3Proof{
+		CredentialId:      "cred-id",
+		ClientDataJson:    "client-data",
+		AuthenticatorData: "auth-data",
+		Signature:         "sig",
+	}
+
+	allowed, err := notary.VerifyL3Proof(context.Background(), userID, txHash, "cli-session", webauthnProof)
+	require.Error(t, err)
+	assert.False(t, allowed)
+}

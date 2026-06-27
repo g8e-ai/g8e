@@ -463,6 +463,16 @@ var (
 	ErrWindowsRegistryOpenKey     = errors.New("failed to open registry key")
 	ErrWindowsRegistryReadValue   = errors.New("failed to read registry value")
 
+	// Windows Hello WebAuthn diagnostics — mapped from HRESULT codes
+	ErrWindowsHelloUserCancelled    = errors.New("windows Hello: user cancelled the operation")
+	ErrWindowsHelloDeviceNotFound   = errors.New("windows Hello: biometric device not found")
+	ErrWindowsHelloDeviceNotReady   = errors.New("windows Hello: device not ready")
+	ErrWindowsHelloNotSupported     = errors.New("windows Hello: operation not supported on this device")
+	ErrWindowsHelloTimeout          = errors.New("windows Hello: operation timed out")
+	ErrWindowsHelloInvalidUserID    = errors.New("windows Hello: user ID must be a 16-byte GUID for WebAuthn v4 compliance")
+	ErrWindowsHelloEmptyInput       = errors.New("windows Hello: challenge or user ID input is empty")
+	ErrWindowsHelloResponseTooLarge = errors.New("windows Hello: response data exceeds maximum allowed size")
+
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
 	ErrOperatorSessionIDRequired  = errors.New("operator session id required")

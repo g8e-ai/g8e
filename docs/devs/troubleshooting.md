@@ -106,11 +106,11 @@ The test suite uses a tiered structure with different infrastructure requirement
 - **Tier 2 (In-Process Integration)**: No external dependencies. Integration tests use in-process gateway fixtures (`test/fixtures/gateway_fixture.go`) that spin up the gateway within the test process. Run via `make test-integration`.
 - **Tier 3 (Docker E2E)**: Requires Docker. Run via `make test-docker`.
 
-Tier 2 integration tests and `make test-gateway` do not require a running
-external gateway. They construct the gateway in-process via
-`GatewayFixture`, which handles PKI enrollment and mTLS configuration
-automatically. If these tests fail, the cause is typically a port conflict or
-missing build dependencies, not a missing gateway process.
+Tier 2 integration tests do not require a running external gateway. They
+construct the gateway in-process via `GatewayFixture`, which handles PKI
+enrollment and mTLS configuration automatically. If these tests fail, the cause
+is typically a port conflict or missing build dependencies, not a missing
+gateway process.
 
 If a test failure mentions missing trust bundles or client certificates,
 confirm that the test fixture has not been modified to skip enrollment. The

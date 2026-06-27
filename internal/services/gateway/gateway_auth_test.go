@@ -319,6 +319,72 @@ func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
 	assert.True(t, registry.IsPublic("/api/v1/auth/logout"), "Logout must be public")
 }
 
+func TestPublicRouteRegistry_PasskeyRoutes(t *testing.T) {
+	t.Parallel()
+
+	registry := NewPublicRouteRegistry(false)
+
+	// bootstrap/* prefix entries should be public
+	bootstrapPaths := []string{
+		constants.APIPaths.AuthPasskeysBootstrapRegisterChallenge,
+		constants.APIPaths.AuthPasskeysBootstrapRegisterVerify,
+		constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify,
+	}
+	for _, path := range bootstrapPaths {
+		assert.True(t, registry.IsPublic(path), "bootstrap path %s should be public", path)
+	}
+
+	// console/* prefix entries should be public
+	consolePaths := []string{
+		constants.APIPaths.AuthPasskeysConsoleRegisterChallenge,
+		constants.APIPaths.AuthPasskeysConsoleRegisterVerify,
+		constants.APIPaths.AuthPasskeysConsoleAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify,
+	}
+	for _, path := range consolePaths {
+		assert.True(t, registry.IsPublic(path), "console path %s should be public", path)
+	}
+
+	// Deprecated alias exact paths should be public
+	deprecatedPaths := []string{
+		constants.APIPaths.AuthPasskeysCLIRegisterChallenge,
+		constants.APIPaths.AuthPasskeysCLIRegisterVerify,
+		constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge,
+		constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify,
+		constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify,
+		constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysCLIAuthenticateVerify,
+	}
+	for _, path := range deprecatedPaths {
+		assert.True(t, registry.IsPublic(path), "deprecated alias %s should be public", path)
+	}
+
+	// mTLS-protected passkey sub-paths must NOT be public (excluded prefixes)
+	mtlsPaths := []string{
+		constants.APIPaths.AuthPasskeysRegisterChallenge,
+		constants.APIPaths.AuthPasskeysRegisterVerify,
+		constants.APIPaths.AuthPasskeysAuthenticateChallenge,
+		constants.APIPaths.AuthPasskeysAuthenticateVerify,
+		constants.APIPaths.AuthPasskeysCLIStatus,
+	}
+	for _, path := range mtlsPaths {
+		assert.False(t, registry.IsPublic(path), "mTLS path %s should NOT be public", path)
+	}
+
+	// Non-alias sub-paths under excluded prefixes must NOT be public
+	// (e.g., /api/v1/auth/passkeys/cli-register/some-other-endpoint)
+	nonAliasExcludedPaths := []string{
+		"/api/v1/auth/passkeys/cli-register/other",
+		"/api/v1/auth/passkeys/cli-browser-register/other",
+		"/api/v1/auth/passkeys/cli/other",
+	}
+	for _, path := range nonAliasExcludedPaths {
+		assert.False(t, registry.IsPublic(path), "non-alias excluded path %s should NOT be public", path)
+	}
+}
+
 // TestAuthIntegrity_AppPolicyDenyByDefault verifies that app identities without
 // an AppPolicy are denied access (deny-by-default enforcement).
 // This is a regression test for Finding 2: MCP/A2A ingress when JWKS omitted.
@@ -469,7 +535,7 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "nonexistent-session"})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "nonexistent-session"})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -494,7 +560,7 @@ func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: ""})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: ""})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -531,7 +597,7 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -578,7 +644,7 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -628,7 +694,7 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 	middleware := auth.WebSessionAuth(handler, db)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
-	req.AddCookie(&http.Cookie{Name: "g8e_session", Value: webSessionID})
+	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)

@@ -70,7 +70,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	jitCfg := passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 	cliBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}
 	cliBootstrapAuthCfg := passkeyHandlerConfig{source: sourceCLIBootstrap}
-	browserBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true}
+	browserBootstrapRegisterCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}
 	browserBootstrapAuthCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}
 
 	// JIT passkey bootstrap: allow first-credential registration via JWT

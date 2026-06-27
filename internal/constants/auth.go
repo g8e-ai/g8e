@@ -193,4 +193,6 @@ const (
 const (
 	// WebSessionTTL defines the lifetime of a web session.
 	WebSessionTTL = 24 * time.Hour
+	// WebSessionCookieName is the name of the browser session cookie used by WebSessionAuth.
+	WebSessionCookieName = "g8e_session"
 )

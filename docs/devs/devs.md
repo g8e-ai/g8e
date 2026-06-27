@@ -76,7 +76,9 @@ The platform is built via the Makefile. Run `make help` for available targets.
 
 **Source paths** (git root):
 - `protocol/` - Protobuf schemas and JSON constants (SSOT)
-- `cmd/` - CLI entry points
+- `cmd/operator/` - Binary entrypoint (32-line `main.go` that delegates to the CLI tree)
+- `internal/cli/cmd/` - Cobra command tree (all CLI subcommands)
+- `internal/cli/serve/` - Foreground worker bodies (`RunGateway`, `RunOperator`, cert enrollment, logger)
 - `internal/` - Internal Go packages
 - `pkg/` - Public Go packages
 - `docs/` - Documentation
@@ -279,7 +281,7 @@ Native tools are MCP tools compiled into the g8e binary that execute within the 
 | Constants (JSON SSOT) | `protocol/constants/` |
 | Go registry files | `internal/constants/` |
 | Governance layers | `internal/services/governance/` |
-| CLI entry points | `cmd/` |
+| CLI entry points | `cmd/operator/` (binary) → `internal/cli/cmd/` (cobra tree) |
 | Architecture docs | `docs/architecture/` |
 
 ## Contributing

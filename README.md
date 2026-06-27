@@ -36,20 +36,20 @@ The g8e platform operates as a reference monitor that is tamper-evident, always 
 
 - **Governance Gateway (`g8e gw`)**: This role serves as the Policy Decision Point. It admits signed `GovernanceEnvelope` transactions, manages the platform PKI (mTLS, SPIFFE workload identities), and enforces freshness and replay defense. The gateway relays envelopes to operators and does not possess privileged bypass or execution authority. It does not initiate connections to operators. See [Gateway Architecture](docs/architecture/gateway.md).
 
-- **Governed Operator (`g8e op`)**: This role serves as the Policy Execution Point. It initiates outbound-only mTLS connections to the gateway and does not listen on any ports. It re-verifies every proof locally against its internal state and is the only component authorized to mutate the host. See [Operator Architecture](docs/architecture/operator.md).
+- **Governed Operator (`g8e operator`)**: This role serves as the Policy Execution Point. It initiates outbound-only mTLS connections to the gateway and does not listen on any ports. It re-verifies every proof locally against its internal state and is the only component authorized to mutate the host. See [Operator Architecture](docs/architecture/operator.md).
 
 g8e is actor-agnostic and governs actions rather than actors. AI agents, human users, CI/CD pipelines, and scheduled tasks submit actions through the same admission API. Any component that produces a conformant `GovernanceEnvelope` is treated as a principal. See [Connecting Applications](docs/guides/connect_apps_to_gateway.md) for integration examples.
 
 ```mermaid
 graph TD
-    subgraph Clients ["Any AI client — agent-agnostic"]
+    subgraph Clients ["Any AI client, agent-agnostic"]
         C1["MCP client<br/>(Claude / Cursor / Windsurf)"]
         C2["Agentic ensemble<br/>(A2A / tool calls)"]
     end
 
     GW["Governance Gateway · g8eg<br/>(Policy Decision Point)<br/>admits signed envelopes · owns PKI"]
 
-    subgraph Fleet ["Sovereign hosts — platform-agnostic"]
+    subgraph Fleet ["Sovereign hosts, platform-agnostic"]
         O1["Governed Operator · g8eo<br/>(Policy Execution Point)<br/>governs + executes locally"]
         D1[("Raw data + audit<br/>stay on host")]
         O1 --- D1
@@ -107,7 +107,7 @@ sequenceDiagram
     Operator->>Gateway: Open outbound-only mTLS tunnel
     Operator->>Gateway: Fetch pending GovernanceEnvelope
 
-    Note over Operator: Run verification layers — Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
+    Note over Operator: Run verification layers: Doctrine, Consensus, Notary, Warden<br/>(fail-closed)<br/>Execute via Actuator<br/>Anchor to local audit vault
 
     Operator->>Gateway: Push Sovereignty-scrubbed signed receipt
     Gateway->>Principal: Return final safe output
@@ -212,7 +212,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 
 ## Status
 
-**v1.1.9**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline with Tribunal-based L2 consensus, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, JIT execution capabilities, bound vs observed state tiering, and multi-platform support. The gateway delegates L2 deliberation to an enrolled Tribunal service under consensus and notary postures. The L4 Warden verifies L2 consensus before L3 notary. Auto-approval and intent grant/revoke subsystems have been removed.
+**v1.2.4**: Current release. Includes core protocol, gateway and operator roles, five-layer pipeline with Tribunal-based L2 consensus, PKI/mTLS identity, WebAuthn notary, MCP/A2A protocol translation, LFAA audit vault, native tools, JIT execution capabilities, bound vs observed state tiering, and multi-platform support. The gateway delegates L2 deliberation to an enrolled Tribunal service under consensus and notary postures. The L4 Warden verifies L2 consensus before L3 notary. The g8e Console SPA provides a browser-based dashboard for passkey management, interactive L3 transaction approval, and real-time SSE audit streaming. Dual-auth browser passkey endpoints and hybrid TLS/mTLS enforcement enable secure web browser access without client certificates. Auto-approval and intent grant/revoke subsystems have been removed.
 
 ## Documentation
 
@@ -226,6 +226,7 @@ The g8e platform is designed for environments requiring zero trust architecture 
 - [Build Applications](docs/guides/build_apps.md)
 - [Connect Applications to Gateway](docs/guides/connect_apps_to_gateway.md)
 - [Connect Operator to Gateway](docs/guides/connect_operator_to_gateway.md)
+- [Build Agentic Systems](docs/guides/build_agentic_system.md)
 - [Air Gap Deployment](docs/guides/air_gap.md)
 - [Docker Gateway](docs/guides/docker_gateway.md)
 

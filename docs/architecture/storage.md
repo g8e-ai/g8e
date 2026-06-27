@@ -1,7 +1,7 @@
 # Storage Architecture
 
 Last Updated: 2026-06-26
-Version: v1.2.3
+Version: v1.2.4
 
 ## Overview
 
@@ -153,7 +153,7 @@ err = ledger.CompleteMirrorCreate(result, sessionID)
 - `GetStateMerkleRoot()`: Return the HEAD commit hash of the global files ledger.
 - `GetDiffContent(hashBefore, hashAfter, sessionID)`: Return the full patch string between two commits.
 - `GetDiffStat(hashBefore, hashAfter, sessionID)`: Return a summary stat string between two commits.
-- `ListCommits(sessionID, limit)`: List commits from the session ledger (or global files ledger if sessionID is empty), ordered oldest-first.
+- `ListCommits(sessionID, limit)`: List commits from the session ledger (or global files ledger if sessionID is empty), ordered newest-first (repo.Log order).
 
 ---
 

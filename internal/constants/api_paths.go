@@ -78,6 +78,7 @@ var APIPaths = struct {
 	AuditEvents         string `json:"audit_events"`
 	AuditSummary        string `json:"audit_summary"`
 	AuditReport         string `json:"audit_report"`
+	AuditStream         string `json:"audit_stream"`
 	// User routes
 	Users   string `json:"users"`
 	UsersMe string `json:"users_me"`
@@ -221,6 +222,7 @@ var APIPaths = struct {
 	AuditEvents:         "/api/v1/audit/events",
 	AuditSummary:        "/api/v1/audit/summary",
 	AuditReport:         "/api/v1/audit/report",
+	AuditStream:         "/api/v1/audit/stream",
 	// User routes
 	Users:   "/api/v1/users",
 	UsersMe: "/api/v1/users/me",

@@ -98,7 +98,7 @@ func TestHandlePublicAuthLogout(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
-		req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "test-session"})
+		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "test-session"})
 		rr := httptest.NewRecorder()
 
 		c.handlePublicAuthLogout(rr, req)
@@ -106,7 +106,7 @@ func TestHandlePublicAuthLogout(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 		cookies := rr.Result().Cookies()
 		assert.Len(t, cookies, 1)
-		assert.Equal(t, "g8e_session", cookies[0].Name)
+		assert.Equal(t, constants.WebSessionCookieName, cookies[0].Name)
 		assert.Equal(t, -1, cookies[0].MaxAge)
 	})
 
@@ -190,7 +190,7 @@ func TestHandleWebSession(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
-		req.AddCookie(&http.Cookie{Name: "g8e_session", Value: "test-session-id"})
+		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "test-session-id"})
 		rr := httptest.NewRecorder()
 
 		c.handleWebSession(rr, req)
