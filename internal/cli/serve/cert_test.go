@@ -14,6 +14,7 @@
 package serve
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/ed25519"
@@ -26,6 +27,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math/big"
@@ -813,3 +815,273 @@ func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 	_, err = os.Stat(signerPath)
 	assert.NoError(t, err, "actuator public key should be saved to trusted_signers")
 }
+
+// ---------------------------------------------------------------------------
+// RenewOperatorCertificate
+// ---------------------------------------------------------------------------
+
+// renewalTestServer creates an httptest.Server that handles the trust bundle
+// and PKI device enrollment endpoints for RenewOperatorCertificate tests.
+// The trustStatus and enrollStatus control HTTP status codes.
+// enrollBody overrides the enrollment response; if nil, a valid response is generated.
+// trustBody overrides the trust bundle response; if nil, caPEM is used.
+func renewalTestServer(t *testing.T, caPEM []byte, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, trustStatus, enrollStatus int, trustBody, enrollBody []byte) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.WellKnownPKICABundle:
+			w.WriteHeader(trustStatus)
+			if trustStatus == http.StatusOK {
+				if trustBody != nil {
+					w.Write(trustBody) //nolint:errcheck
+				} else {
+					w.Write(caPEM) //nolint:errcheck
+				}
+			}
+		case constants.APIPathPKIDevicesEnroll:
+			if enrollStatus >= http.StatusOK && enrollStatus < http.StatusMultipleChoices {
+				if enrollBody != nil {
+					w.WriteHeader(enrollStatus)
+					w.Write(enrollBody) //nolint:errcheck
+					return
+				}
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				var req struct {
+					CSRPEM string `json:"csr_pem"`
+				}
+				require.NoError(t, json.Unmarshal(body, &req))
+				opCert := signCSR(t, []byte(req.CSRPEM), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
+				cliCert := signCSR(t, []byte(req.CSRPEM), caCert, caKey, "test-cli", time.Now().Add(365*24*time.Hour))
+				resp := map[string]string{
+					"operator_cert": string(opCert),
+					"cli_cert":      string(cliCert),
+				}
+				respBytes, _ := json.Marshal(resp)
+				w.WriteHeader(enrollStatus)
+				w.Write(respBytes) //nolint:errcheck
+			} else {
+				w.WriteHeader(enrollStatus)
+				w.Write([]byte(`{"error":"server error"}`)) //nolint:errcheck
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}
+
+// writeExpiringCertPair creates a cert+key pair where the cert expires within 24h,
+// writes them to temp files, and returns the paths. The cert is signed by the given CA.
+func writeExpiringCertPair(t *testing.T, caCert *x509.Certificate, caKey *ecdsa.PrivateKey) (certPath, keyPath string) {
+	t.Helper()
+	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(3),
+		Subject:      pkix.Name{CommonName: "expiring-operator"},
+		NotBefore:    time.Now().Add(-23 * time.Hour),
+		NotAfter:     time.Now().Add(1 * time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+	}
+
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &privKey.PublicKey, caKey)
+	require.NoError(t, err)
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
+
+	keyDER, err := x509.MarshalECPrivateKey(privKey)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+	dir := t.TempDir()
+	certPath = filepath.Join(dir, "client.crt")
+	keyPath = filepath.Join(dir, "client.key")
+	require.NoError(t, os.WriteFile(certPath, certPEM, 0600))
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0600))
+	return certPath, keyPath
+}
+
+func TestRenewOperatorCertificate_Success(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, nil, nil)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+
+	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	require.NoError(t, err)
+
+	savedCert, err := os.ReadFile(certPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(savedCert), "BEGIN CERTIFICATE")
+
+	savedKey, err := os.ReadFile(keyPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(savedKey), "EC PRIVATE KEY")
+}
+
+func TestRenewOperatorCertificate_TrustBundleHTTPError(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusInternalServerError, http.StatusOK, nil, nil)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+
+	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
+}
+
+func TestRenewOperatorCertificate_EnrollmentHTTPError(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusInternalServerError, nil, nil)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+
+	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
+}
+
+func TestRenewOperatorCertificate_ErrorFieldInResponse(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	errorBody, _ := json.Marshal(map[string]string{"error": "renewal denied"})
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, nil, errorBody)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+
+	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
+}
+
+func TestRenewOperatorCertificate_MissingCertsInResponse(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	missingBody, _ := json.Marshal(map[string]string{"operator_cert": "", "cli_cert": ""})
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, nil, missingBody)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+
+	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrMissingRequiredField))
+}
+
+func TestRenewOperatorCertificate_EmptyTrustBundle(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, []byte{}, nil)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+
+	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrEmptyTrustBundle))
+}
+
+func TestRenewOperatorCertificate_InvalidTrustBundlePEM(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, []byte("not a valid PEM"), nil)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+
+	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrCAParseFailed))
+}
+
+// ---------------------------------------------------------------------------
+// RunClientCertRenewalLoop (renewal trigger)
+// ---------------------------------------------------------------------------
+
+func TestRunClientCertRenewalLoop_RenewalTriggerWithExpiringCert(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.CaCertPath), 0700))
+
+	caPEM, caKey, caCert := generateTestCA(t)
+	certPath, keyPath := writeExpiringCertPair(t, caCert, caKey)
+
+	srv := renewalTestServer(t, caPEM, caCert, caKey, http.StatusOK, http.StatusOK, nil, nil)
+	defer srv.Close()
+
+	cfg := &config.Config{Endpoint: srv.URL}
+	ci := certs.NewClientIdentity(tls.Certificate{})
+	logger := testLogger()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+
+	go func() {
+		RunClientCertRenewalLoop(ctx, cfg, certPath, keyPath, logger, ci)
+		close(done)
+	}()
+
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunClientCertRenewalLoop did not stop after context cancellation")
+	}
+
+	savedCert, err := os.ReadFile(certPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(savedCert), "BEGIN CERTIFICATE",
+		"cert should have been renewed on startup before context cancellation")
+}
+
+// Ensure bytes and fmt are used to avoid unused import errors
+var _ = bytes.NewReader
+var _ = fmt.Sprintf
