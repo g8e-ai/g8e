@@ -214,11 +214,9 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
-		SignerStore:       rs.signerStore,
 		Execution:         c.Execution,
 		SQLAuditStore:     c.AuditStore,
 		ConsoleAuditStore: c.TransactionAudit,
-		L3Notary:          c.L3Notary,
 		StateRootProvider: c.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // OperatorPubSubService implements ExecutionHandler
