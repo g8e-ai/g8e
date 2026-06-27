@@ -107,7 +107,7 @@ func generateSignedJWT(t *testing.T, privKey *rsa.PrivateKey, claims map[string]
 	return signingString + "." + sigB64
 }
 
-func setupSuspendedTxService(t *testing.T, dbDir string) *storage.SuspendedTransactionService {
+func setupSuspendedTxService(t *testing.T, dbDir string) storage.SuspendedTransactionStore {
 	t.Helper()
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
 		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),

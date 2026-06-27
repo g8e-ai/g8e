@@ -46,7 +46,7 @@ type TestInfrastructure struct {
 	WebSessionSvc      *WebSessionService
 	Reg                *RegistrationService
 	Passkey            *PasskeyService
-	SuspendedStore     *storage.SuspendedTransactionService
+	SuspendedStore     storage.SuspendedTransactionStore
 	DBDir              string
 	PKIDir             string
 	SecretsDir         string

@@ -64,7 +64,8 @@ type GatewayModeService struct {
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
 	webSessionSvc      *WebSessionService
-	suspendedTxService *storage.SuspendedTransactionService
+	suspendedTxService storage.SuspendedTransactionStore
+	suspendedTxCloser  *storage.SuspendedTransactionService
 	mcpGateway         *mcp.GatewayService
 	tribunal           *tribunal.TribunalService
 	responder          *response.Writer
@@ -193,6 +194,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
 		suspendedTxService: suspendedTxService,
+		suspendedTxCloser:  suspendedTxService,
 		extraIPs:           extraIPs,
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -361,6 +363,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 		operatorSessionSvc: operatorSessionSvc,
 		webSessionSvc:      webSessionSvc,
 		suspendedTxService: suspendedTxService,
+		suspendedTxCloser:  suspendedTxService,
 		extraIPs:           nil, // Test configuration does not use extra IPs
 		mcpGateway:         mcpGateway,
 		responder:          res,
@@ -760,8 +763,8 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	ls.pubsub.Close()
 
 	// Close suspended transaction service database
-	if ls.suspendedTxService != nil {
-		if err := ls.suspendedTxService.Close(); err != nil {
+	if ls.suspendedTxCloser != nil {
+		if err := ls.suspendedTxCloser.Close(); err != nil {
 			ls.logger.Error("Suspended transaction service close error", "state", string(constants.ConnectionStateError), "error", err)
 		}
 	}
