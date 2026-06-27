@@ -39,7 +39,6 @@ func TestCollectionName(t *testing.T) {
 	}
 }
 
-
 func TestDocumentID(t *testing.T) {
 	tests := []struct {
 		name string

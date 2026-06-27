@@ -419,7 +419,6 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 	}
 }
 
-
 func TestPasskeyConfigInvariants(t *testing.T) {
 	t.Parallel()
 

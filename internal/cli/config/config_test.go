@@ -317,7 +317,6 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 
 }
 
-
 func TestConfig_OperatorPublicURL(t *testing.T) {
 	t.Run("returns Operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
 		config := &Config{

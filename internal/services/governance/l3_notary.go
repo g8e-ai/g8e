@@ -100,10 +100,10 @@ func NewGatewayL3Notary(suspendedStore storage.SuspendedTransactionStore, cliVer
 // VerifyL3Proof verifies an L3 proof using a layered authorization model.
 //
 // Gateway mode (passkeyVerifier != nil):
-// 1. Passkey authorization is required — proofs without a credential_id are rejected
-//    with ErrPasskeyProofRequired. The passkey verifier validates the WebAuthn assertion.
-// 2. CLI mTLS session authentication — if the proof includes mtls_cert_fingerprint
-//    (CLI caller), the CLI session is verified as an additional transport-auth layer.
+//  1. Passkey authorization is required — proofs without a credential_id are rejected
+//     with ErrPasskeyProofRequired. The passkey verifier validates the WebAuthn assertion.
+//  2. CLI mTLS session authentication — if the proof includes mtls_cert_fingerprint
+//     (CLI caller), the CLI session is verified as an additional transport-auth layer.
 //
 // Outbound mode (passkeyVerifier == nil):
 // 1. The transaction exists in the suspended store and is marked as approved

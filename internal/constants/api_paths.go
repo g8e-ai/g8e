@@ -83,31 +83,31 @@ var APIPaths = struct {
 	Users   string `json:"users"`
 	UsersMe string `json:"users_me"`
 	// Auth routes
-	AuthLogout                                 string `json:"auth_logout"`
-	AuthBootstrap                              string `json:"auth_bootstrap"`
-	AuthBootstrapStatus                        string `json:"auth_bootstrap_status"`
-	AuthCLIEnroll                              string `json:"auth_cli_enroll"`
-	AuthDeviceEnroll                           string `json:"auth_device_enroll"`
-	AuthPasskeys                               string `json:"auth_passkeys"`
-	AuthPasskeysByID                           string `json:"auth_passkeys_by_id"`
-	AuthPasskeysJITRegisterChallenge           string `json:"auth_passkeys_jit_register_challenge"`
-	AuthPasskeysJITRegisterVerify              string `json:"auth_passkeys_jit_register_verify"`
-	AuthPasskeysJITPrefix                      string `json:"auth_passkeys_jit_prefix"`
-	AuthPasskeysPrefix                         string `json:"auth_passkeys_prefix"`
-	AuthPasskeysCLIStatus                      string `json:"auth_passkeys_cli_status"`
-	AuthPasskeysConsoleRegisterChallenge       string `json:"auth_passkeys_console_register_challenge"`
-	AuthPasskeysConsoleRegisterVerify          string `json:"auth_passkeys_console_register_verify"`
-	AuthPasskeysConsoleAuthenticateChallenge   string `json:"auth_passkeys_console_authenticate_challenge"`
-	AuthPasskeysConsoleAuthenticateVerify      string `json:"auth_passkeys_console_authenticate_verify"`
-	AuthPasskeysConsolePrefix                  string `json:"auth_passkeys_console_prefix"`
-	AuthSessionsMe                             string `json:"auth_sessions_me"`
+	AuthLogout                               string `json:"auth_logout"`
+	AuthBootstrap                            string `json:"auth_bootstrap"`
+	AuthBootstrapStatus                      string `json:"auth_bootstrap_status"`
+	AuthCLIEnroll                            string `json:"auth_cli_enroll"`
+	AuthDeviceEnroll                         string `json:"auth_device_enroll"`
+	AuthPasskeys                             string `json:"auth_passkeys"`
+	AuthPasskeysByID                         string `json:"auth_passkeys_by_id"`
+	AuthPasskeysJITRegisterChallenge         string `json:"auth_passkeys_jit_register_challenge"`
+	AuthPasskeysJITRegisterVerify            string `json:"auth_passkeys_jit_register_verify"`
+	AuthPasskeysJITPrefix                    string `json:"auth_passkeys_jit_prefix"`
+	AuthPasskeysPrefix                       string `json:"auth_passkeys_prefix"`
+	AuthPasskeysCLIStatus                    string `json:"auth_passkeys_cli_status"`
+	AuthPasskeysConsoleRegisterChallenge     string `json:"auth_passkeys_console_register_challenge"`
+	AuthPasskeysConsoleRegisterVerify        string `json:"auth_passkeys_console_register_verify"`
+	AuthPasskeysConsoleAuthenticateChallenge string `json:"auth_passkeys_console_authenticate_challenge"`
+	AuthPasskeysConsoleAuthenticateVerify    string `json:"auth_passkeys_console_authenticate_verify"`
+	AuthPasskeysConsolePrefix                string `json:"auth_passkeys_console_prefix"`
+	AuthSessionsMe                           string `json:"auth_sessions_me"`
 	// Approval routes
-	Approvals           string `json:"approvals"`
-	ApprovalsByID       string `json:"approvals_by_id"`
-	ApprovalsPrefix     string `json:"approvals_prefix"`
-	ApprovePage         string `json:"approve_page"`
-	ApprovePagePrefix   string `json:"approve_page_prefix"`
-	ApprovalsCLIStatus  string `json:"approvals_cli_status"`
+	Approvals          string `json:"approvals"`
+	ApprovalsByID      string `json:"approvals_by_id"`
+	ApprovalsPrefix    string `json:"approvals_prefix"`
+	ApprovePage        string `json:"approve_page"`
+	ApprovePagePrefix  string `json:"approve_page_prefix"`
+	ApprovalsCLIStatus string `json:"approvals_cli_status"`
 	// Admin routes
 	AdminAppPoliciesBySigner string `json:"admin_app_policies_by_signer"`
 	AdminAppsRevoke          string `json:"admin_apps_revoke"`
@@ -210,24 +210,24 @@ var APIPaths = struct {
 	Users:   "/api/v1/users",
 	UsersMe: "/api/v1/users/me",
 	// Auth routes
-	AuthLogout:                                 "/api/v1/auth/logout",
-	AuthBootstrap:                              "/api/v1/auth/bootstrap",
-	AuthBootstrapStatus:                        "/api/v1/auth/bootstrap/status",
-	AuthCLIEnroll:                              "/api/v1/auth/cli/enroll",
-	AuthDeviceEnroll:                           "/api/v1/auth/device/enroll",
-	AuthPasskeys:                               "/api/v1/auth/passkeys",
-	AuthPasskeysByID:                           "/api/v1/auth/passkeys/",
-	AuthPasskeysJITRegisterChallenge:           "/api/v1/auth/passkeys/jit-register/challenge",
-	AuthPasskeysJITRegisterVerify:              "/api/v1/auth/passkeys/jit-register/verify",
-	AuthPasskeysJITPrefix:                      "/api/v1/auth/passkeys/jit-",
-	AuthPasskeysPrefix:                         "/api/v1/auth/passkeys/",
-	AuthPasskeysCLIStatus:                      "/api/v1/auth/passkeys/cli/status",
-	AuthPasskeysConsoleRegisterChallenge:       "/api/v1/auth/passkeys/console/register/challenge",
-	AuthPasskeysConsoleRegisterVerify:          "/api/v1/auth/passkeys/console/register/verify",
-	AuthPasskeysConsoleAuthenticateChallenge:   "/api/v1/auth/passkeys/console/authenticate/challenge",
-	AuthPasskeysConsoleAuthenticateVerify:      "/api/v1/auth/passkeys/console/authenticate/verify",
-	AuthPasskeysConsolePrefix:                  "/api/v1/auth/passkeys/console/",
-	AuthSessionsMe:                             "/api/v1/auth/sessions/me",
+	AuthLogout:                               "/api/v1/auth/logout",
+	AuthBootstrap:                            "/api/v1/auth/bootstrap",
+	AuthBootstrapStatus:                      "/api/v1/auth/bootstrap/status",
+	AuthCLIEnroll:                            "/api/v1/auth/cli/enroll",
+	AuthDeviceEnroll:                         "/api/v1/auth/device/enroll",
+	AuthPasskeys:                             "/api/v1/auth/passkeys",
+	AuthPasskeysByID:                         "/api/v1/auth/passkeys/",
+	AuthPasskeysJITRegisterChallenge:         "/api/v1/auth/passkeys/jit-register/challenge",
+	AuthPasskeysJITRegisterVerify:            "/api/v1/auth/passkeys/jit-register/verify",
+	AuthPasskeysJITPrefix:                    "/api/v1/auth/passkeys/jit-",
+	AuthPasskeysPrefix:                       "/api/v1/auth/passkeys/",
+	AuthPasskeysCLIStatus:                    "/api/v1/auth/passkeys/cli/status",
+	AuthPasskeysConsoleRegisterChallenge:     "/api/v1/auth/passkeys/console/register/challenge",
+	AuthPasskeysConsoleRegisterVerify:        "/api/v1/auth/passkeys/console/register/verify",
+	AuthPasskeysConsoleAuthenticateChallenge: "/api/v1/auth/passkeys/console/authenticate/challenge",
+	AuthPasskeysConsoleAuthenticateVerify:    "/api/v1/auth/passkeys/console/authenticate/verify",
+	AuthPasskeysConsolePrefix:                "/api/v1/auth/passkeys/console/",
+	AuthSessionsMe:                           "/api/v1/auth/sessions/me",
 	// Approval routes
 	Approvals:          "/api/v1/approvals",
 	ApprovalsByID:      "/api/v1/approvals/",

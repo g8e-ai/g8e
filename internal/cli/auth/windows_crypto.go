@@ -215,4 +215,3 @@ func TrustRootCAInWindowsStore(caBundlePEM string) error {
 
 	return nil
 }
-

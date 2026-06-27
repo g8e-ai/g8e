@@ -35,10 +35,10 @@ type SuspendedTransaction struct {
 	ExpectedCertFingerprint string // Expected mTLS cert fingerprint for verification
 	ApprovalPublicKey       string // Hex-encoded Ed25519 public key of the approver
 	// Passkey WebAuthn fields (present for all approvals going forward)
-	PasskeyCredentialID    string // WebAuthn credential ID
-	PasskeyClientDataJSON  string // WebAuthn clientDataJSON
+	PasskeyCredentialID      string // WebAuthn credential ID
+	PasskeyClientDataJSON    string // WebAuthn clientDataJSON
 	PasskeyAuthenticatorData string // WebAuthn authenticatorData
-	PasskeySignature       string // WebAuthn signature
+	PasskeySignature         string // WebAuthn signature
 }
 
 // ApprovalProof holds all fields needed to record an L3 approval.

@@ -402,11 +402,11 @@ func TestGatewayL3Notary_NilProofReturnsError(t *testing.T) {
 
 // mockCLISessionVerifier is a test double for the CLISessionVerifier interface.
 type mockCLISessionVerifier struct {
-	called             bool
-	calledUserID       string
-	calledSessionID    string
-	calledFingerprint  string
-	result             error
+	called            bool
+	calledUserID      string
+	calledSessionID   string
+	calledFingerprint string
+	result            error
 }
 
 func (m *mockCLISessionVerifier) VerifyCLISession(userID, cliSessionID, certFingerprint string) error {

@@ -301,24 +301,24 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 	}
 
 	return &models.SuspendedTransaction{
-		TransactionHash:         txHash,
-		Envelope:                []byte(envelopeStr.String),
-		CreatedAt:               createdAt,
-		ExpiresAt:               expiresAt,
-		ToolName:                toolName.String,
-		ToolArguments:           toolArgs,
-		UserID:                  userID.String,
-		OperatorID:              operatorID.String,
-		Approved:                approved == 1,
-		ApprovedAt:              approvedAt,
-		ApprovedBy:              approvedBy.String,
-		ApprovalSignature:       approvalSignature.String,
-		ExpectedCertFingerprint:   expectedCertFingerprint.String,
-		ApprovalPublicKey:         approvalPublicKey.String,
-		PasskeyCredentialID:       passkeyCredentialID.String,
-		PasskeyClientDataJSON:     passkeyClientDataJSON.String,
-		PasskeyAuthenticatorData:  passkeyAuthenticatorData.String,
-		PasskeySignature:          passkeySignature.String,
+		TransactionHash:          txHash,
+		Envelope:                 []byte(envelopeStr.String),
+		CreatedAt:                createdAt,
+		ExpiresAt:                expiresAt,
+		ToolName:                 toolName.String,
+		ToolArguments:            toolArgs,
+		UserID:                   userID.String,
+		OperatorID:               operatorID.String,
+		Approved:                 approved == 1,
+		ApprovedAt:               approvedAt,
+		ApprovedBy:               approvedBy.String,
+		ApprovalSignature:        approvalSignature.String,
+		ExpectedCertFingerprint:  expectedCertFingerprint.String,
+		ApprovalPublicKey:        approvalPublicKey.String,
+		PasskeyCredentialID:      passkeyCredentialID.String,
+		PasskeyClientDataJSON:    passkeyClientDataJSON.String,
+		PasskeyAuthenticatorData: passkeyAuthenticatorData.String,
+		PasskeySignature:         passkeySignature.String,
 	}, true, nil
 }
 
@@ -341,24 +341,24 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 	}
 
 	type suspendedTxRow struct {
-		txHash                  sql.NullString
-		envelopeStr             sql.NullString
-		createdAtStr            sql.NullString
-		expiresAtStr            sql.NullString
-		toolName                sql.NullString
-		toolArgsStr             sql.NullString
-		userID                  sql.NullString
-		operatorID              sql.NullString
-		approved                int
-		approvedAtStr           sql.NullString
-		approvedBy              sql.NullString
-		approvalSignature       sql.NullString
-		expectedCertFingerprint sql.NullString
-		approvalPublicKey       sql.NullString
-		passkeyCredentialID     sql.NullString
-		passkeyClientDataJSON   sql.NullString
+		txHash                   sql.NullString
+		envelopeStr              sql.NullString
+		createdAtStr             sql.NullString
+		expiresAtStr             sql.NullString
+		toolName                 sql.NullString
+		toolArgsStr              sql.NullString
+		userID                   sql.NullString
+		operatorID               sql.NullString
+		approved                 int
+		approvedAtStr            sql.NullString
+		approvedBy               sql.NullString
+		approvalSignature        sql.NullString
+		expectedCertFingerprint  sql.NullString
+		approvalPublicKey        sql.NullString
+		passkeyCredentialID      sql.NullString
+		passkeyClientDataJSON    sql.NullString
 		passkeyAuthenticatorData sql.NullString
-		passkeySignature        sql.NullString
+		passkeySignature         sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(sts.db, query, args, func(r *sql.Rows) (suspendedTxRow, error) {
@@ -387,24 +387,24 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 		}
 
 		transactions = append(transactions, &models.SuspendedTransaction{
-			TransactionHash:         row.txHash.String,
-			Envelope:                []byte(row.envelopeStr.String),
-			CreatedAt:               createdAt,
-			ExpiresAt:               expiresAt,
-			ToolName:                row.toolName.String,
-			ToolArguments:           toolArgs,
-			UserID:                  row.userID.String,
-			OperatorID:              row.operatorID.String,
-			Approved:                row.approved == 1,
-			ApprovedAt:              approvedAt,
-			ApprovedBy:              row.approvedBy.String,
-			ApprovalSignature:       row.approvalSignature.String,
-			ExpectedCertFingerprint: row.expectedCertFingerprint.String,
-			ApprovalPublicKey:       row.approvalPublicKey.String,
-			PasskeyCredentialID:     row.passkeyCredentialID.String,
-			PasskeyClientDataJSON:   row.passkeyClientDataJSON.String,
+			TransactionHash:          row.txHash.String,
+			Envelope:                 []byte(row.envelopeStr.String),
+			CreatedAt:                createdAt,
+			ExpiresAt:                expiresAt,
+			ToolName:                 row.toolName.String,
+			ToolArguments:            toolArgs,
+			UserID:                   row.userID.String,
+			OperatorID:               row.operatorID.String,
+			Approved:                 row.approved == 1,
+			ApprovedAt:               approvedAt,
+			ApprovedBy:               row.approvedBy.String,
+			ApprovalSignature:        row.approvalSignature.String,
+			ExpectedCertFingerprint:  row.expectedCertFingerprint.String,
+			ApprovalPublicKey:        row.approvalPublicKey.String,
+			PasskeyCredentialID:      row.passkeyCredentialID.String,
+			PasskeyClientDataJSON:    row.passkeyClientDataJSON.String,
 			PasskeyAuthenticatorData: row.passkeyAuthenticatorData.String,
-			PasskeySignature:        row.passkeySignature.String,
+			PasskeySignature:         row.passkeySignature.String,
 		})
 	}
 
@@ -483,24 +483,24 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 	query := "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE expires_at < ? ORDER BY expires_at ASC"
 
 	type suspendedTxRow struct {
-		txHash                  sql.NullString
-		envelopeStr             sql.NullString
-		createdAtStr            sql.NullString
-		expiresAtStr            sql.NullString
-		toolName                sql.NullString
-		toolArgsStr             sql.NullString
-		userID                  sql.NullString
-		operatorID              sql.NullString
-		approved                int
-		approvedAtStr           sql.NullString
-		approvedBy              sql.NullString
-		approvalSignature       sql.NullString
-		expectedCertFingerprint sql.NullString
-		approvalPublicKey       sql.NullString
-		passkeyCredentialID     sql.NullString
-		passkeyClientDataJSON   sql.NullString
+		txHash                   sql.NullString
+		envelopeStr              sql.NullString
+		createdAtStr             sql.NullString
+		expiresAtStr             sql.NullString
+		toolName                 sql.NullString
+		toolArgsStr              sql.NullString
+		userID                   sql.NullString
+		operatorID               sql.NullString
+		approved                 int
+		approvedAtStr            sql.NullString
+		approvedBy               sql.NullString
+		approvalSignature        sql.NullString
+		expectedCertFingerprint  sql.NullString
+		approvalPublicKey        sql.NullString
+		passkeyCredentialID      sql.NullString
+		passkeyClientDataJSON    sql.NullString
 		passkeyAuthenticatorData sql.NullString
-		passkeySignature        sql.NullString
+		passkeySignature         sql.NullString
 	}
 
 	rows, err := sqliteutil.MaterializeRows(sts.db, query, []interface{}{sqliteutil.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
@@ -529,24 +529,24 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 		}
 
 		transactions = append(transactions, &models.SuspendedTransaction{
-			TransactionHash:         row.txHash.String,
-			Envelope:                []byte(row.envelopeStr.String),
-			CreatedAt:               createdAt,
-			ExpiresAt:               expiresAt,
-			ToolName:                row.toolName.String,
-			ToolArguments:           toolArgs,
-			UserID:                  row.userID.String,
-			OperatorID:              row.operatorID.String,
-			Approved:                row.approved == 1,
-			ApprovedAt:              approvedAt,
-			ApprovedBy:              row.approvedBy.String,
-			ApprovalSignature:       row.approvalSignature.String,
-			ExpectedCertFingerprint: row.expectedCertFingerprint.String,
-			ApprovalPublicKey:       row.approvalPublicKey.String,
-			PasskeyCredentialID:     row.passkeyCredentialID.String,
-			PasskeyClientDataJSON:   row.passkeyClientDataJSON.String,
+			TransactionHash:          row.txHash.String,
+			Envelope:                 []byte(row.envelopeStr.String),
+			CreatedAt:                createdAt,
+			ExpiresAt:                expiresAt,
+			ToolName:                 row.toolName.String,
+			ToolArguments:            toolArgs,
+			UserID:                   row.userID.String,
+			OperatorID:               row.operatorID.String,
+			Approved:                 row.approved == 1,
+			ApprovedAt:               approvedAt,
+			ApprovedBy:               row.approvedBy.String,
+			ApprovalSignature:        row.approvalSignature.String,
+			ExpectedCertFingerprint:  row.expectedCertFingerprint.String,
+			ApprovalPublicKey:        row.approvalPublicKey.String,
+			PasskeyCredentialID:      row.passkeyCredentialID.String,
+			PasskeyClientDataJSON:    row.passkeyClientDataJSON.String,
 			PasskeyAuthenticatorData: row.passkeyAuthenticatorData.String,
-			PasskeySignature:        row.passkeySignature.String,
+			PasskeySignature:         row.passkeySignature.String,
 		})
 	}
 

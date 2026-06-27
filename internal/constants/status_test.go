@@ -323,11 +323,11 @@ func TestStatusJSONTribunalMemberMatches(t *testing.T) {
 	cat, ok := statusJSON["tribunal_member"]
 	require.True(t, ok, "tribunal_member category exists")
 	expected := map[string]string{
-		"axiom":   "axiom",
-		"concord": "concord",
+		"axiom":    "axiom",
+		"concord":  "concord",
 		"variance": "variance",
-		"pragma":  "pragma",
-		"nemesis": "nemesis",
+		"pragma":   "pragma",
+		"nemesis":  "nemesis",
 	}
 	for key, exp := range expected {
 		entry, exists := cat[key]

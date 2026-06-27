@@ -126,4 +126,3 @@ func (tc *TLSConfig) GetTLSConfig() (*tls.Config, error) {
 
 	return cfg, nil
 }
-

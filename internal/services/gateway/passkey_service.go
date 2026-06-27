@@ -75,17 +75,17 @@ type webauthnClient interface {
 // PasskeyService handles L3 proof brokerage for passkey/WebAuthn operations.
 // This moves the L3 authorization from client into g8eo as the sovereign authority.
 type PasskeyService struct {
-	userStore       userStore
-	sessionStore    sessionStore
-	webauthn        webauthnClient
-	logger          *slog.Logger
-	rpID            string
-	rpName          string
-	webSessionSvc   *WebSessionService
-	responder       *response.Writer
-	maxPayload      int64
-	mcpSvc          MCPServiceProvider
-	suspendedStore  storage.SuspendedTransactionStore
+	userStore      userStore
+	sessionStore   sessionStore
+	webauthn       webauthnClient
+	logger         *slog.Logger
+	rpID           string
+	rpName         string
+	webSessionSvc  *WebSessionService
+	responder      *response.Writer
+	maxPayload     int64
+	mcpSvc         MCPServiceProvider
+	suspendedStore storage.SuspendedTransactionStore
 }
 
 // PasskeyConfig holds configuration for passkey operations.

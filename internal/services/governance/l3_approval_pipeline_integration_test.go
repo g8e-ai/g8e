@@ -178,6 +178,7 @@ func TestL3ApprovalPipeline_CLI_Browser_PasskeyDenied(t *testing.T) {
 	}
 
 	allowed, err := notary.VerifyL3Proof(ctx, userID, txHash, cliSessionID, l3Proof)
+	require.NoError(t, err)
 	assert.False(t, allowed)
 	assert.True(t, passkeyVerifier.called)
 	assert.False(t, cliVerifier.called, "CLI verifier should not be called when passkey fails")
