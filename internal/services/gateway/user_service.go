@@ -61,16 +61,11 @@ func (s *UserService) CreateUser() (*models.User, error) {
 	return s.createUser(false, nil)
 }
 
-// CreateBootstrapUser creates the ephemeral local-owner identity used by
+// CreateBootstrapUserWithOSUser creates the ephemeral local-owner identity used by
 // `./g8e gw start -a`. The resulting user carries IsBootstrap=true so
 // the CSR-based registration path can identify and retire it the first time
 // a real identity is provisioned.
-func (s *UserService) CreateBootstrapUser() (*models.User, error) {
-	return s.CreateBootstrapUserWithOSUser(nil)
-}
-
-// CreateBootstrapUserWithOSUser creates a bootstrap user with the provided OS user information.
-// If localOSUser is nil, it falls back to the gateway's local OS user (for backward compatibility).
+// If localOSUser is nil, it falls back to the gateway's local OS user.
 func (s *UserService) CreateBootstrapUserWithOSUser(localOSUser *models.LocalOSUser) (*models.User, error) {
 	return s.createUser(true, localOSUser)
 }

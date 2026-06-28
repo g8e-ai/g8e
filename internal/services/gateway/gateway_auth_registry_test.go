@@ -46,8 +46,7 @@ func TestPrivilegedRouteRegistry_NonPrivilegedPaths(t *testing.T) {
 	nonPrivilegedPaths := []string{
 		constants.APIPaths.Health,
 		constants.APIPaths.State,
-		constants.APIPaths.MCPToolsList,
-		constants.APIPaths.MCPToolsCall,
+		constants.APIPaths.MCPEndpoint,
 		constants.APIPaths.A2ACall,
 		constants.APIPaths.AuditReceipts,
 		constants.APIPaths.Operators,

@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.1.9  
-**Last Updated:** 2026-06-23  
-**Platform:** g8e v1.1.9  
+**Document Version:** 1.3.1  
+**Last Updated:** 2026-06-28  
+**Platform:** g8e v1.3.1  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -34,14 +34,14 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **CC1.2** | Logical access security software | 5-layer verification pipeline (L1-L5) | `internal/services/governance/l4_warden.go` |
 | **CC1.3** | Logical access to system components | Role-based session isolation (operator_session_id, cli_session_id, web_session_id) | `protocol/models/conversation.json` |
 | **CC1.4** | Logical access to stored data | Encrypted audit store with mandatory encryption at rest | `internal/services/storage/audit_store.go` |
-| **CC1.5** | Authentication of external users | WebAuthn/FIDO2 hardware-bound authentication, mTLS certificate verification | `internal/services/governance/l3_notary.go` |
+| **CC1.5** | Authentication of external users | Two-layer L3 Notary: passkey authorization (WebAuthn/FIDO2) plus mTLS transport authentication for CLI callers | `internal/services/governance/l3_notary.go` |
 | **CC1.6** | Identification and authentication | SPIFFE URI SAN binding in certificates, Ed25519 signature verification | `protocol/workload_identity.go` |
 | **CC1.7** | Logical access for support personnel | No standing privileges, JIT provisioning via CSR enrollment | `internal/services/gateway/pki_controller.go` |
 | **CC1.8** | Management of access security | Certificate revocation with database-backed denylist and CRL | `internal/services/gateway/pki_controller.go` |
 | **CC1.9** | Data transfer security | mTLS for all platform communication, outbound-only operator connections | `docs/architecture/auth.md` |
 | **CC1.10** | Security monitoring | Audit store with immutable git-backed ledger, signed ActionReceipts | `internal/services/storage/audit_store.go`, `internal/services/storage/ledger.go` |
 | **CC1.11** | Data disposal | Configurable retention policies (default 90 days), automated pruning | `internal/services/storage/audit_store.go` |
-| **CC1.12** | Security incident response | Coordinated disclosure policy via `security@lateraluslabs.com` | `SECURITY.md` |
+| **CC1.12** | Security incident response | Coordinated disclosure policy via `security@lateraluslabs.com` | `.github/SECURITY.md` |
 
 #### TSC - Availability (A)
 
@@ -67,7 +67,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 ### Annex A Control Mapping
 
 #### A.5 Organizational Security Policies
-- **A.5.1 Policies for information security:** Security policy documented in `SECURITY.md`
+- **A.5.1 Policies for information security:** Security policy documented in `.github/SECURITY.md`
 - **A.5.2 Review of the policies:** Versioned documentation with changelog
 
 #### A.6 Organization of People, Roles, and Responsibilities
@@ -193,7 +193,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **Workforce Security** | JIT provisioning, no standing privileges | `internal/services/gateway/pki_controller.go` |
 | **Information Access Management** | Session-based access control, mTLS enforcement | `docs/architecture/auth.md` |
 | **Security Awareness and Training** | Documentation for secure deployment | `docs/guides/` |
-| **Security Incident Procedures** | Coordinated disclosure policy | `SECURITY.md` |
+| **Security Incident Procedures** | Coordinated disclosure policy | `.github/SECURITY.md` |
 | **Contingency Plan** | Git-backed ledger for recovery | `internal/services/storage/ledger.go` |
 | **Evaluation** | Automated testing in CI/CD | `.github/workflows/build-and-test.yml` |
 
@@ -230,10 +230,10 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 | Control | g8e Implementation | Evidence |
 |---------|-------------------|----------|
-| **AC-1** | Access control policy | `SECURITY.md` |
+| **AC-1** | Access control policy | `.github/SECURITY.md` |
 | **AC-2** | Account management | CSR-based enrollment, session tracking |
-| **AC-3** | Access enforcement | 5-layer verification pipeline |
-| **AC-6** | Least privilege | JIT provisioning, no standing privileges |
+| **AC-3** | Access enforcement | 5-layer verification pipeline, PrivilegedRouteRegistry blocks app certificates from submitting governance envelopes | `internal/services/gateway/gateway_auth.go` |
+| **AC-6** | Least privilege | JIT provisioning, self-dissolving execution capabilities, no standing privileges | `internal/services/governance/capability.go` |
 | **AC-7** | Successful/failed access attempts | Audit store logging |
 | **AC-8** | System use notification | Session identifiers in envelopes |
 | **AC-11** | Session lock | Session-based isolation |
@@ -248,7 +248,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 | Control | g8e Implementation | Evidence |
 |---------|-------------------|----------|
-| **AU-1** | Audit and accountability policy | `SECURITY.md` |
+| **AU-1** | Audit and accountability policy | `.github/SECURITY.md` |
 | **AU-2** | Audit events | Comprehensive event logging in audit store |
 | **AU-3** | Audit record content | Events include timestamp, user, action, result |
 | **AU-4** | Audit storage retention | Configurable retention (default 90 days) |
@@ -265,7 +265,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 | Control | g8e Implementation | Evidence |
 |---------|-------------------|----------|
-| **SC-1** | System and communications protection policy | `SECURITY.md` |
+| **SC-1** | System and communications protection policy | `.github/SECURITY.md` |
 | **SC-7** | Boundary protection | Sovereign Execution Boundary |
 | **SC-8** | Transmission confidentiality | mTLS with TLS 1.3 |
 | **SC-9** | Transmission integrity | mTLS with certificate verification |
@@ -284,7 +284,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 
 | Control | g8e Implementation | Evidence |
 |---------|-------------------|----------|
-| **SI-1** | System and information integrity policy | `SECURITY.md` |
+| **SI-1** | System and information integrity policy | `.github/SECURITY.md` |
 | **SI-2** | Flaw remediation | Coordinated disclosure, automated dependency scanning |
 | **SI-3** | Malicious code protection | L1 Doctrine with MITRE ATT&CK detection |
 | **SI-4** | System monitoring | Audit store, signed receipts |
@@ -296,7 +296,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **SI-11** | Error handling | Fail-closed verification, error categorization |
 | **SI-12** | Information output handling | Sensitive data scrubbing before output |
 | **SI-13** | Predictable failure prevention | Fail-closed design |
-| **SI-14** | Non-persistence | JIT credentials, no standing privileges |
+| **SI-14** | Non-persistence | JIT credentials, self-dissolving capabilities, no standing privileges | `internal/services/governance/capability.go` |
 | **SI-16** | Memory protection | Go memory safety |
 | **SI-17** | Fail-safe procedures | Fail-closed verification pipeline |
 
@@ -347,14 +347,14 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **11.4** | Use intrusion detection systems | L1 Doctrine threat detection |
 | **11.5** | Deploy intrusion prevention systems | L1 Doctrine hard gates |
 | **11.6** | Verify security controls | Automated testing in CI/CD |
-| **12.1** | Maintain security policy | `SECURITY.md` |
+| **12.1** | Maintain security policy | `.github/SECURITY.md` |
 | **12.2** | Risk assessment | This compliance alignment document |
 | **12.3** | Security awareness | Documentation for secure deployment |
 | **12.4** | Incident response | Coordinated disclosure policy |
 | **12.5** | Vulnerability management | Coordinated disclosure, automated scanning |
 | **12.6** | Security updates | Versioned releases with changelog |
 | **12.7** | Security information | Architecture documentation |
-| **12.8** | Security policies | `SECURITY.md` |
+| **12.8** | Security policies | `.github/SECURITY.md` |
 
 ---
 
@@ -395,7 +395,7 @@ The NSA Zero Trust Implementation Guidelines (ZIG) provide a five-phase approach
 | **Encryption at Rest** | Protect stored data | Mandatory encryption vault for audit content | `internal/services/storage/audit_store.go` |
 | **Identity and Access Management** | Centralized identity control | SPIFFE workload identity system | `protocol/workload_identity.go` |
 | **Continuous Monitoring** | Real-time security monitoring | Audit store with signed receipts | `internal/services/storage/audit_store.go` |
-| **Incident Response** | Coordinated disclosure and response | Coordinated disclosure policy | `SECURITY.md` |
+| **Incident Response** | Coordinated disclosure and response | Coordinated disclosure policy | `.github/SECURITY.md` |
 
 ### Phase Two Alignment: Core Zero Trust Tools
 
@@ -447,7 +447,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 |---------|-----------|---------|----------------|
 | **Certificate Authority** | ECDSA P-256 | PKI hierarchy | `internal/services/gateway/pki_controller.go` |
 | **Workload Identity** | SPIFFE URI SAN | Identity binding | `protocol/workload_identity.go` |
-| **Transaction Signatures** | Ed25519 | L2 Consensus (Tribunal), L5 Actuator | `internal/services/tribunal/service.go`, `internal/services/governance/l4_warden.go` |
+| **Transaction Signatures** | Ed25519 | L2 Consensus, L5 Actuator | `internal/services/tribunal/service.go`, `internal/services/governance/l4_warden.go` |
 | **Hash Functions** | SHA-256 | Transaction hash, state roots | `protocol/proto/g8e/operator/v1/operator.proto` |
 | **Transport Security** | TLS 1.3 | mTLS for all communication | `docs/architecture/auth.md` |
 | **Human Authentication** | WebAuthn/FIDO2 | L3 Notary | `internal/services/governance/l3_notary.go` |
@@ -489,6 +489,9 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 - **PII/secret scrubbing** before cloud transmission
 - **Certificate revocation** with CRL and database denylist
 - **Air-gap capable** with no external dependencies
+- **g8e Console SPA** for browser-based passkey registration and transaction approval
+- **PrivilegedRouteRegistry** blocking app certificates from governance envelope submission
+- **JIT capability minting** with self-dissolving execution scopes
 
 ### Planned Enhancements
 
@@ -520,6 +523,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 | **Architecture: Auth** | `docs/architecture/auth.md` | Authentication and authorization architecture |
 | **Architecture: Operator** | `docs/architecture/operator.md` | Operator execution boundary |
 | **Architecture: Gateway** | `docs/architecture/gateway.md` | Gateway policy decision point |
+| **Architecture: Governance** | `docs/architecture/governance.md` | Governance postures and transaction process |
 | **Position Paper** | `docs/core/position_paper.md` | Platform philosophy and security model |
 
 ### Code Evidence
@@ -530,10 +534,12 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 | **Audit Store** | `internal/services/storage/audit_store.go` | Audit logging, encryption, retention |
 | **Sovereign Execution Boundary** | `internal/services/scrubbing/boundary.go` | PII scrubbing, data sovereignty |
 | **L1 Doctrine** | `internal/services/governance/l1_doctrine.go` | Threat detection, input validation |
-| **Tribunal Consensus** | `internal/services/tribunal/service.go` | L2 deliberation and Ed25519 consensus signing |
-| **L3 Notary** | `internal/services/governance/l3_notary.go` | Human authorization |
+| **L2 Consensus** | `internal/services/tribunal/service.go` | L2 deliberation and Ed25519 consensus signing |
+| **L3 Notary** | `internal/services/governance/l3_notary.go` | Two-layer human authorization (passkey plus mTLS transport) |
 | **L4 Warden** | `internal/services/governance/l4_warden.go` | Pre-dispatch verification |
 | **L5 Actuator** | `internal/services/governance/l5_actuator.go` | Execution boundary, signed receipts |
+| **JIT Capabilities** | `internal/services/governance/capability.go` | Self-dissolving execution capability minting |
+| **Privileged Route Registry** | `internal/services/gateway/gateway_auth.go` | App certificate governance envelope blocking |
 | **Workload Identity** | `protocol/workload_identity.go` | SPIFFE identity specification |
 
 ### Test Evidence
@@ -544,6 +550,8 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 | **Audit Store Tests** | `internal/services/storage/storagetest/audit_store_test.go` | Audit logging, encryption |
 | **Sovereignty Tests** | `internal/services/scrubbing/boundary_test.go` | PII scrubbing, rehydration |
 | **Governance Tests** | `internal/services/governance/*_test.go` | L1-L5 verification |
+| **L3 Approval Pipeline Tests** | `internal/services/governance/l3_approval_pipeline_integration_test.go` | Full CLI to browser to approval pipeline |
+| **Reporting Verification Tests** | `internal/services/reporting/verification_test.go` | Commitment chain, merkle root, receipt cross-link |
 | **Integration Tests** | `test/*_test.go` | End-to-end security flows |
 
 ---
@@ -553,7 +561,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 ### Security Contact
 
 - **Email:** security@lateraluslabs.com
-- **Vulnerability Reporting:** Coordinated disclosure policy in `SECURITY.md`
+- **Vulnerability Reporting:** Coordinated disclosure policy in `.github/SECURITY.md`
 - **Response Time:** 48 hours acknowledgment, 5 business days initial assessment
 
 ### General Contact
@@ -576,6 +584,7 @@ For specific compliance questions or audit support, contact:
 | 1.0 | 2026-06-02 | Lateralus Labs | Initial compliance alignment report |
 | 1.1 | 2026-06-12 | Lateralus Labs | Corrected Sovereign Execution Boundary evidence path (`internal/services/scrubbing/boundary.go`); updated platform version to v1.1.1 |
 | 1.1.9 | 2026-06-23 | Lateralus Labs | Updated platform version to v1.1.9; replaced L2 Consensus references with Tribunal system (`internal/services/tribunal/service.go`); corrected DoD Zero Trust Reference Architecture naming; removed auto-approval references (removed in v1.1.9); corrected default posture configuration; fixed evidence repository paths to repository-relative format |
+| 1.3.1 | 2026-06-28 | Lateralus Labs | Updated platform version to v1.3.1; updated L3 Notary description to reflect two-layer model (passkey authorization plus mTLS transport); added PrivilegedRouteRegistry and JIT capability minting evidence; added g8e Console SPA to current strengths; corrected `.github/SECURITY.md` references to repository-relative paths; added governance architecture documentation to evidence repository; added reporting verification and L3 approval pipeline test evidence |
 
 ---
 

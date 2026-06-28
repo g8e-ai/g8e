@@ -53,8 +53,8 @@ func TestMCPToolsList(t *testing.T) {
 				if r.Method != http.MethodPost {
 					t.Errorf("expected POST, got %s", r.Method)
 				}
-				if r.URL.Path != "/api/mcp/v1/tools/list" {
-					t.Errorf("expected path /api/mcp/v1/tools/list, got %s", r.URL.Path)
+				if r.URL.Path != "/mcp" {
+					t.Errorf("expected path /mcp, got %s", r.URL.Path)
 				}
 
 				var req JSONRPCRequest
@@ -139,8 +139,8 @@ func TestMCPToolsCall(t *testing.T) {
 				if r.Method != http.MethodPost {
 					t.Errorf("expected POST, got %s", r.Method)
 				}
-				if r.URL.Path != "/api/mcp/v1/tools/call" {
-					t.Errorf("expected path /api/mcp/v1/tools/call, got %s", r.URL.Path)
+				if r.URL.Path != "/mcp" {
+					t.Errorf("expected path /mcp, got %s", r.URL.Path)
 				}
 
 				var req JSONRPCRequest
@@ -200,8 +200,8 @@ func TestMCPResourcesList(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/mcp/v1/resources/list" {
-			t.Errorf("expected path /api/mcp/v1/resources/list, got %s", r.URL.Path)
+		if r.URL.Path != "/mcp" {
+			t.Errorf("expected path /mcp, got %s", r.URL.Path)
 		}
 
 		var req JSONRPCRequest
@@ -249,8 +249,8 @@ func TestMCPResourcesRead(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/mcp/v1/resources/read" {
-			t.Errorf("expected path /api/mcp/v1/resources/read, got %s", r.URL.Path)
+		if r.URL.Path != "/mcp" {
+			t.Errorf("expected path /mcp, got %s", r.URL.Path)
 		}
 
 		var req JSONRPCRequest
@@ -307,8 +307,8 @@ func TestMCPPromptsList(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/mcp/v1/prompts/list" {
-			t.Errorf("expected path /api/mcp/v1/prompts/list, got %s", r.URL.Path)
+		if r.URL.Path != "/mcp" {
+			t.Errorf("expected path /mcp, got %s", r.URL.Path)
 		}
 
 		var req JSONRPCRequest
@@ -356,8 +356,8 @@ func TestMCPPromptsGet(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
-		if r.URL.Path != "/api/mcp/v1/prompts/get" {
-			t.Errorf("expected path /api/mcp/v1/prompts/get, got %s", r.URL.Path)
+		if r.URL.Path != "/mcp" {
+			t.Errorf("expected path /mcp, got %s", r.URL.Path)
 		}
 
 		var req JSONRPCRequest

@@ -195,10 +195,10 @@ func TestGatewayService_HandleToolsCall_ErrorMapping(t *testing.T) {
 
 			// Valid MCP tools/call request
 			reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-			req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 			w := httptest.NewRecorder()
 
-			g.HandleToolsCall(w, req)
+			g.HandleMCP(w, req)
 
 			require.Equal(t, http.StatusOK, w.Code)
 
@@ -219,10 +219,10 @@ func TestGatewayService_HandleToolsCall_Suspension(t *testing.T) {
 	)
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
-	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 
-	g.HandleToolsCall(w, req)
+	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 
@@ -378,10 +378,10 @@ func TestGatewayService_HandleResourcesRead(t *testing.T) {
 	g := newTestGatewayService(t, withEnvProc(proc))
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri":"file:///test.txt"}}`
-	req := httptest.NewRequest(http.MethodPost, "/mcp/resources/read", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 
-	g.HandleResourcesRead(w, req)
+	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 
@@ -401,137 +401,15 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 	g := newTestGatewayService(t, withEnvProc(proc))
 
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"prompts/get","params":{"name":"test-prompt"}}`
-	req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/get", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 
-	g.HandlePromptsGet(w, req)
+	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 
 	expectedJSON := `{"jsonrpc":"2.0","id":1,"result":{"description":"prompt template","messages":[{"role":"user","content":{"type":"text","text":"prompt template"}}]}}`
 	require.JSONEq(t, expectedJSON, w.Body.String())
-}
-
-func TestGatewayService_HandleToolsCallSSE(t *testing.T) {
-	t.Parallel()
-
-	t.Run("successful SSE stream", func(t *testing.T) {
-		t.Parallel()
-		receipt := &operatorv1.ActionReceipt{
-			TransactionId: "tx-1",
-			Status:        operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-			ResultSummary: "streamed result",
-		}
-		proc := &fakeEnvelopeProcessor{receipt: receipt}
-
-		g := newTestGatewayService(t, withEnvProc(proc))
-
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCallSSE(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-		require.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
-		require.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
-
-		body := w.Body.String()
-		require.Contains(t, body, "data:")
-		require.Contains(t, body, "streamed result")
-	})
-
-	t.Run("circuit breaker open", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t,
-			withDownstreamURL("http://localhost:9999"),
-			withCircuitBreaker(3, 1*time.Minute),
-		)
-
-		// Open the circuit
-		for i := 0; i < 3; i++ {
-			g.recordFailure()
-		}
-
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCallSSE(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		body := w.Body.String()
-		require.Contains(t, body, "circuit open")
-	})
-
-	t.Run("invalid JSON-RPC", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t)
-
-		reqBody := `invalid json`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCallSSE(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		body := w.Body.String()
-		require.Contains(t, body, "error")
-	})
-
-	t.Run("payload too large", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t, withMaxPayloadBytes(100))
-
-		largePayload := strings.Repeat("a", 1000)
-		reqBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"data":"%s"}}}`, largePayload)
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCallSSE(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		body := w.Body.String()
-		require.Contains(t, body, "error")
-	})
-
-	t.Run("missing tool name", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t)
-
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"arguments":{}}}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCallSSE(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		body := w.Body.String()
-		require.Contains(t, body, "error")
-	})
-
-	t.Run("governance error - L1 validation failed", func(t *testing.T) {
-		t.Parallel()
-		proc := &fakeEnvelopeProcessor{err: governance.ErrL1ValidationFailed}
-
-		g := newTestGatewayService(t, withEnvProc(proc))
-
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call/sse", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsCallSSE(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		body := w.Body.String()
-		require.Contains(t, body, "error")
-	})
-
 }
 
 func TestGatewayService_CircuitBreaker(t *testing.T) {
@@ -592,10 +470,10 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t)
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader("{}"))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandleToolsList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 
@@ -622,34 +500,10 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 		w := httptest.NewRecorder()
 
-		g.HandleToolsList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Nil(t, resp.Error)
-	})
-
-	t.Run("successful GET proxy to downstream", func(t *testing.T) {
-		t.Parallel()
-		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
-		}))
-		defer downstream.Close()
-
-		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
-
-		req := httptest.NewRequest(http.MethodGet, "/mcp/tools/list", nil)
-		w := httptest.NewRecorder()
-
-		g.HandleToolsList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 
@@ -671,233 +525,10 @@ func TestGatewayService_HandleToolsList(t *testing.T) {
 			g.recordFailure()
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandleToolsList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Nil(t, resp.Error)
-
-		// Should return native tools as fallback
-		var result ToolsListResult
-		err = json.Unmarshal(resp.Result, &result)
-		require.NoError(t, err)
-		require.NotEmpty(t, result.Tools)
-	})
-
-	t.Run("downstream HTTP error", func(t *testing.T) {
-		t.Parallel()
-		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusInternalServerError)
-		}))
-		defer downstream.Close()
-
-		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
-
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsList(w, req)
-
-		// Should return native tools as fallback when downstream returns 500
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Nil(t, resp.Error)
-
-		var result ToolsListResult
-		err = json.Unmarshal(resp.Result, &result)
-		require.NoError(t, err)
-		require.NotEmpty(t, result.Tools)
-	})
-
-	t.Run("downstream connection error", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t, withDownstreamURL("http://localhost:9999"))
-
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsList(w, req)
-
-		// Should return native tools as fallback when downstream is unreachable
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Nil(t, resp.Error)
-
-		var result ToolsListResult
-		err = json.Unmarshal(resp.Result, &result)
-		require.NoError(t, err)
-		require.NotEmpty(t, result.Tools)
-	})
-
-	t.Run("empty POST body uses default", func(t *testing.T) {
-		t.Parallel()
-		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(t, string(body), "tools/list")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
-		}))
-		defer downstream.Close()
-
-		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
-
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(""))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-	})
-
-	t.Run("merges native tools with downstream tools", func(t *testing.T) {
-		t.Parallel()
-		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			// Return a downstream tool that doesn't conflict with native tools
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"downstream_tool","description":"A downstream tool","inputSchema":{"type":"object"}}]}}`))
-		}))
-		defer downstream.Close()
-
-		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
-
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
-		w := httptest.NewRecorder()
-
-		g.HandleToolsList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Nil(t, resp.Error)
-
-		var result ToolsListResult
-		err = json.Unmarshal(resp.Result, &result)
-		require.NoError(t, err)
-
-		// Should have both downstream tool and native tools
-		toolNames := make(map[string]bool)
-		for _, tool := range result.Tools {
-			toolNames[tool.Name] = true
-		}
-
-		require.Contains(t, toolNames, "downstream_tool", "should include downstream tool")
-		require.Contains(t, toolNames, "db_discover_topology", "should include native tools")
-	})
-
-	t.Run("method not allowed", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t)
-
-		req := httptest.NewRequest(http.MethodDelete, "/mcp/tools/list", nil)
-		w := httptest.NewRecorder()
-
-		g.HandleToolsList(w, req)
-
-		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
-}
-
-func TestGatewayService_HandleResourcesList(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty list when no downstream", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t)
-
-		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader("{}"))
-		w := httptest.NewRecorder()
-
-		g.HandleResourcesList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp ResourcesListResult
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Empty(t, resp.Resources)
-	})
-
-	t.Run("successful POST proxy to downstream", func(t *testing.T) {
-		t.Parallel()
-		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[{"uri":"file:///test.txt","name":"test"}]}}`))
-		}))
-		defer downstream.Close()
-
-		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
-
-		reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/list"}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(reqBody))
-		w := httptest.NewRecorder()
-
-		g.HandleResourcesList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Nil(t, resp.Error)
-	})
-
-	t.Run("successful GET proxy to downstream", func(t *testing.T) {
-		t.Parallel()
-		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[]}}`))
-		}))
-		defer downstream.Close()
-
-		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
-
-		req := httptest.NewRequest(http.MethodGet, "/mcp/resources/list", nil)
-		w := httptest.NewRecorder()
-
-		g.HandleResourcesList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
-
-		var resp JSONRPCResponse
-		err := json.Unmarshal(w.Body.Bytes(), &resp)
-		require.NoError(t, err)
-		require.Nil(t, resp.Error)
-	})
-
-	t.Run("circuit breaker open", func(t *testing.T) {
-		t.Parallel()
-		g := newTestGatewayService(t,
-			withDownstreamURL("http://localhost:9999"),
-			withCircuitBreaker(3, 1*time.Minute),
-		)
-
-		// Open the circuit
-		for i := 0; i < 5; i++ {
-			g.recordFailure()
-		}
-
-		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
-		w := httptest.NewRecorder()
-
-		g.HandleResourcesList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 
@@ -917,22 +548,212 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandleResourcesList(w, req)
+		g.HandleMCP(w, req)
 
-		require.Equal(t, http.StatusInternalServerError, w.Code)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
 	})
 
 	t.Run("downstream connection error", func(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withDownstreamURL("http://localhost:9999"))
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandleResourcesList(w, req)
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "failed to query downstream")
+	})
+
+	t.Run("proxies to downstream with valid request", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			assert.Contains(t, string(body), "tools/list")
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("downstream tools returned", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"tools":[{"name":"downstream_tool","description":"A downstream tool","inputSchema":{"type":"object"}}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+
+		var result ToolsListResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+
+		toolNames := make(map[string]bool)
+		for _, tool := range result.Tools {
+			toolNames[tool.Name] = true
+		}
+
+		require.Contains(t, toolNames, "downstream_tool", "should include downstream tool")
+	})
+
+	t.Run("method not allowed", func(t *testing.T) {
+		t.Parallel()
+		g := newTestGatewayService(t)
+
+		req := httptest.NewRequest(http.MethodDelete, "/mcp", nil)
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
+	})
+}
+
+func TestGatewayService_HandleResourcesList(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty list when no downstream", func(t *testing.T) {
+		t.Parallel()
+		g := newTestGatewayService(t)
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+
+		var result ResourcesListResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+		require.Empty(t, result.Resources)
+	})
+
+	t.Run("successful POST proxy to downstream", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[{"uri":"file:///test.txt","name":"test"}]}}`))
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
+
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"resources/list"}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.Nil(t, resp.Error)
+	})
+
+	t.Run("circuit breaker open", func(t *testing.T) {
+		t.Parallel()
+		g := newTestGatewayService(t,
+			withDownstreamURL("http://localhost:9999"),
+			withCircuitBreaker(3, 1*time.Minute),
+		)
+
+		// Open the circuit
+		for i := 0; i < 5; i++ {
+			g.recordFailure()
+		}
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "circuit open")
+	})
+
+	t.Run("downstream HTTP error", func(t *testing.T) {
+		t.Parallel()
+		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer downstream.Close()
+
+		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+	})
+
+	t.Run("downstream connection error", func(t *testing.T) {
+		t.Parallel()
+		g := newTestGatewayService(t, withDownstreamURL("http://localhost:9999"))
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"resources/list"}`))
+		w := httptest.NewRecorder()
+
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 
@@ -947,33 +768,12 @@ func TestGatewayService_HandleResourcesList(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t, withDownstreamURL("http://localhost:9999"))
 
-		req := httptest.NewRequest(http.MethodPut, "/mcp/resources/list", strings.NewReader(`{}`))
+		req := httptest.NewRequest(http.MethodPut, "/mcp", strings.NewReader(`{}`))
 		w := httptest.NewRecorder()
 
-		g.HandleResourcesList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
-	})
-
-	t.Run("empty POST body uses default", func(t *testing.T) {
-		t.Parallel()
-		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			body, _ := io.ReadAll(r.Body)
-			assert.Contains(t, string(body), "resources/list")
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"resources":[]}}`))
-		}))
-		defer downstream.Close()
-
-		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
-
-		req := httptest.NewRequest(http.MethodPost, "/mcp/resources/list", strings.NewReader(""))
-		w := httptest.NewRecorder()
-
-		g.HandleResourcesList(w, req)
-
-		require.Equal(t, http.StatusOK, w.Code)
 	})
 }
 
@@ -984,22 +784,26 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t)
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"prompts/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandlePromptsList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 
-		var resp PromptsListResult
+		var resp JSONRPCResponse
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
 		require.NoError(t, err)
-		require.Empty(t, resp.Prompts)
+		require.Nil(t, resp.Error)
+
+		var result PromptsListResult
+		err = json.Unmarshal(resp.Result, &result)
+		require.NoError(t, err)
+		require.Empty(t, result.Prompts)
 	})
 
 	t.Run("proxies to downstream MCP server", func(t *testing.T) {
 		t.Parallel()
-		// Mock downstream MCP server
 		downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -1009,10 +813,10 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"prompts/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandlePromptsList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 
@@ -1034,10 +838,10 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 			g.recordFailure()
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"prompts/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandlePromptsList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 
@@ -1057,22 +861,27 @@ func TestGatewayService_HandlePromptsList(t *testing.T) {
 
 		g := newTestGatewayService(t, withDownstreamURL(downstream.URL))
 
-		req := httptest.NewRequest(http.MethodPost, "/mcp/prompts/list", strings.NewReader("{}"))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"prompts/list"}`))
 		w := httptest.NewRecorder()
 
-		g.HandlePromptsList(w, req)
+		g.HandleMCP(w, req)
 
-		require.Equal(t, http.StatusInternalServerError, w.Code)
+		require.Equal(t, http.StatusOK, w.Code)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
 	})
 
 	t.Run("method not allowed", func(t *testing.T) {
 		t.Parallel()
 		g := newTestGatewayService(t)
 
-		req := httptest.NewRequest(http.MethodDelete, "/mcp/prompts/list", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/mcp", nil)
 		w := httptest.NewRecorder()
 
-		g.HandlePromptsList(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusMethodNotAllowed, w.Code)
 	})
@@ -1517,7 +1326,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	})
 }
 
-func TestGatewayService_HandleMCPRequest(t *testing.T) {
+func TestGatewayService_HandleA2ARequest(t *testing.T) {
 	t.Parallel()
 
 	t.Run("method not allowed", func(t *testing.T) {
@@ -1527,7 +1336,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/mcp/test", nil)
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1546,7 +1355,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1567,7 +1376,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"test/method","params":"%s"}`, largeBody)))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1587,7 +1396,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`invalid json`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1607,7 +1416,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"1.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1627,7 +1436,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1647,7 +1456,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"wrong/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1667,7 +1476,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, errors.New("handler error")
 		})
 
@@ -1687,7 +1496,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return map[string]string{"result": "success"}, nil
 		})
 

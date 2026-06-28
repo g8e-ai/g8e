@@ -494,7 +494,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 			return
 		}
 
-		user, err = c.userSvc.CreateBootstrapUser()
+		user, err = c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		if err != nil {
 			c.logger.Error("Failed to create bootstrap user for device enrollment", "error", err)
 			c.responder.Error(w, http.StatusInternalServerError, "failed to create user")

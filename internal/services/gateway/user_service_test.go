@@ -130,7 +130,7 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		logger := newNoopLogger()
 		userSvc := NewUserService(mockDB, logger)
 
-		user, err := userSvc.CreateBootstrapUser()
+		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, user)
@@ -145,11 +145,11 @@ func TestUserService_CreateBootstrapUser(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create first bootstrap user
-		_, err := userSvc.CreateBootstrapUser()
+		_, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 
 		// Try to create second bootstrap user
-		_, err = userSvc.CreateBootstrapUser()
+		_, err = userSvc.CreateBootstrapUserWithOSUser(nil)
 		assert.Error(t, err)
 		assert.Equal(t, constants.ErrAlreadyExists, err)
 	})
@@ -207,7 +207,7 @@ func TestUserService_FindBootstrapUser(t *testing.T) {
 		userSvc := NewUserService(mockDB, logger)
 
 		// Create bootstrap user
-		bootstrapUser, err := userSvc.CreateBootstrapUser()
+		bootstrapUser, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 
 		// Find bootstrap user
@@ -247,12 +247,12 @@ func TestUser_IsActive(t *testing.T) {
 		assert.False(t, user.IsActive())
 	})
 
-	t.Run("Empty status returns true (backward compatibility)", func(t *testing.T) {
+	t.Run("Empty status returns false", func(t *testing.T) {
 		t.Parallel()
 		user := &models.User{
 			Status: "",
 		}
-		assert.True(t, user.IsActive())
+		assert.False(t, user.IsActive())
 	})
 
 	t.Run("Nil user returns false", func(t *testing.T) {

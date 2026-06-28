@@ -596,7 +596,7 @@ func TestDBControllerHandleRevokeApp(t *testing.T) {
 	resp := response.NewWriter(logger)
 	adminController := newAdminController(cfg, logger, db, userSvc, resp)
 
-	bootstrapUser, err := userSvc.CreateBootstrapUser()
+	bootstrapUser, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
 	t.Cleanup(func() { db.DocStore.DocDelete("users", bootstrapUser.ID) })

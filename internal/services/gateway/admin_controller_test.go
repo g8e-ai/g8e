@@ -43,7 +43,7 @@ func TestAdminControllerHandleAppPolicySigner(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// Create a bootstrap user for testing
-	bootstrapUser, err := adminController.userSvc.CreateBootstrapUser()
+	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
 	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })
@@ -213,7 +213,7 @@ func TestAdminControllerHandleTribunals(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// Create a bootstrap user for testing
-	bootstrapUser, err := adminController.userSvc.CreateBootstrapUser()
+	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
 	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })
@@ -349,7 +349,7 @@ func TestAdminControllerHandleDeleteTribunal(t *testing.T) {
 	adminController := setupTestAdminController(t)
 
 	// Create a bootstrap user for testing
-	bootstrapUser, err := adminController.userSvc.CreateBootstrapUser()
+	bootstrapUser, err := adminController.userSvc.CreateBootstrapUserWithOSUser(nil)
 	require.NoError(t, err)
 	require.NotNil(t, bootstrapUser)
 	t.Cleanup(func() { adminController.db.DocStore.DocDelete("users", bootstrapUser.ID) })

@@ -92,7 +92,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		user, err := c.userSvc.CreateBootstrapUser()
+		user, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		require.NotNil(t, user)
 
@@ -123,7 +123,7 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 	t.Run("Failure - Rotation fails for disabled bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		user, _ := c.userSvc.CreateBootstrapUser()
+		user, _ := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		c.userSvc.Disable(user.ID, "retired", "actor", "op")
 
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
@@ -203,7 +203,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	t.Run("Success - CLI enrollment over loopback after bootstrap", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		require.NotNil(t, bootstrapUser)
 
@@ -237,7 +237,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	t.Run("Failure - Non-loopback request rejected", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		require.NotNil(t, bootstrapUser)
 
@@ -282,7 +282,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	t.Run("Failure - Rejected when bootstrap user disabled", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		c.userSvc.Disable(bootstrapUser.ID, "retired", "actor", "op")
 
@@ -306,7 +306,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	t.Run("Failure - Missing cli_csr_pem", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		require.NotNil(t, bootstrapUser)
 
@@ -328,7 +328,7 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	t.Run("Failure - Method not allowed", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		require.NotNil(t, bootstrapUser)
 
@@ -423,7 +423,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	t.Run("Failure - bootstrap user disabled", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		c.userSvc.Disable(bootstrapUser.ID, "test", "actor", "op")
 
@@ -528,7 +528,7 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	t.Run("Success - existing bootstrap user", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUser()
+		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 
 		body := map[string]string{

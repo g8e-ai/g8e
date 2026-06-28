@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-14
-Version: v1.2.4
+Last Updated: 2026-06-28
+Version: v1.3.1
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
@@ -121,7 +121,7 @@ The public HTTPS router registers the following route categories:
 
 **Public Routes (no authentication)**: Health, state, Swagger UI (`/swagger/`, `/swagger/index.html`, `/swagger/doc.json`), CA bundle and fingerprint discovery, CRL, blob store, console SPA (`/console/`), landing page, login/logout, bootstrap enrollment, CLI and device enrollment, PKI apps and devices enrollment.
 
-**MCP/A2A Routes**: Registered via `registerMCPRoutes` on the public mux. When JWKS is configured, MCP routes are wrapped with `JWTAuthMiddleware`; otherwise they rely on mTLS via the outer `auth.Middleware`. Registered paths include `/api/v1/mcp` (unified endpoint), `/api/v1/mcp/tools/list`, `/api/v1/mcp/tools/call`, `/api/v1/mcp/tools/call/sse`, `/api/v1/mcp/resources/list`, `/api/v1/mcp/resources/read`, `/api/v1/mcp/prompts/list`, `/api/v1/mcp/prompts/get`, and `/api/v1/a2a/call`.
+**MCP/A2A Routes**: Registered via `registerMCPRoutes` on the public mux. When JWKS is configured, MCP routes are wrapped with `JWTAuthMiddleware`; otherwise they rely on mTLS via the outer `auth.Middleware`. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
 
 **Passkey Console Routes (public, no auth)**: Browser-facing passkey registration and authentication under `/api/v1/auth/passkeys/console/*`. These routes use `passkeyHandlerConfig` with `sourceBrowserBootstrap`, `createWebSession`, and `setCookie` enabled. A CORS middleware wraps the passkey mux.
 
@@ -149,7 +149,7 @@ The g8e Gateway (g8eg) implements a unified MCP (Model Context Protocol) endpoin
 
 ### Unified Endpoint Contract
 
-The unified endpoint accepts POST requests containing JSON-RPC 2.0 messages and dispatches by the `method` field. The per-method REST routes remain for backward compatibility. The endpoint implements the MCP protocol handshake via the `initialize` method and negotiates protocol version with clients.
+The unified endpoint accepts POST requests containing JSON-RPC 2.0 messages and dispatches by the `method` field. The endpoint implements the MCP protocol handshake via the `initialize` method and negotiates protocol version with clients.
 
 ### Supported Methods
 

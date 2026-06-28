@@ -69,7 +69,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc := NewUserService(db, logger)
 
 		// Create a bootstrap user
-		user, err := userSvc.CreateBootstrapUser()
+		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
@@ -110,7 +110,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc := NewUserService(db, logger)
 
 		// Create and disable a user
-		user, err := userSvc.CreateBootstrapUser()
+		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
 		require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc.SetAuthService(mockAuthSvc)
 
 		// Create a bootstrap user
-		user, err := userSvc.CreateBootstrapUser()
+		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 
 		err = userSvc.Disable(user.ID, "test_reason", "actor_user_id", "operator_id")
@@ -167,7 +167,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		userSvc := NewUserService(db, logger)
 
 		// Create a bootstrap user
-		user, err := userSvc.CreateBootstrapUser()
+		user, err := userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
 
 		// Close DB to force GetByID error

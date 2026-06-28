@@ -70,7 +70,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 
 - Prefixes: `InternalPrefix` (`/api/v1`), `OperatorPrefix` (`/api`)
 - Client map: `chat` (`/api/v1/chat`), `health` (`/api/v1/health`), `sse_events` (`/api/v1/internal/sse/events`), `sse_stream` (`/api/v1/internal/sse/stream`)
-- MCP: `MCPEndpoint` (`/mcp`), `MCPToolsList`, `MCPToolsCall`, `MCPToolsCallSSE`, `MCPToolsPrefix`, `MCPResourcesList`, `MCPResourcesRead`, `MCPPromptsList`, `MCPPromptsGet`
+- MCP: `MCPEndpoint` (`/mcp`)
 - A2A: `A2ACall` (`/api/v1/a2a/call`), `A2APrefix` (`/api/v1/a2a/`)
 - Governance: `GovernanceEnvelopes`, `GovernanceSigners`, `GovernanceSignersByID`, `GovernanceSignersPrefix`
 - Operator: `Operators`, `OperatorsByID`, `OperatorsBind`, `OperatorsUnbind`, `OperatorsTarget`, `OperatorsReauth`
@@ -81,7 +81,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - PKI: `PKICSRSign`, `PKIDevicesEnroll`, `PKIAppsEnroll`, `PKIAppsDelegated`, `PKICertificatesRevoke`, `PKIRevocationBundle`, `PKICRL`, `PKICABundle`, `PKIFingerprint`
 - Audit: `AuditReceipts`, `AuditReceiptsExport`, `AuditEvents`, `AuditSummary`, `AuditReport`
 - User: `Users`, `UsersMe`
-- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIEnroll`, `AuthDeviceEnroll`, `AuthPasskeysRegisterChallenge`, `AuthPasskeysRegisterVerify`, `AuthPasskeysAuthenticateChallenge`, `AuthPasskeysAuthenticateVerify`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIRegisterChallenge`, `AuthPasskeysCLIRegisterVerify`, `AuthPasskeysCLIAuthenticateChallenge`, `AuthPasskeysCLIAuthenticateVerify`, `AuthSessionsMe`
+- Auth: `AuthLogout`, `AuthBootstrap`, `AuthBootstrapStatus`, `AuthCLIEnroll`, `AuthDeviceEnroll`, `AuthPasskeys`, `AuthPasskeysByID`, `AuthPasskeysJITRegisterChallenge`, `AuthPasskeysJITRegisterVerify`, `AuthPasskeysJITPrefix`, `AuthPasskeysPrefix`, `AuthPasskeysCLIStatus`, `AuthPasskeysConsoleRegisterChallenge`, `AuthPasskeysConsoleRegisterVerify`, `AuthPasskeysConsoleAuthenticateChallenge`, `AuthPasskeysConsoleAuthenticateVerify`, `AuthPasskeysConsolePrefix`, `AuthSessionsMe`
 - Approval: `Approvals`, `ApprovalsByID`, `ApprovalsPrefix`, `ApprovePage`, `ApprovePagePrefix`
 - Admin: `AdminAppPoliciesBySigner`, `AdminAppsRevoke`, `AdminAppPoliciesPrefix`, `AdminTribunals`, `AdminTribunalsByID`, `AdminTribunalsPrefix`
 - Tribunal: `TribunalDeliberate` (`/tribunal/v1/deliberate`)
