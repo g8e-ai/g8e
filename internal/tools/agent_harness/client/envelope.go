@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -40,10 +41,11 @@ const (
 // signature from the registered consensus key over "<hash>|<decision>", plus
 // one AgentID per voter — exactly what L4Warden.verifyL2Signature checks.
 type Ensemble struct {
-	KeyID  string
-	priv   ed25519.PrivateKey
-	pub    ed25519.PublicKey
-	agents []string
+	KeyID      string
+	TribunalID string
+	priv       ed25519.PrivateKey
+	pub        ed25519.PublicKey
+	agents     []string
 }
 
 // NewEnsemble mints a fresh consensus key and n agent identities.
@@ -56,11 +58,35 @@ func NewEnsemble(keyID string, n int) (*Ensemble, error) {
 	for i := range agents {
 		agents[i] = fmt.Sprintf("%s-agent-%d", keyID, i+1)
 	}
-	return &Ensemble{KeyID: keyID, priv: priv, pub: pub, agents: agents}, nil
+	return &Ensemble{KeyID: keyID, TribunalID: "test-tribunal", priv: priv, pub: pub, agents: agents}, nil
+}
+
+// NewEnsembleFromSeed constructs an Ensemble from a hex-encoded Ed25519 seed.
+// This enables deterministic key generation for demo tribunal bootstrap: the
+// gateway seeds the trusted signer from the same seed file, and the harness
+// reconstructs the same private key to sign L2 votes that verify against it.
+func NewEnsembleFromSeed(keyID string, n int, seedHex string) (*Ensemble, error) {
+	seed, err := hex.DecodeString(strings.TrimSpace(seedHex))
+	if err != nil {
+		return nil, fmt.Errorf("ensemble from seed: decode hex: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return nil, fmt.Errorf("ensemble from seed: invalid seed length %d, expected %d", len(seed), ed25519.SeedSize)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	pub := priv.Public().(ed25519.PublicKey)
+	agents := make([]string, n)
+	for i := range agents {
+		agents[i] = fmt.Sprintf("%s-agent-%d", keyID, i+1)
+	}
+	return &Ensemble{KeyID: keyID, TribunalID: "test-tribunal", priv: priv, pub: pub, agents: agents}, nil
 }
 
 // PubHex is the consensus public key for trusted-signer registration.
 func (e *Ensemble) PubHex() string { return hex.EncodeToString(e.pub) }
+
+// SeedHex returns the hex-encoded Ed25519 seed for persistence (demo bootstrap).
+func (e *Ensemble) SeedHex() string { return hex.EncodeToString(e.priv.Seed()) }
 
 // AgentCount is the number of mock voters in the ensemble.
 func (e *Ensemble) AgentCount() int { return len(e.agents) }
@@ -71,7 +97,7 @@ func (e *Ensemble) Vote(txHash string, decision bool) *commonv1.L2Metadata {
 	basis := fmt.Sprintf("%s|%v", txHash, decision) // matches l2_consensus.SignDecision
 	sig := ed25519.Sign(e.priv, []byte(basis))
 	return &commonv1.L2Metadata{
-		TribunalId: "test-tribunal",
+		TribunalId: e.TribunalID,
 		Votes: []*commonv1.L2Vote{
 			{
 				SignerKeyId:        e.KeyID,

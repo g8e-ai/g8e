@@ -62,17 +62,23 @@ func TestDHSScenarioTitles(t *testing.T) {
 func TestDHSScenarioPostures(t *testing.T) {
 	scenarios := dhsScenarios()
 
+	expectedPostures := map[string]Posture{
+		"dhs-ingest":         Doctrine,
+		"dhs-release":        Notary,
+		"dhs-cue":            Consensus,
+		"dhs-cue-veto":       Consensus,
+		"dhs-evidence-block": Doctrine,
+		"dhs-purge":          Doctrine,
+	}
+
 	for _, sc := range scenarios {
-		if sc.RequiresPosture != Notary && sc.RequiresPosture != Consensus {
-			t.Errorf("dhs scenario %q has unexpected posture %q", sc.Name, sc.RequiresPosture)
+		expected, ok := expectedPostures[sc.Name]
+		if !ok {
+			t.Errorf("No expected posture for scenario %q", sc.Name)
+			continue
 		}
-		// dhs-cue-veto requires Consensus (it tests L2 veto without L3)
-		if sc.Name == "dhs-cue-veto" && sc.RequiresPosture != Consensus {
-			t.Errorf("dhs-cue-veto should require Consensus posture, got %q", sc.RequiresPosture)
-		}
-		// All others require Notary
-		if sc.Name != "dhs-cue-veto" && sc.RequiresPosture != Notary {
-			t.Errorf("dhs scenario %q should require Notary posture, got %q", sc.Name, sc.RequiresPosture)
+		if sc.RequiresPosture != expected {
+			t.Errorf("Scenario %q should require %s posture, got %q", sc.Name, expected, sc.RequiresPosture)
 		}
 	}
 }

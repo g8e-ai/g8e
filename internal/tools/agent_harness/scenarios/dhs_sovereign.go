@@ -63,7 +63,7 @@ func dataopArgs(op, recordID, detail string) string {
 func dhsScenarios() []Scenario {
 	return []Scenario{
 		{
-			Name: "dhs-ingest", Title: "DHS: governed multi-source ingest into the sovereign data plane", Persona: dhsConnector, RequiresPosture: Notary,
+			Name: "dhs-ingest", Title: "DHS: governed multi-source ingest into the sovereign data plane", Persona: dhsConnector, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
 					return errors.New("gov kit not initialized (need ensemble + principal)")
@@ -146,7 +146,7 @@ func dhsScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "dhs-cue", Title: "DHS: authorized interdiction cue admitted under L2 consensus quorum", Persona: dhsConnector, RequiresPosture: Notary,
+			Name: "dhs-cue", Title: "DHS: authorized interdiction cue admitted under L2 consensus quorum", Persona: dhsConnector, RequiresPosture: Consensus,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
 					return errors.New("gov kit not initialized (need ensemble + principal)")
@@ -220,7 +220,7 @@ func dhsScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "dhs-evidence-block", Title: "DHS: attempt to wipe the audit trail is rejected by L1 doctrine", Persona: dhsConnector, RequiresPosture: Notary,
+			Name: "dhs-evidence-block", Title: "DHS: attempt to wipe the audit trail is rejected by L1 doctrine", Persona: dhsConnector, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
 					return errors.New("gov kit not initialized (need ensemble + principal)")
@@ -259,7 +259,7 @@ func dhsScenarios() []Scenario {
 			},
 		},
 		{
-			Name: "dhs-purge", Title: "DHS: governed retention destruction with cryptographic receipt", Persona: dhsConnector, RequiresPosture: Notary,
+			Name: "dhs-purge", Title: "DHS: governed retention destruction with cryptographic receipt", Persona: dhsConnector, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if kit == nil || kit.Ensemble == nil || kit.Principal == nil {
 					return errors.New("gov kit not initialized (need ensemble + principal)")

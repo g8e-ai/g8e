@@ -6,6 +6,12 @@ name: dhs-demo
 # cross-domain release control, governs the predictive-analytics agent, and
 # executes cryptographically receipted retention/destruction.
 #
+# Phase 2 — Consensus posture: L1 doctrine + L2 BFT consensus enforced.
+# The gateway boots with --posture consensus --tribunal-id dhs-tribunal
+# --tribunal-bootstrap /etc/g8e/tribunal-bootstrap.json, which seeds a
+# TribunalPolicy and trusted signer from a deterministic Ed25519 seed shared
+# with the agent-harness. L3 notary is deferred (Phase 3).
+#
 # Teaming model: the "fusion-cop" service represents a partner company's data
 # product (the COP / fusion engine). g8e provides everything that data product
 # cannot: sovereign control, U.S.-person minimization, and provable auditability.
@@ -68,6 +74,7 @@ services:
       - gateway_state:/root/.g8e
       - ./doctrine:/etc/g8e/doctrine:ro
       - ./dataop.sh:/usr/local/bin/dataop:ro
+      - ./config/tribunal-bootstrap.json:/etc/g8e/tribunal-bootstrap.json:ro
     ports:
       - "8087:8080"
       - "8450:8443"
@@ -78,7 +85,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f", "--posture", "notary"]
+    command: ["gw", "start", "-f", "--posture", "consensus", "--tribunal-id", "dhs-tribunal", "--tribunal-bootstrap", "/etc/g8e/tribunal-bootstrap.json"]
 
   operator:
     build:
@@ -126,6 +133,7 @@ services:
     volumes:
       - operator_state:/root/.g8e:ro
       - ./target-data:/var/g8e/target:ro
+      - ./config/ensemble-seed.hex:/etc/g8e/ensemble-seed.hex:ro
     depends_on:
       gateway:
         condition: service_healthy

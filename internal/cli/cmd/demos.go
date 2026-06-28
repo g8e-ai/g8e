@@ -714,8 +714,27 @@ func runAllScenarios(org, demoDir string) error {
 
 	printResultsTable(org, results)
 
-	fmt.Printf("\n%s\n  All %s scenarios passed.\n%s\n",
-		strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	hasFail, hasSkip := false, false
+	for _, r := range results {
+		switch r.status {
+		case "FAIL":
+			hasFail = true
+		case "SKIP":
+			hasSkip = true
+		}
+	}
+
+	switch {
+	case hasFail:
+		fmt.Printf("\n%s\n  One or more %s scenarios FAILED.\n%s\n",
+			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	case hasSkip:
+		fmt.Printf("\n%s\n  All active %s scenarios passed (some skipped — see table).\n%s\n",
+			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	default:
+		fmt.Printf("\n%s\n  All %s scenarios passed.\n%s\n",
+			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	}
 	return nil
 }
 

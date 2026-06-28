@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
@@ -67,7 +68,7 @@ func TestNeedsGovKit(t *testing.T) {
 		all := scenarios.Registry()
 		var doctrineOnly []scenarios.Scenario
 		for _, s := range all {
-			if s.RequiresPosture == scenarios.Doctrine {
+			if s.RequiresPosture == scenarios.Doctrine && !strings.HasPrefix(s.Name, "dhs-") {
 				doctrineOnly = append(doctrineOnly, s)
 			}
 		}

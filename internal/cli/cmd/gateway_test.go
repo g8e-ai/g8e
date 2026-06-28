@@ -301,6 +301,7 @@ func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
 		CertIdentityMode:   "full",
 		TribunalID:         "trib-1",
 		TribunalURL:        "https://localhost:8443/tribunal/v1/deliberate",
+		TribunalBootstrap:  "/etc/g8e/tribunal-bootstrap.json",
 		MCPDownstreamURL:   "https://downstream.example.com/mcp",
 		A2ADownstreamURL:   "https://downstream.example.com/a2a",
 		IdentityData:       []byte(`{"hostnames":["localhost"]}`),

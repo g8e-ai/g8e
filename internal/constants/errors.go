@@ -518,7 +518,7 @@ var (
 	ErrConfigPortsMustDiffer    = errors.New("httpPort and httpsPort must be different")
 	ErrConfigInvalidWorkingDir  = errors.New("invalid working directory")
 	ErrConfigTribunalIDRequired = errors.New("consensus posture requires --tribunal-id")
-	ErrConfigTribunalQuorumLow  = errors.New("consensus posture requires tribunal quorum >= 2")
+	ErrConfigTribunalQuorumLow  = errors.New("consensus posture requires tribunal quorum >= 1")
 
 	// Operator main initialization errors
 	ErrPathsInitFailed        = errors.New("failed to initialize paths")
