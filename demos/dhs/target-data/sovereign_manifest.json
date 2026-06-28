@@ -1,0 +1,44 @@
+{
+  "manifest_id": "DHS-SOVEREIGN-2026-001",
+  "title": "Persistent Sovereign Capability — Governed Data Plane",
+  "classification": "CUI",
+  "operating_area": "Western Hemisphere maritime approaches",
+  "authority": "DHS operational component with interagency partners (DoW, IC) and partner nations",
+  "registered_sources": [
+    {"id": "DHS_CBP_AMOC", "network": "NIPR", "max_classification": "CUI//LES"},
+    {"id": "DOW_ISR_EOIR", "network": "SIPR", "max_classification": "SECRET//NOFORN"},
+    {"id": "IC_SIGINT", "network": "SIPR", "max_classification": "SECRET//NOFORN//ORCON"},
+    {"id": "PARTNER_NATION_MPA", "network": "PARTNER_NATION", "max_classification": "REL TO USA, COALITION"},
+    {"id": "DHS_HSI", "network": "NIPR", "max_classification": "CUI//SP-PRVCY"}
+  ],
+  "registered_destinations": [
+    {"id": "MISSION_PARTNER_COP", "network": "MISSION_PARTNER", "accepts": ["REL_COALITION"], "rejects": ["NOFORN", "ORCON", "USPER"]},
+    {"id": "SOVEREIGN_VAULT", "network": "US_ONLY", "accepts": ["*"]}
+  ],
+  "release_authorities": {
+    "REL_COALITION": "auto-release after caveat check",
+    "NOFORN": "U.S.-only; never released to partner-nation networks",
+    "ORCON": "release requires originator approval token",
+    "USPER": "U.S.-person data; minimization required, never released, on-host rehydration only"
+  },
+  "retention_policy": {
+    "usperson_non_pertinent_days": 30,
+    "operational_track_days": 180,
+    "destruction": "cryptographically receipted purge written to the hash-chained ledger",
+    "note": "Privacy Act / civil-liberties retention limits enforced by governed destruction with proof, not ad-hoc deletion."
+  },
+  "governance": {
+    "required_posture": "notary",
+    "ingest_receipt_required": true,
+    "release_receipt_required": true,
+    "destruction_receipt_required": true,
+    "manifest_signed_by": null,
+    "note": "manifest_signed_by is null until the sovereign-data authority runs: ./g8e manifest sign"
+  },
+  "metadata": {
+    "org": "dhs",
+    "compliance_standard": "NIST 800-53 / Privacy Act / DHS CRCL data-handling",
+    "created": "2026-06-28",
+    "audit_status": "PENDING_AUTHORIZATION"
+  }
+}

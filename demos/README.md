@@ -43,6 +43,12 @@ demos/
 │   ├── gimbal.py               # Mock gimbal HTTP server (records slew commands)
 │   ├── slew.sh                 # Demo artifact: wraps gimbal HTTP call for run_shell_command
 │   └── README.md               # DoW-specific documentation
+├── dhs/                        # DHS persistent sovereign capability demo
+│   ├── compose.yml
+│   ├── config/
+│   ├── doctrine/               # Sovereign data-handling L1 rules (USPER PII, cross-domain release, destruction)
+│   ├── target-data/            # Mock multi-source coalition feeds + sovereign manifest
+│   └── README.md               # DHS-specific documentation and LOE mapping
 └── swarm/                      # Drone swarm battlefield demo
     ├── compose.yml
     ├── config/
@@ -77,20 +83,20 @@ Each org deploys five isolated networks:
 
 * Operator appears on net_internal only for its outbound mTLS tunnel to the Gateway. It accepts no inbound connections from net_internal.
 
-The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal. The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, an EW adversary on net_untrusted, and a mock gimbal controller on net_secure, with SWaP resource limits on all g8e containers. The `agent-sigint` container is a real g8e binary that submits genuine GovernanceEnvelopes; `agent-eoir` and `agent-pnt-fusion` still use `dow_simulator.py` for display-only narration.
+The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal. The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, an EW adversary on net_untrusted, and a mock gimbal controller on net_secure, with SWaP resource limits on all g8e containers. The `agent-sigint` container is a real g8e binary that submits genuine GovernanceEnvelopes; `agent-eoir` and `agent-pnt-fusion` still use `dow_simulator.py` for display-only narration. The `dhs` demo deploys a real `agent-coalition` container (running `agent-harness` scenarios) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter — modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s; the display connectors are Alpine echo loops for narrative only.
 
 ## Org Differentiation
 
 Each org demonstrates different compliance requirements and use cases:
 
-| Dimension | Gov | Healthcare | Finance | Secure-Data | DoW | Swarm |
-|---|---|---|---|---|---|---|
-| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | GPS spoofing, cross-cue, EW, weapons control, PNT BFT | Weapons control, safety, navigation, command integrity |
-| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | RF environment, PNT sources (incl. spoofed), payload manifest | Battlefield intelligence and drone fleet manifest |
-| Gateway posture | notary | consensus | notary | notary | consensus | consensus |
-| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Tactical sensor agent (SIGINT, EO/IR, PNT fusion) | Autonomous drone operator (recon, attack, support, relay) |
-| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Gimbal/flight controller actuator | Drone fleet with telemetry simulation |
-| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | SIGINT cross-cue + BFT spoofing defense + disconnected ops | Adversary interception and safety violation detection |
+| Dimension | Gov | Healthcare | Finance | Secure-Data | DoW | Swarm | DHS |
+|---|---|---|---|---|---|---|---|
+| Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | GPS spoofing, cross-cue, EW, weapons control, PNT BFT | Weapons control, safety, navigation, command integrity | USPER PII minimization, cross-domain release, sovereign destruction |
+| Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | RF environment, PNT sources (incl. spoofed), payload manifest | Battlefield intelligence and drone fleet manifest | Mock multi-source coalition feeds + sovereign manifest |
+| Gateway posture | notary | consensus | notary | notary | consensus | consensus | notary |
+| Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Tactical sensor agent (SIGINT, EO/IR, PNT fusion) | Autonomous drone operator (recon, attack, support, relay) | Coalition source connectors + predictive-analytics agent |
+| Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Gimbal/flight controller actuator | Drone fleet with telemetry simulation | Sovereign data vault + partner fusion COP |
+| Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | SIGINT cross-cue + BFT spoofing defense + disconnected ops | Adversary interception and safety violation detection | Sovereign coalition data plane: govern ingest, release, use, destruction |
 
 ## Quick Start
 
@@ -173,6 +179,13 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run secure-data 2` - Connector Bypass Attempt Blocked
 - `g8e demos run secure-data 3` - Cross-Tenant Leak Doctrine Triggered
 
+**DHS Persistent Sovereign Capability Demo Scenarios:**
+- `g8e demos run dhs 1` - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
+- `g8e demos run dhs 2` - Cross-Domain Release requires Notary authority (LOE 1 & 2)
+- `g8e demos run dhs 3` - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
+- `g8e demos run dhs 4` - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
+- `g8e demos run dhs 5` - Sovereign Destruction + tamper-proof audit (LOE 2)
+
 The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
 
 Note: The `g8e demos run` command automatically starts the demo environment if it is not already running.
@@ -249,6 +262,7 @@ Each org uses different host ports to allow simultaneous deployment:
 | secure-data (dst) | 8084 | 8447 | |
 | dow | 8086 | 8449 | |
 | swarm | 8085 | 8448 | Command Interface: 5005 |
+| dhs | 8087 | 8450 | |
 
 ## PKI and Enrollment
 

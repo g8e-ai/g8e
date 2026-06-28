@@ -796,10 +796,10 @@ func TestRegistryScenarioOrder(t *testing.T) {
 		t.Errorf("First scenario should be MCP, got %q", scenarios[0].Name)
 	}
 
-	// Last scenario should be a governance or dow scenario
+	// Last scenario should be a governance, dow, or dhs scenario
 	lastName := scenarios[len(scenarios)-1].Name
-	if !contains(lastName, "consensus") && !contains(lastName, "envelope") && !contains(lastName, "notary") && !contains(lastName, "tribunal") && !contains(lastName, "delegation") && !contains(lastName, "dow") {
-		t.Errorf("Last scenario should be governance or dow, got %q", lastName)
+	if !contains(lastName, "consensus") && !contains(lastName, "envelope") && !contains(lastName, "notary") && !contains(lastName, "tribunal") && !contains(lastName, "delegation") && !contains(lastName, "dow") && !contains(lastName, "dhs") {
+		t.Errorf("Last scenario should be governance, dow, or dhs, got %q", lastName)
 	}
 }
 
@@ -817,7 +817,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := 16 // 5 MCP + 3 A2A + 6 governance + 2 dow
+	expectedCount := 22 // 5 MCP + 3 A2A + 6 governance + 2 dow + 6 dhs
 
 	if len(scenarios) != expectedCount {
 		t.Errorf("Registry should have %d scenarios, got %d", expectedCount, len(scenarios))

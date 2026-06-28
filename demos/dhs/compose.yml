@@ -1,0 +1,257 @@
+name: dhs-demo
+
+# DHS Persistent Sovereign Capability — governed data plane for a coalition
+# common operating picture. g8e is the governance/sovereignty/audit layer that
+# sits underneath a partner prime's data-fusion COP: it gates ingest, enforces
+# cross-domain release control, governs the predictive-analytics agent, and
+# executes cryptographically receipted retention/destruction.
+#
+# Teaming model: the "fusion-cop" service represents a partner company's data
+# product (the COP / fusion engine). g8e provides everything that data product
+# cannot: sovereign control, U.S.-person minimization, and provable auditability.
+#
+# Real vs display:
+#   REAL g8e (built from root Dockerfile): gateway, operator, agent-coalition
+#   REAL actuator: datasvc (Python HTTP server, the L5 target)
+#   DISPLAY (alpine echo loops, narrative only): connector-*, fusion-cop,
+#     coalition-datalink, analyst-partner, bad-actor, observability
+
+networks:
+  net_untrusted:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.60.0.0/24
+  net_perimeter:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.61.0.0/24
+  net_internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.62.0.0/24
+  net_secure:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.63.0.0/24
+  net_mgmt:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.64.0.0/24
+
+volumes:
+  gateway_state:
+  operator_state:
+  vault_data:
+
+services:
+
+  # ── Governance plane ────────────────────────────────────────────────────────
+
+  gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: dhs-gateway
+    networks:
+      net_perimeter:
+        ipv4_address: 10.61.0.10
+      net_internal:
+        ipv4_address: 10.62.0.10
+      net_secure:
+        ipv4_address: 10.63.0.10
+    volumes:
+      - gateway_state:/root/.g8e
+      - ./doctrine:/etc/g8e/doctrine:ro
+      - ./dataop.sh:/usr/local/bin/dataop:ro
+    ports:
+      - "8087:8080"
+      - "8450:8443"
+    working_dir: /root
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["gw", "start", "-f", "--posture", "notary"]
+
+  operator:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: dhs-operator
+    networks:
+      net_internal:
+        ipv4_address: 10.62.0.20
+      net_secure:
+        ipv4_address: 10.63.0.20
+    extra_hosts:
+      - "g8e.local:10.62.0.10"
+    volumes:
+      - operator_state:/root/.g8e
+      - ./dataop.sh:/usr/local/bin/dataop:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    working_dir: /root
+    healthcheck:
+      test: ["CMD", "test", "-f", "/root/.g8e/pki/operator.crt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: ["operator", "run", "-e", "10.62.0.10", "--execution-vault"]
+
+  # ── Real g8e agent (runs agent-harness scenarios via docker compose run) ───
+  # One real agent container — personas are set inside the scenario code, not
+  # by the container. Mirrors the dow agent-sigint pattern: shares the
+  # operator's enrolled mTLS creds via operator_state:ro.
+
+  agent-coalition:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: dhs-agent-coalition
+    networks:
+      net_internal:
+        ipv4_address: 10.62.0.31
+    extra_hosts:
+      - "g8e.local:10.62.0.10"
+    volumes:
+      - operator_state:/root/.g8e:ro
+      - ./target-data:/var/g8e/target:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+      operator:
+        condition: service_healthy
+    working_dir: /root
+    command: ["sh", "-c", "sleep infinity"]
+
+  # ── Display-only source connectors (narrative, no real g8e identity) ────────
+
+  connector-dhs:
+    image: alpine:latest
+    container_name: dhs-connector-dhs
+    networks:
+      net_internal:
+        ipv4_address: 10.62.0.30
+    depends_on:
+      operator:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do echo '[DHS-CBP] NIPR feed active.'; sleep 30; done"]
+
+  connector-mil:
+    image: alpine:latest
+    container_name: dhs-connector-mil
+    networks:
+      net_internal:
+        ipv4_address: 10.62.0.32
+    depends_on:
+      operator:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do echo '[MIL-ISR] SIPR feed active.'; sleep 30; done"]
+
+  connector-ic:
+    image: alpine:latest
+    container_name: dhs-connector-ic
+    networks:
+      net_internal:
+        ipv4_address: 10.62.0.33
+    depends_on:
+      operator:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do echo '[IC-SIGINT] SIPR feed active.'; sleep 30; done"]
+
+  connector-partner:
+    image: alpine:latest
+    container_name: dhs-connector-partner
+    networks:
+      net_untrusted:
+        ipv4_address: 10.60.0.30
+    command: ["sh", "-c", "while true; do echo '[PARTNER-NATION] Maritime patrol feed active.'; sleep 30; done"]
+
+  # ── Sovereign Data Service (the L5 actuator — real, Python HTTP server) ──────
+  # The operator drives this via the `dataop` wrapper after an envelope clears
+  # governance. Records governed ops to /var/vault/operations.jsonl.
+
+  datasvc:
+    image: python:3.11-slim
+    container_name: dhs-datasvc
+    networks:
+      net_secure:
+        ipv4_address: 10.63.0.50
+    volumes:
+      - vault_data:/var/vault
+      - ./datasvc.py:/app/datasvc.py:ro
+      - ./verify_ops.py:/app/verify_ops.py:ro
+    working_dir: /app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9100/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    command: ["python", "datasvc.py"]
+
+  # ── Mission Partner shared environment (partner prime's COP product) ─────────
+  # fusion-cop represents the teaming partner's data-fusion / COP product on the
+  # coalition-shared network. Only caveat-cleared, minimized records reach it.
+
+  fusion-cop:
+    image: alpine:latest
+    container_name: dhs-fusion-cop
+    networks:
+      net_perimeter:
+        ipv4_address: 10.61.0.40
+    command: ["sh", "-c", "while true; do echo '[FUSION-COP] Coalition common operating picture online. Awaiting governed, caveat-cleared records...'; sleep 30; done"]
+
+  # coalition-datalink is the link to the Mission Partner environment. Scenario 3
+  # severs it to prove continuity of coverage under comms-denied conditions.
+  coalition-datalink:
+    image: alpine:latest
+    container_name: dhs-coalition-datalink
+    networks:
+      net_perimeter:
+        ipv4_address: 10.61.0.30
+    depends_on:
+      gateway:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do echo '[COALITION-DATALINK] Mission Partner datalink active.'; sleep 30; done"]
+
+  # ── Partner-nation analyst: requests release across the sovereignty boundary ─
+
+  analyst-partner:
+    image: alpine:latest
+    container_name: dhs-analyst-partner
+    networks:
+      net_untrusted:
+        ipv4_address: 10.60.0.40
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  # ── Bad actor: isolated on untrusted network, no path to vault or gateway ────
+
+  bad-actor:
+    image: alpine:latest
+    container_name: dhs-bad-actor
+    networks:
+      net_untrusted:
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+
+  # ── Observability: out-of-band audit tail ───────────────────────────────────
+
+  observability:
+    image: alpine:latest
+    container_name: dhs-observability
+    networks:
+      net_mgmt:
+    volumes:
+      - gateway_state:/data/gateway:ro
+      - operator_state:/data/operator:ro
+    command: ["sh", "-c", "until [ -f /data/gateway/logs/operator.log ]; do sleep 2; done; tail -f /data/gateway/logs/operator.log"]

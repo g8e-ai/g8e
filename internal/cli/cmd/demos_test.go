@@ -227,10 +227,11 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 1, scenarioCounts["finance"])
 		assert.Equal(t, 3, scenarioCounts["secure-data"])
 		assert.Equal(t, 3, scenarioCounts["dow"])
+		assert.Equal(t, 5, scenarioCounts["dhs"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow"}
+		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -335,6 +336,24 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8449")
 	})
 
+	t.Run("prints dhs endpoints", func(t *testing.T) {
+		var buf bytes.Buffer
+		originalStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		printDemoEndpoints("dhs")
+
+		w.Close()
+		os.Stdout = originalStdout
+		buf.ReadFrom(r)
+
+		output := buf.String()
+		assert.Contains(t, output, "Available endpoints:")
+		assert.Contains(t, output, "http://localhost:8087")
+		assert.Contains(t, output, "https://localhost:8450")
+	})
+
 	t.Run("prints default message for unknown org", func(t *testing.T) {
 		var buf bytes.Buffer
 		originalStdout := os.Stdout
@@ -395,6 +414,13 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1-3")
 	})
 
+	t.Run("returns error for invalid dhs scenario", func(t *testing.T) {
+		err := runDHSScenario("/tmp", "99")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
+		assert.Contains(t, err.Error(), "valid: 1-5")
+	})
+
 	t.Run("healthcare scenario functions exist", func(t *testing.T) {
 		// Verify the scenario function exists and doesn't panic on valid input
 		// We don't execute it since it requires Docker
@@ -415,6 +441,10 @@ func TestRunScenario(t *testing.T) {
 
 	t.Run("dow scenario functions exist", func(t *testing.T) {
 		assert.NotNil(t, runDoWScenario)
+	})
+
+	t.Run("dhs scenario functions exist", func(t *testing.T) {
+		assert.NotNil(t, runDHSScenario)
 	})
 }
 
@@ -558,5 +588,17 @@ func TestDoWScenarioDescriptions(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Autonomous SIGINT-to-EO/IR Cross-Cueing")
 		assert.Contains(t, cmd.Long, "BFT Spoofing Defense")
 		assert.Contains(t, cmd.Long, "Disconnected Operations")
+	})
+}
+
+func TestDHSScenarioDescriptions(t *testing.T) {
+	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
+		cmd := demosRunCmd()
+		assert.Contains(t, cmd.Long, "dhs: 1-5")
+		assert.Contains(t, cmd.Long, "Sovereign Multi-Source Ingest (chain-of-custody)")
+		assert.Contains(t, cmd.Long, "Cross-Domain Release requires Notary authority")
+		assert.Contains(t, cmd.Long, "Resilient Disconnected Operations")
+		assert.Contains(t, cmd.Long, "Governed Predictive Cueing")
+		assert.Contains(t, cmd.Long, "Sovereign Destruction + tamper-proof audit")
 	})
 }
