@@ -20,7 +20,7 @@ the system libc.
 At minimum, install the tools for the component you are touching:
 
 - Go 1.26.4 or later for the g8e Operator and protocol work.
-- Python 3.14 or later for protocol generation and demo scripts.
+- Python 3.10 or later for protocol generation and demo scripts.
 
 ## `make` targets fail with missing `curl`
 
@@ -74,8 +74,9 @@ make proto-python
 
 ## `./g8e gw start` does not become healthy
 
-The `gw start` command builds and launches the g8e Gateway, then waits for the
-health endpoint. Start with the status command and the log:
+The `gw start` command launches the g8e Gateway as a background process via
+`gateway serve`, then waits for the process to become healthy. Start with the
+status command and the log:
 
 ```bash
 ./g8e gw status
@@ -88,7 +89,12 @@ Common causes:
 - The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.4).
 - Runtime PKI or secrets were created by an older incompatible checkout.
 
-Stop the managed process before retrying:
+Stop the managed process before retrying. Use `gw restart` as a shortcut, or
+stop and start manually:
+
+```bash
+./g8e gw restart
+```
 
 ```bash
 ./g8e gw stop
@@ -164,5 +170,5 @@ make build
 ```
 
 The `make build` target compiles `cmd/operator` and copies the resulting
-binary to the repository root as `g8e`. On Windows, use `build.ps1` instead
-of `make`.
+binary to the repository root as `g8e`. The target handles Windows builds
+natively, producing `g8e.exe` when run on Windows.

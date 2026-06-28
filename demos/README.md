@@ -42,12 +42,18 @@ demos/
 │   ├── dow_simulator.py        # Display-only sensor narration (EO/IR, PNT fusion)
 │   ├── gimbal.py               # Mock gimbal HTTP server (records slew commands)
 │   ├── slew.sh                 # Demo artifact: wraps gimbal HTTP call for run_shell_command
+│   ├── inspect_rf.py           # RF environment inspection helper for sensor agents
+│   ├── inspect_pnt.py          # PNT source inspection helper for sensor agents
+│   ├── verify_slews.py         # Verifies gimbal slew commands were recorded
 │   └── README.md               # DoW-specific documentation
 ├── dhs/                        # DHS persistent sovereign capability demo
 │   ├── compose.yml
-│   ├── config/
+│   ├── config/                 # Gateway/operator config, tribunal-bootstrap.json, ensemble-seed.hex
 │   ├── doctrine/               # Sovereign data-handling L1 rules (USPER PII, cross-domain release, destruction)
 │   ├── target-data/            # Mock multi-source coalition feeds + sovereign manifest
+│   ├── dataop.sh               # Wrapper script bridging operator execution to datasvc
+│   ├── datasvc.py              # Sovereign Data Service (L5 actuator, Python HTTP server)
+│   ├── verify_ops.py           # Verifies datasvc recorded governed operations
 │   └── README.md               # DHS-specific documentation and LOE mapping
 └── swarm/                      # Drone swarm battlefield demo
     ├── compose.yml
@@ -65,8 +71,10 @@ Each org deploys five isolated networks:
 - **net_untrusted**: External/internet simulation. Bad actor services live here.
 - **net_perimeter**: DMZ equivalent. Gateway public surface and demo UI.
 - **net_internal**: Trusted application tier. AI agents, LLM backend, workflow orchestrators.
-- **net_secure**: Privileged tier. Operator and target system only. No direct route from net_internal. In the `secure-data` demo, this is split into **net_src_internal**, **net_dst_internal**, and **net_migration**.
+- **net_secure**: Privileged tier. Operator and target system. No direct route from net_internal. In the `dow` and `dhs` demos, the Gateway is also attached to net_secure so it can reach the actuator boundary.
 - **net_mgmt**: Out-of-band observability. Log aggregator and audit tail viewer.
+
+The `secure-data` demo replaces the standard five-network topology with a two-domain layout: **net_src_internal** (source gateway, operator, connectors, source storage), **net_dst_internal** (destination gateway, operator, destination storage), **net_migration** (transfer bridge between source and destination operators), **net_untrusted** (bad actor), and **net_mgmt** (observability).
 
 ## Service Placement
 
@@ -74,16 +82,22 @@ Each org deploys five isolated networks:
 |---|:---:|:---:|:---:|:---:|:---:|
 | External requestor / bad actor sim | ✓ | | | | |
 | Demo UI / Notary approval UI | | ✓ | | | |
-| Gateway | | ✓ | ✓ | | |
+| Gateway | | ✓ | ✓ | ✓† | |
 | AI agent runtime | | | ✓ | | |
 | LLM backend | | | ✓ | | |
 | Operator | | | ✓* | ✓ | |
 | Target system | | | | ✓ | |
 | Observability stack | | | | | ✓ |
 
-* Operator appears on net_internal only for its outbound mTLS tunnel to the Gateway. It accepts no inbound connections from net_internal.
+\* Operator appears on net_internal only for its outbound mTLS tunnel to the Gateway. It accepts no inbound connections from net_internal.
 
-The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal. The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, an EW adversary on net_untrusted, and a mock gimbal controller on net_secure, with SWaP resource limits on all g8e containers. The `agent-sigint` container is a real g8e binary that submits genuine GovernanceEnvelopes; `agent-eoir` and `agent-pnt-fusion` still use `dow_simulator.py` for display-only narration. The `dhs` demo deploys a real `agent-coalition` container (running `agent-harness` scenarios) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter — modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s; the display connectors are Alpine echo loops for narrative only.
+\† Gateway appears on net_secure only in the `dow` and `dhs` demos, where it needs direct access to the actuator boundary.
+
+The `healthcare` demo adds PA workflow services on net_secure (pa-submission-service, provider-exemption-rules, pa-processing-worker, message-broker, reporting-db) and a Metabase compliance dashboard on net_perimeter. The `swarm` demo deploys 20 operator containers (8 recon, 6 attack, 4 support, 2 relay) plus a command interface on net_internal. The `secure-data` demo deploys two gateway-operator pairs (source and destination) with connectors on net_src_internal.
+
+The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, an EW adversary on net_untrusted, and a mock gimbal controller on net_secure, with SWaP resource limits on all g8e containers. The `agent-sigint` container is a real g8e binary that submits genuine GovernanceEnvelopes. `agent-eoir` and `agent-pnt-fusion` use `dow_simulator.py` for display-only narration.
+
+The `dhs` demo deploys a real `agent-coalition` container (running `agent-harness` scenarios) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s. The display connectors are Alpine echo loops for narrative only.
 
 ## Org Differentiation
 
@@ -93,7 +107,7 @@ Each org demonstrates different compliance requirements and use cases:
 |---|---|---|---|---|---|---|---|
 | Doctrine content | CUI, classification markings, CMMC rules | PHI scrub patterns, PA workflow gates | Tx limits, dual-control triggers | Migration-screening rules (bypass, exfil, cross-tenant) | GPS spoofing, cross-cue, EW, weapons control, PNT BFT | Weapons control, safety, navigation, command integrity | USPER PII minimization, cross-domain release, sovereign destruction |
 | Target data content | Simulated classified document store | Simulated EHR / PA records | Simulated ledger / positions | Simulated SharePoint migration manifest | RF environment, PNT sources (incl. spoofed), payload manifest | Battlefield intelligence and drone fleet manifest | Mock multi-source coalition feeds + sovereign manifest |
-| Gateway posture | notary | consensus | notary | notary | consensus | consensus | consensus (Phase 2) |
+| Gateway posture | doctrine | consensus | doctrine | doctrine | doctrine | doctrine | consensus |
 | Agent principal type | DoD contractor agent | Clinical AI agent | Algorithmic trading agent | Data migration connector (rclone, SharePoint) | Tactical sensor agent (SIGINT, EO/IR, PNT fusion) | Autonomous drone operator (recon, attack, support, relay) | Coalition source connectors + predictive-analytics agent |
 | Target system mock | Classified doc API | EHR / PA processor | Trade execution API | Source and destination storage endpoints | Gimbal/flight controller actuator | Drone fleet with telemetry simulation | Sovereign data vault + partner fusion COP |
 | Demo narrative | CUI exfil attempt blocked | PHI scrub + PA approval flow | Unauthorized trade blocked | Governed migration with chain-of-custody receipts | SIGINT cross-cue + BFT spoofing defense + disconnected ops | Adversary interception and safety violation detection | Sovereign coalition data plane: govern ingest, release, use, destruction |
@@ -134,6 +148,15 @@ g8e demos stop <org>
 # Clean a demo environment (remove containers, volumes, and networks)
 g8e demos clean <org>
 
+# Clean all demo environments
+g8e demos clean
+
+# Skip confirmation prompt when cleaning
+g8e demos clean <org> --yes
+
+# Rebuild Docker images and restart a demo environment
+g8e demos rebuild <org>
+
 # Reset a demo environment (clean and restart)
 g8e demos reset <org>
 
@@ -149,8 +172,23 @@ g8e demos audit <org> logs
 # Open the gateway audit database (SQLite)
 g8e demos audit <org> gateway-db
 
+# Open the operator audit database (SQLite)
+g8e demos audit <org> operator-db
+
 # View the git ledger log
 g8e demos audit <org> ledger-log
+
+# List files tracked in the git ledger
+g8e demos audit <org> ledger-files
+
+# Show commit history for a specific ledger file
+g8e demos audit <org> ledger-history <file>
+
+# Show a specific ledger commit
+g8e demos audit <org> ledger-show <hash>
+
+# Open the execution vault database (SQLite)
+g8e demos audit <org> vault
 ```
 
 ### Demo Scenarios
@@ -243,11 +281,11 @@ The Dockerfile at the repository root is shared across all org directories. Dock
 
 The following must hold in every org environment:
 
-1. The Operator is the only process on net_secure. No agent, no gateway surface, no observability service is co-located on net_secure.
+1. The Operator is the only g8e process on net_secure. No agent, no observability service is co-located on net_secure. In the `dow` and `dhs` demos, the Gateway is also attached to net_secure so it can reach the actuator boundary.
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted.
+5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted. The `healthcare` agent-runtime is the sole exception: it bind-mounts the host-built `g8e` binary at `../../g8e:/usr/local/bin/g8e:ro` because it runs as an Alpine container without the Go toolchain.
 
 ## Port Mappings
 
@@ -274,7 +312,7 @@ There is no shared PKI volume. There is no init container that pre-populates cer
 2. Operator container starts, reads its config (gateway endpoint + device-link token), dials the Gateway over mTLS, completes enrollment, receives its identity certificate
 3. From that point forward the Operator holds its own identity material in its own named volume
 
-`depends_on` with `condition: service_healthy` enforces ordering. The Gateway health check (`/healthz`) must pass before the Operator starts.
+`depends_on` with `condition: service_healthy` enforces ordering. The Gateway health check (`/api/v1/health`) must pass before the Operator starts.
 
 This reflects real deployment: the Operator on a remote air-gapped host has no filesystem access to the Gateway.
 

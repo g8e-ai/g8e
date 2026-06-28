@@ -7,15 +7,14 @@ This document details the networking architecture of the g8e platform, including
 
 ## Overview
 
-The g8e platform uses a zero-trust networking model where all communication is authenticated via mutual TLS (mTLS) with verified SPIFFE workload identities. The platform uses `g8e.local` as the canonical internal hostname for mesh communication.
+The g8e platform uses a zero-trust networking model where all communication is authenticated via mutual TLS (mTLS) with verified SPIFFE workload identities. The platform uses `g8e.local` as the SPIFFE trust domain and default hostname for gateway connections.
 
 ### Design Goals
 
 The use of `g8e.local` and the underlying network architecture are driven by several key goals:
-1. **Canonical stability**: `g8e.local` remains the stable mesh-facing name across all installations.
-2. **Hidden complexity**: Real host identity and addressing are resolved internally by the gateway.
-3. **Frictionless bootstrap**: Users never configure DNS or host-specific addressing unless they choose to.
-4. **Security**: Translation preserves mTLS identity binding and SPIFFE URI SAN validation.
+1. **Canonical stability**: `g8e.local` remains the stable trust domain and default hostname across all installations.
+2. **Frictionless bootstrap**: Users never configure DNS or host-specific addressing unless they choose to; the CLI falls back to direct IP automatically.
+3. **Security**: mTLS identity binding and SPIFFE URI SAN validation are preserved regardless of whether clients connect via `g8e.local` or direct IP.
 
 ---
 
@@ -135,68 +134,53 @@ Default ports are defined in `protocol/constants/ports.json`:
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, trust scripts (`/bootstrap-ca` etc.), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS via a permanent 301 redirect.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/bootstrap-ca` etc.), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS via a permanent 301 redirect.
 - **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default from `PKIAuthority.TLSConfig()`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 
 ---
 
-## 6. g8e.local Internal Translation Layer
+## 6. g8e.local Trust Domain and Hostname
 
-`g8e.local` is the canonical internal hostname for operator-to-operator communication in the g8e mesh. The gateway translates this alias to installation-specific peer identity and endpoint data, ensuring that users do not manage hostnames, IPs, or DNS records manually.
+`g8e.local` serves two roles in the platform: the SPIFFE trust domain and the default hostname for gateway connections.
 
-### Translation Components
+### Trust Domain
 
-#### Canonical Alias
+The trust domain is defined as the constant `TrustDomain = "g8e.local"` in `protocol/workload_identity.go`. All SPIFFE IDs use this domain: `spiffe://g8e.local/<path>`. The trust domain is static and does not vary per installation.
 
-- **Alias**: `g8e.local`
-- **Scope**: Internal mesh communication and SPIFFE trust domain.
-- **Visibility**: Used internally for routing and identity resolution.
+### Default Gateway Hostname
 
-#### Gateway Identity Mapping
+The constant `GatewayInternalHostname` in `internal/constants/network.go` sets `g8e.local` as the default hostname for gateway TLS connections. The gateway serving certificate includes `g8e.local` as a DNS SAN, allowing clients to connect using this name when DNS resolution is configured.
 
-The gateway maintains a mapping from the canonical alias to installation-specific identity:
+### Gateway Peer PKI
 
-```
-g8e.local -> spiffe://g8e.local/gateway/<gateway_id>
-```
+The platform defines a dedicated gateway peer PKI tier for federated gateway-to-gateway communication. The `g8e Gateway Peer Intermediate CA` signs peer certificates with the SPIFFE ID format `spiffe://g8e.local/gateway/<gateway_id>`, where `<gateway_id>` is a persistent identifier generated at gateway installation time. The peer intermediate CA and SPIFFE ID format are defined in `internal/services/gateway/gateway_certs.go` and `protocol/workload_identity.go` respectively.
 
-Where `<gateway_id>` is a persistent identifier generated at gateway installation time and stored in the data directory.
+### No-DNS Fallback
 
-#### Peer Endpoint Resolution
+When `g8e.local` does not resolve via system DNS, the CLI falls back to the machine's external interface IP. This fallback is implemented in `internal/cli/cmd/mcp.go` using `network.GetExternalInterfaceIP()` from `internal/services/network/identity.go`.
 
-When a gateway needs to resolve `g8e.local`, it uses the network identity detector in `internal/services/network/identity.go`. If `g8e.local` does not resolve via system DNS, the system falls back to detected network IP addresses.
+### Local Operator Delivery
 
-#### Certificate SAN Binding
-
-Gateway peer certificates include the canonical alias in their SPIFFE URI SAN:
-
-```
-URI SAN: spiffe://g8e.local/gateway/<gateway_id>
-```
-
-This ensures identity is consistent across the mesh and certificate revocation operates on the canonical identity.
-
-### Routing Flow
-
-#### Local Operator Resolution
-
-1. Envelope arrives at the local gateway.
-2. Gateway identifies the target Operator via the internal pub/sub router.
-3. If the Operator is local, the gateway delivers the envelope via in-process dispatch.
-4. No alias translation is required for local delivery.
+1. A `GovernanceEnvelope` arrives at the local gateway via the pub/sub stream.
+2. The gateway identifies the target Operator via the internal pub/sub router.
+3. If the Operator is local, the gateway delivers the envelope via in-process dispatch to the command service.
 
 ---
 
 ## 7. Communication Patterns
 
-### Outbound-Only mTLS Connectivity
+### Outbound-Only WebSocket Connectivity
 
-The g8e Operator uses dial-out reverse tunnels with zero inbound port requirements. This eliminates the need to open inbound ports on managed hosts, reducing the attack surface.
+The g8e Operator uses dial-out WebSocket pub/sub connections with zero inbound port requirements. The operator establishes a persistent WebSocket connection to the gateway's `/api/v1/pubsub/stream` endpoint using mTLS. This eliminates the need to open inbound ports on managed hosts, reducing the attack surface.
 
 ### WebSocket Pub/Sub
 
-The gateway provides a high-performance WebSocket fan-out via `/api/v1/pubsub/stream`. Mutation channels (`cmd:*`) are governed and require mTLS authentication.
+The gateway provides a WebSocket fan-out via `/api/v1/pubsub/stream`, authenticated by `WebSocketAuth` middleware. The channel naming convention is `cmd:<operator_id>:<operator_session_id>` for commands and `results:<operator_id>:<operator_session_id>` for results. All channels require mTLS authentication.
+
+### Server-Sent Events (SSE)
+
+The gateway provides real-time event streaming from app workloads to browser and CLI clients via three endpoints: `POST /api/v1/sse/push` (app workload producers), `GET /api/v1/sse/events` (polling), and `GET /api/v1/sse/stream` (live SSE stream). Events are routed by `web_session_id`, `cli_session_id`, or `user_id`. See [SSE Streaming](./sse.md) for full details.
 
 ### Agent Integration
 
@@ -228,7 +212,12 @@ This information is used for certificate SAN generation and peer discovery.
 | Network identity | `internal/services/network/identity.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
 | Port constants | `protocol/constants/ports.json` |
+| Gateway hostname constant | `internal/constants/network.go` |
+| HTTP and HTTPS routers | `internal/services/gateway/gateway_http_router.go` |
+| mTLS middleware and public routes | `internal/services/gateway/gateway_auth.go` |
 | Gateway pub/sub | `internal/services/gateway/gateway_pubsub.go` |
+| SSE event bridge | `internal/services/gateway/gateway_http_sse.go` |
+| SSE event storage | `internal/services/gateway/sse_event_service.go` |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | Governance envelope verification | `internal/services/gateway/governance_envelope.go` |
 | CLI MCP Stdio | `internal/cli/cmd/mcp.go` |
@@ -238,6 +227,7 @@ This information is used for certificate SAN generation and peer discovery.
 ## Related Documentation
 
 - [**Authentication & Authorization**](./auth.md)
+- [**SSE Streaming**](./sse.md)
 - [**g8e Protocol**](../../protocol/docs/spec.md)
 - [**g8e Gateway**](./gateway.md)
 - [**g8e Operator**](./operator.md)

@@ -5,7 +5,7 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-28
+Last Updated: 2026-06-29
 Version: v1.3.2
 
 ---
@@ -275,7 +275,7 @@ The CLI displays configurations for `g8e.local` (mTLS), IP Address (mTLS), and S
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for six scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), and **Swarm** (drone swarm with 20 autonomous operators). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for seven scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), **Swarm** (drone swarm with 20 autonomous operators), and **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
 
 ### What the demos use Docker for
 
@@ -283,21 +283,21 @@ Each demo spins up a full isolated stack via Docker Compose:
 
 - **Gateway**, runs in a container on `net_perimeter` and `net_internal`
 - **Operator**, runs in a container on `net_internal` and `net_secure` (outbound-only to gateway)
-- **AI agent runtime**, simulated agent on `net_internal`
+- **AI agent runtime**, simulated or real g8e agent on `net_internal`
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All demos build the gateway and operator images from the root `Dockerfile` using `build: context: ../..`, which compiles the g8e binary from source inside each container. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers.
+All demos build the gateway and operator images from the root `Dockerfile` using `build: context: ../..`, which compiles the g8e binary from source inside each container. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `agent-harness` scenarios, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 
-The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This check is advisory; the demo containers build the binary from source via Docker. No pre-built binary is bind-mounted into containers.
+The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This check is advisory; the demo containers build the binary from source via Docker. The healthcare demo is the sole exception: it bind-mounts the host-built `g8e` binary at `../../g8e:/usr/local/bin/g8e:ro` for its Alpine-based agent-runtime container, which lacks the Go toolchain.
 
 ### Prerequisites for demos
 
 - Docker 24.0+ with Docker Compose v2
 
-Docker builds the g8e binary from source inside each container. No local Go toolchain or pre-built binary is required.
+Docker builds the g8e binary from source inside each container. No local Go toolchain is required. The healthcare demo bind-mounts a host-built `g8e` binary for its Alpine agent-runtime container; run `make build && cp g8e demos/bin/g8e` before starting it.
 
 ### Run a demo
 
@@ -355,6 +355,11 @@ docker compose down -v
 | dow | 1 | Autonomous SIGINT-to-EO/IR cross-cueing |
 | dow | 2 | BFT spoofing defense |
 | dow | 3 | Disconnected operations |
+| dhs | 1 | Sovereign multi-source ingest (chain-of-custody) |
+| dhs | 2 | Cross-domain release requires Notary authority |
+| dhs | 3 | Resilient disconnected operations / continuity of coverage |
+| dhs | 4 | Governed predictive cueing (quorum vs veto) |
+| dhs | 5 | Sovereign destruction + tamper-proof audit |
 
 The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
 
@@ -371,6 +376,7 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 | secure-data (dst) | 8084 | 8447 | - |
 | swarm | 8085 | 8448 | 5005 |
 | dow | 8086 | 8449 | - |
+| dhs | 8087 | 8450 | - |
 
 ---
 
