@@ -83,6 +83,9 @@ type LedgerCommit struct {
 
 // NewGitLedgerService creates a new GitLedgerService.
 // EncryptionVault in config is required for encryption at rest.
+// The base directory, files/ git repo, and sessions/ directory are eagerly
+// initialized at construction time so the ledger is ready before any
+// transactions occur.
 func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerService, error) {
 	if config == nil {
 		return nil, fmt.Errorf("ledger: %w", constants.ErrLedgerConfigRequired)
@@ -92,10 +95,45 @@ func NewGitLedgerService(config *LedgerConfig, logger *slog.Logger) (*GitLedgerS
 		return nil, fmt.Errorf("ledger: %w", constants.ErrLedgerVaultRequired)
 	}
 
-	return &GitLedgerService{
+	s := &GitLedgerService{
 		config: config,
 		logger: logger,
-	}, nil
+	}
+
+	if err := s.bootstrap(); err != nil {
+		return nil, fmt.Errorf("ledger: %w", err)
+	}
+
+	return s, nil
+}
+
+// bootstrap creates the base directory structure and initializes the default
+// files/ git repo and sessions/ directory eagerly at construction time.
+func (s *GitLedgerService) bootstrap() error {
+	if err := os.MkdirAll(s.config.BaseDir, 0755); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
+	filesDir := filepath.Join(s.config.BaseDir, constants.FilesDirname)
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
+	if err := s.initGitRepo(filesDir); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
+	sessionsDir := filepath.Join(s.config.BaseDir, constants.SessionsDirname)
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+	}
+
+	s.logger.Info("Ledger bootstrapped",
+		"base_dir", s.config.BaseDir,
+		"files_dir", filesDir,
+		"sessions_dir", sessionsDir)
+
+	return nil
 }
 
 // ── State ───────────────────────────────────────────────────────────────

@@ -281,21 +281,53 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Verify local ledger exists on operator ───────────────")
-		_ = demoStep(demoDir, "local ledger",
+		fmt.Println("  ── Step 4: Trigger local cross-cue while disconnected ──────────")
+		fmt.Println("  Running a governed cross-cue through the gateway with the datalink")
+		fmt.Println("  severed — the operator must process it entirely locally:")
+		fmt.Println()
+		if err := demoStep(demoDir, "dow-cross-cue while disconnected",
+			false,
+			"docker", "compose", "run", "--rm", "-T",
+			"--no-deps",
+			"agent-sigint",
+			"agent-harness", "run", "--insecure",
+			"--mtls-url", "https://10.42.0.10:8443",
+			"--public-url", "http://10.42.0.10:8080",
+			"--cert", "/root/.g8e/pki/operator.crt",
+			"--key", "/root/.g8e/pki/operator.key",
+			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+			"--ensemble", "3",
+			"--l3-mode", "mock",
+			"dow-cross-cue",
+		); err != nil {
+			fmt.Println("  (cross-cue while disconnected failed — operator may not be processing locally)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 5: Verify local ledger exists on operator ───────────────")
+		if err := demoStep(demoDir, "local ledger",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la /root/.g8e/ledger/files/ 2>/dev/null || echo 'Ledger directory not yet populated (will be created on first transaction)'",
-		)
+			"sh", "-c", "ls -la /root/.g8e/data/ledger/files/ 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
+		); err != nil {
+			fmt.Println("  (ledger directory not found — no file mutations have been recorded)")
+			fmt.Println()
+			hasErrors = true
+		}
 
-		fmt.Println("  ── Step 5: Verify local audit vault exists on operator ──────────")
-		_ = demoStep(demoDir, "audit vault",
+		fmt.Println("  ── Step 6: Verify local audit vault exists on operator ──────────")
+		if err := demoStep(demoDir, "audit vault",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la /root/.g8e/data/audit_vault.db 2>/dev/null || echo 'Audit vault not yet populated (will be created on first transaction)'",
-		)
+			"sh", "-c", "ls -la /root/.g8e/data/g8e.db 2>/dev/null || echo 'Audit vault DB not yet populated'",
+		); err != nil {
+			fmt.Println("  (audit vault DB not found — no audit events have been recorded)")
+			fmt.Println()
+			hasErrors = true
+		}
 
-		fmt.Println("  ── Step 6: Restore the tactical datalink ────────────────────────")
+		fmt.Println("  ── Step 7: Restore the tactical datalink ────────────────────────")
 		_ = demoStep(demoDir, "restore datalink",
 			false,
 			"docker", "network", "connect", "dow-demo_net_perimeter", "dow-ground-station",
@@ -303,8 +335,8 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		fmt.Println("  Copy-paste to inspect the local audit trail:")
 		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sh -c 'cd /root/.g8e/ledger/files && git log --oneline'")
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sqlite3 /root/.g8e/data/audit_vault.db 'SELECT * FROM events ORDER BY id DESC LIMIT 20;'")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sh -c 'cd /root/.g8e/data/ledger/files && git log --oneline'")
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sqlite3 /root/.g8e/data/g8e.db 'SELECT * FROM events ORDER BY id DESC LIMIT 20;'")
 		fmt.Println()
 
 		if hasErrors {
