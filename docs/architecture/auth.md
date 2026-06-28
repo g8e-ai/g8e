@@ -89,7 +89,7 @@ The **g8e Console** (served exclusively over HTTPS at `/console`) is a zero-depe
 To support browser-based clients that cannot hold mTLS client certificates, the HTTPS server's TLS configuration is set to `tls.VerifyClientCertIfGiven` (rather than strict `RequireAndVerifyClientCert`). Security is rigorously enforced at the application layer:
 - **Centralized Public Registry**: The `PublicRouteRegistry` explicitly allowlists routes that can bypass mTLS (e.g., `/console/`, landing/redirect page, and browser-facing passkey registration/authentication endpoints under the `console/*` prefix).
 - **Registered Browser Passkey Endpoint Prefix**:
-  - `/api/v1/auth/passkeys/console/` — Console SPA passkey registration and authentication (public, CORS-wrapped)
+  - `/api/v1/auth/passkeys/console/` - Console SPA passkey registration and authentication (public, CORS-wrapped)
 - **Fail-Closed Default**: The `auth.Middleware()` acts as a strict, fail-closed gate. Any request to a non-public route that does not carry a verified mTLS certificate is immediately rejected at Layer 7.
 
 #### WebSessionAuth Subtree Routing
@@ -103,8 +103,8 @@ This subtree-match pattern (defined with trailing slashes) ensures all nested en
 
 #### Excluded Prefixes for mTLS-Protected Sub-Paths
 The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management routes (list, revoke by credential ID) and mTLS-only routes (CLI status). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as public, `PublicRouteRegistry` supports **excluded prefixes**:
-- `/api/v1/auth/passkeys/cli/` — mTLS-only CLI status endpoint (`cli/status`)
-- `/api/v1/auth/passkeys/jit-` — JIT passkey bootstrap (excluded only when JWKS is not configured)
+- `/api/v1/auth/passkeys/cli/` - mTLS-only CLI status endpoint (`cli/status`)
+- `/api/v1/auth/passkeys/jit-` - JIT passkey bootstrap (excluded only when JWKS is not configured)
 
 The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes.
 
@@ -116,23 +116,23 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 The passkey HTTP layer is split into two components: `PasskeyService` (domain logic) and `PasskeyHandler` (HTTP layer). `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) holds domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`) and retains `VerifyL3Proof` for L3 binding to transaction hashes. `PasskeyHandler` (`internal/services/gateway/passkey_service.go:283`) embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`). All former `AuthController` passkey handlers are consolidated into 4 factory methods and 3 direct handler methods on `PasskeyHandler`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
 
 **Factory Methods** (return `http.HandlerFunc`):
-- `RegisterChallenge(cfg)` — WebAuthn registration challenge
-- `RegisterVerify(cfg)` — WebAuthn registration verification
-- `AuthenticateChallenge(cfg)` — WebAuthn authentication challenge
-- `AuthenticateVerify(cfg)` — WebAuthn authentication verification
+- `RegisterChallenge(cfg)` - WebAuthn registration challenge
+- `RegisterVerify(cfg)` - WebAuthn registration verification
+- `AuthenticateChallenge(cfg)` - WebAuthn authentication challenge
+- `AuthenticateVerify(cfg)` - WebAuthn authentication verification
 
 **Direct Handlers**:
-- `ListCredentials` — `GET /api/v1/auth/passkeys` (WebSession-protected)
-- `RevokeCredential` — `DELETE /api/v1/auth/passkeys/{id}` (WebSession-protected)
-- `CLIStatus` — `GET /api/v1/auth/passkeys/cli/status` (mTLS-protected)
+- `ListCredentials` - `GET /api/v1/auth/passkeys` (WebSession-protected)
+- `RevokeCredential` - `DELETE /api/v1/auth/passkeys/{id}` (WebSession-protected)
+- `CLIStatus` - `GET /api/v1/auth/passkeys/cli/status` (mTLS-protected)
 
 **Approval Handlers** (on `PasskeyHandler`, via `passkey_service_approvals.go`):
-- `handleApprovalAction` — dispatcher for `/api/v1/approvals/{txHash}/{action}`
-- `handleApprovalChallenge` — generates WebAuthn challenge for OOB approval
-- `handleApprovalVerify` — verifies WebAuthn assertion for OOB approval
-- `handleCLIApprovalStatus` — `GET /api/v1/approvals/status/{txHash}` (mTLS-protected)
-- `handleApprovalPage` — redirects to console SPA for browser-based approval
-- `handleListSuspendedTransactions` — lists pending approvals (WebSession-protected)
+- `handleApprovalAction` - dispatcher for `/api/v1/approvals/{txHash}/{action}`
+- `handleApprovalChallenge` - generates WebAuthn challenge for OOB approval
+- `handleApprovalVerify` - verifies WebAuthn assertion for OOB approval
+- `handleCLIApprovalStatus` - `GET /api/v1/approvals/status/{txHash}` (mTLS-protected)
+- `handleApprovalPage` - redirects to console SPA for browser-based approval
+- `handleListSuspendedTransactions` - lists pending approvals (WebSession-protected)
 
 Dependencies for approval handlers are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` on `PasskeyHandler` after construction, since the MCP gateway is created later in the startup sequence.
 
@@ -141,7 +141,7 @@ Dependencies for approval handlers are injected via `SetApprovalDependencies(mcp
 | Field | Purpose |
 | :--- | :--- |
 | `source` | Request source enum (`sourceJWT`, `sourceBrowserBootstrap`) |
-| `enforceFirstCredentialOnly` | Bootstrap protection — rejects registration if user already has credentials |
+| `enforceFirstCredentialOnly` | Bootstrap protection: rejects registration if user already has credentials |
 | `requireAuthenticatedUser` | Requires `ContextKeyUserID` to be present |
 | `enforceSessionUserBinding` | Prevents `user_id` spoofing across an existing session |
 | `createWebSession` | Mints a `g8e_session` on successful verification |
@@ -152,7 +152,7 @@ This design ensures the **server decides auth posture, not the client**. The rou
 
 #### CLI Status Endpoint (mTLS-Gated)
 
-The dedicated `GET /api/v1/auth/passkeys/cli/status` endpoint allows the CLI to authoritatively answer "does this user have a passkey?" using its mTLS certificate. Identity comes exclusively from `ContextKeyUserID` — `user_id` query params are ignored. This fixes a bug where the CLI was silently pushed into re-enrollment because it couldn't reach the WebSession-protected passkey listing endpoint.
+The dedicated `GET /api/v1/auth/passkeys/cli/status` endpoint allows the CLI to authoritatively answer "does this user have a passkey?" using its mTLS certificate. Identity comes exclusively from `ContextKeyUserID`; `user_id` query params are ignored. This fixes a bug where the CLI was silently pushed into re-enrollment because it couldn't reach the WebSession-protected passkey listing endpoint.
 
 #### Passkey Route Table
 
@@ -256,7 +256,7 @@ L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway suspends transactions requiring L3 approval, storing them in the suspended transaction pool.
 - **Browser-Based Approval Flow**: The CLI calls `g8e approve <txHash>`, which opens a browser to `/api/v1/approve/{txHash}`. The gateway redirects to `/console/#approve={txHash}`, where the browser performs the WebAuthn passkey ceremony via `handleApprovalVerify`. The CLI polls `GET /api/v1/approvals/status/{txHash}` via mTLS until the transaction is approved or times out.
 - **Layered Authorization Model**: Gateway mode uses a two-layer authorization model. Layer 1 (passkey authorization) is always required; proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. The `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) validates the WebAuthn assertion. Layer 2 (mTLS transport authentication) applies to CLI callers when `mtls_cert_fingerprint` is present. The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) verifies the CLI session as an additional transport-auth layer. Browser-only approvals skip Layer 2.
-- **Outbound Mode**: When `passkeyVerifier == nil` (outbound L3 notary), only Ed25519 signature validation runs — no passkey is required. This is intentional for environments without a WebAuthn relying party.
+- **Outbound Mode**: When `passkeyVerifier == nil` (outbound L3 notary), only Ed25519 signature validation runs; no passkey is required. This is intentional for environments without a WebAuthn relying party.
 - **Approval Window**: Approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
 - **Unified Enrollment**: `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens the console UI for passkey registration and polls `VerifyPasskeyRegistration` (mTLS) until complete.
 - **Gateway L3 Verification**: The `gatewayNotary` (`internal/services/governance/l3_notary.go:57`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:102`), implements the layered model. `NewGatewayL3Notary` accepts a `PasskeyService` (as `L3Notary`) for WebAuthn proof verification and a `CLISessionVerifier` for mTLS transport auth. The `PasskeyService` is passed as the `passkeyVerifier` delegate via `ls.passkey.PasskeyService` in `gateway_service.go:599`. Passkey verification always runs first; `ErrPasskeyProofRequired` is returned if the proof lacks a `credential_id`. CLI mTLS session verification runs as the second layer when `MtlsCertFingerprint` is present.
