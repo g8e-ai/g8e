@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
 Last Updated: 2026-06-28
-Version: v1.3.1
+Version: v1.3.2
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -29,7 +29,7 @@ docker run -d \
   gw serve --posture doctrine
 ```
 
-The `gw serve` subcommand runs the gateway in foreground mode, which blocks until shutdown. This is the recommended invocation for direct `docker run` usage. The root `docker-compose.yml` uses `gw start -f` instead, which starts the gateway as a subprocess and tails the log output. Both approaches keep the container running; `gw serve` is more direct for single-container deployments.
+The `gw serve` subcommand runs the gateway in foreground mode, blocking until shutdown. It is a hidden subcommand that serves as the re-exec target for `gw start`. For direct `docker run` usage, `gw serve` is suitable because it runs the gateway in the foreground without spawning a subprocess. The root `docker-compose.yml` uses `gw start -f` instead, which starts the gateway as a subprocess and tails the log output. Both approaches keep the container running.
 
 ## Docker Compose Deployment
 
@@ -81,6 +81,7 @@ Functional demo environments are located in the `demos/` directory. These config
 - **Secure Data**: Governed data migration with a two-operator pipeline and chain-of-custody receipts.
 - **Department of War (DoW)**: Tactical edge operations with SWaP-constrained sensors, BFT spoofing defense, and autonomous SIGINT-to-EO/IR cross-cueing.
 - **Swarm**: Drone swarm simulation with 20 autonomous operators, battlefield intelligence, and doctrine-based weapons control.
+- **DHS**: Persistent sovereign capability for coalition data handling with USPER PII minimization, cross-domain release control, and consensus posture.
 
 To run a demo:
 
@@ -89,7 +90,7 @@ cd demos/healthcare
 docker compose up -d
 ```
 
-Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. See `demos/README.md` for the full demo environment guide.
+Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
 
 ## Configuration
 
@@ -115,7 +116,7 @@ services:
     ports:
       - "3000:8080"
       - "3443:8443"
-    command: ["gw", "start", "--posture", "doctrine", "--http-port", "8080", "--https-port", "8443", "-f"]
+    command: ["gw", "start", "-f", "--posture", "consensus"]
 ```
 
 The `gw start` and `gw serve` subcommands accept the same `--posture`, `--http-port`, and `--https-port` flags. The `-f` flag (available only on `gw start`) follows log output after starting the gateway as a subprocess. Container ports remain 8080 and 8443; only the host-side mapping changes.
@@ -136,7 +137,7 @@ docker run -v g8e-data:/root/.g8e g8e-gateway:latest gw serve --posture doctrine
 
 ### Governance Posture
 
-Specify the security posture at startup using a mutually exclusive flag:
+Specify the security posture at startup using the `--posture` flag. Three values are valid:
 
 - **`--posture doctrine`**: L1 enforced; L2/L3 audited.
 - **`--posture consensus`**: L1/L2 enforced; L3 audited.

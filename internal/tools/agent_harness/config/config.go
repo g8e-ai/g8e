@@ -57,6 +57,15 @@ type Config struct {
 	EnsembleSize int `json:"ensemble_size"`
 	// ConsensusKeyID is the trusted-signer id Agent Harness registers for its L2 key.
 	ConsensusKeyID string `json:"consensus_key_id"`
+	// ConsensusSeed is an optional hex-encoded Ed25519 seed for deterministic
+	// ensemble key generation. When set, the ensemble is reconstructed from
+	// this seed instead of being randomly generated, enabling the gateway to
+	// verify L2 votes against a pre-registered trusted signer.
+	ConsensusSeed string `json:"consensus_seed"`
+	// TribunalID is the ID of the TribunalPolicy the gateway uses for L2
+	// consensus verification. The harness sets this on the Ensemble so L2
+	// votes carry the correct tribunal_id. Defaults to "test-tribunal".
+	TribunalID string `json:"tribunal_id"`
 	// PrincipalKeyID identifies the mock L3 principal (the "human" notary).
 	PrincipalKeyID string `json:"principal_key_id"`
 

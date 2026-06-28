@@ -1,84 +1,41 @@
 # Developer Guidelines
 
-This document provides practical guidance for human developers contributing to the g8e platform.
-
-## For AI Agents
-
-AI agents updating documentation must follow the guidelines in **[docs.md](docs.md)**. That document contains the strict stylistic rules, terminology conventions, and source-of-truth hierarchy. This document is for human developers.
+AI agents updating documentation must follow **[docs.md](docs.md)** for stylistic rules, terminology, and source-of-truth hierarchy.
 
 ## Platform Overview
 
-g8e is a zero-trust execution platform for agentic infrastructure. The platform enforces typed, signed, state-bound mutations through a 5-layer verification gauntlet before any host state changes occur.
+g8e is a zero-trust execution platform for agentic infrastructure. Mutations are typed, signed, state-bound, and verified through a 5-layer gauntlet before any host state changes.
 
-**Key concepts:**
-- **GovernanceEnvelope**: The canonical wire format for all mutations (canonical JSON via protojson)
+- **GovernanceEnvelope**: Canonical wire format for all mutations (protojson)
 - **5-layer verification**: L1 (Technical Bedrock) → L2 (Consensus) → L3 (Notary) → L4 (Warden) → L5 (Actuator)
 - **Data sovereignty**: Raw data stays on the Operator host; platform state is host-native under `.g8e/`
-- **BYO clients**: The platform is UI-less by design. The CLI (`./g8e`) is the default interface.
+- **BYO clients**: UI-less by design; the CLI (`./g8e`) is the default interface
 
-For detailed architecture, see:
-- [g8e Protocol](../../protocol/docs/spec.md) - Platform architecture, governance model, and protocol wire format
-- [g8e Gateway](../architecture/gateway.md) - Gateway service details
-- [g8e Operator](../architecture/operator.md) - Operator service details
+See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gateway.md), [Operator](../architecture/operator.md).
 
 ## Getting Started
 
-### Build
-
-Build the g8e binary:
-
 ```bash
-make build
+make build          # Build the g8e Operator binary
+./g8e --help        # Complete command reference
 ```
-
-This builds the g8e Operator binary for the current platform. Run `make help` for all available build targets.
-
-**Manual GOPATH configuration** (if needed):
-```bash
-export GOPATH=$HOME/go
-export PATH=$GOPATH/bin:$PATH
-```
-
-### Common Commands
 
 | Command | Purpose |
 |---|---|
-| `./g8e` | g8e Platform Manager (shows help) |
-| `./g8e gw start` | Start the g8e Gateway |
-| `./g8e gw status` | Get g8e Gateway health and status |
+| `./g8e gw start` | Start the Gateway |
+| `./g8e gw status` | Gateway health and status |
 | `./g8e auth enroll` | Authenticate the local CLI |
-| `./g8e test` | Run test suites (unit, integration, e2e, lint, chaos) |
+| `./g8e test` | Run test suites |
 
-The g8e Operator is the single entry point for all platform operations. Run `./g8e --help` for complete command reference.
-
-## Architecture
-
-The platform consists of:
-
-- **g8e Protocol** - Protobuf schemas and canonical JSON wire contract in `protocol/`
-- **g8e Gateway** - Central Policy Decision Point (PDP)
-- **g8e Operator** - Host-side Policy Execution Point (PEP) and MCP server
-
-All components run as native Go processes. Runtime state lives in `.g8e/`.
-
-For details, see [Architecture](../architecture/).
-
-## Build & Runtime
-
-The platform is built via the Makefile. Run `make help` for available targets.
-
-**Startup sequence** (`./g8e gw start`):
-1. g8e binary check/build
-2. Root of trust generation (first boot only) - CA hierarchy in `.g8e/pki/`, secrets in `.g8e/secrets/`
-3. Service convergence via health checks
+Startup sequence: binary check/build → root of trust generation (first boot) → service convergence via health checks.
 
 ## Paths & State
 
 **Source paths** (git root):
 - `protocol/` - Protobuf schemas and JSON constants (SSOT)
-- `cmd/operator/` - Binary entrypoint (32-line `main.go` that delegates to the CLI tree)
-- `internal/cli/cmd/` - Cobra command tree (all CLI subcommands)
-- `internal/cli/serve/` - Foreground worker bodies (`RunGateway`, `RunOperator`, cert enrollment, logger)
+- `cmd/operator/` - Binary entrypoint
+- `internal/cli/cmd/` - Cobra command tree
+- `internal/cli/serve/` - Foreground worker bodies
 - `internal/` - Internal Go packages
 - `pkg/` - Public Go packages
 - `docs/` - Documentation
@@ -90,44 +47,56 @@ The platform is built via the Makefile. Run `make help` for available targets.
 - `.g8e/logs/` - Component logs
 - `.g8e/pids/` - Process IDs
 
-**Cleanup commands:**
-- `./g8e gw reset` - Delete database and secrets, preserve CA
-- `./g8e gw clean` - Destructive removal of all runtime state
+**Cleanup:** `./g8e gw reset` (delete DB + secrets, preserve CA) · `./g8e gw clean` (destructive removal of all runtime state)
 
-## Code Quality Principles
+## Always
 
-**No tech debt:**
-- Rip and replace broken code; do not add compatibility shims
-- No `ensure*()`, `getOrCreate*()`, `Any` types, or `map[string]interface{}` for known shapes
+- Rip and replace broken code; no compatibility shims
 - Functions do one thing: reads read, writes write
-- Fix root causes; do not add defensive guards at call sites
-
-**Industry standards:**
-- Use latest stable versions (Go 1.26.4, Python 3.14+)
+- Fix root causes; no defensive guards at call sites
 - Fail-closed on security checks
 - Explicit over implicit; no magic or hidden side effects
 - Leave codebase cleaner than you found it
+- Check all errors; wrap with context: `fmt.Errorf("component: action: %w", err)`
+- Define typed error constants in `internal/constants/errors.go` for any error that is checked, compared, wrapped with `errors.Is()`/`errors.As()`, or represents a distinct failure mode
+- Use `fmt.Errorf()` for wrapping with context, dynamic messages with runtime values, and one-off test errors
+- Search for hand-rolled strings when adding new error constants and replace them
+- Return errors from production paths; no panics
+- Use `context.Context` for cancellation; manage goroutines with `sync.WaitGroup` or channels
+- Write table-driven tests with `testify/assert`
+- Use three import blocks: standard library, external, internal
+- Pass pointers for mutable/large structs; values for small/read-only structs
+- Use typed model instances; no raw dicts, untyped maps, or ad-hoc JSON
+- Use canonical JSON (protojson) for all client-facing surfaces
+- Route all mutations through `GovernanceEnvelope` and the 5-layer verification gauntlet
+- Define ALL filepath strings as constants in `internal/constants/paths.go`
+- Use `TestPaths` for isolated test environments (base directory from a constant, all sub-paths from constants)
+- Reproduce bugs with failing tests before fixing
+- Tier 1 (Unit) tests: mocks and stubs, no external dependencies (no files, network, or DB)
+- Tier 2 (Integration) and Tier 3 (E2E) tests: real database, pub/sub, and LLM calls
+- Keep test infrastructure separated from production code
+- Run tests via `./g8e test` (unit, integration, e2e, coverage, lint, chaos, summary)
+- Document what the system does, not what it should do
+- Cross-link rather than repeat
+- Present tense, active voice, direct and specific
+- Keep PRs focused (one change per PR)
+- Add tests for bug fixes and features
 
-## Go Standards
+## Never
 
-**Tooling:** `gofmt`, `goimports`, `golangci-lint` (mandatory in CI)
+- No `ensure*()`, `getOrCreate*()`, `Any` types, or `map[string]interface{}` for known shapes
+- No hand-rolled error strings (`errors.New("...")`) when a centralized constant exists or should exist
+- No package-level error variables outside `internal/constants/errors.go`
+- No panics in production paths
+- No hardcoded or dynamically constructed filepath strings (including `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`)
+- No `filepath.Join()` with string literals (except within `TestPaths` using constants)
+- No `go test` directly for platform tests; use `./g8e test`
+- No emojis in documentation
+- No stale docs; docs are code
 
-**Error handling:** Always check errors; wrap with context using `fmt.Errorf("component: action: %w", err)`
+## Examples
 
-**Typed errors:** Define typed error constants for error reasons instead of hand-rolled strings. All error constants MUST be defined in `internal/constants/errors.go` and used consistently across the codebase.
-
-**When to use centralized error constants:**
-- Package-level error variables (e.g., `ErrNotFound`, `ErrInvalidInput`)
-- Error reasons that are checked or compared elsewhere
-- Error messages that represent distinct failure modes
-- Any error that could be wrapped with `errors.Is()` or `errors.As()`
-
-**When to use `fmt.Errorf()`:**
-- Wrapping errors with context: `fmt.Errorf("component: action: %w", err)`
-- Dynamic error messages that include runtime values
-- One-off errors in test code
-
-**Examples:**
+### Error Handling
 
 ```go
 // GOOD - Use centralized constant
@@ -149,129 +118,56 @@ if user == nil {
 var ErrCustomError = errors.New("custom error")  // Move to internal/constants/errors.go
 ```
 
-**Adding new error constants:**
-1. Check `internal/constants/errors.go` for existing errors that match your use case
-2. If no suitable constant exists, add a new one to `internal/constants/errors.go`
-3. Use the new constant consistently across the codebase
-4. Search for hand-rolled strings that should be replaced with the new constant
+### Adding Error Constants
 
-**No panics** in production paths; return errors instead
+1. Check `internal/constants/errors.go` for existing matches
+2. Add a new constant if none exists
+3. Use it consistently across the codebase
+4. Search for hand-rolled strings to replace
 
-**Concurrency:** Use `context.Context` for cancellation; manage goroutines with `sync.WaitGroup` or channels
+### Adding Path Constants
 
-**Testing:** Table-driven tests with `testify/assert`
-
-**Imports:** Three blocks - standard library, external, internal
-
-**Parameters:** Pointers for mutable/large structs; values for small/read-only structs
-
-## Data & Protocol
-
-**Single source of truth:** The `protocol/` directory is canonical for wire-protocol values and document schemas
-
-**Strict typing:** Use typed model instances; no raw dicts, untyped maps, or ad-hoc JSON
-
-**Wire format:** Canonical JSON (protojson) for all client-facing surfaces
-
-**Governance:** All mutations must pass through the `GovernanceEnvelope` and 5-layer verification gauntlet. See [g8e Protocol](../../protocol/docs/spec.md) for detailed layer responsibilities.
+1. Add to `internal/constants/paths.go`
+2. Update `protocol/constants/` JSON if part of the public protocol
+3. Run tests to verify integration
+4. Commit both Go source and JSON reference files
 
 ## Testing
 
-**Principles:**
-- Reproduce bugs with failing tests before fixing
-- Tier 1 (Unit) tests use mocks and stubs for isolation; no external dependencies (no files, network, or DB)
-- Tier 2 (Integration) and Tier 3 (E2E) tests use real database, pub/sub, and LLM calls
-- Contract tests enforce alignment between components and `protocol/`
 - mTLS by default; test runner handles certificate injection
-- Test infrastructure separated from production code to avoid import cycles
+- Contract tests enforce alignment between components and `protocol/`
+- Coverage threshold: 70%
 
-**Run tests via CLI:**
-- `./g8e test unit` - Run Tier 1 (Unit) tests
-- `./g8e test integration` - Run Tier 2 (In-Process Integration) tests
-- `./g8e test e2e` - Run Tier 3 (Live Platform E2E) tests
-- `./g8e test coverage` - Run tests with coverage report (70% threshold)
-- `./g8e test lint` - Run linting and quality checks
-- `./g8e test chaos` - Generate governance events for testing
-- `./g8e test summary` - View chaos test summary from test vault
+**Test infrastructure separation:**
+- `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`)
+- `internal/tools/chaos/` - Chaos engineering infrastructure (uses `storagetest.TestSQLAuditStore`)
+- Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
+- Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`
 
-Never call `go test` directly for platform tests.
+## Constants & Doctrines
 
-### Test Infrastructure Separation
+Go constants in `internal/constants/` are SSOT. JSON files in `protocol/constants/` are reference documentation and external protocol definitions.
 
-Test-only code is separated from production code to avoid import cycles and maintain clear boundaries:
+**Doctrines:** Stored in `protocol/constants/doctrine/` as canonical JSON, loaded by L1Doctrine at startup.
 
-**`internal/services/storage/storagetest/`** - Test-only audit storage implementations
-- `TestSQLAuditStore` - Test-only monolithic audit service with Git ledger integration
-- Used only in test code (e.g., chaos tester at `internal/tools/chaos/chaos.go`)
-- Implements `TransactionAuditStore` interface with a no-op `DocSet` (the test audit store has no document store; console audit records are irrelevant in chaos tests)
-- Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore` so L5 console audit records go to the canonical document store
-- Production outbound mode uses an `auditStoreTransactionStore` adapter in `g8eo.go` to write receipts via `SQLAuditStore.RecordActionReceipt`
+Adding doctrines: update JSON → `make validate-doctrines` → restart Operator.
 
-**`internal/tools/chaos/`** - Chaos engineering test infrastructure
-- Chaos tester uses `storagetest.TestSQLAuditStore` for audit storage
-- This is intentional test infrastructure, not production code
-- Located in `internal/tools/` to clearly indicate test-only status
+See [Constants Reference](../../protocol/docs/constants.md) and [Protocol Spec](../../protocol/docs/spec.md).
 
-## Documentation
-
-**Principles:**
-- Docs are code; stale docs are bugs
-- Document what the system does, not what it should do
-- Cross-link rather than repeat
-- Present tense, active voice, direct and specific
-- No emojis
-
-**Single source of truth:** `protocol/` for wire-protocol values
-
-## Doctrines
-
-Security doctrines are stored in `protocol/constants/doctrine/` as canonical JSON and loaded by L1Doctrine at startup.
-
-**Adding doctrines:**
-1. Update JSON file in `protocol/constants/doctrine/`
-2. Run `make validate-doctrines`
-3. Restart g8e Operator to load new doctrines
-
-See [g8e Protocol](../../protocol/docs/spec.md) for doctrine schema details.
-
-## Constants
-
-Constants are defined in Go source files in `internal/constants/` (SSOT). JSON files in `protocol/constants/` serve as reference documentation and external protocol definitions.
-
-**Path constants:**
-- ALL filepath strings in the codebase MUST be defined as constants in `internal/constants/paths.go`
-- No filepath strings may be constructed dynamically or hardcoded inline, including relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`, etc.
-- Dynamic path construction using `filepath.Join()` with string literals is prohibited
-- The only exception is when using `TestPaths` for isolated test environments - the base directory for TestPaths must come from a constant, and all path construction within TestPaths must use constants
-- This eliminates magic strings and improves maintainability and system robustness
-
-**Adding constants:**
-1. Add the constant to the appropriate Go file in `internal/constants/`
-2. For path constants, add them to `internal/constants/paths.go`
-3. Update the corresponding JSON file in `protocol/constants/` if the constant is part of the public protocol
-4. Run tests to verify the constant is properly integrated
-5. Commit both the Go source file and any updated JSON reference files
-
-**Commands:**
-- `make generate` - Generate protobuf code from `.proto` files
-- `make proto` - Generate Go Protobuf code (alias for generate)
-
-See [Constants Reference](../../protocol/docs/constants.md) for details.
+**Code generation:** `make generate` (protobuf from `.proto` files) · `make proto` (alias)
 
 ## Native Tools
 
-Native tools are MCP tools compiled into the g8e binary that execute within the Operator's execution boundary locally, without proxying to downstream MCP servers.
+MCP tools compiled into the g8e binary that execute within the Operator's execution boundary locally.
 
 **Adding a new native tool:**
 1. Copy `protocol/docs/mcp_tool_template.go` to `internal/services/mcp/your_tool_name.go`
-2. Implement the `NativeTool` interface with `Name()`, `Description()`, `InputSchema()`, and `Execute()` methods
-3. Add your tool to the tools list in `RegisterNativeTools()` in `internal/services/mcp/native_tool_registry.go`
+2. Implement `NativeTool` interface: `Name()`, `Description()`, `InputSchema()`, `Execute()`
+3. Register in `RegisterNativeTools()` at `internal/services/mcp/native_tool_registry.go`
 4. Add unit tests in `internal/services/mcp/your_tool_name_test.go`
-5. No `init()` function needed - registration is explicit via `RegisterNativeTools()`
+5. No `init()` function; registration is explicit
 
-**Template:** See `protocol/docs/mcp_tool_template.go` for a complete example.
-
-**Existing tools:** Database tools (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics (top, tree), disk profiling (usage, profile, file checksum), signal safety, network socket audit, endpoint ping, HTTP probe, DNS resolution, TLS cert inspection, SSH known hosts, service status, container status, system info, environment variables, time clock, Git operations, cloud metadata, Kubernetes inspection, shell command execution, file read, operator deploy.
+**Existing tools:** Database (discover, validate, read, index triage), log filtering, OOM detection, config diff masking, process metrics (top, tree), disk profiling (usage, profile, file checksum), signal safety, network socket audit, endpoint ping, HTTP probe, DNS resolution, TLS cert inspection, SSH known hosts, service status, container status, system info, environment variables, time clock, Git operations, cloud metadata, Kubernetes inspection, shell command execution, file read, operator deploy.
 
 ## Quick Reference
 
@@ -281,16 +177,13 @@ Native tools are MCP tools compiled into the g8e binary that execute within the 
 | Constants (JSON SSOT) | `protocol/constants/` |
 | Go registry files | `internal/constants/` |
 | Governance layers | `internal/services/governance/` |
-| CLI entry points | `cmd/operator/` (binary) → `internal/cli/cmd/` (cobra tree) |
+| CLI entry points | `cmd/operator/` → `internal/cli/cmd/` |
 | Architecture docs | `docs/architecture/` |
 
 ## Contributing
 
-**PR guidelines:**
-- Keep it focused (one change per PR)
+- One change per PR
 - Add tests for bug fixes and features
-- Use clear commit prefixes (e.g., `g8e: fix the thing`)
+- Commit prefixes: `g8e: fix the thing`
 
-**Contact:** danny@g8e.ai
-
-**License:** Apache 2.0. By contributing, you grant us a license to use your work in g8e.
+**Contact:** danny@g8e.ai · **License:** Apache 2.0

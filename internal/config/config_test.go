@@ -430,7 +430,8 @@ func TestValidateConsensusStartup(t *testing.T) {
 		{"not consensus — no validation", "doctrine", "", 0, false, nil},
 		{"consensus with tribunal and quorum", "consensus", "trib-1", 3, false, nil},
 		{"consensus without tribunal id", "consensus", "", 3, true, constants.ErrConfigTribunalIDRequired},
-		{"consensus with quorum < 2", "consensus", "trib-1", 1, true, constants.ErrConfigTribunalQuorumLow},
+		{"consensus with quorum 1 is valid", "consensus", "trib-1", 1, false, nil},
+		{"consensus with quorum 0", "consensus", "trib-1", 0, true, constants.ErrConfigTribunalQuorumLow},
 	}
 
 	for _, tt := range tests {

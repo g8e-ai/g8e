@@ -16,16 +16,20 @@ package serve
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/exitcode"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/execution"
@@ -58,6 +62,7 @@ type GatewayConfig struct {
 	NetworkIdentityFile string
 	TribunalID          string
 	TribunalURL         string
+	TribunalBootstrap   string
 	MCPDownstreamURL    string
 	A2ADownstreamURL    string
 }
@@ -140,11 +145,22 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		os.Exit(exitcode.FromError(err))
 	}
 
+	// Tribunal bootstrap: if --tribunal-bootstrap is set, seed the trusted
+	// signer(s) and TribunalPolicy from a JSON config file before consensus
+	// validation runs. This enables deterministic demo deployments where the
+	// gateway and harness share the same Ed25519 seed.
+	if cfg.TribunalBootstrap != "" {
+		if err := bootstrapTribunalPolicy(svc, cfg.TribunalBootstrap, logger); err != nil {
+			logger.Error("Tribunal bootstrap failed", string(constants.ConnectionStateError), err)
+			os.Exit(constants.ExitConfigError)
+		}
+	}
+
 	// Startup validation for consensus posture (Phase 5.4):
 	// If posture is consensus, TribunalID must be set and the TribunalPolicy
 	// must exist and be enabled in the database. Fail fast before starting
 	// any services.
-	if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, 0); err != nil {
+	if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, 1); err != nil {
 		logger.Error("Startup validation failed", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
@@ -319,6 +335,126 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		logger.Error("Gateway shutdown error", string(constants.ConnectionStateError), err)
 	}
 	logger.Info("Gateway mode stopped")
+}
+
+// tribunalBootstrapConfig is the typed JSON config for declarative tribunal
+// seeding at gateway startup.
+type tribunalBootstrapConfig struct {
+	TribunalID   string   `json:"tribunal_id"`
+	MemberAppIDs []string `json:"member_app_ids"`
+	Quorum       int      `json:"quorum"`
+	SeedHex      string   `json:"seed_hex"`
+}
+
+// parseTribunalBootstrapConfig parses and validates a tribunal bootstrap JSON
+// config. Returns an error if the JSON is malformed or required fields are
+// missing/invalid.
+func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) {
+	var boot tribunalBootstrapConfig
+	if err := json.Unmarshal(data, &boot); err != nil {
+		return boot, fmt.Errorf("tribunal bootstrap: parse config: %w", err)
+	}
+	if boot.TribunalID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
+		return boot, fmt.Errorf("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
+	}
+	return boot, nil
+}
+
+// deriveSeedPublicKey decodes a hex-encoded Ed25519 seed and returns the
+// corresponding public key as a hex string. The seed must be exactly
+// ed25519.SeedSize bytes.
+func deriveSeedPublicKey(seedHex string) (string, error) {
+	seed, err := hex.DecodeString(strings.TrimSpace(seedHex))
+	if err != nil {
+		return "", fmt.Errorf("tribunal bootstrap: decode seed hex: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return "", fmt.Errorf("tribunal bootstrap: invalid seed length %d, expected %d", len(seed), ed25519.SeedSize)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	pub := priv.Public().(ed25519.PublicKey)
+	return hex.EncodeToString(pub), nil
+}
+
+// bootstrapTribunalPolicy seeds trusted signers and a TribunalPolicy from a
+// JSON config file. The file format is:
+//
+//	{
+//	  "tribunal_id": "dhs-tribunal",
+//	  "member_app_ids": ["dhs-ensemble"],
+//	  "quorum": 1,
+//	  "seed_hex": "<hex-encoded Ed25519 seed>"  // optional
+//	}
+//
+// If seed_hex is provided, the corresponding Ed25519 public key is registered
+// as a trusted signer for each member_app_id (single-key ensemble). If seed_hex
+// is omitted, a fresh key pair is generated. The TribunalPolicy is then created
+// in the database. This is idempotent: if the tribunal already exists, the
+// bootstrap is skipped.
+func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath string, logger *slog.Logger) error {
+	data, err := os.ReadFile(bootstrapPath)
+	if err != nil {
+		return fmt.Errorf("tribunal bootstrap: read config: %w", err)
+	}
+
+	boot, err := parseTribunalBootstrapConfig(data)
+	if err != nil {
+		return err
+	}
+
+	// Check if tribunal already exists (idempotent)
+	existing, err := svc.GetDB().TribunalStore.GetTribunal(boot.TribunalID)
+	if err != nil {
+		return fmt.Errorf("tribunal bootstrap: check existing: %w", err)
+	}
+	if existing != nil {
+		logger.Info("Tribunal already exists, skipping bootstrap", "tribunal_id", boot.TribunalID)
+		return nil
+	}
+
+	// Derive the public key from the seed (or generate a fresh key)
+	var pubHex string
+	if boot.SeedHex != "" {
+		pubHex, err = deriveSeedPublicKey(boot.SeedHex)
+		if err != nil {
+			return err
+		}
+	} else {
+		pub, _, err := ed25519.GenerateKey(nil)
+		if err != nil {
+			return fmt.Errorf("tribunal bootstrap: generate key: %w", err)
+		}
+		pubHex = hex.EncodeToString(pub)
+	}
+
+	// Register each member as a trusted signer with the same public key
+	// (single-key ensemble pattern for demos)
+	for _, appID := range boot.MemberAppIDs {
+		signer := models.TrustedSigner{
+			ID:        appID,
+			PublicKey: pubHex,
+			AddedAt:   time.Now().UTC(),
+			Enabled:   true,
+		}
+		if err := svc.GetDB().SignerStore.AddTrustedSigner(signer); err != nil {
+			return fmt.Errorf("tribunal bootstrap: register signer %s: %w", appID, err)
+		}
+		logger.Info("Trusted signer registered", "app_id", appID)
+	}
+
+	// Create the TribunalPolicy
+	policy := models.TribunalPolicy{
+		ID:              boot.TribunalID,
+		MemberAppIDs:    boot.MemberAppIDs,
+		Quorum:          boot.Quorum,
+		RequireDistinct: true,
+		Enabled:         true,
+	}
+	if err := svc.GetDB().TribunalStore.AddTribunal(policy); err != nil {
+		return fmt.Errorf("tribunal bootstrap: create policy: %w", err)
+	}
+	logger.Info("Tribunal policy created", "tribunal_id", boot.TribunalID, "members", len(boot.MemberAppIDs), "quorum", boot.Quorum)
+	return nil
 }
 
 // BootstrapTribunal constructs a TribunalService from the TribunalPolicy stored

@@ -329,7 +329,31 @@ func runShellCommandLocally(ctx context.Context, command string, args []string, 
 	// Build command with safe argument passing
 	// Use command as the executable name and args as separate arguments
 	// This prevents shell injection by avoiding shell interpretation
-	cmd := exec.CommandContext(cmdCtx, command, args...)
+	var cmd *exec.Cmd
+	useShell := false
+	resolvedPath, errLook := exec.LookPath(command)
+	if errLook != nil {
+		useShell = true
+	} else {
+		// Read first 2 bytes to check for shebang (shell script)
+		if file, err := os.Open(resolvedPath); err == nil {
+			buf := make([]byte, 2)
+			if n, err := file.Read(buf); err == nil && n == 2 {
+				if string(buf) == "#!" {
+					useShell = true
+				}
+			}
+			file.Close()
+		}
+	}
+
+	if useShell {
+		// Invoke via sh to ensure proper script execution
+		shArgs := append([]string{"-c", `exec "$0" "$@"`, command}, args...)
+		cmd = exec.CommandContext(cmdCtx, "sh", shArgs...)
+	} else {
+		cmd = exec.CommandContext(cmdCtx, command, args...)
+	}
 	if workingDir != "" {
 		// workingDir is validated by validateFilePath to satisfy CodeQL command-injection rule.
 		cmd.Dir = workingDir

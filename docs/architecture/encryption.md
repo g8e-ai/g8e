@@ -1,7 +1,7 @@
 # Encryption Architecture
 
 Last Updated: 2026-06-28
-Version: v1.3.1
+Version: v1.3.2
 
 ## Overview
 
@@ -453,4 +453,5 @@ If services fail with "vault not initialized":
 - Encrypted KV Adapter: `internal/services/gateway/encrypted_kv_adapter.go`
 - CLI Commands: `internal/cli/cmd/vault.go`
 - Path Configuration: `internal/paths/paths.go`, `internal/constants/paths.go`
+- Environment Variable Constants: `internal/constants/env_vars.go`
 - Storage Services: `internal/services/storage/`

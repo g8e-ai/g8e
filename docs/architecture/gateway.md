@@ -5,7 +5,7 @@ title: g8e Gateway
 # g8e Gateway
 
 Last Updated: 2026-06-28
-Version: v1.3.1
+Version: v1.3.2
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
@@ -127,15 +127,28 @@ The public HTTPS router registers the following route categories:
 
 **JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit/register/challenge` and `/api/v1/auth/passkeys/jit/register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with `JWTAuthMiddleware`.
 
-**mTLS-Only Routes**: Data settings, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, tribunal deliberate, governance envelopes (rate-limited), audit receipts and events, SSE push/events/stream, database, KV store, pub/sub publish and stream, PKI management (CSR sign, apps delegated, certificates revoke, revocation bundle), user management, and passkey CLI status.
+**mTLS-Only Routes**: Data settings, operator management (list, terminate, bind, unbind, target, reauth), governance signers, app policies, app revocation, tribunal management (list, delete), tribunal deliberate, governance envelopes (rate-limited), audit receipts, events, export, summary, and report, SSE push/events/stream, database, KV store, pub/sub publish and stream, PKI management (CSR sign, apps delegated, certificates revoke, revocation bundle), user management, and passkey CLI status.
 
 **WebSessionAuth-Protected Routes**: Browser-facing routes under `/api/v1/users/`, `/api/v1/auth/sessions/`, `/api/v1/approvals`, `/api/v1/auth/passkeys` are wrapped with `WebSessionAuth` middleware, requiring a valid web session cookie. These include user profile (`/api/v1/users/me`), web session info (`/api/v1/auth/sessions/me`), OOB approval actions and listing, and passkey credential listing and revocation.
 
-**OOB Approval UI**: The `/approve/{txHash}` page route redirects to the console SPA with an approval hash fragment (`/console/#approve={txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
+**CLI Approval Status**: The `/api/v1/approvals/status/` endpoint is registered on the public mux but excluded from the WebSessionAuth public prefix via `PublicRouteRegistry`. It requires mTLS authentication and allows CLI clients to poll the status of suspended transactions during the L3 approval flow.
+
+**OOB Approval UI**: The `/approve/{txHash}` page route redirects to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
 
 ### PublicRouteRegistry
 
 The `PublicRouteRegistry` in `internal/services/gateway/gateway_auth.go` manages routes that bypass authentication. It maintains exact paths, public prefixes, and excluded prefixes. The `IsPublic` method checks exact matches first (highest priority), then excluded prefixes (mTLS-protected sub-paths under WebSessionAuth prefixes), and finally prefix matches. This ensures that broad public prefixes do not override more specific mTLS-protected sub-paths.
+
+### PrivilegedRouteRegistry
+
+The `PrivilegedRouteRegistry` in `internal/services/gateway/gateway_auth.go` defines routes that require operator or CLI authentication. App certificates are blocked from these routes. The registry covers governance envelope submission (`/api/v1/governance/envelopes`) and query endpoints (`/api/v1/query/`). The `IsPrivileged` method performs prefix matching to determine whether a request path requires operator or CLI identity.
+
+### Auth Middleware Chain
+
+The `auth.Middleware` function in `internal/services/gateway/gateway_auth.go` chains three single-responsibility middlewares in order:
+1. **`publicBypassMiddleware`**: Checks `PublicRouteRegistry.IsPublic`. If the path is public, calls the final handler directly, bypassing the entire chain.
+2. **`mtlsMiddleware`**: Enforces mTLS by requiring a client certificate and verifying revocation status via the PKI controller.
+3. **`authMiddleware`**: Dispatches authentication by identity type: operator session (extracted from mTLS SPIFFE URI SAN), CLI session (via `X-g8e-CLI-Session-Id` header), or App certificate. App auth consults `PrivilegedRouteRegistry.IsPrivileged` to block App certificates from governance and query endpoints.
 
 ### Console SPA
 
@@ -259,16 +272,20 @@ Triggers on the `documents`, `kv_store`, and `blobs` tables increment the state 
 
 ## Health Endpoint Consolidation
 
-The health endpoint is unified across the gateway service and available on all protocol surfaces. The implementation in `internal/services/gateway/gateway_http_health.go` provides consistent health checking behavior:
+The gateway exposes two health endpoints in `internal/services/gateway/gateway_http_health.go`, one per protocol surface:
 
-### Health Check Logic
+### Main Health Check (HTTPS)
 
-The health endpoint verifies:
+The main health endpoint on the HTTPS port (`handleHealth`) performs full readiness checks:
 - Service readiness via an optional `isReady` callback
 - Platform settings document availability
 - State root calculation success
 
-The endpoint returns a `HealthResponse` containing status, mode, and version information. The health check is registered as a public route in the `PublicRouteRegistry` to bypass authentication middleware for monitoring purposes.
+The response (`HealthResponse`) includes `status`, `mode`, `version`, `governance_ready` (whether the governance pipeline is initialized), and `state_merkle_root` (the current state root). This endpoint is registered as a public route in the `PublicRouteRegistry` to bypass authentication middleware for monitoring purposes.
+
+### Bootstrap Health Check (HTTP)
+
+The bootstrap health endpoint on the HTTP port (`handleBootstrapHealth`) is a lighter check that verifies only the `isReady` callback. It skips platform settings and state root verification, making it suitable for initialization monitoring before the database is fully configured. The response includes `status`, `mode`, `version`, and `governance_ready`.
 
 ---
 
@@ -389,7 +406,7 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Passkey Service | `internal/services/gateway/passkey_service.go` |
 | Passkey HTTP Handlers | `internal/services/gateway/passkey_service_http.go` |
 | Console SPA | `internal/services/gateway/console/console.go` |
-| OOB Approval Controller | `internal/services/gateway/auth_controller_approvals.go` |
+| OOB Approval Handlers | `internal/services/gateway/passkey_service_approvals.go` |
 | L4 Warden | `internal/services/governance/l4_warden.go` |
 | L5 Actuator | `internal/services/governance/l5_actuator.go` |
 | PKI / CertStore | `internal/services/gateway/gateway_certs.go` |
