@@ -113,7 +113,7 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 
 #### Passkey Service HTTP Architecture
 
-`PasskeyService` owns its complete HTTP layer via `passkey_service_http.go`. All former `AuthController` passkey handlers have been consolidated into 4 factory methods and 3 direct handler methods on `PasskeyService`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
+The passkey HTTP layer is split into two components: `PasskeyService` (domain logic) and `PasskeyHandler` (HTTP layer). `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) holds domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`) and retains `VerifyL3Proof` for L3 binding to transaction hashes. `PasskeyHandler` (`internal/services/gateway/passkey_service.go:283`) embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`). All former `AuthController` passkey handlers are consolidated into 4 factory methods and 3 direct handler methods on `PasskeyHandler`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
 
 **Factory Methods** (return `http.HandlerFunc`):
 - `RegisterChallenge(cfg)` — WebAuthn registration challenge
@@ -126,6 +126,16 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 - `RevokeCredential` — `DELETE /api/v1/auth/passkeys/{id}` (WebSession-protected)
 - `CLIStatus` — `GET /api/v1/auth/passkeys/cli/status` (mTLS-protected)
 
+**Approval Handlers** (on `PasskeyHandler`, via `passkey_service_approvals.go`):
+- `handleApprovalAction` — dispatcher for `/api/v1/approvals/{txHash}/{action}`
+- `handleApprovalChallenge` — generates WebAuthn challenge for OOB approval
+- `handleApprovalVerify` — verifies WebAuthn assertion for OOB approval
+- `handleCLIApprovalStatus` — `GET /api/v1/approvals/status/{txHash}` (mTLS-protected)
+- `handleApprovalPage` — redirects to console SPA for browser-based approval
+- `handleListSuspendedTransactions` — lists pending approvals (WebSession-protected)
+
+Dependencies for approval handlers are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` on `PasskeyHandler` after construction, since the MCP gateway is created later in the startup sequence.
+
 **`passkeyHandlerConfig` Type**: Each factory method accepts a typed config struct that encodes the trust posture at route mount time:
 
 | Field | Purpose |
@@ -136,9 +146,9 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 | `enforceSessionUserBinding` | Prevents `user_id` spoofing across an existing session |
 | `createWebSession` | Mints a `g8e_session` on successful verification |
 | `setCookie` | Sets the `g8e_session` browser cookie (implies `createWebSession`) |
-| `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment; gated by `userStore.HasAnyUsers()` check — only fires when no users exist, preventing unauthorized user creation (`passkey_service_http.go:123-136`) |
+| `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment; gated by `userStore.HasAnyUsers()` check, only fires when no users exist, preventing unauthorized user creation (`passkey_service_http.go:121-134`) |
 
-This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these.
+This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these. `SetApprovalDependencies(mcpSvc, suspendedStore)` is called on `PasskeyHandler` after both the handler and MCP GatewayService are constructed, since the MCP gateway is created later in the startup sequence.
 
 #### CLI Status Endpoint (mTLS-Gated)
 
@@ -168,11 +178,11 @@ The browser-based console flow (`/api/v1/auth/passkeys/console/*`) is the sole p
 - `AttestationType` is one of `"none"`, `"indirect"`, `"direct"`, `"enterprise"`
 - `CreatedAtUnixMs` is non-zero
 
-Called in `addCredential` at `passkey_service.go:631` before writing to disk. Typed error constants: `ErrPasskeyCredentialInvalidID`, `ErrPasskeyCredentialIDTooLong`, `ErrPasskeyCredentialInvalidPublicKey`, `ErrPasskeyCredentialInvalidAttestation`, `ErrPasskeyCredentialInvalidTimestamp`.
+Called in `addCredential` at `passkey_service.go:666` before writing to disk. Typed error constants: `ErrPasskeyCredentialInvalidID`, `ErrPasskeyCredentialIDTooLong`, `ErrPasskeyCredentialInvalidPublicKey`, `ErrPasskeyCredentialInvalidAttestation`, `ErrPasskeyCredentialInvalidTimestamp`.
 
-`encodeCredID([]byte) string` and `decodeCredID(string) ([]byte, error)` helpers (`passkey_service.go:86-94`) provide centralized base64 RawURL encoding/decoding for credential IDs, replacing scattered ad-hoc `base64.RawURLEncoding` calls.
+`encodeCredID([]byte) string` and `decodeCredID(string) ([]byte, error)` helpers (`passkey_service.go:92-100`) provide centralized base64 RawURL encoding/decoding for credential IDs, replacing scattered ad-hoc `base64.RawURLEncoding` calls.
 
-Safe byte comparisons use `bytes.Equal` instead of unsafe `string()` casts for credential ID matching (`passkey_service.go:474`).
+Safe byte comparisons use `bytes.Equal` instead of unsafe `string()` casts for credential ID matching (`passkey_service.go:509`).
 
 #### Challenge Lifecycle (Purge After Verify)
 
@@ -235,18 +245,23 @@ L2 provides multi-agent cryptographic attestation of payload safety through a Tr
 - **Tribunal Quorum**: The L4 Warden verifies L2 votes by loading the `TribunalPolicy` from `TribunalStore`, checking that each signer is a tribunal member, resolving their Ed25519 public key from `SignerStore`, verifying the signature, and counting affirmative votes against the quorum threshold. The `RequireDistinct` option prevents duplicate signers.
 
 ### Layer 3: Notary (L3Notary)
-*Implementation: `internal/services/governance/l3_notary.go:60` (`outboundL3Notary` struct); interface at `internal/services/governance/l3_notary.go:35`*
+*Implementation: `internal/services/governance/l3_notary.go:57` (`gatewayNotary` struct); interface at `internal/services/governance/l3_notary.go:35`*
+
+L3 has three notary implementations:
+- **`gatewayNotary`** (`internal/services/governance/l3_notary.go:57`): Gateway mode, constructed by `NewGatewayL3Notary`. Combines `cliSessionVerifier` (mTLS CLI) and `PasskeyService` (WebAuthn) as delegates. Passkey verification always runs first; `ErrPasskeyProofRequired` is returned if the proof lacks a `credential_id`. CLI mTLS session verification runs as the second layer when `MtlsCertFingerprint` is present.
+- **`outboundNotary`** (`internal/services/governance/l3_notary.go:66`): Outbound mode, constructed by `NewOutboundL3Notary`. Performs suspended transaction lookup and Ed25519 signature verification only. No passkey or CLI session verification.
+- **`cliNotary`** (`internal/services/governance/l3_notary.go:74`): Gateway CLI mode, constructed by `NewCLIL3Notary`. Performs CLI session verification (user active, session validity, cert revocation) before the shared suspended transaction and signature verification.
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway suspends transactions requiring L3 approval, storing them in the suspended transaction pool.
 - **Browser-Based Approval Flow**: The CLI calls `g8e approve <txHash>`, which opens a browser to `/api/v1/approve/{txHash}`. The gateway redirects to `/console/#approve={txHash}`, where the browser performs the WebAuthn passkey ceremony via `handleApprovalVerify`. The CLI polls `GET /api/v1/approvals/status/{txHash}` via mTLS until the transaction is approved or times out.
-- **Layered Authorization Model**: Gateway mode uses a two-layer authorization model. Layer 1 (passkey authorization) is always required — proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. The `PasskeyService` (`internal/services/gateway/passkey_service.go:68`) validates the WebAuthn assertion. Layer 2 (mTLS transport authentication) applies to CLI callers when `mtls_cert_fingerprint` is present. The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) verifies the CLI session as an additional transport-auth layer. Browser-only approvals skip Layer 2.
+- **Layered Authorization Model**: Gateway mode uses a two-layer authorization model. Layer 1 (passkey authorization) is always required; proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. The `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) validates the WebAuthn assertion. Layer 2 (mTLS transport authentication) applies to CLI callers when `mtls_cert_fingerprint` is present. The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) verifies the CLI session as an additional transport-auth layer. Browser-only approvals skip Layer 2.
 - **Outbound Mode**: When `passkeyVerifier == nil` (outbound L3 notary), only Ed25519 signature validation runs — no passkey is required. This is intentional for environments without a WebAuthn relying party.
 - **Approval Window**: Approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
 - **Unified Enrollment**: `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens the console UI for passkey registration and polls `VerifyPasskeyRegistration` (mTLS) until complete.
-- **Gateway L3 Verification**: The `outboundL3Notary` (`internal/services/governance/l3_notary.go:60`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:91`), implements the layered model. Passkey verification always runs first; `ErrPasskeyProofRequired` is returned if the proof lacks a `credential_id`. CLI mTLS session verification runs as the second layer when `MtlsCertFingerprint` is present.
+- **Gateway L3 Verification**: The `gatewayNotary` (`internal/services/governance/l3_notary.go:57`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:102`), implements the layered model. `NewGatewayL3Notary` accepts a `PasskeyService` (as `L3Notary`) for WebAuthn proof verification and a `CLISessionVerifier` for mTLS transport auth. The `PasskeyService` is passed as the `passkeyVerifier` delegate via `ls.passkey.PasskeyService` in `gateway_service.go:599`. Passkey verification always runs first; `ErrPasskeyProofRequired` is returned if the proof lacks a `credential_id`. CLI mTLS session verification runs as the second layer when `MtlsCertFingerprint` is present.
 - **CLI Session Verifier**: The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) implements the `governance.CLISessionVerifier` interface and verifies that the user is active, the CLI session exists and belongs to the user, the certificate fingerprint matches the session's stored fingerprint (constant-time comparison), the session is active and not expired, and the certificate is not revoked via the PKI authority.
-- **Passkey Service**: The `PasskeyService` handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority.
+- **Passkey Service**: The `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority. `VerifyL3Proof` remains on `PasskeyService` (not `PasskeyHandler`) to maintain the L3 binding to the transaction hash per architectural guardrails.
 - **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:64`) containing the passkey WebAuthn fields (`credential_id`, `client_data_json`, `authenticator_data`, `signature`) and optional mTLS fields (`mtls_cert_fingerprint`), cryptographically bound to the `transaction_hash`.
 - **Transition for Old CLI Binaries**: Old CLI binaries that send Ed25519-only L3 proofs (without `credential_id`) receive `ErrPasskeyProofRequired` from the gateway, providing a clear error rather than silent failure.
 
@@ -258,18 +273,18 @@ The Warden is the final fail-closed gate before execution. It verifies in the fo
 2. **Nonce Reservation**: Early durable replay protection via `ReplayStore.ReserveNonce`, committed to SQLite before any expensive cryptographic checks. Expiry is checked before reservation; expired transactions are rejected.
 3. **Stateless Validation**: Structural integrity checks, action type recognition, typed payload decoding, L1Doctrine compliance, and transaction hash verification (both `id` and `transaction_hash` must equal the computed hash).
 4. **Stateful Validation**: State Merkle root consistency check via `StateRootProvider`; rejects the envelope if the provided `state_merkle_root` does not match the current root.
-5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification loads the `TribunalPolicy` from `TribunalStore`, verifies each signer is a tribunal member, resolves their Ed25519 public key from `SignerStore` by `key_id`, verifies the signature over `{transaction_hash}|{decision}`, and counts affirmative votes against the quorum threshold. L3 proof verification delegates to the configured `L3Notary` implementation, typically the `outboundL3Notary` constructed by `NewGatewayL3Notary`, which routes to `PasskeyService` (WebAuthn) or `cliSessionVerifier` (mTLS) based on proof type.
+5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification loads the `TribunalPolicy` from `TribunalStore`, verifies each signer is a tribunal member, resolves their Ed25519 public key from `SignerStore` by `key_id`, verifies the signature over `{transaction_hash}|{decision}`, and counts affirmative votes against the quorum threshold. L3 proof verification delegates to the configured `L3Notary` implementation, typically the `gatewayNotary` constructed by `NewGatewayL3Notary`, which routes to `PasskeyService` (WebAuthn) or `cliSessionVerifier` (mTLS) based on proof type.
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:51`*
+*Implementation: `internal/services/governance/l5_actuator.go:50`*
 
-The Actuator represents the execution boundary and final audit commitment.
+The Actuator represents the execution boundary and final audit commitment. L5Actuator does NOT re-verify L2 or L3 proofs. By design, L4Warden performs all pre-dispatch verification (L1 doctrine, L2 consensus, L3 notary) and embeds the results in `VerifiedTransaction`. L5 trusts that `VerifiedTransaction`, records the L2/L3 status in the `ActionReceipt` for audit, and focuses on execution safety. The separation between L4 (verification) and L5 (execution) is the defense-in-depth boundary: two independent components with distinct responsibilities.
 - **Fail-Closed Pre-Execution**: Receipt signing and initial audit logging must both succeed before the execution handler is invoked. If either fails, the transaction is aborted.
 - **Sensitive Data Rehydration**: Rehydrates scrubbed placeholders (such as `{{UEI_1}}`) with original sensitive data just before execution via `ScrubbingService.RehydratePayload`.
 - **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving `Capability` (`internal/services/governance/capability.go:39`) from the `VerifiedTransaction` via `MintCapability` (`internal/services/governance/capability.go:117`). The capability binds the action type, target resource, transaction hash, and expiry, and is injected into the execution context. The capability is dissolved immediately after execution completes or fails, ensuring zero standing privileges outside the lifetime of a single `Execute()` call.
 - **Egress Dispatch**: Dispatches the verified payload to downstream executors (Shell, MCP, A2A) via `ExecutionHandler.ExecuteVerifiedTransaction`.
 - **Action Receipts**: Issues a signed `ActionReceipt` using the Actuator's own Ed25519 key over a canonical JSON serialization of the receipt fields, providing immutable proof of the execution outcome.
-- **Commitment**: Records the transaction in the `SQLAuditStore` and, where configured, in the console audit store.
+- **Commitment**: Records the transaction in the `SQLAuditStore` (from `CanonicalDBService.AuditStore` in both gateway and outbound modes) and, where configured, in the console audit store.
 
 ---
 

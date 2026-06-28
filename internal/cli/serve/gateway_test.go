@@ -489,15 +489,15 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 
 func TestGatewayConfig_DoctrinePostureScenario(t *testing.T) {
 	cfg := GatewayConfig{
-		Posture:      config.PostureDoctrine,
-		HTTPPort:     8080,
-		HTTPSPort:    8443,
-		DataDir:      "/var/lib/g8e/data",
-		PKIDir:       "/var/lib/g8e/pki",
-		SecretsDir:   "/var/lib/g8e/secrets",
-		PasskeyRpID:  "localhost",
+		Posture:       config.PostureDoctrine,
+		HTTPPort:      8080,
+		HTTPSPort:     8443,
+		DataDir:       "/var/lib/g8e/data",
+		PKIDir:        "/var/lib/g8e/pki",
+		SecretsDir:    "/var/lib/g8e/secrets",
+		PasskeyRpID:   "localhost",
 		PasskeyRpName: "g8e",
-		LogLevel:     "info",
+		LogLevel:      "info",
 	}
 
 	assert.Equal(t, config.PostureDoctrine, cfg.Posture)
@@ -512,17 +512,17 @@ func TestGatewayConfig_DoctrinePostureScenario(t *testing.T) {
 
 func TestGatewayConfig_ConsensusPostureScenario(t *testing.T) {
 	cfg := GatewayConfig{
-		Posture:      config.PostureConsensus,
-		HTTPPort:     8080,
-		HTTPSPort:    8443,
-		DataDir:      "/var/lib/g8e/data",
-		PKIDir:       "/var/lib/g8e/pki",
-		SecretsDir:   "/var/lib/g8e/secrets",
-		PasskeyRpID:  "localhost",
+		Posture:       config.PostureConsensus,
+		HTTPPort:      8080,
+		HTTPSPort:     8443,
+		DataDir:       "/var/lib/g8e/data",
+		PKIDir:        "/var/lib/g8e/pki",
+		SecretsDir:    "/var/lib/g8e/secrets",
+		PasskeyRpID:   "localhost",
 		PasskeyRpName: "g8e",
-		LogLevel:     "info",
-		TribunalID:   "trib-001",
-		TribunalURL:  "https://localhost:8443/tribunal/v1/deliberate",
+		LogLevel:      "info",
+		TribunalID:    "trib-001",
+		TribunalURL:   "https://localhost:8443/tribunal/v1/deliberate",
 	}
 
 	assert.Equal(t, config.PostureConsensus, cfg.Posture)
@@ -537,15 +537,15 @@ func TestGatewayConfig_ConsensusPostureScenario(t *testing.T) {
 
 func TestGatewayConfig_NotaryPostureScenario(t *testing.T) {
 	cfg := GatewayConfig{
-		Posture:      config.PostureNotary,
-		HTTPPort:     8080,
-		HTTPSPort:    8443,
-		DataDir:      "/var/lib/g8e/data",
-		PKIDir:       "/var/lib/g8e/pki",
-		SecretsDir:   "/var/lib/g8e/secrets",
-		PasskeyRpID:  "localhost",
+		Posture:       config.PostureNotary,
+		HTTPPort:      8080,
+		HTTPSPort:     8443,
+		DataDir:       "/var/lib/g8e/data",
+		PKIDir:        "/var/lib/g8e/pki",
+		SecretsDir:    "/var/lib/g8e/secrets",
+		PasskeyRpID:   "localhost",
 		PasskeyRpName: "g8e",
-		LogLevel:     "info",
+		LogLevel:      "info",
 	}
 
 	assert.Equal(t, config.PostureNotary, cfg.Posture)
@@ -573,8 +573,8 @@ func TestGatewayConfig_ConsensusWithoutTribunalID(t *testing.T) {
 
 func TestGatewayConfig_PortBoundaries(t *testing.T) {
 	tests := []struct {
-		name     string
-		httpPort int
+		name      string
+		httpPort  int
 		httpsPort int
 	}{
 		{"zero ports", 0, 0},
@@ -616,9 +616,9 @@ func TestGatewayConfig_NegativePorts(t *testing.T) {
 
 func TestGatewayConfig_RateLimitBoundaries(t *testing.T) {
 	tests := []struct {
-		name   string
-		rps    float64
-		burst  int
+		name  string
+		rps   float64
+		burst int
 	}{
 		{"zero", 0, 0},
 		{"minimal", 0.1, 1},

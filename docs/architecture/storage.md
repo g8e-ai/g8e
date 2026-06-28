@@ -1,7 +1,7 @@
 # Storage Architecture
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 ## Overview
 
@@ -324,7 +324,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: constants.Suspend
 - `Wait()`: Block until all in-flight writes complete.
 - `Close()`: Stop the pruner and close the database.
 
-`SuspendedTransactionService` implements the `storage.SuspendedTransactionStore` interface.
+`SuspendedTransactionService` implements the `storage.SuspendedTransactionStore` interface (defined at `internal/services/storage/suspended_transaction_store.go:36`). The interface standardizes the method set across gateway and outbound modes; callers reference the interface type for storage operations and the concrete `*SuspendedTransactionService` type for lifecycle methods (`Wait`, `Close`).
 
 ---
 

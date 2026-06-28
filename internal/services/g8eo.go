@@ -42,17 +42,17 @@ type G8eoService struct {
 	config *config.Config
 	logger *slog.Logger
 
-	bootstrap        *auth.BootstrapService
-	secretManager    *gateway.SecretManager
-	execution        *execution.ExecutionService
-	fileEdit         *execution.FileEditService
-	pubSubCommands   *pubsub.OperatorPubSubService
-	pubSubResults    *pubsub.PubSubResultsService
-	executionVault   *storage.ExecutionVaultService
-	tokenStore       storage.TokenStore
-	suspendedTxStore storage.SuspendedTransactionStore
+	bootstrap         *auth.BootstrapService
+	secretManager     *gateway.SecretManager
+	execution         *execution.ExecutionService
+	fileEdit          *execution.FileEditService
+	pubSubCommands    *pubsub.OperatorPubSubService
+	pubSubResults     *pubsub.PubSubResultsService
+	executionVault    *storage.ExecutionVaultService
+	tokenStore        storage.TokenStore
+	suspendedTxStore  storage.SuspendedTransactionStore
 	suspendedTxCloser *storage.SuspendedTransactionService
-	gatewayDB        *gateway.CanonicalDBService
+	gatewayDB         *gateway.CanonicalDBService
 
 	pubSubClient pubsub.PubSubClient
 	tlsConfig    *certs.TLSConfig

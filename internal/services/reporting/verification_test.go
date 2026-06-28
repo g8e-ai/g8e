@@ -111,19 +111,19 @@ func setupTestCommitmentLedger(t *testing.T) (*storage.CommitmentLedger, *sqlite
 func insertCommitment(t *testing.T, cl *storage.CommitmentLedger, txID, txHash, priorHash, hash, actionType, targetResource string) {
 	t.Helper()
 	attestation := map[string]any{
-		"transaction_id":           txID,
-		"transaction_hash":         txHash,
-		"prior_commitment_hash":    priorHash,
-		"hash":                     hash,
-		"action_type":              actionType,
-		"target_resource":          targetResource,
-		"committed_at_unix_ms":     time.Now().UnixMilli(),
-		"auditor_key_id":           "test-auditor",
-		"signature":                "test-sig",
-		"state_root_at_commit":     "",
-		"l2_signature_digest":      "",
+		"transaction_id":                   txID,
+		"transaction_hash":                 txHash,
+		"prior_commitment_hash":            priorHash,
+		"hash":                             hash,
+		"action_type":                      actionType,
+		"target_resource":                  targetResource,
+		"committed_at_unix_ms":             time.Now().UnixMilli(),
+		"auditor_key_id":                   "test-auditor",
+		"signature":                        "test-sig",
+		"state_root_at_commit":             "",
+		"l2_signature_digest":              "",
 		"Actuator_intent_signature_digest": "",
-		"human_signature_digest":   "",
+		"human_signature_digest":           "",
 	}
 	attJSON, err := json.Marshal(attestation)
 	require.NoError(t, err)

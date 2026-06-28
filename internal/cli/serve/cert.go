@@ -104,10 +104,10 @@ func GenerateCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 // CertPaths holds the filesystem paths needed by enrollment and renewal functions.
 // It decouples these functions from the global paths.Infra singleton.
 type CertPaths struct {
-	PkiTrustDir     string
-	OperatorKeyPath string
-	OperatorCertPath string
-	CaCertPath      string
+	PkiTrustDir       string
+	OperatorKeyPath   string
+	OperatorCertPath  string
+	CaCertPath        string
 	TrustedSignersDir string
 }
 
