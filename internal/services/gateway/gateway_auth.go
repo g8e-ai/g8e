@@ -331,7 +331,7 @@ func (s *AuthService) ValidateOperatorSession(operatorSessionID string) (*models
 
 	docs, err := s.db.DocStore.DocQuery(marshaler.CollectionName(constants.CollectionOperators), filters, "", 1)
 	if err != nil {
-		return nil, fmt.Errorf("gateway: auth: query operator session: %w", constants.ErrNotFound)
+		return nil, fmt.Errorf("gateway: auth: query operator session: %w", err)
 	}
 
 	if len(docs) == 0 {
@@ -531,13 +531,15 @@ func (s *AuthService) handleOperatorAuth(w http.ResponseWriter, r *http.Request,
 		return true
 	}
 
-	s.logger.Warn("gateway: auth: Invalid Operator session attempt", "operator_session_id", operatorSessionID[:8]+"...", string(constants.ConnectionStateError), err)
+	s.logger.Warn("gateway: auth: Invalid Operator session attempt", "operator_session_id", safeTruncateID(operatorSessionID, 8), string(constants.ConnectionStateError), err)
 
 	if ae, ok := err.(*AuthError); ok {
 		s.responder.Error(w, ae.Status, ae.Message)
 		return true
 	}
-	return false
+	s.logger.Error("gateway: auth: operator session validation failed", "operator_session_id", safeTruncateID(operatorSessionID, 8), string(constants.ConnectionStateError), err)
+	s.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
+	return true
 }
 
 // handleCLIAuth handles authentication for CLI sessions.
@@ -962,4 +964,13 @@ func (s *AuthService) JWTAuthMiddleware(next http.Handler) http.Handler {
 		s.logger.Debug("gateway: auth: JWT authentication successful", "user_id", user.ID, "tenant_id", tenantID, "persona", bindingPersona)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// safeTruncateID returns the first n characters of id followed by "...", or the
+// full id if it is shorter than n. This prevents panics on short or empty IDs.
+func safeTruncateID(id string, n int) string {
+	if len(id) <= n {
+		return id
+	}
+	return id[:n] + "..."
 }

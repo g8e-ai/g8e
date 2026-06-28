@@ -1,7 +1,7 @@
 # Governance
 
 Last Updated: 2026-06-28
-Version: v1.3.1
+Version: v1.3.2
 
 ## Overview
 
@@ -82,7 +82,7 @@ The canonical transaction container is defined in `protocol/proto/g8e/common/v1/
 - **Quorum must be >= 1** → `ErrConfigTribunalQuorumLow` (`internal/config/config.go:295-296`). Quorum=1 is valid for single-member ensembles (e.g., demo deployments with a single-key ensemble).
 - The Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
-**Tribunal bootstrap** (`internal/cli/serve/gateway.go`): The `BootstrapTribunal` function constructs a `TribunalService` from the `TribunalPolicy` stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). For multi-member tribunals, member keys are loaded from disk via `FileKeyProvider` (`internal/services/tribunal/factory.go:85-130`), which reads hex-encoded Ed25519 seeds from `{secretsDir}/{prefix}{tribunalID}_{appID}.key` files. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
+**Tribunal bootstrap** (`internal/cli/serve/gateway.go:465-492`): The `BootstrapTribunal` function constructs a `TribunalService` from the `TribunalPolicy` stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). For multi-member tribunals, member keys are loaded from disk via `FileKeyProvider` (`internal/services/tribunal/factory.go:85-130`), which reads hex-encoded Ed25519 seeds from `{secretsDir}/{prefix}{tribunalID}_{appID}.key` files. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
 **Declarative tribunal seeding** (`--tribunal-bootstrap`): When the `--tribunal-bootstrap` flag is set to a JSON config file path, `bootstrapTribunalPolicy` (`internal/cli/serve/gateway.go`) seeds trusted signers and a TribunalPolicy at startup, before consensus validation runs. The config file contains `tribunal_id`, `member_app_ids`, `quorum`, and optional `seed_hex` (a hex-encoded Ed25519 seed). If `seed_hex` is provided, the corresponding public key is derived and registered as a trusted signer for each member. If omitted, a fresh key pair is generated. The TribunalPolicy is then created in the database. This is idempotent: if the tribunal already exists, the bootstrap is skipped. This enables deterministic demo deployments where the gateway and agent harness share the same Ed25519 seed.
 
@@ -147,7 +147,7 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | L3 proof valid (mutations only) | `l4_warden.go:670-673` | Audited | Audited | **Enforced** |
 | L2/L3 status in receipt | `l5_actuator.go:109-127` | Recorded | Recorded | Recorded |
 | Startup: tribunal ID required | `config.go:292-293` | - | **Enforced** | - |
-| Startup: quorum >= 2 | `config.go:295-296` | - | **Enforced** | - |
+| Startup: quorum >= 1 | `config.go:295-296` | - | **Enforced** | - |
 | Startup: tribunal policy exists + enabled | `internal/cli/serve/gateway.go` | - | **Enforced** | - |
 | Invalid posture name → panic | `posture.go:75-81` | **Enforced** | **Enforced** | **Enforced** |
 
@@ -403,13 +403,13 @@ The Tribunal is the enrolled agentic application that deliberates on governance 
 
 ### TribunalPolicy
 
-The `TribunalPolicy` (`internal/models/auth.go:466-477`) defines a named consensus body with the following fields:
+The `TribunalPolicy` (`internal/models/auth.go:502-510`) defines a named consensus body with the following fields:
 
 | Field | Type | Description |
 |---|---|---|
 | `ID` | `string` | Tribunal name/identifier. Must be non-empty, alphanumeric + hyphens + underscores only. |
 | `MemberAppIDs` | `[]string` | List of member App IDs. Each must correspond to an enabled `TrustedSigner`. No duplicates. |
-| `Quorum` | `int` | Minimum number of affirmative distinct signatures required. Must be >= 1 and <= member count. Consensus posture enforces >= 2 at startup. |
+| `Quorum` | `int` | Minimum number of affirmative distinct signatures required. Must be >= 1 and <= member count. Consensus posture enforces >= 1 at startup. |
 | `RequireDistinct` | `bool` | If true, duplicate `signer_key_id` values in a vote set are rejected. |
 | `Enabled` | `bool` | Whether the tribunal is active. New tribunals must be created with `Enabled=true`. |
 | `CreatedAt` | `time.Time` | Creation timestamp (auto-set). |
@@ -478,7 +478,7 @@ Errors are returned for missing files, invalid hex, or wrong seed length.
 
 #### Bootstrap Key Resolution
 
-During `BootstrapTribunal` (`internal/cli/serve/gateway.go:330-357`), a composite `KeyProvider` is constructed:
+During `BootstrapTribunal` (`internal/cli/serve/gateway.go:465-492`), a composite `KeyProvider` is constructed:
 
 1. **File-based lookup**: First attempts to load the member key from disk via `FileKeyProvider`.
 2. **Actuator fallback**: If the file lookup fails and the member App ID matches the actuator's key ID, the actuator's Ed25519 private key is used (Option C for single-member tribunals).
@@ -539,7 +539,7 @@ The `Deliberate` method:
 
 ### Tribunal Bootstrap at Gateway Startup
 
-When the gateway starts in consensus posture, `BootstrapTribunal` (`internal/cli/serve/gateway.go:330-357`) is called to construct and wire the Tribunal service. Under doctrine or notary posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
+When the gateway starts in consensus posture, `BootstrapTribunal` (`internal/cli/serve/gateway.go:465-492`) is called to construct and wire the Tribunal service. Under doctrine or notary posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
 
 1. **Load policy**: Retrieves the `TribunalPolicy` from the database via `TribunalStore.GetTribunal(tribunalID)`. If the policy is missing, returns `ErrTxL2TribunalNotConfigured`.
 2. **Construct key provider**: Creates a `FileKeyProvider` for the configured secrets directory, then wraps it with the actuator key fallback logic (see [Bootstrap Key Resolution](#bootstrap-key-resolution)).

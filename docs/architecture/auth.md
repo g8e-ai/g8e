@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
 Last Updated: 2026-06-28
-Version: v1.3.1
+Version: v1.3.2
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
@@ -147,7 +147,7 @@ Dependencies for approval handlers are injected via `SetApprovalDependencies(mcp
 | `enforceSessionUserBinding` | Prevents `user_id` spoofing across an existing session |
 | `createWebSession` | Mints a `g8e_session` on successful verification |
 | `setCookie` | Sets the `g8e_session` browser cookie (implies `createWebSession`) |
-| `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment; gated by `userStore.HasAnyUsers()` check, only fires when no users exist, preventing unauthorized user creation (`passkey_service_http.go:121-134`) |
+| `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment; gated by `userStore.HasAnyUsers()` check, only fires when no users exist, preventing unauthorized user creation (`passkey_service_http.go:120-151`) |
 
 This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these. `SetApprovalDependencies(mcpSvc, suspendedStore)` is called on `PasskeyHandler` after both the handler and MCP GatewayService are constructed, since the MCP gateway is created later in the startup sequence.
 
@@ -376,27 +376,9 @@ When a user interacts with the g8e Dashboard (web session), they may control mul
 
 #### 7.1.2 KV Key Scheme
 
-Binding uses the platform KV store with three key prefixes defined in `internal/services/gateway/registration_service.go`:
+Binding uses the platform KV store with three key prefixes defined in `internal/services/gateway/registration_service.go`. The web-to-operator key (`g8e:sessions:web:{web_session_id}:bind`) maps to a JSON array of operator session ID strings. The operator-to-web key (`g8e:sessions:operator:{operator_session_id}:bind`) maps to a single web session ID string. A CLI binding prefix (`g8e:sessions:cli:{cli_session_id}:bind`) is reserved for future use.
 
-```
-g8e:sessions:web:{web_session_id}:bind       → JSON array of operator_session_id strings
-g8e:sessions:operator:{operator_session_id}:bind  → web_session_id string
-g8e:sessions:cli:{cli_session_id}:bind        → (CLI binding prefix, reserved)
-```
-
-The web→operator direction is a **one-to-many** mapping (one web session can bind multiple operators). The operator→web direction is **one-to-one** (an operator session is bound to at most one web session at a time).
-
-Helper functions:
-
-```go
-func sessionWebBindKey(webSessionID string) string {
-    return sessionWebBindPrefix + webSessionID + sessionBindSuffix
-}
-
-func sessionOperatorBindKey(operatorSessionID string) string {
-    return sessionOperatorBindPrefix + operatorSessionID + sessionBindSuffix
-}
-```
+The web-to-operator direction is a **one-to-many** mapping (one web session can bind multiple operators). The operator-to-web direction is **one-to-one** (an operator session is bound to at most one web session at a time). Helper functions `sessionWebBindKey` and `sessionOperatorBindKey` construct the full KV keys from prefix, ID, and suffix constants.
 
 #### 7.1.3 Durable Document: `BoundSessionsDocumentGo`
 
@@ -435,24 +417,7 @@ For each operator ID in the request:
 4. **Durable doc**: create or update the `BoundSessionsDocumentGo` in the `bound_sessions` collection, adding the operator ID and session ID.
 5. **Operator doc**: stamp `bound_web_session_id` on the Operator document for UI consumption.
 
-**Request/Response types** (`internal/models/auth.go`):
-
-```go
-type BindOperatorsRequest struct {
-    OperatorIDs  []string `json:"operator_ids"`
-    UserID       string   `json:"user_id"`
-    WebSessionID string   `json:"web_session_id"`
-}
-
-type BindOperatorsResponse struct {
-    Success           bool     `json:"success"`
-    BoundCount        int      `json:"bound_count"`
-    FailedCount       int      `json:"failed_count"`
-    BoundOperatorIDs  []string `json:"bound_operator_ids"`
-    FailedOperatorIDs []string `json:"failed_operator_ids"`
-    Error             string   `json:"error,omitempty"`
-}
-```
+The request type (`BindOperatorsRequest` in `internal/models/auth.go`) carries the operator IDs to bind, the requesting user ID, and the web session ID. The response type (`BindOperatorsResponse`) reports success/failure counts, lists of bound and failed operator IDs, and an optional error string.
 
 #### 7.1.6 Unbind Operation (`UnbindOperators`)
 
@@ -523,19 +488,7 @@ This function verifies that a presented client certificate belongs to a CLI sess
 
 Location: `internal/services/gateway/cli_session_service.go:44`
 
-`PersistCLISession` creates the CLI session document with the `OperatorSessionID` field that establishes the binding:
-
-```go
-cliSession := models.CLISession{
-    ID:                cliSessionID,
-    UserID:            userID,
-    OperatorSessionID: operatorSessionID,  // ← the binding link
-    SystemFingerprint: systemFingerprint,
-    CertFingerprint:   certFingerprint,
-    CertSerial:        certSerial,
-    ...
-}
-```
+`PersistCLISession` creates the CLI session document with the `OperatorSessionID` field that establishes the binding. The session record also stores the user ID, system fingerprint, certificate fingerprint, and certificate serial for later verification.
 
 ---
 
@@ -556,15 +509,7 @@ Location: `internal/services/gateway/gateway_auth.go:881-965`
 
 #### 7.3.3 Context Key
 
-Defined in `protocol/constants/auth.json`:
-
-```json
-"binding_persona": {
-    "_go_const": "ContextKeyBindingPersona",
-    "value": "binding_persona",
-    "description": "Stores the binding persona identifier in context"
-}
-```
+Defined in `protocol/constants/auth.json` as the `binding_persona` entry, which maps to the Go constant `ContextKeyBindingPersona` with the value `binding_persona`.
 
 ---
 
@@ -606,7 +551,7 @@ This ensures every governance envelope carries the full identity chain: who requ
 
 #### 7.5.1 Push Authorization (App → Target)
 
-Location: `internal/services/gateway/gateway_http_sse.go:126-232`
+Location: `internal/services/gateway/gateway_http_sse.go:129-235`
 
 When an app workload pushes an SSE event to a target session, the Gateway verifies the app is authorized for that target by checking the binding:
 
@@ -624,7 +569,7 @@ When an app workload pushes an SSE event to a target session, the Gateway verifi
 
 #### 7.5.2 Stream Authorization (Consumer → Events)
 
-Location: `internal/services/gateway/gateway_http_sse.go:285-336`
+Location: `internal/services/gateway/gateway_http_sse.go:275-339`
 
 When a consumer connects to the SSE stream, the Gateway verifies the Operator session is bound to the declared routing target:
 

@@ -1,13 +1,13 @@
 # Storage Architecture
 
 Last Updated: 2026-06-28
-Version: v1.3.1
+Version: v1.3.2
 
 ## Overview
 
 The g8e storage layer is split into discrete services, each responsible for a specific persistence concern. Following the v1.0.10 refactor, the monolithic `AuditVaultService` is consolidated into `SQLAuditStore`, `GitLedgerService`, and `HistoryHandler`. All services reside under `internal/services/storage/`.
 
-Mandatory [encryption at rest](./encryption.md) is enforced across the storage layer. Services require an unlocked vault for secure operations, with specific fail-open or fail-closed behaviors depending on the criticality of data continuity versus confidentiality.
+Mandatory [encryption at rest](./encryption.md) is enforced across the storage layer. Services require an unlocked vault for secure operations; most services are fail-closed, returning errors when the vault is locked.
 
 - **Audit Store**: Append-only audit logging with encryption at rest
 - **Ledger**: git-backed version control for file modifications, session-isolated
@@ -43,7 +43,7 @@ Shared implementation patterns across the services:
 
 **Key Features:**
 
-- **Encryption at rest**: `content_text`, `command_stdout`, and `command_stderr` are encrypted using the vault when it is unlocked. If the vault is locked, content is stored as plaintext to ensure audit records are never blocked by vault state (fail-open for audit continuity). The `encrypted` column tracks the encryption status of each event.
+- **Encryption at rest**: `content_text`, `command_stdout`, and `command_stderr` are encrypted using the vault when it is unlocked. If the vault is locked, the encryption step returns an error and the event is not recorded (fail-closed). The `encrypted` column tracks the encryption status of each event.
 - **Mandatory Vault**: `NewSQLAuditStore` requires an `EncryptionVault` in its configuration and returns an error if it is missing.
 - **Output truncation**: Large outputs are truncated using a head/tail strategy to prevent database bloat; thresholds are configurable.
 - **Session validation**: Events must reference a pre-existing session row. App sessions are auto-created on first write to satisfy the foreign key constraint.
@@ -53,20 +53,7 @@ Shared implementation patterns across the services:
 
 **Configuration:**
 
-```go
-type AuditStoreConfig struct {
-    DataDir                   string
-    DBPath                    string
-    MaxDBSizeMB               int64
-    RetentionDays             int
-    PruneIntervalMinutes      int
-    OutputTruncationThreshold int
-    HeadTailSize              int
-    EncryptionVault           *vault.Vault // required
-}
-```
-
-`EncryptionVault` is required; `NewSQLAuditStore` returns an error if it is nil.
+`AuditStoreConfig` holds `DataDir`, `DBPath`, `MaxDBSizeMB`, `RetentionDays`, `PruneIntervalMinutes`, `OutputTruncationThreshold`, `HeadTailSize`, and `EncryptionVault`. The `EncryptionVault` field is required; `NewSQLAuditStore` returns an error if it is nil.
 
 Default values (`DefaultAuditStoreConfig`): `DataDir: paths.Infra.DataDir` (resolves to `{baseDir}/.g8e/data`), `DBPath: constants.DbFilename` (`"g8e.db"`, resolved to `{DataDir}/g8e.db` via `pathutil.ResolveDBPath`), `MaxDBSizeMB: 2048`, `RetentionDays: 90`, `PruneIntervalMinutes: 60`, `OutputTruncationThreshold: 102400`, `HeadTailSize: 51200`.
 
@@ -104,39 +91,16 @@ Default values (`DefaultAuditStoreConfig`): `DataDir: paths.Infra.DataDir` (reso
 - **Encryption at rest**: When the vault is unlocked, file copies are encrypted using AES-256-GCM and stored with an `.enc` extension. The service enforces a 100 MB size limit on encrypted copies to prevent memory exhaustion during the full-read required by the encryption cipher.
 - **Streaming**: Unencrypted files are streamed to the ledger using `io.Copy` to prevent memory exhaustion.
 - **Fail-closed Retrieval**: `GetFileAtCommit` and `RestoreFileFromCommit` require an unlocked vault and return an error if the vault is locked.
-- **Path normalization**: `normalizeToGitPath` removes Windows drive letters and converts backslashes so paths are consistent across platforms.
+- **Path normalization**: The ledger normalizes paths by removing Windows drive letters and converting backslashes so paths are consistent across platforms.
 - **State merkle root**: `GetStateMerkleRoot` returns the HEAD commit hash of the global `files` ledger as a BFT-verifiable snapshot.
 
 **Configuration:**
 
-```go
-type LedgerConfig struct {
-    BaseDir         string       // base directory for all session ledgers
-    GitPath         string       // non-empty string enables git operations
-    EncryptionVault *vault.Vault // required
-}
-```
-
-`EncryptionVault` is required; `NewGitLedgerService` returns an error if it is nil. Git operations are only performed when `GitPath` is non-empty (`gitReady()` check).
+`LedgerConfig` holds `BaseDir`, `GitPath`, and `EncryptionVault`. The `EncryptionVault` field is required; `NewGitLedgerService` returns an error if it is nil. Git operations are only performed when `GitPath` is non-empty.
 
 **Two-Phase Commit Pattern:**
 
-```go
-// Write
-result, err := ledger.LedgerFileWrite(sessionID, filePath)
-// ... perform host file write ...
-err = ledger.CompleteMirrorWrite(result, sessionID)
-
-// Delete
-result, err := ledger.MirrorFileDelete(sessionID, filePath)
-// ... perform host file deletion ...
-err = ledger.CompleteMirrorDelete(result, sessionID)
-
-// Create
-result, err := ledger.MirrorFileCreate(sessionID, filePath)
-// ... perform host file creation ...
-err = ledger.CompleteMirrorCreate(result, sessionID)
-```
+Each file operation follows a two-phase commit: the ledger snapshots pre-mutation state and returns a `LedgerResult` with `LedgerHashBefore`, the operator performs the host filesystem mutation, then the ledger completes the commit by copying the post-mutation file and committing to git. The three operations are write (`LedgerFileWrite` / `CompleteMirrorWrite`), delete (`MirrorFileDelete` / `CompleteMirrorDelete`), and create (`MirrorFileCreate` / `CompleteMirrorCreate`).
 
 **Key Methods:**
 
@@ -172,21 +136,12 @@ err = ledger.CompleteMirrorCreate(result, sessionID)
 - **Hash verification**: Content hashes are stored alongside compressed blobs for integrity checks.
 - **Case/task/investigation linking**: Execution records carry workflow metadata fields.
 - **Retention pruning**: Background `sqliteutil.Pruner` deletes records older than the retention threshold and prunes the oldest 10% of rows when the database exceeds the size limit.
-- **Fail-closed**: The service is fail-closed; `encryptContent` returns an error if the vault is locked, with no plaintext fallback.
+- **Fail-closed**: The service is fail-closed; the encryption step returns an error if the vault is locked, with no plaintext fallback.
 - **ID Persistence**: Both `execution_log` and `file_diff_log` use stable string IDs as primary keys.
 
 **Configuration:**
 
-```go
-type ExecutionVaultConfig struct {
-    DBPath               string
-    MaxDBSizeMB          int64
-    RetentionDays        int
-    PruneIntervalMinutes int
-}
-```
-
-`vault.Vault` is passed as a constructor argument and is required. `NewExecutionVaultService` returns an error if it is nil.
+`ExecutionVaultConfig` holds `DBPath`, `MaxDBSizeMB`, `RetentionDays`, and `PruneIntervalMinutes`. The `vault.Vault` is passed as a separate constructor argument and is required; `NewExecutionVaultService` returns an error if it is nil.
 
 Default values (`DefaultExecutionVaultConfig`): `DBPath: constants.ExecutionVaultDBPath` (`".g8e/execution_vault.db"`; overridden at runtime to `paths.Infra.ExecutionVaultDBPath`, which resolves to `{baseDir}/.g8e/data/execution_vault.db`), `MaxDBSizeMB: 1024`, `RetentionDays: 30`, `PruneIntervalMinutes: 60`.
 
@@ -212,13 +167,7 @@ Default values (`DefaultExecutionVaultConfig`): `DBPath: constants.ExecutionVaul
 
 **Interface Definition:**
 
-```go
-type TokenStore interface {
-    KVSet(ctx context.Context, key, value string, ttlSeconds int) error
-    KVGet(ctx context.Context, key string) (string, error)
-    KVScanPrefix(ctx context.Context, prefix string) (map[string]string, error)
-}
-```
+The `TokenStore` interface defines three methods: `KVSet` for writing a key-value pair with a TTL, `KVGet` for retrieving a single value by key, and `KVScanPrefix` for retrieving all key-value pairs matching a prefix.
 
 **Canonical Implementation: `EncryptedKVAdapter`**
 
@@ -231,13 +180,7 @@ type TokenStore interface {
 - **Prefix scanning**: `KVScanPrefix` retrieves all keys matching the prefix, decrypting each value. Decryption failures are silently skipped.
 - **No standalone database**: The adapter uses the shared `CanonicalDBService` database connection; no separate SQLite database or background pruner is required.
 
-**Constructor:**
-
-```go
-func NewEncryptedKVAdapter(kv *KVStoreService, v *vault.Vault) *EncryptedKVAdapter
-```
-
-`EncryptedKVAdapter` implements `storage.TokenStore`.
+`NewEncryptedKVAdapter` accepts a `KVStoreService` and a `vault.Vault`, and returns an `EncryptedKVAdapter` that implements `storage.TokenStore`.
 
 ---
 
@@ -254,19 +197,13 @@ func NewEncryptedKVAdapter(kv *KVStoreService, v *vault.Vault) *EncryptedKVAdapt
 - **Atomic replay detection**: The `INSERT` on `nonce_usage` relies on the UNIQUE constraint to detect duplicates without a separate read-then-write race.
 - **Nonce lifecycle**: Reserve, then either Finalize (mark as `used`) or Release (delete reservation on transaction failure).
 - **Fail-closed design**: `ReserveNonce` fails closed on any SQLite error during cleanup or insertion.
-- **Automatic expiry cleanup**: `cleanupExpiredNonces` runs on each `ReserveNonce` call.
+- **Automatic expiry cleanup**: Expired nonces are cleaned up on each `ReserveNonce` call.
 - **Stale reservation cleanup**: `CleanupStaleReserved` removes reservations older than a configurable duration that were never finalized, for example after a crash.
 - **No encryption required**: Nonce data does not contain sensitive content.
 
 **Configuration:**
 
-```go
-type ReplayStoreConfig struct {
-    DBPath string
-}
-```
-
-Default value (`DefaultReplayStoreConfig`): `DBPath: constants.ReplayStoreDBPath` (`".g8e/replay_store.db"`; overridden at runtime to `paths.Infra.ReplayStoreDBPath`, which resolves to `{baseDir}/.g8e/data/replay_store.db`).
+`ReplayStoreConfig` holds a single `DBPath` field. The default value (`DefaultReplayStoreConfig`) sets `DBPath` to `constants.ReplayStoreDBPath` (`".g8e/replay_store.db"`; overridden at runtime to `paths.Infra.ReplayStoreDBPath`, which resolves to `{baseDir}/.g8e/data/replay_store.db`).
 
 No background pruner is started; callers invoke `Prune` and `CleanupStaleReserved` directly.
 
@@ -288,7 +225,7 @@ No background pruner is started; callers invoke `Prune` and `CleanupStaleReserve
 
 **Schema Tables:**
 
-- `suspended_transactions`: Approval workflow records (`transaction_hash`, `envelope`, `created_at`, `expires_at`, `tool_name`, `tool_arguments`, `user_id`, `operator_id`, `approved`, `approved_at`, `approved_by`, `approval_signature`, `expected_cert_fingerprint`, `approval_public_key`)
+- `suspended_transactions`: Approval workflow records (`transaction_hash`, `envelope`, `created_at`, `expires_at`, `tool_name`, `tool_arguments`, `user_id`, `operator_id`, `approved`, `approved_at`, `approved_by`, `approval_signature`, `expected_cert_fingerprint`, `approval_public_key`, `passkey_credential_id`, `passkey_client_data_json`, `passkey_authenticator_data`, `passkey_signature`)
 
 **Key Features:**
 
@@ -301,16 +238,7 @@ No background pruner is started; callers invoke `Prune` and `CleanupStaleReserve
 
 **Configuration:**
 
-```go
-type SuspendedTransactionConfig struct {
-    DBPath               string
-    MaxDBSizeMB          int64
-    RetentionDays        int
-    PruneIntervalMinutes int
-}
-```
-
-Default values (`DefaultSuspendedTransactionConfig`): `DBPath: constants.SuspendedTransactionDBPath` (`".g8e/suspended_transactions.db"`; overridden at runtime to `paths.Infra.SuspendedTransactionsDBPath`, which resolves to `{baseDir}/.g8e/data/suspended_transactions.db`), `MaxDBSizeMB: 256`, `RetentionDays: 7`, `PruneIntervalMinutes: 30`.
+`SuspendedTransactionConfig` holds `DBPath`, `MaxDBSizeMB`, `RetentionDays`, and `PruneIntervalMinutes`. Default values (`DefaultSuspendedTransactionConfig`): `DBPath` is `constants.SuspendedTransactionDBPath` (`".g8e/suspended_transactions.db"`; overridden at runtime to `paths.Infra.SuspendedTransactionsDBPath`, which resolves to `{baseDir}/.g8e/data/suspended_transactions.db`), `MaxDBSizeMB: 256`, `RetentionDays: 7`, `PruneIntervalMinutes: 30`.
 
 **Key Methods:**
 
@@ -324,7 +252,7 @@ Default values (`DefaultSuspendedTransactionConfig`): `DBPath: constants.Suspend
 - `Wait()`: Block until all in-flight writes complete.
 - `Close()`: Stop the pruner and close the database.
 
-`SuspendedTransactionService` implements the `storage.SuspendedTransactionStore` interface (defined at `internal/services/storage/suspended_transaction_store.go:36`). The interface standardizes the method set across gateway and outbound modes; callers reference the interface type for storage operations and the concrete `*SuspendedTransactionService` type for lifecycle methods (`Wait`, `Close`).
+`SuspendedTransactionService` implements the `storage.SuspendedTransactionStore` interface. The interface standardizes the method set across gateway and outbound modes; callers reference the interface type for storage operations and the concrete `*SuspendedTransactionService` type for lifecycle methods (`Wait`, `Close`).
 
 ---
 
@@ -344,11 +272,7 @@ Columns: `id` (auto-increment primary key, mapped to `CommitmentRow.Seq`), `tran
 - **Signature tracking**: All signature digests and the auditor signature are stored as discrete columns.
 - **No encryption required**: Attestation JSON is treated as public audit data.
 
-**Constructor:**
-
-```go
-func NewCommitmentLedger(db *sqliteutil.DB, logger *slog.Logger) *CommitmentLedger
-```
+`NewCommitmentLedger` accepts a `sqliteutil.DB` and a `slog.Logger`, and returns a `CommitmentLedger` ready for use.
 
 **Key Methods:**
 
@@ -370,13 +294,7 @@ func NewCommitmentLedger(db *sqliteutil.DB, logger *slog.Logger) *CommitmentLedg
 - **File restoration**: `HandleRestoreFile` delegates to the ledger's `RestoreFileFromCommit`.
 - **Session context**: All operations are scoped to an `operator_session_id`.
 
-**Constructor:**
-
-```go
-func NewHistoryHandler(auditStore auditStoreInterface, ledger ledgerInterface, logger loggerInterface) *HistoryHandler
-```
-
-The constructor accepts interface types for dependency injection and unit testing. The `auditStoreInterface` requires `GetOperatorSession`, `GetEvents`, and `GetFileMutations`. The `ledgerInterface` requires `GetFileHistory`, `RestoreFileFromCommit`, `GetFileAtCommit`, and two-phase commit methods.
+`NewHistoryHandler` accepts interface types for dependency injection and unit testing. The audit store interface requires `GetOperatorSession`, `GetEvents`, and `GetFileMutations`. The ledger interface requires `GetFileHistory`, `RestoreFileFromCommit`, `GetFileAtCommit`, and two-phase commit methods.
 
 **Key Methods:**
 
@@ -395,7 +313,7 @@ Services requiring encryption use `vault.Vault` (AES-256-GCM). Following v1.0.10
 
 Behavior when the vault is locked varies by service:
 
-- **Audit Store**: Stores plaintext and sets `encrypted = 0`. Audit continuity takes precedence over encryption (fail-open).
+- **Audit Store**: Returns an error if the vault is locked; events are not recorded until the vault is unlocked (fail-closed).
 - **Execution Vault**: Returns an error if the vault is locked. No plaintext fallback (fail-closed).
 - **Token Store (`EncryptedKVAdapter`)**: `KVSet` and `KVGet` return an error if the vault is locked. `KVScanPrefix` silently skips entries that cannot be decrypted. No plaintext fallback (fail-closed).
 - **Ledger**: `GetFileAtCommit` and `RestoreFileFromCommit` return an error if the vault is locked.
@@ -418,14 +336,7 @@ All SQLite-backed services use `sqliteutil.DB`, which provides:
 
 ### Pruning
 
-Most services start a `sqliteutil.Pruner` in their constructor:
-
-```go
-pruner := sqliteutil.NewPruner(db, logger, interval, pruneFunc)
-pruner.Start()
-```
-
-Prune functions typically:
+Most services start a `sqliteutil.Pruner` in their constructor, configured with an interval and a prune function. Prune functions typically:
 
 1. Delete records older than the retention cutoff.
 2. Delete the oldest 10% of records when the database exceeds the configured size limit.
@@ -440,7 +351,7 @@ Prune functions typically:
 The storage package contains comprehensive unit tests co-located with each service implementation:
 
 - `audit_store_unit_test.go`: Unit tests for `SQLAuditStore` session, event, mutation, receipt, encryption, and config validation logic.
-- `ledger_test.go`, `ledger_diffcontent_test.go`, `ledger_diffstat_test.go`, `ledger_git_test.go`: Unit tests for `GitLedgerService` two-phase commit, diff generation, and git operations.
+- `ledger_test.go`, `ledger_diffcontent_test.go`, `ledger_diffstat_test.go`, `ledger_git_test.go`, `ledger_bootstrap_test.go`: Unit tests for `GitLedgerService` two-phase commit, diff generation, git operations, and bootstrap initialization.
 - `execution_vault_test.go`: Unit tests for `ExecutionVaultService` encryption, compression, storage, and retrieval.
 - `replay_store_test.go`: Unit tests for `SQLReplayStore` nonce reservation, finalization, release, and cleanup.
 - `suspended_transaction_store_test.go`: Unit tests for `SuspendedTransactionService` store, retrieve, approve, and expire operations.
@@ -452,7 +363,7 @@ The `storagetest` subdirectory (`internal/services/storage/storagetest/`) contai
 
 - `audit_vault.go`: `TestSQLAuditStore`, a monolithic test implementation that integrates audit storage with a git ledger in a single struct. It includes an additional `chaos_events` table and `RecordChaosEvent`/`RecordChaosEvents` methods not present in production code.
 - `helpers.go`: `CreateTestVault` helper for initializing an unlocked `vault.Vault` in tests.
-- `audit_store_*_test.go`: Dedicated test suites for audit store config, encryption, events, mutations, receipts, sessions, and end-to-end flows.
+- `audit_store_config_test.go`, `audit_store_e2e_test.go`, `audit_store_encryption_test.go`, `audit_store_event_test.go`, `audit_store_mutation_test.go`, `audit_store_receipt_test.go`, `audit_store_session_test.go`, `audit_store_test.go`: Dedicated test suites for audit store config, encryption, events, mutations, receipts, sessions, and end-to-end flows.
 
 These implementations are kept separate from production code to avoid import cycles.
 
@@ -460,11 +371,11 @@ These implementations are kept separate from production code to avoid import cyc
 
 ## Security Properties
 
-1. **Encryption at rest**: Sensitive fields are encrypted at rest using AES-256-GCM. The Audit Store uses fail-open semantics to ensure continuity; the Execution Vault and Token Store use fail-closed semantics.
+1. **Encryption at rest**: Sensitive fields are encrypted at rest using AES-256-GCM. The Audit Store, Execution Vault, and Token Store all use fail-closed semantics, returning errors when the vault is locked.
 2. **Fail-closed replay protection**: `SQLReplayStore.ReserveNonce` returns an error on any SQLite failure, preventing replay protection from being silently bypassed.
 3. **Commitment chain integrity**: `CommitmentLedger` verifies `prior_commitment_hash` inside a transaction to prevent chain forks under concurrent writes.
 4. **Session validation**: Audit events must reference an existing session row. Foreign key constraints are enforced at the schema level.
-5. **Path traversal protection**: `GitLedgerService.normalizeToGitPath` strips drive letters and leading separators before constructing ledger-relative paths.
+5. **Path traversal protection**: The ledger strips drive letters and leading separators before constructing ledger-relative paths.
 6. **Size limits for encrypted copies**: The ledger enforces a 100 MB cap on encrypted file copies to prevent OOM during the full-read required by AES-GCM.
 7. **Streaming for unencrypted copies**: The ledger streams unencrypted file copies using `io.Copy` to prevent OOM.
 8. **Atomic nonce reservation**: The UNIQUE constraint on `nonce_usage.nonce` provides atomicity without application-level locking.

@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.2] - 2026-06-28
 
 ### Added
 
@@ -16,6 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 * **Relaxed Consensus Quorum Validation** — `ValidateConsensusStartup` in `internal/config/config.go` now accepts `quorum >= 1` (was `>= 2`). Single-member ensembles producing one signed vote per envelope are valid for demo deployments.
+* **Developer Documentation Overhaul** — Significantly condensed and restructured `docs/devs/devs.md` from verbose prose to a concise Always/Never/Examples format with concrete code snippets for error handling, path constants, and test tiers. Condensed `docs/devs/docs.md` and `docs/devs/tests.md` to remove redundancy and stale guidance. Updated `demos/README.md` with DHS demo entry. Updated `docs/architecture/governance.md` with consensus posture clarification.
+* **Encryption Architecture Doc Update** — Updated `docs/architecture/encryption.md` to v1.3.2 with accurate references, added `internal/constants/env_vars.go` to References section.
+
+### Fixed
+
+* **Stale vault header comment** — Fixed misleading comment in `internal/services/vault/vault_header.go` that referenced `.g8e/data/vault.header` instead of the correct `.g8e/vault/vault.header` path.
+* **Misleading NewVault doc comment** — Removed reference to non-existent `Initialize()` method from `NewVault` doc comment in `internal/services/vault/vault.go`.
+* **Execution vault error constant reuse** — Created execution vault-specific error constants (`ErrExecutionVaultVaultLocked`, `ErrExecutionVaultEncryptFailed`, `ErrExecutionVaultDecryptFailed`) in `internal/constants/errors.go` to replace misleading reuse of audit store error constants in `internal/services/storage/execution_vault.go`.
+* **EncryptedKVAdapter fail-closed violation** — `KVScanPrefix` in `internal/services/gateway/encrypted_kv_adapter.go` now returns errors when the vault is locked or decryption fails, instead of silently skipping entries. Aligns with the fail-closed design principle documented in the encryption architecture.
+* **Auth doc compliance and accuracy** — Updated `docs/architecture/auth.md` to v1.3.2: removed embedded code snippets (struct definitions, function signatures, KV key schemes, JSON constants) per `docs/devs/docs.md` guidelines, replaced with prose descriptions. Fixed line references for SSE push/stream authorization and passkey bootstrap user creation. Updated version header.
+* **Leaked implementation detail in passkey error** — Replaced verbose internal error message in `passkey_service_http.go` `enforceFirstCred` with the generic `ErrFirstCredentialOnly` constant, preventing architecture detail exposure to HTTP clients.
+* **Unsafe session ID truncation** — Replaced manual `operatorSessionID[:8]+"..."` slice in `gateway_auth.go` with `safeTruncateID` helper that handles short or empty IDs without panicking.
+* **Silent auth fall-through on DB error** — `handleOperatorAuth` in `gateway_auth.go` now returns 500 for non-`AuthError` failures from `ValidateOperatorSession` (e.g., DB errors) instead of silently falling through to `handleAppAuth`, masking server-side failures as "no operator session found". Also fixed `ValidateOperatorSession` to propagate the original DB error instead of wrapping it with `ErrNotFound`.
+* **Approval error conflation** — `handleApprovalChallenge` and `handleApprovalVerify` in `passkey_service_approvals.go` now separate transport errors (500) from not-found (404), matching the pattern already used in `handleCLIApprovalStatus`.
 
 ### Tests
 

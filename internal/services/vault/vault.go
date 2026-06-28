@@ -49,7 +49,7 @@ type VaultConfig struct {
 }
 
 // NewVault creates a new Vault instance.
-// The vault is not initialized or unlocked until Initialize() or Unlock() is called.
+// The vault is not initialized or unlocked until Unlock() is called.
 func NewVault(config *VaultConfig) (*Vault, error) {
 	if config == nil {
 		return nil, constants.ErrVaultConfigRequired

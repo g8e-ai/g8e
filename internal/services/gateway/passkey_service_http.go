@@ -72,7 +72,7 @@ func (h *PasskeyHandler) enforceFirstCred(r *http.Request, userID string, cfg pa
 	if len(user.PasskeyCredentials) == 0 {
 		return false, 0, ""
 	}
-	return true, http.StatusForbidden, "first-credential registration only; user already has credentials, require step-up via existing passkey or mTLS"
+	return true, http.StatusForbidden, constants.ErrFirstCredentialOnly.Error()
 }
 
 // @Summary		Generate WebAuthn registration challenge

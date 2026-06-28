@@ -6,7 +6,7 @@ parent: Guides
 # Air-Gap Architecture
 
 Last Updated: 2026-06-28
-Version: v1.3.1
+Version: v1.3.2
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies. The platform supports both binary deployment and containerized deployment via Docker.
 
