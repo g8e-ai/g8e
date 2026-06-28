@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -123,12 +123,11 @@ The second layer of g8e governance (Consensus). A multi-agent consensus system w
 
 ## L3 Notary (L3Notary)
 
-The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. This is implemented via:
-- **WebAuthn (Passkey)**: FIDO2-compliant cryptographic proof for web sessions only.
-- **mTLS Signature**: A cryptographic signature over the transaction hash using the CLI private key (mTLS certificate fingerprint binding) for CLI sessions.
-- **Operator mTLS**: mTLS certificate fingerprint validation for operator sessions (passkey auth is not available for operators).
-- **CLI Approval**: In outbound mode, mutations requiring L3 are suspended and must be approved via CLI command with cryptographic signature verification. CLI L3 notary now verifies the approver's Ed25519 signature against a stored public key (ApprovalPublicKey field) rather than just the mTLS certificate fingerprint.
-The L4 Warden verifies these proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
+The third layer of g8e governance (Authorization), focusing on human oversight. Every state-changing mutation requires explicit human authorization. The L3 notary uses a layered authorization model with three implementations:
+- **Gateway Notary** (`gatewayNotary`): The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2. Implemented by `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go`.
+- **Outbound Notary** (`outboundNotary`): The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction. Implemented by `NewOutboundL3Notary`.
+- **CLI Notary** (`cliNotary`): The notary for gateway CLI mode without a passkey verifier. Performs CLI session verification followed by suspended transaction and Ed25519 signature verification. Implemented by `NewCLIL3Notary`.
+The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and polls the gateway's mTLS status endpoint (`/api/v1/approvals/status/{tx_hash}`) until the transaction is approved or times out. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
 
@@ -138,7 +137,7 @@ The fail-closed transaction verification gate in the g8e Operator that enforces 
 - Envelope integrity and decoding validation
 - Typed payload validation and action type matching
 - L1 forbidden pattern validation via L1Doctrine
-- Transaction hash verification (`id == transaction_hash`)
+- Transaction hash verification (both `id` and `transaction_hash` must match the computed hash)
 - Freshness (expiry) and replay protection (nonce)
 - State root matching
 - L2 signature verification (when required by posture)
@@ -237,7 +236,7 @@ The data sovereignty and scrubbing system running within the g8e Operator (PEP),
 
 ## SSE (Server-Sent Events)
 
-The streaming protocol used to push real-time events from the g8e Gateway to clients. Used for command execution results, heartbeat updates, and approval requests in BYO agentic client integrations.
+The streaming protocol used to push real-time events from the g8e Gateway to clients. Used for command execution results and heartbeat updates. All clients (CLI, browser, operator) use the unified `/api/v1/sse/stream` endpoint. Approval requests are returned inline in the MCP or A2A response with an `approval_url` field, not pushed via SSE.
 
 ---
 
