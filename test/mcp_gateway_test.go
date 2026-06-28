@@ -98,9 +98,9 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		}
 		err = json.NewDecoder(resp.Body).Decode(&mcpResp)
 		require.NoError(t, err)
-		// Gateway merges native tools with downstream tools (1 echo)
-		// Count is dynamic based on native tool registry
-		require.GreaterOrEqual(t, len(mcpResp.Result.Tools), 30)
+		// Gateway proxies tools/list to downstream (1 echo tool).
+		// Native tool merging was removed with the per-method REST handlers.
+		require.GreaterOrEqual(t, len(mcpResp.Result.Tools), 1)
 		// Verify downstream tool is present
 		hasEcho := false
 		for _, tool := range mcpResp.Result.Tools {

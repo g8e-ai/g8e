@@ -45,7 +45,6 @@ func enrollCmd() *cobra.Command {
 	return enrollCmdWithConfig(loadConfig)
 }
 
-
 func enrollCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "enroll",

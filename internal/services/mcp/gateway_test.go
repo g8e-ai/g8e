@@ -412,7 +412,6 @@ func TestGatewayService_HandlePromptsGet(t *testing.T) {
 	require.JSONEq(t, expectedJSON, w.Body.String())
 }
 
-
 func TestGatewayService_CircuitBreaker(t *testing.T) {
 	t.Parallel()
 
@@ -1327,7 +1326,7 @@ func TestGatewayService_HandleReadField(t *testing.T) {
 	})
 }
 
-func TestGatewayService_HandleMCPRequest(t *testing.T) {
+func TestGatewayService_HandleA2ARequest(t *testing.T) {
 	t.Parallel()
 
 	t.Run("method not allowed", func(t *testing.T) {
@@ -1337,7 +1336,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/mcp/test", nil)
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1356,7 +1355,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1377,7 +1376,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"test/method","params":"%s"}`, largeBody)))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1397,7 +1396,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`invalid json`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1417,7 +1416,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"1.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1437,7 +1436,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1457,7 +1456,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"wrong/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, nil
 		})
 
@@ -1477,7 +1476,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return nil, errors.New("handler error")
 		})
 
@@ -1497,7 +1496,7 @@ func TestGatewayService_HandleMCPRequest(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/mcp/test", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"test/method"}`))
 		w := httptest.NewRecorder()
 
-		g.handleMCPRequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+		g.handleA2ARequest(w, req, "test/method", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 			return map[string]string{"result": "success"}, nil
 		})
 

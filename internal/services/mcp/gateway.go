@@ -347,7 +347,7 @@ func (g *GatewayService) recordSuccess() {
 	g.circuitOpen = false
 }
 
-func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request, method string, handler func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error)) {
+func (g *GatewayService) handleA2ARequest(w http.ResponseWriter, r *http.Request, method string, handler func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error)) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -413,8 +413,8 @@ func (g *GatewayService) handleMCPRequest(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// callTool executes a governed MCP tools/call. It is shared by the unified
-// Streamable HTTP dispatcher (HandleMCP) and the A2A handler (HandleA2aCall).
+// callTool executes a governed MCP tools/call. It is called by the unified
+// Streamable HTTP dispatcher (HandleMCP) via dispatchMCP.
 // The *http.Request is used to extract identity headers and the client
 // certificate fingerprint when a transaction is suspended for L3 approval.
 func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params json.RawMessage) (interface{}, error) {
@@ -792,7 +792,7 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 // @Success		200	{object}	map[string]interface{}
 // @Router			/api/v1/a2a/call [post]
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
-	g.handleMCPRequest(w, r, "a2a/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
+	g.handleA2ARequest(w, r, "a2a/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.a2aCall(ctx, r, params)
 	})
 }

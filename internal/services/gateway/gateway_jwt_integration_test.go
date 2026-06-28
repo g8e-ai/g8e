@@ -240,7 +240,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	// Call an MCP endpoint that generates an envelope
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/mcp/tools/call", bytes.NewBufferString(reqBody))
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+constants.APIPaths.MCPEndpoint, bytes.NewBufferString(reqBody))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 

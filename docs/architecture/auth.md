@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-06-27
-Version: v1.3.0
+Last Updated: 2026-06-28
+Version: v1.3.1
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
@@ -75,14 +75,14 @@ On Windows, enrollment uses the Windows Certificate Store with TPM-backed keys v
 The platform supports authentication via external Identity Providers (IdPs) for BYO clients on MCP and A2A endpoints.
 - **JWKS Integration**: The gateway validates JWT tokens against configured JWKS endpoints.
 - **JIT Provisioning**: Users are provisioned Just-In-Time (JIT) based on the JWT subject claim upon their first successful authentication, subject to platform owner authorization.
-- **Persona Mapping**: JWT roles are mapped to internal binding personas via the `PersonaService` defined in `internal/services/gateway/user_service.go:391`.
+- **Persona Mapping**: JWT roles are mapped to internal binding personas via the `PersonaService` defined in `internal/services/gateway/user_service.go:386`.
 
 ### 1.5 Browser-Facing Console & L3 Passkey Brokerage
 
 The **g8e Console** (served exclusively over HTTPS at `/console`) is a zero-dependency, single-page application (SPA) that acts as the primary WebAuthn interface for L3 passkey brokerage. It consolidates all browser-facing interactions:
 - **Unified Interface**: Replaces legacy inline HTML pages across various routes with a single elegant dark-themed UI.
 - **L3 Passkey Authentication**: Provides browser-based WebAuthn registration and authentication flows, allowing users to obtain web session cookies.
-- **Interactive Approval**: Automatically intercepts OOB approval redirects from `/api/v1/approve/{txHash}` to `/console#approve={txHash}` and handles cryptographic challenge-response signature generation directly from the browser.
+- **Interactive Approval**: Automatically intercepts OOB approval redirects from `/api/v1/approve/{txHash}` to `/console/#approve={url.QueryEscape(txHash)}` and handles cryptographic challenge-response signature generation directly from the browser.
 - **Passkey Management**: Under `WebSessionAuth` protection, authenticated users can view their active passkeys and revoke credentials.
 
 #### L7 mTLS Enforcement Model
@@ -104,12 +104,13 @@ This subtree-match pattern (defined with trailing slashes) ensures all nested en
 #### Excluded Prefixes for mTLS-Protected Sub-Paths
 The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management routes (list, revoke by credential ID) and mTLS-only routes (CLI status). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as public, `PublicRouteRegistry` supports **excluded prefixes**:
 - `/api/v1/auth/passkeys/cli/` - mTLS-only CLI status endpoint (`cli/status`)
+- `/api/v1/approvals/status/` - mTLS-only CLI approval status endpoint (`/api/v1/approvals/status/{txHash}`)
 - `/api/v1/auth/passkeys/jit-` - JIT passkey bootstrap (excluded only when JWKS is not configured)
 
 The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes.
 
 #### Approval Page Redirect
-The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={txHash}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.
+The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={url.QueryEscape(txHash)}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.
 
 #### Passkey Service HTTP Architecture
 
@@ -190,7 +191,7 @@ The `sessionStore` interface includes `DeleteSession(userID string) error`, impl
 
 #### Governance Envelope Authentication
 
-Governance envelope submission (`POST /api/v1/governance/envelopes`) requires operator or CLI mTLS certificates. App certificates (issued via `/api/v1/pki/apps/enroll`) are explicitly blocked from this endpoint by `handleAppAuth` in `gateway_auth.go`. There is no API-key or Bearer token path for governance envelopes. Only operator certs (with a valid operator session in the database) and CLI certs (with `X-G8E-CLI-Session-ID` header) can submit envelopes.
+Governance envelope submission (`POST /api/v1/governance/envelopes`) and query endpoints (`/_query/*`) require operator or CLI mTLS certificates. App certificates (issued via `/api/v1/pki/apps/enroll`) are explicitly blocked from these endpoints by `handleAppAuth` in `gateway_auth.go`, which checks the `PrivilegedRouteRegistry` (`NewPrivilegedRouteRegistry` in `gateway_auth.go:184`). There is no API-key or Bearer token path for governance envelopes. Only operator certs (with a valid operator session in the database) and CLI certs (with `X-G8E-CLI-Session-ID` header) can submit envelopes.
 
 #### Operator Device Enrollment (Headless)
 
@@ -254,7 +255,7 @@ L3 has three notary implementations:
 
 L3 ensures explicit human authorization for mutations.
 - **Suspension**: The g8e Gateway suspends transactions requiring L3 approval, storing them in the suspended transaction pool.
-- **Browser-Based Approval Flow**: The CLI calls `g8e approve <txHash>`, which opens a browser to `/api/v1/approve/{txHash}`. The gateway redirects to `/console/#approve={txHash}`, where the browser performs the WebAuthn passkey ceremony via `handleApprovalVerify`. The CLI polls `GET /api/v1/approvals/status/{txHash}` via mTLS until the transaction is approved or times out.
+- **Browser-Based Approval Flow**: The CLI calls `g8e approve <txHash>`, which opens a browser to `/api/v1/approve/{txHash}`. The gateway redirects to `/console/#approve={url.QueryEscape(txHash)}`, where the browser performs the WebAuthn passkey ceremony via `handleApprovalVerify`. The CLI polls `GET /api/v1/approvals/status/{txHash}` via mTLS until the transaction is approved or times out.
 - **Layered Authorization Model**: Gateway mode uses a two-layer authorization model. Layer 1 (passkey authorization) is always required; proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. The `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) validates the WebAuthn assertion. Layer 2 (mTLS transport authentication) applies to CLI callers when `mtls_cert_fingerprint` is present. The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) verifies the CLI session as an additional transport-auth layer. Browser-only approvals skip Layer 2.
 - **Outbound Mode**: When `passkeyVerifier == nil` (outbound L3 notary), only Ed25519 signature validation runs; no passkey is required. This is intentional for environments without a WebAuthn relying party.
 - **Approval Window**: Approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
@@ -498,7 +499,7 @@ When an Operator is bound to a web session, its status transitions to `bound`. T
 
 #### 7.2.1 Concept
 
-A CLI client (`g8e login`) receives its own mTLS certificate with a SPIFFE URI SAN identifying the CLI session. The CLI session is itself linked to an Operator session via the `OperatorSessionID` field on the `CLISession` model. This creates a chain:
+A CLI client (`g8e enroll`) receives its own mTLS certificate with a SPIFFE URI SAN identifying the CLI session. The CLI session is itself linked to an Operator session via the `OperatorSessionID` field on the `CLISession` model. This creates a chain:
 
 ```
 CLI mTLS cert (SPIFFE URI) → CLI session → OperatorSessionID → Operator session
@@ -506,7 +507,7 @@ CLI mTLS cert (SPIFFE URI) → CLI session → OperatorSessionID → Operator se
 
 #### 7.2.2 `cliCertBoundToOperator`
 
-Location: `internal/services/gateway/gateway_auth.go:761`
+Location: `internal/services/gateway/gateway_auth.go:753`
 
 This function verifies that a presented client certificate belongs to a CLI session whose `OperatorSessionID` matches the claimed operator session. It is used during authentication to allow CLI clients to call internal APIs scoped by `cli_session_id` while presenting their CLI mTLS cert and the linked operator session as a Bearer token.
 
@@ -546,12 +547,12 @@ When external Identity Provider (IdP) JWT tokens are used for authentication, th
 
 #### 7.3.2 Flow
 
-Location: `internal/services/gateway/gateway_auth.go:890-974`
+Location: `internal/services/gateway/gateway_auth.go:881-965`
 
 1. JWT is validated against the configured JWKS endpoint.
 2. `PersonaService.MapRolesToPersona(jwt.Roles)` maps the JWT roles to a persona string. If mapping fails, `"default"` is used.
 3. The persona is stamped into the request context via `ContextKeyBindingPersona`.
-4. The MCP gateway envelope builder (`internal/services/mcp/gateway.go:1216`) reads the persona from context and sets `env.BindingPersona` on the governance envelope.
+4. The MCP gateway envelope builder (`internal/services/mcp/gateway.go:737`) reads the persona from context and sets `env.BindingPersona` on the governance envelope.
 
 #### 7.3.3 Context Key
 
@@ -588,7 +589,7 @@ The `handlePKIAppsDelegated` handler:
 
 #### 7.4.3 Envelope Binding
 
-Location: `internal/services/mcp/gateway.go:1212-1236`
+Location: `internal/services/mcp/gateway.go:718-756`
 
 The governance envelope builder binds both identities to the envelope:
 
@@ -735,7 +736,7 @@ All binding-related errors are defined in `internal/constants/errors.go`:
 
                     ┌─────────────┐
                     │  CLI Client  │
-                    │  (g8e login) │
+                    │  (g8e enroll) │
                     └──────┬───────┘
                            │ mTLS cert (SPIFFE URI)
                            ▼

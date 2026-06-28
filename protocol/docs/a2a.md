@@ -4,7 +4,7 @@ title: A2A Protocol
 
 # A2A Protocol
 
-Last Updated: 2026-06-25
+Last Updated: 2026-06-28
 
 The g8e Operator supports Agent-to-Agent (A2A) protocol integration. A2A agents submit HTTP/JSON skill invocation requests to the g8e Gateway, which encapsulates them in a governance envelope, executes the 5-layer verification sequence (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator), and dispatches verified payloads to a configured downstream A2A server.
 

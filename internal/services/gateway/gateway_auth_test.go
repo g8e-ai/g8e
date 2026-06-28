@@ -253,11 +253,9 @@ func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
 		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
 	}
 
-	// Test MCP tools prefix matches
+	// Test MCP endpoint is public with JWKS enabled
 	mcpPaths := []string{
-		"/api/v1/mcp/tools/list",
-		"/api/v1/mcp/tools/call",
-		"/api/v1/mcp/tools/some-tool",
+		constants.APIPaths.MCPEndpoint,
 	}
 	for _, path := range mcpPaths {
 		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
@@ -1448,7 +1446,7 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 
 		middleware := auth.Middleware(handler)
 
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/mcp/tools/call", nil)
+		req := httptest.NewRequest(http.MethodPost, constants.APIPaths.MCPEndpoint, nil)
 		req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
 		req.Header.Set(constants.HeaderOperatorID, opID)
 		req.Header.Set(constants.HeaderOperatorSessionID, opSessionID)

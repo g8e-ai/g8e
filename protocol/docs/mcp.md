@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-06-25
+Last Updated: 2026-06-28
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -255,7 +255,7 @@ MCP clients connect to the gateway via:
 
 ### Tool Invocation
 
-Invoke MCP tools via JSON-RPC POST to the unified `/mcp` endpoint or via `/api/v1/mcp/tools/call` for direct tool invocation. The `/api/v1/mcp/tools/call/sse` endpoint provides server-sent events for real-time streaming responses. A2A skill invocations are available via `/api/v1/a2a/call`.
+Invoke MCP tools via JSON-RPC POST to the unified `/mcp` endpoint. A2A skill invocations are available via `/api/v1/a2a/call`.
 
 ```json
 {
