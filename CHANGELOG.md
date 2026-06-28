@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+* **Backward Compatibility Cruft Cleanup** — Removed all backward-compatibility code paths that were no longer needed:
+  - Deleted `migratePasskeyColumns()` from `SuspendedTransactionService` — columns already in `CREATE TABLE` schema.
+  - Deleted `migrateStateTierColumns()` from `gateway_db.go` — column already in embedded `db/schema.sql`.
+  - Deleted `loginCmd()` hidden CLI alias — `enroll` is the sole entry point.
+  - Deleted `ResolveGitBinary()` stub — `system.GitEmbedded` is used directly.
+  - Deleted `CreateBootstrapUser()` no-arg wrapper — `CreateBootstrapUserWithOSUser(nil)` is the single entry point.
+  - Simplified `User.IsActive()` — dropped `Status == ""` zero-value compat clause.
+  - Simplified `WebAuthnID()` — removed `[]byte(u.ID)` fallback, returns `nil` on parse failure.
+  - Removed `calculateStateRootUncached()` fallback — `GetCurrentStateRoot()` now returns error if `state_version` query fails.
+  - Removed per-method MCP REST routes (`/api/v1/mcp/tools/list`, `/api/v1/mcp/tools/call`, `/api/v1/mcp/tools/call/sse`, `/api/v1/mcp/resources/list`, `/api/v1/mcp/resources/read`, `/api/v1/mcp/prompts/list`, `/api/v1/mcp/prompts/get`) and their handler methods — the unified `/mcp` JSON-RPC endpoint is the sole MCP entry point.
+  - Removed per-method MCP constants from `api_paths.go` and `api_paths.json` — only `MCPEndpoint`/`mcp_endpoint` retained.
+  - Replaced `MCPToolsPrefix` auth scoping with `MCPEndpoint` exact path in `PublicRouteRegistry`.
+  - Updated all tests, demos, and documentation to reference only the unified `/mcp` endpoint.
+
 ---
 
 ## [1.3.0] - 2026-06-27

@@ -92,7 +92,7 @@ func TestAuthCommandSubcommands(t *testing.T) {
 		cmd := authCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"login", "logout"}
+		expectedSubcommands := []string{"enroll", "logout"}
 
 		for _, subcmd := range expectedSubcommands {
 			found := false

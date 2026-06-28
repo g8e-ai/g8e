@@ -81,7 +81,14 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4. Test MCP tools/list
 	t.Run("tools/list", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mcpURL+constants.APIPaths.MCPToolsList, nil)
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -107,7 +114,14 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.5 Test MCP resources/list
 	t.Run("resources/list", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mcpURL+constants.APIPaths.MCPResourcesList, nil)
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "resources/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -123,7 +137,14 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 
 	// 4.6 Test MCP prompts/list
 	t.Run("prompts/list", func(t *testing.T) {
-		req, _ := http.NewRequest(http.MethodGet, mcpURL+constants.APIPaths.MCPPromptsList, nil)
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "prompts/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -154,7 +175,7 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -222,7 +243,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -257,7 +278,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -290,7 +311,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -322,7 +343,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -354,7 +375,7 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		callReq.Params = mustMarshal(params)
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -398,7 +419,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -417,7 +438,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -433,7 +454,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(map[string]interface{}{})
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -443,7 +464,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 
 	t.Run("malformed JSON", func(t *testing.T) {
 		reqBody := `{invalid json`
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader([]byte(reqBody)))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader([]byte(reqBody)))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -474,7 +495,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		}
 		callReq.Params = mustMarshal(params)
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)
@@ -495,7 +516,7 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		paramsBytes, _ := json.Marshal(params)
 		callReq.Params = paramsBytes
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPToolsCall, bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mcpURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := mtlsClient.Do(req)
 		require.NoError(t, err)

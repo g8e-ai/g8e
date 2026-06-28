@@ -153,7 +153,7 @@ AI clients can connect to the gateway's MCP endpoint:
 **For mTLS-based MCP:**
 
 ```bash
-curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
+curl -X POST https://localhost:8443/mcp \
   --cert .g8e/credentials/cli.crt \
   --key .g8e/credentials/cli.key \
   -H "Content-Type: application/json" \
@@ -165,7 +165,7 @@ curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
 **For plain HTTP MCP (non-mTLS):**
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/mcp/tools/call \
+curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```

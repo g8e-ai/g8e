@@ -303,7 +303,7 @@ Applications can leverage the g8e Gateway's MCP/A2A translation layer instead of
 For MCP-based applications, the Gateway accepts JSON-RPC tool calls and translates them into GovernanceEnvelope format:
 
 ```bash
-curl -X POST https://localhost:8443/api/v1/mcp/tools/call \
+curl -X POST https://localhost:8443/mcp \
   --cert .g8e/cli.crt \
   --key .g8e/cli.key \
   -H "Content-Type: application/json" \

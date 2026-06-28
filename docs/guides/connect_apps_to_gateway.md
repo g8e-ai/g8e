@@ -166,18 +166,11 @@ All native tools include input validation to prevent SQL injection, SSRF attacks
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/mcp` | POST/GET | Unified MCP JSON-RPC endpoint (recommended) |
-| `/api/v1/mcp/tools/list` | POST/GET | List available tools |
-| `/api/v1/mcp/tools/call` | POST | Invoke a tool |
-| `/api/v1/mcp/tools/call/sse` | POST | Invoke tool with SSE streaming |
-| `/api/v1/mcp/resources/list` | POST/GET | List available resources |
-| `/api/v1/mcp/resources/read` | POST | Read a resource |
-| `/api/v1/mcp/prompts/list` | POST/GET | List prompt templates |
-| `/api/v1/mcp/prompts/get` | POST | Get a prompt template |
+| `/mcp` | POST/GET | Unified MCP JSON-RPC endpoint (POST for dispatch, GET for SSE heartbeat) |
 
 #### MCP Unified Endpoint Tool Invocation
 
-The unified `/mcp` endpoint is the recommended surface for AI IDEs. It implements the JSON-RPC 2.0 dispatch contract:
+The `/mcp` endpoint is the sole MCP surface for AI IDEs. It implements the JSON-RPC 2.0 dispatch contract:
 
 ```bash
 curl -X POST https://localhost:8443/mcp \
