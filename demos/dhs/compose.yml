@@ -140,7 +140,7 @@ services:
       operator:
         condition: service_healthy
     working_dir: /root
-    command: ["sh", "-c", "sleep infinity"]
+    entrypoint: ["sh", "-c", "sleep infinity"]
 
   # ── Display-only source connectors (narrative, no real g8e identity) ────────
 

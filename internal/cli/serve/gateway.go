@@ -160,7 +160,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	// If posture is consensus, TribunalID must be set and the TribunalPolicy
 	// must exist and be enabled in the database. Fail fast before starting
 	// any services.
-	if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, 0); err != nil {
+	if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, 1); err != nil {
 		logger.Error("Startup validation failed", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)
 	}
@@ -337,6 +337,45 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	logger.Info("Gateway mode stopped")
 }
 
+// tribunalBootstrapConfig is the typed JSON config for declarative tribunal
+// seeding at gateway startup.
+type tribunalBootstrapConfig struct {
+	TribunalID   string   `json:"tribunal_id"`
+	MemberAppIDs []string `json:"member_app_ids"`
+	Quorum       int      `json:"quorum"`
+	SeedHex      string   `json:"seed_hex"`
+}
+
+// parseTribunalBootstrapConfig parses and validates a tribunal bootstrap JSON
+// config. Returns an error if the JSON is malformed or required fields are
+// missing/invalid.
+func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) {
+	var boot tribunalBootstrapConfig
+	if err := json.Unmarshal(data, &boot); err != nil {
+		return boot, fmt.Errorf("tribunal bootstrap: parse config: %w", err)
+	}
+	if boot.TribunalID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
+		return boot, fmt.Errorf("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
+	}
+	return boot, nil
+}
+
+// deriveSeedPublicKey decodes a hex-encoded Ed25519 seed and returns the
+// corresponding public key as a hex string. The seed must be exactly
+// ed25519.SeedSize bytes.
+func deriveSeedPublicKey(seedHex string) (string, error) {
+	seed, err := hex.DecodeString(strings.TrimSpace(seedHex))
+	if err != nil {
+		return "", fmt.Errorf("tribunal bootstrap: decode seed hex: %w", err)
+	}
+	if len(seed) != ed25519.SeedSize {
+		return "", fmt.Errorf("tribunal bootstrap: invalid seed length %d, expected %d", len(seed), ed25519.SeedSize)
+	}
+	priv := ed25519.NewKeyFromSeed(seed)
+	pub := priv.Public().(ed25519.PublicKey)
+	return hex.EncodeToString(pub), nil
+}
+
 // bootstrapTribunalPolicy seeds trusted signers and a TribunalPolicy from a
 // JSON config file. The file format is:
 //
@@ -358,17 +397,9 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 		return fmt.Errorf("tribunal bootstrap: read config: %w", err)
 	}
 
-	var boot struct {
-		TribunalID   string   `json:"tribunal_id"`
-		MemberAppIDs []string `json:"member_app_ids"`
-		Quorum       int      `json:"quorum"`
-		SeedHex      string   `json:"seed_hex"`
-	}
-	if err := json.Unmarshal(data, &boot); err != nil {
-		return fmt.Errorf("tribunal bootstrap: parse config: %w", err)
-	}
-	if boot.TribunalID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
-		return fmt.Errorf("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
+	boot, err := parseTribunalBootstrapConfig(data)
+	if err != nil {
+		return err
 	}
 
 	// Check if tribunal already exists (idempotent)
@@ -384,17 +415,10 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 	// Derive the public key from the seed (or generate a fresh key)
 	var pubHex string
 	if boot.SeedHex != "" {
-		seedHex := strings.TrimSpace(boot.SeedHex)
-		seed, err := hex.DecodeString(seedHex)
+		pubHex, err = deriveSeedPublicKey(boot.SeedHex)
 		if err != nil {
-			return fmt.Errorf("tribunal bootstrap: decode seed hex: %w", err)
+			return err
 		}
-		if len(seed) != ed25519.SeedSize {
-			return fmt.Errorf("tribunal bootstrap: invalid seed length %d, expected %d", len(seed), ed25519.SeedSize)
-		}
-		priv := ed25519.NewKeyFromSeed(seed)
-		pub := priv.Public().(ed25519.PublicKey)
-		pubHex = hex.EncodeToString(pub)
 	} else {
 		pub, _, err := ed25519.GenerateKey(nil)
 		if err != nil {

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* **Declarative Tribunal Bootstrap** — Added `--tribunal-bootstrap` flag to `gw start`/`gw serve` that accepts a JSON config file path. At startup, `bootstrapTribunalPolicy` seeds trusted signers and a TribunalPolicy from the config, enabling deterministic demo deployments where the gateway and agent harness share the same Ed25519 seed. The config contains `tribunal_id`, `member_app_ids`, `quorum`, and optional `seed_hex`. Idempotent: skips if the tribunal already exists.
+* **Seed-Based Ensemble Key Generation** — Added `NewEnsembleFromSeed(keyID, n, seedHex)` and `SeedHex()` to `internal/tools/agent_harness/client/envelope.go` for deterministic Ed25519 key generation. Added `--consensus-seed` and `--tribunal-id` flags to `agent-harness run`. The `Ensemble.TribunalID` field is now configurable (defaults to `"test-tribunal"`).
+* **Consensus Phase Support for DHS Demo** — Added `consensus` case to `selectAgentHarnessScenarios` in `agent_harness.go`. Updated `demos/dhs/compose.yml` to consensus posture with tribunal bootstrap. Un-skipped Scenario 4 (predictive cueing with L2 quorum vs veto). Refactored `dhsHarnessRun` to use `dhsHarnessConfig` struct with named fields.
+
+### Changed
+
+* **Relaxed Consensus Quorum Validation** — `ValidateConsensusStartup` in `internal/config/config.go` now accepts `quorum >= 1` (was `>= 2`). Single-member ensembles producing one signed vote per envelope are valid for demo deployments.
+
+### Tests
+
+* Added 22 Tier 1 unit tests for tribunal bootstrap helpers (`parseTribunalBootstrapConfig`, `deriveSeedPublicKey`, `bootstrapTribunalPolicy` error paths) in `internal/cli/serve/gateway_test.go`.
+* Added `TestSelectAgentHarnessScenarios_Consensus` and `TestApplyAgentHarnessFlags_ConsensusSeedAndTribunalID` in `agent_harness_extra_test.go`.
+* Added `TestNewEnsembleFromSeed`, `TestSeedHex`, `TestEnsemble_TribunalID` in `envelope_test.go`.
+* Updated `TestReExecArgsMatchServeCmdFlags` in `gateway_test.go` to include `TribunalBootstrap`.
+
 ---
 
 ## [1.3.1] - 2026-06-28

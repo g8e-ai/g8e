@@ -77,14 +77,15 @@ func dhsSkipScenario(number, name, required, current, reason string) (scenarioRe
 	}, nil
 }
 
-// dhsHarnessRun builds the docker compose run command for a DHS agent-harness
-// scenario from a dhsHarnessConfig. Mirrors the dow pattern: --rm --no-deps -T
-// for clean, capturable, non-spawning execution.
+// dhsHarnessRun builds the docker compose exec command for a DHS agent-harness
+// scenario from a dhsHarnessConfig. Uses exec (not run) because agent-coalition
+// is a long-running sleep-infinity container with a fixed IP; `run` would try
+// to create a second container with the same IP and fail.
 func dhsHarnessRun(scenario string, cfg dhsHarnessConfig) []string {
 	cmd := []string{
-		"docker", "compose", "run", "--rm", "-T", "--no-deps",
+		"docker", "compose", "exec", "-T",
 		"agent-coalition",
-		"agent-harness", "run", "--insecure",
+		"/g8e", "agent-harness", "run", "--insecure",
 		"--mtls-url", cfg.MTLSURL,
 		"--public-url", cfg.PublicURL,
 		"--cert", cfg.CertPath,
