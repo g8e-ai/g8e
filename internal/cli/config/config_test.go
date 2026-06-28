@@ -317,17 +317,6 @@ func TestConfig_OperatorHTTPURL(t *testing.T) {
 
 }
 
-func TestConfig_OperatorBootstrapURL(t *testing.T) {
-	t.Run("returns Operator bootstrap HTTPS URL (deprecated, delegates to OperatorPublicURL)", func(t *testing.T) {
-		config := &Config{
-			Paths: &PathsConfig{},
-		}
-
-		result := config.OperatorBootstrapURL()
-		assert.Equal(t, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps), result)
-	})
-}
-
 func TestConfig_OperatorPublicURL(t *testing.T) {
 	t.Run("returns Operator public TLS URL for CSR-based enrollment", func(t *testing.T) {
 		config := &Config{

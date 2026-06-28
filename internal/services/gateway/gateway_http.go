@@ -27,7 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
-	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/tribunal"
 )
 
@@ -43,13 +42,12 @@ type HTTPHandlerDependencies struct {
 	OperatorSessionSvc *OperatorSessionService
 	WebSessionSvc      *WebSessionService
 	Reg                *RegistrationService
-	Passkey            *PasskeyService
+	Passkey            *PasskeyHandler
 	UserSvc            *UserService
 	Responder          *response.Writer
 	MCPGateway         *mcp.GatewayService
 	AppEnrollment      *AppEnrollmentService
 	Tribunal           *tribunal.TribunalService
-	SuspendedStore     storage.SuspendedTransactionStore
 	IsReady            func() bool
 	IsGovernanceReady  func() bool
 }
@@ -66,7 +64,7 @@ type HTTPHandler struct {
 	operatorSessionSvc *OperatorSessionService
 	webSessionSvc      *WebSessionService
 	reg                *RegistrationService
-	passkey            *PasskeyService
+	passkey            *PasskeyHandler
 	userSvc            *UserService
 	responder          *response.Writer
 	mcp                *mcp.GatewayService
@@ -131,7 +129,7 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 
 	// Initialize actuator key reader for device enrollment
 	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
-	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.SuspendedStore, deps.MCPGateway, deps.Responder, actuatorKeyReader)
+	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, deps.Responder, actuatorKeyReader)
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
@@ -162,7 +160,7 @@ func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
 	h.router = h.buildPublicRouter()
 }
 
-func (h *HTTPHandler) GetPasskeyService() *PasskeyService {
+func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {
 	return h.passkey
 }
 

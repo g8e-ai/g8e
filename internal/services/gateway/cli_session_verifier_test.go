@@ -37,7 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestSuspendedStore(t *testing.T) *storage.SuspendedTransactionService {
+func newTestSuspendedStore(t *testing.T) storage.SuspendedTransactionStore {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test_suspended.db")
 	sts, err := storage.NewSuspendedTransactionService(&storage.SuspendedTransactionConfig{

@@ -474,7 +474,7 @@ func TestApproveSuspendedTransaction_NilStore(t *testing.T) {
 	var sts *SuspendedTransactionService
 	ctx := context.Background()
 
-	err := sts.ApproveSuspendedTransaction(ctx, "hash", "approver", "sig", "fingerprint", "")
+	err := sts.ApproveSuspendedTransaction(ctx, "hash", models.ApprovalProof{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "store not initialized")
 }
@@ -487,7 +487,7 @@ func TestApproveSuspendedTransaction_NilDB(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	err := sts.ApproveSuspendedTransaction(ctx, "hash", "approver", "sig", "fingerprint", "")
+	err := sts.ApproveSuspendedTransaction(ctx, "hash", models.ApprovalProof{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "store not initialized")
 }
@@ -498,7 +498,7 @@ func TestApproveSuspendedTransaction_NotFound(t *testing.T) {
 	sts := setupTestSuspendedTransactionStore(t)
 	ctx := context.Background()
 
-	err := sts.ApproveSuspendedTransaction(ctx, "nonexistent-hash", "approver", "sig", "fingerprint", "")
+	err := sts.ApproveSuspendedTransaction(ctx, "nonexistent-hash", models.ApprovalProof{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "transaction not found or expired")
 }
@@ -524,7 +524,7 @@ func TestApproveSuspendedTransaction_Expired(t *testing.T) {
 	require.NoError(t, err)
 
 	// Try to approve expired transaction
-	err = sts.ApproveSuspendedTransaction(ctx, "expired-approval-hash", "approver", "sig", "fingerprint", "")
+	err = sts.ApproveSuspendedTransaction(ctx, "expired-approval-hash", models.ApprovalProof{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "transaction not found or expired")
 }
@@ -551,7 +551,17 @@ func TestApproveSuspendedTransaction_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Approve the transaction
-	err = sts.ApproveSuspendedTransaction(ctx, "approval-test-hash", "approver-123", "signature-abc", "fingerprint-xyz", "pubkey-abc")
+	proof := models.ApprovalProof{
+		ApprovedBy:        "approver-123",
+		CliSignature:      "signature-abc",
+		CertFingerprint:   "fingerprint-xyz",
+		ApprovalPublicKey: "pubkey-abc",
+		CredentialID:      "cred-id-1",
+		ClientDataJSON:    "client-data",
+		AuthenticatorData: "auth-data",
+		Signature:         "passkey-sig",
+	}
+	err = sts.ApproveSuspendedTransaction(ctx, "approval-test-hash", proof)
 	require.NoError(t, err)
 
 	// Verify the approval
@@ -563,6 +573,10 @@ func TestApproveSuspendedTransaction_Success(t *testing.T) {
 	assert.Equal(t, "signature-abc", retrieved.ApprovalSignature)
 	assert.Equal(t, "fingerprint-xyz", retrieved.ExpectedCertFingerprint)
 	assert.Equal(t, "pubkey-abc", retrieved.ApprovalPublicKey)
+	assert.Equal(t, "cred-id-1", retrieved.PasskeyCredentialID)
+	assert.Equal(t, "client-data", retrieved.PasskeyClientDataJSON)
+	assert.Equal(t, "auth-data", retrieved.PasskeyAuthenticatorData)
+	assert.Equal(t, "passkey-sig", retrieved.PasskeySignature)
 	assert.NotNil(t, retrieved.ApprovedAt)
 }
 
@@ -906,7 +920,11 @@ func TestSuspendedTransactionStore_FullWorkflow(t *testing.T) {
 	assert.Len(t, txs, 1)
 
 	// Step 4: Approve the transaction
-	err = sts.ApproveSuspendedTransaction(ctx, "workflow-hash", "workflow-approver", "workflow-sig", "workflow-fingerprint", "")
+	err = sts.ApproveSuspendedTransaction(ctx, "workflow-hash", models.ApprovalProof{
+		ApprovedBy:      "workflow-approver",
+		CliSignature:    "workflow-sig",
+		CertFingerprint: "workflow-fingerprint",
+	})
 	require.NoError(t, err)
 
 	// Step 5: Verify approval

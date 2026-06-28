@@ -14,9 +14,14 @@
 package serve
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -476,4 +481,439 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 	}
 
 	assert.Equal(t, 20, nonZero, "all 20 fields should be set and non-zero")
+}
+
+// ---------------------------------------------------------------------------
+// Posture-specific GatewayConfig scenarios
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfig_DoctrinePostureScenario(t *testing.T) {
+	cfg := GatewayConfig{
+		Posture:       config.PostureDoctrine,
+		HTTPPort:      8080,
+		HTTPSPort:     8443,
+		DataDir:       "/var/lib/g8e/data",
+		PKIDir:        "/var/lib/g8e/pki",
+		SecretsDir:    "/var/lib/g8e/secrets",
+		PasskeyRpID:   "localhost",
+		PasskeyRpName: "g8e",
+		LogLevel:      "info",
+	}
+
+	assert.Equal(t, config.PostureDoctrine, cfg.Posture)
+	assert.Equal(t, "", cfg.TribunalID, "doctrine posture does not require tribunal")
+	assert.Equal(t, "", cfg.TribunalURL, "doctrine posture does not require tribunal URL")
+
+	opts := gatewayConfigToOptions(cfg)
+	assert.Equal(t, config.PostureDoctrine, opts.Posture)
+	assert.Equal(t, "", opts.TribunalID)
+	assert.Equal(t, "", opts.TribunalURL)
+}
+
+func TestGatewayConfig_ConsensusPostureScenario(t *testing.T) {
+	cfg := GatewayConfig{
+		Posture:       config.PostureConsensus,
+		HTTPPort:      8080,
+		HTTPSPort:     8443,
+		DataDir:       "/var/lib/g8e/data",
+		PKIDir:        "/var/lib/g8e/pki",
+		SecretsDir:    "/var/lib/g8e/secrets",
+		PasskeyRpID:   "localhost",
+		PasskeyRpName: "g8e",
+		LogLevel:      "info",
+		TribunalID:    "trib-001",
+		TribunalURL:   "https://localhost:8443/tribunal/v1/deliberate",
+	}
+
+	assert.Equal(t, config.PostureConsensus, cfg.Posture)
+	assert.NotEmpty(t, cfg.TribunalID, "consensus posture requires tribunal ID")
+	assert.NotEmpty(t, cfg.TribunalURL, "consensus posture requires tribunal URL")
+
+	opts := gatewayConfigToOptions(cfg)
+	assert.Equal(t, config.PostureConsensus, opts.Posture)
+	assert.Equal(t, "trib-001", opts.TribunalID)
+	assert.Equal(t, "https://localhost:8443/tribunal/v1/deliberate", opts.TribunalURL)
+}
+
+func TestGatewayConfig_NotaryPostureScenario(t *testing.T) {
+	cfg := GatewayConfig{
+		Posture:       config.PostureNotary,
+		HTTPPort:      8080,
+		HTTPSPort:     8443,
+		DataDir:       "/var/lib/g8e/data",
+		PKIDir:        "/var/lib/g8e/pki",
+		SecretsDir:    "/var/lib/g8e/secrets",
+		PasskeyRpID:   "localhost",
+		PasskeyRpName: "g8e",
+		LogLevel:      "info",
+	}
+
+	assert.Equal(t, config.PostureNotary, cfg.Posture)
+	assert.Equal(t, "", cfg.TribunalID, "notary posture does not require tribunal by default")
+
+	opts := gatewayConfigToOptions(cfg)
+	assert.Equal(t, config.PostureNotary, opts.Posture)
+}
+
+func TestGatewayConfig_ConsensusWithoutTribunalID(t *testing.T) {
+	cfg := GatewayConfig{
+		Posture:     config.PostureConsensus,
+		TribunalURL: "https://localhost:8443/tribunal",
+	}
+
+	assert.Equal(t, "", cfg.TribunalID, "tribunal ID missing but URL set is an invalid config")
+	opts := gatewayConfigToOptions(cfg)
+	assert.Equal(t, "", opts.TribunalID)
+	assert.NotEmpty(t, opts.TribunalURL)
+}
+
+// ---------------------------------------------------------------------------
+// Port boundary tests
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfig_PortBoundaries(t *testing.T) {
+	tests := []struct {
+		name      string
+		httpPort  int
+		httpsPort int
+	}{
+		{"zero ports", 0, 0},
+		{"privileged HTTP", 80, 0},
+		{"privileged HTTPS", 0, 443},
+		{"standard HTTP", 8080, 0},
+		{"standard HTTPS", 0, 8443},
+		{"both standard", 8080, 8443},
+		{"max port", 65535, 65535},
+		{"high ports", 18080, 18443},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := GatewayConfig{HTTPPort: tt.httpPort, HTTPSPort: tt.httpsPort}
+			assert.Equal(t, tt.httpPort, cfg.HTTPPort)
+			assert.Equal(t, tt.httpsPort, cfg.HTTPSPort)
+
+			opts := gatewayConfigToOptions(cfg)
+			assert.Equal(t, tt.httpPort, opts.HTTPPort)
+			assert.Equal(t, tt.httpsPort, opts.HTTPSPort)
+		})
+	}
+}
+
+func TestGatewayConfig_NegativePorts(t *testing.T) {
+	cfg := GatewayConfig{HTTPPort: -1, HTTPSPort: -1}
+	assert.Equal(t, -1, cfg.HTTPPort)
+	assert.Equal(t, -1, cfg.HTTPSPort)
+
+	opts := gatewayConfigToOptions(cfg)
+	assert.Equal(t, -1, opts.HTTPPort, "mapping should preserve negative values without validation")
+	assert.Equal(t, -1, opts.HTTPSPort)
+}
+
+// ---------------------------------------------------------------------------
+// Rate limit boundary tests
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfig_RateLimitBoundaries(t *testing.T) {
+	tests := []struct {
+		name  string
+		rps   float64
+		burst int
+	}{
+		{"zero", 0, 0},
+		{"minimal", 0.1, 1},
+		{"standard", 5.0, 10},
+		{"high throughput", 1000.0, 2000},
+		{"fractional rps", 0.5, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := GatewayConfig{RateLimitRPS: tt.rps, RateLimitBurst: tt.burst}
+			assert.Equal(t, tt.rps, cfg.RateLimitRPS)
+			assert.Equal(t, tt.burst, cfg.RateLimitBurst)
+
+			opts := gatewayConfigToOptions(cfg)
+			assert.Equal(t, tt.rps, opts.RateLimitRPS)
+			assert.Equal(t, tt.burst, opts.RateLimitBurst)
+		})
+	}
+}
+
+func TestGatewayConfig_NegativeRateLimit(t *testing.T) {
+	cfg := GatewayConfig{RateLimitRPS: -1.0, RateLimitBurst: -1}
+	opts := gatewayConfigToOptions(cfg)
+
+	assert.Equal(t, -1.0, opts.RateLimitRPS, "mapping should preserve negative values without validation")
+	assert.Equal(t, -1, opts.RateLimitBurst)
+}
+
+// ---------------------------------------------------------------------------
+// Vault configuration tests
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfig_VaultConfiguration(t *testing.T) {
+	cfg := GatewayConfig{
+		VaultDir:           "/var/lib/g8e/vault",
+		VaultKeyPath:       "/var/lib/g8e/vault/key",
+		VaultRequireUnlock: true,
+	}
+
+	assert.Equal(t, "/var/lib/g8e/vault", cfg.VaultDir)
+	assert.Equal(t, "/var/lib/g8e/vault/key", cfg.VaultKeyPath)
+	assert.True(t, cfg.VaultRequireUnlock)
+}
+
+func TestGatewayConfig_VaultRequireUnlockDefault(t *testing.T) {
+	var cfg GatewayConfig
+	assert.False(t, cfg.VaultRequireUnlock, "VaultRequireUnlock should default to false")
+}
+
+func TestGatewayConfigToOptions_VaultFieldsPreservedInConfigOnly(t *testing.T) {
+	cfg := GatewayConfig{
+		VaultDir:           "/vault",
+		VaultKeyPath:       "/vault/key",
+		VaultRequireUnlock: true,
+		DataDir:            "/data",
+		PKIDir:             "/pki",
+		SecretsDir:         "/secrets",
+	}
+
+	opts := gatewayConfigToOptions(cfg)
+
+	assert.Equal(t, "/data", opts.DataDir, "DataDir should be mapped")
+	assert.Equal(t, "/pki", opts.PKIDir, "PKIDir should be mapped")
+	assert.Equal(t, "/secrets", opts.SecretsDir, "SecretsDir should be mapped")
+}
+
+// ---------------------------------------------------------------------------
+// Cert identity mode tests
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfig_CertIdentityModes(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{"empty (default)", ""},
+		{"localhost", "localhost"},
+		{"full", "full"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := GatewayConfig{CertIdentityMode: tt.mode}
+			opts := gatewayConfigToOptions(cfg)
+			assert.Equal(t, tt.mode, opts.CertMode)
+		})
+	}
+}
+
+func TestGatewayConfig_NetworkIdentityFile(t *testing.T) {
+	cfg := GatewayConfig{NetworkIdentityFile: "/etc/g8e/network-identity.json"}
+	opts := gatewayConfigToOptions(cfg)
+
+	assert.Equal(t, "/etc/g8e/network-identity.json", opts.NetworkIdentityFile)
+}
+
+// ---------------------------------------------------------------------------
+// AllowTestPortZero invariant
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfigToOptions_AllowTestPortZeroAlwaysFalse(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  GatewayConfig
+	}{
+		{"empty config", GatewayConfig{}},
+		{"full config", GatewayConfig{
+			Posture:   config.PostureConsensus,
+			HTTPPort:  8080,
+			HTTPSPort: 8443,
+		}},
+		{"zero ports", GatewayConfig{HTTPPort: 0, HTTPSPort: 0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := gatewayConfigToOptions(tt.cfg)
+			assert.False(t, opts.AllowTestPortZero,
+				"AllowTestPortZero must always be false in production gateway config mapping")
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Passkey configuration tests
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfig_PasskeyConfiguration(t *testing.T) {
+	cfg := GatewayConfig{
+		PasskeyRpID:   "operator.example.com",
+		PasskeyRpName: "g8e Operator",
+	}
+
+	opts := gatewayConfigToOptions(cfg)
+	assert.Equal(t, "operator.example.com", opts.PasskeyRpID)
+	assert.Equal(t, "g8e Operator", opts.PasskeyRpName)
+}
+
+func TestGatewayConfig_PasskeyEmptyDefaults(t *testing.T) {
+	var cfg GatewayConfig
+	opts := gatewayConfigToOptions(cfg)
+
+	assert.Equal(t, "", opts.PasskeyRpID)
+	assert.Equal(t, "", opts.PasskeyRpName)
+}
+
+// ---------------------------------------------------------------------------
+// Tribunal URL variants
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfigToOptions_TribunalURLVariants(t *testing.T) {
+	tests := []struct {
+		name string
+		url  string
+	}{
+		{"empty", ""},
+		{"localhost", "https://localhost:8443/tribunal/v1/deliberate"},
+		{"remote", "https://tribunal.example.com:9443/tribunal/v1/deliberate"},
+		{"http (insecure)", "http://localhost:8080/tribunal/v1/deliberate"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := GatewayConfig{TribunalURL: tt.url}
+			opts := gatewayConfigToOptions(cfg)
+			assert.Equal(t, tt.url, opts.TribunalURL)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Downstream URL combinations with posture
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfigToOptions_DownstreamWithPosture(t *testing.T) {
+	tests := []struct {
+		name    string
+		posture config.GatewayPosture
+		mcpURL  string
+		a2aURL  string
+	}{
+		{"doctrine with downstreams", config.PostureDoctrine, "http://mcp:3000", "http://a2a:3001"},
+		{"consensus with downstreams", config.PostureConsensus, "http://mcp:3000", "http://a2a:3001"},
+		{"notary without downstreams", config.PostureNotary, "", ""},
+		{"notary with MCP only", config.PostureNotary, "http://mcp:3000", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := GatewayConfig{
+				Posture:          tt.posture,
+				MCPDownstreamURL: tt.mcpURL,
+				A2ADownstreamURL: tt.a2aURL,
+			}
+			opts := gatewayConfigToOptions(cfg)
+
+			assert.Equal(t, tt.posture, opts.Posture)
+			assert.Equal(t, tt.mcpURL, opts.MCPDownstreamURL)
+			assert.Equal(t, tt.a2aURL, opts.A2ADownstreamURL)
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// BootstrapTribunal nil behavior (Tier 1 documentation)
+// ---------------------------------------------------------------------------
+
+func TestBootstrapTribunal_NilServicePanics(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	assert.Panics(t, func() {
+		_, _ = BootstrapTribunal(nil, "trib-001", priv, "key-id", "/secrets", logger)
+	}, "BootstrapTribunal with nil service should panic on GetDB()")
+}
+
+func TestBootstrapTribunal_EmptyTribunalID(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	assert.Panics(t, func() {
+		_, _ = BootstrapTribunal(nil, "", priv, "key-id", "/secrets", logger)
+	}, "BootstrapTribunal with nil service panics regardless of tribunal ID")
+}
+
+// ---------------------------------------------------------------------------
+// GatewayConfig round-trip mapping integrity
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfigToOptions_RoundTripIntegrity(t *testing.T) {
+	original := GatewayConfig{
+		Posture:             config.PostureNotary,
+		HTTPPort:            8080,
+		HTTPSPort:           8443,
+		DataDir:             "/data",
+		PKIDir:              "/pki",
+		SecretsDir:          "/secrets",
+		PasskeyRpID:         "localhost",
+		PasskeyRpName:       "g8e",
+		RateLimitRPS:        10.0,
+		RateLimitBurst:      20,
+		CertIdentityMode:    "full",
+		NetworkIdentityFile: "/path/identity.json",
+		TribunalID:          "trib-1",
+		TribunalURL:         "https://tribunal.example.com",
+		MCPDownstreamURL:    "http://mcp:3000",
+		A2ADownstreamURL:    "http://a2a:3001",
+	}
+
+	opts := gatewayConfigToOptions(original)
+
+	assert.Equal(t, original.Posture, opts.Posture)
+	assert.Equal(t, original.HTTPPort, opts.HTTPPort)
+	assert.Equal(t, original.HTTPSPort, opts.HTTPSPort)
+	assert.Equal(t, original.DataDir, opts.DataDir)
+	assert.Equal(t, original.PKIDir, opts.PKIDir)
+	assert.Equal(t, original.SecretsDir, opts.SecretsDir)
+	assert.Equal(t, original.PasskeyRpID, opts.PasskeyRpID)
+	assert.Equal(t, original.PasskeyRpName, opts.PasskeyRpName)
+	assert.Equal(t, original.RateLimitRPS, opts.RateLimitRPS)
+	assert.Equal(t, original.RateLimitBurst, opts.RateLimitBurst)
+	assert.Equal(t, original.CertIdentityMode, opts.CertMode)
+	assert.Equal(t, original.NetworkIdentityFile, opts.NetworkIdentityFile)
+	assert.Equal(t, original.TribunalID, opts.TribunalID)
+	assert.Equal(t, original.TribunalURL, opts.TribunalURL)
+	assert.Equal(t, original.MCPDownstreamURL, opts.MCPDownstreamURL)
+	assert.Equal(t, original.A2ADownstreamURL, opts.A2ADownstreamURL)
+}
+
+// ---------------------------------------------------------------------------
+// GatewayConfig with constants consistency
+// ---------------------------------------------------------------------------
+
+func TestGatewayConfig_StandardPortValues(t *testing.T) {
+	cfg := GatewayConfig{
+		HTTPPort:  constants.Ports.OperatorHttp,
+		HTTPSPort: constants.Ports.OperatorHttps,
+	}
+
+	assert.Equal(t, 8080, cfg.HTTPPort, "HTTP port should match standard gateway HTTP port")
+	assert.Equal(t, 8443, cfg.HTTPSPort, "HTTPS port should match standard gateway HTTPS port")
+}
+
+func TestGatewayConfigToOptions_StandardPortsPreserved(t *testing.T) {
+	cfg := GatewayConfig{
+		HTTPPort:  constants.Ports.OperatorHttp,
+		HTTPSPort: constants.Ports.OperatorHttps,
+	}
+	opts := gatewayConfigToOptions(cfg)
+
+	assert.Equal(t, constants.Ports.OperatorHttp, opts.HTTPPort)
+	assert.Equal(t, constants.Ports.OperatorHttps, opts.HTTPSPort)
 }

@@ -14,370 +14,26 @@
 package auth
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"fmt"
-	"html"
 	"io"
-	"log"
-	"net"
 	"net/http"
 	"os"
-	"os/user"
-	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/services/network"
 )
 
-// PasskeyBootstrapServer handles the localhost HTTP server for passkey registration
-// during CLI bootstrap. It serves a simple HTML page that performs WebAuthn registration.
-type PasskeyBootstrapServer struct {
-	server       *http.Server
-	gatewayURL   string
-	bootstrapURL string
-	userID       string
-	userName     string
-	cliSessionID string
-	done         chan struct{}
-	success      bool
-	errMessage   string
-}
-
-// NewPasskeyBootstrapServer creates a new localhost server for passkey registration
-func NewPasskeyBootstrapServer(gatewayURL, bootstrapURL, userID, userName, cliSessionID string) *PasskeyBootstrapServer {
-	return &PasskeyBootstrapServer{
-		gatewayURL:   gatewayURL,
-		bootstrapURL: bootstrapURL,
-		userID:       userID,
-		userName:     userName,
-		cliSessionID: cliSessionID,
-		done:         make(chan struct{}),
-	}
-}
-
-// Start starts the localhost server on a random available port
-func (s *PasskeyBootstrapServer) Start() (string, error) {
-	// Find an available port on 0.0.0.0 to allow remote access via port forwarding
-	listener, err := net.Listen("tcp", "0.0.0.0:0")
-	if err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrPortUnavailable, err)
-	}
-
-	port := listener.Addr().(*net.TCPAddr).Port
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", s.handleIndex)
-	mux.HandleFunc("/register", s.handleRegister)
-
-	s.server = &http.Server{
-		Handler:      mux,
-		ReadTimeout:  1 * time.Minute,
-		WriteTimeout: 1 * time.Minute,
-	}
-
-	go func() {
-		if err := s.server.Serve(listener); err != nil && err != http.ErrServerClosed {
-			log.Printf("Passkey bootstrap server error: %v", err)
-		}
-	}()
-
-	return fmt.Sprintf("http://0.0.0.0:%d", port), nil
-}
-
-// Stop stops the server
-func (s *PasskeyBootstrapServer) Stop() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = s.server.Shutdown(ctx)
-}
-
-// Wait waits for the registration to complete or timeout.
-// It returns (success, timedOut).
-func (s *PasskeyBootstrapServer) Wait(timeout time.Duration) (bool, bool) {
-	select {
-	case <-s.done:
-		return s.success, false
-	case <-time.After(timeout):
-		return false, true
-	}
-}
-
-// handleIndex serves the registration page
-func (s *PasskeyBootstrapServer) handleIndex(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-
-	html := `<!DOCTYPE html>
-<html>
-<head>
-    <title>Register Passkey - g8e</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; line-height: 1.5; }
-        .container { border: 1px solid #ddd; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        h1 { color: #333; margin-top: 0; }
-        .info { background: #f5f5f5; padding: 15px; border-radius: 4px; margin: 20px 0; border: 1px solid #eee; }
-        .warning { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin: 20px 0; border: 1px solid #ffeeba; }
-        .label { font-weight: bold; margin-bottom: 5px; }
-        .value { margin-bottom: 15px; word-break: break-all; font-family: monospace; }
-        .actions { margin-top: 20px; }
-        button { padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.2s; }
-        .register { background: #4CAF50; color: white; }
-        .register:hover { background: #45a049; }
-        .status { margin-top: 20px; padding: 15px; border-radius: 4px; display: none; }
-        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .loading { background: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
-        code { background: #eee; padding: 2px 4px; border-radius: 3px; font-family: monospace; }
-        pre { background: #2d2d2d; color: #ccc; padding: 10px; border-radius: 4px; overflow-x: auto; }
-        .trust-link { display: block; margin-top: 10px; color: #0066cc; text-decoration: none; }
-        .trust-link:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Register Passkey for g8e CLI</h1>
-        <p>To complete your CLI enrollment, please register a passkey (WebAuthn/FIDO2).</p>
-        
-        <div class="warning">
-            <strong>Self-Signed Certificate Required</strong>
-            <p>Since this platform uses a self-signed CA, you must trust the root certificate before proceeding, or your browser will block the passkey registration.</p>
-            
-            <div class="label">1. Install Trust Script:</div>
-            <p>Linux / macOS:</p>
-            <pre>curl -fsSL ` + html.EscapeString(s.bootstrapURL) + constants.APIPaths.BootstrapCALinux + ` | sh</pre>
-            <p>Windows (PowerShell):</p>
-            <pre>irm ` + html.EscapeString(s.bootstrapURL) + constants.APIPaths.BootstrapCAWindows + ` | iex</pre>
-
-            <div class="label">2. Restart Browser:</div>
-            <p><strong>RESTART ALL OPEN BROWSERS</strong> after running the script for the new CA to be recognized.</p>
-        </div>
-
-        <div class="info">
-            <div class="label">User ID:</div>
-            <div class="value">` + html.EscapeString(s.userID) + `</div>
-        </div>
-        
-        <div class="actions">
-            <button class="register" onclick="registerPasskey()">Register Passkey</button>
-        </div>
-        
-        <div id="status" class="status"></div>
-    </div>
-
-    <script>
-        // Helper to convert base64url to Uint8Array
-        function base64urlToUint8Array(base64url) {
-            const padding = '='.repeat((4 - base64url.length % 4) % 4);
-            const base64 = (base64url + padding).replace(/\-/g, '+').replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
-            }
-            return outputArray;
-        }
-
-        // Helper to convert Uint8Array to base64url
-        function bufferToBase64url(buffer) {
-            const bytes = new Uint8Array(buffer);
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-                binary += String.fromCharCode(bytes[i]);
-            }
-            return window.btoa(binary)
-                .replace(/\+/g, '-')
-                .replace(/\//g, '_')
-                .replace(/=/g, '');
-        }
-
-        async function registerPasskey() {
-            const statusDiv = document.getElementById('status');
-            const userID = "` + html.EscapeString(s.userID) + `";
-            const userName = "` + html.EscapeString(s.userName) + `";
-            const gatewayURL = "` + html.EscapeString(s.gatewayURL) + `";
-            const cliSessionID = "` + html.EscapeString(s.cliSessionID) + `";
-
-            // Check if WebAuthn is available
-            if (!window.navigator || !window.navigator.credentials) {
-                statusDiv.style.display = 'block';
-                statusDiv.className = 'status error';
-                statusDiv.innerHTML = '<strong>Error:</strong><br/>WebAuthn is not available in this browser.<br/><br/>WebAuthn requires HTTPS (or localhost for HTTP).<br/>Since you are accessing via port forwarding over HTTP, please:<br/>1. Access this page directly on the Linux host using localhost, or<br/>2. Set up HTTPS for the gateway.<br/><br/>Alternatively, you can register a passkey later via the web interface after setting up HTTPS.';
-                return;
-            }
-
-            try {
-                statusDiv.style.display = 'block';
-                statusDiv.className = 'status loading';
-                statusDiv.textContent = 'Requesting registration challenge...';
-
-                // 1. Get Registration Challenge (use browser CLI bootstrap endpoint - public, no auth required)
-                const challengeResp = await fetch(gatewayURL + "` + constants.APIPaths.AuthPasskeysConsoleRegisterChallenge + `", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        user_id: userID,
-                        user_name: userName,
-                        cli_session_id: cliSessionID
-                    })
-                });
-                
-                if (!challengeResp.ok) {
-                    const err = await challengeResp.json();
-                    throw new Error(err.error || "Failed to get challenge");
-                }
-                
-                const challengeData = await challengeResp.json();
-                const options = challengeData.options;
-
-                // Prepare options for navigator.credentials.create
-                options.publicKey.challenge = base64urlToUint8Array(options.publicKey.challenge);
-                options.publicKey.user.id = base64urlToUint8Array(options.publicKey.user.id);
-                if (options.publicKey.excludeCredentials) {
-                    options.publicKey.excludeCredentials.forEach(cred => {
-                        cred.id = base64urlToUint8Array(cred.id);
-                    });
-                }
-
-                statusDiv.textContent = 'Please follow your browser prompts to create a passkey...';
-
-                // 2. WebAuthn Registration
-                const credential = await navigator.credentials.create({
-                    publicKey: options.publicKey
-                });
-
-                statusDiv.textContent = 'Verifying registration...';
-
-                // 3. Verify Registration (use browser CLI bootstrap endpoint - public, no auth required)
-                const verifyResp = await fetch(gatewayURL + "` + constants.APIPaths.AuthPasskeysConsoleRegisterVerify + `", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        user_id: userID,
-                        cli_session_id: cliSessionID,
-                        attestation_response: {
-                            id: credential.id,
-                            rawId: bufferToBase64url(credential.rawId),
-                            clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
-                            attestationObject: bufferToBase64url(credential.response.attestationObject),
-                            transports: credential.response.getTransports ? credential.response.getTransports() : []
-                        }
-                    })
-                });
-
-                if (!verifyResp.ok) {
-                    const err = await verifyResp.json();
-                    throw new Error(err.error || "Verification failed");
-                }
-
-                const verifyData = await verifyResp.json();
-                
-                if (!verifyData.success) {
-                    throw new Error(verifyData.error || "Registration failed");
-                }
-
-                statusDiv.className = 'status success';
-                statusDiv.innerHTML = '<strong>Success!</strong><br/>Passkey registered successfully.<br/>You can close this window and return to the CLI.';
-                
-                // Notify server that registration is complete
-                await fetch("/register?status=success", { method: "POST" });
-                
-            } catch (err) {
-                console.error(err);
-                statusDiv.className = 'status error';
-                statusDiv.textContent = 'Error: ' + err.message;
-                
-                // Notify server that registration failed
-                const errorMsg = encodeURIComponent(err.message);
-                await fetch("/register?status=error&error=" + errorMsg, { method: "POST" });
-            }
-        }
-    </script>
-</body>
-</html>`
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(html))
-}
-
-// handleRegister handles the registration completion callback
-func (s *PasskeyBootstrapServer) handleRegister(w http.ResponseWriter, r *http.Request) {
-	log.Printf("Passkey bootstrap: Received registration callback")
-
-	// Security: allow requests from any origin when accessed via port forwarding
-	// This is safe because the registration callback is a simple completion signal
-	// and doesn't expose sensitive data
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-	}
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		log.Printf("Passkey bootstrap: Invalid method %s", r.Method)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	status := r.URL.Query().Get("status")
-	s.errMessage = r.URL.Query().Get("error")
-	log.Printf("Passkey bootstrap: Registration status: %s, error: %s", status, s.errMessage)
-	s.success = (status == "success")
-	close(s.done)
-
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("OK"))
-}
-
-// RegisterPasskeyViaLocalhost starts a localhost server and guides the user through passkey registration
-func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string) error {
-	// Use external interface IP for gateway URL to support port forwarding scenarios
-	// Use HTTPS (port 8443) for WebAuthn compatibility - WebAuthn requires HTTPS or localhost
-	externalIP := network.GetExternalInterfaceIP()
-	gatewayURL := fmt.Sprintf("https://%s:%d", externalIP, constants.Ports.OperatorHttps)
-
-	// Get current username for passkey registration
-	currentUser, err := user.Current()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrGetCurrentUser, err)
-	}
-	userName := currentUser.Username
-
-	bootstrapURL := fmt.Sprintf("http://%s:%d", externalIP, constants.Ports.OperatorHttp)
-	server := NewPasskeyBootstrapServer(gatewayURL, bootstrapURL, userID, userName, cliSessionID)
-
-	url, err := server.Start()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrPasskeyBootstrapServerStart, err)
-	}
-	defer server.Stop()
-
-	// Replace 0.0.0.0 with g8e.local for the display URL
-	portStr := strings.TrimPrefix(url, "http://0.0.0.0:")
-	displayURL := fmt.Sprintf("https://g8e.local:%s", portStr)
-
-	// Trust script URLs for both Unix and Windows platforms (HTTP with external IP)
-	httpPort := constants.Ports.OperatorHttp
-	linuxURL := fmt.Sprintf("http://%s:%d%s", externalIP, httpPort, constants.APIPaths.BootstrapCALinux)
-	windowsURL := fmt.Sprintf("http://%s:%d%s", externalIP, httpPort, constants.APIPaths.BootstrapCAWindows)
-
-	// Attempt to auto-open the browser (best-effort, silent on failure)
-	_ = platform.OpenBrowser(displayURL)
+// RegisterPasskeyViaBrowser opens the gateway's console UI in the user's browser
+// for passkey registration, then polls the mTLS passkey status endpoint until
+// registration is detected or the timeout expires. This replaces the legacy
+// localhost bootstrap server approach and works identically on all platforms.
+func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) error {
+	consoleURL := cfg.OperatorPublicURL() + "/console/#register=1"
 
 	fmt.Printf("\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
@@ -387,45 +43,38 @@ func RegisterPasskeyViaLocalhost(cfg *config.Config, userID, cliSessionID string
 	fmt.Printf("To complete your CLI enrollment, you need to register a passkey.\n")
 	fmt.Printf("This will enable secure passwordless authentication.\n")
 	fmt.Printf("\n")
-	fmt.Printf("IMPORTANT: Since we use self-signed certificates, you must:\n")
-	fmt.Printf("1. Run the trust script to install the platform CA:\n")
+	fmt.Printf("Opening your browser to the g8e console...\n")
 	fmt.Printf("\n")
-	fmt.Printf("   Linux / macOS:\n")
-	fmt.Printf("   curl -fsSL %s | sh\n", linuxURL)
+	fmt.Printf("  %s\n", consoleURL)
 	fmt.Printf("\n")
-	fmt.Printf("   Windows (PowerShell):\n")
-	fmt.Printf("   irm %s | iex\n", windowsURL)
-	fmt.Printf("\n")
-	fmt.Printf("2. RESTART ALL OPEN BROWSERS for the new CA to be recognized.\n")
-	fmt.Printf("\n")
-	fmt.Printf("Once trusted, open this URL in your browser:\n")
-	fmt.Printf("\n")
-	fmt.Printf("  %s\n", displayURL)
-	fmt.Printf("\n")
-	fmt.Printf("The page will guide you through creating a WebAuthn/FIDO2 passkey.\n")
+	fmt.Printf("The console will guide you through creating a WebAuthn/FIDO2 passkey.\n")
 	fmt.Printf("You can use Face ID, Touch ID, Windows Hello, or a security key.\n")
 	fmt.Printf("\n")
 	fmt.Printf("Waiting for passkey registration...\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
 	fmt.Printf("\n")
 
-	// Wait for registration to complete (5 minute timeout for local registration to allow for slow user interaction)
-	success, timedOut := server.Wait(5 * time.Minute)
-	if timedOut {
-		return constants.ErrPasskeyRegistrationTimedOut
-	}
+	_ = platform.OpenBrowser(consoleURL)
 
-	if !success {
-		if server.errMessage != "" {
-			return fmt.Errorf("%w: %s", constants.ErrPasskeyRegistrationFailed, server.errMessage)
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for i := 0; i < 100; i++ { // 5 minute timeout
+		<-ticker.C
+		hasPasskey, err := VerifyPasskeyRegistration(cfg, userID)
+		if err != nil {
+			continue
 		}
-		return constants.ErrPasskeyRegistrationFailed
+		if hasPasskey {
+			fmt.Printf("\n✓ Passkey registered successfully!\n\n")
+			return nil
+		}
+		if i%10 == 0 && i > 0 {
+			fmt.Printf("  Still waiting... (%ds elapsed)\n", i*3)
+		}
 	}
 
-	fmt.Printf("\n✓ Passkey registered successfully!\n")
-	fmt.Printf("\n")
-
-	return nil
+	return constants.ErrPasskeyRegistrationTimedOut
 }
 
 // VerifyPasskeyRegistration checks if a user has a passkey registered

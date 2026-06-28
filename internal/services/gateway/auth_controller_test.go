@@ -85,7 +85,8 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -112,8 +113,51 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
-	authController := newAuthController(cfg, logger, db, auth, passkey, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, suspendedTxService, mcpGateway, resp, nil)
+	authController := newAuthController(cfg, logger, db, auth, passkeyHandler, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, resp, nil)
+	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
 	return authController, cfg
+}
+
+// setupTestPasskeyService creates a PasskeyHandler with approval dependencies for testing.
+func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, storage.SuspendedTransactionStore) {
+	t.Helper()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	dbDir := t.TempDir()
+	db, err := OpenCanonicalDBService(dbDir, t.TempDir(), filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	userSvc := NewUserService(db, logger)
+	resp := response.NewWriter(logger)
+	webSessionSvc := NewWebSessionService(db, logger)
+	passkey, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	require.NoError(t, err)
+
+	suspendedTxConfig := &storage.SuspendedTransactionConfig{
+		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		MaxDBSizeMB:          256,
+		RetentionDays:        7,
+		PruneIntervalMinutes: 30,
+	}
+	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
+	require.NoError(t, err)
+	t.Cleanup(func() { suspendedTxService.Close() })
+
+	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
+		Logger:           logger,
+		Responder:        resp,
+		SuspendedStore:   suspendedTxService,
+		ScrubbingService: nil,
+		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
+		Posture:          string(cfg.Gateway.Posture),
+	})
+	require.NoError(t, err)
+
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	return passkeyHandler, userSvc, suspendedTxService
 }
 
 // Test Helpers
@@ -149,8 +193,9 @@ func TestAuthControllerReadBody(t *testing.T) {
 		c, _ := setupTestAuthController(t)
 		body := `{"test":"data"}`
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(body))
+		rr := httptest.NewRecorder()
 
-		data, err := c.readBody(req)
+		data, err := c.readBody(rr, req)
 		require.NoError(t, err)
 		assert.Equal(t, []byte(body), data)
 	})
@@ -159,8 +204,9 @@ func TestAuthControllerReadBody(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(""))
+		rr := httptest.NewRecorder()
 
-		data, err := c.readBody(req)
+		data, err := c.readBody(rr, req)
 		require.NoError(t, err)
 		assert.Equal(t, []byte{}, data)
 	})
@@ -172,8 +218,9 @@ func TestAuthControllerReadBody(t *testing.T) {
 		c.cfg.Gateway.MaxPayloadBytes = 100
 		largeBody := strings.Repeat("a", 200)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(largeBody))
+		rr := httptest.NewRecorder()
 
-		_, err := c.readBody(req)
+		_, err := c.readBody(rr, req)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "http: request body too large")
 	})

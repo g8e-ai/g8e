@@ -32,28 +32,6 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 	return constants.ErrWindowsCertStoreImport
 }
 
-// AuthenticateWithWindowsHello is a stub for non-Windows platforms.
-func AuthenticateWithWindowsHello(rpID string, challenge []byte) (*WebAuthnAssertionResponse, error) {
-	return nil, constants.ErrWindowsHelloAuthentication
-}
-
-// WebAuthnAttestationResponse is a stub for non-Windows platforms.
-type WebAuthnAttestationResponse struct {
-	Id                string
-	RawId             []byte
-	AuthenticatorData []byte
-	AttestationObject []byte
-}
-
-// WebAuthnAssertionResponse is a stub for non-Windows platforms.
-type WebAuthnAssertionResponse struct {
-	Id                string
-	RawId             []byte
-	AuthenticatorData []byte
-	Signature         []byte
-	UserHandle        []byte
-}
-
 // TrustRootCAInWindowsStore is a stub for non-Windows platforms.
 func TrustRootCAInWindowsStore(caBundlePEM string) error {
 	return constants.ErrWindowsCertStoreTrust

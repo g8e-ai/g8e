@@ -338,10 +338,10 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
-	cfg, err := config.Load("")
+func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
+	cfg, err := loadConfig("")
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+		return err
 	}
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
@@ -389,7 +389,7 @@ func runMCPStdioProxy(_ *cobra.Command, _ []string) error {
 
 		logger.Info("Proxying MCP request", "method", req.Method, "id", req.ID)
 
-		resp, err := proxySessionToGatewayWithRetry(conn, req, logger)
+		resp, err := proxySessionToGatewayWithRetryContext(cmd.Context(), conn, req, logger)
 		if err != nil {
 			logger.Error("Failed to proxy to gateway", "error", err)
 			sendError(encoder, req.ID, -32603, fmt.Sprintf("gateway proxy error: %v", err))
@@ -607,9 +607,9 @@ func extractApprovalURL(resp JSONRPCResponse) string {
 // ─── agent show config printers ─────────────────────────────────────────────
 
 func printMCPConfigLocal(cmd *cobra.Command) error {
-	cfg, err := config.Load("")
+	cfg, err := loadConfig("")
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+		return err
 	}
 
 	externalIP := network.GetExternalInterfaceIP()
@@ -637,9 +637,9 @@ func printMCPConfigLocal(cmd *cobra.Command) error {
 }
 
 func printMCPConfigIP(cmd *cobra.Command) error {
-	cfg, err := config.Load("")
+	cfg, err := loadConfig("")
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+		return err
 	}
 
 	externalIP := network.GetExternalInterfaceIP()
@@ -954,9 +954,9 @@ func (d *subprocessMCPProxy) forward(req JSONRPCRequest) (JSONRPCResponse, error
 // HTTP is only used here to poll the bootstrap health endpoint before mTLS
 // certs have been issued — all subsequent traffic uses mTLS.
 func ensureGatewayRunning() error {
-	cfg, err := config.Load("")
+	cfg, err := loadConfig("")
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+		return err
 	}
 
 	pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -1291,9 +1291,9 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 		return fmt.Errorf("%w: %w", constants.ErrGatewayNotReady, err)
 	}
 
-	cfg, err := config.Load("")
+	cfg, err := loadConfig("")
 	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+		return err
 	}
 
 	// Ensure CLI credentials exist, auto-enroll if needed
@@ -1323,7 +1323,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	}
 	if !hasPasskey {
 		fmt.Fprintf(os.Stderr, "[g8e] No passkey registered, starting passkey enrollment...\n")
-		if err := auth.RegisterPasskeyViaLocalhost(cfg, creds.UserID, creds.CLISessionID); err != nil {
+		if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
 		}
 	}

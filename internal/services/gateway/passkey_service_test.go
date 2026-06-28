@@ -64,7 +64,7 @@ func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 	user, err := NewUserService(db, logger).CreateUser()
 	require.NoError(t, err)
 
-	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, nil, nil, 0)
+	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 	return svc, user
 }
@@ -498,7 +498,7 @@ func newPasskeyServiceWithMock(t *testing.T) (*PasskeyService, *models.User) {
 	logger := testutil.NewTestLogger()
 	user, err := NewUserService(db, logger).CreateUser()
 	require.NoError(t, err)
-	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, nil, nil, 0)
+	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
 	svc.webauthn = &mockWebauthnClient{
 		credential: &webauthn.Credential{

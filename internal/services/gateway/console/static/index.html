@@ -245,7 +245,19 @@ async function authenticatePasskey() {
     body: JSON.stringify({ user_id: uid })
   });
   var cd = await cr.json();
-  if (!cd.success) { showMsg('error', cd.error || 'Challenge failed'); return; }
+  if (!cd.success) {
+    if (cd.needs_setup) {
+      showMsg('info', 'No passkey registered for this user. Please register a passkey first.');
+      var regSection = document.getElementById('regSection');
+      if (regSection) {
+        regSection.style.display = 'block';
+        var regUid = document.getElementById('regUserId');
+        if (regUid) regUid.value = uid;
+      }
+      return;
+    }
+    showMsg('error', cd.error || 'Challenge failed'); return;
+  }
 
   var pk = cd.options.publicKey;
   pk.challenge = b64urlToBuf(pk.challenge);

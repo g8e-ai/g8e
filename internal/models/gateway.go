@@ -266,14 +266,6 @@ type AuthLoginChallengeResponse struct {
 	Options *protocol.CredentialAssertion `json:"options,omitempty"`
 }
 
-// AuthLoginVerifyResponse is the typed response for POST /api/auth/login/verify.
-type AuthLoginVerifyResponse struct {
-	Success      bool   `json:"success"`
-	UserID       string `json:"user_id,omitempty"`
-	WebSessionID string `json:"web_session_id,omitempty"`
-	Error        string `json:"error,omitempty"`
-}
-
 // BootstrapStatusResponse is the typed response for GET /api/auth/bootstrap/status.
 type BootstrapStatusResponse struct {
 	Bootstrapped bool `json:"bootstrapped"`
@@ -333,6 +325,14 @@ type SuspendedTxResponse struct {
 	ToolName        string    `json:"tool_name"`
 	UserID          string    `json:"user_id"`
 	OperatorID      string    `json:"operator_id"`
+}
+
+// ApprovalStatusResponse is the typed response for GET /api/v1/approvals/status/{txHash}.
+// The CLI polls this mTLS-authenticated endpoint after opening the browser approval page.
+type ApprovalStatusResponse struct {
+	Status   string `json:"status"`
+	TxHash   string `json:"tx_hash,omitempty"`
+	ToolName string `json:"tool_name,omitempty"`
 }
 
 // BootstrapResponse is the typed response for POST /api/auth/bootstrap.

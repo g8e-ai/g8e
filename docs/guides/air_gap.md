@@ -1,12 +1,12 @@
 ---
 title: Air Gap
-parent: Architecture
+parent: Guides
 ---
 
 # Air-Gap Architecture
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies. The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -40,7 +40,7 @@ Surfaces with conflicting TLS client-authentication requirements do not share a 
 ### Core Functional Capabilities
 
 - **State Persistence**: All system state is stored locally within SQLite databases. Runtime paths are defined in `internal/paths/paths.go`, including the main database (`.g8e/data/g8e.db`), local state (`.g8e/local_state.db`), and audit vault (`.g8e/data/audit_vault.db`). Database filenames are defined in `internal/constants/paths.go`.
-- **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-384 keys to issue and rotate TLS certificates for local services.
+- **Local Public Key Infrastructure (PKI)**: The gateway generates a local Certificate Authority (CA) using ECDSA P-256 keys to issue and rotate TLS certificates for local services.
 - **Secret Storage**: An internal encrypted vault stores local credentials and access tokens, removing any requirement for external key managers.
 - **Event Brokerage**: A local WebSocket pub/sub broker (`internal/services/gateway/gateway_pubsub.go`) manages real-time communication between the gateway and connected clients. Server-Sent Events (SSE) streaming (`internal/services/gateway/gateway_http_sse.go`) provides event delivery to browser and CLI subscribers.
 - **WebAuthn Passkey Bootstrap**: The gateway supports WebAuthn passkey-based authentication for secure local enrollment without external identity providers.

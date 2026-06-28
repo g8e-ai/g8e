@@ -77,7 +77,7 @@ func TestPubSubAvailable(t *testing.T, baseURL string) {
 		baseURL = GetTestOperatorDirectURL()
 	}
 	wsURL := baseURL + "/ws/pubsub"
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	trustStore := GetTestTrustStore()
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 	stdTLS, err := tlsConfig.GetTLSConfig()
@@ -104,7 +104,7 @@ func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []b
 
 	wsURL := baseURL + "/ws/pubsub"
 
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	trustStore := GetTestTrustStore()
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 	stdTLS, err := tlsConfig.GetTLSConfig()
@@ -172,7 +172,7 @@ func PublishTestMessage(t *testing.T, baseURL string, channel string, message st
 
 	wsURL := baseURL + "/ws/pubsub"
 
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	trustStore := GetTestTrustStore()
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 	stdTLS, err := tlsConfig.GetTLSConfig()

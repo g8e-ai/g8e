@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 ## Overview
 
@@ -34,7 +34,7 @@ The canonical transaction container is defined in `protocol/proto/g8e/common/v1/
 
 **Configuration**: `--posture doctrine`
 
-**Interface implementation** (`internal/services/governance/posture.go:47-50`):
+**Interface implementation** (`internal/services/governance/posture.go:47-52`):
 - `RequiresL2Signature()` → `false`
 - `RequiresL3Proof()` → `false`
 
@@ -59,7 +59,7 @@ The canonical transaction container is defined in `protocol/proto/g8e/common/v1/
 
 **Configuration**: `--posture consensus`
 
-**Interface implementation** (`internal/services/governance/posture.go:56-59`):
+**Interface implementation** (`internal/services/governance/posture.go:56-61`):
 - `RequiresL2Signature()` → `true`
 - `RequiresL3Proof()` → `false`
 
@@ -82,7 +82,7 @@ The canonical transaction container is defined in `protocol/proto/g8e/common/v1/
 - **Quorum must be >= 2** → `ErrConfigTribunalQuorumLow` (`internal/config/config.go:295-296`). This prevents single-member tribunals from being used in consensus posture.
 - The Tribunal service is bootstrapped in-process and wired as both the mTLS HTTP handler and the local deliberator.
 
-**Tribunal bootstrap** (`internal/cli/serve/gateway.go:325-357`): The `BootstrapTribunal` function constructs a `TribunalService` from the `TribunalPolicy` stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). For multi-member tribunals, member keys are loaded from disk via `FileKeyProvider` (`internal/services/tribunal/factory.go:85-130`), which reads hex-encoded Ed25519 seeds from `{secretsDir}/{prefix}{tribunalID}_{appID}.key` files. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
+**Tribunal bootstrap** (`internal/cli/serve/gateway.go:330-357`): The `BootstrapTribunal` function constructs a `TribunalService` from the `TribunalPolicy` stored in the database. For single-member tribunals, the gateway's actuator Ed25519 key is reused as the member signing key (Option C). For multi-member tribunals, member keys are loaded from disk via `FileKeyProvider` (`internal/services/tribunal/factory.go:85-130`), which reads hex-encoded Ed25519 seeds from `{secretsDir}/{prefix}{tribunalID}_{appID}.key` files. Members whose keys cannot be resolved are included without a private key; they can participate in policy but cannot sign votes, and a warning is logged.
 
 **What is audited but NOT gated**:
 - **L3 Notary proofs**: same behavior as doctrine: verified if present, recorded in receipt, but not required for mutations (`l4_warden.go:641-676`).
@@ -93,7 +93,7 @@ The canonical transaction container is defined in `protocol/proto/g8e/common/v1/
 
 **Configuration**: `--posture notary`
 
-**Interface implementation** (`internal/services/governance/posture.go:65-68`):
+**Interface implementation** (`internal/services/governance/posture.go:65-70`):
 - `RequiresL2Signature()` → `true`
 - `RequiresL3Proof()` → `true`
 
@@ -143,7 +143,7 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | L3 proof present (mutations only) | `l4_warden.go:646-650` | Audited | Audited | **Enforced** |
 | L3 notary configured (mutations only) | `l4_warden.go:654-659` | Audited | Audited | **Enforced** |
 | L3 proof valid (mutations only) | `l4_warden.go:670-673` | Audited | Audited | **Enforced** |
-| L2/L3 status in receipt | `l5_actuator.go:105-123` | Recorded | Recorded | Recorded |
+| L2/L3 status in receipt | `l5_actuator.go:109-127` | Recorded | Recorded | Recorded |
 | Startup: tribunal ID required | `config.go:292-293` | - | **Enforced** | - |
 | Startup: quorum >= 2 | `config.go:295-296` | - | **Enforced** | - |
 | Startup: tribunal policy exists + enabled | `internal/cli/serve/gateway.go` | - | **Enforced** | - |
@@ -298,7 +298,7 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 - **NewCLIL3Notary** (`internal/services/governance/l3_notary.go`): Gateway mode for CLI sessions. Extends outbound mode with a `CLISessionVerifier` that checks user active status, session ownership, certificate fingerprint match, session expiry, and certificate revocation via the PKI authority. The `CLISessionVerifier` interface is implemented by `cliSessionVerifier` in `internal/services/gateway/cli_session_verifier.go`.
 
-- **NewGatewayL3Notary** (`internal/services/governance/l3_notary.go`): Unified gateway mode that handles both CLI (mTLS) and passkey (WebAuthn) proofs. When `VerifyL3Proof` is called, proofs containing `mtls_cert_fingerprint` route to the CLI verification path; all others delegate to the injected `passkeyVerifier` (PasskeyService). This is the constructor used in `GetGovernanceDeps` (`internal/services/gateway/gateway_service.go`) for gateway-mode deployments.
+- **NewGatewayL3Notary** (`internal/services/governance/l3_notary.go`): Unified gateway mode that requires passkey authorization for all proofs. `gatewayNotary.VerifyL3Proof` always requires a `credential_id` and delegates to the injected `passkeyVerifier` (PasskeyService) first. If the proof includes `mtls_cert_fingerprint` (CLI caller), CLI mTLS session verification runs as an additional transport-auth layer. This is the constructor used in `GetGovernanceDeps` (`internal/services/gateway/gateway_service.go`) for gateway-mode deployments.
 
 - **VerifyCLICertificate** (`internal/services/gateway/cli_cert.go`): Standalone function for real-time mTLS certificate validation during request authentication, distinct from the L3 notary verification path.
 
@@ -308,7 +308,7 @@ If any stage fails, the nonce reservation is released and the transaction is rej
 
 **Mutation enforcement**: The `isMutation` check determines whether an action type is state-changing. Only mutations require L3 proof under the notary posture.
 
-**No bypass field**: L3 is satisfied only by a verified proof. There is no `AutoApproved` or equivalent bypass; the Warden re-derives whether L3 is required from the action type and posture, and if required, demands a real proof. Out-of-band approvals use the `outboundL3Notary` + `SuspendedTransactionStore` path with a verifiable CLI signature, not a producer-supplied flag.
+**No bypass field**: L3 is satisfied only by a verified proof. There is no `AutoApproved` or equivalent bypass; the Warden re-derives whether L3 is required from the action type and posture, and if required, demands a real proof. Out-of-band approvals use the `outboundNotary` + `SuspendedTransactionStore` path with a verifiable CLI signature, not a producer-supplied flag.
 
 **Outcome**:
 - **Authorized**: Proceeds to L5 (Actuator)
@@ -420,7 +420,7 @@ Each `TribunalMember` (`internal/services/tribunal/member.go:26-32`) represents 
 - **`AppID`**: The member's enrolled application ID. This is the same ID used to look up the member's trusted public key in the `SignerStore`.
 - **`PrivateKey`**: The member's Ed25519 private key, used to sign consensus votes. Members without a private key (key resolution failed during bootstrap) are included in the member list for policy purposes but cannot sign votes; their votes are skipped during deliberation.
 
-Members never share the gateway identity key. Even in single-member tribunals, the member is a distinct principal — the actuator's Ed25519 key is reused as the member signing key (Option C), but the member App ID remains separate from the gateway's actuator key ID.
+Members never share the gateway identity key. Even in single-member tribunals, the member is a distinct principal; the actuator's Ed25519 key is reused as the member signing key (Option C), but the member App ID remains separate from the gateway's actuator key ID.
 
 ### TribunalService
 
@@ -476,7 +476,7 @@ Errors are returned for missing files, invalid hex, or wrong seed length.
 
 #### Bootstrap Key Resolution
 
-During `BootstrapTribunal` (`internal/cli/serve/gateway.go:325-357`), a composite `KeyProvider` is constructed:
+During `BootstrapTribunal` (`internal/cli/serve/gateway.go:330-357`), a composite `KeyProvider` is constructed:
 
 1. **File-based lookup**: First attempts to load the member key from disk via `FileKeyProvider`.
 2. **Actuator fallback**: If the file lookup fails and the member App ID matches the actuator's key ID, the actuator's Ed25519 private key is used (Option C for single-member tribunals).
@@ -537,7 +537,7 @@ The `Deliberate` method:
 
 ### Tribunal Bootstrap at Gateway Startup
 
-When the gateway starts in consensus posture, `BootstrapTribunal` (`internal/cli/serve/gateway.go:325-357`) is called to construct and wire the Tribunal service. Under doctrine or notary posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
+When the gateway starts in consensus posture, `BootstrapTribunal` (`internal/cli/serve/gateway.go:330-357`) is called to construct and wire the Tribunal service. Under doctrine or notary posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
 
 1. **Load policy**: Retrieves the `TribunalPolicy` from the database via `TribunalStore.GetTribunal(tribunalID)`. If the policy is missing, returns `ErrTxL2TribunalNotConfigured`.
 2. **Construct key provider**: Creates a `FileKeyProvider` for the configured secrets directory, then wraps it with the actuator key fallback logic (see [Bootstrap Key Resolution](#bootstrap-key-resolution)).
@@ -552,11 +552,11 @@ When the gateway starts in consensus posture, `BootstrapTribunal` (`internal/cli
 
 ### L3 Notary Implementations
 
-The `L3Notary` interface (`internal/services/governance/l3_notary.go:35-39`) is implemented by a single struct, `outboundL3Notary`, configured through three constructors:
+The `L3Notary` interface (`internal/services/governance/l3_notary.go:35-39`) is implemented by three structs, configured through three constructors:
 
-- **NewOutboundL3Notary** (`internal/services/governance/l3_notary.go:68-73`): Operator-side approval. Verifies the transaction exists in `SuspendedTransactionStore`, is marked approved, has a valid Ed25519 signature over the transaction hash, matches the expected certificate fingerprint, and is within the 30-minute approval window.
-- **NewCLIL3Notary** (`internal/services/governance/l3_notary.go:78-84`): Gateway CLI mode. Wraps `outboundL3Notary` with a `CLISessionVerifier` that checks user active status, CLI session ownership, session expiry, and certificate revocation before the shared suspended-transaction and signature verification.
-- **NewGatewayL3Notary** (`internal/services/governance/l3_notary.go:89-96`): Unified gateway mode. Wraps `outboundL3Notary` with both a `CLISessionVerifier` and a `passkeyVerifier`. `VerifyL3Proof` dispatches based on proof type: proofs with `mtls_cert_fingerprint` use the CLI verification path; all others delegate to the passkey verifier.
+- **NewOutboundL3Notary** (`internal/services/governance/l3_notary.go:80-86`): Constructs an `outboundNotary` (line 66). Operator-side approval. Verifies the transaction exists in `SuspendedTransactionStore`, is marked approved, has a valid Ed25519 signature over the transaction hash, matches the expected certificate fingerprint, and is within the 30-minute approval window.
+- **NewCLIL3Notary** (`internal/services/governance/l3_notary.go:88-97`): Constructs a `cliNotary` (line 74). Gateway CLI mode. Calls the shared `verifyOutboundProof` function with a `CLISessionVerifier` that checks user active status, CLI session ownership, certificate fingerprint match, session expiry, and certificate revocation before the suspended-transaction and signature verification.
+- **NewGatewayL3Notary** (`internal/services/governance/l3_notary.go:99-108`): Constructs a `gatewayNotary` (line 57). Unified gateway mode. Requires passkey authorization for all proofs; `credential_id` must be non-empty or `ErrPasskeyProofRequired` is returned. Passkey verification runs first via the injected `passkeyVerifier`. If `mtls_cert_fingerprint` is present, CLI mTLS session verification runs as an additional transport-auth layer.
 
 The passkey verifier is **PasskeyService** (`internal/services/gateway/passkey_service.go`), which implements `L3Notary` for WebAuthn assertion verification. It uses `transaction_hash` as the challenge and verifies the assertion against the registered passkey credentials for the user.
 
@@ -608,7 +608,7 @@ Non-mutation actions never require L3 proof, even under notary posture.
 
 ## Receipt Metadata
 
-The L5 Actuator records posture enforcement results in every `ActionReceipt` (`l5_actuator.go:105-123`):
+The L5 Actuator records posture enforcement results in every `ActionReceipt` (`l5_actuator.go:109-127`):
 
 | Posture | L2Status | L3Status |
 |---|---|---|
@@ -616,7 +616,7 @@ The L5 Actuator records posture enforcement results in every `ActionReceipt` (`l
 | Consensus | `L2_STATUS_REQUIRED_VALID` or `L2_STATUS_REQUIRED_FAILED` | `L3_STATUS_NOT_REQUIRED` |
 | Notary | `L2_STATUS_REQUIRED_VALID` or `L2_STATUS_REQUIRED_FAILED` | `L3_STATUS_REQUIRED_VALID` or `L3_STATUS_REQUIRED_FAILED` |
 
-These values are part of the canonical receipt JSON (`l5_actuator.go:238-250`) and are signed by the actuator's Ed25519 key. They are also persisted in the `ActionReceiptRecord` in the SQL audit store (`l5_actuator.go:299-317`).
+These values are part of the canonical receipt JSON (`l5_actuator.go:241-254`) and are signed by the actuator's Ed25519 key. They are also persisted in the `ActionReceiptRecord` in the SQL audit store (`l5_actuator.go:297-319`).
 
 ---
 
@@ -665,7 +665,7 @@ Every verification layer fails closed: if any check fails, the transaction is re
 | **L4 Warden** | Verification Orchestrator | Five-stage verification: in-flight tracking, nonce reservation, stateless validation (L1 Doctrine + hash), stateful validation (state root), posture-gated L2/L3. |
 | **L1 Doctrine** | Technical Bedrock | Protobuf `forbidden_patterns` field option validation, MITRE-based threat detection with `ThreatDetector` regex patterns. |
 | **L2 Consensus** | Tribunal Verification | Ed25519 vote signatures, quorum and distinct-signer checks, TribunalPolicy enforcement. |
-| **L3 Notary** | Authorization Engine | `outboundL3Notary` (`l3_notary.go`) configured via `NewGatewayL3Notary` (gateway), `NewCLIL3Notary` (CLI), or `NewOutboundL3Notary` (operator). Routes WebAuthn proofs to PasskeyService and mTLS proofs to CLI session verification. |
+| **L3 Notary** | Authorization Engine | Three structs in `l3_notary.go`: `gatewayNotary` (line 57, via `NewGatewayL3Notary`), `cliNotary` (line 74, via `NewCLIL3Notary`), `outboundNotary` (line 66, via `NewOutboundL3Notary`). `gatewayNotary` requires passkey first, then CLI session as additional layer. `cliNotary` and `outboundNotary` use shared `verifyOutboundProof` with suspended transaction and Ed25519 signature verification. |
 | **L5 Actuator** | Execution Gateway | Fail-closed dual receipt signing with canonical JSON, JIT capability minting/dissolving, rehydration, execution dispatch via ExecutionHandler. |
 | **Local Audit Vault** | Immutable Ledger | SQLAuditStore (encrypted SQLite) and GitLedgerService (git-backed, two-phase commit, optional encryption). |
 

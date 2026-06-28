@@ -17,6 +17,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -64,6 +65,82 @@ func resolveWorkingDir(workingDir, launchDir string) string {
 	return launchDir
 }
 
+// resolveKeyPath returns the explicit key path if set, otherwise checks the default
+// operator and client key paths on disk. Returns empty string if none are found.
+func resolveKeyPath(privateKey string, logger *slog.Logger) string {
+	if privateKey != "" {
+		return privateKey
+	}
+	if _, err := os.Stat(paths.Infra.OperatorKeyPath); err == nil {
+		logger.Info("Using default Operator key from project directory", "path", paths.Infra.OperatorKeyPath)
+		return paths.Infra.OperatorKeyPath
+	}
+	if _, err := os.Stat(paths.Infra.ClientOperatorKeyPath); err == nil {
+		logger.Info("Using default client key from project directory", "path", paths.Infra.ClientOperatorKeyPath)
+		return paths.Infra.ClientOperatorKeyPath
+	}
+	return ""
+}
+
+// resolveCertPath returns the explicit cert path if set, otherwise checks the default
+// operator and client cert paths on disk. Returns empty string if none are found.
+func resolveCertPath(clientCert string, logger *slog.Logger) string {
+	if clientCert != "" {
+		return clientCert
+	}
+	if _, err := os.Stat(paths.Infra.OperatorCertPath); err == nil {
+		logger.Info("Using default Operator certificate from project directory", "path", paths.Infra.OperatorCertPath)
+		return paths.Infra.OperatorCertPath
+	}
+	if _, err := os.Stat(paths.Infra.ClientOperatorCertPath); err == nil {
+		logger.Info("Using default client certificate from project directory", "path", paths.Infra.ClientOperatorCertPath)
+		return paths.Infra.ClientOperatorCertPath
+	}
+	return ""
+}
+
+// loadClientCertPair reads the cert and key PEM files and returns the TLS certificate
+// along with the raw cert PEM bytes for logging.
+func loadClientCertPair(certPath, keyPath string) (tls.Certificate, []byte, error) {
+	certPEM, err := os.ReadFile(certPath)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadClientCert, err)
+	}
+	keyPEM, err := os.ReadFile(keyPath)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrReadPrivateKey, err)
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return tls.Certificate{}, nil, fmt.Errorf("%w: %w", constants.ErrLoadCertKeyPair, err)
+	}
+	return cert, certPEM, nil
+}
+
+// buildOperatorLoadOptions creates config.LoadOptions from ServeOperatorOptions and
+// resolved runtime parameters.
+func buildOperatorLoadOptions(opts ServeOperatorOptions, operatorEndpoint, effectiveWorkDir string) config.LoadOptions {
+	return config.LoadOptions{
+		OperatorEndpoint:      operatorEndpoint,
+		HTTPPort:              0,
+		HTTPSPort:             0,
+		CloudMode:             opts.CloudMode,
+		CloudProvider:         opts.CloudProvider,
+		ExecutionVaultEnabled: opts.ExecutionVault,
+		NoGit:                 opts.NoGit,
+		LogLevel:              opts.LogLevel,
+		WorkDir:               effectiveWorkDir,
+		PKIDir:                "",
+		SecretsDir:            "",
+		HeartbeatInterval:     opts.HeartbeatInterval,
+		Shell:                 os.Getenv(string(constants.EnvVar.Shell)),
+		Lang:                  os.Getenv(string(constants.EnvVar.Lang)),
+		Term:                  os.Getenv(string(constants.EnvVar.Term)),
+		TZ:                    os.Getenv(string(constants.EnvVar.TZ)),
+		Posture:               "",
+	}
+}
+
 // RunOperator runs the operator in standalone mode with the given options.
 func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	logger, err := ConfigureLogger(opts.LogLevel)
@@ -102,41 +179,26 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 	}
 	logger.Info("Trust bundle loaded")
 
-	privateKey := opts.PrivateKey
-	clientCert := opts.ClientCert
-
-	if privateKey == "" {
-		if _, err := os.Stat(paths.Infra.OperatorKeyPath); err == nil {
-			privateKey = paths.Infra.OperatorKeyPath
-			logger.Info("Using default Operator key from project directory", "path", privateKey)
-		} else {
-			if _, err := os.Stat(paths.Infra.ClientOperatorKeyPath); err == nil {
-				privateKey = paths.Infra.ClientOperatorKeyPath
-				logger.Info("Using default client key from project directory", "path", privateKey)
-			}
-		}
-	}
-
-	if clientCert == "" {
-		if _, err := os.Stat(paths.Infra.OperatorCertPath); err == nil {
-			clientCert = paths.Infra.OperatorCertPath
-			logger.Info("Using default Operator certificate from project directory", "path", clientCert)
-		} else {
-			if _, err := os.Stat(paths.Infra.ClientOperatorCertPath); err == nil {
-				clientCert = paths.Infra.ClientOperatorCertPath
-				logger.Info("Using default client certificate from project directory", "path", clientCert)
-			}
-		}
-	}
+	privateKey := resolveKeyPath(opts.PrivateKey, logger)
+	clientCert := resolveCertPath(opts.ClientCert, logger)
 
 	if opts.Endpoint != "" {
 		logger.Info("Performing automatic enrollment with Gateway", "endpoint", opts.Endpoint)
-		if err := PerformAutomaticEnrollment(opts.Endpoint, opts.LaunchDir, logger); err != nil {
+		certPaths := CertPaths{
+			PkiTrustDir:       paths.Infra.PkiTrustDir,
+			OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+			OperatorCertPath:  paths.Infra.OperatorCertPath,
+			CaCertPath:        paths.Infra.CaCertPath,
+			TrustedSignersDir: paths.Infra.TrustedSignersDir,
+		}
+		sessionID, err := PerformAutomaticEnrollment(opts.Endpoint, opts.LaunchDir, certPaths, logger)
+		if err != nil {
 			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)
 			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
 			os.Exit(constants.ExitConfigError)
 		}
+		os.Setenv("G8E_OPERATOR_SESSION_ID", sessionID)
 
 		privateKey = paths.Infra.OperatorKeyPath
 		clientCert = paths.Infra.OperatorCertPath
@@ -167,21 +229,9 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
 
-	certPEM, err := os.ReadFile(clientCert)
+	cert, certPEM, err := loadClientCertPair(clientCert, privateKey)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrReadClientCert, err)
-		os.Exit(constants.ExitConfigError)
-	}
-
-	keyPEM, err := os.ReadFile(privateKey)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrReadPrivateKey, err)
-		os.Exit(constants.ExitConfigError)
-	}
-
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrLoadCertKeyPair, err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(constants.ExitConfigError)
 	}
 
@@ -194,25 +244,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 
 	effectiveWorkDir := resolveWorkingDir(opts.WorkingDir, opts.LaunchDir)
 
-	cfg, err := config.Load(config.LoadOptions{
-		OperatorEndpoint:      operatorEndpoint,
-		HTTPPort:              0,
-		HTTPSPort:             0,
-		CloudMode:             opts.CloudMode,
-		CloudProvider:         opts.CloudProvider,
-		ExecutionVaultEnabled: opts.ExecutionVault,
-		NoGit:                 opts.NoGit,
-		LogLevel:              opts.LogLevel,
-		WorkDir:               effectiveWorkDir,
-		PKIDir:                "",
-		SecretsDir:            "",
-		HeartbeatInterval:     opts.HeartbeatInterval,
-		Shell:                 os.Getenv(string(constants.EnvVar.Shell)),
-		Lang:                  os.Getenv(string(constants.EnvVar.Lang)),
-		Term:                  os.Getenv(string(constants.EnvVar.Term)),
-		TZ:                    os.Getenv(string(constants.EnvVar.TZ)),
-		Posture:               "",
-	})
+	cfg, err := config.Load(buildOperatorLoadOptions(opts, operatorEndpoint, effectiveWorkDir))
 	if err != nil {
 		logger.Error("Failed to load configuration", string(constants.ConnectionStateError), err)
 		os.Exit(constants.ExitConfigError)

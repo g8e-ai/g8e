@@ -278,6 +278,40 @@ const EventSourceAiAssistant EventType = "g8e.v1.source.ai.assistant"
 const EventSourceAiTriage EventType = "g8e.v1.source.ai.triage"
 const EventSourceSystem EventType = "g8e.v1.source.system"
 
+// AI Tribunal session events
+const EventAiTribunalSessionStarted EventType = "g8e.v1.ai.tribunal.session.started"
+const EventAiTribunalSessionCompleted EventType = "g8e.v1.ai.tribunal.session.completed"
+const EventAiTribunalSessionDisabled EventType = "g8e.v1.ai.tribunal.session.disabled"
+const EventAiTribunalSessionGenerationFailed EventType = "g8e.v1.ai.tribunal.session.generation.failed"
+const EventAiTribunalSessionModelNotConfigured EventType = "g8e.v1.ai.tribunal.session.model.not.configured"
+const EventAiTribunalSessionProviderUnavailable EventType = "g8e.v1.ai.tribunal.session.provider.unavailable"
+const EventAiTribunalSessionSystemError EventType = "g8e.v1.ai.tribunal.session.system.error"
+const EventAiTribunalSessionAuditorFailed EventType = "g8e.v1.ai.tribunal.session.auditor.failed"
+const EventAiTribunalSessionWardenBlocked EventType = "g8e.v1.ai.tribunal.session.warden.blocked"
+
+// AI Tribunal voting events
+const EventAiTribunalVotingPassCompleted EventType = "g8e.v1.ai.tribunal.voting.pass.completed"
+const EventAiTribunalVotingConsensusReached EventType = "g8e.v1.ai.tribunal.voting.consensus.reached"
+const EventAiTribunalVotingConsensusNotReached EventType = "g8e.v1.ai.tribunal.voting.consensus.not.reached"
+const EventAiTribunalVotingConsensusFailed EventType = "g8e.v1.ai.tribunal.voting.consensus.failed"
+const EventAiTribunalVotingRoundStarted EventType = "g8e.v1.ai.tribunal.voting.round.started"
+const EventAiTribunalVotingRoundCompleted EventType = "g8e.v1.ai.tribunal.voting.round.completed"
+const EventAiTribunalVotingRound2Started EventType = "g8e.v1.ai.tribunal.voting.round.2.started"
+const EventAiTribunalVotingRound2ConsensusReached EventType = "g8e.v1.ai.tribunal.voting.round.2.consensus.reached"
+const EventAiTribunalVotingRound2ConsensusFailed EventType = "g8e.v1.ai.tribunal.voting.round.2.consensus.failed"
+const EventAiTribunalVotingDissentRecorded EventType = "g8e.v1.ai.tribunal.voting.dissent.recorded"
+const EventAiTribunalVotingAuditStarted EventType = "g8e.v1.ai.tribunal.voting.audit.started"
+const EventAiTribunalVotingAuditCompleted EventType = "g8e.v1.ai.tribunal.voting.audit.completed"
+
+// Other new events
+const EventAiLLMChatIterationThinkingStopped EventType = "g8e.v1.ai.llm.chat.iteration.thinking.stopped"
+const EventAiReputationStateUpdated EventType = "g8e.v1.ai.reputation.state.updated"
+const EventAppCaseDeleted EventType = "g8e.v1.app.case.deleted"
+const EventAppInvestigationDeleted EventType = "g8e.v1.app.investigation.deleted"
+const EventAppMemoryCreated EventType = "g8e.v1.app.memory.created"
+const EventAppMemoryUpdated EventType = "g8e.v1.app.memory.updated"
+const EventOperatorPortCheckRequested EventType = "g8e.v1.operator.port.check.requested"
+
 // Event.Operator provides hierarchical access to Operator event constants
 type _EventOperatorA2a struct {
 	CallRequested EventType

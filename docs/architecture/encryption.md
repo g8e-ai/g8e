@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 ## Overview
 
@@ -96,7 +96,7 @@ The `VaultHeader` struct (`internal/services/vault/vault_header.go`) contains:
 
 | Method | Description |
 |--------|-------------|
-| `NewVaultHeader(privateKey)` | Create new header with freshly generated DEK wrapped by KEK derived from `privateKey` |
+| `NewVaultHeader(privateKey)` | Create new header with freshly generated DEK wrapped by KEK derived from `privateKey`; returns `(*VaultHeader, []byte, error)` where the `[]byte` is the raw DEK |
 | `UnwrapDEK(privateKey)` | Unwrap DEK using provided private key; verifies key fingerprint first |
 | `Rekey(oldPrivateKey, newPrivateKey)` | Re-wrap DEK with a new private key; updates fingerprint and `LastRekeyedAt` |
 | `Save(dataDir)` | Write header to disk atomically via temp file rename |

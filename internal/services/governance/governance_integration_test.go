@@ -31,16 +31,11 @@ import (
 // TestGovernanceFlow tests the full governance flow from envelope creation
 // through L5Actuator execution.
 func TestGovernanceFlow(t *testing.T) {
-	pub, priv, _ := ed25519.GenerateKey(nil)
+	_, priv, _ := ed25519.GenerateKey(nil)
 	nodeID := "test-node-1"
 
 	actuator := &L5Actuator{
 		Logger: testutil.NewTestLogger(),
-		SignerStore: &SimpleSignerStore{
-			Signers: map[string]ed25519.PublicKey{
-				nodeID: pub,
-			},
-		},
 	}
 
 	env := &governance.GovernanceEnvelope{

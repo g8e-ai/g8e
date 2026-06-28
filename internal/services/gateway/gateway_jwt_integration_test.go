@@ -107,7 +107,7 @@ func generateSignedJWT(t *testing.T, privKey *rsa.PrivateKey, claims map[string]
 	return signingString + "." + sigB64
 }
 
-func setupSuspendedTxService(t *testing.T, dbDir string) *storage.SuspendedTransactionService {
+func setupSuspendedTxService(t *testing.T, dbDir string) storage.SuspendedTransactionStore {
 	t.Helper()
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
 		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
@@ -178,7 +178,8 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -208,7 +209,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 		OperatorSessionSvc: operatorSessionSvc,
 		WebSessionSvc:      webSessionSvc,
 		Reg:                reg,
-		Passkey:            passkey,
+		Passkey:            passkeyHandler,
 		UserSvc:            userSvc,
 		Responder:          resp,
 		MCPGateway:         mcpGateway,
@@ -334,7 +335,8 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -364,7 +366,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 		OperatorSessionSvc: operatorSessionSvc,
 		WebSessionSvc:      webSessionSvc,
 		Reg:                reg,
-		Passkey:            passkey,
+		Passkey:            passkeyHandler,
 		UserSvc:            userSvc,
 		Responder:          resp,
 		MCPGateway:         mcpGateway,
@@ -505,7 +507,8 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -535,7 +538,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 		OperatorSessionSvc: operatorSessionSvc,
 		WebSessionSvc:      webSessionSvc,
 		Reg:                reg,
-		Passkey:            passkey,
+		Passkey:            passkeyHandler,
 		UserSvc:            userSvc,
 		Responder:          resp,
 		MCPGateway:         mcpGateway,

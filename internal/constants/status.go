@@ -234,9 +234,11 @@ const (
 type VersionStability string
 
 const (
-	VersionStabilityBeta   VersionStability = "beta"
-	VersionStabilityDev    VersionStability = "dev"
-	VersionStabilityStable VersionStability = "stable"
+	VersionStabilityBeta       VersionStability = "beta"
+	VersionStabilityDev        VersionStability = "dev"
+	VersionStabilityStable     VersionStability = "stable"
+	VersionStabilityUnstable   VersionStability = "unstable"
+	VersionStabilityDeprecated VersionStability = "deprecated"
 )
 
 // UserRole is a typed string for user role.
@@ -372,4 +374,210 @@ const (
 	AISourceTerminalAnchored AISource = "ai.terminal.anchored"
 	AISourceTerminalDirect   AISource = "ai.terminal.direct"
 	AISourceToolCall         AISource = "ai.tool.call"
+)
+
+// ComponentStatus is a typed string for component status.
+type ComponentStatus string
+
+const (
+	ComponentStatusActive      ComponentStatus = "active"
+	ComponentStatusError       ComponentStatus = "error"
+	ComponentStatusInactive    ComponentStatus = "inactive"
+	ComponentStatusMaintenance ComponentStatus = "maintenance"
+	ComponentStatusDegraded    ComponentStatus = "degraded"
+)
+
+// WorkflowType is a typed string for workflow type.
+type WorkflowType string
+
+const (
+	WorkflowTypeG8eBound      WorkflowType = "g8e.bound"
+	WorkflowTypeG8eCloudBound WorkflowType = "g8e.cloud.bound"
+	WorkflowTypeG8eNotBound   WorkflowType = "g8e.not.bound"
+	WorkflowTypeTriage        WorkflowType = "triage"
+	WorkflowTypeInvestigation WorkflowType = "investigation"
+)
+
+// AITaskId is a typed string for AI task identifiers.
+type AITaskId string
+
+const (
+	AITaskIDAgentContinue      AITaskId = "ai.agent.continue"
+	AITaskIDChat               AITaskId = "ai.chat"
+	AITaskIDCommand            AITaskId = "ai.command"
+	AITaskIDDirectCommand      AITaskId = "ai.direct.command"
+	AITaskIDFetchFileDiff      AITaskId = "ai.fetch.file.diff"
+	AITaskIDFetchFileHistory   AITaskId = "ai.fetch.file.history"
+	AITaskIDFetchHistory       AITaskId = "ai.fetch.history"
+	AITaskIDFetchLogs          AITaskId = "ai.fetch.logs"
+	AITaskIDFileEdit           AITaskId = "ai.file.edit"
+	AITaskIDFsList             AITaskId = "ai.fs.list"
+	AITaskIDFsRead             AITaskId = "ai.fs.read"
+	AITaskIDIntentGrant        AITaskId = "ai.intent.grant"
+	AITaskIDIntentRevoke       AITaskId = "ai.intent.revoke"
+	AITaskIDPortCheck          AITaskId = "ai.port.check"
+	AITaskIDRecursiveGrep      AITaskId = "ai.recursive_grep"
+	AITaskIDRestoreFile        AITaskId = "ai.restore.file"
+	AITaskIdChat               AITaskId = "ai.chat"
+	AITaskIdCase               AITaskId = "ai.case"
+	AITaskIdMemory             AITaskId = "ai.memory"
+	AITaskIdCommand            AITaskId = "ai.command"
+	AITaskIdCommandExecution   AITaskId = "ai.command.execution"
+	AITaskIdDirectCommand      AITaskId = "ai.direct.command"
+	AITaskIdIntentGrant        AITaskId = "ai.intent.grant"
+	AITaskIdIntentRevoke       AITaskId = "ai.intent.revoke"
+	AITaskIdFileEdit           AITaskId = "ai.file.edit"
+	AITaskIdFileOperation      AITaskId = "ai.file.operation"
+	AITaskIdFsList             AITaskId = "ai.fs.list"
+	AITaskIdRecursiveGrep      AITaskId = "ai.recursive.grep"
+	AITaskIdPortCheck          AITaskId = "ai.port.check"
+	AITaskIdAgentContinue      AITaskId = "ai.agent.continue"
+	AITaskIdInvestigationQuery AITaskId = "ai.investigation.query"
+)
+
+// TribunalMember is a typed string for tribunal member identifiers.
+type TribunalMember string
+
+const (
+	TribunalMemberAxiom    TribunalMember = "axiom"
+	TribunalMemberConcord  TribunalMember = "concord"
+	TribunalMemberVariance TribunalMember = "variance"
+	TribunalMemberPragma   TribunalMember = "pragma"
+	TribunalMemberNemesis  TribunalMember = "nemesis"
+)
+
+// TribunalAuditMode is a typed string for tribunal audit mode.
+type TribunalAuditMode string
+
+const (
+	TribunalAuditModeUnanimous TribunalAuditMode = "unanimous"
+	TribunalAuditModeMajority  TribunalAuditMode = "majority"
+	TribunalAuditModeTied      TribunalAuditMode = "tied"
+)
+
+// TribunalAuditStatus is a typed string for tribunal audit status.
+type TribunalAuditStatus string
+
+const (
+	TribunalAuditStatusOk      TribunalAuditStatus = "ok"
+	TribunalAuditStatusRevised TribunalAuditStatus = "revised"
+	TribunalAuditStatusSwap    TribunalAuditStatus = "swap"
+)
+
+// AuditorReason is a typed string for auditor reason.
+type AuditorReason string
+
+const (
+	AuditorReasonOk                 AuditorReason = "ok"
+	AuditorReasonRevised            AuditorReason = "revised"
+	AuditorReasonRevisedFromDissent AuditorReason = "revised_from_dissent"
+	AuditorReasonSwappedToDissenter AuditorReason = "swapped_to_dissenter"
+	AuditorReasonWhitelistViolation AuditorReason = "whitelist_violation"
+	AuditorReasonNoValidRevision    AuditorReason = "no_valid_revision"
+	AuditorReasonAuditorError       AuditorReason = "auditor_error"
+	AuditorReasonEmptyResponse      AuditorReason = "empty_response"
+)
+
+// TieBreakReason is a typed string for tie-break reason.
+type TieBreakReason string
+
+const (
+	TieBreakReasonShortest        TieBreakReason = "shortest"
+	TieBreakReasonExcludedNemesis TieBreakReason = "excluded_nemesis"
+)
+
+// ReasoningAgent is a typed string for reasoning agent identifiers.
+type ReasoningAgent string
+
+const (
+	ReasoningAgentSage ReasoningAgent = "sage"
+	ReasoningAgentDash ReasoningAgent = "dash"
+)
+
+// ErrorCode is a typed string for g8e error codes.
+type ErrorCode string
+
+const (
+	ErrorCodeGenericError               ErrorCode = "G8E-1000"
+	ErrorCodeUnexpectedError            ErrorCode = "G8E-1001"
+	ErrorCodeNotImplemented             ErrorCode = "G8E-1002"
+	ErrorCodeConfigError                ErrorCode = "G8E-1100"
+	ErrorCodeMissingEnvVar              ErrorCode = "G8E-1101"
+	ErrorCodeInvalidSettings            ErrorCode = "G8E-1102"
+	ErrorCodeServiceInitError           ErrorCode = "G8E-1103"
+	ErrorCodeAuthError                  ErrorCode = "G8E-1200"
+	ErrorCodeTokenExpired               ErrorCode = "G8E-1201"
+	ErrorCodeInvalidToken               ErrorCode = "G8E-1202"
+	ErrorCodeInsufficientPermissions    ErrorCode = "G8E-1203"
+	ErrorCodeDBConnectionError          ErrorCode = "G8E-1300"
+	ErrorCodeDBQueryError               ErrorCode = "G8E-1301"
+	ErrorCodeDBDocumentNotFound         ErrorCode = "G8E-1302"
+	ErrorCodeDBWriteError               ErrorCode = "G8E-1303"
+	ErrorCodeDBTransactionError         ErrorCode = "G8E-1304"
+	ErrorCodePubSubConnectionError      ErrorCode = "G8E-1400"
+	ErrorCodePubSubPublishError         ErrorCode = "G8E-1401"
+	ErrorCodePubSubSubscribeError       ErrorCode = "G8E-1402"
+	ErrorCodePubSubTopicError           ErrorCode = "G8E-1403"
+	ErrorCodeStorageConnectionError     ErrorCode = "G8E-1500"
+	ErrorCodeStorageReadError           ErrorCode = "G8E-1501"
+	ErrorCodeStorageWriteError          ErrorCode = "G8E-1502"
+	ErrorCodeStorageDeleteError         ErrorCode = "G8E-1503"
+	ErrorCodeAPIConnectionError         ErrorCode = "G8E-1600"
+	ErrorCodeAPITimeoutError            ErrorCode = "G8E-1601"
+	ErrorCodeAPIResponseError           ErrorCode = "G8E-1602"
+	ErrorCodeAPIRequestError            ErrorCode = "G8E-1603"
+	ErrorCodeAPIRateLimitError          ErrorCode = "G8E-1604"
+	ErrorCodeGenericNotFound            ErrorCode = "G8E-1605"
+	ErrorCodeExternalServiceError       ErrorCode = "G8E-1607"
+	ErrorCodeValidationError            ErrorCode = "G8E-1700"
+	ErrorCodeMissingRequiredField       ErrorCode = "G8E-1701"
+	ErrorCodeInvalidFieldFormat         ErrorCode = "G8E-1702"
+	ErrorCodeInvalidFieldValue          ErrorCode = "G8E-1703"
+	ErrorCodeInvalidFieldType           ErrorCode = "G8E-1704"
+	ErrorCodeSchemaValidationFailed     ErrorCode = "G8E-1705"
+	ErrorCodeSchemaNotFound             ErrorCode = "G8E-1706"
+	ErrorCodeInvalidInput               ErrorCode = "G8E-1707"
+	ErrorCodeBusinessLogicError         ErrorCode = "G8E-1800"
+	ErrorCodeWorkflowError              ErrorCode = "G8E-1801"
+	ErrorCodeStateTransitionError       ErrorCode = "G8E-1802"
+	ErrorCodeResourceConflict           ErrorCode = "G8E-1803"
+	ErrorCodeTaskCreationFailed         ErrorCode = "G8E-1804"
+	ErrorCodeOperationFailed            ErrorCode = "G8E-1805"
+	ErrorCodeGovernanceRejected         ErrorCode = "G8E-1806"
+	ErrorCodeModelCapabilityUnsupported ErrorCode = "G8E-1807"
+	ErrorCodeServiceUnavailableError    ErrorCode = "G8E-1900"
+)
+
+// ErrorCategory is a typed string for error categories.
+type ErrorCategory string
+
+const (
+	ErrorCategoryValidation         ErrorCategory = "validation"
+	ErrorCategoryBusinessLogic      ErrorCategory = "business_logic"
+	ErrorCategoryConfiguration      ErrorCategory = "configuration"
+	ErrorCategoryAuth               ErrorCategory = "auth"
+	ErrorCategoryPermission         ErrorCategory = "permission"
+	ErrorCategoryResourceNotFound   ErrorCategory = "resource_not_found"
+	ErrorCategoryConflict           ErrorCategory = "conflict"
+	ErrorCategoryRateLimit          ErrorCategory = "rate_limit"
+	ErrorCategoryServiceUnavailable ErrorCategory = "service_unavailable"
+	ErrorCategoryExternalService    ErrorCategory = "external_service"
+	ErrorCategoryTimeout            ErrorCategory = "timeout"
+	ErrorCategoryDatabase           ErrorCategory = "database"
+	ErrorCategoryNetwork            ErrorCategory = "network"
+	ErrorCategoryPubSub             ErrorCategory = "pubsub"
+	ErrorCategoryStorage            ErrorCategory = "storage"
+	ErrorCategoryInternal           ErrorCategory = "internal"
+	ErrorCategoryDependency         ErrorCategory = "dependency"
+)
+
+// ErrorSeverity is a typed string for error severity levels.
+type ErrorSeverity string
+
+const (
+	ErrorSeverityLow      ErrorSeverity = "low"
+	ErrorSeverityMedium   ErrorSeverity = "medium"
+	ErrorSeverityHigh     ErrorSeverity = "high"
+	ErrorSeverityCritical ErrorSeverity = "critical"
+	ErrorSeverityInfo     ErrorSeverity = "info"
 )

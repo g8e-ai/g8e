@@ -28,13 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/internal/certs"
 )
-
-func init() {
-	certs.SetCA(generateTestCA())
-}
 
 func generateTestCA() []byte {
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

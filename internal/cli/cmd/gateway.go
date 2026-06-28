@@ -24,7 +24,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
@@ -182,9 +181,9 @@ func gatewayStartCmd() *cobra.Command {
 		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -434,9 +433,9 @@ func gatewayStopCmd() *cobra.Command {
 		Use:   "stop",
 		Short: "Stop the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -470,9 +469,9 @@ func gatewayStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Check Gateway health and status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			cmd.Println("g8e Gateway Status")
@@ -527,9 +526,9 @@ func gatewayRestartCmd() *cobra.Command {
 		Use:   "restart",
 		Short: "Restart the g8e Gateway",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -600,9 +599,9 @@ func gatewayLogsCmd() *cobra.Command {
 		Use:   "logs",
 		Short: "View Gateway logs",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -630,9 +629,9 @@ func gatewaySettingsCmd() *cobra.Command {
 		Use:   "settings",
 		Short: "Manage Gateway settings",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := api.NewClient(cfg)
@@ -719,9 +718,9 @@ func gatewayCleanCmd() *cobra.Command {
 		Use:   "clean",
 		Short: "Destructively remove all Gateway state",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			if !force {

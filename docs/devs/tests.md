@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-25
+Last Updated: 2026-06-27
 
 g8e tests run directly on the host using real infrastructure. The test environment is the production environment. If it does not work in tests, it will not work in production.
 
@@ -100,21 +100,28 @@ The agent harness is a universal agent testing and auditing tool that impersonat
 **Architecture**:
 - **client/** - Thin, faithful HTTP client with mTLS support and exchange recording
 - **config/** - Runtime configuration (auth, URLs, ensemble size, L3 mode)
-- **scenarios/** - Ordered registry of impersonation scripts (MCP, A2A, governance)
+- **scenarios/** - Ordered registry of impersonation scripts (MCP, A2A, governance, DoW)
 - **report/** - Generates machine-readable JSON and human-readable Markdown reports
 
 **Protocol Coverage**:
 - **MCP (Model Context Protocol)** - Tools, resources, and prompts
 - **A2A (Agent-to-Agent)** - Skill invocations with JSON and protobuf payloads
 - **Governance envelopes** - L2 consensus and L3 notary flows
+- **DoW (Defense on Web)** - Tactical edge cross-cue scenarios with governed actuator dispatch and BFT veto
 
-**Governance Scenarios** (4 scenarios added 2026-06-24):
+**Governance Scenarios** (6 scenarios):
+- `consensus` (Consensus) - L2 consensus envelope with mock ensemble co-sign
+- `envelope-maximal` (Notary) - Official notary envelope with L2 consensus and principal L3 signing
 - `agent-delegation` (Doctrine) - CLI delegates to agent persona, verifies distinct SPIFFE identity
 - `tribunal-quorum` (Consensus) - 2-of-3 co-sign, asserts admission success
 - `tribunal-veto` (Consensus) - False vote, asserts rejection with status ≥ 400
 - `notary-oob` (Notary) - Suspend mode, OOB principal approval flow
 
-The registry now has 14 scenarios total (5 MCP + 3 A2A + 6 governance).
+**DoW Cross-Cue Scenarios** (2 scenarios):
+- `dow-cross-cue` (Consensus) - SIGINT to EO/IR cross-cue with governed camera slew
+- `dow-bft-veto` (Consensus) - BFT veto rejects spoofed GNSS cross-cue
+
+The registry now has 16 scenarios total (5 MCP + 3 A2A + 6 governance + 2 DoW).
 
 **Testing Postures**:
 Scenarios run under different enforcement modes:
@@ -123,8 +130,10 @@ Scenarios run under different enforcement modes:
 - **Notary** - L1/L2/L3 strictly enforced
 
 **Personas Impersonated**:
-- Claude Desktop, Cursor, enterprise agents (MCP clients)
-- A2A peers with JSON and protobuf transports
+- Claude Desktop, Cursor, enterprise agents, clinical agents (MCP clients)
+- A2A peers with JSON, mTLS, and protobuf transports
+- CLI delegator and delegated agent (distinct SPIFFE identity verification)
+- DoW SIGINT agent (tactical edge cross-cue)
 - Mock consensus ensemble (L2 co-signers)
 - Mock principal (L3 human notary)
 
@@ -195,7 +204,7 @@ All 7 tests use `GatewayFixture` with real PKI, SQLite, `TribunalService`, and `
 - `TestUniversalGateway_CanonicalJSONWireFormat` - Canonical JSON wire format validation
 
 **Native Tool Registry Tests** (`test/native_tool_registry_integration_test.go`):
-- `TestRegisterNativeTools` - Validates registration of all 30 native tools (db_discover_topology, db_query_validate, db_isolated_read, db_index_triage, log_stream_filter, sys_oom_detect, config_diff_mask, proc_metric_top, fs_disk_profile, proc_signal_safe, net_socket_audit, net_endpoint_ping, net_http_probe, sys_info, net_dns_resolve, tls_cert_inspect, sys_env_vars, fs_file_checksum, sys_service_status, sys_container_status, fs_disk_usage, sys_time_clock, proc_tree, git_ops, cloud_metadata, k8s_inspect, shell_execute, net_ssh_known_hosts, operator_deploy, file_read)
+- `TestRegisterNativeTools` - Validates registration of all 30 native tools (db_discover_topology, db_query_validate, db_isolated_read, db_index_triage, log_stream_filter, sys_oom_detect, config_diff_mask, proc_metric_top, fs_disk_profile, proc_signal_safe, net_socket_audit, net_endpoint_ping, net_http_probe, sys_info, net_dns_resolve, tls_cert_inspect, sys_env_vars, fs_file_checksum, sys_service_status, sys_container_status, fs_disk_usage, sys_time_clock, proc_tree, git_ops, cloud_metadata, k8s_inspect, run_shell_command, net_ssh_known_hosts, operator_deploy, read_file)
 - `TestRegisterNativeTools_DuplicateRegistration` - Verifies duplicate registration fails
 - `TestRegisterNativeTools_NilRegistry` - Tests panic on nil registry
 - `TestRegisterNativeTools_ToolNameConsistency` - Validates naming convention (lowercase with underscores)
@@ -727,11 +736,11 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 ### Go Tests
 
 - **Tooling** - Standard `go test` with optional `gotestsum` for dots-style output.
-- **Race detection** - Enabled via `-race` in CI and by default in `./g8e test unit`.
-- **Parallelism** - `-parallel 4` with `180s` timeout.
-- **Coverage** - `--coverage` flag generates reports. CI enforces 70% coverage threshold.
+- **Race detection** - Enabled via `-race` on all non-Windows platforms across all test targets (unit, integration, Docker E2E, coverage).
+- **Parallelism** - Unit tests run with `-p=1` (sequential package execution) to avoid resource contention. Integration tests use default Go parallelism. Timeout is `180s` for both tiers; Docker E2E uses `300s`.
+- **Coverage** - `make test-coverage` generates reports with `-coverprofile` and `-covermode=atomic`. CI enforces 70% coverage threshold.
 - **Concurrency** - Goroutines require explicit cancellation contexts and clear channel ownership.
-- **Integration tags** - Scenario tests require `-tags=integration` to access test fixtures and Gateway gate infrastructure.
+- **Integration tags** - Integration tests require `-tags=integration` to run. Docker E2E tests require `-tags=e2e`. Agent harness scenarios are run via `./g8e agent-harness run` and do not use build tags.
 - **Path constants** - ALL filepath strings in test code MUST be defined as constants in `internal/constants/paths.go`. No filepath strings may be constructed dynamically or hardcoded inline, including relative paths like `"../../"`, `"./"`, `".g8e/"`, `"/pki/"`, etc. Dynamic path construction using `filepath.Join()` with string literals is prohibited. Tests must use `constants.Paths.Infra.*` constants for runtime state paths (e.g., `constants.Paths.Infra.PkiDir` for `.g8e/pki`). The only exception is when using `TestPaths` for isolated test environments - the base directory for TestPaths must come from a constant, and all path construction within TestPaths must use constants. This eliminates magic strings and improves maintainability and system robustness.
 - **Typed error constants** - When testing error handling, check for any hand-trolled strings that should be properly typed errors (e.g., error reason strings, status codes, rejection reasons). Use typed constants from `internal/constants/` instead of hardcoded strings in assertions and error message checks.
 - **Regression test markers** - When documenting known issues in regression tests (e.g., Phase0Regression tests), use standardized marker constants instead of hardcoded strings. See `internal/services/gateway/pki_authority_test.go` for examples:
@@ -753,7 +762,7 @@ Tests do not mutate local PKI state. If trust bundle issues persist, the gateway
 - **`make lint`** - Runs all linting and quality checks including golangci-lint, lint-no-embedded-newlines, vulncheck, validate-doctrines, and swagger-generate.
 - **`make lint-no-embedded-newlines`** - Checks for compilation errors including embedded newlines.
 - **`make vulncheck`** - Runs `govulncheck` on Go dependencies.
-- **`make validate-doctrines`** - Validates doctrine JSON schema against the governance policy model.
+- **`make validate-doctrines`** - Validates doctrine JSON files are well-formed JSON.
 - **`make swagger-generate`** - Generates Swagger/OpenAPI documentation from code annotations.
 
 ---

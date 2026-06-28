@@ -123,7 +123,6 @@ func TestEvalAnswerVerification(t *testing.T) {
 	keyID := "test-key-id"
 	actuator := &L5Actuator{
 		Logger:            slog.Default(),
-		SignerStore:       &SimpleSignerStore{Signers: map[string]ed25519.PublicKey{keyID: pubKey}},
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root-v1"),
 		ExecutionHandler: &mockExecutionHandler{
 			ExecuteVerifiedTransactionFunc: func(ctx context.Context, eventType constants.EventType, cmdMsg interface{}) (string, error) {

@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 ---
 
@@ -31,6 +31,7 @@ This creates the `.g8e` directory structure:
 - `.g8e/data/` - SQLite database for g8e Gateway persistence
 - `.g8e/secrets/` - Platform secrets (session encryption keys, bootstrap digest)
 - `.g8e/vault/` - Encryption vault for data at rest
+- `.g8e/logs/` - Component logs
 
 The g8e Gateway runs in the default mode (Doctrine: L1 enforced, L2/L3 audited). To run in different enforcement modes, use the `--posture` flag:
 
@@ -372,7 +373,7 @@ This:
 2. Receives a signed client certificate with SPIFFE URI SAN
 3. Stores it in `.g8e/pki/client.crt`
 
-CLI sessions use the mTLS certificate fingerprint as L3 proof via CLIL3Notary.
+CLI sessions use the mTLS certificate fingerprint as L3 proof via `cliNotary` (constructed by `NewCLIL3Notary` in `internal/services/governance/l3_notary.go`).
 
 ### Browser Authentication (WebAuthn)
 
@@ -473,26 +474,40 @@ When a standard AI client requests a mutation without L3 proof, the Gateway susp
 3. Gateway returns approval URL: `https://localhost:8443/api/v1/approve/{tx_hash}`.
 4. User opens URL in browser and authenticates with passkey.
 5. User approves transaction via WebAuthn.
-6. Gateway attaches L3 proof and resumes verification.
-7. Transaction proceeds to execution.
+6. Gateway calls `ResumeWithL3Proof` to attach the L3 proof and resubmit the envelope through the verification pipeline.
+7. Transaction proceeds to execution and the signed receipt is returned.
 
 ### Approval API
 
-List suspended transactions:
+List suspended transactions (requires web session cookie):
 
 ```bash
 curl https://localhost:8443/api/v1/approvals \
   --cookie "web_session=..."
 ```
 
-Approve a transaction:
+Get WebAuthn challenge for a suspended transaction:
 
 ```bash
-curl -X POST https://localhost:8443/api/v1/approvals/{tx_hash} \
+curl https://localhost:8443/api/v1/approvals/{tx_hash}/challenge \
+  --cookie "web_session=..."
+```
+
+Verify WebAuthn assertion and resume execution:
+
+```bash
+curl -X POST https://localhost:8443/api/v1/approvals/{tx_hash}/verify \
   --cookie "web_session=..." \
   -H "Content-Type: application/json" \
-  -d '{"action": "approve"}'
+  -d '{
+    "id": "credential-id-base64url",
+    "clientDataJSON": "...",
+    "authenticatorData": "...",
+    "signature": "..."
+  }'
 ```
+
+The Gateway calls `ResumeWithL3Proof` (`internal/services/mcp/gateway.go`) to attach the L3 proof to the stored envelope and resubmit it through the verification pipeline. On success, the suspended transaction is deleted and the signed receipt is returned.
 
 ---
 
