@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -131,5 +132,70 @@ func TestAgentHarnessListCmdRun(t *testing.T) {
 		assert.NotPanics(t, func() {
 			cmd.Run(cmd, []string{})
 		})
+	})
+}
+
+func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
+	t.Run("consensus phase returns doctrine+consensus but not notary", func(t *testing.T) {
+		result := selectAgentHarnessScenarios("consensus", nil)
+		assert.NotEmpty(t, result)
+		for _, s := range result {
+			assert.True(t, s.RequiresPosture == scenarios.Doctrine || s.RequiresPosture == scenarios.Consensus,
+				"consensus phase should only return doctrine or consensus scenarios, got %s for %s",
+				s.RequiresPosture, s.Name)
+		}
+		for _, s := range result {
+			assert.NotEqual(t, scenarios.Notary, s.RequiresPosture,
+				"consensus phase must NOT return notary scenarios")
+		}
+	})
+
+	t.Run("consensus phase includes dhs scenarios", func(t *testing.T) {
+		result := selectAgentHarnessScenarios("consensus", nil)
+		var dhsCount int
+		for _, s := range result {
+			if strings.HasPrefix(s.Name, "dhs-") {
+				dhsCount++
+			}
+		}
+		assert.Greater(t, dhsCount, 0, "consensus phase should include DHS scenarios")
+	})
+}
+
+func TestApplyAgentHarnessFlags_ConsensusSeedAndTribunalID(t *testing.T) {
+	t.Run("populates ConsensusSeed and TribunalID when flags are set", func(t *testing.T) {
+		originalSeed := harnessConsensusSeed
+		originalTribunal := harnessTribunalID
+		defer func() {
+			harnessConsensusSeed = originalSeed
+			harnessTribunalID = originalTribunal
+		}()
+
+		harnessConsensusSeed = "/etc/g8e/ensemble-seed.hex"
+		harnessTribunalID = "dhs-tribunal"
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+
+		assert.Equal(t, "/etc/g8e/ensemble-seed.hex", cfg.ConsensusSeed)
+		assert.Equal(t, "dhs-tribunal", cfg.TribunalID)
+	})
+
+	t.Run("leaves ConsensusSeed and TribunalID empty when flags are unset", func(t *testing.T) {
+		originalSeed := harnessConsensusSeed
+		originalTribunal := harnessTribunalID
+		defer func() {
+			harnessConsensusSeed = originalSeed
+			harnessTribunalID = originalTribunal
+		}()
+
+		harnessConsensusSeed = ""
+		harnessTribunalID = ""
+
+		cfg := config.Default()
+		applyAgentHarnessFlags(&cfg)
+
+		assert.Empty(t, cfg.ConsensusSeed)
+		assert.Empty(t, cfg.TribunalID)
 	})
 }

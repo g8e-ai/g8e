@@ -25,6 +25,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/tools/agent_harness/config"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewEnsemble(t *testing.T) {
@@ -810,6 +812,108 @@ func TestMaximalEnvelope(t *testing.T) {
 	if maximal.TTL != 5*time.Minute {
 		t.Error("TTL not set correctly")
 	}
+}
+
+func TestNewEnsembleFromSeed(t *testing.T) {
+	knownSeed := "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
+
+	t.Run("constructs deterministic ensemble from valid seed", func(t *testing.T) {
+		ens1, err := NewEnsembleFromSeed("auditor-ensemble", 3, knownSeed)
+		require.NoError(t, err)
+		require.NotNil(t, ens1)
+
+		ens2, err := NewEnsembleFromSeed("auditor-ensemble", 3, knownSeed)
+		require.NoError(t, err)
+
+		assert.Equal(t, ens1.PubHex(), ens2.PubHex(), "same seed must produce same public key")
+		assert.Equal(t, "auditor-ensemble", ens1.KeyID)
+		assert.Equal(t, 3, ens1.AgentCount())
+		assert.Equal(t, "test-tribunal", ens1.TribunalID)
+	})
+
+	t.Run("differs from random NewEnsemble", func(t *testing.T) {
+		seeded, err := NewEnsembleFromSeed("test-key", 3, knownSeed)
+		require.NoError(t, err)
+
+		random, err := NewEnsemble("test-key", 3)
+		require.NoError(t, err)
+
+		assert.NotEqual(t, seeded.PubHex(), random.PubHex(), "seeded ensemble must differ from random")
+	})
+
+	t.Run("rejects invalid hex", func(t *testing.T) {
+		_, err := NewEnsembleFromSeed("test-key", 3, "not-valid-hex-zzz")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "decode hex")
+	})
+
+	t.Run("rejects wrong-length seed", func(t *testing.T) {
+		shortSeed := "87278693f5894d8de5d28401"
+		_, err := NewEnsembleFromSeed("test-key", 3, shortSeed)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid seed length")
+	})
+
+	t.Run("trims whitespace in seed hex", func(t *testing.T) {
+		seedWithWhitespace := "  " + knownSeed + "\n"
+		ens, err := NewEnsembleFromSeed("test-key", 3, seedWithWhitespace)
+		require.NoError(t, err)
+		assert.NotNil(t, ens)
+	})
+}
+
+func TestSeedHex(t *testing.T) {
+	t.Run("round-trips with NewEnsembleFromSeed", func(t *testing.T) {
+		original, err := NewEnsembleFromSeed("test-key", 3, "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77")
+		require.NoError(t, err)
+
+		seedHex := original.SeedHex()
+		assert.NotEmpty(t, seedHex)
+
+		reconstructed, err := NewEnsembleFromSeed("test-key", 3, seedHex)
+		require.NoError(t, err)
+
+		assert.Equal(t, original.PubHex(), reconstructed.PubHex(),
+			"SeedHex round-trip must produce the same public key")
+	})
+
+	t.Run("returns valid 32-byte hex (64 chars)", func(t *testing.T) {
+		ens, err := NewEnsemble("test-key", 2)
+		require.NoError(t, err)
+
+		seedHex := ens.SeedHex()
+		assert.Len(t, seedHex, 64)
+
+		decoded, err := hex.DecodeString(seedHex)
+		require.NoError(t, err)
+		assert.Len(t, decoded, 32)
+	})
+}
+
+func TestEnsemble_TribunalID(t *testing.T) {
+	t.Run("defaults to test-tribunal", func(t *testing.T) {
+		ens, err := NewEnsemble("test-key", 2)
+		require.NoError(t, err)
+		assert.Equal(t, "test-tribunal", ens.TribunalID)
+	})
+
+	t.Run("defaults to test-tribunal in NewEnsembleFromSeed", func(t *testing.T) {
+		ens, err := NewEnsembleFromSeed("test-key", 2, "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77")
+		require.NoError(t, err)
+		assert.Equal(t, "test-tribunal", ens.TribunalID)
+	})
+
+	t.Run("is settable and used in Vote output", func(t *testing.T) {
+		ens, err := NewEnsemble("test-key", 2)
+		require.NoError(t, err)
+
+		ens.TribunalID = "dhs-tribunal"
+		l2 := ens.Vote("abc123", true)
+
+		require.NotEmpty(t, l2.Votes)
+		assert.Equal(t, "dhs-tribunal", l2.TribunalId,
+			"Vote() must use the configured TribunalID")
+	})
 }
 
 // Helper function

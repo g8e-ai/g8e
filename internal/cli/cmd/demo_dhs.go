@@ -26,20 +26,47 @@ func runDHSScenario(demoDir, scenario string) error {
 	return err
 }
 
-// dhsGatewayPosture is the posture the DHS compose file starts the gateway in.
-// Phase 1 uses doctrine; Phase 2 will use consensus; Phase 3 (deferred) notary.
-// Scenarios whose RequiresPosture exceeds this are skipped with a banner.
-const dhsGatewayPosture = "doctrine"
+// dhsHarnessConfig holds the parameters for building a docker compose run
+// command for a DHS agent-harness scenario. Centralising these in a struct
+// avoids positional-argument drift as flags are added across phases.
+type dhsHarnessConfig struct {
+	MTLSURL       string
+	PublicURL     string
+	CertPath      string
+	KeyPath       string
+	CAPath        string
+	EnsembleSize  int
+	L3Mode        string
+	Posture       string
+	ConsensusSeed string
+	TribunalID    string
+}
+
+// defaultDHSHarnessConfig returns the config matching the DHS compose topology.
+func defaultDHSHarnessConfig() dhsHarnessConfig {
+	return dhsHarnessConfig{
+		MTLSURL:       "https://10.62.0.10:8443",
+		PublicURL:     "http://10.62.0.10:8080",
+		CertPath:      "/root/.g8e/pki/operator.crt",
+		KeyPath:       "/root/.g8e/pki/operator.key",
+		CAPath:        "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+		EnsembleSize:  3,
+		L3Mode:        "mock",
+		Posture:       "consensus",
+		ConsensusSeed: "/etc/g8e/ensemble-seed.hex",
+		TribunalID:    "dhs-tribunal",
+	}
+}
 
 // dhsSkipScenario prints a skip banner and returns a SKIP result for
 // scenarios that require a higher posture than the gateway is running.
-func dhsSkipScenario(number, name, required, reason string) (scenarioResult, error) {
+func dhsSkipScenario(number, name, required, current, reason string) (scenarioResult, error) {
 	fmt.Printf("\n%s\n", strings.Repeat("─", 60))
 	fmt.Printf("  Scenario %s — %s\n", number, name)
 	fmt.Println(strings.Repeat("─", 60))
 	fmt.Println()
 	fmt.Printf("  [SKIP] This scenario requires %s posture.\n", required)
-	fmt.Printf("         The gateway is currently running in %s posture.\n", dhsGatewayPosture)
+	fmt.Printf("         The gateway is currently running in %s posture.\n", current)
 	fmt.Printf("         %s\n", reason)
 	fmt.Println()
 	return scenarioResult{
@@ -51,25 +78,46 @@ func dhsSkipScenario(number, name, required, reason string) (scenarioResult, err
 }
 
 // dhsHarnessRun builds the docker compose run command for a DHS agent-harness
-// scenario. Mirrors the dow pattern: --rm --no-deps -T for clean, capturable,
-// non-spawning execution.
-func dhsHarnessRun(scenario, l3Mode string) []string {
-	return []string{
+// scenario from a dhsHarnessConfig. Mirrors the dow pattern: --rm --no-deps -T
+// for clean, capturable, non-spawning execution.
+func dhsHarnessRun(scenario string, cfg dhsHarnessConfig) []string {
+	cmd := []string{
 		"docker", "compose", "run", "--rm", "-T", "--no-deps",
 		"agent-coalition",
 		"agent-harness", "run", "--insecure",
-		"--mtls-url", "https://10.62.0.10:8443",
-		"--public-url", "http://10.62.0.10:8080",
-		"--cert", "/root/.g8e/pki/operator.crt",
-		"--key", "/root/.g8e/pki/operator.key",
-		"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
-		"--ensemble", "3",
-		"--l3-mode", l3Mode,
-		scenario,
+		"--mtls-url", cfg.MTLSURL,
+		"--public-url", cfg.PublicURL,
+		"--cert", cfg.CertPath,
+		"--key", cfg.KeyPath,
+		"--ca", cfg.CAPath,
+		"--ensemble", fmt.Sprintf("%d", cfg.EnsembleSize),
+		"--l3-mode", cfg.L3Mode,
 	}
+	if cfg.ConsensusSeed != "" {
+		cmd = append(cmd, "--consensus-seed", cfg.ConsensusSeed)
+	}
+	if cfg.TribunalID != "" {
+		cmd = append(cmd, "--tribunal-id", cfg.TribunalID)
+	}
+	cmd = append(cmd, scenario)
+	return cmd
+}
+
+// dhsScenarioStep runs a single demo step: prints the description, executes
+// the command via demoStep, prints pass/fail, and returns whether it succeeded.
+// This extracts the repetitive print → demoStep → error pattern from each
+// scenario case block.
+func dhsScenarioStep(demoDir, desc string, cmd []string) bool {
+	fmt.Printf("  ── %s ──\n", desc)
+	if err := demoStep(demoDir, desc, false, cmd...); err != nil {
+		fmt.Printf("  (%s failed)\n\n", desc)
+		return false
+	}
+	return true
 }
 
 func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+	hcfg := defaultDHSHarnessConfig()
 	var result scenarioResult
 	var hasErrors bool
 
@@ -78,7 +126,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		result.number = "1"
 		result.name = "Sovereign Multi-Source Ingest (chain-of-custody)"
 		result.status = "PASS"
-		result.metrics = "L1 doctrine admits // L2/L3 audited in receipt // L5 actuator records INGEST"
+		result.metrics = "L1 doctrine admits // L2 consensus quorum met // L5 actuator records INGEST"
 
 		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
 		fmt.Println("  Scenario 1 — Sovereign Multi-Source Ingest (LOE 1)")
@@ -87,53 +135,38 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("  PROVES: A coalition source connector submits a real")
 		fmt.Println("          GovernanceEnvelope wrapping a run_shell_command that")
 		fmt.Println("          drives the Sovereign Data Service (L5 actuator). L1")
-		fmt.Println("          doctrine admits the envelope; L2/L3 proofs are")
-		fmt.Println("          attached and audited in the receipt. The ingest is")
-		fmt.Println("          executed and a signed receipt is written to the")
-		fmt.Println("          hash-chained ledger — provable chain-of-custody.")
+		fmt.Println("          doctrine admits the envelope; L2 consensus quorum is")
+		fmt.Println("          met and verified. The ingest is executed and a signed")
+		fmt.Println("          receipt is written to the hash-chained ledger —")
+		fmt.Println("          provable chain-of-custody.")
 		fmt.Println()
 
-		fmt.Println("  ── Step 1: Confirm the governance gateway is live (doctrine) ────")
-		if err := demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-sf", "http://localhost:8087/api/v1/health",
-		); err != nil {
-			fmt.Println("  (gateway health check failed — is the demo running?)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Verify operator enrollment (mTLS certs) ──────────────")
-		if err := demoStep(demoDir, "enrollment check",
-			false,
-			"docker", "compose", "exec", "-T", "operator",
-			"test", "-f", "/root/.g8e/pki/operator.crt",
-		); err != nil {
-			fmt.Println("  (operator cert not found — operator may not have enrolled)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 2: Verify operator enrollment (mTLS certs)",
+			[]string{"docker", "compose", "exec", "-T", "operator",
+				"test", "-f", "/root/.g8e/pki/operator.crt"}) {
 			hasErrors = true
 		}
 
 		fmt.Println("  ── Step 3: Run real dhs-ingest via agent-harness ────────────────")
-		fmt.Println("  L1 doctrine admits; L2/L3 proofs attached and audited in receipt:")
+		fmt.Println("  L1 doctrine admits; L2 consensus quorum met and verified → L5 actuator records INGEST:")
 		fmt.Println()
 		if err := demoStep(demoDir, "dhs-ingest via agent-harness",
 			false,
-			dhsHarnessRun("dhs-ingest", "mock")...,
+			dhsHarnessRun("dhs-ingest", hcfg)...,
 		); err != nil {
 			fmt.Println("  (dhs-ingest harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Verify the Sovereign Data Service recorded the INGEST ─")
-		if err := demoStep(demoDir, "datasvc verify INGEST",
-			false,
-			"docker", "compose", "exec", "-T", "datasvc",
-			"python", "/app/verify_ops.py", "INGEST",
-		); err != nil {
-			fmt.Println("  (no INGEST operation recorded — L5 actuation may have failed)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 4: Verify the Sovereign Data Service recorded the INGEST",
+			[]string{"docker", "compose", "exec", "-T", "datasvc",
+				"python", "/app/verify_ops.py", "INGEST"}) {
 			hasErrors = true
 		}
 
@@ -147,13 +180,13 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
 		} else {
 			fmt.Println("  [PASS] Scenario 1 — Sovereign ingest governed end to end.")
-			fmt.Println("         L1 doctrine admitted; L2/L3 proofs audited in receipt.")
+			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         L5 actuator recorded the ingest; signed receipt in hash-chained ledger.")
 		}
 
 	case "2":
 		return dhsSkipScenario("2", "Cross-Domain Release requires Notary authority",
-			"notary",
+			"notary", hcfg.Posture,
 			"Deferred to Phase 3 — the L3 mock is incompatible with gateway-mode notary (requires WebAuthn passkey). See plan §11.2.")
 
 	case "3":
@@ -174,13 +207,8 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          is restored.")
 		fmt.Println()
 
-		fmt.Println("  ── Step 1: Confirm gateway is live before disconnect ───────────")
-		if err := demoStep(demoDir, "gateway health (pre-disconnect)",
-			false,
-			"curl", "-s", "http://localhost:8087/api/v1/health",
-		); err != nil {
-			fmt.Println("  (gateway health check failed — is the demo running?)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 1: Confirm gateway is live before disconnect",
+			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
 		}
 
@@ -190,47 +218,32 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			"docker", "network", "disconnect", "dhs-demo_net_perimeter", "dhs-coalition-datalink",
 		)
 
-		fmt.Println("  ── Step 3: Verify gateway continues operating locally ───────────")
-		if err := demoStep(demoDir, "gateway health (post-disconnect)",
-			false,
-			"curl", "-s", "http://localhost:8087/api/v1/health",
-		); err != nil {
-			fmt.Println("  (gateway not reachable after disconnect — check container status)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 3: Verify gateway continues operating locally",
+			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
 		}
 
 		fmt.Println("  ── Step 4: Govern an ingest while disconnected ──────────────────")
-		fmt.Println("  Running dhs-ingest through the gateway (doctrine) with the datalink severed:")
+		fmt.Println("  Running dhs-ingest through the gateway (consensus) with the datalink severed:")
 		fmt.Println()
 		if err := demoStep(demoDir, "dhs-ingest while disconnected",
 			false,
-			dhsHarnessRun("dhs-ingest", "mock")...,
+			dhsHarnessRun("dhs-ingest", hcfg)...,
 		); err != nil {
 			fmt.Println("  (ingest while disconnected failed — operator may not be processing locally)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 5: Verify local ledger exists on operator ───────────────")
-		if err := demoStep(demoDir, "local ledger",
-			false,
-			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la /root/.g8e/data/ledger/files/ 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
-		); err != nil {
-			fmt.Println("  (ledger directory not found — no file mutations have been recorded)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 5: Verify local ledger exists on operator",
+			[]string{"docker", "compose", "exec", "-T", "operator",
+				"sh", "-c", "ls -la /root/.g8e/data/ledger/files/ 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'"}) {
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 6: Verify local audit vault exists on operator ──────────")
-		if err := demoStep(demoDir, "audit vault",
-			false,
-			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la /root/.g8e/data/g8e.db 2>/dev/null || echo 'Audit vault DB not yet populated'",
-		); err != nil {
-			fmt.Println("  (audit vault DB not found — no audit events have been recorded)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 6: Verify local audit vault exists on operator",
+			[]string{"docker", "compose", "exec", "-T", "operator",
+				"sh", "-c", "ls -la /root/.g8e/data/g8e.db 2>/dev/null || echo 'Audit vault DB not yet populated'"}) {
 			hasErrors = true
 		}
 
@@ -255,15 +268,77 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 	case "4":
-		return dhsSkipScenario("4", "Governed Predictive Cueing (quorum vs veto)",
-			"consensus",
-			"Deferred to Phase 2 — requires tribunal policy creation and consensus posture. See plan §12 Phase 2.")
+		result.number = "4"
+		result.name = "Governed Predictive Cueing (quorum vs veto)"
+		result.status = "PASS"
+		result.metrics = "L2 quorum admits cue // L2 veto blocks unauthorized cue // L5 actuator records CUE"
+
+		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
+		fmt.Println("  Scenario 4 — Governed Predictive Cueing (LOE 3 & 4)")
+		fmt.Println(strings.Repeat("─", 60))
+		fmt.Println()
+		fmt.Println("  PROVES: An authorized interdiction cue with L2 ensemble quorum")
+		fmt.Println("          is admitted and executed by the L5 actuator (dhs-cue).")
+		fmt.Println("          The same cue with L2 decision=false is vetoed at quorum")
+		fmt.Println("          (dhs-cue-veto) — the operator fails closed. This")
+		fmt.Println("          demonstrates that L2 BFT consensus is a real fail-closed")
+		fmt.Println("          gate, not just an audit annotation.")
+		fmt.Println()
+
+		if !dhsScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
+			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 2: Run dhs-cue via agent-harness (L2 quorum → admit) ────")
+		fmt.Println("  L2 consensus quorum met (decision=true) → admitted → L5 actuator records CUE:")
+		fmt.Println()
+		if err := demoStep(demoDir, "dhs-cue via agent-harness",
+			false,
+			dhsHarnessRun("dhs-cue", hcfg)...,
+		); err != nil {
+			fmt.Println("  (dhs-cue harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		if !dhsScenarioStep(demoDir, "Step 3: Verify the Sovereign Data Service recorded the CUE",
+			[]string{"docker", "compose", "exec", "-T", "datasvc",
+				"python", "/app/verify_ops.py", "CUE"}) {
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 4: Run dhs-cue-veto via agent-harness (L2 veto → reject) ─")
+		fmt.Println("  L2 consensus decision=false → vetoed at quorum → operator fails closed (≥400):")
+		fmt.Println()
+		if err := demoStep(demoDir, "dhs-cue-veto via agent-harness",
+			false,
+			dhsHarnessRun("dhs-cue-veto", hcfg)...,
+		); err != nil {
+			fmt.Println("  (dhs-cue-veto harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		fmt.Println("  Copy-paste to inspect the audit trail:")
+		fmt.Println()
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sh -c 'cd /root/.g8e/data/ledger/files && git log --oneline'")
+		fmt.Println()
+
+		if hasErrors {
+			result.status = "FAIL"
+			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
+		} else {
+			fmt.Println("  [PASS] Scenario 4 — Predictive cueing governed by L2 consensus.")
+			fmt.Println("         Authorized cue admitted with quorum; vetoed cue blocked at quorum.")
+			fmt.Println("         CUE operation recorded by the L5 actuator; veto produced no actuator row.")
+		}
 
 	case "5":
 		result.number = "5"
 		result.name = "Sovereign Destruction + tamper-proof audit"
 		result.status = "PASS"
-		result.metrics = "L1 blocks audit wipe // L1 admits governed purge → receipt"
+		result.metrics = "L1 blocks audit wipe // L1+L2 admit governed purge → receipt"
 
 		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
 		fmt.Println("  Scenario 5 — Sovereign Destruction + Tamper-Proof Audit (LOE 2)")
@@ -273,9 +348,8 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          with 'rm -rf /var/log/g8e' — L1 doctrine rejects it at")
 		fmt.Println("          admission (the data-destruction threat detector fires).")
 		fmt.Println("          Then a governed retention purge is admitted by L1 doctrine")
-		fmt.Println("          (L2/L3 proofs attached and audited) and")
-		fmt.Println("          the L5 actuator records the PURGE with a cryptographic")
-		fmt.Println("          destruction receipt.")
+		fmt.Println("          with L2 consensus quorum met, and the L5 actuator records")
+		fmt.Println("          the PURGE with a cryptographic destruction receipt.")
 		fmt.Println()
 
 		fmt.Println("  ── Step 1: Run dhs-evidence-block via agent-harness (L1 reject) ──")
@@ -283,7 +357,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println()
 		if err := demoStep(demoDir, "dhs-evidence-block via agent-harness",
 			false,
-			dhsHarnessRun("dhs-evidence-block", "mock")...,
+			dhsHarnessRun("dhs-evidence-block", hcfg)...,
 		); err != nil {
 			fmt.Println("  (dhs-evidence-block harness scenario failed)")
 			fmt.Println()
@@ -291,25 +365,20 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		fmt.Println("  ── Step 2: Run dhs-purge via agent-harness (admit) ──────────────")
-		fmt.Println("  L1 doctrine admits; L2/L3 proofs attached and audited → L5 actuator records PURGE:")
+		fmt.Println("  L1 doctrine admits; L2 consensus quorum met → L5 actuator records PURGE:")
 		fmt.Println()
 		if err := demoStep(demoDir, "dhs-purge via agent-harness",
 			false,
-			dhsHarnessRun("dhs-purge", "mock")...,
+			dhsHarnessRun("dhs-purge", hcfg)...,
 		); err != nil {
 			fmt.Println("  (dhs-purge harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Verify the Sovereign Data Service recorded the PURGE ──")
-		if err := demoStep(demoDir, "datasvc verify PURGE",
-			false,
-			"docker", "compose", "exec", "-T", "datasvc",
-			"python", "/app/verify_ops.py", "PURGE",
-		); err != nil {
-			fmt.Println("  (no PURGE operation recorded — L5 actuation may have failed)")
-			fmt.Println()
+		if !dhsScenarioStep(demoDir, "Step 3: Verify the Sovereign Data Service recorded the PURGE",
+			[]string{"docker", "compose", "exec", "-T", "datasvc",
+				"python", "/app/verify_ops.py", "PURGE"}) {
 			hasErrors = true
 		}
 
@@ -323,7 +392,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			fmt.Println("  [FAIL] Scenario 5 — One or more steps failed.")
 		} else {
 			fmt.Println("  [PASS] Scenario 5 — Destruction governed and provable.")
-			fmt.Println("         L1 blocked the audit-wipe; L1 admitted governed purge with receipt.")
+			fmt.Println("         L1 blocked the audit-wipe; L1+L2 admitted governed purge with receipt.")
 			fmt.Println("         PURGE operation recorded by the L5 actuator.")
 		}
 

@@ -19,7 +19,7 @@ This demo uses **real g8e enforcement** — no mock/fake doctrine, no fake MCP c
 
 | Component | Type | Description |
 |---|---|---|
-| **gateway** | REAL | g8e binary in `doctrine` posture (Phase 1; consensus/notary in later phases) |
+| **gateway** | REAL | g8e binary in `consensus` posture (Phase 2; notary in later phases) |
 | **operator** | REAL | g8e binary with `--execution-vault`, executes governed `run_shell_command` calls |
 | **agent-coalition** | REAL | g8e binary running `agent-harness` scenarios that submit genuine `GovernanceEnvelope`s |
 | **datasvc** | REAL | Python HTTP server (the L5 actuator) — records governed data operations to `operations.jsonl` |
@@ -55,20 +55,25 @@ Each network models a real classification / sovereignty domain:
 
 The operator is the only process on net_secure with the vault. Source connectors hold enrolled mTLS identities and submit `GovernanceEnvelope`s; the operator executes the governed data operation.
 
-## Gateway posture: doctrine (Phase 1)
+## Gateway posture: consensus (Phase 2)
 
-The gateway currently runs in **doctrine** posture — the minimum enforcement level. Under doctrine:
+The gateway currently runs in **consensus** posture — L2 BFT consensus is enforced as a fail-closed gate. Under consensus:
 - **L1 doctrine** is enforced at admission (compiled-in threat detectors block dangerous commands).
-- **L2 consensus** and **L3 notary** proofs are **attached to envelopes and audited in the receipt**, but do **not** gate admission.
-- The operator still executes admitted commands via `run_shell_command`, driving the `datasvc` actuator.
+- **L2 consensus** is enforced: ensemble Ed25519 votes must meet quorum for the transaction to be admitted. A veto (decision=false) blocks execution.
+- **L3 notary** proofs are **attached to envelopes and audited in the receipt**, but do **not** gate admission (deferred to Phase 3).
+- The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator.
 - Signed receipts are written to the hash-chained ledger for every admitted operation.
+
+### Tribunal bootstrap
+
+The gateway boots with `--posture consensus --tribunal-id dhs-tribunal --tribunal-bootstrap /etc/g8e/tribunal-bootstrap.json`. The bootstrap file seeds a `TribunalPolicy` and trusted signer from a deterministic Ed25519 seed (`ensemble-seed.hex`), shared with the `agent-coalition` container. This enables the harness to reconstruct the same private key and sign L2 votes that verify against the gateway's trusted signer registry.
 
 ### Phased rollout
 
 | Phase | Posture | What it demonstrates | Status |
 |---|---|---|---|
-| **Phase 1** | doctrine | L1 doctrine enforcement, L5 actuator execution, signed receipts, disconnected ops | **Active** |
-| **Phase 2** | consensus | L2 BFT consensus as a fail-closed gate (quorum required, veto blocks execution) | Planned |
+| **Phase 1** | doctrine | L1 doctrine enforcement, L5 actuator execution, signed receipts, disconnected ops | Complete |
+| **Phase 2** | consensus | L2 BFT consensus as a fail-closed gate (quorum required, veto blocks execution) | **Active** |
 | **Phase 3** | notary | L3 notary suspend/approve flow for cross-domain release | Deferred (L3 mock incompatible with gateway-mode notary) |
 
 Scenarios that require a higher posture than the current phase are **skipped** with an explanatory banner when running `g8e demos run dhs`.
@@ -104,10 +109,10 @@ g8e demos clean dhs
 
 ## Scenarios
 
-All scenarios run via `agent-harness` — a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Under doctrine posture (Phase 1), L1 doctrine is enforced at admission; L2 consensus and L3 notary proofs are attached and audited in the receipt but do not gate admission. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
+All scenarios run via `agent-harness` — a real g8e binary that submits genuine `GovernanceEnvelope`s over mTLS to the gateway. Under consensus posture (Phase 2), L1 doctrine is enforced at admission and L2 BFT consensus is enforced as a fail-closed gate (quorum required, veto blocks execution). L3 notary proofs are attached and audited in the receipt but do not gate admission. The operator executes admitted commands via `run_shell_command`, driving the `datasvc` actuator through the `dataop` wrapper.
 
 ### 1 — Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
-**Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2/L3 proofs are attached and audited in the receipt. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
+**Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
 
 ### 2 — Cross-Domain Release requires Notary authority (LOE 1 & 2)
 **Scenario `dhs-release`**: **Deferred (Phase 3).** A cross-domain release is submitted with L2 consensus only. Under notary posture the Gateway would suspend the transaction pending an out-of-band L3 principal (release authority) approval. The release would execute only after the authority signs the exact transaction hash OOB. This scenario is skipped under doctrine posture because the L3 mock is incompatible with gateway-mode notary (which requires WebAuthn passkey credentials).
@@ -116,11 +121,12 @@ All scenarios run via `agent-harness` — a real g8e binary that submits genuine
 The Mission Partner datalink is severed (docker network disconnect). Governance continues locally — a `dhs-ingest` scenario runs through the gateway with the datalink down. Every decision is committed to the Git-backed ledger and SQLite audit vault on the operator. The datalink is restored afterward. No cloud required.
 
 ### 4 — Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
-**Deferred (Phase 2).** Under consensus posture, an authorized interdiction cue with L2 ensemble quorum would be admitted and executed by the L5 actuator (`dhs-cue`), while the same cue with L2 decision=false would be vetoed (`dhs-cue-veto`) — the operator fails closed. This scenario is skipped under doctrine posture because L2 consensus does not gate admission under doctrine.
+**Scenario `dhs-cue`**: An authorized interdiction cue with L2 ensemble quorum (decision=true) is admitted and executed by the L5 actuator. The `datasvc` records a `CUE` operation.
+**Scenario `dhs-cue-veto`**: The same cue with L2 consensus decision=false is vetoed at quorum — the operator fails closed (≥400 response). No actuator row is produced. This demonstrates that L2 BFT consensus is a real fail-closed gate, not just an audit annotation.
 
 ### 5 — Sovereign Destruction + tamper-proof audit (LOE 2)
 **Scenario `dhs-evidence-block`**: A compromised connector tries to wipe the audit trail with `rm -rf /var/log/g8e` — L1 doctrine rejects it at admission (the data-destruction threat detector fires). Even with valid L2 + L3 proofs attached, L1 is the hard gate and runs first.
-**Scenario `dhs-purge`**: A governed retention purge is admitted by L1 doctrine (L2/L3 proofs attached and audited) and the L5 actuator records a `PURGE` operation with a cryptographic destruction receipt written to the ledger.
+**Scenario `dhs-purge`**: A governed retention purge is admitted by L1 doctrine with L2 consensus quorum met, and the L5 actuator records a `PURGE` operation with a cryptographic destruction receipt written to the ledger.
 
 ## Compliance & sovereignty mapping (evaluation rubric)
 
