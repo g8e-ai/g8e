@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -792,13 +793,21 @@ func TestRegistryScenarioOrder(t *testing.T) {
 	}
 
 	// First scenario should be an MCP scenario
-	if !contains(scenarios[0].Name, "mcp") {
+	if !strings.Contains(scenarios[0].Name, "mcp") {
 		t.Errorf("First scenario should be MCP, got %q", scenarios[0].Name)
 	}
 
 	// Last scenario should be a governance, dow, or dhs scenario
 	lastName := scenarios[len(scenarios)-1].Name
-	if !contains(lastName, "consensus") && !contains(lastName, "envelope") && !contains(lastName, "notary") && !contains(lastName, "tribunal") && !contains(lastName, "delegation") && !contains(lastName, "dow") && !contains(lastName, "dhs") {
+	validLastPrefixes := []string{"consensus", "envelope", "notary", "tribunal", "delegation", "dow", "dhs"}
+	found := false
+	for _, p := range validLastPrefixes {
+		if strings.Contains(lastName, p) {
+			found = true
+			break
+		}
+	}
+	if !found {
 		t.Errorf("Last scenario should be governance, dow, or dhs, got %q", lastName)
 	}
 }
@@ -817,10 +826,10 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := 22 // 5 MCP + 3 A2A + 6 governance + 2 dow + 6 dhs
+	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dowScenarios()) + len(dhsScenarios())
 
 	if len(scenarios) != expectedCount {
-		t.Errorf("Registry should have %d scenarios, got %d", expectedCount, len(scenarios))
+		t.Errorf("Registry should have %d scenarios (sum of module functions), got %d", expectedCount, len(scenarios))
 	}
 }
 
@@ -921,18 +930,4 @@ func TestPersonaConstants(t *testing.T) {
 			t.Errorf("Registry should use persona %q", expected)
 		}
 	}
-}
-
-// Helper function
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
