@@ -177,13 +177,6 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 func (h *HTTPHandler) buildMCPHandler() http.Handler {
 	mcpMux := http.NewServeMux()
 	mcpMux.HandleFunc(constants.APIPaths.MCPEndpoint, h.mcp.HandleMCP)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsList, h.mcp.HandleToolsList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCall, h.mcp.HandleToolsCall)
-	mcpMux.HandleFunc(constants.APIPaths.MCPToolsCallSSE, h.mcp.HandleToolsCallSSE)
-	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesList, h.mcp.HandleResourcesList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPResourcesRead, h.mcp.HandleResourcesRead)
-	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsList, h.mcp.HandlePromptsList)
-	mcpMux.HandleFunc(constants.APIPaths.MCPPromptsGet, h.mcp.HandlePromptsGet)
 	mcpMux.HandleFunc(constants.APIPaths.A2ACall, h.mcp.HandleA2aCall)
 
 	mcpRateLimited := h.rateLimitMiddleware(mcpMux)
@@ -197,13 +190,6 @@ func (h *HTTPHandler) buildMCPHandler() http.Handler {
 // registerMCPRoutes registers all MCP/A2A ingress paths on the given mux with the provided handler.
 func registerMCPRoutes(mux *http.ServeMux, handler http.Handler) {
 	mux.Handle(constants.APIPaths.MCPEndpoint, handler)
-	mux.Handle(constants.APIPaths.MCPToolsList, handler)
-	mux.Handle(constants.APIPaths.MCPToolsCall, handler)
-	mux.Handle(constants.APIPaths.MCPToolsCallSSE, handler)
-	mux.Handle(constants.APIPaths.MCPResourcesList, handler)
-	mux.Handle(constants.APIPaths.MCPResourcesRead, handler)
-	mux.Handle(constants.APIPaths.MCPPromptsList, handler)
-	mux.Handle(constants.APIPaths.MCPPromptsGet, handler)
 	mux.Handle(constants.APIPaths.A2ACall, handler)
 }
 

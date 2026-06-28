@@ -8,13 +8,6 @@
     "sse_stream": "/api/v1/internal/sse/stream"
   },
   "mcp_endpoint": "/mcp",
-  "mcp_tools_list": "/api/v1/mcp/tools/list",
-  "mcp_tools_call": "/api/v1/mcp/tools/call",
-  "mcp_tools_call_sse": "/api/v1/mcp/tools/call/sse",
-  "mcp_resources_list": "/api/v1/mcp/resources/list",
-  "mcp_resources_read": "/api/v1/mcp/resources/read",
-  "mcp_prompts_list": "/api/v1/mcp/prompts/list",
-  "mcp_prompts_get": "/api/v1/mcp/prompts/get",
   "a2a_call": "/api/v1/a2a/call",
   "governance_envelopes": "/api/v1/governance/envelopes",
   "governance_signers": "/api/v1/governance/signers",

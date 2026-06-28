@@ -75,10 +75,10 @@ func TestMCPGatewayEndToEndIntegration(t *testing.T) {
 
 	// Execute a tools/call request
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{"foo":"bar"}}}`
-	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 
-	g.HandleToolsCall(w, req)
+	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 
@@ -146,10 +146,10 @@ func TestReceiptIntegration(t *testing.T) {
 
 	// Execute a tools/call request
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test-tool","arguments":{}}}`
-	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 
-	g.HandleToolsCall(w, req)
+	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 
@@ -198,65 +198,6 @@ func TestCanonicalizationIntegration(t *testing.T) {
 	require.Equal(t, canonical, canonical2, "Canonicalization should be deterministic")
 }
 
-// TestSSEStreamingIntegration tests the SSE streaming endpoint for tools/call
-func TestSSEStreamingIntegration(t *testing.T) {
-	t.Parallel()
-
-	processor := &fakeEnvelopeProcessor{
-		receipt: &operatorv1.ActionReceipt{
-			TransactionId:    "tx-sse-1",
-			Status:           operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED,
-			ResultSummary:    "streaming result",
-			StateRootBefore:  "root-before",
-			StateRootAfter:   "root-after",
-			ExecutedAtUnixMs: 1234567890,
-			L2Status:         operatorv1.L2Status_L2_STATUS_REQUIRED_VALID,
-			L3Status:         operatorv1.L3Status_L3_STATUS_REQUIRED_VALID,
-		},
-	}
-
-	pubKey, privKey, _ := ed25519.GenerateKey(nil)
-	_ = pubKey
-
-	g := &GatewayService{
-		logger:            slog.Default(),
-		envProc:           processor,
-		signingKey:        privKey,
-		keyID:             "sse-test-key",
-		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		maxPayloadBytes:   10 * 1024 * 1024,
-	}
-
-	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"streaming_tool","arguments":{"msg":"hello"}}}`
-	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call/sse", strings.NewReader(reqBody))
-	w := httptest.NewRecorder()
-
-	g.HandleToolsCallSSE(w, req)
-
-	// Verify SSE headers
-	require.Equal(t, http.StatusOK, w.Code)
-	require.Equal(t, "text/event-stream", w.Header().Get("Content-Type"))
-	require.Equal(t, "no-cache", w.Header().Get("Cache-Control"))
-	require.Equal(t, "keep-alive", w.Header().Get("Connection"))
-
-	// Verify SSE response format
-	body := w.Body.String()
-	require.Contains(t, body, "data: ")
-	require.Contains(t, body, "streaming result")
-
-	// Parse SSE chunk
-	lines := strings.Split(body, "\n")
-	require.GreaterOrEqual(t, len(lines), 2)
-	require.True(t, strings.HasPrefix(lines[0], "data: "))
-
-	var chunk CallToolResult
-	dataLine := strings.TrimPrefix(lines[0], "data: ")
-	err := json.Unmarshal([]byte(dataLine), &chunk)
-	require.NoError(t, err)
-	require.Equal(t, "streaming result", chunk.Content[0].Text)
-	require.False(t, chunk.IsError)
-}
-
 // TestCircuitBreakerIntegration tests circuit breaker state transitions
 func TestCircuitBreakerIntegration(t *testing.T) {
 	t.Parallel()
@@ -288,29 +229,24 @@ func TestCircuitBreakerIntegration(t *testing.T) {
 
 	// Trigger failures until circuit opens
 	for i := 0; i < 3; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/list", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 		w := httptest.NewRecorder()
-		g.HandleToolsList(w, req)
+		g.HandleMCP(w, req)
 	}
 
 	// Circuit should now be open
 	require.True(t, g.isCircuitOpen(), "Circuit should be open after 3 failures")
 
-	// Next request should return native tools when circuit is open
-	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/list", strings.NewReader(reqBody))
+	// Next request should return a circuit-open error
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
-	g.HandleToolsList(w, req)
+	g.HandleMCP(w, req)
 
 	var resp JSONRPCResponse
 	err = json.Unmarshal(w.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	require.Nil(t, resp.Error)
-
-	// Verify native tools are returned
-	var result ToolsListResult
-	err = json.Unmarshal(resp.Result, &result)
-	require.NoError(t, err)
-	require.NotEmpty(t, result.Tools, "Native tools should be returned when circuit is open")
+	require.NotNil(t, resp.Error)
+	require.Contains(t, resp.Error.Message, "circuit open")
 
 	// Wait for cooldown and verify circuit closes
 	time.Sleep(150 * time.Millisecond)
@@ -372,10 +308,10 @@ func TestGatewayErrorCodesIntegration(t *testing.T) {
 			}
 
 			reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test","arguments":{}}}`
-			req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+			req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 			w := httptest.NewRecorder()
 
-			g.HandleToolsCall(w, req)
+			g.HandleMCP(w, req)
 
 			var resp JSONRPCResponse
 			err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -417,10 +353,10 @@ func TestNativeToolExecutionIntegration(t *testing.T) {
 
 	// Test with a known native tool (e.g., uptime)
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"uptime","arguments":{}}}`
-	req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 
-	g.HandleToolsCall(w, req)
+	g.HandleMCP(w, req)
 
 	var resp JSONRPCResponse
 	err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -509,10 +445,10 @@ func TestReadFieldIntegration(t *testing.T) {
 	// extraction and audit logging happen inside the pipeline, not before it.
 	t.Run("routes through pipeline", func(t *testing.T) {
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read_field","arguments":{"collection":"investigations","document_id":"investigation-123","field_path":"status","operator_session_id":"valid-session-123"}}}`
-		req := httptest.NewRequest(http.MethodPost, "/api/mcp/v1/tools/call", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 		w := httptest.NewRecorder()
 
-		g.HandleToolsCall(w, req)
+		g.HandleMCP(w, req)
 
 		var resp JSONRPCResponse
 		err := json.Unmarshal(w.Body.Bytes(), &resp)
@@ -701,10 +637,10 @@ func TestNativeToolSingleAudit(t *testing.T) {
 
 	// Execute a native tool call through the gateway
 	reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"db_discover_topology","arguments":{}}}`
-	req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 	w := httptest.NewRecorder()
 
-	g.HandleToolsCall(w, req)
+	g.HandleMCP(w, req)
 
 	require.Equal(t, http.StatusOK, w.Code)
 

@@ -55,7 +55,7 @@ func TestGatewayAuditAttribution(t *testing.T) {
 		opSessionID := "opsess-456"
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sys_info","arguments":{}}}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 
 		// Simulate what the auth middleware does
 		ctx := req.Context()
@@ -64,7 +64,7 @@ func TestGatewayAuditAttribution(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
-		g.HandleToolsCall(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		require.NotNil(t, capture.lastEnvelope)
@@ -79,7 +79,7 @@ func TestGatewayAuditAttribution(t *testing.T) {
 		opSessionID := "opsess-456"
 
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sys_info","arguments":{}}}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 
 		// Simulate app auth
 		ctx := req.Context()
@@ -89,7 +89,7 @@ func TestGatewayAuditAttribution(t *testing.T) {
 		req = req.WithContext(ctx)
 
 		w := httptest.NewRecorder()
-		g.HandleToolsCall(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		require.NotNil(t, capture.lastEnvelope)
@@ -101,10 +101,10 @@ func TestGatewayAuditAttribution(t *testing.T) {
 	t.Run("attribution empty when no context present", func(t *testing.T) {
 		capture.lastEnvelope = nil
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sys_info","arguments":{}}}`
-		req := httptest.NewRequest(http.MethodPost, "/mcp/tools/call", strings.NewReader(reqBody))
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
 
 		w := httptest.NewRecorder()
-		g.HandleToolsCall(w, req)
+		g.HandleMCP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)
 		require.NotNil(t, capture.lastEnvelope)

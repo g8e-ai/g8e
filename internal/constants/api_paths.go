@@ -19,15 +19,7 @@ var APIPaths = struct {
 	OperatorPrefix string            `json:"operator_prefix"`
 	Client         map[string]string `json:"client"`
 	// MCP routes
-	MCPEndpoint      string `json:"mcp_endpoint"`
-	MCPToolsList     string `json:"mcp_tools_list"`
-	MCPToolsCall     string `json:"mcp_tools_call"`
-	MCPToolsCallSSE  string `json:"mcp_tools_call_sse"`
-	MCPToolsPrefix   string `json:"mcp_tools_prefix"`
-	MCPResourcesList string `json:"mcp_resources_list"`
-	MCPResourcesRead string `json:"mcp_resources_read"`
-	MCPPromptsList   string `json:"mcp_prompts_list"`
-	MCPPromptsGet    string `json:"mcp_prompts_get"`
+	MCPEndpoint string `json:"mcp_endpoint"`
 	// A2A routes
 	A2ACall   string `json:"a2a_call"`
 	A2APrefix string `json:"a2a_prefix"`
@@ -146,15 +138,7 @@ var APIPaths = struct {
 		"sse_stream": "/api/v1/internal/sse/stream",
 	},
 	// MCP routes
-	MCPEndpoint:      "/mcp",
-	MCPToolsList:     "/api/v1/mcp/tools/list",
-	MCPToolsCall:     "/api/v1/mcp/tools/call",
-	MCPToolsCallSSE:  "/api/v1/mcp/tools/call/sse",
-	MCPToolsPrefix:   "/api/v1/mcp/tools/",
-	MCPResourcesList: "/api/v1/mcp/resources/list",
-	MCPResourcesRead: "/api/v1/mcp/resources/read",
-	MCPPromptsList:   "/api/v1/mcp/prompts/list",
-	MCPPromptsGet:    "/api/v1/mcp/prompts/get",
+	MCPEndpoint: "/mcp",
 	// A2A routes
 	A2ACall:   "/api/v1/a2a/call",
 	A2APrefix: "/api/v1/a2a/",

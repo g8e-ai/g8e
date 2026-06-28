@@ -54,32 +54,32 @@ func (c *Client) rpc(ctx context.Context, p Persona, path, method string, params
 // ---- MCP --------------------------------------------------------------------
 
 func (c *Client) MCPToolsList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/api/mcp/v1/tools/list", "tools/list", map[string]any{})
+	return c.rpc(ctx, p, "/mcp", "tools/list", map[string]any{})
 }
 
 // MCPToolsCall invokes a tool. The Gateway wraps this into a governed MCP_CALL
 // envelope, runs the interlock sequence, and dispatches to the real Operator.
 func (c *Client) MCPToolsCall(ctx context.Context, p Persona, tool string, args map[string]any) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/api/mcp/v1/tools/call", "tools/call", map[string]any{
+	return c.rpc(ctx, p, "/mcp", "tools/call", map[string]any{
 		"name":      tool,
 		"arguments": args,
 	})
 }
 
 func (c *Client) MCPResourcesList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/api/mcp/v1/resources/list", "resources/list", map[string]any{})
+	return c.rpc(ctx, p, "/mcp", "resources/list", map[string]any{})
 }
 
 func (c *Client) MCPResourcesRead(ctx context.Context, p Persona, uri string) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/api/mcp/v1/resources/read", "resources/read", map[string]any{"uri": uri})
+	return c.rpc(ctx, p, "/mcp", "resources/read", map[string]any{"uri": uri})
 }
 
 func (c *Client) MCPPromptsList(ctx context.Context, p Persona) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/api/mcp/v1/prompts/list", "prompts/list", map[string]any{})
+	return c.rpc(ctx, p, "/mcp", "prompts/list", map[string]any{})
 }
 
 func (c *Client) MCPPromptsGet(ctx context.Context, p Persona, name string, args map[string]any) (*JSONRPCResponse, error) {
-	return c.rpc(ctx, p, "/api/mcp/v1/prompts/get", "prompts/get", map[string]any{"name": name, "arguments": args})
+	return c.rpc(ctx, p, "/mcp", "prompts/get", map[string]any{"name": name, "arguments": args})
 }
 
 // ---- A2A --------------------------------------------------------------------

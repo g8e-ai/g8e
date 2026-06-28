@@ -13,13 +13,4 @@
 
 package system
 
-import (
-	"log/slog"
-)
-
 const GitEmbedded = "embedded"
-
-// ResolveGitBinary is a stub for native go-git migration.
-func ResolveGitBinary(logger *slog.Logger) string {
-	return GitEmbedded
-}

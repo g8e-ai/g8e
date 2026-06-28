@@ -121,8 +121,8 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// JIT passkey bootstrap (only when JWKS is configured)
 	if jwksEnabled {
 		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
-		// MCP tools endpoints are public when JWKS is enabled for BYO clients
-		r.addPrefix(constants.APIPaths.MCPToolsPrefix)
+		// MCP endpoint is public when JWKS is enabled for BYO clients
+		r.addExact(constants.APIPaths.MCPEndpoint)
 		// A2A endpoints are public when JWKS is enabled
 		r.addPrefix(constants.APIPaths.A2APrefix)
 	}

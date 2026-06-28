@@ -241,7 +241,7 @@ services:
     extra_hosts:
       - "g8e.local:10.22.0.10"
     environment:
-      - G8E_GATEWAY_URL=https://g8e.local:8443/api/v1/mcp/tools/call
+      - G8E_GATEWAY_URL=https://g8e.local:8443/mcp
     volumes:
       - ../../g8e:/usr/local/bin/g8e:ro
       - operator_state:/root/.g8e:ro

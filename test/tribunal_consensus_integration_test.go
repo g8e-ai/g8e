@@ -72,7 +72,7 @@ func doToolsCall(t *testing.T, client *http.Client, httpsPort int, sessionID str
 	t.Helper()
 	mtlsURL := netutil.LocalhostHTTPSURL(httpsPort)
 	reqBody := makeToolsCallRequest(toolName, args)
-	req, err := http.NewRequest(http.MethodPost, mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+	req, err := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(constants.HeaderAuthorization, "Bearer "+sessionID)

@@ -79,7 +79,15 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 
 	t.Run("MCP tools/list with gateway", func(t *testing.T) {
 		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/tools/list")
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := apiClient.Do(req)
 		if err != nil {
 			t.Logf("tools/list failed: %v (may indicate no downstream MCP server configured)", err)
 			return
@@ -95,7 +103,15 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 
 	t.Run("MCP resources/list with gateway", func(t *testing.T) {
 		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/resources/list")
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "resources/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := apiClient.Do(req)
 		if err != nil {
 			t.Logf("resources/list failed: %v", err)
 			return
@@ -111,7 +127,15 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 
 	t.Run("MCP prompts/list with gateway", func(t *testing.T) {
 		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/prompts/list")
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "prompts/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := apiClient.Do(req)
 		if err != nil {
 			t.Logf("prompts/list failed: %v", err)
 			return
@@ -138,7 +162,7 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -226,7 +250,7 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/list", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -288,7 +312,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -318,7 +342,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -347,7 +371,7 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -393,7 +417,7 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -437,7 +461,15 @@ func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
 
 	t.Run("downstream server tools/list", func(t *testing.T) {
 		mtlsURL := netutil.LocalhostHTTPSURL(f.Service.GetHTTPSPort())
-		resp, err := apiClient.Get(mtlsURL + "/api/v1/mcp/tools/list")
+		listReq := mcp.JSONRPCRequest{
+			JSONRPC: "2.0",
+			Method:  "tools/list",
+			ID:      1,
+		}
+		reqBody, _ := json.Marshal(listReq)
+		req, _ := http.NewRequest(http.MethodPost, mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := apiClient.Do(req)
 		if err != nil {
 			t.Logf("Downstream server not configured: %v", err)
 			return
@@ -465,7 +497,7 @@ func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 
@@ -502,7 +534,7 @@ func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 		}
 
 		reqBody, _ := json.Marshal(callReq)
-		req, _ := http.NewRequest("POST", mtlsURL+"/api/v1/mcp/tools/call", bytes.NewReader(reqBody))
+		req, _ := http.NewRequest("POST", mtlsURL+constants.APIPaths.MCPEndpoint, bytes.NewReader(reqBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(constants.HeaderAuthorization, "Bearer "+identity.OperatorSessionID)
 

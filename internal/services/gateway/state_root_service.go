@@ -91,8 +91,7 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 	var currentVersion int64
 	err := s.db.QueryRowWithRetry("SELECT version FROM state_version WHERE id = 1").Scan(&currentVersion)
 	if err != nil {
-		// Fallback to full calculation if version table is unavailable
-		return s.calculateStateRootUncached()
+		return "", fmt.Errorf("failed to read state_version: %w", err)
 	}
 
 	// If version hasn't changed, return cached root
@@ -151,26 +150,6 @@ func (s *StateRootService) InvalidateCache() error {
 // This is used for initialization when the state_root table is empty.
 func (s *StateRootService) CalculateStateRoot() (string, error) {
 	return s.calculateStateRoot()
-}
-
-// calculateStateRootUncached performs a full state root calculation without caching.
-// Used as a fallback when state_version tracking is unavailable.
-func (s *StateRootService) calculateStateRootUncached() (string, error) {
-	root, err := s.calculateStateRoot()
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", constants.ErrStateRootCalculate, err)
-	}
-	_, err = s.db.ExecWithRetry(
-		`INSERT INTO state_root (id, root, updated_at)
-		 VALUES (1, ?, ?)
-		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
-		root,
-		sqliteutil.FormatTimestamp(time.Now().UTC()),
-	)
-	if err != nil {
-		return "", fmt.Errorf("%w: %v", constants.ErrStateRootPersist, err)
-	}
-	return root, nil
 }
 
 // calculateStateRoot computes the merkle root of all authoritative state.

@@ -31,8 +31,7 @@ import (
 // This endpoint implements the single-URL JSON-RPC dispatch contract that
 // standard MCP clients (e.g. Claude Code custom connectors) expect:
 // one path that accepts POST messages and routes by the JSON-RPC "method"
-// field, anchored by the "initialize" handshake. The per-method REST routes
-// (HandleToolsList, HandleToolsCall, ...) remain for backward compatibility.
+// field, anchored by the "initialize" handshake.
 const (
 	// mcpDefaultProtocolVersion is advertised when a client does not request a
 	// specific protocol version during initialize. Clients negotiate by
@@ -81,9 +80,8 @@ type initializeParams struct {
 }
 
 // HandleMCP is the unified MCP Streamable HTTP endpoint. It accepts a single
-// JSON-RPC 2.0 request via POST and dispatches by method, reusing the same
-// governed execution paths as the per-method REST handlers. GET is used for
-// SSE streaming support.
+// JSON-RPC 2.0 request via POST and dispatches by method through the governed
+// execution pipeline. GET is used for SSE streaming support.
 //
 //	@Summary		MCP endpoint
 //	@Description	Unified MCP JSON-RPC endpoint for AI IDE integration

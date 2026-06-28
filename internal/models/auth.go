@@ -295,18 +295,11 @@ type Authenticator struct {
 
 // WebAuthnUser implements webauthn.User interface.
 func (u *User) WebAuthnID() []byte {
-	// For WebAuthn v4 compliance (2026), use a dedicated GUID instead of Windows SID
-	// Windows Hello v4 requires a stable 16-byte GUID, not a variable-length SID string
-	if u.WebAuthnUserID != "" {
-		// Parse the GUID string and return as bytes (16 bytes)
-		guidBytes, err := uuid.Parse(u.WebAuthnUserID)
-		if err == nil {
-			return guidBytes[:]
-		}
-		// If GUID parsing fails, fall back to ID
+	guidBytes, err := uuid.Parse(u.WebAuthnUserID)
+	if err != nil {
+		return nil
 	}
-	// Fallback to internal user ID for backward compatibility or when WebAuthnUserID is not set
-	return []byte(u.ID)
+	return guidBytes[:]
 }
 
 func (u *User) WebAuthnName() string {
@@ -436,14 +429,12 @@ type User struct {
 	WebAuthnUserID string       `json:"webauthn_user_id,omitempty"` // GUID for WebAuthn v4 compliance (Windows Hello)
 }
 
-// IsActive reports whether the user is permitted to authenticate. Treats the
-// zero value as active so pre-existing user docs (written before Status was
-// introduced) keep working without a migration step.
+// IsActive reports whether the user is permitted to authenticate.
 func (u *User) IsActive() bool {
 	if u == nil {
 		return false
 	}
-	return u.Status == "" || u.Status == constants.UserStatusActive
+	return u.Status == constants.UserStatusActive
 }
 
 // AdminAuditEntry is a single row in the `auth_admin_audit` collection.
