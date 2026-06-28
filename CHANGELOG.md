@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Overview
 
-v1.3.1 is a backward-compatibility cruft cleanup release. This version removes all legacy code paths that existed solely for compatibility with older versions: DB migration helpers, CLI hidden aliases, MCP per-method REST routes, WebAuthn fallbacks, bootstrap user wrappers, git binary stubs, and state root fallbacks. The unified `/mcp` JSON-RPC endpoint is now the sole MCP entry point. All tests pass including E2E Docker tests.
+v1.3.1 is a backward-compatibility cruft cleanup release. This version removes all legacy code paths that existed solely for compatibility with older versions: DB migration helpers, CLI hidden aliases, MCP per-method REST routes, WebAuthn fallbacks, bootstrap user wrappers, git binary stubs, and state root fallbacks. The unified `/mcp` JSON-RPC endpoint is now the sole MCP entry point. Additionally, the ledger service now eagerly bootstraps its directory structure and git repo at construction time, preventing race conditions on first transaction. All tests pass including E2E Docker tests.
 
 ### Removed
 
@@ -36,6 +36,10 @@ v1.3.1 is a backward-compatibility cruft cleanup release. This version removes a
 * **Renamed `handleMCPRequest` to `handleA2ARequest`** — The method is only used by `HandleA2aCall`; renamed to reflect its actual purpose. Updated test name from `TestGatewayService_HandleMCPRequest` to `TestGatewayService_HandleA2ARequest`.
 * **Protocol Python Version** — Updated `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` to v1.3.1.
 * **Documentation Updates** — Updated all architecture, guide, and reference docs to v1.3.1. Updated `docs/architecture/gateway.md` to document only the unified `/mcp` endpoint. Updated `docs/guides/connect_apps_to_gateway.md`, `docs/guides/connect_operator_to_gateway.md`, and `docs/guides/build_apps.md` to remove per-method REST endpoint references.
+
+### Fixed
+
+* **Ledger Bootstrap Initialization** — `NewGitLedgerService` now eagerly creates the base directory, `files/` git repo, and `sessions/` directory at construction time via a new `bootstrap()` method, rather than relying on lazy initialization on first transaction. This prevents race conditions and ensures the ledger is ready before any transactions occur. Added comprehensive bootstrap test coverage in `ledger_bootstrap_test.go` (580 lines). Updated DoW demo to verify ledger directory existence and run a cross-cue scenario while disconnected.
 
 ### Deferred
 
