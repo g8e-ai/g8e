@@ -75,18 +75,19 @@ func (a *EncryptedKVAdapter) KVScanPrefix(_ context.Context, prefix string) (map
 		return nil, fmt.Errorf("failed to scan keys with prefix %q: %w", prefix, err)
 	}
 
+	if !a.vault.IsUnlocked() {
+		return nil, fmt.Errorf("vault is locked, cannot decrypt values for prefix %s", prefix)
+	}
+
 	result := make(map[string]string, len(fullKeys))
 	for _, fullKey := range fullKeys {
 		value, found := a.kv.KVGet(fullKey)
 		if !found {
 			continue
 		}
-		if !a.vault.IsUnlocked() {
-			continue
-		}
 		decrypted, err := a.vault.Decrypt([]byte(value))
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to decrypt value for key %s: %w", fullKey, err)
 		}
 		result[strings.TrimPrefix(fullKey, sentinelKeyPrefix)] = string(decrypted)
 	}

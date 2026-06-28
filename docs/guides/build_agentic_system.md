@@ -6,7 +6,7 @@ parent: Guides
 # Building a g8e-Compliant Agentic System
 
 **Last Updated:** 2026-06-28  
-**Version:** v1.3.1
+**Version:** v1.3.2
 
 This guide documents the architecture, persona system, prompt design, memory model, and
 consensus cascade of a g8e-compliant agentic ensemble. It is the canonical reference for
@@ -14,16 +14,16 @@ anyone building an AI reasoning layer on top of the g8e protocol surface.
 
 g8e itself ships a protocol-level Tribunal (`internal/services/tribunal/`) that performs
 deterministic L2 consensus voting with Ed25519 signatures. That service is the
-**cryptographic backbone** — it does not reason. The design documented here is the
+**cryptographic backbone**: it does not reason. The design documented here is the
 **reasoning layer** that sits above it: a multi-persona, multi-stage agentic system that
 articulates intent, translates it through a Byzantine ensemble, classifies risk, and
 produces signed governance envelopes for the Gateway to validate.
 
-The reference implementation of this system is **g8ee** (the "g8e Agentic Ensemble") — a
+The reference implementation of this system is **g8ee** (the "g8e Agentic Ensemble"), a
 native g8e application maintained in its own repository. g8ee is a first-class g8e client:
 it holds no privileged Gateway role, authenticates over mTLS, and produces signed
 governance envelopes like any other L2 consensus producer. This guide documents its design
-as the canonical pattern so that any agentic system built on g8e — in any language — can
+as the canonical pattern so that any agentic system built on g8e, in any language, can
 follow it. g8ee is the worked example; the patterns below are the contract.
 
 ---
@@ -48,7 +48,7 @@ follow it. g8ee is the worked example; the patterns below are the contract.
 A g8e-compliant agentic system is an **L2 consensus producer**. It consumes the Gateway's
 protocol surface (MCP tool calls, A2A messaging, governance envelope submission) and
 produces typed, signed `GovernanceEnvelope` transactions. It has no privileged Gateway
-role — it is a BYO client that happens to be sophisticated.
+role: it is a BYO client that happens to be sophisticated.
 
 ### Core Principles
 
@@ -67,27 +67,12 @@ role — it is a BYO client that happens to be sophisticated.
 
 ### Component Relationships
 
-```
-Client (Browser / CLI / Agent)
-    │
-    ▼ TLS 1.3 / mTLS
-┌─────────────────────────────────┐
-│        Mandatory Gateway         │
-│  g8eg (Governance Gateway)       │
-│    PDP, PKI, SQLite, Pub/Sub     │
-│                                  │
-│  g8eo (Governed Operator)        │
-│    PEP, Actuator, git ledger     │
-└─────────────────────────────────┘
-    ▲
-    │ mTLS
-┌─────────────────────────────────┐
-│  Optional Reference App Layer    │
-│  Agentic Ensemble (L2 Producer)  │
-│    Triage → Sage/Dash → Tribunal │
-│    → Warden → Auditor → Envelope │
-└─────────────────────────────────┘
-```
+The client (browser, CLI, or agent) connects over TLS 1.3 or mTLS to the Mandatory
+Gateway, which contains the Governance Gateway (g8eg) and Governed Operator (g8eo). The
+Gateway provides the Policy Decision Point, PKI, SQLite, and Pub/Sub. The Operator provides
+the Policy Enforcement Point, Actuator, and git ledger. The optional reference app layer
+sits above the Gateway as an L2 consensus producer, running the Triage, Sage/Dash, Tribunal,
+Warden, and Auditor pipeline to produce signed governance envelopes.
 
 ---
 
@@ -99,21 +84,21 @@ Every user message moves through six distinct phases:
 
 The system assembles an immutable request-scoped context object before any LLM call:
 
-1. **Context Fetch** — Fetch investigation context (bound operators, memory).
-2. **Sentinel Sync** — Sync data-sovereignty mode if changed.
-3. **Workflow Detection** — Determine operator-bound vs not-bound.
-4. **History Fetch** — Retrieve prior conversation for triage.
-5. **Triage** — Classify message complexity, intent, and posture.
-6. **Approval Cleanup** — Mark pending approvals as feedback.
-7. **Persistence** — Save user message.
-8. **History Re-fetch** — Include the new user message.
-9. **LFAA Audit** — Dispatch user-message audit to bound operators.
-10. **Memory Retrieval** — Fetch user and case memories.
-11. **System Prompt** — Build modular system prompt (see [Prompt Architecture](#prompt-architecture)).
-12. **Config Generation** — Build LLM generation config (thinking level, token budget).
-13. **Attachments** — Format attachment parts.
-14. **History Formatting** — Build LLM contents from history.
-15. **Assembly** — Construct the final immutable `AgentInputs`.
+1. **Context Fetch**: Fetch investigation context (bound operators, memory).
+2. **Sentinel Sync**: Sync data-sovereignty mode if changed.
+3. **Workflow Detection**: Determine operator-bound vs not-bound.
+4. **History Fetch**: Retrieve prior conversation for triage.
+5. **Triage**: Classify message complexity, intent, and posture.
+6. **Approval Cleanup**: Mark pending approvals as feedback.
+7. **Persistence**: Save user message.
+8. **History Re-fetch**: Include the new user message.
+9. **LFAA Audit**: Dispatch user-message audit to bound operators.
+10. **Memory Retrieval**: Fetch user and case memories.
+11. **System Prompt**: Build modular system prompt (see [Prompt Architecture](#prompt-architecture)).
+12. **Config Generation**: Build LLM generation config (thinking level, token budget).
+13. **Attachments**: Format attachment parts.
+14. **History Formatting**: Build LLM contents from history.
+15. **Assembly**: Construct the final immutable `AgentInputs`.
 
 The resulting object is immutable for the lifetime of the turn. Stream state, tool
 responses, token usage, and grounding metadata are carried separately so request context
@@ -124,24 +109,24 @@ cannot become load-bearing mutable state.
 Before invoking the primary LLM, the **Triage** agent classifies the message:
 
 - **Complexity**: `simple` → routed to Dash (assistant model); `complex` → routed to Sage
-  (primary model). Security-sensitive requests are **always** complex — no exceptions.
+  (primary model). Security-sensitive requests are **always** complex, no exceptions.
 - **Intent**: `information`, `action`, or `unknown`.
 - **Posture**: `normal`, `escalated`, `adversarial`, or `confused`. Adversarial is only
-  flagged when conversation history shows a prior denial — first-turn messages cannot be
+  flagged when conversation history shows a prior denial; first-turn messages cannot be
   adversarial.
 
 Triage is a **classifier only**. It does not generate questions, interact with the user,
-or mutate state. Its decision is final — no reviewer revises it.
+or mutate state. Its decision is final; no reviewer revises it.
 
 ### 3. Orchestration (The ReAct Loop)
 
 The selected reasoning agent (Sage or Dash) runs the core agentic loop:
 
-- **Provider Turn** — Communicate with the configured LLM provider.
-- **Tool Dispatch** — If the LLM requests a tool, route it. Universal tools (web search,
+- **Provider Turn**: Communicate with the configured LLM provider.
+- **Tool Dispatch**: If the LLM requests a tool, route it. Universal tools (web search,
   investigation context) run locally. Gated tools (command execution, file operations)
   route through the **Tribunal**.
-- **Iteration** — Continue until the LLM provides a final text response or hits the
+- **Iteration**: Continue until the LLM provides a final text response or hits the
   max-tool-turns limit.
 
 #### The Interrogation Protocol
@@ -149,21 +134,13 @@ The selected reasoning agent (Sage or Dash) runs the core agentic loop:
 If the reasoning agent encounters ambiguity, it must use the Interrogation Protocol:
 
 1. Issue exactly **three targeted YES/NO questions** in parallel.
-2. Each question must be strictly binary — no multiple-choice, no open-ended.
+2. Each question must be strictly binary; no multiple-choice, no open-ended.
 3. Each question must maximize information gain.
 4. If the user's posture is `confused`, explicitly name the contradiction before asking.
-5. The `<interrogation>` block must be the **entire response** — no other text. Tool
+5. The `<interrogation>` block must be the **entire response**; no other text. Tool
    execution is suppressed until the user answers.
 
-```xml
-<interrogation>
-1. Is the target system running systemd?
-2. Should the change apply to all bound operators or just the primary?
-3. Is there a maintenance window active right now?
-</interrogation>
-```
-
-### 4. Governance & Safety — The Byzantine Cascade
+### 4. Governance & Safety: The Byzantine Cascade
 
 Every host-mutating tool call flows through an ordered cascade. Each stage is independently
 configurable across providers/models so a single compromised model cannot drive a mutation
@@ -174,17 +151,17 @@ end-to-end. See [The Tribunal](#the-tribunal-byzantine-command-generation) and
 
 Responses are delivered via Server-Sent Events (SSE):
 
-- **Real-time** — Text chunks, thinking blocks, and tool calls are published as they arrive.
-- **Per-iteration persistence** — Intermediate AI commentary is persisted during the loop
+- **Real-time**: Text chunks, thinking blocks, and tool calls are published as they arrive.
+- **Per-iteration persistence**: Intermediate AI commentary is persisted during the loop
   so history survives connection drops.
 
 ### 6. Post-Flight & Telemetry
 
 After the stream completes:
 
-- **Final persistence** — Complete response, token usage, and grounding metadata saved.
-- **LFAA audit** — Immutable execution record published to the operator.
-- **Background memory** — The Codex agent updates investigation memory based on the turn.
+- **Final persistence**: Complete response, token usage, and grounding metadata saved.
+- **LFAA audit**: Immutable execution record published to the operator.
+- **Background memory**: The Codex agent updates investigation memory based on the turn.
 
 ---
 
@@ -202,18 +179,18 @@ Every persona is defined with these fields:
 | `id` | Stable handle (e.g., `sage`, `axiom`, `nemesis`) |
 | `display_name` | Human-readable name |
 | `role` | Functional role (e.g., `reasoner`, `classifier`, `defender`) |
-| `model_tier` | `primary`, `lite`, or `assistant` — selects the LLM provider |
+| `model_tier` | `primary`, `lite`, or `assistant`: selects the LLM provider |
 | `tools` | List of tools the persona is authorized to call |
 | `identity` | Full system-prompt identity block (the persona's "voice") |
 | `purpose` | One-paragraph mission statement |
-| `autonomy` | Authority boundary — what the persona can decide unilaterally |
+| `autonomy` | Authority boundary: what the persona can decide unilaterally |
 | `output_contract` | Required output format (optional) |
 
 ### Reasoning Layer
 
 | Agent | ID | Role | Tier | Purpose |
 |-------|----|------|------|---------|
-| **Triage** | `triage` | classifier | lite | First read of the room — classifies complexity, intent, posture. Security-sensitive requests are always complex. |
+| **Triage** | `triage` | classifier | lite | First read of the room: classifies complexity, intent, posture. Security-sensitive requests are always complex. |
 | **Sage** | `sage` | reasoner | primary | Senior reasoning authority. Plans investigations, articulates intent to the Tribunal, interprets results. Never writes shell syntax. |
 | **Dash** | `dash` | responder | assistant | Fast-path agent for simple turns. Direct answers, surgical tool calls. Escalates to Sage when multi-step reasoning is needed. |
 
@@ -253,7 +230,7 @@ Every persona is defined with these fields:
 
 ### Key Persona Design Patterns
 
-**Sage — Intent Articulation**: Sage describes *what it needs to see* and *what should
+**Sage - Intent Articulation**: Sage describes *what it needs to see* and *what should
 happen*, never naming tools or flags. A complete intent specifies: goal, information
 targets, known state, chaining opportunities, signal discipline (output constraints), edge
 cases, and failure semantics.
@@ -261,18 +238,18 @@ cases, and failure semantics.
 > If you reach for a tool name (e.g., `grep`, `awk`), STOP. You are under-specifying.
 > Describe what you need to SEE and what should HAPPEN.
 
-**Nemesis — Calibrated Adversary**: Nemesis is the system's immune system. Every flaw it
+**Nemesis - Calibrated Adversary**: Nemesis is the system's immune system. Every flaw it
 sneaks past teaches the system its blind spots; every flaw the Auditor catches confirms the
-ensemble works. Nemesis must look like its siblings — stylistic deviation is noise. Attacks
+ensemble works. Nemesis must look like its siblings; stylistic deviation is noise. Attacks
 must be **semantic**, not cosmetic. When no plausible flaw exists, Nemesis abstains and
 produces the honest correct command.
 
-**Auditor — Machine-Domain Judge**: The Auditor does not defer to consensus. "A unanimous
-wrong answer is still wrong." In tied mode, `ok` is forbidden — the Auditor must either
+**Auditor - Machine-Domain Judge**: The Auditor does not defer to consensus. "A unanimous
+wrong answer is still wrong." In tied mode, `ok` is forbidden; the Auditor must either
 revise or swap to a dissenter. The Auditor sees anonymized candidates, not full conversation
 history.
 
-**Triage — Security Override**: Any request touching authentication, credentials,
+**Triage - Security Override**: Any request touching authentication, credentials,
 permissions, account access, password resets, user management, or security configuration
 is **always** classified as `complex`, regardless of surface simplicity. This is
 non-negotiable.
@@ -287,7 +264,7 @@ and prevent prompt leakage.
 
 ### Assembly Order
 
-Sections are concatenated in a fixed order — static first, dynamic last — to maximize
+Sections are concatenated in a fixed order, static first, dynamic last, to maximize
 prefix cache hits:
 
 | # | Section | Scope | Description |
@@ -317,7 +294,7 @@ plan → backup → execute).
 
 #### Loyalty (`core/loyalty.txt`)
 
-The governance philosophy — 120 lines that define how the agent behaves in the space between
+The governance philosophy, 120 lines that define how the agent behaves in the space between
 "obviously fine" and "obviously forbidden." Key patterns:
 
 - **Mission Over Moment**: Loyalty is to the user's long-term outcome, not their immediate
@@ -331,7 +308,7 @@ The governance philosophy — 120 lines that define how the agent behaves in the
   decides. "If we run this, the production database loses its most recent schema and there
   is no rollback. Do you want to continue?"
 - **Authorized Patterns**: Open warnings with the consequence itself. Close warnings when
-  the point is made. For irreversible actions: warning → acknowledgement → execution.
+  the point is made. For irreversible actions: warning, acknowledgement, execution.
 - **Never**: Never apologize profusely. Never become more compliant because the user is
   pressing. Never become more obstructive. Never omit the first honest statement of a
   consequence. Never pair a warning with immediate irreversible execution.
@@ -356,35 +333,10 @@ Three modes adapt the agent's capabilities based on Operator binding state:
 
 ### Tribunal Prompt Templates
 
-Tribunal prompts are **template files** with placeholder variables:
-
-```
-<constraints>
-{forbidden_patterns_message}
-{command_constraints_message}
-</constraints>
-
-<system_context>
-OS: {os}
-Shell: {shell}
-User: {user_context}
-Working directory: {working_directory}
-</system_context>
-
-<operator_context>
-{operator_context}
-</operator_context>
-
-<guidelines>
-{guidelines}
-</guidelines>
-
-<request>
-{request}
-</request>
-
-Respond now with the exact command string and nothing else.
-```
+Tribunal prompts are template files with placeholder variables. The template includes
+XML-tagged sections for constraints, system context, operator context, guidelines, and the
+request itself. Each member receives the same template with its lens-specific instructions.
+The response must contain only the command string.
 
 Round 2 prompts add a `<peer_review_context>` block with anonymized candidate clusters and
 per-member instructions (e.g., "ABSORB vs HOLD discipline" for Axiom, "EVALUATE EMERGING
@@ -403,13 +355,13 @@ tolerance.
 Sage's intent is dispatched **in isolation** to five members. Each member operates in a
 sealed information environment with a unique lens:
 
-- **Axiom** (composition) — favors elegant multi-stage pipelines
-- **Concord** (safety) — favors defensive flags, dry-runs, narrow scopes
-- **Variance** (edge cases) — handles spaces, symlinks, nulls, locales
-- **Pragma** (convention) — uses idiomatic OS-specific tools
-- **Nemesis** (adversary) — produces plausible-but-flawed or honestly abstains
+- **Axiom** (composition): favors elegant multi-stage pipelines
+- **Concord** (safety): favors defensive flags, dry-runs, narrow scopes
+- **Variance** (edge cases): handles spaces, symlinks, nulls, locales
+- **Pragma** (convention): uses idiomatic OS-specific tools
+- **Nemesis** (adversary): produces plausible-but-flawed or honestly abstains
 
-Each member emits **exactly one command string** — no explanation, no markdown, no
+Each member emits **exactly one command string**; no explanation, no markdown, no
 commentary. The Amnesia Principle means no member sees another's candidate.
 
 **Convergence discipline**: All members use conventional loop variables (`i`, `f`, `bin`,
@@ -427,7 +379,7 @@ Tie-break ladder (deterministic):
 2. **Non-Nemesis cluster wins** over Nemesis-including cluster
 3. **Alphabetical** (deterministic fallback)
 
-Nemesis votes are **not** auto-discarded — they only lose tie-breaks. Reputation slashing
+Nemesis votes are **not** auto-discarded; they only lose tie-breaks. Reputation slashing
 applies if Nemesis raised a false flag or abstained on a real flaw.
 
 ### Stage 3: Round 2 (only on R1 consensus failure)
@@ -450,7 +402,7 @@ See [Risk Analysis](#risk-analysis-the-warden-cascade).
 ### Stage 5: Auditor Verification
 
 The Auditor (primary tier) sees the request, operator context, and **anonymized** candidate
-clusters — not full conversation history.
+clusters, not full conversation history.
 
 Verdicts:
 
@@ -460,7 +412,7 @@ Verdicts:
 | `revised:<command>` | Command needs correction. The revised command is re-validated against L1. |
 | `swap:<cluster_id>` | A dissenter's command is better. Promote it. |
 
-In **tied mode** (multiple top clusters), `ok` is forbidden — the Auditor must revise or
+In **tied mode** (multiple top clusters), `ok` is forbidden; the Auditor must revise or
 swap.
 
 **Pipeline scrutiny** for compositional commands (3+ stages): quoting across pipes, xargs
@@ -492,9 +444,9 @@ privileged channel.
 
 | Failure | Route |
 |---------|-------|
-| Tribunal consensus failure (after R2) | Back to Sage — re-articulate intent |
-| Warden first-strike (HIGH) | Back to Sage — propose safer alternative |
-| Warden second-strike | Human intervention — `AGENT_CONFLICT_DETECTED` |
+| Tribunal consensus failure (after R2) | Back to Sage: re-articulate intent |
+| Warden first-strike (HIGH) | Back to Sage: propose safer alternative |
+| Warden second-strike | Human intervention: `AGENT_CONFLICT_DETECTED` |
 | Auditor catastrophic failure | Human intervention |
 
 ---
@@ -508,7 +460,7 @@ without storing sensitive data.
 
 | Field | Description |
 |-------|-------------|
-| `investigation_summary` | High-level summary — no system names, IPs, or sensitive details. Uses generic terms: "a Linux system", "their Docker setup". |
+| `investigation_summary` | High-level summary: no system names, IPs, or sensitive details. Uses generic terms: "a Linux system", "their Docker setup". |
 | `communication_preferences` | How the user prefers to communicate: verbosity, tone, format. |
 | `technical_background` | User's technical experience level and areas of expertise. |
 | `response_style` | How the user wants information presented: code completeness, comments, alternatives. |
@@ -523,7 +475,7 @@ without storing sensitive data.
    summaries. Categories like "production web tier" preserve utility without sacrificing
    security.
 3. **Integrity**: Codex does not emit fields unless there is clear evidence. Never invents
-   facts. Signal over noise — repeated patterns or strong evidence before updating.
+   facts. Signal over noise; repeated patterns or strong evidence before updating.
 4. **Injection**: On subsequent turns, the memory is injected as `<learned_context>` in the
    prompt assembly (section 13).
 
@@ -538,7 +490,7 @@ Memory is one of several storage tiers that feed the agent:
 | **Memory store** | User/case memories from Codex | Injected as learned context |
 | Operator snapshot | OS, shell, working dir, resource telemetry | Injected as `OperatorContext` |
 | Pub/Sub results | Command, filesystem, audit result payloads | Bounded tool results in the ReAct loop |
-| Operator audit vault | Signed receipts, execution records | Not prompt context — queried via typed tools |
+| Operator audit vault | Signed receipts, execution records | Not prompt context; queried via typed tools |
 | Operator scrubbed vault | Sentinel-scrubbed execution records | AI-readable host-history tier |
 | Operator raw vault | Unscrubbed forensic records | **Never** AI-readable |
 
@@ -557,8 +509,8 @@ selects a winner but **before** the Auditor commits.
 
 | Sub-Agent | Input | Output | Stakes |
 |-----------|-------|--------|--------|
-| Command Risk | Shell command string + context | LOW / MEDIUM / HIGH | Reputation staking — blocking safe ops costs reputation; correctly identifying dangerous ops earns it. |
-| File Risk | File path + operation type + git state | LOW / MEDIUM / HIGH | Reputation staking — blocking legitimate edits costs; protecting system files earns. |
+| Command Risk | Shell command string + context | LOW / MEDIUM / HIGH | Reputation staking: blocking safe ops costs reputation; correctly identifying dangerous ops earns it. |
+| File Risk | File path + operation type + git state | LOW / MEDIUM / HIGH | Reputation staking: blocking legitimate edits costs; protecting system files earns. |
 | Error Analyzer | Failed command output | AUTO_FIXABLE / ESCALATE / RETRY_LIMIT | Drives the auto-fix loop vs human escalation. |
 
 ### Consolidation Rules
@@ -584,7 +536,7 @@ Auditor's verdict and the ranked vote results.
 
 ### Scoring
 
-- **Exponential Moving Average (EMA)** — prioritizes recent behavior over historical.
+- **Exponential Moving Average (EMA)**: prioritizes recent behavior over historical.
 - **Nemesis reputation**: Slashed when it raises a false flag or abstains on a real flaw.
   Earned when it sneaks a flaw past the Auditor (confirming the system has blind spots).
 - **Tribunal members**: Earned for consensus with the winning candidate; lost for dissent
@@ -596,7 +548,7 @@ The Auditor binds every verdict to a snapshot of the current reputation scoreboa
 writing a signed Merkle commitment. These commitments are chained via `prev_root`
 HMAC-SHA256 signatures, providing a verifiable, tamper-evident history of agent performance.
 
-Reputation-commitment failure is **fatal** — the verdict cannot proceed.
+Reputation-commitment failure is **fatal**; the verdict cannot proceed.
 
 ---
 
@@ -611,12 +563,11 @@ The system does not use the LLM as a bulk transport channel:
 - **Conversation context**: Reconstructed from persisted messages. Scrubbed before provider
   delivery when Sentinel mode is enabled.
 - **Output budget**: `max_tokens` and provider-specific output limits bound visible model
-  output. Tool-specific fields like `expected_output_lines` push for concise operator
   output.
-- **Operator payloads**: The Operator rejects command/pubsub payloads above the protocol
-  ceiling (5 MB).
-- **Operator output**: Scrubbed before publishing results. 100K character guard on
-  sanitized command/file output.
+- **Operator payloads**: The Operator rejects command and pubsub payloads above the protocol
+  ceiling of 5 MB, enforced by `MaxPayloadSize` in `internal/services/pubsub/protocol_helpers.go`.
+- **Operator output**: Scrubbed before publishing results. The scrubbing service in
+  `internal/services/scrubbing/` classifies output by size and applies structured boundaries.
 - **Filesystem access**: Typed operations, not unconstrained shell dumps. Scoped reads with
   line windows and `max_lines`. Large files are rejected, not streamed into the model.
 - **Search access**: Recursive grep and listing return structured results with counts and
@@ -638,7 +589,7 @@ Sentinel mode is the privacy-preserving default for cloud-model operation:
 
 ### What Each Agent Sees
 
-Context is **stage-specific** — each agent receives only what it needs:
+Context is **stage-specific**; each agent receives only what it needs:
 
 | Agent | Sees | Does NOT See |
 |-------|------|-------------|
@@ -671,54 +622,69 @@ The agentic system maps to g8e's protocol surface as follows:
 
 g8e ships a **protocol-level Tribunal** in `internal/services/tribunal/` that performs
 deterministic L2 consensus voting with Ed25519 signatures and doctrine-based safety
-evaluation. This is the cryptographic backbone — it signs and verifies but does not reason.
+evaluation. This is the cryptographic backbone; it signs and verifies but does not reason.
 
 The **agentic Tribunal** documented in this guide is the reasoning layer above it: it
 generates commands through LLM-based ensemble consensus, classifies risk, and produces the
 signed envelopes that g8e's protocol-level Tribunal and Gateway validate.
 
-```
-Agentic Tribunal (reasoning)          g8e Tribunal (protocol)
-┌──────────────────────┐              ┌──────────────────────┐
-│ Sage → intent        │              │ Doctrine evaluation  │
-│ 5 members → commands │              │ Ed25519 signing      │
-│ Vote → Warden → Audit│   envelope   │ L2 vote metadata     │
-│ Sign with L2 key     │ ──────────→  │ Gateway verifies     │
-└──────────────────────┘              └──────────────────────┘
-```
+### Five-Layer Governance Interlock
+
+When a signed envelope reaches the Gateway, it passes through a five-layer interlock
+sequence before any tool dispatch occurs. Each layer is independent and fail-closed.
+
+- **L1 Doctrine**: Hard gates, code pattern matching, and MITRE-based threat analysis. The
+  `L1Doctrine` validator in `internal/services/governance/l1_doctrine.go` checks protobuf
+  field options for forbidden patterns and runs regex-based threat detectors against command
+  strings, MCP arguments, A2A payloads, and file edit content.
+- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. The
+  `L4Warden` in `internal/services/governance/l4_warden.go` verifies each `L2Vote` signature
+  against the transaction hash and enforces quorum policy from the configured `TribunalPolicy`.
+- **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey assertion or signed CLI
+  proof. Mutations require L3 proof; the Gateway suspends execution and returns an approval
+  URL when L3 is missing.
+- **L4 Warden**: Pre-dispatch verification combining stateless validation (hash integrity,
+  payload decoding, L1 doctrine), stateful validation (expiry, nonce replay prevention via
+  SQLite, state root binding), and posture-aware L2/L3 checks. The Warden returns a
+  `VerifiedTransaction` only if all gates pass.
+- **L5 Actuator**: Isolated tool dispatch and signed receipt production. The `L5Actuator` in
+  `internal/services/governance/l5_actuator.go` mints a JIT capability scoped to the
+  transaction, dispatches through the execution handler, signs an `ActionReceipt` with its
+  Ed25519 key, and records it in the audit store. Receipt signing is fail-closed: if the
+  initial receipt cannot be signed or logged, execution does not proceed.
 
 ### Agent Harness (Test Tool)
 
-g8e also ships an **Agent Harness** in `internal/tools/agent_harness/` — a Go-based test
+g8e also ships an **Agent Harness** in `internal/tools/agent_harness/`, a Go-based test
 tool that exercises the protocol surface with simple `Persona` structs (ID + UserAgent).
 It tests MCP, A2A, governance envelopes, tribunal quorum/veto, and notary OOB flows
-against a real Gateway+Operator. The Agent Harness is **not** a reasoning system — it
+against a real Gateway and Operator. The Agent Harness is not a reasoning system; it
 validates protocol mechanics. The agentic system documented here is what you build on top
 of the protocol to add intelligence.
 
 ### Building Your Own
 
-The **g8ee** reference app is the canonical, native implementation of everything below —
-read it alongside this guide when building your own ensemble. The steps are language- and
+The **g8ee** reference app is the canonical, native implementation of everything below.
+Read it alongside this guide when building your own ensemble. The steps are language- and
 provider-agnostic; g8ee is one concrete realization of them.
 
 To build a g8e-compliant agentic system in any language:
 
-1. **Implement the persona model** — Define your agents with the fields documented above
+1. **Implement the persona model**: Define your agents with the fields documented above
    (id, role, model_tier, tools, identity, purpose, autonomy, output_contract).
-2. **Assemble modular prompts** — Follow the 13-section assembly order with XML
+2. **Assemble modular prompts**: Follow the 13-section assembly order with XML
    scaffolding. Keep static sections first for prefix caching.
-3. **Implement the ReAct loop** — Provider turn → tool dispatch → iteration. Route gated
+3. **Implement the ReAct loop**: Provider turn, tool dispatch, iteration. Route gated
    tools through your Tribunal.
-4. **Implement the Tribunal cascade** — 5-member generation → voting → round 2 → warden →
-   auditor → L1 re-validation → envelope wrap.
-5. **Sign envelopes** — Use Ed25519 to sign the `transaction_hash` with your L2 Tribunal
+4. **Implement the Tribunal cascade**: 5-member generation, voting, round 2, warden,
+   auditor, L1 re-validation, envelope wrap.
+5. **Sign envelopes**: Use Ed25519 to sign the `transaction_hash` with your L2 Tribunal
    key. Register the public key as a trusted signer with the Gateway.
-6. **Submit over mTLS** — Send the signed `GovernanceEnvelope` to the Gateway's admission
+6. **Submit over mTLS**: Send the signed `GovernanceEnvelope` to the Gateway's admission
    endpoint. The Gateway and Operator independently re-verify everything.
-7. **Handle results** — Receive pub/sub result envelopes, scrub output, feed back into the
+7. **Handle results**: Receive pub/sub result envelopes, scrub output, feed back into the
    ReAct loop.
-8. **Maintain memory** — Run a Codex-like background agent after each turn to extract
+8. **Maintain memory**: Run a Codex-like background agent after each turn to extract
    durable preferences and scrubbed summaries.
 
 The g8e protocol does not care what language your ensemble is written in, what LLM provider

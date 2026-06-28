@@ -227,6 +227,9 @@ func printDemoEndpoints(org string) {
 	case "dow":
 		fmt.Println("  Gateway HTTP:  http://localhost:8086")
 		fmt.Println("  Gateway HTTPS: https://localhost:8449")
+	case "dhs":
+		fmt.Println("  Gateway HTTP:  http://localhost:8087")
+		fmt.Println("  Gateway HTTPS: https://localhost:8450")
 	default:
 		fmt.Printf("  No endpoint information available for '%s'\n", org)
 	}
@@ -599,6 +602,7 @@ var scenarioCounts = map[string]int{
 	"finance":     1,
 	"secure-data": 3,
 	"dow":         3,
+	"dhs":         5,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -625,7 +629,13 @@ Available scenarios:
   dow: 1-3
     1 - Autonomous SIGINT-to-EO/IR Cross-Cueing (Challenge 5)
     2 - BFT Spoofing Defense (Challenge 8)
-    3 - Disconnected Operations (Challenge 6)`,
+    3 - Disconnected Operations (Challenge 6)
+  dhs: 1-5
+    1 - Sovereign Multi-Source Ingest (chain-of-custody) (LOE 1)
+    2 - Cross-Domain Release requires Notary authority (LOE 1 & 2)
+    3 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
+    4 - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
+    5 - Sovereign Destruction + tamper-proof audit (LOE 2)`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runDemosRun,
 	}
@@ -704,8 +714,27 @@ func runAllScenarios(org, demoDir string) error {
 
 	printResultsTable(org, results)
 
-	fmt.Printf("\n%s\n  All %s scenarios passed.\n%s\n",
-		strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	hasFail, hasSkip := false, false
+	for _, r := range results {
+		switch r.status {
+		case "FAIL":
+			hasFail = true
+		case "SKIP":
+			hasSkip = true
+		}
+	}
+
+	switch {
+	case hasFail:
+		fmt.Printf("\n%s\n  One or more %s scenarios FAILED.\n%s\n",
+			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	case hasSkip:
+		fmt.Printf("\n%s\n  All active %s scenarios passed (some skipped — see table).\n%s\n",
+			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	default:
+		fmt.Printf("\n%s\n  All %s scenarios passed.\n%s\n",
+			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
+	}
 	return nil
 }
 
@@ -733,6 +762,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runSecureDataScenarioWithResult(demoDir, scenario)
 	case "dow":
 		return runDoWScenarioWithResult(demoDir, scenario)
+	case "dhs":
+		return runDHSScenarioWithResult(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}

@@ -26,7 +26,7 @@ import (
 )
 
 // VaultHeader contains the metadata and wrapped DEK for an encrypted vault.
-// The header is stored at .g8e/data/vault.header as JSON.
+// The header is stored at .g8e/vault/vault.header as JSON.
 // The DEK is wrapped (encrypted) with the KEK derived from the operator's private key.
 type VaultHeader struct {
 	Version        int        `json:"version"`

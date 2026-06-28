@@ -16,8 +16,11 @@ package serve
 import (
 	"crypto/ed25519"
 	"crypto/rand"
+	"encoding/hex"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/config"
@@ -916,4 +919,261 @@ func TestGatewayConfigToOptions_StandardPortsPreserved(t *testing.T) {
 
 	assert.Equal(t, constants.Ports.OperatorHttp, opts.HTTPPort)
 	assert.Equal(t, constants.Ports.OperatorHttps, opts.HTTPSPort)
+}
+
+// ---------------------------------------------------------------------------
+// parseTribunalBootstrapConfig tests (Tier 1 — no DB)
+// ---------------------------------------------------------------------------
+
+func TestParseTribunalBootstrapConfig_Valid(t *testing.T) {
+	data := []byte(`{
+		"tribunal_id": "dhs-tribunal",
+		"member_app_ids": ["auditor-ensemble"],
+		"quorum": 1,
+		"seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
+	}`)
+
+	boot, err := parseTribunalBootstrapConfig(data)
+	require.NoError(t, err)
+	assert.Equal(t, "dhs-tribunal", boot.TribunalID)
+	assert.Equal(t, []string{"auditor-ensemble"}, boot.MemberAppIDs)
+	assert.Equal(t, 1, boot.Quorum)
+	assert.Equal(t, "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77", boot.SeedHex)
+}
+
+func TestParseTribunalBootstrapConfig_ValidNoSeed(t *testing.T) {
+	data := []byte(`{
+		"tribunal_id": "test-tribunal",
+		"member_app_ids": ["member-a", "member-b"],
+		"quorum": 2
+	}`)
+
+	boot, err := parseTribunalBootstrapConfig(data)
+	require.NoError(t, err)
+	assert.Equal(t, "test-tribunal", boot.TribunalID)
+	assert.Len(t, boot.MemberAppIDs, 2)
+	assert.Equal(t, 2, boot.Quorum)
+	assert.Empty(t, boot.SeedHex)
+}
+
+func TestParseTribunalBootstrapConfig_MalformedJSON(t *testing.T) {
+	data := []byte(`{not valid json}`)
+
+	_, err := parseTribunalBootstrapConfig(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse config")
+}
+
+func TestParseTribunalBootstrapConfig_EmptyTribunalID(t *testing.T) {
+	data := []byte(`{
+		"tribunal_id": "",
+		"member_app_ids": ["member-a"],
+		"quorum": 1
+	}`)
+
+	_, err := parseTribunalBootstrapConfig(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+}
+
+func TestParseTribunalBootstrapConfig_EmptyMemberAppIDs(t *testing.T) {
+	data := []byte(`{
+		"tribunal_id": "test-tribunal",
+		"member_app_ids": [],
+		"quorum": 1
+	}`)
+
+	_, err := parseTribunalBootstrapConfig(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+}
+
+func TestParseTribunalBootstrapConfig_QuorumZero(t *testing.T) {
+	data := []byte(`{
+		"tribunal_id": "test-tribunal",
+		"member_app_ids": ["member-a"],
+		"quorum": 0
+	}`)
+
+	_, err := parseTribunalBootstrapConfig(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+}
+
+func TestParseTribunalBootstrapConfig_NegativeQuorum(t *testing.T) {
+	data := []byte(`{
+		"tribunal_id": "test-tribunal",
+		"member_app_ids": ["member-a"],
+		"quorum": -1
+	}`)
+
+	_, err := parseTribunalBootstrapConfig(data)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+}
+
+func TestParseTribunalBootstrapConfig_MultipleMembers(t *testing.T) {
+	data := []byte(`{
+		"tribunal_id": "council",
+		"member_app_ids": ["alpha", "beta", "gamma"],
+		"quorum": 2,
+		"seed_hex": ""
+	}`)
+
+	boot, err := parseTribunalBootstrapConfig(data)
+	require.NoError(t, err)
+	assert.Equal(t, "council", boot.TribunalID)
+	assert.Len(t, boot.MemberAppIDs, 3)
+	assert.Equal(t, 2, boot.Quorum)
+}
+
+// ---------------------------------------------------------------------------
+// deriveSeedPublicKey tests (Tier 1 — no DB)
+// ---------------------------------------------------------------------------
+
+func TestDeriveSeedPublicKey_ValidSeed(t *testing.T) {
+	seed := make([]byte, ed25519.SeedSize)
+	for i := range seed {
+		seed[i] = byte(i + 1)
+	}
+	seedHex := hex.EncodeToString(seed)
+
+	pubHex, err := deriveSeedPublicKey(seedHex)
+	require.NoError(t, err)
+
+	priv := ed25519.NewKeyFromSeed(seed)
+	expectedPub := priv.Public().(ed25519.PublicKey)
+	assert.Equal(t, hex.EncodeToString(expectedPub), pubHex)
+}
+
+func TestDeriveSeedPublicKey_Deterministic(t *testing.T) {
+	seedHex := "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
+
+	pub1, err := deriveSeedPublicKey(seedHex)
+	require.NoError(t, err)
+
+	pub2, err := deriveSeedPublicKey(seedHex)
+	require.NoError(t, err)
+
+	assert.Equal(t, pub1, pub2, "same seed must produce same public key")
+	assert.Len(t, pub1, 64, "Ed25519 public key hex should be 64 chars")
+}
+
+func TestDeriveSeedPublicKey_TrimsWhitespace(t *testing.T) {
+	seedHex := "  87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77  \n"
+
+	pubHex, err := deriveSeedPublicKey(seedHex)
+	require.NoError(t, err)
+	assert.Len(t, pubHex, 64)
+}
+
+func TestDeriveSeedPublicKey_InvalidHex(t *testing.T) {
+	_, err := deriveSeedPublicKey("not-hex-at-all")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "decode seed hex")
+}
+
+func TestDeriveSeedPublicKey_WrongLength(t *testing.T) {
+	shortHex := hex.EncodeToString([]byte{1, 2, 3})
+
+	_, err := deriveSeedPublicKey(shortHex)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid seed length")
+}
+
+func TestDeriveSeedPublicKey_EmptyString(t *testing.T) {
+	_, err := deriveSeedPublicKey("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid seed length")
+}
+
+func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
+	seedHex := "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
+	seed, err := hex.DecodeString(seedHex)
+	require.NoError(t, err)
+
+	priv := ed25519.NewKeyFromSeed(seed)
+	expectedPub := hex.EncodeToString(priv.Public().(ed25519.PublicKey))
+
+	pubHex, err := deriveSeedPublicKey(seedHex)
+	require.NoError(t, err)
+	assert.Equal(t, expectedPub, pubHex)
+}
+
+// ---------------------------------------------------------------------------
+// bootstrapTribunalPolicy error-path tests (Tier 1 — no DB)
+// ---------------------------------------------------------------------------
+
+func TestBootstrapTribunalPolicy_NilServicePanics(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "tribunal-bootstrap.json")
+	err := os.WriteFile(configPath, []byte(`{
+		"tribunal_id": "test-tribunal",
+		"member_app_ids": ["auditor-ensemble"],
+		"quorum": 1,
+		"seed_hex": "87278693f5894d8de5d28401c923e0c3fea9ae7c35f467065954eecbc85b2e77"
+	}`), 0600)
+	require.NoError(t, err)
+
+	assert.Panics(t, func() {
+		_ = bootstrapTribunalPolicy(nil, configPath, logger)
+	}, "bootstrapTribunalPolicy with nil service should panic on GetDB()")
+}
+
+func TestBootstrapTribunalPolicy_MissingFile(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	err := bootstrapTribunalPolicy(nil, "/nonexistent/path/tribunal.json", logger)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read config")
+}
+
+func TestBootstrapTribunalPolicy_MalformedJSON(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "tribunal-bootstrap.json")
+	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
+	require.NoError(t, err)
+
+	err = bootstrapTribunalPolicy(nil, configPath, logger)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse config")
+}
+
+func TestBootstrapTribunalPolicy_InvalidConfig(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+
+	tests := []struct {
+		name   string
+		config string
+	}{
+		{
+			"empty tribunal_id",
+			`{"tribunal_id": "", "member_app_ids": ["a"], "quorum": 1}`,
+		},
+		{
+			"empty member_app_ids",
+			`{"tribunal_id": "t", "member_app_ids": [], "quorum": 1}`,
+		},
+		{
+			"quorum zero",
+			`{"tribunal_id": "t", "member_app_ids": ["a"], "quorum": 0}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			configPath := filepath.Join(tmpDir, "tribunal-bootstrap.json")
+			err := os.WriteFile(configPath, []byte(tt.config), 0600)
+			require.NoError(t, err)
+
+			err = bootstrapTribunalPolicy(nil, configPath, logger)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+		})
+	}
 }

@@ -61,7 +61,12 @@ func (h *PasskeyHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.
 	}
 
 	suspendedTx, ok, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
-	if err != nil || !ok {
+	if err != nil {
+		h.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
+		h.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
+		return
+	}
+	if !ok {
 		h.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}
@@ -87,7 +92,12 @@ func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 	}
 
 	suspendedTx, ok, err := h.mcpSvc.GetSuspendedTransaction(r.Context(), txHash)
-	if err != nil || !ok {
+	if err != nil {
+		h.logger.Error("Failed to get suspended transaction", "error", err, "txHash", txHash)
+		h.responder.Error(w, http.StatusInternalServerError, "failed to get transaction")
+		return
+	}
+	if !ok {
 		h.responder.Error(w, http.StatusNotFound, "transaction not found or expired")
 		return
 	}

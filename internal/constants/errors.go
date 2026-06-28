@@ -337,6 +337,11 @@ var (
 	ErrAuditStoreVaultLocked              = errors.New("vault is locked, cannot decrypt content")
 	ErrAuditStoreDecryptFailed            = errors.New("failed to decrypt content")
 
+	// Execution vault errors
+	ErrExecutionVaultVaultLocked   = errors.New("execution vault: vault is locked, cannot encrypt/decrypt content")
+	ErrExecutionVaultEncryptFailed = errors.New("execution vault: failed to encrypt content")
+	ErrExecutionVaultDecryptFailed = errors.New("execution vault: failed to decrypt content")
+
 	// PubSub service errors
 	ErrPubSubEmptyPayload                 = errors.New("empty payload")
 	ErrPubSubTransactionVerifier          = errors.New("transaction verifier not configured")
@@ -518,7 +523,7 @@ var (
 	ErrConfigPortsMustDiffer    = errors.New("httpPort and httpsPort must be different")
 	ErrConfigInvalidWorkingDir  = errors.New("invalid working directory")
 	ErrConfigTribunalIDRequired = errors.New("consensus posture requires --tribunal-id")
-	ErrConfigTribunalQuorumLow  = errors.New("consensus posture requires tribunal quorum >= 2")
+	ErrConfigTribunalQuorumLow  = errors.New("consensus posture requires tribunal quorum >= 1")
 
 	// Operator main initialization errors
 	ErrPathsInitFailed        = errors.New("failed to initialize paths")

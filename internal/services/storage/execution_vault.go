@@ -842,12 +842,12 @@ func (ev *ExecutionVaultService) encryptContent(content string) ([]byte, error) 
 	}
 
 	if !ev.vault.IsUnlocked() {
-		return nil, constants.ErrAuditStoreVaultLocked
+		return nil, constants.ErrExecutionVaultVaultLocked
 	}
 
 	encrypted, err := ev.vault.Encrypt([]byte(content))
 	if err != nil {
-		return nil, fmt.Errorf("execution_vault: %w", constants.ErrAuditStoreEncryptFailed)
+		return nil, fmt.Errorf("execution_vault: %w", constants.ErrExecutionVaultEncryptFailed)
 	}
 
 	return encrypted, nil
@@ -860,12 +860,12 @@ func (ev *ExecutionVaultService) decryptContent(data []byte) (string, error) {
 	}
 
 	if !ev.vault.IsUnlocked() {
-		return "", constants.ErrAuditStoreVaultLocked
+		return "", constants.ErrExecutionVaultVaultLocked
 	}
 
 	decrypted, err := ev.vault.Decrypt(data)
 	if err != nil {
-		return "", fmt.Errorf("execution_vault: %w", constants.ErrAuditStoreDecryptFailed)
+		return "", fmt.Errorf("execution_vault: %w", constants.ErrExecutionVaultDecryptFailed)
 	}
 
 	return string(decrypted), nil

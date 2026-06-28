@@ -1,0 +1,95 @@
+{
+  "operating_area": "WESTERN_HEMISPHERE_MARITIME_APPROACHES",
+  "version": "1.0.0",
+  "generated": "2026-06-28",
+  "note": "Synthetic, mock-generated feed records. g8e does not collect or generate this data; it governs how the data is ingested, fused, shared, retained, and destroyed. Every record carries provenance, classification, and dissemination caveats so the governance plane can enforce sovereignty and U.S.-person privacy.",
+  "networks": {
+    "NIPR": "DHS / law-enforcement unclassified domain",
+    "SIPR": "Military / IC classified domain",
+    "MISSION_PARTNER": "Coalition shared common-operating-picture environment",
+    "PARTNER_NATION": "Foreign partner-nation domain (outside U.S. authority)"
+  },
+  "feeds": [
+    {
+      "record_id": "TRK-CBP-0001",
+      "source": "DHS_CBP_AMOC",
+      "source_network": "NIPR",
+      "domain": "maritime",
+      "classification": "CUI//LES",
+      "caveats": ["FOUO"],
+      "track": {
+        "type": "go-fast vessel",
+        "lat": 12.41,
+        "lon": -81.72,
+        "heading": 305,
+        "speed_kn": 31,
+        "first_seen": "2026-06-28T04:12:00Z"
+      },
+      "usperson_fields": {
+        "registered_owner": "REDACT-ON-INGEST",
+        "owner_ssn": "REDACT-ON-INGEST"
+      },
+      "content_summary": "CBP AMOC maritime radar track of suspected smuggling go-fast. Registered-owner PII present; must be tokenized on ingest and rehydrated on-host only under authority."
+    },
+    {
+      "record_id": "TRK-MIL-0007",
+      "source": "DOW_ISR_EOIR",
+      "source_network": "SIPR",
+      "domain": "air-isr",
+      "classification": "SECRET//NOFORN",
+      "caveats": ["NOFORN", "ORCON"],
+      "track": {
+        "type": "EO/IR detection",
+        "lat": 12.45,
+        "lon": -81.69,
+        "confidence": 0.88,
+        "correlates_to": "TRK-CBP-0001",
+        "first_seen": "2026-06-28T04:14:00Z"
+      },
+      "content_summary": "DoW MQ-9 EO/IR detection correlating the CBP surface track. SECRET//NOFORN — not releasable to partner-nation networks."
+    },
+    {
+      "record_id": "TRK-IC-0012",
+      "source": "IC_SIGINT",
+      "source_network": "SIPR",
+      "domain": "sigint",
+      "classification": "SECRET//NOFORN//ORCON",
+      "caveats": ["NOFORN", "ORCON"],
+      "track": {
+        "type": "RF emitter cut",
+        "bearing_deg": 142,
+        "correlates_to": "TRK-CBP-0001",
+        "first_seen": "2026-06-28T04:15:30Z"
+      },
+      "content_summary": "IC SIGINT bearing line on a sat-phone emitter consistent with the vessel. Originator-controlled; release requires originator approval."
+    },
+    {
+      "record_id": "TRK-PN-0003",
+      "source": "PARTNER_NATION_MPA",
+      "source_network": "PARTNER_NATION",
+      "domain": "maritime",
+      "classification": "REL TO USA, COALITION",
+      "caveats": ["REL_COALITION"],
+      "track": {
+        "type": "maritime patrol sighting",
+        "lat": 12.38,
+        "lon": -81.80,
+        "correlates_to": "TRK-CBP-0001",
+        "first_seen": "2026-06-28T04:09:00Z"
+      },
+      "content_summary": "Partner-nation maritime patrol aircraft visual sighting. Releasable to coalition; safe to fuse into the Mission Partner COP."
+    }
+  ],
+  "vulnerable_population_report": {
+    "record_id": "VPR-0001",
+    "source": "DHS_HSI",
+    "source_network": "NIPR",
+    "classification": "CUI//SP-PRVCY",
+    "caveats": ["PRIVACY", "USPER"],
+    "summary": "Indications of trafficked persons aboard the vessel of interest. Contains U.S.-person and victim PII subject to strict minimization and a 30-day non-pertinent-data purge under the sovereign retention policy.",
+    "usperson_fields": {
+      "victim_names": "REDACT-ON-INGEST",
+      "victim_dob": "REDACT-ON-INGEST"
+    }
+  }
+}

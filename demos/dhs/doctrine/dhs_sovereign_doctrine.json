@@ -1,0 +1,116 @@
+{
+  "source": "dhs_persistent_sovereign_capability",
+  "version": "1.0.0",
+  "last_updated": "2026-06-28",
+  "license": "Proprietary",
+  "doctrines": [
+    {
+      "id": "usperson_pii_minimization",
+      "name": "U.S.-Person PII Entering Operating Picture Without Minimization",
+      "description": "Detects U.S.-person identifiers (SSN, full name + DOB, passport, phone, street address) flowing from a source feed into the common operating picture without on-ingest tokenization. Enforces privacy / civil-liberties minimization for U.S.-person information.",
+      "category": "privacy_civil_liberties",
+      "severity": "critical",
+      "pattern": "(?i)(ssn|social.security|passport.?no|date.of.birth|\\bdob\\b|usper|u\\.s\\.?.person).*(ingest|fuse|enrich|publish|cop|operating.picture)(?!.*(tokeniz|minimiz|redact|pseudonym))",
+      "mitre_attack": "T1213",
+      "mitre_tactic": "Collection",
+      "confidence": 0.94,
+      "enabled": true
+    },
+    {
+      "id": "cross_domain_release_violation",
+      "name": "Caveated Record Released Across Sovereignty Boundary",
+      "description": "Rejects release of NOFORN, ORCON, or U.S.-person-tagged records to a partner-nation or foreign-controlled network. Enforces that caveated and U.S.-only data remains under U.S. Government authority at all times.",
+      "category": "cross_domain",
+      "severity": "critical",
+      "pattern": "(?i)(noforn|orcon|usper|rel.?usa.?only|u\\.s\\..?only).*(release|share|export|transmit|push|disseminate).*(partner|coalition|foreign|rel.?to|mission.?partner|external)",
+      "mitre_attack": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.93,
+      "enabled": true
+    },
+    {
+      "id": "sovereignty_boundary_exfil",
+      "name": "Data Written to Endpoint Outside U.S. Government Authority",
+      "description": "Detects writing or syncing operational data to an endpoint not present in the signed sovereign manifest (foreign cloud, unregistered tenant, or out-of-band host).",
+      "category": "data_sovereignty",
+      "severity": "critical",
+      "pattern": "(?i)(blob\\.core\\.windows\\.net|s3\\.amazonaws\\.com|storage\\.googleapis\\.com|\\.cn\\b|\\.ru\\b|dropbox|wetransfer|mega\\.nz).*(write|upload|copy|put|sync|transfer)",
+      "mitre_attack": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "classification_marking_strip",
+      "name": "Classification Marking or Caveat Stripped",
+      "description": "Rejects mutations that remove classification banners or dissemination caveats from a record in order to downgrade or launder it past release controls.",
+      "category": "defense_evasion",
+      "severity": "critical",
+      "pattern": "(?i)(strip|remove|drop|clear|delete|unset).*(classification|caveat|marking|banner|noforn|portion.mark)",
+      "mitre_attack": "T1070",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.89,
+      "enabled": true
+    },
+    {
+      "id": "unauthorized_model_ingest",
+      "name": "Predictive Model Ingesting Raw U.S.-Person Data",
+      "description": "Blocks an AI/ML predictive-analytics agent from reading raw, un-minimized U.S.-person records before the privacy / civil-liberties gate has tokenized them. Models may only train or infer over minimized data.",
+      "category": "ai_governance",
+      "severity": "critical",
+      "pattern": "(?i)(model|train|inference|predict|fine.?tune|embed).*(raw|unredacted|un.?minimized|full.?pii|usper).*(ingest|read|load|consume)",
+      "mitre_attack": "T1213",
+      "mitre_tactic": "Collection",
+      "confidence": 0.9,
+      "enabled": true
+    },
+    {
+      "id": "interdiction_authorization_required",
+      "name": "Interdiction Cue Without Signed Authorization",
+      "description": "Rejects an interdiction or targeting cue produced by an analytics agent unless it references a valid, authority-signed tasking. A cue against a U.S. person on U.S. soil is always rejected absent explicit legal authorization.",
+      "category": "decision_support",
+      "severity": "critical",
+      "pattern": "(?i)(interdict|target|cue|task|vector|intercept).*(track|vessel|person|subject)(?!.*(authorization_id|tasking_id|warrant_id))",
+      "mitre_attack": "T1565",
+      "mitre_tactic": "Impact",
+      "confidence": 0.87,
+      "enabled": true
+    },
+    {
+      "id": "evidence_destruction",
+      "name": "Destructive Command Against Sovereign Data Store or Audit Trail",
+      "description": "Rejects destructive shell commands that would wipe operational evidence or the hash-chained audit trail outside the governed, receipted retention-purge workflow.",
+      "category": "impact",
+      "severity": "critical",
+      "pattern": "(?i)(rm\\s+-rf|mkfs|dd\\s+if=|:\\(\\)\\{|shred|wipe|truncate|drop\\s+table).*(vault|ledger|audit|evidence|case|track|target)",
+      "mitre_attack": "T1485",
+      "mitre_tactic": "Impact",
+      "confidence": 0.93,
+      "enabled": true
+    },
+    {
+      "id": "audit_logging_bypass",
+      "name": "Audit Logging Bypass",
+      "description": "Detects flags or intent that would suppress an operation from landing in the hash-chained ledger and SQLite audit vault, defeating sovereign auditability.",
+      "category": "audit",
+      "severity": "high",
+      "pattern": "(?i)(disable.log|bypass.audit|no.logging|--quiet.*--no-record|silent|--no-ledger|skip.audit)",
+      "mitre_attack": "T1562.006",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.84,
+      "enabled": true
+    },
+    {
+      "id": "unencrypted_cross_domain_transit",
+      "name": "Unencrypted Transit of Classified Data Across Domains",
+      "description": "Rejects movement of classified or U.S.-person data across NIPR/SIPR/Mission-Partner network boundaries over plaintext protocols.",
+      "category": "encryption",
+      "severity": "high",
+      "pattern": "(?i)(http://|ftp://|telnet|plaintext|clear.?text).*(secret|classified|cui|noforn|usper|sensitive|track)",
+      "mitre_attack": "T1565.001",
+      "mitre_tactic": "Defense Evasion",
+      "confidence": 0.86,
+      "enabled": true
+    }
+  ]
+}

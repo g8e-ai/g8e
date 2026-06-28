@@ -31,20 +31,22 @@ import (
 )
 
 var (
-	harnessConfigPath string
-	harnessMTLSURL    string
-	harnessPublicURL  string
-	harnessCert       string
-	harnessKey        string
-	harnessCA         string
-	harnessAPIKey     string
-	harnessInsecure   bool
-	harnessSessionID  string
-	harnessOutDir     string
-	harnessL3Mode     string
-	harnessEnsemble   int
-	harnessVerbose    bool
-	harnessPhase      string
+	harnessConfigPath    string
+	harnessMTLSURL       string
+	harnessPublicURL     string
+	harnessCert          string
+	harnessKey           string
+	harnessCA            string
+	harnessAPIKey        string
+	harnessInsecure      bool
+	harnessSessionID     string
+	harnessOutDir        string
+	harnessL3Mode        string
+	harnessEnsemble      int
+	harnessVerbose       bool
+	harnessPhase         string
+	harnessConsensusSeed string
+	harnessTribunalID    string
 )
 
 func agentHarnessCmd() *cobra.Command {
@@ -98,7 +100,9 @@ func agentHarnessRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend")
 	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "mock consensus voters")
 	cmd.Flags().BoolVar(&harnessVerbose, "verbose", false, "echo each request/response")
-	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|notary|all")
+	cmd.Flags().StringVar(&harnessPhase, "phase", "all", "doctrine|consensus|notary|all")
+	cmd.Flags().StringVar(&harnessConsensusSeed, "consensus-seed", "", "hex-encoded Ed25519 seed for deterministic ensemble key (or path to seed file)")
+	cmd.Flags().StringVar(&harnessTribunalID, "tribunal-id", "", "TribunalPolicy ID for L2 consensus (defaults to test-tribunal)")
 
 	return cmd
 }
@@ -245,6 +249,12 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	if harnessVerbose {
 		cfg.Verbose = harnessVerbose
 	}
+	if harnessConsensusSeed != "" {
+		cfg.ConsensusSeed = harnessConsensusSeed
+	}
+	if harnessTribunalID != "" {
+		cfg.TribunalID = harnessTribunalID
+	}
 }
 
 func selectAgentHarnessScenarios(phase string, names []string) []scenarios.Scenario {
@@ -267,6 +277,10 @@ func selectAgentHarnessScenarios(phase string, names []string) []scenarios.Scena
 			if s.RequiresPosture == scenarios.Doctrine {
 				out = append(out, s)
 			}
+		case "consensus":
+			if s.RequiresPosture == scenarios.Doctrine || s.RequiresPosture == scenarios.Consensus {
+				out = append(out, s)
+			}
 		case "notary":
 			if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary {
 				out = append(out, s)
@@ -280,7 +294,7 @@ func selectAgentHarnessScenarios(phase string, names []string) []scenarios.Scena
 
 func needsGovKit(ss []scenarios.Scenario) bool {
 	for _, s := range ss {
-		if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary {
+		if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary || strings.HasPrefix(s.Name, "dhs-") {
 			return true
 		}
 	}
@@ -288,9 +302,29 @@ func needsGovKit(ss []scenarios.Scenario) bool {
 }
 
 func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Config) error {
-	ens, err := clientpkg.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
-	if err != nil {
-		return err
+	var ens *clientpkg.Ensemble
+	var err error
+	if cfg.ConsensusSeed != "" {
+		seedHex := cfg.ConsensusSeed
+		if _, statErr := os.Stat(seedHex); statErr == nil {
+			data, readErr := os.ReadFile(seedHex)
+			if readErr != nil {
+				return fmt.Errorf("read consensus seed file: %w", readErr)
+			}
+			seedHex = strings.TrimSpace(string(data))
+		}
+		ens, err = clientpkg.NewEnsembleFromSeed(cfg.ConsensusKeyID, cfg.EnsembleSize, seedHex)
+		if err != nil {
+			return err
+		}
+	} else {
+		ens, err = clientpkg.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
+		if err != nil {
+			return err
+		}
+	}
+	if cfg.TribunalID != "" {
+		ens.TribunalID = cfg.TribunalID
 	}
 	prin, err := clientpkg.NewPrincipal(cfg.PrincipalKeyID)
 	if err != nil {

@@ -26,7 +26,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via CanonicalDBService) [SHARED]
 │   │   ├── governance.TribunalStore (nil in outbound mode, gateway.TribunalStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (created internally by L4Warden when doctrine param is nil)
-│   │   └── governance.L3Notary (governance.outboundL3Notary implementation)
+│   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
@@ -143,8 +143,20 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── mcp.GatewayService [SHARED]
 │   ├── tribunal.TribunalService (set post-construction by boot sequence via SetTribunal)
 │   ├── governance.EnvelopeProcessor (set post-construction by boot sequence via SetEnvelopeProcessor)
+│   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
+│   ├── gateway.DBController (audit receipts, audit events, data DB, KV, blobs, governance signers, pub/sub)
+│   ├── gateway.AuthController (bootstrap, CLI enrollment, device enrollment, user management, web session)
+│   │   ├── gateway.PasskeyHandler [SHARED]
+│   │   ├── gateway.RegistrationService [SHARED]
+│   │   ├── gateway.PKIAuthority [SHARED]
+│   │   ├── gateway.WebSessionService [SHARED]
+│   │   ├── gateway.CLISessionService [SHARED]
+│   │   ├── gateway.OperatorSessionService [SHARED]
+│   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
+│   ├── gateway.AdminController (app policies, tribunals, app revocation)
+│   ├── gateway.OperatorController (operator list, terminate, bind/unbind, target context, reauth)
 │   └── response.Writer
-├── governance.outboundL3Notary (gateway variant via governance.NewGatewayL3Notary, implements governance.L3Notary)
+├── governance.gatewayNotary (via governance.NewGatewayL3Notary, implements governance.L3Notary)
 │   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore)
 │   ├── gateway.cliSessionVerifier (via NewCLISessionVerifier, implements governance.CLISessionVerifier)
 │   │   ├── gateway.CanonicalDBService [SHARED]
@@ -180,7 +192,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 
 ### Mode Bifurcation
 - **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only)
-- **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling; note: in outbound mode, `MCPGateway` is declared in `CommandServiceConfig` but not wired in `g8eo.go` Start), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
+- **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling; note: in outbound mode, `MCPGateway` is declared in `CommandServiceConfig` but not wired in `g8eo.go` Start; `FieldReader` and `TribunalStore` are also declared but not wired in outbound mode), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it now contains only lifecycle code (Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop). All domain logic has been extracted to dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
@@ -247,6 +259,31 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
 
+### Gateway HTTP Dual-Router Architecture
+- **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, and approval UI. WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware.
+- **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, trust scripts, deploy scripts, CLI enrollment, and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard.
+- **`PublicRouteRegistry`** centralizes routes that bypass mTLS authentication: health, landing, state, PKI bootstrap, console SPA, passkey console routes, SSE consumer endpoints, and WebSessionAuth-protected prefixes. Excluded prefixes protect mTLS-only sub-paths under shared prefixes.
+- **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
+- **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization.
+- **`gateway_http_sse.go`**: SSE event bridge with three endpoints. `POST /api/v1/sse/push` for event production, `GET /api/v1/sse/events` for polling, `GET /api/v1/sse/stream` for SSE streaming. Events are routed by `web_session_id`, `cli_session_id`, or `user_id`.
+- **`gateway/docs/`**: Embedded OpenAPI/Swagger specifications (`swagger.json`, `swagger.yaml`) served at `/swagger/` with Swagger UI.
+- **`gateway/scripts/`**: Thread-safe deploy script templates (`g8e-operator.sh`, `g8e-operator.ps1`) initialized via `sync.Once`.
+
+### HTTP Controller Decomposition
+- **`gateway.PKIController`** (`pki_controller.go`): PKI enrollment, CSR signing, CA bundle, trust scripts (Linux/macOS/Windows), deploy scripts, certificate revocation, app enrollment.
+- **`gateway.DBController`** (`db_controller.go`): Audit receipts, audit events, audit summary, audit report, data DB, KV store, blob storage, governance signers, pub/sub publish and stream.
+- **`gateway.AuthController`** (`auth_controller.go`, `auth_controller_bootstrap.go`, `auth_controller_session.go`): Local bootstrap with URL, bootstrap status, CLI enrollment, device enrollment, user creation, user me, web session, logout. Decomposed into three files: core constructor, bootstrap flows, and session/user management.
+- **`gateway.AdminController`** (`admin_controller.go`): App policy management by signer, app revocation, tribunal CRUD.
+- **`gateway.OperatorController`** (`operator_controller.go`): Operator list, terminate, bind/unbind operators, set target context, reauth.
+
+### JWT Authentication
+- **`gateway.JWKSProvider`** (`jwks.go`): Optional external IdP JWT validation via JWKS endpoint. When configured, MCP/A2A routes accept JWT auth in addition to mTLS.
+- **`gateway.NativeJWT`** (`jwt_native.go`): Native RSA-SHA256 JWT validation without external dependencies. Validates `exp`, `nbf`, `iat` claims with 60-second clock skew allowance. Used when JWKS is configured but no external HTTP call is needed for key resolution.
+- **`gateway.AuthService`** applies JWT middleware to MCP/A2A routes and JIT passkey bootstrap routes when JWKS is configured. App policy enforcement and rate limiting apply to JWT-authenticated requests.
+
+### Persona Service
+- **`gateway.PersonaService`** (defined in `user_service.go`): Manages role-based access control personas. Initialized with `DefaultPersonaDefinitions` during gateway startup. `AuthService` references personas for authorization decisions.
+
 ## MCP Native Tools
 
 All Model Context Protocol (MCP) native tools are registered explicitly in `internal/services/mcp/native_tool_registry.go` inside the `RegisterNativeTools` function, avoiding global state mutation and init-based registrations. The tools are handled and dispatched via `mcp.NativeToolHandler`. Key tool categories include:
@@ -274,7 +311,7 @@ All Model Context Protocol (MCP) native tools are registered explicitly in `inte
 
 The reporting system operates as a self-contained, offline verification utility invoked via CLI subcommands.
 
-- **`internal/services/reporting/`**: Reads from database and storage backends (including decrypted execution vault, replay store, and git ledger directory) to write flat, deterministic CSV evidence files.
+- **`internal/services/reporting/`**: Reads from database and storage backends (including decrypted execution vault, replay store, git ledger directory, and suspended transaction store) to write flat, deterministic CSV evidence files. Modules: `commitments.go`, `events.go`, `executions.go`, `file_mutations.go`, `ledger.go`, `receipts.go`, `replay.go`, `rows.go`, `suspended.go`, `csvwriter.go`.
 - **Cryptographic Verification**: Re-validates receipt signatures, verifies the sequential commitment hash chain, and checks the git ledger Merkle root to ensure system integrity.
 - **Test Coverage**: `verification_test.go` provides 15 hermetic tests covering all 5 verification checks (commitment chain integrity, git merkle root, file mutation linkage, receipt/commitment cross-link, context cancellation) with real SQLite + vault. `verification.go` at 80.8% coverage.
 
@@ -282,7 +319,15 @@ The reporting system operates as a self-contained, offline verification utility 
 
 - **`internal/cli/serve/cert.go`**: PKI enrollment and certificate lifecycle — `PerformAutomaticEnrollment` (initial enrollment via CSR + trust bundle fetch, returns `(sessionID, err)` instead of calling `os.Setenv` internally), `RenewOperatorCertificate` (re-enrollment for expiring certs, decomposed into 5 testable units: `checkCertExpiry`, `fetchAndSaveTrustBundle`, `buildMTLSClient`, `submitRenewal`, `saveRenewedCerts`), `RunClientCertRenewalLoop` (periodic renewal check). `CertPaths` struct decouples path configuration from `paths.Infra`. HTTP client uses 15s timeout via `http.Client` + `http.NewRequestWithContext`. Error wrapping standardized with `ErrEmptyTrustBundle`, `ErrCAParseFailed`, `ErrMissingRequiredField`.
 - **`internal/cli/serve/operator.go`**: Operator boot sequence — `RunOperator` orchestrates config loading, trust bundle setup, enrollment, and signal handling. Extracted helpers: `resolveKeyPath`, `resolveCertPath`, `loadClientCertPair`, `buildOperatorLoadOptions`.
-- **Test Coverage**: `cert_test.go` covers `PerformAutomaticEnrollment` (6 tests), `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `operator_test.go` covers extracted helpers at 100%. `internal/cli/serve` overall at 49.6% coverage.
+- **`internal/cli/serve/gateway.go`**: Gateway boot sequence — `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, tribunal bootstrap (policy seeding via `bootstrapTribunalPolicy`, key loading via `BootstrapTribunal` with `FileKeyProvider`), in-process `OperatorPubSubService` construction with full `CommandServiceConfig` including `MCPGateway`, `FieldReader`, and `TribunalStore`, `SetEnvelopeProcessor` wiring, `SetTribunal` and `SetTribunalDeliberator` wiring under consensus posture, and graceful shutdown with 30-second timeout.
+- **`internal/cli/serve/logger.go`**: Logger configuration — `ConfigureLogger` and `ConfigureLoggerWithOutput` produce `slog.Logger` instances with operator-friendly formatting and configurable log levels.
+- **`internal/cli/serve/version.go`**: `VersionInfo` struct holds build-time metadata (version, build ID, build time, platform) set via ldflags.
+- **Test Coverage**: `cert_test.go` covers `PerformAutomaticEnrollment` (6 tests), `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `operator_test.go` covers extracted helpers at 100%. `gateway_test.go` covers gateway boot sequence. `internal/cli/serve` overall at 49.6% coverage.
+
+## CLI Platform & Stream Packages
+
+- **`internal/cli/platform/`**: Cross-platform process management for operator subprocesses. `process.go` provides core process lifecycle. `process_unix.go` and `process_windows.go` provide platform-specific process discovery and signal handling. `browser.go` provides cross-platform browser opening for console URLs.
+- **`internal/cli/stream/`**: SSH and subprocess streaming for remote operator management. `stream.go` provides the streaming CLI command. `stream_ssh.go` provides SSH connection management for remote log streaming and command execution.
 
 ## Test Infrastructure (Not Production)
 
@@ -298,9 +343,14 @@ The following packages are test-only and are not part of the production dependen
 - Used by pubsub service tests and g8eo lifecycle/integration tests
 - Follows the same pattern as `storagetest`, which keeps mock infrastructure out of production code
 
-**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest` and `pubsubtest` packages provide test implementations that should never be used in production code paths.
+**`internal/tools/chaos/`** - Test-only chaos testing for governance stack
+- Generates a realistic distribution of governance events (70% good actor, 20% prompt injection, 10% MitM) against the local audit stack
+- Drives `TransactionVerifier` + `Actuator` stack directly in-process, bypassing network/TLS
+- Uses `storagetest.TestSQLAuditStore` and should not be used in production code paths
 
-## Agent Harness & DoW Demo
+**Key distinction**: Test infrastructure is separated from production code to avoid import cycles. The `storagetest`, `pubsubtest`, and `chaos` packages provide test implementations that should never be used in production code paths.
+
+## Agent Harness & Demos
 
 **`internal/tools/agent_harness/`** - Reference client for real governance envelope submission
 - `client/client.go` - mTLS client: `StateRoot`, `RegisterSigner`, `Approve` (uses `constants.APIPaths.*`)
@@ -310,6 +360,7 @@ The following packages are test-only and are not part of the production dependen
 - `config/config.go` - Harness configuration: auth material (client cert/key/CA bundle), gateway URL, posture selection
 - `scenarios/governance.go` - Governance scenarios: consensus, notary, delegation, veto, OOB approval
 - `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
+- `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with tribunal consensus
 - `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 
@@ -320,3 +371,22 @@ The following packages are test-only and are not part of the production dependen
 - `inspect_rf.py` - Demo artifact for RF spectrum inspection in `agent-eoir` container
 - `verify_slews.py` - Demo artifact for verifying gimbal slew results
 - `dow_simulator.py` - Display-only sensor narration for `agent-eoir` and `agent-pnt-fusion`
+
+**`demos/dhs/`** - DHS sovereign data operations demo
+- `datasvc.py` - Mock data service HTTP server for sovereign data access
+- `dataop.sh` - Demo artifact for data operations invocation
+- `verify_ops.py` - Demo artifact for verifying data operation results
+
+**`demos/healthcare/`** - Healthcare analytics demo with Metabase integration
+- `pa_api_server.py` - Prior authorization API server mock
+- `setup_metabase.py` - Metabase initialization and dashboard setup
+- `init.sql` - Database schema initialization for healthcare data
+
+**`demos/swarm/`** - Drone swarm tactical demo
+- `drone_simulator.py` - Mock drone telemetry and command simulation
+
+**`demos/finance/`** - Financial data governance demo
+
+**`demos/gov/`** - Government operations demo
+
+**`demos/secure-data/`** - Secure data handling demo

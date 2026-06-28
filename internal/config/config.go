@@ -292,7 +292,7 @@ func ValidateConsensusStartup(posture string, tribunalID string, quorum int) err
 	if tribunalID == "" {
 		return constants.ErrConfigTribunalIDRequired
 	}
-	if quorum < 2 {
+	if quorum < 1 {
 		return constants.ErrConfigTribunalQuorumLow
 	}
 	return nil
