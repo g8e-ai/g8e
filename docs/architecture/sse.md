@@ -5,7 +5,7 @@ title: SSE Streaming
 # SSE Streaming
 
 Last Updated: 2026-06-27
-Version: v1.2.4
+Version: v1.3.0
 
 The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
 
@@ -17,7 +17,7 @@ The SSE system provides three endpoints:
 
 - **`POST /api/v1/sse/push`**: App workloads push events (authenticated via mTLS)
 - **`GET /api/v1/sse/events`**: Poll for historical events (with `since_id` and `limit` params)
-- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery (mTLS authenticated). All clients — CLI, browser, dashboard — use this single endpoint.
+- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery (mTLS authenticated). All clients (CLI, browser, dashboard) use this single endpoint.
 
 Events are stored in the `sse_events` table and routed by one of three identifiers:
 - `web_session_id`: Web UI session events
@@ -136,7 +136,7 @@ Unset routing fields are omitted from the JSON response (the `SSEEventRow` model
 
 ### GET /api/v1/sse/stream
 
-**Authentication**: mTLS with Operator session. All clients (CLI, browser, dashboard) authenticate via mTLS client certificate. There is no cookie-based auth path — the transport determines identity, not the browser session.
+**Authentication**: mTLS with Operator session. All clients (CLI, browser, dashboard) authenticate via mTLS client certificate. There is no cookie-based auth path; the transport determines identity, not the browser session.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session
