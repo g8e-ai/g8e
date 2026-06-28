@@ -41,13 +41,6 @@ func TestEnrollCmd(t *testing.T) {
 		assert.Equal(t, "enroll", cmd.Use)
 		assert.Contains(t, cmd.Short, "Enroll")
 	})
-
-	t.Run("login alias is hidden and has correct use", func(t *testing.T) {
-		cmd := loginCmd()
-		assert.Equal(t, "login", cmd.Use)
-		assert.True(t, cmd.Hidden)
-	})
-
 }
 
 func TestLogoutCmd(t *testing.T) {
@@ -195,14 +188,14 @@ func TestLogoutCmd(t *testing.T) {
 }
 
 func TestAuthCommandFlags(t *testing.T) {
-	t.Run("login has no count flag", func(t *testing.T) {
-		cmd := loginCmd()
+	t.Run("enroll has no count flag", func(t *testing.T) {
+		cmd := enrollCmd()
 		countFlag := cmd.Flags().Lookup("count")
 		assert.Nil(t, countFlag)
 	})
 
-	t.Run("login has no ttl flag", func(t *testing.T) {
-		cmd := loginCmd()
+	t.Run("enroll has no ttl flag", func(t *testing.T) {
+		cmd := enrollCmd()
 		ttlFlag := cmd.Flags().Lookup("ttl")
 		assert.Nil(t, ttlFlag)
 	})

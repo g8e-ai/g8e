@@ -214,9 +214,6 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 	if err != nil {
 		return err
 	}
-	if err := s.migrateStateTierColumns(); err != nil {
-		return err
-	}
 	var ks *keystore.Keystore
 	if testKeystore != nil {
 		ks = testKeystore
@@ -303,9 +300,6 @@ func (s *CanonicalDBService) initSchema(secretsDir string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.migrateStateTierColumns(); err != nil {
-		return err
-	}
 
 	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
 	if err != nil {
@@ -315,43 +309,6 @@ func (s *CanonicalDBService) initSchema(secretsDir string) error {
 		return err
 	}
 
-	return nil
-}
-
-// migrateStateTierColumns adds the state_tier column to kv_store and blobs for
-// existing databases that predate the observed/bound tiering feature.
-// SQLite ALTER TABLE ADD COLUMN is idempotent-safe: we check pragma table_info
-// to avoid errors on databases where the column already exists.
-func (s *CanonicalDBService) migrateStateTierColumns() error {
-	for _, table := range []string{"kv_store", "blobs"} {
-		var hasTier bool
-		rows, err := s.db.QueryWithRetry(fmt.Sprintf("PRAGMA table_info(%s)", table))
-		if err != nil {
-			return fmt.Errorf("failed to check %s schema: %w", table, err)
-		}
-		for rows.Next() {
-			var cid int
-			var name, ctype string
-			var notNull, pk int
-			var dfltValue interface{}
-			if err := rows.Scan(&cid, &name, &ctype, &notNull, &dfltValue, &pk); err != nil {
-				rows.Close()
-				return fmt.Errorf("failed to scan %s schema: %w", table, err)
-			}
-			if name == "state_tier" {
-				hasTier = true
-				break
-			}
-		}
-		rows.Close()
-		if !hasTier {
-			_, err := s.db.ExecWithRetry(fmt.Sprintf("ALTER TABLE %s ADD COLUMN state_tier TEXT NOT NULL DEFAULT 'bound'", table))
-			if err != nil {
-				return fmt.Errorf("failed to add state_tier to %s: %w", table, err)
-			}
-			s.logger.Info("Added state_tier column", "table", table)
-		}
-	}
 	return nil
 }
 

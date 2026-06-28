@@ -173,10 +173,9 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	execSvc := execution.NewExecutionService(gatewayCfg, logger)
 	fileSvc := execution.NewFileEditService(gatewayCfg, logger)
 
-	// Resolve Git for ledger
-	gitPath := system.ResolveGitBinary(logger)
-	gatewayCfg.GitPath = gitPath
-	gatewayCfg.GitAvailable = gitPath != ""
+	// Git for ledger (embedded go-git)
+	gatewayCfg.GitPath = system.GitEmbedded
+	gatewayCfg.GitAvailable = true
 
 	// Use the gateway-mode database for everything
 	govDeps := svc.GetGovernanceDeps()
