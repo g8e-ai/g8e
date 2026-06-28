@@ -406,8 +406,6 @@ var (
 	ErrGatewayTransactionNotFound         = errors.New("transaction not found")
 	ErrGatewayTransactionBelongsToAnother = errors.New("transaction belongs to another user")
 	ErrGatewayTransactionHashRequired     = errors.New("transaction hash required")
-	ErrGatewayCLISignatureRequired        = errors.New("cli_signature required")
-	ErrGatewayMTLSCertFingerprintRequired = errors.New("mtls_cert_fingerprint required")
 
 	// MCP native handler errors
 	ErrMCPNativeToolRegistration = errors.New("native tool registration failed")
@@ -435,9 +433,6 @@ var (
 	// Passkey bootstrap errors
 	ErrPasskeyRegistrationTimedOut = errors.New("passkey registration timed out")
 	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")
-	ErrPasskeyRequiresBrowser      = errors.New("direct passkey registration requires browser interaction; use RegisterPasskeyViaLocalhost instead")
-	ErrGetCurrentUser              = errors.New("failed to get current user")
-	ErrPasskeyBootstrapServerStart = errors.New("failed to start passkey bootstrap server")
 	ErrPasskeyStatusUnauthorized   = errors.New("passkey status endpoint returned unauthorized")
 
 	// Passkey credential validation errors
@@ -448,30 +443,15 @@ var (
 	ErrPasskeyCredentialInvalidTimestamp   = errors.New("passkey credential created_at_unix_ms is zero")
 
 	// Windows-specific errors
-	ErrWindowsSpecificEnrollment  = errors.New("windows-specific enrollment is only available on Windows")
-	ErrWindowsCertStoreImport     = errors.New("windows cert store import is only available on Windows")
-	ErrWindowsHelloSigning        = errors.New("windows Hello signing is only available on Windows")
-	ErrWindowsHelloAuthentication = errors.New("windows Hello authentication is only available on Windows")
-	ErrWindowsHelloRegistration   = errors.New("windows Hello registration is only available on Windows")
-	ErrWindowsCertStoreTrust      = errors.New("windows cert store trust is only available on Windows")
-	ErrWindowsWebAuthnDLLNotFound = errors.New("webauthn.dll not found")
-	ErrWindowsWebAuthnAPIVersion  = errors.New("the Windows Hello API version is too old")
-	ErrWindowsTempDirCreate       = errors.New("failed to create Windows temp directory")
-	ErrWindowsCertWriteFailed     = errors.New("failed to write certificate to temp file")
-	ErrWindowsPowerShellImport    = errors.New("failed to import certificate via PowerShell")
-	ErrWindowsPowerShellTrust     = errors.New("failed to trust Root CA via PowerShell")
-	ErrWindowsRegistryOpenKey     = errors.New("failed to open registry key")
-	ErrWindowsRegistryReadValue   = errors.New("failed to read registry value")
-
-	// Windows Hello WebAuthn diagnostics — mapped from HRESULT codes
-	ErrWindowsHelloUserCancelled    = errors.New("windows Hello: user cancelled the operation")
-	ErrWindowsHelloDeviceNotFound   = errors.New("windows Hello: biometric device not found")
-	ErrWindowsHelloDeviceNotReady   = errors.New("windows Hello: device not ready")
-	ErrWindowsHelloNotSupported     = errors.New("windows Hello: operation not supported on this device")
-	ErrWindowsHelloTimeout          = errors.New("windows Hello: operation timed out")
-	ErrWindowsHelloInvalidUserID    = errors.New("windows Hello: user ID must be a 16-byte GUID for WebAuthn v4 compliance")
-	ErrWindowsHelloEmptyInput       = errors.New("windows Hello: challenge or user ID input is empty")
-	ErrWindowsHelloResponseTooLarge = errors.New("windows Hello: response data exceeds maximum allowed size")
+	ErrWindowsSpecificEnrollment = errors.New("windows-specific enrollment is only available on Windows")
+	ErrWindowsCertStoreImport    = errors.New("windows cert store import is only available on Windows")
+	ErrWindowsCertStoreTrust     = errors.New("windows cert store trust is only available on Windows")
+	ErrWindowsTempDirCreate      = errors.New("failed to create Windows temp directory")
+	ErrWindowsCertWriteFailed    = errors.New("failed to write certificate to temp file")
+	ErrWindowsPowerShellImport   = errors.New("failed to import certificate via PowerShell")
+	ErrWindowsPowerShellTrust    = errors.New("failed to trust Root CA via PowerShell")
+	ErrWindowsRegistryOpenKey    = errors.New("failed to open registry key")
+	ErrWindowsRegistryReadValue  = errors.New("failed to read registry value")
 
 	// Data command errors
 	ErrCollectionRequired         = errors.New("collection required")
@@ -659,6 +639,7 @@ var (
 	ErrCLIL3TransactionNotApproved        = errors.New("suspended transaction is not approved")
 	ErrCLIL3ApprovalExpired               = errors.New("CLI L3 approval has expired")
 	ErrCLIL3UserServiceNotConfigured      = errors.New("user service not configured for CLI L3 verification")
+	ErrPasskeyProofRequired               = errors.New("passkey proof required for L3 authorization")
 
 	// File edit service errors
 	ErrFileEditUnsupportedOperation   = errors.New("unsupported file operation")

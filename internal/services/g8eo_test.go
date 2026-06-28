@@ -28,7 +28,7 @@ import (
 
 func newTestTLSConfig(t *testing.T) *certs.TLSConfig {
 	t.Helper()
-	trustStore := certs.NewTrustStore(certs.GetRawCA())
+	trustStore := testutil.GetTestTrustStore()
 	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
 	return certs.NewTLSConfig(trustStore, clientIdentity)
 }
@@ -64,7 +64,6 @@ func TestNewG8eoService_InitialState(t *testing.T) {
 	assert.Nil(t, service.executionVault)
 	assert.Nil(t, service.tokenStore)
 	assert.Nil(t, service.suspendedTxStore)
-	assert.Nil(t, service.auditStore)
 	assert.Nil(t, service.ledger)
 	assert.Nil(t, service.historyHandler)
 }

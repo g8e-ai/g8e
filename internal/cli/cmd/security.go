@@ -194,7 +194,18 @@ func securityPKICmd() *cobra.Command {
 	return cmd
 }
 
+// enrollFunc is the signature for gateway enrollment, injectable for testing.
+type enrollFunc func(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR, caFingerprint string) (*auth.RegistrationResponse, error)
+
+func defaultEnrollFunc(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR, caFingerprint string) (*auth.RegistrationResponse, error) {
+	return auth.EnrollWithGateway(cfg, gatewayEndpoint, operatorCSR, cliCSR, caFingerprint)
+}
+
 func securityPKIEnrollCmd() *cobra.Command {
+	return securityPKIEnrollCmdWithConfig(loadConfig, defaultEnrollFunc)
+}
+
+func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enroll enrollFunc) *cobra.Command {
 	var endpoint string
 	var outputDir string
 
@@ -207,9 +218,9 @@ func securityPKIEnrollCmd() *cobra.Command {
 				return fmt.Errorf("security: %w", constants.ErrEndpointRequired)
 			}
 
-			cfg, err := config.Load("")
+			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("security: %w", err)
+				return err
 			}
 
 			// Use outputDir if specified, otherwise use project root
@@ -234,7 +245,7 @@ func securityPKIEnrollCmd() *cobra.Command {
 			// Append default HTTP port
 			gatewayEndpoint := fmt.Sprintf("%s:%d", endpoint, constants.Ports.OperatorHttp)
 			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
-			regResp, err := auth.EnrollWithGateway(cfg, gatewayEndpoint, opCSR, "", "")
+			regResp, err := enroll(cfg, gatewayEndpoint, opCSR, "", "")
 			if err != nil {
 				return fmt.Errorf("security: %w", err)
 			}

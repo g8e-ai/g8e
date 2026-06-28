@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
@@ -126,9 +125,9 @@ func testE2ECmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Running Tier 3 (Live Platform E2E) tests...")
 
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			// Try HTTP check first (works for Docker/foreground/background modes)

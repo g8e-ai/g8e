@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-06-26
-Version: v1.2.4
+Last Updated: 2026-06-27
+Version: v1.3.0
 
 ---
 
@@ -367,7 +367,7 @@ Each demo uses distinct host ports to allow simultaneous deployment:
 | gov | 8080 | 8443 | 3000 |
 | healthcare | 8081 | 8444 | 3001 |
 | finance | 8082 | 8445 | 3002 |
-| secure-data (src) | 8083 | 8446 | 3003 |
+| secure-data (src) | 8083 | 8446 | - |
 | secure-data (dst) | 8084 | 8447 | - |
 | swarm | 8085 | 8448 | 5005 |
 | dow | 8086 | 8449 | - |

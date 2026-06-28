@@ -32,7 +32,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
-func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyService, *WebSessionService, *models.User) {
+func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionService, *models.User) {
 	t.Helper()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
@@ -40,13 +40,14 @@ func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyService, *WebSessionSer
 	require.NoError(t, err)
 	webSessionSvc := NewWebSessionService(db, logger)
 	resp := response.NewWriter(logger)
-	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, 10*1024*1024)
+	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	return svc, webSessionSvc, user
+	handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+	return handler, webSessionSvc, user
 }
 
 func TestPasskeyRegisterChallenge(t *testing.T) {
-	cfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
+	cfg := passkeyHandlerConfig{source: sourceJWT, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 
 	tests := []struct {
 		name       string
@@ -133,7 +134,7 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 }
 
 func TestPasskeyAuthenticateChallenge(t *testing.T) {
-	cfg := passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
+	cfg := passkeyHandlerConfig{source: sourceJWT, requireAuthenticatedUser: true, enforceSessionUserBinding: true}
 
 	tests := []struct {
 		name       string
@@ -211,24 +212,25 @@ func TestPasskeyListCredentials(t *testing.T) {
 	tests := []struct {
 		name       string
 		method     string
-		query      string
+		ctxUserID  string
 		wantStatus int
 	}{
 		{
 			name:       "rejects non-GET",
 			method:     http.MethodPost,
+			ctxUserID:  "user1",
 			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
-			name:       "rejects missing user_id",
+			name:       "rejects missing context user_id",
 			method:     http.MethodGet,
-			query:      "",
-			wantStatus: http.StatusBadRequest,
+			ctxUserID:  "",
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:       "returns empty list for user with no credentials",
 			method:     http.MethodGet,
-			query:      "?user_id=REPLACE",
+			ctxUserID:  "REPLACE",
 			wantStatus: http.StatusOK,
 		},
 	}
@@ -237,11 +239,14 @@ func TestPasskeyListCredentials(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			svc, _, user := newPasskeyServiceHTTPForTest(t)
-			query := tc.query
-			if query == "?user_id=REPLACE" {
-				query = "?user_id=" + user.ID
+			ctxUserID := tc.ctxUserID
+			if ctxUserID == "REPLACE" {
+				ctxUserID = user.ID
 			}
-			req := httptest.NewRequest(tc.method, "/api/v1/auth/passkeys"+query, nil)
+			req := httptest.NewRequest(tc.method, "/api/v1/auth/passkeys", nil)
+			if ctxUserID != "" {
+				req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, ctxUserID))
+			}
 			rr := httptest.NewRecorder()
 			svc.ListCredentials(rr, req)
 
@@ -253,6 +258,20 @@ func TestPasskeyListCredentials(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("ignores query user_id param (IDOR fix)", func(t *testing.T) {
+		t.Parallel()
+		svc, _, user := newPasskeyServiceHTTPForTest(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys?user_id=other-user", nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+		svc.ListCredentials(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp models.PasskeyCredentialsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.True(t, resp.Success)
+	})
 }
 
 func TestPasskeyRevokeCredential(t *testing.T) {
@@ -260,28 +279,28 @@ func TestPasskeyRevokeCredential(t *testing.T) {
 		name       string
 		method     string
 		path       string
-		query      string
+		ctxUserID  string
 		wantStatus int
 	}{
 		{
 			name:       "rejects non-DELETE",
 			method:     http.MethodGet,
 			path:       "/api/v1/auth/passkeys/some-id",
-			query:      "?user_id=user1",
+			ctxUserID:  "user1",
 			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
-			name:       "rejects missing user_id",
+			name:       "rejects missing context user_id",
 			method:     http.MethodDelete,
 			path:       "/api/v1/auth/passkeys/some-id",
-			query:      "",
-			wantStatus: http.StatusBadRequest,
+			ctxUserID:  "",
+			wantStatus: http.StatusUnauthorized,
 		},
 		{
 			name:       "returns not-found gracefully for unknown credential",
 			method:     http.MethodDelete,
 			path:       "/api/v1/auth/passkeys/nonexistent",
-			query:      "?user_id=REPLACE",
+			ctxUserID:  "REPLACE",
 			wantStatus: http.StatusOK,
 		},
 	}
@@ -290,17 +309,35 @@ func TestPasskeyRevokeCredential(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			svc, _, user := newPasskeyServiceHTTPForTest(t)
-			query := tc.query
-			if query == "?user_id=REPLACE" {
-				query = "?user_id=" + user.ID
+			ctxUserID := tc.ctxUserID
+			if ctxUserID == "REPLACE" {
+				ctxUserID = user.ID
 			}
-			req := httptest.NewRequest(tc.method, tc.path+query, nil)
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			if ctxUserID != "" {
+				req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, ctxUserID))
+			}
 			rr := httptest.NewRecorder()
 			svc.RevokeCredential(rr, req)
 
 			assert.Equal(t, tc.wantStatus, rr.Code)
 		})
 	}
+
+	t.Run("ignores query user_id param (IDOR fix)", func(t *testing.T) {
+		t.Parallel()
+		svc, _, user := newPasskeyServiceHTTPForTest(t)
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/nonexistent?user_id=other-user", nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+		svc.RevokeCredential(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp models.PasskeyRevokeResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.True(t, resp.Success)
+		assert.False(t, resp.Found)
+	})
 }
 
 func TestPasskeyCLIStatus(t *testing.T) {
@@ -362,7 +399,7 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 	}{
 		{
 			name:      "allows registration when user has no credentials",
-			source:    sourceMTLS,
+			source:    sourceJWT,
 			wantAllow: true,
 		},
 	}
@@ -383,30 +420,6 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 	}
 }
 
-func TestPasskeyRegisterChallengeEnforcesFirstCredCLI(t *testing.T) {
-	// CLI bootstrap: already-authenticated user (same ID) must be allowed even if credentials exist.
-	// We can't easily reach that branch in a unit test without a real credential, so we test
-	// the enforcement path: a non-matching mTLS user is rejected.
-	t.Parallel()
-	svc, _, user := newPasskeyServiceHTTPForTest(t)
-	cfg := passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}
-	handler := svc.RegisterChallenge(cfg)
-
-	// Simulate: user_id in body but context has a DIFFERENT authenticated user.
-	// enforceFirstCred is called, user has 0 creds → should allow regardless.
-	body, _ := json.Marshal(map[string]string{"user_id": user.ID})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/cli/register/challenge", bytes.NewReader(body))
-	req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "other-user"))
-	rr := httptest.NewRecorder()
-	handler(rr, req)
-
-	// With no existing creds, first-cred check passes regardless of source.
-	assert.Equal(t, http.StatusOK, rr.Code)
-	var resp map[string]any
-	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-	assert.True(t, resp["success"].(bool))
-}
-
 func TestPasskeyConfigInvariants(t *testing.T) {
 	t.Parallel()
 
@@ -419,12 +432,8 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 	}
 	productionConfigs := []cfgEntry{
 		{"jitCfg", passkeyHandlerConfig{source: sourceJWT, enforceFirstCredentialOnly: true, requireAuthenticatedUser: true, enforceSessionUserBinding: true}, true},
-		{"cliBootstrapRegisterCfg", passkeyHandlerConfig{source: sourceCLIBootstrap, enforceFirstCredentialOnly: true}, true},
-		{"cliBootstrapAuthCfg", passkeyHandlerConfig{source: sourceCLIBootstrap}, false},
 		{"browserBootstrapRegisterCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, enforceFirstCredentialOnly: true, createWebSession: true, setCookie: true, createUserOnBootstrap: true}, true},
 		{"browserBootstrapAuthCfg", passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}, false},
-		{"mtlsCfg", passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true}, true},
-		{"mtlsAuthVerifyCfg", passkeyHandlerConfig{source: sourceMTLS, requireAuthenticatedUser: true, enforceSessionUserBinding: true, createWebSession: true}, false},
 	}
 
 	for _, pc := range productionConfigs {
@@ -446,4 +455,40 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPasskeyCookieConsistency(t *testing.T) {
+	t.Parallel()
+	svc, webSessionSvc, user := newPasskeyServiceHTTPForTest(t)
+
+	webSession, err := webSessionSvc.CreateWebSession(user.ID)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	svc.setWebSessionCookie(rr, webSession)
+
+	cookies := rr.Result().Cookies()
+	require.Len(t, cookies, 1)
+	cookie := cookies[0]
+
+	assert.Equal(t, constants.WebSessionCookieName, cookie.Name)
+	assert.Equal(t, webSession.ID, cookie.Value)
+	assert.Equal(t, constants.PathRoot, cookie.Path)
+	assert.True(t, cookie.HttpOnly)
+	assert.True(t, cookie.Secure)
+	assert.Equal(t, http.SameSiteLaxMode, cookie.SameSite)
+	assert.Equal(t, webSession.ExpiresAtUnixMs/1000, cookie.Expires.Unix())
+}
+
+func TestPasskeyReadBodyRejectsOversized(t *testing.T) {
+	t.Parallel()
+	svc, _, _ := newPasskeyServiceHTTPForTest(t)
+
+	largeBody := bytes.NewReader(bytes.Repeat([]byte("a"), 11*1024*1024))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passkeys/register/challenge", largeBody)
+	rr := httptest.NewRecorder()
+
+	_, err := svc.readBody(rr, req)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "http: request body too large")
 }

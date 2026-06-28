@@ -202,7 +202,6 @@ func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
 		constants.APIPaths.PKIDevicesEnroll,
 		constants.APIPaths.AuthBootstrap,
 		constants.APIPaths.AuthBootstrapStatus,
-		constants.APIPaths.AuthLoginVerify,
 		constants.APIPaths.AuthLogout,
 	}
 
@@ -315,7 +314,6 @@ func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
 	assert.True(t, registry.IsPublic("/api/v1/pki/devices/enroll"), "Device enrollment must be public")
 	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap"), "Bootstrap must be public")
 	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap/status"), "Bootstrap status must be public")
-	assert.True(t, registry.IsPublic("/api/v1/auth/login/verify"), "Login verify must be public")
 	assert.True(t, registry.IsPublic("/api/v1/auth/logout"), "Logout must be public")
 }
 
@@ -323,17 +321,6 @@ func TestPublicRouteRegistry_PasskeyRoutes(t *testing.T) {
 	t.Parallel()
 
 	registry := NewPublicRouteRegistry(false)
-
-	// bootstrap/* prefix entries should be public
-	bootstrapPaths := []string{
-		constants.APIPaths.AuthPasskeysBootstrapRegisterChallenge,
-		constants.APIPaths.AuthPasskeysBootstrapRegisterVerify,
-		constants.APIPaths.AuthPasskeysBootstrapAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysBootstrapAuthenticateVerify,
-	}
-	for _, path := range bootstrapPaths {
-		assert.True(t, registry.IsPublic(path), "bootstrap path %s should be public", path)
-	}
 
 	// console/* prefix entries should be public
 	consolePaths := []string{
@@ -346,27 +333,8 @@ func TestPublicRouteRegistry_PasskeyRoutes(t *testing.T) {
 		assert.True(t, registry.IsPublic(path), "console path %s should be public", path)
 	}
 
-	// Deprecated alias exact paths should be public
-	deprecatedPaths := []string{
-		constants.APIPaths.AuthPasskeysCLIRegisterChallenge,
-		constants.APIPaths.AuthPasskeysCLIRegisterVerify,
-		constants.APIPaths.AuthPasskeysCLIBrowserRegisterChallenge,
-		constants.APIPaths.AuthPasskeysCLIBrowserRegisterVerify,
-		constants.APIPaths.AuthPasskeysBrowserAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysBrowserAuthenticateVerify,
-		constants.APIPaths.AuthPasskeysCLIAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysCLIAuthenticateVerify,
-	}
-	for _, path := range deprecatedPaths {
-		assert.True(t, registry.IsPublic(path), "deprecated alias %s should be public", path)
-	}
-
 	// mTLS-protected passkey sub-paths must NOT be public (excluded prefixes)
 	mtlsPaths := []string{
-		constants.APIPaths.AuthPasskeysRegisterChallenge,
-		constants.APIPaths.AuthPasskeysRegisterVerify,
-		constants.APIPaths.AuthPasskeysAuthenticateChallenge,
-		constants.APIPaths.AuthPasskeysAuthenticateVerify,
 		constants.APIPaths.AuthPasskeysCLIStatus,
 	}
 	for _, path := range mtlsPaths {
@@ -374,10 +342,7 @@ func TestPublicRouteRegistry_PasskeyRoutes(t *testing.T) {
 	}
 
 	// Non-alias sub-paths under excluded prefixes must NOT be public
-	// (e.g., /api/v1/auth/passkeys/cli-register/some-other-endpoint)
 	nonAliasExcludedPaths := []string{
-		"/api/v1/auth/passkeys/cli-register/other",
-		"/api/v1/auth/passkeys/cli-browser-register/other",
 		"/api/v1/auth/passkeys/cli/other",
 	}
 	for _, path := range nonAliasExcludedPaths {

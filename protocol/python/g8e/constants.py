@@ -68,6 +68,7 @@ DOCUMENT_IDS = _load_protocol_json("document_ids.json")
 PLATFORM = _load_protocol_json("platform.json")
 AGENTS = _load_protocol_json("agents.json")
 NETWORK = _load_protocol_json("network.json")
+API_PATHS = _load_protocol_json("api_paths.json")
 
 from enum import StrEnum
 

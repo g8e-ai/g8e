@@ -26,7 +26,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
-	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/cli/stream"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -58,9 +57,9 @@ func operatorListCmd() *cobra.Command {
 		Short: "List all Operator instances",
 		Long:  `List all Operator instances currently connected to the Gateway.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := api.NewClient(cfg)
@@ -375,9 +374,9 @@ func operatorDeployCmd() *cobra.Command {
 		Short: "Deploy the operator binary to remote hosts and start it",
 		Long:  `Deploy the g8e operator binary to remote hosts via SSH and start it in the background. Uses your existing SSH config for authentication. Requires './g8e auth enroll' first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.Load("")
+			cfg, err := loadConfig("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			creds, err := auth.LoadCredentials(cfg)

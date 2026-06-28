@@ -638,7 +638,7 @@ func TestCheckBootstrapStatus_HTTPError(t *testing.T) {
 	}
 
 	// When gateway is not reachable, CheckBootstrapStatus returns the connection error
-	_, err := CheckBootstrapStatus(cfg, "")
+	_, err := CheckBootstrapStatus(cfg, "http://127.0.0.1:1")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrServiceUnavailable)
 }

@@ -582,13 +582,8 @@ paths:
     get:
       consumes:
       - application/json
-      description: Lists all WebAuthn credentials for the authenticated user (WebSession-protected).
-      parameters:
-      - description: User ID
-        in: query
-        name: user_id
-        required: true
-        type: string
+      description: Lists all WebAuthn credentials for the authenticated user. Identity
+        comes from the auth context.
       produces:
       - application/json
       responses:
@@ -603,13 +598,9 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Revokes a WebAuthn credential by ID (WebSession-protected).
+      description: Revokes a WebAuthn credential by ID. Identity comes from the auth
+        context.
       parameters:
-      - description: User ID
-        in: query
-        name: user_id
-        required: true
-        type: string
       - description: Credential ID
         in: path
         name: id

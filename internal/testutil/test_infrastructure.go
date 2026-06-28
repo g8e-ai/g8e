@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -34,15 +35,39 @@ import (
 // testConfigCounter ensures unique OperatorIDs across parallel test calls.
 var testConfigCounter atomic.Uint64
 
+// testTrustStore is a shared TrustStore for tests, replacing the deprecated
+// global certs.SetCA/GetRawCA pattern.
+var (
+	testTrustStoreOnce sync.Once
+	testTrustStore     *certs.TrustStore
+)
+
+// GetTestTrustStore returns a shared TrustStore initialized with a test CA.
+// It replaces the deprecated certs.GetRawCA() + certs.NewTrustStore() pattern.
+func GetTestTrustStore() *certs.TrustStore {
+	testTrustStoreOnce.Do(func() {
+		testTrustStore = certs.NewTrustStore(nil)
+	})
+	return testTrustStore
+}
+
+// EnsureTestCA ensures the shared test TrustStore has a CA configured.
+// Call this from test helpers that need TLS to work.
+func EnsureTestCA(t *testing.T) {
+	t.Helper()
+	ts := GetTestTrustStore()
+	if len(ts.GetRawCA()) == 0 {
+		ts.SetCA([]byte(GenerateTestCA(t, "test-ca")))
+	}
+}
+
 // NewTestConfig returns a test configuration with isolated workDir.
 // Does NOT modify global constants.Paths to avoid data races in parallel tests.
 func NewTestConfig(t *testing.T) *config.Config {
 	t.Helper()
 
-	// Ensure certs package has a valid CA configured for httpclient calls in tests
-	if len(certs.GetRawCA()) == 0 {
-		certs.SetCA([]byte(GenerateTestCA(t, "test-ca")))
-	}
+	// Ensure shared test TrustStore has a valid CA configured
+	EnsureTestCA(t)
 	n := testConfigCounter.Add(1)
 
 	safeName := strings.NewReplacer("/", "-", " ", "_", ":", "-").Replace(t.Name())

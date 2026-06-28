@@ -76,7 +76,7 @@ func dataCmd() *cobra.Command {
 }
 
 func dataUsersCmd() *cobra.Command {
-	return dataUsersCmdWithConfig(config.Load, defaultAPIClientFactory)
+	return dataUsersCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
 func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
@@ -86,7 +86,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -117,7 +117,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 }
 
 func dataOperatorsCmd() *cobra.Command {
-	return dataOperatorsCmdWithConfig(config.Load, defaultAPIClientFactory)
+	return dataOperatorsCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
 func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
@@ -127,7 +127,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -158,7 +158,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 }
 
 func dataSettingsCmd() *cobra.Command {
-	return dataSettingsCmdWithConfig(config.Load, defaultAPIClientFactory)
+	return dataSettingsCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
 func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
@@ -168,7 +168,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -200,7 +200,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 }
 
 func dataStoreCmd() *cobra.Command {
-	return dataStoreCmdWithConfig(config.Load, defaultAPIClientFactory)
+	return dataStoreCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
 func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
@@ -213,7 +213,7 @@ func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), c
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)
@@ -273,7 +273,7 @@ func dataAuditCmd() *cobra.Command {
 }
 
 func dataAuditListCmd() *cobra.Command {
-	return dataAuditListCmdWithConfig(config.Load, defaultAPIClientFactory)
+	return dataAuditListCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
 func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
@@ -286,7 +286,7 @@ func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			client, err := clientFactory(cfg)

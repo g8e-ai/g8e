@@ -144,7 +144,7 @@
         },
         "/api/v1/auth/passkeys": {
             "get": {
-                "description": "Lists all WebAuthn credentials for the authenticated user (WebSession-protected).",
+                "description": "Lists all WebAuthn credentials for the authenticated user. Identity comes from the auth context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -155,15 +155,6 @@
                     "passkey"
                 ],
                 "summary": "List passkey credentials",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -291,7 +282,7 @@
         },
         "/api/v1/auth/passkeys/{id}": {
             "delete": {
-                "description": "Revokes a WebAuthn credential by ID (WebSession-protected).",
+                "description": "Revokes a WebAuthn credential by ID. Identity comes from the auth context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -303,13 +294,6 @@
                 ],
                 "summary": "Revoke passkey credential",
                 "parameters": [
-                    {
-                        "type": "string",
-                        "description": "User ID",
-                        "name": "user_id",
-                        "in": "query",
-                        "required": true
-                    },
                     {
                         "type": "string",
                         "description": "Credential ID",

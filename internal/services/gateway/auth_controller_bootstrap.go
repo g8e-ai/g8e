@@ -31,7 +31,7 @@ func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *h
 		return
 	}
 
-	body, err := c.readBody(r)
+	body, err := c.readBody(w, r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
@@ -261,7 +261,7 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	body, err := c.readBody(r)
+	body, err := c.readBody(w, r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return
@@ -431,7 +431,7 @@ func (c *AuthController) handleDeviceEnrollment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	body, err := c.readBody(r)
+	body, err := c.readBody(w, r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, "failed to read body")
 		return

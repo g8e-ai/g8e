@@ -518,9 +518,7 @@ func Run(cfg Config) error {
 	// L5Actuator replaces Actuator - execution boundary with receipt signing
 	act := &governance.L5Actuator{
 		Logger:            logger,
-		SignerStore:       &governance.SimpleSignerStore{Signers: trustedSigners},
 		ConsoleAuditStore: av,
-		L3Notary:          l3Notary,
 		StateRootProvider: stateRootProvider,
 		ExecutionHandler:  &chaosExecutionHandler{ledger: ledger, stateRoot: stateRootProvider},
 		SigningKey:        privKey,

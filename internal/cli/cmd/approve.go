@@ -14,17 +14,14 @@
 package cmd
 
 import (
-	"crypto/ed25519"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/cobra"
 )
@@ -42,125 +39,89 @@ func defaultAPIClientFactory(cfg *config.Config) (apiClient, error) {
 	return api.NewClient(cfg)
 }
 
+var (
+	approvePollInterval  = 3 * time.Second
+	approveMaxIterations = 100 // 5 minutes at 3s intervals
+)
+
 func approveCmd() *cobra.Command {
-	return approveCmdWithConfig(config.Load, defaultAPIClientFactory)
+	return approveCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
 func approveCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "approve <transaction_hash>",
-		Short: "Approve a suspended L3 transaction with CLI signature",
-		Long:  `Approve a suspended transaction by signing the transaction hash with the CLI private key and submitting the cryptographic proof to the Gateway.`,
-		Args:  cobra.ExactArgs(1),
+		Short: "Approve a suspended L3 transaction via browser WebAuthn",
+		Long: `Approve a suspended transaction by opening the gateway's browser-based approval page.
+The browser handles the WebAuthn/passkey ceremony; the CLI polls the gateway's mTLS
+status endpoint until the transaction is approved or times out.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			txHash := args[0]
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("failed to load config: %w", constants.ErrConfigLoadFailed)
+				return err
 			}
 
-			// Read CLI private key
-			keyData, err := os.ReadFile(cfg.CLIKeyFile())
-			if err != nil {
-				return fmt.Errorf("approve: read CLI private key: %w", constants.ErrKeyReadFailed)
-			}
-
-			// Parse PEM-encoded private key
-			block, rest := pem.Decode(keyData)
-			if block == nil {
-				return fmt.Errorf("approve: decode PEM private key: %w", constants.ErrPEMDecodeFailed)
-			}
-			if len(rest) > 0 {
-				return fmt.Errorf("approve: extra data after PEM block: %w", constants.ErrPEMExtraData)
-			}
-
-			// Ed25519 keys are encoded in PKCS8 format
-			key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-			if err != nil {
-				return fmt.Errorf("approve: parse private key: %w", constants.ErrKeyParseFailed)
-			}
-
-			privKey, ok := key.(ed25519.PrivateKey)
-			if !ok {
-				return fmt.Errorf("approve: invalid key type: %w", constants.ErrInvalidKeyType)
-			}
-
-			// Sign the transaction hash
-			signature := ed25519.Sign(privKey, []byte(txHash))
-			signatureHex := hex.EncodeToString(signature)
-
-			// Derive the Ed25519 public key for cryptographic verification at the gateway
-			pubKeyHex := hex.EncodeToString(privKey.Public().(ed25519.PublicKey))
-
-			// Calculate certificate fingerprint for verification
-			certData, err := os.ReadFile(cfg.CLICertFile())
-			if err != nil {
-				return fmt.Errorf("approve: read CLI certificate: %w", constants.ErrCertReadFailed)
-			}
-
-			certBlock, rest := pem.Decode(certData)
-			if certBlock == nil {
-				return fmt.Errorf("approve: decode PEM certificate: %w", constants.ErrPEMDecodeFailed)
-			}
-			if len(rest) > 0 {
-				return fmt.Errorf("approve: extra data after PEM certificate block: %w", constants.ErrPEMExtraData)
-			}
-
-			cert, err := x509.ParseCertificate(certBlock.Bytes)
-			if err != nil {
-				return fmt.Errorf("approve: parse certificate: %w", constants.ErrCertParseFailed)
-			}
-
-			hash := sha256.Sum256(cert.Raw)
-			certFingerprint := hex.EncodeToString(hash[:])
-
-			// Create approval request
-			type approvalRequest struct {
-				CliSignature        string `json:"cli_signature"`
-				MtlsCertFingerprint string `json:"mtls_cert_fingerprint"`
-				ApprovalPublicKey   string `json:"approval_public_key"`
-			}
-			req := approvalRequest{
-				CliSignature:        signatureHex,
-				MtlsCertFingerprint: certFingerprint,
-				ApprovalPublicKey:   pubKeyHex,
-			}
-
-			reqBody, err := json.Marshal(req)
-			if err != nil {
-				return fmt.Errorf("approve: marshal request: %w", constants.ErrRequestMarshalFailed)
-			}
-
-			// Call approval API
 			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("approve: create API client: %w", err)
 			}
 
-			approvePath := constants.APIPaths.ApprovePagePrefix + txHash
-			resp, err := client.Post(approvePath, reqBody)
-			if err != nil {
-				return fmt.Errorf("approve: approve transaction: %w", constants.ErrTransactionApproveFailed)
+			// Build the browser approval URL (public endpoint, redirects to console SPA)
+			approvalURL := cfg.OperatorPublicURL() + constants.APIPaths.ApprovePagePrefix + txHash
+
+			cmd.Printf("Opening browser for WebAuthn approval...\n")
+			cmd.Printf("  Transaction: %s\n", txHash)
+			cmd.Printf("  URL: %s\n", approvalURL)
+
+			if err := platform.OpenBrowser(approvalURL); err != nil {
+				cmd.Printf("Failed to auto-open browser: %v\n", err)
+				fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 			}
 
-			type approvalResponse struct {
-				Status        string `json:"status"`
-				ResultSummary string `json:"result_summary"`
-			}
-			var result approvalResponse
-			if err := json.Unmarshal(resp, &result); err != nil {
-				return fmt.Errorf("approve: parse response: %w", constants.ErrResponseParseFailed)
+			cmd.Printf("\nWaiting for browser approval (polling gateway via mTLS)...\n")
+
+			statusPath := constants.APIPaths.ApprovalsCLIStatus + txHash
+			ticker := time.NewTicker(approvePollInterval)
+			defer ticker.Stop()
+
+			type statusResponse struct {
+				Status   string `json:"status"`
+				TxHash   string `json:"tx_hash,omitempty"`
+				ToolName string `json:"tool_name,omitempty"`
 			}
 
-			cmd.Printf("Transaction %s approved successfully\n", txHash)
-			if result.Status != "" {
-				cmd.Printf("Status: %s\n", result.Status)
-			}
-			if result.ResultSummary != "" {
-				cmd.Printf("Result: %s\n", result.ResultSummary)
+			for i := 0; i < approveMaxIterations; i++ {
+				<-ticker.C
+				resp, err := client.Get(statusPath)
+				if err != nil {
+					continue
+				}
+
+				var status statusResponse
+				if err := json.Unmarshal(resp, &status); err != nil {
+					continue
+				}
+
+				switch status.Status {
+				case "approved":
+					cmd.Printf("\n✓ Transaction %s approved successfully\n", txHash)
+					if status.ToolName != "" {
+						cmd.Printf("  Tool: %s\n", status.ToolName)
+					}
+					return nil
+				case "expired_or_not_found":
+					return fmt.Errorf("approve: transaction %s expired or not found", txHash)
+				case "pending":
+					if i%10 == 0 && i > 0 {
+						cmd.Printf("  Still waiting... (%ds elapsed)\n", i*int(approvePollInterval.Seconds()))
+					}
+					continue
+				}
 			}
 
-			return nil
+			return fmt.Errorf("approve: timed out waiting for browser approval after %d seconds", approveMaxIterations*int(approvePollInterval.Seconds()))
 		},
 	}
 

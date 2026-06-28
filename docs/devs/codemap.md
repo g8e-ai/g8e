@@ -30,12 +30,13 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │       └── storage.SuspendedTransactionService
 │   ├── governance.L5Actuator
 │   │   ├── execution.ExecutionService
-│   │   ├── storage.SQLAuditStore
+│   │   ├── storage.SQLAuditStore (from CanonicalDBService.AuditStore) [SHARED]
 │   │   ├── governance.TransactionAuditStore (auditStoreTransactionStore wrapper)
-│   │   ├── governance.L3Notary
 │   │   ├── scrubbing.ScrubbingService
-│   │   ├── governance.StateRootProvider
-│   │   └── governance.SignerStore
+│   │   └── governance.StateRootProvider
+│   │   (L5Actuator does NOT depend on L3Notary or SignerStore — it trusts
+│   │    VerifiedTransaction from L4Warden for L2/L3 status. See defense-in-depth
+│   │    comment on L5Actuator struct.)
 │   └── mcp.GatewayService [SHARED] (declared in CommandServiceConfig but not wired in g8eo.go; subtree is potential wiring only)
 │       ├── response.Writer
 │       └── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
@@ -48,13 +49,10 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.SuspendedTransactionService
 │   └── sqliteutil.DB
-├── storage.SQLAuditStore
-│   ├── sqliteutil.DB
-│   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.GitLedgerService
 │   └── vault.Vault (shared with CanonicalDBService)
 ├── storage.HistoryHandler
-│   ├── storage.SQLAuditStore
+│   ├── storage.SQLAuditStore (from CanonicalDBService.AuditStore) [SHARED]
 │   └── storage.GitLedgerService
 ├── governance.ReplayStore (storage.SQLReplayStore)
 │   └── sqliteutil.DB
@@ -109,10 +107,14 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.UserService
 │   ├── gateway.CLISessionService
 │   └── gateway.OperatorSessionService
-├── gateway.PasskeyService
-│   ├── gateway.CanonicalDBService [SHARED] (via dbUserStore and dbSessionStore wrappers)
+├── gateway.PasskeyService (domain logic only)
+│   └── gateway.CanonicalDBService [SHARED] (via dbUserStore and dbSessionStore wrappers)
+├── gateway.PasskeyHandler (HTTP layer, embeds *PasskeyService)
+│   ├── gateway.PasskeyService [SHARED]
 │   ├── gateway.WebSessionService (for session creation on browser flows)
-│   └── response.Writer (for HTTP responses in passkey_service_http.go)
+│   ├── response.Writer (for HTTP responses)
+│   ├── gateway.MCPServiceProvider (set post-construction via SetApprovalDependencies)
+│   └── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
@@ -130,7 +132,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.OperatorSessionService
 │   ├── gateway.WebSessionService
 │   ├── gateway.RegistrationService
-│   ├── gateway.PasskeyService
+│   ├── gateway.PasskeyHandler (includes approval handlers via passkey_service_approvals.go)
+│   │   ├── gateway.MCPServiceProvider (set post-construction via SetApprovalDependencies)
+│   │   └── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
 │   │   ├── gateway.CanonicalDBService [SHARED]
@@ -138,7 +142,6 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
 │   ├── tribunal.TribunalService (set post-construction by boot sequence via SetTribunal)
-│   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore) [SHARED]
 │   ├── governance.EnvelopeProcessor (set post-construction by boot sequence via SetEnvelopeProcessor)
 │   └── response.Writer
 ├── governance.outboundL3Notary (gateway variant via governance.NewGatewayL3Notary, implements governance.L3Notary)
@@ -148,7 +151,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   │   ├── gateway.PKIAuthority
 │   │   ├── gateway.UserService
 │   │   └── gateway.CLISessionService
-│   └── gateway.PasskeyService (as governance.L3Notary for WebAuthn proofs)
+│   └── gateway.PasskeyService (as governance.L3Notary for WebAuthn proofs, domain logic only)
 │       └── gateway.CanonicalDBService [SHARED]
 ├── tribunal.TribunalService
 │   ├── governance.L1Doctrine
@@ -192,7 +195,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`storage.SuspendedTransactionService`** is the L3 approval workflow store used consistently in both gateway and outbound modes (implements `storage.SuspendedTransactionStore`).
 - **`storage.ExecutionVaultService`** is the execution log and file diff storage for outbound mode.
 - **`gateway.EncryptedKVAdapter`** implements `storage.TokenStore` and provides Sentinel token persistence for outbound mode. It wraps `gateway.KVStoreService` (from CanonicalDBService) and encrypts values at rest via `vault.Vault`.
-- **`storage.SQLAuditStore`** is embedded in CanonicalDBService as the `AuditStore` field and provides the SQL-based audit storage foundation for gateway mode. In outbound mode, a separate SQLAuditStore instance is used for the Local-First Audit Architecture (LFAA).
+- **`storage.SQLAuditStore`** is embedded in CanonicalDBService as the `AuditStore` field and provides the SQL-based audit storage foundation for both gateway and outbound modes. In outbound mode, the standalone instance has been removed — `g8eo.go` reuses `CanonicalDBService.AuditStore` for all audit writes (L5Actuator, HistoryHandler, session management), eliminating a redundant connection pool and pruner on the same `g8e.db` file.
 - **`vault.Vault`** is shared across all storage services in outbound mode (reused from CanonicalDBService).
 
 ### Dependency Flow
@@ -204,9 +207,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### Governance Stack (L1-L5)
 - **L1**: `governance.L1Doctrine` (technical bedrock validation, threat detection, forbidden pattern matching)
 - **L2**: `tribunal.TribunalService` (Tribunal-based deliberation producing L2 votes via Ed25519 signatures; gateway delegates deliberation via `LocalDeliberator`). The `TribunalStore` interface in `governance.L4Warden` loads `TribunalPolicy` for quorum verification.
-- **L3**: `governance.L3Notary` (gateway mode uses `governance.outboundL3Notary` via `governance.NewGatewayL3Notary`, combining WebAuthn passkey proofs via `PasskeyService` and mTLS CLI proofs via `cliSessionVerifier`; outbound mode uses `governance.outboundL3Notary` via `governance.NewOutboundL3Notary` for CLI-based approval via suspended transactions)
+- **L3**: `governance.L3Notary` (gateway mode uses `governance.gatewayNotary` via `governance.NewGatewayL3Notary`, combining WebAuthn passkey proofs via `PasskeyService` and mTLS CLI proofs via `cliSessionVerifier`; outbound mode uses `governance.outboundNotary` via `governance.NewOutboundL3Notary` for CLI-based approval via suspended transactions; gateway CLI mode uses `governance.cliNotary` via `governance.NewCLIL3Notary` for CLI session verification + suspended transaction checks)
 - **L4**: `governance.L4Warden` (pre-dispatch verification gating, validating signatures, replay prevention, expiry, nonces, and state Merkle root)
-- **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging)
+- **L5**: `governance.L5Actuator` (isolated boundary tool dispatch via MCP/A2A, signed receipt production, audit logging). Does NOT re-verify L2/L3 proofs — trusts `VerifiedTransaction` from L4Warden. The L4→L5 separation is the defense-in-depth boundary: L4 verifies, L5 executes and records.
 
 ### Shared Interface Implementations
 - `gateway.SignerStoreService` implements: `governance.SignerStore` (gateway mode dedicated implementation).
@@ -218,14 +221,23 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `gateway.EncryptedKVAdapter` implements: `storage.TokenStore` (outbound mode).
 - `storage.SuspendedTransactionService` implements: `storage.SuspendedTransactionStore` (used in both gateway and outbound modes).
 - `governance.FilesystemSignerStore` implements: `governance.SignerStore` (used in outbound mode).
-- `governance.outboundL3Notary` implements: `governance.L3Notary` (used in outbound mode via `NewOutboundL3Notary`; used in gateway mode via `NewGatewayL3Notary` with both `cliSessionVerifier` and `PasskeyService` as delegates).
+- `governance.gatewayNotary` implements: `governance.L3Notary` (gateway mode via `NewGatewayL3Notary` with both `cliSessionVerifier` and `PasskeyService` as delegates).
+- `governance.outboundNotary` implements: `governance.L3Notary` (outbound mode via `NewOutboundL3Notary` for suspended transaction + signature verification only).
+- `governance.cliNotary` implements: `governance.L3Notary` (gateway CLI mode via `NewCLIL3Notary` for CLI session verification + suspended transaction checks).
 - `gateway.cliSessionVerifier` implements: `governance.CLISessionVerifier` (used in gateway mode for mTLS CLI session verification within the L3 notary).
 
-### PasskeyService HTTP Layer Consolidation
-- **`passkey_service_http.go`** — All passkey HTTP handlers now live on `PasskeyService` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). The former `auth_controller_passkey.go` has been deleted entirely. Passkey handlers were stripped from `auth_controller_bootstrap.go` (non-passkey bootstrap handlers retained). All 7 methods have Swagger annotations (`@Summary`/`@Router`/`@Success`/`@Failure`).
-- **`passkey_service.go`** — Domain logic unchanged. Added `encodeCredID`/`decodeCredID` helpers (lines 86-95) and `encodeChallenge` helper (lines 97-100) for centralized base64 RawURL encoding of credential IDs and challenge bytes. The `userStore` interface includes `CreateUser` and `HasAnyUsers` methods (lines 43-48) for browser bootstrap auto-creation. The `sessionStore` interface includes `DeleteSession` (line 54) for challenge purge-after-verify. Uses `bytes.Equal` for safe credential ID comparisons (line 474).
-- **`internal/models/auth.go`** — `PasskeyCredential.Validate()` method (line 263) performs on-disk schema validation (COSE key parsing, ID size limits, attestation type validation, timestamp checks) before persistence in `addCredential`.
-- **`internal/cli/auth/windows_crypto_mock_test.go`** — Cross-platform crypto mock tests (6 tests, 9 subtests) that construct synthetic `WebAuthnAttestationResponse` and `WebAuthnAssertionResponse` structs and verify the full client-side encoding/decoding pathway without requiring `webauthn.dll`. Covers edge cases: empty `UserHandle`, large credential IDs (1024 bytes), empty `RawId`, binary data with special bytes, JSON field name shape, `omitempty` behavior, and CLI encoding pathway consistency.
+### PasskeyService/PasskeyHandler Domain-HTTP Split
+- **`passkey_service.go`**: `PasskeyService` reduced to domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`). `NewPasskeyService` signature simplified to `(db, logger, cfg)`. Retains domain logic: `VerifyL3Proof`, `GenerateRegistrationChallenge`, `VerifyRegistration`, `GenerateAuthenticationChallenge`, `VerifyAuthentication`, `GenerateApprovalChallenge`, `addCredential`, `listCredentials`, `revokeCredential`, `getUser`. `VerifyL3Proof` stays on `PasskeyService` (L3 binding to transaction hash per architectural guardrails).
+- **`passkey_service_http.go`**: All passkey HTTP handlers now live on `*PasskeyHandler` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). All 7 methods have Swagger annotations (`@Summary`/`@Router`/`@Success`/`@Failure`).
+- **`passkey_service_approvals.go`**: 6 approval functions (`handleApprovalAction` dispatcher, `handleApprovalChallenge`, `handleApprovalVerify`, `handleCLIApprovalStatus`, `handleApprovalPage`, `handleListSuspendedTransactions`) now live on `*PasskeyHandler`. Dependencies are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` after construction on `PasskeyHandler`.
+- **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`). `NewPasskeyHandler` constructor added.
+- **`gateway_service.go`**: `passkey` field → `*PasskeyHandler`, both constructors updated, `GetGovernanceDeps` passes `ls.passkey.PasskeyService` to `NewGatewayL3Notary`.
+- **`gateway_http.go`**: `HTTPHandlerDeps.Passkey` and `HTTPHandler.passkey` → `*PasskeyHandler`. `GetPasskeyService()` renamed to `GetPasskeyHandler()`.
+- **`auth_controller.go`**: `AuthController.passkey` field and `newAuthController` param → `*PasskeyHandler`.
+- **`passkey_service_approvals_test.go`**: Tests all handlers on `*PasskeyHandler` with mocked dependencies.
+- **`passkey_service_http_test.go`**: Tests for the 7 passkey HTTP handlers on `*PasskeyHandler`.
+- **`passkey_service_test.go`**: Tests for `PasskeyService` domain logic, including `VerifyL3Proof` WebAuthn assertion verification.
+- **`internal/models/auth.go`**: `PasskeyCredential.Validate()` method performs on-disk schema validation before persistence in `addCredential`.
 
 ### Transport & Protocol Layer
 - `pubsub.OperatorPubSubService` is the dispatcher for outbound mode (WebSocket pub/sub).
@@ -264,6 +276,13 @@ The reporting system operates as a self-contained, offline verification utility 
 
 - **`internal/services/reporting/`**: Reads from database and storage backends (including decrypted execution vault, replay store, and git ledger directory) to write flat, deterministic CSV evidence files.
 - **Cryptographic Verification**: Re-validates receipt signatures, verifies the sequential commitment hash chain, and checks the git ledger Merkle root to ensure system integrity.
+- **Test Coverage**: `verification_test.go` provides 15 hermetic tests covering all 5 verification checks (commitment chain integrity, git merkle root, file mutation linkage, receipt/commitment cross-link, context cancellation) with real SQLite + vault. `verification.go` at 80.8% coverage.
+
+## CLI Serve Layer (Operator & Gateway Boot)
+
+- **`internal/cli/serve/cert.go`**: PKI enrollment and certificate lifecycle — `PerformAutomaticEnrollment` (initial enrollment via CSR + trust bundle fetch, returns `(sessionID, err)` instead of calling `os.Setenv` internally), `RenewOperatorCertificate` (re-enrollment for expiring certs, decomposed into 5 testable units: `checkCertExpiry`, `fetchAndSaveTrustBundle`, `buildMTLSClient`, `submitRenewal`, `saveRenewedCerts`), `RunClientCertRenewalLoop` (periodic renewal check). `CertPaths` struct decouples path configuration from `paths.Infra`. HTTP client uses 15s timeout via `http.Client` + `http.NewRequestWithContext`. Error wrapping standardized with `ErrEmptyTrustBundle`, `ErrCAParseFailed`, `ErrMissingRequiredField`.
+- **`internal/cli/serve/operator.go`**: Operator boot sequence — `RunOperator` orchestrates config loading, trust bundle setup, enrollment, and signal handling. Extracted helpers: `resolveKeyPath`, `resolveCertPath`, `loadClientCertPair`, `buildOperatorLoadOptions`.
+- **Test Coverage**: `cert_test.go` covers `PerformAutomaticEnrollment` (6 tests), `RenewOperatorCertificate` (9 tests), `RunClientCertRenewalLoop` (1 test) with hermetic `httptest.Server` and real certificate generation. `operator_test.go` covers extracted helpers at 100%. `internal/cli/serve` overall at 49.6% coverage.
 
 ## Test Infrastructure (Not Production)
 

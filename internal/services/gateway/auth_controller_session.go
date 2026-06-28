@@ -16,7 +16,6 @@ package gateway
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
@@ -29,7 +28,7 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := c.readBody(r)
+	body, err := c.readBody(w, r)
 	if err != nil {
 		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
 		return
@@ -60,64 +59,6 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 
 // Browser Auth Handlers (Public Router)
 // =============================================================================
-
-func (c *AuthController) handlePublicAuthLoginVerify(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
-	}
-
-	body, err := c.readBody(r)
-	if err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-
-	var req struct {
-		UserID            string                            `json:"user_id"`
-		AssertionResponse *models.WebAuthnAssertionResponse `json:"assertion_response"`
-	}
-	if err := json.Unmarshal(body, &req); err != nil {
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-
-	responseJSON, err := json.Marshal(req.AssertionResponse)
-	if err != nil {
-		c.logger.Warn("Failed to marshal assertion response", "error", err, "userID", req.UserID)
-		c.responder.Error(w, http.StatusBadRequest, constants.ErrInvalidJSONBody.Error())
-		return
-	}
-
-	_, err = c.passkey.VerifyAuthentication(req.UserID, responseJSON)
-	if err != nil {
-		c.responder.Error(w, http.StatusUnauthorized, err.Error())
-		return
-	}
-
-	webSession, err := c.webSessionSvc.CreateWebSession(req.UserID)
-	if err != nil {
-		c.responder.Error(w, http.StatusInternalServerError, constants.ErrInternal.Error())
-		return
-	}
-
-	// Set HttpOnly Secure SameSite=Lax cookie
-	http.SetCookie(w, &http.Cookie{
-		Name:     constants.WebSessionCookieName,
-		Value:    webSession.ID,
-		Path:     constants.PathRoot,
-		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	c.responder.JSON(w, http.StatusOK, models.AuthLoginVerifyResponse{
-		Success:      true,
-		UserID:       req.UserID,
-		WebSessionID: webSession.ID,
-	})
-}
 
 func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(constants.WebSessionCookieName)

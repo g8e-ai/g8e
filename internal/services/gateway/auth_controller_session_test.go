@@ -64,35 +64,6 @@ func TestHandleUsers(t *testing.T) {
 	})
 }
 
-func TestHandlePublicAuthLoginVerify(t *testing.T) {
-	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
-		c, _ := setupTestAuthController(t)
-		testMethodNotAllowed(t, c.handlePublicAuthLoginVerify, http.MethodGet, "/api/v1/auth/login/verify")
-	})
-
-	t.Run("Failure - invalid JSON", func(t *testing.T) {
-		t.Parallel()
-		c, _ := setupTestAuthController(t)
-		testInvalidJSON(t, c.handlePublicAuthLoginVerify, http.MethodPost, "/api/v1/auth/login/verify")
-	})
-
-	t.Run("Failure - missing user_id", func(t *testing.T) {
-		t.Parallel()
-		c, _ := setupTestAuthController(t)
-		body := map[string]string{}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login/verify", bytes.NewReader(b))
-		rr := httptest.NewRecorder()
-
-		c.handlePublicAuthLoginVerify(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.Contains(t, rr.Body.String(), "user not found")
-	})
-}
-
 func TestHandlePublicAuthLogout(t *testing.T) {
 	t.Run("Success - clears cookie", func(t *testing.T) {
 		t.Parallel()

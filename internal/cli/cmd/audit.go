@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -48,10 +47,10 @@ func auditCmd() *cobra.Command {
 }
 
 func auditReceiptsCmd() *cobra.Command {
-	return auditReceiptsCmdWithConfig(config.Load)
+	return auditReceiptsCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
-func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	var operatorSessionID string
 	var txID string
 	var jsonOutput bool
@@ -62,10 +61,10 @@ func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("%w: failed to create API client", err)
 			}
@@ -163,10 +162,10 @@ func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error
 }
 
 func auditExportCmd() *cobra.Command {
-	return auditExportCmdWithConfig(config.Load)
+	return auditExportCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
-func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	var operatorSessionID string
 	var outPath string
 
@@ -176,10 +175,10 @@ func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error))
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("%w: failed to create API client", err)
 			}
@@ -227,10 +226,10 @@ func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error))
 }
 
 func auditReportCmd() *cobra.Command {
-	return auditReportCmdWithConfig(config.Load)
+	return auditReportCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
-func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	var operatorSessionID string
 	var outDir string
 
@@ -240,10 +239,10 @@ func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error))
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("%w: failed to create API client", err)
 			}
@@ -314,10 +313,10 @@ func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error))
 }
 
 func auditEventsCmd() *cobra.Command {
-	return auditEventsCmdWithConfig(config.Load)
+	return auditEventsCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
-func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	var operatorSessionID string
 	var limit int
 	var jsonOutput bool
@@ -328,7 +327,7 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error))
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
 			// Validate limit before network calls
@@ -336,7 +335,7 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error))
 				return fmt.Errorf("%w: limit must be between 1 and 10000", constants.ErrValidationFailed)
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("%w: failed to create API client", err)
 			}
@@ -436,10 +435,10 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error))
 }
 
 func auditSummaryCmd() *cobra.Command {
-	return auditSummaryCmdWithConfig(config.Load)
+	return auditSummaryCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
 
-func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error)) *cobra.Command {
+func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	var operatorSessionID string
 
 	cmd := &cobra.Command{
@@ -448,10 +447,10 @@ func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error)
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrConfigLoadFailed, err)
+				return err
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("%w: failed to create API client", err)
 			}

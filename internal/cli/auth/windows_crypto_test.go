@@ -45,14 +45,3 @@ func TestGenerateWindowsCSRWithTPM(t *testing.T) {
 		t.Fatal("Private key is nil")
 	}
 }
-
-func TestSignWithWindowsHello(t *testing.T) {
-	txHash := []byte("test-transaction-hash")
-	sig, err := AuthenticateWithWindowsHello("test-rp-id", txHash)
-	if err == nil {
-		t.Fatal("SignWithWindowsHello should fail (not yet implemented)")
-	}
-	if sig != nil {
-		t.Fatal("Signature should be nil on error")
-	}
-}

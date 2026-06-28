@@ -45,8 +45,8 @@ type TestInfrastructure struct {
 	OperatorSessionSvc *OperatorSessionService
 	WebSessionSvc      *WebSessionService
 	Reg                *RegistrationService
-	Passkey            *PasskeyService
-	SuspendedStore     *storage.SuspendedTransactionService
+	Passkey            *PasskeyHandler
+	SuspendedStore     storage.SuspendedTransactionStore
 	DBDir              string
 	PKIDir             string
 	SecretsDir         string
@@ -110,7 +110,8 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"}, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
+	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -138,7 +139,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 		OperatorSessionSvc: operatorSessionSvc,
 		WebSessionSvc:      webSessionSvc,
 		Reg:                reg,
-		Passkey:            passkey,
+		Passkey:            passkeyHandler,
 		SuspendedStore:     suspendedTxService,
 		DBDir:              dbDir,
 		PKIDir:             pkiDir,

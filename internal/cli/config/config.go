@@ -322,8 +322,3 @@ func (c *Config) OperatorDiscoveryURL() string {
 	}
 	return netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp)
 }
-
-// OperatorBootstrapURL is deprecated; use OperatorPublicURL for CSR-based enrollment
-func (c *Config) OperatorBootstrapURL() string {
-	return c.OperatorPublicURL()
-}

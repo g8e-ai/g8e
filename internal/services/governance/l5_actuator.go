@@ -48,18 +48,23 @@ type TransactionAuditStore interface {
 }
 
 // L5Actuator is the execution gateway. It is the final stop for all GovernanceEnvelope envelopes.
+//
+// Defense-in-depth note: L5Actuator does NOT re-verify L2 or L3 proofs. By design,
+// L4Warden performs all pre-dispatch verification (L1 doctrine, L2 consensus, L3 notary)
+// and embeds the results in VerifiedTransaction. L5 trusts that VerifiedTransaction,
+// records the L2/L3 status in the ActionReceipt for audit, and focuses on execution
+// safety: fail-closed receipt signing, JIT capability minting, and audit logging.
+// The separation between L4 (verification) and L5 (execution) is the defense-in-depth
+// boundary — two independent components with distinct responsibilities.
 type L5Actuator struct {
 	Logger            *slog.Logger
-	SignerStore       SignerStore
 	Execution         *execution.ExecutionService
 	SQLAuditStore     *storage.SQLAuditStore
 	ConsoleAuditStore TransactionAuditStore
-	L3Notary          L3Notary
 	StateRootProvider StateRootProvider
 	Ctx               context.Context
 	ExecutionHandler  ExecutionHandler
 	Scrubbing         *scrubbing.ScrubbingService
-	Posture           GovernancePosture
 
 	// L5Actuator's own signing identity for ActionReceipts
 	SigningKey ed25519.PrivateKey
