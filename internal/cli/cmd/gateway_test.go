@@ -295,6 +295,7 @@ func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
 		VaultRequireUnlock: true,
 		PasskeyRpID:        "localhost",
 		PasskeyRpName:      "g8e",
+		PasskeyRpOrigins:   []string{"http://localhost:8087", "https://localhost:8450"},
 		RateLimitRPS:       100.0,
 		RateLimitBurst:     50,
 		LogLevel:           "info",

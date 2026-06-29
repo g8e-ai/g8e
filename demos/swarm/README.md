@@ -35,6 +35,7 @@ The swarm demo demonstrates:
 |---------|------|
 | Gateway HTTP | 8085 |
 | Gateway HTTPS | 8448 |
+| Console | https://localhost:8448/console/ |
 | Command Interface | 5005 |
 
 ## Doctrine Rules

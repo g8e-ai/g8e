@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.3.1  
-**Last Updated:** 2026-06-28  
-**Platform:** g8e v1.3.1  
+**Document Version:** 1.3.3  
+**Last Updated:** 2026-06-29  
+**Platform:** g8e v1.3.3  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---

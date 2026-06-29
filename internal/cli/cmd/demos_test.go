@@ -259,6 +259,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:15673")
 		assert.Contains(t, output, "localhost:5433")
 		assert.Contains(t, output, "http://localhost:3001")
+		assert.Contains(t, output, "https://localhost:8444/console/")
 	})
 
 	t.Run("prints gov endpoints", func(t *testing.T) {
@@ -278,6 +279,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8080")
 		assert.Contains(t, output, "https://localhost:8443")
 		assert.Contains(t, output, "http://localhost:3000")
+		assert.Contains(t, output, "https://localhost:8443/console/")
 	})
 
 	t.Run("prints finance endpoints", func(t *testing.T) {
@@ -297,6 +299,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8082")
 		assert.Contains(t, output, "https://localhost:8445")
 		assert.Contains(t, output, "http://localhost:3002")
+		assert.Contains(t, output, "https://localhost:8445/console/")
 	})
 
 	t.Run("prints secure-data endpoints", func(t *testing.T) {
@@ -316,6 +319,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8083")
 		assert.Contains(t, output, "https://localhost:8446")
 		assert.Contains(t, output, "http://localhost:3003")
+		assert.Contains(t, output, "https://localhost:8446/console/")
 	})
 
 	t.Run("prints dow endpoints", func(t *testing.T) {
@@ -334,6 +338,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "Available endpoints:")
 		assert.Contains(t, output, "http://localhost:8086")
 		assert.Contains(t, output, "https://localhost:8449")
+		assert.Contains(t, output, "https://localhost:8449/console/")
 	})
 
 	t.Run("prints dhs endpoints", func(t *testing.T) {
@@ -352,6 +357,26 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "Available endpoints:")
 		assert.Contains(t, output, "http://localhost:8087")
 		assert.Contains(t, output, "https://localhost:8450")
+		assert.Contains(t, output, "https://localhost:8450/console/")
+	})
+
+	t.Run("prints swarm endpoints", func(t *testing.T) {
+		var buf bytes.Buffer
+		originalStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		printDemoEndpoints("swarm")
+
+		w.Close()
+		os.Stdout = originalStdout
+		buf.ReadFrom(r)
+
+		output := buf.String()
+		assert.Contains(t, output, "Available endpoints:")
+		assert.Contains(t, output, "http://localhost:8085")
+		assert.Contains(t, output, "https://localhost:8448")
+		assert.Contains(t, output, "https://localhost:8448/console/")
 	})
 
 	t.Run("prints default message for unknown org", func(t *testing.T) {
@@ -588,6 +613,41 @@ func TestDoWScenarioDescriptions(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Autonomous SIGINT-to-EO/IR Cross-Cueing")
 		assert.Contains(t, cmd.Long, "BFT Spoofing Defense")
 		assert.Contains(t, cmd.Long, "Disconnected Operations")
+	})
+}
+
+func TestCheckDockerAvailable(t *testing.T) {
+	t.Run("checkDockerAvailable function exists", func(t *testing.T) {
+		assert.NotNil(t, checkDockerAvailable)
+	})
+
+	t.Run("returns error when docker is not on PATH", func(t *testing.T) {
+		originalPath := os.Getenv("PATH")
+		defer os.Setenv("PATH", originalPath)
+
+		os.Setenv("PATH", "/nonexistent/path")
+
+		err := checkDockerAvailable()
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrServiceUnavailable)
+	})
+}
+
+func TestToDockerPath(t *testing.T) {
+	t.Run("converts backslashes to forward slashes on Windows", func(t *testing.T) {
+		if runtime.GOOS != "windows" {
+			t.Skip("test only applies to Windows")
+		}
+		result := toDockerPath(`D:\g8e\demos\dhs\compose.yml`)
+		assert.Equal(t, "D:/g8e/demos/dhs/compose.yml", result)
+	})
+
+	t.Run("returns path unchanged on non-Windows", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("test only applies to non-Windows")
+		}
+		result := toDockerPath("/home/user/g8e/demos/dhs/compose.yml")
+		assert.Equal(t, "/home/user/g8e/demos/dhs/compose.yml", result)
 	})
 }
 

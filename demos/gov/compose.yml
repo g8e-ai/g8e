@@ -99,14 +99,23 @@ services:
     command: ["sh", "-c", "while true; do sleep 3600; done"]
 
   agent-runtime:
-    image: alpine:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     container_name: gov-agent
     networks:
       net_internal:
+    extra_hosts:
+      - "g8e.local:10.22.0.10"
+    volumes:
+      - operator_state:/root/.g8e:ro
     depends_on:
       gateway:
         condition: service_healthy
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
+      operator:
+        condition: service_healthy
+    working_dir: /root
+    entrypoint: ["sh", "-c", "sleep infinity"]
 
   llm-backend:
     image: alpine:latest

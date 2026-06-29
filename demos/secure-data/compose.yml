@@ -66,7 +66,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f"]
+    command: ["gw", "start", "-f", "--passkey-rp-origin", "http://localhost:8083", "--passkey-rp-origin", "https://localhost:8446"]
 
   src-operator:
     build:
@@ -119,7 +119,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f"]
+    command: ["gw", "start", "-f", "--passkey-rp-origin", "http://localhost:8084", "--passkey-rp-origin", "https://localhost:8447"]
 
   dst-operator:
     build:

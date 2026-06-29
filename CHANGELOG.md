@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-06-29
+
+### Overview
+
+v1.3.3 is a demos infrastructure and passkey configuration release. This version adds injectable WebAuthn RP origins for Docker deployments with remapped host ports, introduces a dedicated mTLS endpoint for pending approvals, refactors demo scenarios into a reusable two-layer pattern, and improves gateway startup output with posture-aware guidance.
+
+### Added
+
+* **Injectable Passkey RP Origins** — Added `--passkey-rp-origin` flag (repeatable) to `gw start`/`gw serve` that appends additional origins to the WebAuthn allowlist via `PasskeyConfig.RpOrigins`. The `buildRPOrigins` pure function constructs the full origin list: localhost defaults (HTTP/HTTPS on both `localhost` and `127.0.0.1` at configured ports) or a single `https://<custom-rp-id>` for custom RP IDs, followed by any injected origins. Enables demos that publish the gateway on remapped host ports (e.g. `http://localhost:8087`) to accept WebAuthn ceremonies without cert changes.
+* **CLI Pending Approvals Endpoint** — Added `handleCLIListSuspended` (`GET /api/v1/approvals/pending`, mTLS-protected) that returns only non-approved suspended transactions. The existing `handleListSuspendedTransactions` (WebSession-protected) continues to return all transactions including approved ones. Added `ApprovalsCLIList` constant to `api_paths.go` and `api_paths.json`.
+* **Posture-Aware Gateway Startup Guidance** — Added `printNextSteps` in `gwstdout.go` that outputs posture-specific next steps after gateway start: enrollment instructions, tribunal configuration for consensus/notary, operator deployment options, and MCP agent connection guidance.
+* **Docker Pre-Flight Check** — Added `checkDockerAvailable` helper that verifies Docker is running before executing any demo subcommand (start, stop, status, clean, rebuild), providing a clear error instead of a confusing Docker failure.
+* **Gov/Finance Agent Harness Scenarios** — Added `govFinanceScenarios` in `internal/tools/agent_harness/scenarios/gov_finance.go` with two doctrine-enforcement scenarios: `gov-cui-exfil-block` (CUI exfiltration blocked by L1 doctrine) and `finance-unauthorized-trade` (unauthorized trade blocked by L1 doctrine).
+* **Two-Layer Demo Scenario Pattern** — Added `runTwoLayerScenario` helper and `twoLayerScenarioConfig` struct in `demos.go` for reusable demo scenario orchestration. Refactored gov and finance demo scenarios to use this pattern.
+* **Demo READMEs** — Added comprehensive READMEs for `demos/finance/`, `demos/gov/`, `demos/healthcare/`, and `demos/secure-data/`. Updated `demos/swarm/README.md`.
+* **Console URLs in Demo Endpoints** — `printDemoEndpoints` now prints the console URL for all demos, and includes swarm demo endpoints.
+
+### Changed
+
+* **PasskeyConfig Expanded** — Added `RpOrigins`, `HTTPPort`, and `HTTPSPort` fields to `PasskeyConfig`. `buildRPOrigins` uses configurable ports (defaulting to `constants.Ports.OperatorHttp`/`OperatorHttps`) instead of hardcoded 8080/8443.
+* **PKI Trust/Deploy Scripts Use Configured Port** — `PKIController` now uses `gatewayHTTPPort()` helper instead of hardcoded `constants.Ports.OperatorHttp` in all trust and deploy script handlers (Linux, macOS, Windows).
+* **DHS Demo Harness URLs** — Changed DHS demo harness URLs from IP-based (`10.62.0.10:8443`) to hostname-based (`g8e.local:8443`). Removed `--insecure` flag from DHS harness run command.
+* **Agent Harness Default Public URL** — Changed `Default()` in `agent_harness/config/config.go` to use `LocalhostHTTPURL` for `PublicBaseURL` instead of HTTPS, matching the HTTP bootstrap port.
+* **Windows Script Commands** — Changed Windows deploy script from `Invoke-WebRequest` to `Invoke-RestMethod` in `g8e-operator.ps1`. Updated documentation to use `irm` instead of `iwr -UseBasicParsing` for trust scripts.
+* **Swagger Command Port** — `swagger.go` now uses `constants.Ports.OperatorHttps` instead of hardcoded `8443`.
+* **Demos Start Command Cleanup** — Removed debug `fmt.Printf` for compose path. Added Windows-specific binary copy instructions.
+
+### Fixed
+
+* **mTLS Approvals Pending List** — `handleListSuspendedTransactions` split into `listSuspendedTransactions` with `filterApproved` parameter. The CLI endpoint (`handleCLIListSuspended`) filters out already-approved transactions, preventing the CLI from displaying stale approved items as pending.
+* **PublicRouteRegistry Exclusion for Pending Endpoint** — Added `/api/v1/approvals/pending` to `PublicRouteRegistry` excluded prefixes, ensuring the mTLS-protected CLI endpoint is not bypassed by the WebSessionAuth public prefix for `/api/v1/approvals`.
+
+### Tests
+
+* Added `TestGatewayConfig_PasskeyRpOriginsWiring` in `gateway_test.go` (single origin, multiple origins, nil preservation).
+* Added `TestBuildRPOrigins` tests in `passkey_rp_origins_test.go` (118 lines) covering localhost, custom RP ID, and injected origins.
+* Added approval pending list tests in `passkey_service_approvals_test.go` (95 lines) verifying filter behavior.
+* Updated `TestReExecArgsMatchServeCmdFlags` to include `PasskeyRpOrigins`.
+* Updated `TestRegistryScenarioOrder` and `TestRegistryCount` for new govFinance scenarios.
+* Added `demo_dhs_test.go` (46 lines) for DHS demo scenario helpers.
+
+---
+
 ## [1.3.2] - 2026-06-28
 
 ### Added

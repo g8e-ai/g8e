@@ -309,7 +309,7 @@ func (c *Config) OperatorPublicURL() string {
 		}
 		return fmt.Sprintf("https://%s", endpointOverride)
 	}
-	return netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
+	return netutil.LocalhostHTTPSURL(c.OperatorHTTPSPort())
 }
 
 // OperatorDiscoveryURL returns the HTTP port for CA download and bootstrap routes

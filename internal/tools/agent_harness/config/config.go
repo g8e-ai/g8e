@@ -88,7 +88,7 @@ type Config struct {
 func Default() Config {
 	cfg := Config{
 		MTLSBaseURL:    netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
-		PublicBaseURL:  netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		PublicBaseURL:  netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp),
 		EnsembleSize:   3,
 		ConsensusKeyID: "auditor-ensemble",
 		PrincipalKeyID: "auditor-principal",

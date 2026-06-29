@@ -15,10 +15,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func runGovScenario(demoDir, scenario string) error {
@@ -27,50 +23,25 @@ func runGovScenario(demoDir, scenario string) error {
 }
 
 func runGovScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
-
 	switch scenario {
 	case "1":
-		result.number = "1"
-		result.name = "CUI Exfiltration Attempt Blocked"
-		result.status = "PASS"
-		result.metrics = "Network isolation: net_untrusted → net_secure blocked"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — CUI Exfiltration Attempt Blocked")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Network isolation prevents a bad-actor on net_untrusted")
-		fmt.Println("          from reaching classified documents on net_secure.")
-		fmt.Println()
-
-		fmt.Println("  ── Layer 1: Network isolation ────────────────────────────────")
-		_ = demoStep(demoDir, "network isolation",
-			false,
-			"docker", "compose", "exec", "-T", "gov-bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'",
-		)
-
-		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
-		fmt.Println("  Confirming the gateway is live:")
-		fmt.Println()
-		_ = demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8080/api/v1/health",
-		)
-
-		fmt.Println("  Copy-paste to inspect the enforcement audit:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 1 — CUI exfiltration blocked.")
-		fmt.Println("         Net_untrusted has no route to net_internal or net_secure.")
-
+		return runTwoLayerScenario(demoDir, twoLayerScenarioConfig{
+			scenarioName:    "CUI Exfiltration Attempt Blocked",
+			metrics:         "L1 doctrine: cui_exfil_attempt (0.95 conf) // Network isolation: net_untrusted blocked",
+			httpPort:        "8080",
+			harnessScenario: "gov-cui-exfil-block",
+			provesDescription: "Two-layer defense against CUI exfiltration.\n" +
+				"    Layer 1 — Network isolation: bad-actor on net_untrusted has no\n" +
+				"              route to net_internal or net_secure.\n" +
+				"    Layer 2 — Doctrine enforcement: the g8e gateway blocks CUI\n" +
+				"              exfiltration payloads at confidence >= 0.95 (cui_exfil_attempt).",
+			step3Label:       "Submit CUI exfiltration attempt via agent-harness",
+			step3Description: "The agent-harness submits a GovernanceEnvelope through the real\n  gateway via mTLS, attempting to read CUI documents for exfiltration.\n  L1 doctrine must block this at the gateway before execution:",
+			passMessage: "CUI exfiltration blocked at both layers.\n" +
+				"         Layer 1: network isolation (net_untrusted has no route to net_secure).\n" +
+				"         Layer 2: doctrine cui_exfil_attempt loaded at confidence 0.95.",
+		})
 	default:
 		return scenarioResult{}, fmt.Errorf("invalid scenario number for gov: %q (valid: 1)", scenario)
 	}
-	return result, nil
 }
-
-// Made with Bob

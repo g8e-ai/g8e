@@ -210,7 +210,15 @@ func (h *PasskeyHandler) handleApprovalPage(w http.ResponseWriter, r *http.Reque
 	http.Redirect(w, r, "/console/#approve="+url.QueryEscape(txHash), http.StatusFound)
 }
 
+func (h *PasskeyHandler) handleCLIListSuspended(w http.ResponseWriter, r *http.Request) {
+	h.listSuspendedTransactions(w, r, true)
+}
+
 func (h *PasskeyHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *http.Request) {
+	h.listSuspendedTransactions(w, r, false)
+}
+
+func (h *PasskeyHandler) listSuspendedTransactions(w http.ResponseWriter, r *http.Request, filterApproved bool) {
 	if r.Method != http.MethodGet {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -231,6 +239,9 @@ func (h *PasskeyHandler) handleListSuspendedTransactions(w http.ResponseWriter, 
 
 	var txResponses []models.SuspendedTxResponse
 	for _, tx := range transactions {
+		if filterApproved && tx.Approved {
+			continue
+		}
 		txResponses = append(txResponses, models.SuspendedTxResponse{
 			TransactionHash: tx.TransactionHash,
 			CreatedAt:       tx.CreatedAt,

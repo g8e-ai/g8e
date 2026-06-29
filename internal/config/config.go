@@ -95,6 +95,7 @@ type GatewayConfig struct {
 	VaultRequireUnlock bool           // Require vault to be unlocked before starting (default: true)
 	PasskeyRpID        string         // RP ID for passkey operations (default: localhost)
 	PasskeyRpName      string         // RP Name for passkey operations (default: g8e)
+	PasskeyRpOrigins   []string       // Additional RP origins for passkey operations (e.g. demo remapped ports)
 	MCPDownstreamURL   string         // URL of the downstream MCP server to proxy discovery and execution to
 	A2ADownstreamURL   string         // URL of the downstream A2A server to proxy execution to
 	PublicBaseURL      string         // Public base URL for L3 approval links (e.g., https://localhost:8443)
@@ -223,6 +224,7 @@ type GatewayOptions struct {
 	SecretsDir       string
 	PasskeyRpID      string
 	PasskeyRpName    string
+	PasskeyRpOrigins []string
 	MCPDownstreamURL string
 	A2ADownstreamURL string
 	JWKSURL          string
@@ -426,6 +428,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			VaultRequireUnlock: false,
 			PasskeyRpID:        passkeyRpID,
 			PasskeyRpName:      passkeyRpName,
+			PasskeyRpOrigins:   opts.PasskeyRpOrigins,
 			MCPDownstreamURL:   mcpDownstreamURL,
 			A2ADownstreamURL:   a2aDownstreamURL,
 			JWKSURL:            jwksURL,

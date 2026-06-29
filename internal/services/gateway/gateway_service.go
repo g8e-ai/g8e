@@ -142,8 +142,11 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 
 	// Initialize passkey service for L3 brokerage
 	passkeyCfg := &PasskeyConfig{
-		RpID:   cfg.Gateway.PasskeyRpID,
-		RpName: cfg.Gateway.PasskeyRpName,
+		RpID:      cfg.Gateway.PasskeyRpID,
+		RpName:    cfg.Gateway.PasskeyRpName,
+		RpOrigins: cfg.Gateway.PasskeyRpOrigins,
+		HTTPPort:  cfg.Gateway.HTTPPort,
+		HTTPSPort: cfg.Gateway.HTTPSPort,
 	}
 	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
 	if err != nil {
@@ -314,8 +317,11 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 
 	// Initialize passkey service for L3 brokerage (test configuration)
 	passkeyCfg := &PasskeyConfig{
-		RpID:   cfg.Gateway.PasskeyRpID,
-		RpName: cfg.Gateway.PasskeyRpName,
+		RpID:      cfg.Gateway.PasskeyRpID,
+		RpName:    cfg.Gateway.PasskeyRpName,
+		RpOrigins: cfg.Gateway.PasskeyRpOrigins,
+		HTTPPort:  cfg.Gateway.HTTPPort,
+		HTTPSPort: cfg.Gateway.HTTPSPort,
 	}
 	// Passkey service initialization is optional; ignore errors for test configuration
 	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
