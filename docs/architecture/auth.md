@@ -48,7 +48,7 @@ Plain HTTP is used only for the bootstrap and CLI enrollment paths because the C
 **Trusting the Self-Signed CA**: Since the g8e Gateway uses self-signed certificates for its internal PKI, non-Windows clients must trust the platform's Root CA before browser-based passkey registration can succeed. The platform provides automated trust scripts for this purpose:
 - **Linux**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca | sh`
 - **macOS**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca-macos | sh`
-- **Windows**: `iwr http://<gateway-ip>:8080/bootstrap-ca.ps1 -UseBasicParsing | iex`
+- **Windows**: `irm http://<gateway-ip>:8080/bootstrap-ca.ps1 | iex`
 
 **CRITICAL**: After running a trust script, the user **MUST restart all open browsers** for the newly installed CA to be recognized. Failure to do so will result in WebAuthn registration errors in the browser.
 

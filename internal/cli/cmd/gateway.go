@@ -293,7 +293,7 @@ func gatewayStartCmd() *cobra.Command {
 			cmd.Printf("       Stream:        %s operator stream --hosts <host1,host2>\n", getBinaryName())
 			cmd.Printf("       PKI enroll:    %s gw security pki enroll -e %s\n", getBinaryName(), externalIP)
 			cmd.Printf("       Remote script: curl -fsSL http://%s:%d/g8e-operator.sh | bash  (Linux/macOS)\n", externalIP, constants.Ports.OperatorHttp)
-			cmd.Printf("                      iwr http://%s:%d/g8e-operator.ps1 | iex          (Windows)\n", externalIP, constants.Ports.OperatorHttp)
+			cmd.Printf("                      irm http://%s:%d/g8e-operator.ps1 | iex          (Windows)\n", externalIP, constants.Ports.OperatorHttp)
 			cmd.Println()
 			cmd.Println("  3. Connect AI agents:")
 			cmd.Printf("       %s mcp show    Print MCP client configuration\n", getBinaryName())
