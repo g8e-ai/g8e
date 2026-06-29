@@ -48,7 +48,7 @@ func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
 	require.NoError(t, os.WriteFile(caPath, []byte(dummyCert), 0600))
 	cfg.Paths.Infra.CACertPath = caPath
 
-	hasPasskey, err := VerifyPasskeyRegistration(cfg, "test-user")
+	hasPasskey, err := VerifyPasskeyRegistration(cfg, "test-user", "test-cli-session")
 
 	require.Error(t, err)
 	assert.False(t, hasPasskey)

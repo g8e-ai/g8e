@@ -14,127 +14,45 @@
 package tui
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/g8e-ai/g8e/internal/cli/sse"
 )
 
 // Adapter bridges external event sources to bubbletea messages.
 // It does not modify production code — it subscribes to existing event
 // sources and translates them into tea.Msg values.
 type Adapter struct {
-	sseURL  string
-	token   string
-	program *tea.Program
-	client  *http.Client
+	sseClient *sse.Client
+	program   *tea.Program
 }
 
 // NewAdapter creates an Adapter that connects to the gateway's SSE stream.
 func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client) *Adapter {
-	if client == nil {
-		client = &http.Client{Timeout: 0}
+	c := sse.NewClient(sseURL, client)
+	if token != "" {
+		c.SetHeader("Authorization", "Bearer "+token)
 	}
 	return &Adapter{
-		sseURL:  sseURL,
-		token:   token,
-		program: program,
-		client:  client,
+		sseClient: c,
+		program:   program,
 	}
 }
 
 // Run starts the adapter goroutine. It connects to the SSE stream and
 // translates events into tea.Msg values until the context is cancelled.
 func (a *Adapter) Run(ctx context.Context) {
-	if a.sseURL == "" {
-		return
-	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
+	a.sseClient.Run(ctx, func(eventType, data string) {
+		msg := translateSSEEvent(eventType, data)
+		if msg != nil {
+			a.program.Send(msg)
 		}
-
-		err := a.connectAndServe(ctx)
-		if err == nil {
-			return
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(3 * time.Second):
-		}
-	}
-}
-
-// connectAndServe opens the SSE connection and processes events.
-func (a *Adapter) connectAndServe(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, a.sseURL, nil)
-	if err != nil {
-		return fmt.Errorf("tui adapter: build request: %w", err)
-	}
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Cache-Control", "no-cache")
-	if a.token != "" {
-		req.Header.Set("Authorization", "Bearer "+a.token)
-	}
-
-	resp, err := a.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("tui adapter: connect: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("tui adapter: SSE returned %d", resp.StatusCode)
-	}
-
-	return a.parseSSEStream(ctx, resp.Body)
-}
-
-// parseSSEStream reads SSE frames from the response body and dispatches
-// translated tea.Msg values to the program.
-func (a *Adapter) parseSSEStream(ctx context.Context, r io.Reader) error {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-
-	var eventType, data string
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if line == "" {
-			if data != "" {
-				msg := translateSSEEvent(eventType, data)
-				if msg != nil {
-					a.program.Send(msg)
-				}
-			}
-			eventType = ""
-			data = ""
-			continue
-		}
-
-		if strings.HasPrefix(line, "event: ") {
-			eventType = strings.TrimPrefix(line, "event: ")
-		} else if strings.HasPrefix(line, "data: ") {
-			data = strings.TrimPrefix(line, "data: ")
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("tui adapter: scan: %w", err)
-	}
-	return nil
+	})
 }
 
 // translateSSEEvent maps an SSE event_type + data payload to a tea.Msg.

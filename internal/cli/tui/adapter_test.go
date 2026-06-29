@@ -293,14 +293,13 @@ func TestParseConsensusEvent(t *testing.T) {
 func TestAdapterNewAdapter(t *testing.T) {
 	t.Run("creates adapter with nil client default", func(t *testing.T) {
 		a := NewAdapter("http://localhost:8080/sse", "token", nil, nil)
-		assert.Equal(t, "http://localhost:8080/sse", a.sseURL)
-		assert.Equal(t, "token", a.token)
-		assert.NotNil(t, a.client)
+		assert.NotNil(t, a.sseClient)
+		assert.Nil(t, a.program)
 	})
 
 	t.Run("creates adapter with provided http client", func(t *testing.T) {
 		a := NewAdapter("url", "", nil, &http.Client{Timeout: 5 * time.Second})
-		assert.NotNil(t, a.client)
+		assert.NotNil(t, a.sseClient)
 	})
 }
 

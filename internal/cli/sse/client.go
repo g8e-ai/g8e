@@ -1,0 +1,148 @@
+// Copyright (c) 2026 Lateralus Labs, LLC.
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package sse provides a reusable SSE (Server-Sent Events) client that connects
+// to an SSE endpoint, parses frames, and dispatches events to a handler.
+// It supports reconnection with backoff and custom headers (e.g., mTLS session IDs).
+package sse
+
+import (
+	"bufio"
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// EventHandler receives parsed SSE events. The eventType is the value from the
+// `event:` line (or empty if not set). The data is the accumulated `data:` payload.
+type EventHandler func(eventType, data string)
+
+// Client is a reusable SSE client that connects to an SSE endpoint,
+// parses frames, and dispatches events to a handler.
+type Client struct {
+	url     string
+	headers map[string]string
+	client  *http.Client
+}
+
+// NewClient creates an SSE client. The http.Client should be configured with
+// mTLS certs, timeouts, etc. by the caller. If httpClient is nil, a default
+// client with no timeout is used (suitable for context-controlled cancellation).
+func NewClient(url string, httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 0}
+	}
+	return &Client{
+		url:     url,
+		headers: make(map[string]string),
+		client:  httpClient,
+	}
+}
+
+// SetHeader sets a custom header on the SSE request (e.g., X-G8E-CLI-Session-ID).
+// Must be called before Run or ConnectOnce. Modifying headers after Run starts
+// is not safe for concurrent access.
+func (c *Client) SetHeader(key, value string) {
+	c.headers[key] = value
+}
+
+// Run connects to the SSE stream and calls handler for each event.
+// Reconnects with 3-second backoff on error. Returns when ctx is cancelled.
+func (c *Client) Run(ctx context.Context, handler EventHandler) {
+	if c.url == "" {
+		return
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		err := c.ConnectOnce(ctx, handler)
+		if err == nil {
+			return
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(3 * time.Second):
+		}
+	}
+}
+
+// ConnectOnce connects and streams events until the connection breaks.
+// Does NOT reconnect — caller controls retry. Returns nil on context cancel.
+func (c *Client) ConnectOnce(ctx context.Context, handler EventHandler) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url, nil)
+	if err != nil {
+		return fmt.Errorf("sse client: build request: %w", err)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Cache-Control", "no-cache")
+	for key, value := range c.headers {
+		req.Header.Set(key, value)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("sse client: connect: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("sse client: SSE returned %d", resp.StatusCode)
+	}
+
+	return parseSSEStream(ctx, resp.Body, handler)
+}
+
+// parseSSEStream reads SSE frames from the reader and dispatches events to the handler.
+func parseSSEStream(ctx context.Context, r io.Reader, handler EventHandler) error {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	var eventType, data string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if line == "" {
+			if data != "" {
+				handler(eventType, data)
+			}
+			eventType = ""
+			data = ""
+			continue
+		}
+
+		if strings.HasPrefix(line, "event: ") {
+			eventType = strings.TrimPrefix(line, "event: ")
+		} else if strings.HasPrefix(line, "data: ") {
+			data = strings.TrimPrefix(line, "data: ")
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("sse client: scan: %w", err)
+	}
+	return nil
+}

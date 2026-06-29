@@ -269,7 +269,56 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 			Success:    true,
 			Credential: cred,
 		})
+
+		if req.CLISessionID != "" && h.sseStore != nil && h.pubsub != nil {
+			h.emitPasskeyRegisteredSSE(req.UserID, req.CLISessionID)
+		}
 	}
+}
+
+// emitPasskeyRegisteredSSE publishes a passkey.registered SSE event scoped to the
+// CLI session so the waiting CLI client receives real-time notification. Uses the
+// internalSSEPushPayload wire format for compatibility with the SSE stream handler.
+func (h *PasskeyHandler) emitPasskeyRegisteredSSE(userID, cliSessionID string) {
+	eventPayload, err := json.Marshal(passkeyRegisteredEvent{
+		Type:         "passkey.registered",
+		UserID:       userID,
+		CLISessionID: cliSessionID,
+	})
+	if err != nil {
+		h.logger.Error("passkey: failed to marshal SSE event", string(constants.ConnectionStateError), err)
+		return
+	}
+
+	envelope := internalSSEPushPayload{
+		CliSessionID: cliSessionID,
+		UserID:       userID,
+		Event:        eventPayload,
+	}
+	envelopeJSON, err := json.Marshal(envelope)
+	if err != nil {
+		h.logger.Error("passkey: failed to marshal SSE envelope", string(constants.ConnectionStateError), err)
+		return
+	}
+
+	if err := h.sseStore.SSEEventsAppend(
+		SSERoute{CLISessionID: cliSessionID},
+		"passkey.registered",
+		string(envelopeJSON),
+		"g8eg",
+	); err != nil {
+		h.logger.Error("passkey: failed to append SSE event", string(constants.ConnectionStateError), err)
+		return
+	}
+
+	h.pubsub.Publish("sse:cli:"+cliSessionID, envelopeJSON)
+}
+
+// passkeyRegisteredEvent is the typed SSE event payload for passkey registration completion.
+type passkeyRegisteredEvent struct {
+	Type         string `json:"type"`
+	UserID       string `json:"user_id"`
+	CLISessionID string `json:"cli_session_id"`
 }
 
 // @Summary		Generate WebAuthn authentication challenge

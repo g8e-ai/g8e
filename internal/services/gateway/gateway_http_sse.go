@@ -275,8 +275,12 @@ func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string
 	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
 	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
 	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+	appID, _ := r.Context().Value(constants.ContextKeyAppID).(string)
 
-	isMTLSAuth := operatorSessionID != ""
+	// CLI mTLS auth stamps ContextKeyUserID but not ContextKeyOperatorSessionID.
+	// Exclude app certs (which also stamp ContextKeyUserID for delegated user SANs)
+	// by requiring ContextKeyAppID to be empty.
+	isMTLSAuth := operatorSessionID != "" || (userID != "" && webSessionID == "" && appID == "")
 	isCookieAuth := webSessionID != ""
 
 	if !isMTLSAuth && !isCookieAuth {
@@ -302,8 +306,16 @@ func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string
 			return "", &sseAuthError{status: http.StatusInternalServerError, message: "failed to verify cli session"}
 		}
 		if isMTLSAuth {
-			if cliSess.OperatorSessionID != operatorSessionID {
-				return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this cli session"}
+			if operatorSessionID != "" {
+				// Operator mTLS auth — check operator session ownership
+				if cliSess.OperatorSessionID != operatorSessionID {
+					return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this cli session"}
+				}
+			} else {
+				// CLI mTLS auth — check user ownership
+				if cliSess.UserID != userID {
+					return "", &sseAuthError{status: http.StatusForbidden, message: "user does not own this cli session"}
+				}
 			}
 		} else {
 			if cliSess.UserID != userID {
@@ -417,11 +429,16 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 
 	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
 	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
+	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
 	var clientLabel string
 	if operatorSessionID != "" {
 		clientLabel = "operator_session_id=" + operatorSessionID
-	} else {
+	} else if webSessionID != "" {
 		clientLabel = "web_session_id=" + webSessionID
+	} else if userID != "" {
+		clientLabel = "cli_user_id=" + userID
+	} else {
+		clientLabel = "unknown"
 	}
 
 	// Set SSE Headers

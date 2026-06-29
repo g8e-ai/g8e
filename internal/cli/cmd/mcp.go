@@ -1317,7 +1317,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	}
 
 	// Require an authenticated human with passkey registration; auto-register if missing
-	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID)
+	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID, creds.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
 	}

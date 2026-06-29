@@ -183,6 +183,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	passkeyHandler.SetSSEDependencies(db.SSEStore, pubsub)
 
 	ls := &GatewayModeService{
 		cfg:                cfg,
@@ -356,6 +357,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	}
 
 	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	passkeyHandler.SetSSEDependencies(db.SSEStore, pubsub)
 
 	ls := &GatewayModeService{
 		cfg:                cfg,

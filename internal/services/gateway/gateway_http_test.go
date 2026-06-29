@@ -1000,6 +1000,53 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 	})
 }
 
+func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	const (
+		userID       = "u-cli-mtls"
+		cliSessionID = "cli-mtls-1"
+	)
+
+	cliSess := models.CLISession{
+		ID:        cliSessionID,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	b, _ := json.Marshal(cliSess)
+	require.NoError(t, h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+
+	t.Run("CLI mTLS auth with matching user ID passes auth", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, userID)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.NotEqual(t, http.StatusUnauthorized, rr.Code)
+		assert.NotEqual(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("CLI mTLS auth with wrong user ID is forbidden", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "other-user")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("CLI mTLS auth with app ID is rejected as mTLS auth", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, userID)
+		ctx = context.WithValue(ctx, constants.ContextKeyAppID, "app-1")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+}
+
 func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 	t.Parallel()
 
