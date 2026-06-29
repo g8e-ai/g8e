@@ -61,25 +61,6 @@ func defaultDHSHarnessConfig() dhsHarnessConfig {
 	}
 }
 
-// dhsSkipScenario prints a skip banner and returns a SKIP result for
-// scenarios that require a higher posture than the gateway is running.
-func dhsSkipScenario(number, name, required, current, reason string) (scenarioResult, error) {
-	fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-	fmt.Printf("  Scenario %s — %s\n", number, name)
-	fmt.Println(strings.Repeat("─", 60))
-	fmt.Println()
-	fmt.Printf("  [SKIP] This scenario requires %s posture.\n", required)
-	fmt.Printf("         The gateway is currently running in %s posture.\n", current)
-	fmt.Printf("         %s\n", reason)
-	fmt.Println()
-	return scenarioResult{
-		number:  number,
-		name:    name,
-		status:  "SKIP",
-		metrics: fmt.Sprintf("requires %s posture (deferred)", required),
-	}, nil
-}
-
 // dhsHarnessRun builds the docker compose exec command for a DHS agent-harness
 // scenario from a dhsHarnessConfig. Uses exec (not run) because agent-coalition
 // is a long-running sleep-infinity container with a fixed IP; `run` would try

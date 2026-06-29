@@ -19,7 +19,7 @@ This demo uses **real g8e enforcement** — no mock/fake doctrine, no fake MCP c
 
 | Component | Type | Description |
 |---|---|---|
-| **gateway** | REAL | g8e binary in `consensus` posture (Phase 2; notary in later phases) |
+| **gateway** | REAL | g8e binary in `consensus` posture (notary for scenario 2) |
 | **operator** | REAL | g8e binary with `--execution-vault`, executes governed `run_shell_command` calls |
 | **agent-coalition** | REAL | g8e binary running `agent-harness` scenarios that submit genuine `GovernanceEnvelope`s |
 | **datasvc** | REAL | Python HTTP server (the L5 actuator) — records governed data operations to `operations.jsonl` |
@@ -74,9 +74,9 @@ The gateway boots with `--posture consensus --tribunal-id dhs-tribunal --tribuna
 |---|---|---|---|
 | **Phase 1** | doctrine | L1 doctrine enforcement, L5 actuator execution, signed receipts, disconnected ops | Complete |
 | **Phase 2** | consensus | L2 BFT consensus as a fail-closed gate (quorum required, veto blocks execution) | **Active** |
-| **Phase 3** | notary | L3 notary suspend/approve flow for cross-domain release | Deferred (L3 mock incompatible with gateway-mode notary) |
+| **Phase 3** | notary | L3 notary suspend/approve flow for cross-domain release | **Active** (scenario 2) |
 
-Scenarios that require a higher posture than the current phase are **skipped** with an explanatory banner when running `g8e demos run dhs`.
+Scenario 2 dynamically restarts the gateway in notary posture, runs the release scenario, and restores consensus posture afterward. All other scenarios run under consensus.
 
 ## Port mappings
 
@@ -116,7 +116,7 @@ All scenarios run via `agent-harness` — a real g8e binary that submits genuine
 **Scenario `dhs-ingest`**: A coalition source connector submits a `GovernanceEnvelope` wrapping a `run_shell_command` that drives the Sovereign Data Service (L5 actuator). L1 doctrine admits the envelope; L2 consensus quorum is met and verified. The ingest is executed and a signed receipt is written to the hash-chained ledger. The `datasvc` records an `INGEST` operation.
 
 ### 2 — Cross-Domain Release requires Notary authority (LOE 1 & 2)
-**Scenario `dhs-release`**: **Deferred (Phase 3).** A cross-domain release is submitted with L2 consensus only. Under notary posture the Gateway would suspend the transaction pending an out-of-band L3 principal (release authority) approval. The release would execute only after the authority signs the exact transaction hash OOB. This scenario is skipped under doctrine posture because the L3 mock is incompatible with gateway-mode notary (which requires WebAuthn passkey credentials).
+**Scenario `dhs-release`**: The gateway is restarted in **notary** posture. A cross-domain release is submitted with L2 consensus only. Under notary posture the Gateway suspends the transaction pending an out-of-band L3 principal (release authority) approval. The scenario extracts the suspended transaction hash from the gateway database, then invokes `g8e approve` — which opens a browser for WebAuthn passkey approval of the exact transaction hash. Once approved, the release executes on the L5 actuator (datasvc records a `RELEASE` operation). The gateway is then restored to consensus posture.
 
 ### 3 — Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
 The Mission Partner datalink is severed (docker network disconnect). Governance continues locally — a `dhs-ingest` scenario runs through the gateway with the datalink down. Every decision is committed to the Git-backed ledger and SQLite audit vault on the operator. The datalink is restored afterward. No cloud required.

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Declarative Tribunal Bootstrap** — Added `--tribunal-bootstrap` flag to `gw start`/`gw serve` that accepts a JSON config file path. At startup, `bootstrapTribunalPolicy` seeds trusted signers and a TribunalPolicy from the config, enabling deterministic demo deployments where the gateway and agent harness share the same Ed25519 seed. The config contains `tribunal_id`, `member_app_ids`, `quorum`, and optional `seed_hex`. Idempotent: skips if the tribunal already exists.
 * **Seed-Based Ensemble Key Generation** — Added `NewEnsembleFromSeed(keyID, n, seedHex)` and `SeedHex()` to `internal/tools/agent_harness/client/envelope.go` for deterministic Ed25519 key generation. Added `--consensus-seed` and `--tribunal-id` flags to `agent-harness run`. The `Ensemble.TribunalID` field is now configurable (defaults to `"test-tribunal"`).
 * **Consensus Phase Support for DHS Demo** — Added `consensus` case to `selectAgentHarnessScenarios` in `agent_harness.go`. Updated `demos/dhs/compose.yml` to consensus posture with tribunal bootstrap. Un-skipped Scenario 4 (predictive cueing with L2 quorum vs veto). Refactored `dhsHarnessRun` to use `dhsHarnessConfig` struct with named fields.
+* **DHS Scenario 2 — Cross-Domain Release with Notary Posture** — Implemented as a real interactive platform demo. Scenario 2 restarts the gateway in notary mode, runs the agent harness to submit the transaction (which suspends on the real gateway), extracts the transaction hash from the gateway's SQLite database, runs `g8e approve` for WebAuthn passkey approval in the browser, verifies the RELEASE execution on the datasvc L5 actuator, and restores the gateway to consensus posture. `G8E_GATEWAY_POSTURE` environment variable added to `demos/dhs/compose.yml`.
 
 ### Changed
 
@@ -31,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Unsafe session ID truncation** — Replaced manual `operatorSessionID[:8]+"..."` slice in `gateway_auth.go` with `safeTruncateID` helper that handles short or empty IDs without panicking.
 * **Silent auth fall-through on DB error** — `handleOperatorAuth` in `gateway_auth.go` now returns 500 for non-`AuthError` failures from `ValidateOperatorSession` (e.g., DB errors) instead of silently falling through to `handleAppAuth`, masking server-side failures as "no operator session found". Also fixed `ValidateOperatorSession` to propagate the original DB error instead of wrapping it with `ErrNotFound`.
 * **Approval error conflation** — `handleApprovalChallenge` and `handleApprovalVerify` in `passkey_service_approvals.go` now separate transport errors (500) from not-found (404), matching the pattern already used in `handleCLIApprovalStatus`.
+* **Unused `dhsSkipScenario` function** — Removed dead code from `demo_dhs.go` that was left over from when DHS scenario 2 was skipped. The function is no longer referenced after scenario 2 was implemented as a real interactive demo.
 
 ### Tests
 
