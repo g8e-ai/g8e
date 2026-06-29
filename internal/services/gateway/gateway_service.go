@@ -457,7 +457,8 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 
 	// TLS verification: client certs are accepted and verified when present, but not required.
 	// mTLS enforcement for protected routes happens at the application layer via auth.Middleware(),
-	// which checks client cert presence/validity for all routes not in PublicRouteRegistry.
+	// which uses RouteAuthRegistry to classify routes by auth mode (RouteAuthNone, RouteAuthMTLS,
+	// RouteAuthWebSession, RouteAuthDual) and enforces the appropriate authentication.
 	// Browser clients (console, WebAuthn flows) reach public routes without a client cert.
 	tlsConfig := pki.TLSConfig()
 	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven

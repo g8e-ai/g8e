@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -33,7 +34,10 @@ import (
 // registration is detected or the timeout expires. This replaces the legacy
 // localhost bootstrap server approach and works identically on all platforms.
 func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) error {
-	consoleURL := cfg.OperatorPublicURL() + "/console/#register=1"
+	consoleURL := fmt.Sprintf("%s/console/#register=1&user_id=%s&cli_session_id=%s",
+		cfg.OperatorPublicURL(),
+		url.QueryEscape(userID),
+		url.QueryEscape(cliSessionID))
 
 	fmt.Printf("\n")
 	fmt.Printf("═══════════════════════════════════════════════════════════════\n")

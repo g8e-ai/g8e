@@ -22,11 +22,63 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/spf13/cobra"
 )
+
+// demoEmitter is the active TUI event emitter, or nil when --tui is not set.
+// It is a package-level variable so that deep call chains (dhsScenarioStep,
+// demoStep, etc.) can emit TUI events without threading an emitter through
+// every function signature.
+var demoEmitter DemoEmitter
+
+// DemoEmitter translates demo scenario events into TUI messages.
+// When --tui is not active, demoEmitter is nil and all methods are no-ops.
+type DemoEmitter struct {
+	program *tea.Program
+}
+
+// NewDemoEmitter creates a DemoEmitter backed by the given bubbletea program.
+func NewDemoEmitter(p *tea.Program) *DemoEmitter {
+	return &DemoEmitter{program: p}
+}
+
+// Pipeline emits a pipeline stage update to the TUI.
+func (e *DemoEmitter) Pipeline(stage tui.PipelineStage, status tui.PipelineStatus, txID, detail string) {
+	if e == nil || e.program == nil {
+		return
+	}
+	e.program.Send(tui.PipelineMsg{Stage: stage, Status: status, TxID: txID, Detail: detail})
+}
+
+// Ledger emits a ledger entry to the TUI.
+func (e *DemoEmitter) Ledger(level tui.LedgerLevel, message string) {
+	if e == nil || e.program == nil {
+		return
+	}
+	e.program.Send(tui.LedgerMsg{Level: level, Message: message})
+}
+
+// Consensus emits a tribunal consensus update to the TUI.
+func (e *DemoEmitter) Consensus(member string, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
+	if e == nil || e.program == nil {
+		return
+	}
+	e.program.Send(tui.ConsensusMsg{Member: member, Decision: decision, Signed: signed, Quorum: quorum, Total: total, Result: result, Hash: hash})
+}
+
+// Quit sends a quit signal to the TUI.
+func (e *DemoEmitter) Quit() {
+	if e == nil || e.program == nil {
+		return
+	}
+	e.program.Send(tui.QuitMsg{})
+}
 
 // DoctrineRule represents a single doctrine rule from the JSON file
 type DoctrineRule struct {
@@ -672,6 +724,7 @@ var scenarioCounts = map[string]int{
 }
 
 func demosRunCmd() *cobra.Command {
+	var useTUI bool
 	cmd := &cobra.Command{
 		Use:   "run <org> [scenario]",
 		Short: "Run demo scenarios",
@@ -703,13 +756,17 @@ Available scenarios:
     4 - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
     5 - Sovereign Destruction + tamper-proof audit (LOE 2)`,
 		Args: cobra.RangeArgs(1, 2),
-		RunE: runDemosRun,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDemosRun(cmd, args, useTUI)
+		},
 	}
+
+	cmd.Flags().BoolVar(&useTUI, "tui", false, "Launch tactical governance TUI overlay")
 
 	return cmd
 }
 
-func runDemosRun(cmd *cobra.Command, args []string) error {
+func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 	if len(args) == 0 {
 		return fmt.Errorf("%w: demo environment name", constants.ErrMissingRequiredField)
 	}
@@ -741,11 +798,52 @@ func runDemosRun(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if useTUI {
+		return runDemosWithTUI(org, demoDir, args)
+	}
+
 	if len(args) >= 2 {
 		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
 	}
 
 	return runAllScenarios(org, demoDir)
+}
+
+// runDemosWithTUI launches the bubbletea TUI, sets the package-level
+// demoEmitter so scenario code can send events, runs the requested scenarios
+// in a goroutine, and then waits for the user to quit the TUI. After the TUI
+// exits, it waits up to 5 seconds for the scenario goroutine to finish so
+// errors are not silently lost.
+func runDemosWithTUI(org, demoDir string, args []string) error {
+	m := tui.NewModel(tui.Options{
+		Version:  "tactical",
+		NodeName: "tactical-edge-01",
+		NetLabel: "AIR-GAP",
+	})
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	demoEmitter = *NewDemoEmitter(p)
+	defer func() { demoEmitter = DemoEmitter{} }()
+
+	scenarioErrCh := make(chan error, 1)
+	go func() {
+		if len(args) >= 2 {
+			scenarioErrCh <- runScenario(org, demoDir, args[1])
+		} else {
+			scenarioErrCh <- runAllScenarios(org, demoDir)
+		}
+	}()
+
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("tui: run: %w", err)
+	}
+
+	select {
+	case err := <-scenarioErrCh:
+		return err
+	case <-time.After(5 * time.Second):
+		return nil
+	}
 }
 
 func isDemoRunning(demoDir, composePath string) bool {

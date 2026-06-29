@@ -23,9 +23,9 @@ package gateway
 //                            web_session_id, cli_session_id, user_id,
 //                            plus since_id=N and limit=K.
 // GET  /api/v1/sse/stream   → Consumer streams events via SSE.
-//                            Auth: mTLS (Operator session).
-//                            All clients (CLI, browser, dashboard) use this
-//                            single endpoint with mTLS authentication.
+//                            Auth: dual — mTLS for CLI/operator, web session
+//                            cookie for browser. The unified middleware stamps
+//                            context with the appropriate identity.
 //
 // The Gateway refuses to talk about a bare session id - every routing
 // target is tagged at the type level so a web_session_id can never be
@@ -258,6 +258,95 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	})
 }
 
+// sseAuthError carries an HTTP status and message for SSE authorization failures.
+type sseAuthError struct {
+	status  int
+	message string
+}
+
+func (e *sseAuthError) Error() string { return e.message }
+
+// authorizeSSERoute verifies that the authenticated identity (from context) is
+// authorized to access the requested SSE routing target. Returns the pub/sub
+// channel string on success. The middleware stamps context with either
+// ContextKeyOperatorSessionID (mTLS path) or ContextKeyWebSessionID +
+// ContextKeyUserID (cookie path); this helper enforces ownership for both.
+func (h *HTTPHandler) authorizeSSERoute(route SSERoute, r *http.Request) (string, error) {
+	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
+	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
+	userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
+
+	isMTLSAuth := operatorSessionID != ""
+	isCookieAuth := webSessionID != ""
+
+	if !isMTLSAuth && !isCookieAuth {
+		return "", &sseAuthError{status: http.StatusUnauthorized, message: "missing auth identity"}
+	}
+
+	switch {
+	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
+		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
+		if err != nil {
+			h.logger.Error("SSE: failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
+			return "", &sseAuthError{status: http.StatusInternalServerError, message: "failed to verify cli session"}
+		}
+		if doc == nil {
+			return "", &sseAuthError{status: http.StatusForbidden, message: "cli session not found"}
+		}
+		var cliSess models.CLISession
+		b, err := json.Marshal(doc.ForWire())
+		if err != nil {
+			return "", &sseAuthError{status: http.StatusInternalServerError, message: "failed to verify cli session"}
+		}
+		if err := json.Unmarshal(b, &cliSess); err != nil {
+			return "", &sseAuthError{status: http.StatusInternalServerError, message: "failed to verify cli session"}
+		}
+		if isMTLSAuth {
+			if cliSess.OperatorSessionID != operatorSessionID {
+				return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this cli session"}
+			}
+		} else {
+			if cliSess.UserID != userID {
+				return "", &sseAuthError{status: http.StatusForbidden, message: "user does not own this cli session"}
+			}
+		}
+		return "sse:cli:" + route.CLISessionID, nil
+
+	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
+		if isMTLSAuth {
+			operatorBindKey := sessionOperatorBindKey(operatorSessionID)
+			boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
+			if !ok || boundWebSessionID != route.WebSessionID {
+				return "", &sseAuthError{status: http.StatusForbidden, message: "operator session does not own this web session"}
+			}
+		} else {
+			if route.WebSessionID != webSessionID {
+				return "", &sseAuthError{status: http.StatusForbidden, message: "web session does not match authenticated session"}
+			}
+		}
+		return "sse:web:" + route.WebSessionID, nil
+
+	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
+		if isMTLSAuth {
+			op, err := h.auth.ValidateOperatorSession(operatorSessionID)
+			if err != nil {
+				return "", &sseAuthError{status: http.StatusUnauthorized, message: "invalid Operator session"}
+			}
+			if op.UserID != route.UserID {
+				return "", &sseAuthError{status: http.StatusForbidden, message: "operator does not belong to this user"}
+			}
+		} else {
+			if route.UserID != userID {
+				return "", &sseAuthError{status: http.StatusForbidden, message: "user does not match authenticated user"}
+			}
+		}
+		return "sse:user:" + route.UserID, nil
+
+	default:
+		return "", &sseAuthError{status: http.StatusBadRequest, message: "exactly one routing target required"}
+	}
+}
+
 func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -272,69 +361,16 @@ func (h *HTTPHandler) handleInternalSSEEvents(w http.ResponseWriter, r *http.Req
 	sinceID, _ := strconv.ParseInt(q.Get("since_id"), 10, 64)
 	limit, _ := strconv.Atoi(q.Get("limit"))
 
-	// Authorization: ensure the authenticated Operator session has the right
-	// to access the requested routing buffer. Without this check, any operator
-	// could drain any other client's event buffer, creating a multi-tenant
-	// data leak.
-	operatorSessionID := h.auth.extractOperatorSessionIDFromMTLS(r)
-	if operatorSessionID == "" {
-		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
-		return
-	}
-
-	// Consumers MUST declare exactly one routing target. The Gateway refuses
-	// to fall back to a single shared namespace because that is precisely the
-	// conflation we are eliminating.
-	switch {
-	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
-		// Verify operator_session_id is bound to this cli_session_id.
-		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
-		if err != nil {
-			h.logger.Error("Failed to fetch CLI session", string(constants.ConnectionStateError), err, "cli_session_id", route.CLISessionID)
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
-			return
+	// Authorization: verify the authenticated identity (from context) has the
+	// right to access the requested routing buffer. Without this check, any
+	// authenticated client could drain any other client's event buffer.
+	_, err := h.authorizeSSERoute(route, r)
+	if err != nil {
+		if sseErr, ok := err.(*sseAuthError); ok {
+			h.responder.Error(w, sseErr.status, sseErr.message)
+		} else {
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
 		}
-		if doc == nil {
-			h.responder.Error(w, http.StatusForbidden, "cli session not found")
-			return
-		}
-		var cliSess models.CLISession
-		b, err := json.Marshal(doc.ForWire())
-		if err != nil {
-			h.logger.Error("Failed to marshal CLI session", string(constants.ConnectionStateError), err)
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
-			return
-		}
-		if err := json.Unmarshal(b, &cliSess); err != nil {
-			h.logger.Error("Failed to unmarshal CLI session", string(constants.ConnectionStateError), err)
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
-			return
-		}
-		if cliSess.OperatorSessionID != operatorSessionID {
-			h.responder.Error(w, http.StatusForbidden, "operator session does not own this cli session")
-			return
-		}
-	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
-		// Verify operator_session_id is bound to this web_session_id.
-		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
-		if !ok || boundWebSessionID != route.WebSessionID {
-			h.responder.Error(w, http.StatusForbidden, "operator session does not own this web session")
-			return
-		}
-	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
-		// User-scoped events are accessible to any Operator owned by that user.
-		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
-		if err != nil {
-			h.responder.Error(w, http.StatusUnauthorized, "invalid Operator session")
-			return
-		}
-		if op.UserID != route.UserID {
-			h.responder.Error(w, http.StatusForbidden, "operator does not belong to this user")
-			return
-		}
-	default:
-		h.responder.Error(w, http.StatusBadRequest, "exactly one of web_session_id, cli_session_id, user_id is required")
 		return
 	}
 
@@ -367,55 +403,26 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	}
 	sinceID, _ := strconv.ParseInt(sinceIDStr, 10, 64)
 
-	operatorSessionID := h.auth.extractOperatorSessionIDFromMTLS(r)
-	if operatorSessionID == "" {
-		h.responder.Error(w, http.StatusUnauthorized, "missing Operator session id")
+	// Authorization: verify the authenticated identity (from context) has the
+	// right to access the requested routing buffer. Returns the pub/sub channel.
+	channel, err := h.authorizeSSERoute(route, r)
+	if err != nil {
+		if sseErr, ok := err.(*sseAuthError); ok {
+			h.responder.Error(w, sseErr.status, sseErr.message)
+		} else {
+			h.responder.Error(w, http.StatusInternalServerError, err.Error())
+		}
 		return
 	}
 
-	var channel string
-	switch {
-	case route.CLISessionID != "" && route.WebSessionID == "" && route.UserID == "":
-		doc, err := h.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionCLISessions), route.CLISessionID)
-		if err != nil || doc == nil {
-			h.responder.Error(w, http.StatusForbidden, "not authorized for this cli session")
-			return
-		}
-		var cliSess models.CLISession
-		b, err := json.Marshal(doc.ForWire())
-		if err != nil {
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
-			return
-		}
-		if err := json.Unmarshal(b, &cliSess); err != nil {
-			h.responder.Error(w, http.StatusInternalServerError, "failed to verify cli session")
-			return
-		}
-		if cliSess.OperatorSessionID != operatorSessionID {
-			h.responder.Error(w, http.StatusForbidden, "not authorized for this cli session")
-			return
-		}
-		channel = "sse:cli:" + route.CLISessionID
-	case route.WebSessionID != "" && route.CLISessionID == "" && route.UserID == "":
-		operatorBindKey := sessionOperatorBindKey(operatorSessionID)
-		boundWebSessionID, ok := h.db.KVStore.KVGet(operatorBindKey)
-		if !ok || boundWebSessionID != route.WebSessionID {
-			h.responder.Error(w, http.StatusForbidden, "not authorized for this web session")
-			return
-		}
-		channel = "sse:web:" + route.WebSessionID
-	case route.UserID != "" && route.WebSessionID == "" && route.CLISessionID == "":
-		op, err := h.auth.ValidateOperatorSession(operatorSessionID)
-		if err != nil || op.UserID != route.UserID {
-			h.responder.Error(w, http.StatusForbidden, "not authorized for this user")
-			return
-		}
-		channel = "sse:user:" + route.UserID
-	default:
-		h.responder.Error(w, http.StatusBadRequest, "exactly one routing target required")
-		return
+	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
+	webSessionID, _ := r.Context().Value(constants.ContextKeyWebSessionID).(string)
+	var clientLabel string
+	if operatorSessionID != "" {
+		clientLabel = "operator_session_id=" + operatorSessionID
+	} else {
+		clientLabel = "web_session_id=" + webSessionID
 	}
-	clientLabel := "operator_session_id=" + operatorSessionID
 
 	// Set SSE Headers
 	w.Header().Set("Content-Type", "text/event-stream")

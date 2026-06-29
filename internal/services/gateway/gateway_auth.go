@@ -31,144 +31,148 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
-// PublicRouteRegistry defines routes that bypass authentication.
-// Exact paths are matched precisely. Prefixes allow any path under the prefix.
-// Excluded prefixes protect mTLS-only sub-paths that share a prefix with WebSessionAuth routes.
-// This centralized registry eliminates fragile HasPrefix duplication.
-type PublicRouteRegistry struct {
-	exactPaths       map[string]struct{}
-	prefixes         map[string]struct{}
-	excludedPrefixes map[string]struct{}
-	jwksEnabled      bool
+// RouteAuthMode classifies how a route should be authenticated.
+type RouteAuthMode int
+
+const (
+	// RouteAuthNone: truly public routes (health, PKI bootstrap, console SPA, passkey console).
+	// No authentication required.
+	RouteAuthNone RouteAuthMode = iota
+	// RouteAuthMTLS: mTLS only (SSE push, governance, PKI management, operators, audit).
+	// Requires a verified client certificate with valid operator/CLI/app identity.
+	RouteAuthMTLS
+	// RouteAuthWebSession: web session cookie only (users/me, auth/sessions/me, passkeys management, approvals browser).
+	// Validates the g8e_session cookie and stamps context with user_id + web_session_id.
+	RouteAuthWebSession
+	// RouteAuthDual: mTLS OR web session cookie (SSE stream, SSE events).
+	// Tries mTLS first (stronger auth); falls back to cookie if no cert present.
+	RouteAuthDual
+)
+
+// RouteAuthRegistry classifies every route by its auth requirement.
+// Exact paths are matched precisely (highest priority). Prefixes allow any path under the prefix.
+// No excluded prefixes — each route is explicitly classified by mode.
+type RouteAuthRegistry struct {
+	exactPaths  map[string]RouteAuthMode
+	prefixes    map[string]RouteAuthMode
+	jwksEnabled bool
 }
 
-// NewPublicRouteRegistry creates a registry with the canonical public routes.
-func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
-	r := &PublicRouteRegistry{
-		exactPaths:       make(map[string]struct{}),
-		prefixes:         make(map[string]struct{}),
-		excludedPrefixes: make(map[string]struct{}),
-		jwksEnabled:      jwksEnabled,
+// NewRouteAuthRegistry creates a registry with the canonical route auth classifications.
+func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
+	r := &RouteAuthRegistry{
+		exactPaths:  make(map[string]RouteAuthMode),
+		prefixes:    make(map[string]RouteAuthMode),
+		jwksEnabled: jwksEnabled,
 	}
+
+	// --- RouteAuthNone: truly public routes ---
 
 	// Health check (always public)
-	r.addExact(constants.APIPaths.Health)
+	r.addExact(constants.APIPaths.Health, RouteAuthNone)
 
 	// Landing page (always public to allow redirecting to /console)
-	r.addExact(constants.APIPaths.Landing)
+	r.addExact(constants.APIPaths.Landing, RouteAuthNone)
 
 	// State endpoint (always public for envelope binding)
-	r.addExact(constants.APIPaths.State)
+	r.addExact(constants.APIPaths.State, RouteAuthNone)
 
 	// PKI bootstrap routes (public material only)
-	r.addPrefix(constants.APIPaths.WellKnownPKIPrefix)
-	r.addPrefix(constants.APIPaths.WellKnownBinPrefix)
+	r.addPrefix(constants.APIPaths.WellKnownPKIPrefix, RouteAuthNone)
+	r.addPrefix(constants.APIPaths.WellKnownBinPrefix, RouteAuthNone)
 
 	// Trust script endpoints (public for initial bootstrap)
-	r.addExact(constants.APIPaths.BootstrapCALinux)
-	r.addExact(constants.APIPaths.BootstrapCAMacos)
-	r.addExact(constants.APIPaths.BootstrapCAWindows)
-	r.addExact(constants.APIPaths.WellKnownTrustWindows)
+	r.addExact(constants.APIPaths.BootstrapCALinux, RouteAuthNone)
+	r.addExact(constants.APIPaths.BootstrapCAMacos, RouteAuthNone)
+	r.addExact(constants.APIPaths.BootstrapCAWindows, RouteAuthNone)
+	r.addExact(constants.APIPaths.WellKnownTrustWindows, RouteAuthNone)
 
 	// Deploy script endpoints (public for initial deployment)
-	r.addExact(constants.APIPaths.DeployScriptLinux)
-	r.addExact(constants.APIPaths.DeployScriptWindows)
+	r.addExact(constants.APIPaths.DeployScriptLinux, RouteAuthNone)
+	r.addExact(constants.APIPaths.DeployScriptWindows, RouteAuthNone)
 
 	// Protocol entry points (CSR enrollment, bootstrap)
-	r.addExact(constants.APIPaths.PKICSRSign)
-	r.addExact(constants.APIPaths.PKIDevicesEnroll)
-	r.addExact(constants.APIPaths.AuthBootstrap)
-	r.addExact(constants.APIPaths.AuthBootstrapStatus)
-	r.addExact(constants.APIPaths.AuthLogout)
-	r.addPrefix(constants.APIPaths.ApprovePage)
+	r.addExact(constants.APIPaths.PKICSRSign, RouteAuthNone)
+	r.addExact(constants.APIPaths.PKIDevicesEnroll, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthBootstrap, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthBootstrapStatus, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthLogout, RouteAuthNone)
+	r.addPrefix(constants.APIPaths.ApprovePage, RouteAuthNone)
 
 	// Console SPA (public, no auth required)
-	r.addPrefix("/console/")
+	r.addPrefix("/console/", RouteAuthNone)
 
 	// Passkey console routes (public, no mTLS for browser access)
-	// console/*  — Browser-facing passkey registration and authentication
-	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix)
+	r.addPrefix(constants.APIPaths.AuthPasskeysConsolePrefix, RouteAuthNone)
 
-	// SSE consumer endpoints (dual auth: mTLS for CLI/operator, web session cookie for browser)
-	// These bypass mTLS middleware; the handlers perform their own auth check.
-	r.addExact(constants.APIPaths.SSEStream)
-	r.addExact(constants.APIPaths.SSEEvents)
+	// --- RouteAuthDual: SSE consumer endpoints (mTLS for CLI/operator, web session cookie for browser) ---
+	r.addExact(constants.APIPaths.SSEStream, RouteAuthDual)
+	r.addExact(constants.APIPaths.SSEEvents, RouteAuthDual)
 
-	// WebSessionAuth-protected routes (browser-facing, no client cert)
-	// These bypass mTLS middleware; WebSessionAuth provides the auth gate
-	// (cookie validation, session expiry, user active check — fail-closed).
-	r.addPrefix("/api/v1/users/")
-	r.addPrefix("/api/v1/auth/sessions/")
-	r.addPrefix("/api/v1/approvals")
-	r.addPrefix("/api/v1/auth/passkeys")
+	// --- RouteAuthWebSession: browser-facing routes (cookie auth) ---
+	r.addPrefix("/api/v1/users/", RouteAuthWebSession)
+	r.addPrefix("/api/v1/auth/sessions/", RouteAuthWebSession)
+	r.addPrefix("/api/v1/approvals", RouteAuthWebSession)
+	r.addPrefix("/api/v1/auth/passkeys", RouteAuthWebSession)
 
-	// Exclude mTLS-protected sub-paths under the passkeys prefix.
-	// These routes require client certificates and must NOT bypass mTLS.
-	r.addExcludedPrefix("/api/v1/auth/passkeys/cli/")
+	// --- RouteAuthMTLS: mTLS-protected sub-paths under WebSession prefixes ---
+	// These exact paths must be checked before the WebSession prefix matches.
+	r.addExact(constants.APIPaths.AuthPasskeysCLIStatus, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.ApprovalsCLIStatus, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.ApprovalsCLIList, RouteAuthMTLS)
 
-	// Exclude mTLS-protected CLI approval status endpoint.
-	// The CLI polls this with mTLS; it must NOT bypass mTLS via the
-	// WebSessionAuth public prefix for /api/v1/approvals.
-	r.addExcludedPrefix("/api/v1/approvals/status/")
-
-	// Exclude mTLS-protected CLI pending approvals endpoint.
-	// The CLI queries this with mTLS; it must NOT bypass mTLS via the
-	// WebSessionAuth public prefix for /api/v1/approvals.
-	r.addExcludedPrefix("/api/v1/approvals/pending")
-
-	// Exclude JIT passkey sub-paths when JWKS is not configured.
-	// When JWKS is enabled, the JIT prefix is added below as a public prefix,
-	// and exact paths are checked before exclusions in IsPublic.
-	if !jwksEnabled {
-		r.addExcludedPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
-	}
-
-	// JIT passkey bootstrap (only when JWKS is configured)
+	// JIT passkey routes: RouteAuthNone when JWKS is enabled (JWT middleware handles auth),
+	// RouteAuthMTLS when JWKS is disabled (not accessible without mTLS).
 	if jwksEnabled {
-		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix)
-		// MCP endpoint is public when JWKS is enabled for BYO clients
-		r.addExact(constants.APIPaths.MCPEndpoint)
+		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix, RouteAuthNone)
+		// MCP endpoint is public when JWKS is enabled for BYO clients (JWT middleware handles auth)
+		r.addExact(constants.APIPaths.MCPEndpoint, RouteAuthNone)
 		// A2A endpoints are public when JWKS is enabled
-		r.addPrefix(constants.APIPaths.A2APrefix)
+		r.addPrefix(constants.APIPaths.A2APrefix, RouteAuthNone)
+	} else {
+		// When JWKS is disabled, JIT passkey routes require mTLS
+		r.addPrefix(constants.APIPaths.AuthPasskeysJITPrefix, RouteAuthMTLS)
 	}
 
 	return r
 }
 
-func (r *PublicRouteRegistry) addExact(path string) {
-	r.exactPaths[path] = struct{}{}
+func (r *RouteAuthRegistry) addExact(path string, mode RouteAuthMode) {
+	r.exactPaths[path] = mode
 }
 
-func (r *PublicRouteRegistry) addPrefix(prefix string) {
-	r.prefixes[prefix] = struct{}{}
+func (r *RouteAuthRegistry) addPrefix(prefix string, mode RouteAuthMode) {
+	r.prefixes[prefix] = mode
 }
 
-func (r *PublicRouteRegistry) addExcludedPrefix(prefix string) {
-	r.excludedPrefixes[prefix] = struct{}{}
-}
-
-// IsPublic returns true if the path is registered as a public route.
-func (r *PublicRouteRegistry) IsPublic(path string) bool {
+// AuthMode returns the authentication mode for the given path.
+// Exact paths are checked first (highest priority), then prefix matches.
+// Unknown routes default to RouteAuthMTLS (fail-closed).
+func (r *RouteAuthRegistry) AuthMode(path string) RouteAuthMode {
 	// Check exact matches first (highest priority)
-	if _, ok := r.exactPaths[path]; ok {
-		return true
+	if mode, ok := r.exactPaths[path]; ok {
+		return mode
 	}
 
-	// Check excluded prefixes (mTLS-protected sub-paths under WebSessionAuth prefixes)
-	for prefix := range r.excludedPrefixes {
+	// Check prefix matches — longest prefix wins
+	var bestPrefix string
+	var bestMode RouteAuthMode
+	found := false
+	for prefix, mode := range r.prefixes {
 		if strings.HasPrefix(path, prefix) {
-			return false
+			if !found || len(prefix) > len(bestPrefix) {
+				bestPrefix = prefix
+				bestMode = mode
+				found = true
+			}
 		}
 	}
-
-	// Check prefix matches
-	for prefix := range r.prefixes {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
+	if found {
+		return bestMode
 	}
 
-	return false
+	// Fail-closed default: unknown routes require mTLS
+	return RouteAuthMTLS
 }
 
 // AuthError represents a structured authentication error.
@@ -248,7 +252,7 @@ type AuthService struct {
 	jwtIssuer   string
 	jwtAudience string
 
-	publicRoutes     *PublicRouteRegistry
+	routeAuth        *RouteAuthRegistry
 	privilegedRoutes *PrivilegedRouteRegistry
 
 	// Rate limiting state for app policies
@@ -274,7 +278,7 @@ func NewAuthService(db *CanonicalDBService, pki *PKIAuthority, logger *slog.Logg
 		jwtRole:          jwtRole,
 		jwtIssuer:        jwtIssuer,
 		jwtAudience:      jwtAudience,
-		publicRoutes:     NewPublicRouteRegistry(jwksEnabled),
+		routeAuth:        NewRouteAuthRegistry(jwksEnabled),
 		privilegedRoutes: NewPrivilegedRouteRegistry(),
 		limiters:         make(map[string]*tokenBucket),
 	}
@@ -414,86 +418,103 @@ func (s *AuthService) extractOperatorSessionIDFromMTLS(r *http.Request) string {
 	return ""
 }
 
-// Middleware returns an http.Handler that authenticates requests.
-// It chains multiple single-responsibility middlewares:
-// 1. publicBypassMiddleware (unauthenticated routes - bypasses entire chain)
-// 2. mtlsMiddleware (mTLS enforcement and revocation)
-// 3. authMiddleware (Operator, CLI, or App authentication)
+// Middleware returns an http.Handler that authenticates requests using the unified auth middleware.
+// The route auth mode is determined by RouteAuthRegistry, and auth is enforced accordingly.
+// No bypasses — every request goes through the middleware. Fail-closed for unknown routes.
 func (s *AuthService) Middleware(next http.Handler) http.Handler {
-	return s.publicBypassMiddleware(
-		s.mtlsMiddleware(
-			s.authMiddleware(next),
-		),
-		next,
-	)
-}
-
-// publicBypassMiddleware handles routes that are accessible without any authentication.
-// For public routes, it bypasses the entire middleware chain and calls the final handler directly.
-func (s *AuthService) publicBypassMiddleware(middlewareChain, finalHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.publicRoutes.IsPublic(r.URL.Path) {
-			finalHandler.ServeHTTP(w, r)
+		mode := s.routeAuth.AuthMode(r.URL.Path)
+
+		switch mode {
+		case RouteAuthNone:
+			// Truly public routes: no auth required
+			next.ServeHTTP(w, r)
 			return
-		}
 
-		middlewareChain.ServeHTTP(w, r)
-	})
-}
-
-// mtlsMiddleware enforces mTLS and verifies certificate revocation.
-func (s *AuthService) mtlsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// [PIVOT] Enforce mTLS for all routes (Phase 6)
-		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-			s.logger.Warn("gateway: auth: mTLS required but no client certificate provided", "path", r.URL.Path)
-			s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRequired.Error())
+		case RouteAuthMTLS:
+			// mTLS only: enforce cert presence + revocation + identity extraction
+			s.handleMTLSAuth(w, r, next)
 			return
-		}
 
-		// [PIVOT] Verify certificate revocation status (Phase 6)
-		if s.pki != nil {
-			if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
-				s.logger.Warn("gateway: auth: mTLS certificate revoked", "path", r.URL.Path, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: verify certificate: %w", constants.ErrCertParseFailed))
-				s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRevoked.Error())
-				return
+		case RouteAuthWebSession:
+			// Web session cookie only: validate cookie, stamp context
+			s.handleWebSessionAuth(w, r, next)
+			return
+
+		case RouteAuthDual:
+			// Dual auth: try mTLS first, fall back to web session cookie
+			if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+				s.handleMTLSAuth(w, r, next)
+			} else {
+				s.handleWebSessionAuth(w, r, next)
 			}
-		}
+			return
 
-		next.ServeHTTP(w, r)
-	})
-}
-
-// authMiddleware handles authentication for Operator, CLI, and App identities.
-func (s *AuthService) authMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract operator session ID from mTLS certificate SPIFFE URI SAN (mTLS-only auth)
-		operatorSessionID := s.extractOperatorSessionIDFromMTLS(r)
-		cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
-
-		switch {
-		case operatorSessionID != "":
-			if s.handleOperatorAuth(w, r, operatorSessionID, cliSessionID, next) {
-				return
-			}
-		case cliSessionID != "":
-			if s.handleCLIAuth(w, r, cliSessionID, next) {
-				return
-			}
 		default:
-			if s.handleAppAuth(w, r, next) {
-				return
-			}
-		}
-
-		// For WebSockets, return a plain text error for 401.
-		if strings.HasPrefix(r.URL.Path, "/ws/") {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			// Fail-closed: unknown routes default to RouteAuthMTLS
+			s.handleMTLSAuth(w, r, next)
 			return
 		}
-
-		s.responder.Error(w, http.StatusUnauthorized, constants.ErrProtocolAuthRequired.Error())
 	})
+}
+
+// handleMTLSAuth enforces mTLS cert presence, revocation check, and operator/CLI/app identity extraction.
+// It stamps the context with identity info and calls next on success.
+func (s *AuthService) handleMTLSAuth(w http.ResponseWriter, r *http.Request, next http.Handler) {
+	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+		s.logger.Warn("gateway: auth: mTLS required but no client certificate provided", "path", r.URL.Path)
+		s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRequired.Error())
+		return
+	}
+
+	// Verify certificate revocation status
+	if s.pki != nil {
+		if err := s.pki.VerifyCertificate(r.TLS.PeerCertificates[0]); err != nil {
+			s.logger.Warn("gateway: auth: mTLS certificate revoked", "path", r.URL.Path, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: verify certificate: %w", constants.ErrCertParseFailed))
+			s.responder.Error(w, http.StatusUnauthorized, constants.ErrMTLSCertRevoked.Error())
+			return
+		}
+	}
+
+	// Extract operator session ID from mTLS certificate SPIFFE URI SAN
+	operatorSessionID := s.extractOperatorSessionIDFromMTLS(r)
+	cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
+
+	switch {
+	case operatorSessionID != "":
+		if s.handleOperatorAuth(w, r, operatorSessionID, cliSessionID, next) {
+			return
+		}
+	case cliSessionID != "":
+		if s.handleCLIAuth(w, r, cliSessionID, next) {
+			return
+		}
+	default:
+		if s.handleAppAuth(w, r, next) {
+			return
+		}
+	}
+
+	// For WebSockets, return a plain text error for 401.
+	if strings.HasPrefix(r.URL.Path, "/ws/") {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	s.responder.Error(w, http.StatusUnauthorized, constants.ErrProtocolAuthRequired.Error())
+}
+
+// handleWebSessionAuth validates the web session cookie and stamps context with user_id + web_session_id.
+func (s *AuthService) handleWebSessionAuth(w http.ResponseWriter, r *http.Request, next http.Handler) {
+	webSessionID, userID, err := s.ValidateWebSessionCookie(r)
+	if err != nil {
+		s.responder.Error(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+
+	ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, constants.ContextKeyWebSessionID, webSessionID)
+	next.ServeHTTP(w, r.WithContext(ctx))
 }
 
 // handleOperatorAuth handles authentication for Operator sessions.
@@ -797,17 +818,10 @@ func (s *AuthService) cliCertBoundToOperator(certURIs []*url.URL, cliSessionID, 
 	return cliSession.OperatorSessionID == operatorSessionID, nil
 }
 
-// WebSocketAuth returns an http.Handler that authenticates WebSocket connections.
-func (s *AuthService) WebSocketAuth(next http.Handler) http.Handler {
-	// Re-use the main Middleware logic for WebSockets to ensure consistency.
-	// Middleware already handles /ws/ prefix specifically and bootstrap bypass.
-	return s.Middleware(next)
-}
-
 // ValidateWebSessionCookie extracts and validates the web session cookie from
 // the request, returning the web session ID and user ID if valid. This is used
-// by both WebSessionAuth middleware and the unified SSE stream handler.
-func (s *AuthService) ValidateWebSessionCookie(r *http.Request, db *CanonicalDBService) (webSessionID, userID string, err error) {
+// by the unified auth middleware for RouteAuthWebSession and RouteAuthDual modes.
+func (s *AuthService) ValidateWebSessionCookie(r *http.Request) (webSessionID, userID string, err error) {
 	cookie, err := r.Cookie(constants.WebSessionCookieName)
 	if err != nil || cookie == nil {
 		return "", "", constants.ErrWebSessionCookieRequired
@@ -818,7 +832,7 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request, db *CanonicalDBS
 		return "", "", constants.ErrWebSessionCookieInvalid
 	}
 
-	doc, err := db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
+	doc, err := s.db.DocStore.DocGet(marshaler.CollectionName(constants.CollectionWebSessions), webSessionID)
 	if err != nil {
 		s.logger.Error("gateway: auth: load web session", "web_session_id", webSessionID, string(constants.ConnectionStateError), fmt.Errorf("gateway: auth: load web session %s: %w", webSessionID, constants.ErrNotFound))
 		return "", "", constants.ErrWebSessionValidationFailed
@@ -860,22 +874,6 @@ func (s *AuthService) ValidateWebSessionCookie(r *http.Request, db *CanonicalDBS
 	}
 
 	return webSessionID, webSession.UserID, nil
-}
-
-// WebSessionAuth validates web session cookies and stamps context with user_id.
-// This is for browser-based authentication on the public gateway.
-func (s *AuthService) WebSessionAuth(next http.Handler, db *CanonicalDBService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		webSessionID, userID, err := s.ValidateWebSessionCookie(r, db)
-		if err != nil {
-			s.responder.Error(w, http.StatusUnauthorized, err.Error())
-			return
-		}
-		_ = webSessionID
-
-		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, userID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }
 
 // HasJWKS returns true if JWT authentication is configured.

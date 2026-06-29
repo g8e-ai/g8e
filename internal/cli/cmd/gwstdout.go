@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"runtime"
-
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -49,9 +47,6 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 		cmd.Printf("                     --tribunal-id <id> --tribunal-url <url>\n")
 		cmd.Println()
 		cmd.Printf("       Passkey:    %s auth enroll  (registers WebAuthn credential)\n", bin)
-		if runtime.GOOS == "windows" {
-			cmd.Printf("       Windows:    %s auth enroll-windows  (Windows Certificate Store)\n", bin)
-		}
 		cmd.Println()
 	}
 	stepNum++

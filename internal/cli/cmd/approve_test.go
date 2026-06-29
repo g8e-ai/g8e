@@ -20,6 +20,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"os"
+	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
@@ -163,18 +164,22 @@ func TestEnrollCmdWithConfigErrorPaths(t *testing.T) {
 	})
 }
 
-func TestEnrollWindowsCmdStructure(t *testing.T) {
-	t.Run("enroll-windows command has correct use and description", func(t *testing.T) {
-		cmd := enrollWindowsCmd()
-		assert.Equal(t, "enroll-windows", cmd.Use)
-		assert.Contains(t, cmd.Short, "Windows Certificate Store")
+func TestEnrollCmdStructure(t *testing.T) {
+	t.Run("enroll command has correct use and description", func(t *testing.T) {
+		cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return nil, nil })
+		assert.Equal(t, "enroll", cmd.Use)
+		assert.Contains(t, cmd.Short, "Enroll")
 		assert.NotNil(t, cmd.RunE)
 	})
 
-	t.Run("enroll-windows has tpm flag", func(t *testing.T) {
-		cmd := enrollWindowsCmd()
+	t.Run("enroll has tpm flag on Windows only", func(t *testing.T) {
+		cmd := enrollCmdWithConfig(func(string) (*config.Config, error) { return nil, nil })
 		flag := cmd.Flags().Lookup("tpm")
-		assert.NotNil(t, flag)
-		assert.Equal(t, "false", flag.DefValue)
+		if runtime.GOOS == "windows" {
+			assert.NotNil(t, flag)
+			assert.Equal(t, "false", flag.DefValue)
+		} else {
+			assert.Nil(t, flag)
+		}
 	})
 }

@@ -52,7 +52,7 @@ Plain HTTP is used only for the bootstrap and CLI enrollment paths because the C
 
 **CRITICAL**: After running a trust script, the user **MUST restart all open browsers** for the newly installed CA to be recognized. Failure to do so will result in WebAuthn registration errors in the browser.
 
-**`EnrollCLI(cfg)`** selects between `Bootstrap` and `CLIEnroll` based on `CheckBootstrapStatus`, then saves the signed certificate, trust bundle, and credential file. Callers (`g8e auth enroll`, `g8e mcp agent run`) add their own user-facing output; `EnrollCLI` itself is silent.
+**`EnrollCLI(cfg, useTPM)`** selects between `Bootstrap` and `CLIEnroll` based on `CheckBootstrapStatus`, then saves the signed certificate, trust bundle, and credential file. On Windows, it uses `GenerateWindowsCSR` for key generation and imports the signed cert to the Windows Certificate Store. Callers (`g8e auth enroll`, `g8e mcp agent run`) add their own user-facing output; `EnrollCLI` itself is silent.
 
 **Re-enrollment** (`g8e auth enroll` when credentials already exist) uses `ReEnroll` over mTLS when an operator certificate is present, or falls back to `CLIEnroll` for CLI-only deployments. It also runs `AutoRenewCertificate` to short-circuit if the existing certificate is still valid.
 
@@ -68,7 +68,7 @@ The agent launcher (`g8e mcp agent run` in `internal/cli/cmd/mcp.go`) calls `Ver
 
 #### Windows Enrollment
 
-On Windows, enrollment uses the Windows Certificate Store with TPM-backed keys via Windows Hello for Business. `g8e auth enroll` detects the platform and delegates to the Windows-specific path automatically. See [Network Architecture](./network.md) for details.
+On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Certificate Store for CLI session key generation. The signed CLI certificate is imported to `Cert:\CurrentUser\My` for Windows Hello native API access. The `--tpm` flag (Windows-only) requests TPM-backed keys via Windows Hello for Business. This is distinct from the browser-based WebAuthn passkey flow, which uses the browser's WebAuthn transport (including Windows Hello as a platform authenticator) to register a web session passkey — not a CLI session credential. See [Network Architecture](./network.md) for details.
 
 ### External IdP Support (JWT)
 
@@ -83,31 +83,41 @@ The **g8e Console** (served exclusively over HTTPS at `/console`) is a zero-depe
 - **Unified Interface**: Replaces legacy inline HTML pages across various routes with a single elegant dark-themed UI.
 - **L3 Passkey Authentication**: Provides browser-based WebAuthn registration and authentication flows, allowing users to obtain web session cookies.
 - **Interactive Approval**: Automatically intercepts OOB approval redirects from `/api/v1/approve/{txHash}` to `/console/#approve={url.QueryEscape(txHash)}` and handles cryptographic challenge-response signature generation directly from the browser.
-- **Passkey Management**: Under `WebSessionAuth` protection, authenticated users can view their active passkeys and revoke credentials.
+- **Passkey Management**: Under `RouteAuthWebSession` protection, authenticated users can view their active passkeys and revoke credentials.
 
 #### L7 mTLS Enforcement Model
-To support browser-based clients that cannot hold mTLS client certificates, the HTTPS server's TLS configuration is set to `tls.VerifyClientCertIfGiven` (rather than strict `RequireAndVerifyClientCert`). Security is rigorously enforced at the application layer:
-- **Centralized Public Registry**: The `PublicRouteRegistry` explicitly allowlists routes that can bypass mTLS (e.g., `/console/`, landing/redirect page, and browser-facing passkey registration/authentication endpoints under the `console/*` prefix).
+To support browser-based clients that cannot hold mTLS client certificates, the HTTPS server's TLS configuration is set to `tls.VerifyClientCertIfGiven` (rather than strict `RequireAndVerifyClientCert`). Security is rigorously enforced at the application layer via the `RouteAuthRegistry` and unified auth middleware:
+- **RouteAuthRegistry**: Classifies every route by its auth requirement using a `RouteAuthMode` enum with four modes:
+  - `RouteAuthNone`: Truly public routes (health, PKI bootstrap, console SPA, passkey console) — no auth.
+  - `RouteAuthMTLS`: mTLS only (SSE push, governance, PKI management, operators, audit) — requires verified client certificate.
+  - `RouteAuthWebSession`: Web session cookie only (users/me, auth/sessions/me, passkeys management, approvals browser) — validates `g8e_session` cookie.
+  - `RouteAuthDual`: mTLS OR web session cookie (SSE stream, SSE events) — tries mTLS first (stronger auth), falls back to cookie.
+- **Fail-Closed Default**: Unknown routes default to `RouteAuthMTLS` — the strictest auth mode. The `AuthMode(path)` method checks exact paths first (highest priority), then longest prefix match, then defaults to `RouteAuthMTLS`.
+- **Unified Auth Middleware**: A single `Middleware` function replaces the former three-middleware chain (`publicBypassMiddleware`, `mtlsMiddleware`, `authMiddleware`). No bypasses — every request goes through the middleware. The route's `RouteAuthMode` determines which auth handler runs:
+  - `RouteAuthNone`: Pass through (no auth).
+  - `RouteAuthMTLS`: `handleMTLSAuth` — cert presence + revocation + identity extraction.
+  - `RouteAuthWebSession`: `handleWebSessionAuth` — cookie validation + context stamping with `ContextKeyUserID` and `ContextKeyWebSessionID`.
+  - `RouteAuthDual`: If client cert present, `handleMTLSAuth`; otherwise `handleWebSessionAuth`.
 - **Registered Browser Passkey Endpoint Prefix**:
   - `/api/v1/auth/passkeys/console/` - Console SPA passkey registration and authentication (public, CORS-wrapped)
-- **Fail-Closed Default**: The `auth.Middleware()` acts as a strict, fail-closed gate. Any request to a non-public route that does not carry a verified mTLS certificate is immediately rejected at Layer 7.
+- **No Excluded Prefixes**: The former `PublicRouteRegistry` excluded-prefixes hack (for mTLS-protected sub-paths under WebSession prefixes) has been replaced by explicit exact-path `RouteAuthMTLS` registrations. Exact paths are checked before prefix matches, so mTLS-only sub-paths like `/api/v1/auth/passkeys/cli/status` are correctly classified as `RouteAuthMTLS` even though they share a prefix with `RouteAuthWebSession` routes.
 
-#### WebSessionAuth Subtree Routing
-Web-session authenticated routes (e.g., user profile, approvals, passkey list/revocation) are mounted on the main `mux` via `WebSessionAuth` using standard Go `http.ServeMux` subtree patterns:
+#### WebSession-Protected Subtree Routing
+Web-session authenticated routes (e.g., user profile, approvals, passkey list/revocation) are registered directly on the main `mux` and classified as `RouteAuthWebSession` by the `RouteAuthRegistry`:
 - `/api/v1/users/` (matching `/api/v1/users/me`)
 - `/api/v1/auth/sessions/` (matching `/api/v1/auth/sessions/me`)
 - `/api/v1/approvals` & `/api/v1/approvals/` (matching pending list and action sub-paths)
 - `/api/v1/auth/passkeys` & `/api/v1/auth/passkeys/` (matching listing and individual key revocation)
 
-This subtree-match pattern (defined with trailing slashes) ensures all nested endpoints are seamlessly guarded by the `WebSessionAuth` middleware, while the outer public/mTLS routes (like exact-match `/api/v1/users` or public browser passkey handlers) continue to resolve correctly based on Go's longest-prefix routing rules.
+The unified auth middleware handles auth dispatch based on `RouteAuthRegistry` path classification. No sub-mux or wrapper middleware is needed — the `RouteAuthMode` for each path determines whether cookie auth, mTLS auth, or dual auth is enforced.
 
-#### Excluded Prefixes for mTLS-Protected Sub-Paths
-The `/api/v1/auth/passkeys` prefix is shared between WebSessionAuth management routes (list, revoke by credential ID) and mTLS-only routes (CLI status). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as public, `PublicRouteRegistry` supports **excluded prefixes**:
-- `/api/v1/auth/passkeys/cli/` - mTLS-only CLI status endpoint (`cli/status`)
+#### Exact-Path Overrides for mTLS-Protected Sub-Paths
+The `/api/v1/auth/passkeys` prefix is shared between WebSession management routes (list, revoke by credential ID) and mTLS-only routes (CLI status). To prevent the broad prefix from accidentally exposing mTLS-only sub-paths as cookie-auth, the `RouteAuthRegistry` registers these as exact-path `RouteAuthMTLS` entries:
+- `/api/v1/auth/passkeys/cli/status` - mTLS-only CLI status endpoint
 - `/api/v1/approvals/status/` - mTLS-only CLI approval status endpoint (`/api/v1/approvals/status/{txHash}`)
-- `/api/v1/auth/passkeys/jit-` - JIT passkey bootstrap (excluded only when JWKS is not configured)
+- `/api/v1/approvals/pending` - mTLS-only CLI pending approvals list
 
-The `IsPublic` method checks exact paths first (highest priority), then excluded prefixes (returns false), then regular prefixes (returns true). This ensures mTLS-only routes remain protected even when they share a prefix with WebSessionAuth routes.
+The `AuthMode(path)` method checks exact paths first (highest priority), then prefix matches (longest prefix wins). This ensures mTLS-only routes remain protected even when they share a prefix with WebSession routes. No excluded-prefixes hack is needed.
 
 #### Approval Page Redirect
 The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/#approve={url.QueryEscape(txHash)}` (with trailing slash) to avoid an extra 301 auto-redirect hop from Go's `http.ServeMux`. The console SPA detects the `#approve=` hash fragment on load and after login, automatically triggering the approval flow.
@@ -262,7 +272,7 @@ L3 ensures explicit human authorization for mutations.
 - **Layered Authorization Model**: Gateway mode uses a two-layer authorization model. Layer 1 (passkey authorization) is always required; proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. The `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) validates the WebAuthn assertion. Layer 2 (mTLS transport authentication) applies to CLI callers when `mtls_cert_fingerprint` is present. The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) verifies the CLI session as an additional transport-auth layer. Browser-only approvals skip Layer 2.
 - **Outbound Mode**: When `passkeyVerifier == nil` (outbound L3 notary), only Ed25519 signature validation runs; no passkey is required. This is intentional for environments without a WebAuthn relying party.
 - **Approval Window**: Approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
-- **Unified Enrollment**: `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens the console UI for passkey registration and polls `VerifyPasskeyRegistration` (mTLS) until complete.
+- **Unified Enrollment**: `performEnroll` is the single enrollment path for CLI sessions. On Windows, it auto-detects the platform and uses the Windows Certificate Store with `GenerateWindowsCSR`; on other platforms, it uses `GenerateCSR`. `RegisterPasskeyViaBrowser` opens the console UI for browser-based passkey registration (web session) and polls `VerifyPasskeyRegistration` (mTLS) until complete.
 - **Gateway L3 Verification**: The `gatewayNotary` (`internal/services/governance/l3_notary.go:57`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:102`), implements the layered model. `NewGatewayL3Notary` accepts a `PasskeyService` (as `L3Notary`) for WebAuthn proof verification and a `CLISessionVerifier` for mTLS transport auth. The `PasskeyService` is passed as the `passkeyVerifier` delegate via `ls.passkey.PasskeyService` in `gateway_service.go:599`. Passkey verification always runs first; `ErrPasskeyProofRequired` is returned if the proof lacks a `credential_id`. CLI mTLS session verification runs as the second layer when `MtlsCertFingerprint` is present.
 - **CLI Session Verifier**: The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) implements the `governance.CLISessionVerifier` interface and verifies that the user is active, the CLI session exists and belongs to the user, the certificate fingerprint matches the session's stored fingerprint (constant-time comparison), the session is active and not expired, and the certificate is not revoked via the PKI authority.
 - **Passkey Service**: The `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority. `VerifyL3Proof` remains on `PasskeyService` (not `PasskeyHandler`) to maintain the L3 binding to the transaction hash per architectural guardrails.
@@ -574,11 +584,16 @@ When an app workload pushes an SSE event to a target session, the Gateway verifi
 
 Location: `internal/services/gateway/gateway_http_sse.go:275-339`
 
-When a consumer connects to the SSE stream, the Gateway verifies the Operator session is bound to the declared routing target:
+When a consumer connects to the SSE stream or polls for events, the Gateway verifies authorization via the `authorizeSSERoute` helper, which reads identity from request context (stamped by the unified auth middleware):
 
-- **CLI session target:** Load the CLI session, verify `cliSess.OperatorSessionID == operatorSessionID`.
-- **Web session target:** Look up `sessionOperatorBindKey(operatorSessionID)` in KV, verify the returned `web_session_id` matches the requested `route.WebSessionID`.
-- **User-scoped target:** Validate the Operator session, verify `op.UserID == route.UserID`.
+- **mTLS path** (Operator session in context):
+  - **CLI session target:** Load the CLI session, verify `cliSess.OperatorSessionID == operatorSessionID`.
+  - **Web session target:** Look up `sessionOperatorBindKey(operatorSessionID)` in KV, verify the returned `web_session_id` matches the requested `route.WebSessionID`.
+  - **User-scoped target:** Validate the Operator session, verify `op.UserID == route.UserID`.
+- **Cookie path** (web session ID + user ID in context):
+  - **Web session target:** Verify `web_session_id` matches context's web session ID.
+  - **CLI session target:** Load the CLI session, verify `cliSess.UserID == userID` from context.
+  - **User-scoped target:** Verify `route.UserID == userID` from context.
 
 ---
 

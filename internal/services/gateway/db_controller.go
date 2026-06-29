@@ -775,7 +775,7 @@ func (c *DBController) extractCallerIdentity(r *http.Request) (string, string, s
 	if !ok {
 		appID = ""
 	}
-	operatorSessionID := c.auth.extractOperatorSessionIDFromMTLS(r)
+	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
 	cliSessionID := r.Header.Get(constants.HeaderCLISessionID)
 	return userID, appID, operatorSessionID, cliSessionID
 }

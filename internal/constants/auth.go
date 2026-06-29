@@ -187,12 +187,14 @@ const (
 	ContextKeyOperatorSessionID ContextKey = "operator_session_id"
 	// ContextKeyCapability stores the JIT-minted execution capability in context.
 	ContextKeyCapability ContextKey = "execution_capability"
+	// ContextKeyWebSessionID stores the web session ID for cookie-authenticated requests.
+	ContextKeyWebSessionID ContextKey = "web_session_id"
 )
 
 // Session constants
 const (
 	// WebSessionTTL defines the lifetime of a web session.
 	WebSessionTTL = 24 * time.Hour
-	// WebSessionCookieName is the name of the browser session cookie used by WebSessionAuth.
+	// WebSessionCookieName is the name of the browser session cookie used by the unified auth middleware.
 	WebSessionCookieName = "g8e_session"
 )

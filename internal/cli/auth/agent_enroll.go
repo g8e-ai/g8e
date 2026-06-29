@@ -14,6 +14,7 @@
 package auth
 
 import (
+	"crypto/ecdsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -21,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -28,11 +30,13 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// EnrollCLI performs idempotent first-time CLI enrollment. It bootstraps the
-// gateway if it has never been bootstrapped, or enrolls a new CLI identity if
-// the gateway is already running. It does NOT handle re-enrollment of existing
-// credentials — that is the login command's responsibility.
-func EnrollCLI(cfg *config.Config) error {
+// EnrollCLI performs idempotent first-time CLI session enrollment. It bootstraps
+// the gateway if it has never been bootstrapped, or enrolls a new CLI identity if
+// the gateway is already running. On Windows, it uses the Windows Certificate
+// Store for key generation and imports the signed cert for Windows Hello native
+// API access. It does NOT handle re-enrollment of existing credentials — that
+// is the re-enrollment path's responsibility.
+func EnrollCLI(cfg *config.Config, useTPM bool) error {
 	bootstrapped, err := CheckBootstrapStatus(cfg, "")
 	if err != nil {
 		return fmt.Errorf("check bootstrap status: %w", err)
@@ -42,7 +46,14 @@ func EnrollCLI(cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err)
 	}
-	cliCSR, cliKey, err := GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+
+	var cliCSR string
+	var cliKey *ecdsa.PrivateKey
+	if runtime.GOOS == "windows" {
+		cliCSR, cliKey, err = GenerateWindowsCSR(fmt.Sprintf("g8e-cli-%s", hostname), useTPM)
+	} else {
+		cliCSR, cliKey, err = GenerateCSR(fmt.Sprintf("g8e-cli-%s", hostname))
+	}
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
@@ -62,6 +73,11 @@ func EnrollCLI(cfg *config.Config) error {
 
 	if err := SaveCertAndKey(regResp.CLICert, regResp.CLICertChain, cliKey, cfg.CLICertFile(), cfg.CLIKeyFile()); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
+	}
+	if runtime.GOOS == "windows" {
+		if importErr := ImportCertificateToWindowsStore(regResp.CLICert); importErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to import CLI cert to Windows Certificate Store: %v\n", importErr)
+		}
 	}
 	if regResp.HubTrustBundle != "" {
 		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {

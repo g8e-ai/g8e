@@ -190,10 +190,10 @@ func TestAuthError_Is(t *testing.T) {
 	assert.True(t, otherErr.Is(err))
 }
 
-func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
+func TestRouteAuthRegistry_ExactPaths(t *testing.T) {
 	t.Parallel()
 
-	registry := NewPublicRouteRegistry(false)
+	registry := NewRouteAuthRegistry(false)
 
 	// Test exact public paths
 	publicPaths := []string{
@@ -206,19 +206,19 @@ func TestPublicRouteRegistry_ExactPaths(t *testing.T) {
 	}
 
 	for _, path := range publicPaths {
-		assert.True(t, registry.IsPublic(path), "Path %s should be public", path)
+		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "Path %s should be RouteAuthNone", path)
 	}
 
-	// Test that slight variations are not public
-	assert.False(t, registry.IsPublic("/healthz"), "/healthz should not be public")
-	assert.False(t, registry.IsPublic(constants.APIPaths.PKICSRSign+"/"), constants.APIPaths.PKICSRSign+"/ should not be public")
-	assert.False(t, registry.IsPublic(constants.APIPaths.AuthBootstrap+"/extra"), constants.APIPaths.AuthBootstrap+"/extra should not be public")
+	// Test that slight variations are not public (fail-closed to RouteAuthMTLS)
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/healthz"), "/healthz should default to RouteAuthMTLS")
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.PKICSRSign+"/"), constants.APIPaths.PKICSRSign+"/ should default to RouteAuthMTLS")
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode(constants.APIPaths.AuthBootstrap+"/extra"), constants.APIPaths.AuthBootstrap+"/extra should default to RouteAuthMTLS")
 }
 
-func TestPublicRouteRegistry_Prefixes(t *testing.T) {
+func TestRouteAuthRegistry_Prefixes(t *testing.T) {
 	t.Parallel()
 
-	registry := NewPublicRouteRegistry(false)
+	registry := NewRouteAuthRegistry(false)
 
 	// Test prefix-based public paths
 	publicPrefixPaths := []string{
@@ -229,19 +229,19 @@ func TestPublicRouteRegistry_Prefixes(t *testing.T) {
 	}
 
 	for _, path := range publicPrefixPaths {
-		assert.True(t, registry.IsPublic(path), "Path %s should be public (prefix match)", path)
+		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "Path %s should be RouteAuthNone (prefix match)", path)
 	}
 
 	// Test that paths outside the prefix are not public
-	assert.False(t, registry.IsPublic("/.well-known/other/pki/"), "/.well-known/other/pki/ should not be public")
-	assert.False(t, registry.IsPublic("/api/v1/pki/"), "/api/v1/pki/ should not be public")
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/.well-known/other/pki/"), "/.well-known/other/pki/ should default to RouteAuthMTLS")
+	assert.Equal(t, RouteAuthMTLS, registry.AuthMode("/api/v1/pki/"), "/api/v1/pki/ should default to RouteAuthMTLS")
 }
 
-func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
+func TestRouteAuthRegistry_JWKSEnabled(t *testing.T) {
 	t.Parallel()
 
 	// Registry with JWKS enabled
-	registryWithJWKS := NewPublicRouteRegistry(true)
+	registryWithJWKS := NewRouteAuthRegistry(true)
 
 	// Test JIT passkey prefix matches
 	jitPaths := []string{
@@ -250,7 +250,7 @@ func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
 		"/api/v1/auth/passkeys/jit-register/challenge",
 	}
 	for _, path := range jitPaths {
-		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
+		assert.Equal(t, RouteAuthNone, registryWithJWKS.AuthMode(path), "Path %s should be RouteAuthNone with JWKS enabled", path)
 	}
 
 	// Test MCP endpoint is public with JWKS enabled
@@ -258,7 +258,7 @@ func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
 		constants.APIPaths.MCPEndpoint,
 	}
 	for _, path := range mcpPaths {
-		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
+		assert.Equal(t, RouteAuthNone, registryWithJWKS.AuthMode(path), "Path %s should be RouteAuthNone with JWKS enabled", path)
 	}
 
 	// Test A2A prefix matches
@@ -267,24 +267,24 @@ func TestPublicRouteRegistry_JWKSEnabled(t *testing.T) {
 		"/api/v1/a2a/some-endpoint",
 	}
 	for _, path := range a2aPaths {
-		assert.True(t, registryWithJWKS.IsPublic(path), "Path %s should be public with JWKS enabled", path)
+		assert.Equal(t, RouteAuthNone, registryWithJWKS.AuthMode(path), "Path %s should be RouteAuthNone with JWKS enabled", path)
 	}
 
-	// Registry without JWKS
-	registryWithoutJWKS := NewPublicRouteRegistry(false)
+	// Registry without JWKS — JIT routes should be RouteAuthMTLS
+	registryWithoutJWKS := NewRouteAuthRegistry(false)
 
 	allJWKSPaths := append(jitPaths, append(mcpPaths, a2aPaths...)...)
 	for _, path := range allJWKSPaths {
-		assert.False(t, registryWithoutJWKS.IsPublic(path), "Path %s should not be public without JWKS", path)
+		assert.Equal(t, RouteAuthMTLS, registryWithoutJWKS.AuthMode(path), "Path %s should default to RouteAuthMTLS without JWKS", path)
 	}
 }
 
-func TestPublicRouteRegistry_NonPublicPaths(t *testing.T) {
+func TestRouteAuthRegistry_NonPublicPaths(t *testing.T) {
 	t.Parallel()
 
-	registry := NewPublicRouteRegistry(false)
+	registry := NewRouteAuthRegistry(false)
 
-	// Test paths that should never be public
+	// Test paths that should never be public (default to RouteAuthMTLS)
 	privatePaths := []string{
 		constants.APIPaths.GovernanceEnvelopes,
 		"/_query",
@@ -295,32 +295,32 @@ func TestPublicRouteRegistry_NonPublicPaths(t *testing.T) {
 	}
 
 	for _, path := range privatePaths {
-		assert.False(t, registry.IsPublic(path), "Path %s should not be public", path)
+		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path), "Path %s should default to RouteAuthMTLS", path)
 	}
 }
 
-func TestPublicRouteRegistry_CanonicalCoverage(t *testing.T) {
+func TestRouteAuthRegistry_CanonicalCoverage(t *testing.T) {
 	t.Parallel()
 
-	registry := NewPublicRouteRegistry(false)
+	registry := NewRouteAuthRegistry(false)
 
 	// Ensure all previously hardcoded public routes are covered
 	// This test prevents regression when the registry is modified
-	assert.True(t, registry.IsPublic(constants.APIPaths.Health), "Health check must be public")
-	assert.True(t, registry.IsPublic("/.well-known/g8e/pki/"), "PKI prefix must be public")
-	assert.True(t, registry.IsPublic("/api/v1/pki/csr/sign"), "CSR signing must be public")
-	assert.True(t, registry.IsPublic("/api/v1/pki/devices/enroll"), "Device enrollment must be public")
-	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap"), "Bootstrap must be public")
-	assert.True(t, registry.IsPublic("/api/v1/auth/bootstrap/status"), "Bootstrap status must be public")
-	assert.True(t, registry.IsPublic("/api/v1/auth/logout"), "Logout must be public")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode(constants.APIPaths.Health), "Health check must be RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode("/.well-known/g8e/pki/"), "PKI prefix must be RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/pki/csr/sign"), "CSR signing must be RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/pki/devices/enroll"), "Device enrollment must be RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/auth/bootstrap"), "Bootstrap must be RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/auth/bootstrap/status"), "Bootstrap status must be RouteAuthNone")
+	assert.Equal(t, RouteAuthNone, registry.AuthMode("/api/v1/auth/logout"), "Logout must be RouteAuthNone")
 }
 
-func TestPublicRouteRegistry_PasskeyRoutes(t *testing.T) {
+func TestRouteAuthRegistry_PasskeyRoutes(t *testing.T) {
 	t.Parallel()
 
-	registry := NewPublicRouteRegistry(false)
+	registry := NewRouteAuthRegistry(false)
 
-	// console/* prefix entries should be public
+	// console/* prefix entries should be RouteAuthNone
 	consolePaths := []string{
 		constants.APIPaths.AuthPasskeysConsoleRegisterChallenge,
 		constants.APIPaths.AuthPasskeysConsoleRegisterVerify,
@@ -328,24 +328,61 @@ func TestPublicRouteRegistry_PasskeyRoutes(t *testing.T) {
 		constants.APIPaths.AuthPasskeysConsoleAuthenticateVerify,
 	}
 	for _, path := range consolePaths {
-		assert.True(t, registry.IsPublic(path), "console path %s should be public", path)
+		assert.Equal(t, RouteAuthNone, registry.AuthMode(path), "console path %s should be RouteAuthNone", path)
 	}
 
-	// mTLS-protected passkey sub-paths must NOT be public (excluded prefixes)
+	// mTLS-protected passkey sub-paths must be RouteAuthMTLS (exact path overrides prefix)
 	mtlsPaths := []string{
 		constants.APIPaths.AuthPasskeysCLIStatus,
 	}
 	for _, path := range mtlsPaths {
-		assert.False(t, registry.IsPublic(path), "mTLS path %s should NOT be public", path)
+		assert.Equal(t, RouteAuthMTLS, registry.AuthMode(path), "mTLS path %s should be RouteAuthMTLS", path)
 	}
 
-	// Non-alias sub-paths under excluded prefixes must NOT be public
+	// Non-alias sub-paths under /api/v1/auth/passkeys prefix should be RouteAuthWebSession
 	nonAliasExcludedPaths := []string{
 		"/api/v1/auth/passkeys/cli/other",
 	}
 	for _, path := range nonAliasExcludedPaths {
-		assert.False(t, registry.IsPublic(path), "non-alias excluded path %s should NOT be public", path)
+		assert.Equal(t, RouteAuthWebSession, registry.AuthMode(path), "passkey sub-path %s should be RouteAuthWebSession", path)
 	}
+}
+
+func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
+	t.Parallel()
+
+	registry := NewRouteAuthRegistry(false)
+
+	// SSE stream and events endpoints must be classified as RouteAuthDual
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.SSEStream), "SSE stream must be RouteAuthDual")
+	assert.Equal(t, RouteAuthDual, registry.AuthMode(constants.APIPaths.SSEEvents), "SSE events must be RouteAuthDual")
+}
+
+func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
+	t.Parallel()
+	db := newTestDB(t)
+	logger := testutil.NewTestLogger()
+	userSvc := NewUserService(db, logger)
+	personaSvc := NewPersonaService(db, logger)
+	res := response.NewWriter(logger)
+	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
+
+	t.Run("dual auth falls back to web session when no mTLS cert", func(t *testing.T) {
+		t.Parallel()
+		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		})
+		middleware := auth.Middleware(handler)
+
+		// SSE events path is RouteAuthDual; without mTLS cert, should try web session cookie
+		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.SSEEvents, nil)
+		rr := httptest.NewRecorder()
+		middleware.ServeHTTP(rr, req)
+
+		// No cookie → should get web session cookie required error
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), "web session cookie required")
+	})
 }
 
 // TestAuthIntegrity_AppPolicyDenyByDefault verifies that app identities without
@@ -412,9 +449,9 @@ func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
 
 	middleware := auth.Middleware(handler)
 
-	// Test that health endpoint bypasses all middleware layers via PublicRouteRegistry
-	// This verifies the consolidation: health is in PublicRouteRegistry, and all middleware
-	// use IsPublic() as the single source of truth
+	// Test that health endpoint bypasses all middleware layers via RouteAuthRegistry
+	// This verifies the consolidation: health is RouteAuthNone in RouteAuthRegistry, and the
+	// unified middleware uses AuthMode() as the single source of truth
 	req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 	rr := httptest.NewRecorder()
 
@@ -422,8 +459,8 @@ func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rr.Code, "Health endpoint should bypass all middleware")
 	assert.Equal(t, "success", rr.Body.String())
 
-	// Verify that health is registered as public in the registry
-	assert.True(t, auth.publicRoutes.IsPublic(constants.APIPaths.Health), "Health must be in PublicRouteRegistry")
+	// Verify that health is registered as RouteAuthNone in the registry
+	assert.Equal(t, RouteAuthNone, auth.routeAuth.AuthMode(constants.APIPaths.Health), "Health must be RouteAuthNone in RouteAuthRegistry")
 
 	// Verify that non-public routes still require auth
 	reqPrivate := httptest.NewRequest(http.MethodGet, "/api/v1/operators", nil)
@@ -471,9 +508,10 @@ func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := auth.WebSessionAuth(handler, db)
+	// Use the unified Middleware with a RouteAuthWebSession path
+	middleware := auth.Middleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
 	rr := httptest.NewRecorder()
 
 	middleware.ServeHTTP(rr, req)
@@ -495,9 +533,9 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := auth.WebSessionAuth(handler, db)
+	middleware := auth.Middleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "nonexistent-session"})
 	rr := httptest.NewRecorder()
 
@@ -520,9 +558,9 @@ func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := auth.WebSessionAuth(handler, db)
+	middleware := auth.Middleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: ""})
 	rr := httptest.NewRecorder()
 
@@ -557,9 +595,9 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := auth.WebSessionAuth(handler, db)
+	middleware := auth.Middleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
@@ -604,9 +642,9 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := auth.WebSessionAuth(handler, db)
+	middleware := auth.Middleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 
@@ -654,9 +692,9 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	middleware := auth.WebSessionAuth(handler, db)
+	middleware := auth.Middleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: webSessionID})
 	rr := httptest.NewRecorder()
 

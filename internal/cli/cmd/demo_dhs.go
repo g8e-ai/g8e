@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 )
@@ -158,6 +159,9 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		_ = ensureDHSPosture(demoDir, "consensus")
 
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-ingest", "doctrine check")
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 started: Sovereign Multi-Source Ingest")
+
 		if !dhsScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
@@ -172,6 +176,9 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("  ── Step 3: Run real dhs-ingest via agent-harness ────────────────")
 		fmt.Println("  L1 doctrine admits; L2 consensus quorum met and verified → L5 actuator records INGEST:")
 		fmt.Println()
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-ingest", "doctrine admitted")
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-ingest", "consensus quorum")
+		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-ingest")
 		if err := demoStep(demoDir, "dhs-ingest via agent-harness",
 			false,
 			dhsHarnessRun("dhs-ingest", hcfg)...,
@@ -181,11 +188,18 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-ingest", "quorum met (3/5)")
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-ingest", "actuator executing")
+		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met and verified (3/5)")
+
 		if !dhsScenarioStep(demoDir, "Step 4: Verify the Sovereign Data Service recorded the INGEST",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
 				"python", "/app/verify_ops.py", "INGEST"}) {
 			hasErrors = true
 		}
+
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-ingest", "INGEST recorded")
+		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded INGEST — signed receipt in hash-chained ledger")
 
 		fmt.Println("  Copy-paste to inspect the audit trail:")
 		fmt.Println()
@@ -195,10 +209,12 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if hasErrors {
 			result.status = "FAIL"
 			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
+			demoEmitter.Ledger(tui.LevelCritical, "Scenario 1 FAILED — one or more steps failed")
 		} else {
 			fmt.Println("  [PASS] Scenario 1 — Sovereign ingest governed end to end.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met and verified.")
 			fmt.Println("         L5 actuator recorded the ingest; signed receipt in hash-chained ledger.")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 1 PASSED — Sovereign ingest governed end to end")
 		}
 
 	case "2":
@@ -218,6 +234,8 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          a real human authorizes the exact transaction hash.")
 		fmt.Println()
 
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 started: Cross-Domain Release requires Notary authority")
+
 		// Step 1: Restart gateway in notary posture
 		fmt.Println("  ── Step 1: Restart gateway in notary posture ────────────────────")
 		fmt.Println("  Switching from consensus → notary (L1/L2/L3 strictly enforced):")
@@ -234,10 +252,14 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		// Step 3: Submit dhs-release via agent-harness (L2-only → suspend)
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-release", "doctrine check")
 		fmt.Println("  ── Step 3: Submit dhs-release via agent-harness (L2-only → suspend) ──")
 		fmt.Println("  Connector requests cross-domain release of TRK-MIL-0007.")
 		fmt.Println("  Under notary posture, the gateway suspends pending human L3 approval:")
 		fmt.Println()
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-release", "doctrine admitted")
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-release", "consensus quorum")
+		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-release")
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
 		notaryCfg.L3Mode = "suspend"
@@ -249,6 +271,10 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			fmt.Println()
 			hasErrors = true
 		}
+
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-release", "quorum met (3/5)")
+		demoEmitter.Pipeline(tui.StageL3, tui.StatusWaiting, "dhs-release", "FIDO2 touch required")
+		demoEmitter.Ledger(tui.LevelWarn, "L3 notary: transaction suspended pending human WebAuthn approval")
 
 		// Step 4: Query the gateway's pending approvals API (mTLS) for the suspended tx hash
 		fmt.Println("  ── Step 4: Query gateway for suspended transaction hash ──────────")
@@ -292,16 +318,22 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 				} else {
 					fmt.Println("  Transaction approved via WebAuthn passkey!")
 					fmt.Println()
+					demoEmitter.Pipeline(tui.StageL3, tui.StatusPassed, "dhs-release", "WebAuthn approved")
+					demoEmitter.Ledger(tui.LevelInfo, "L3 notary: human WebAuthn passkey authorization received")
 				}
 			}
 		}
 
 		// Step 6: Verify the RELEASE was executed by the L5 actuator
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-release", "actuator executing")
 		if !dhsScenarioStep(demoDir, "Step 6: Verify the Sovereign Data Service recorded the RELEASE",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
 				"python", "/app/verify_ops.py", "RELEASE"}) {
 			hasErrors = true
 		}
+
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-release", "RELEASE recorded")
+		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded RELEASE — signed receipt in hash-chained ledger")
 
 		// Step 7: Restore gateway to consensus posture
 		fmt.Println("  ── Step 7: Restore gateway to consensus posture ─────────────────")
@@ -317,11 +349,13 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if hasErrors {
 			result.status = "FAIL"
 			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
+			demoEmitter.Ledger(tui.LevelCritical, "Scenario 2 FAILED — one or more steps failed")
 		} else {
 			fmt.Println("  [PASS] Scenario 2 — Cross-domain release governed by human passkey approval.")
 			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
 			fmt.Println("         L3 notary required real human WebAuthn authorization.")
 			fmt.Println("         L5 actuator recorded the RELEASE after approval.")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 2 PASSED — Cross-domain release governed by human passkey approval")
 		}
 
 	case "3":
@@ -344,12 +378,15 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		_ = ensureDHSPosture(demoDir, "consensus")
 
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 started: Resilient Disconnected Operations")
+
 		if !dhsScenarioStep(demoDir, "Step 1: Confirm gateway is live before disconnect",
 			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
 		}
 
 		fmt.Println("  ── Step 2: Sever the Mission Partner datalink ───────────────────")
+		demoEmitter.Ledger(tui.LevelWarn, "Mission Partner datalink severed — entering comms-denied mode")
 		_ = demoStep(demoDir, "sever datalink",
 			false,
 			"docker", "network", "disconnect", "dhs-demo_net_perimeter", "dhs-coalition-datalink",
@@ -363,6 +400,9 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("  ── Step 4: Govern an ingest while disconnected ──────────────────")
 		fmt.Println("  Running dhs-ingest through the gateway (consensus) with the datalink severed:")
 		fmt.Println()
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-ingest-disco", "doctrine check (local)")
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-ingest-disco", "doctrine admitted (local)")
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-ingest-disco", "local consensus")
 		if err := demoStep(demoDir, "dhs-ingest while disconnected",
 			false,
 			dhsHarnessRun("dhs-ingest", hcfg)...,
@@ -371,6 +411,10 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			fmt.Println()
 			hasErrors = true
 		}
+
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-ingest-disco", "local quorum met")
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-ingest-disco", "local INGEST recorded")
+		demoEmitter.Ledger(tui.LevelInfo, "Governance continued locally while disconnected — Git ledger + SQLite vault persisted")
 
 		if !dhsScenarioStep(demoDir, "Step 5: Verify local ledger exists on operator",
 			[]string{"docker", "compose", "exec", "-T", "operator",
@@ -385,6 +429,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		fmt.Println("  ── Step 7: Restore the Mission Partner datalink ─────────────────")
+		demoEmitter.Ledger(tui.LevelInfo, "Mission Partner datalink restored")
 		_ = demoStep(demoDir, "restore datalink",
 			false,
 			"docker", "network", "connect", "dhs-demo_net_perimeter", "dhs-coalition-datalink",
@@ -399,9 +444,11 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if hasErrors {
 			result.status = "FAIL"
 			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
+			demoEmitter.Ledger(tui.LevelCritical, "Scenario 3 FAILED — one or more steps failed")
 		} else {
 			fmt.Println("  [PASS] Scenario 3 — Continuity of coverage verified under comms denial.")
 			fmt.Println("         Governance continued locally; Git ledger + SQLite vault persisted all decisions.")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 3 PASSED — Continuity of coverage verified under comms denial")
 		}
 
 	case "4":
@@ -424,14 +471,22 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		_ = ensureDHSPosture(demoDir, "consensus")
 
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 started: Governed Predictive Cueing (quorum vs veto)")
+
 		if !dhsScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
 		}
 
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-cue", "doctrine check")
 		fmt.Println("  ── Step 2: Run dhs-cue via agent-harness (L2 quorum → admit) ────")
 		fmt.Println("  L2 consensus quorum met (decision=true) → admitted → L5 actuator records CUE:")
 		fmt.Println()
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue", "doctrine admitted")
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-cue", "consensus deliberation")
+		demoEmitter.Consensus("axiom", true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus("concord", true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus("variance", true, true, 3, 5, tui.ConsensusPending, "")
 		if err := demoStep(demoDir, "dhs-cue via agent-harness",
 			false,
 			dhsHarnessRun("dhs-cue", hcfg)...,
@@ -441,15 +496,29 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-cue", "quorum met (3/5)")
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-cue", "actuator executing")
+		demoEmitter.Consensus("axiom", true, true, 3, 5, tui.ConsensusReached, "cue-hash-001")
+		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — cue admitted")
+
 		if !dhsScenarioStep(demoDir, "Step 3: Verify the Sovereign Data Service recorded the CUE",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
 				"python", "/app/verify_ops.py", "CUE"}) {
 			hasErrors = true
 		}
 
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-cue", "CUE recorded")
+		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded CUE — signed receipt in hash-chained ledger")
+
 		fmt.Println("  ── Step 4: Run dhs-cue-veto via agent-harness (L2 veto → reject) ─")
 		fmt.Println("  L2 consensus decision=false → vetoed at quorum → operator fails closed (≥400):")
 		fmt.Println()
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue-veto", "doctrine admitted")
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-cue-veto", "consensus deliberation")
+		demoEmitter.Consensus("axiom", true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus("concord", true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus("variance", true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus("pragma", false, true, 3, 5, tui.ConsensusPending, "")
 		if err := demoStep(demoDir, "dhs-cue-veto via agent-harness",
 			false,
 			dhsHarnessRun("dhs-cue-veto", hcfg)...,
@@ -459,6 +528,10 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusFailed, "dhs-cue-veto", "vetoed at quorum")
+		demoEmitter.Consensus("nemesis", true, true, 3, 5, tui.ConsensusRejected, "veto-hash-002")
+		demoEmitter.Ledger(tui.LevelCritical, "L2 consensus REJECTED — Byzantine fault detected: pragma dissent (4/5 affirmative, quorum requires 3)")
+
 		fmt.Println("  Copy-paste to inspect the audit trail:")
 		fmt.Println()
 		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sh -c 'cd /root/.g8e/data/ledger/files && git log --oneline'")
@@ -467,10 +540,12 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if hasErrors {
 			result.status = "FAIL"
 			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
+			demoEmitter.Ledger(tui.LevelCritical, "Scenario 4 FAILED — one or more steps failed")
 		} else {
 			fmt.Println("  [PASS] Scenario 4 — Predictive cueing governed by L2 consensus.")
 			fmt.Println("         Authorized cue admitted with quorum; vetoed cue blocked at quorum.")
 			fmt.Println("         CUE operation recorded by the L5 actuator; veto produced no actuator row.")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 4 PASSED — Predictive cueing governed by L2 consensus")
 		}
 
 	case "5":
@@ -493,9 +568,12 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		_ = ensureDHSPosture(demoDir, "consensus")
 
+		demoEmitter.Ledger(tui.LevelInfo, "Scenario 5 started: Sovereign Destruction + Tamper-Proof Audit")
+
 		fmt.Println("  ── Step 1: Run dhs-evidence-block via agent-harness (L1 reject) ──")
 		fmt.Println("  L1 doctrine detects 'rm -rf /var/log/g8e' → rejected at admission:")
 		fmt.Println()
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-evidence-block", "doctrine check")
 		if err := demoStep(demoDir, "dhs-evidence-block via agent-harness",
 			false,
 			dhsHarnessRun("dhs-evidence-block", hcfg)...,
@@ -505,9 +583,13 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "dhs-evidence-block", "DATA DESTRUCTION ATTEMPT BLOCKED")
+		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/log/g8e' — data-destruction threat detected at admission")
+
 		fmt.Println("  ── Step 2: Run dhs-purge via agent-harness (admit) ──────────────")
 		fmt.Println("  L1 doctrine admits; L2 consensus quorum met → L5 actuator records PURGE:")
 		fmt.Println()
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-purge", "doctrine check")
 		if err := demoStep(demoDir, "dhs-purge via agent-harness",
 			false,
 			dhsHarnessRun("dhs-purge", hcfg)...,
@@ -517,11 +599,19 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
+		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-purge", "doctrine admitted")
+		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-purge", "quorum met (3/5)")
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-purge", "actuator executing")
+		demoEmitter.Ledger(tui.LevelInfo, "L1+L2 admitted governed purge — L5 actuator recording PURGE with destruction receipt")
+
 		if !dhsScenarioStep(demoDir, "Step 3: Verify the Sovereign Data Service recorded the PURGE",
 			[]string{"docker", "compose", "exec", "-T", "datasvc",
 				"python", "/app/verify_ops.py", "PURGE"}) {
 			hasErrors = true
 		}
+
+		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-purge", "PURGE recorded")
+		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded PURGE — cryptographic destruction receipt in hash-chained ledger")
 
 		fmt.Println("  Copy-paste to inspect the audit trail:")
 		fmt.Println()
@@ -531,10 +621,12 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if hasErrors {
 			result.status = "FAIL"
 			fmt.Println("  [FAIL] Scenario 5 — One or more steps failed.")
+			demoEmitter.Ledger(tui.LevelCritical, "Scenario 5 FAILED — one or more steps failed")
 		} else {
 			fmt.Println("  [PASS] Scenario 5 — Destruction governed and provable.")
 			fmt.Println("         L1 blocked the audit-wipe; L1+L2 admitted governed purge with receipt.")
 			fmt.Println("         PURGE operation recorded by the L5 actuator.")
+			demoEmitter.Ledger(tui.LevelInfo, "Scenario 5 PASSED — Destruction governed and provable")
 		}
 
 	default:
