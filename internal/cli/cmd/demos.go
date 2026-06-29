@@ -82,6 +82,30 @@ func toDockerPath(path string) string {
 	return path
 }
 
+// checkDockerAvailable verifies that Docker is installed and the daemon is running.
+// It returns a user-friendly error with platform-specific guidance if Docker is
+// not available.
+func checkDockerAvailable() error {
+	if _, err := exec.LookPath("docker"); err != nil {
+		if runtime.GOOS == "windows" {
+			return fmt.Errorf("%w: Docker is not installed or not on PATH. Install Docker Desktop from https://www.docker.com/products/docker-desktop/", constants.ErrServiceUnavailable)
+		}
+		return fmt.Errorf("%w: Docker is not installed or not on PATH. Install Docker and ensure 'docker' is in your PATH", constants.ErrServiceUnavailable)
+	}
+
+	infoCmd := exec.Command("docker", "info")
+	infoCmd.Stdout = nil
+	infoCmd.Stderr = nil
+	if err := infoCmd.Run(); err != nil {
+		if runtime.GOOS == "windows" {
+			return fmt.Errorf("%w: Docker daemon is not running. Start Docker Desktop and wait for it to be ready, then try again", constants.ErrServiceUnavailable)
+		}
+		return fmt.Errorf("%w: Docker daemon is not running. Start the Docker daemon (e.g. 'sudo systemctl start docker') and try again", constants.ErrServiceUnavailable)
+	}
+
+	return nil
+}
+
 func demosCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "demos",
@@ -177,14 +201,21 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	}
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		fmt.Printf("Warning: g8e binary not found at %s\n", binPath)
-		fmt.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
+		if runtime.GOOS == "windows" {
+			fmt.Printf("Run 'make build' from the repository root, then copy the binary:\n  copy g8e.exe %s\\%s\\g8e.exe\n", constants.DemosDirname, constants.DemosBinDirname)
+		} else {
+			fmt.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
+		}
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	// Start the demo environment
 	fmt.Printf("Starting demo environment: %s\n", org)
-	dockerPath := toDockerPath(composePath)
-	fmt.Printf("Debug: composePath=%s, dockerPath=%s\n", composePath, dockerPath)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", dockerPath, "up", "-d")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "up", "-d")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -275,6 +306,11 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
 	}
 
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
+	}
+
 	// Stop the demo environment
 	fmt.Printf("Stopping demo environment: %s\n", org)
 	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down")
@@ -319,6 +355,11 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	// Show status
@@ -396,6 +437,11 @@ func cleanSingleDemo(cmd *cobra.Command, demosDir, org string, skipConfirm bool)
 		}
 	}
 
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
+	}
+
 	cmd.Printf("Cleaning demo environment: %s\n", org)
 	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down", "-v")
 	dockerComposeCmd.Dir = demoDir
@@ -467,6 +513,11 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 			cmd.Println("Clean cancelled.")
 			return nil
 		}
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	var failed []string
@@ -541,6 +592,11 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	fmt.Printf("Stopping demo environment: %s\n", org)

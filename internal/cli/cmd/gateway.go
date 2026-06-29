@@ -287,34 +287,7 @@ func gatewayStartCmd() *cobra.Command {
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n", pid)
 			cmd.Println()
-			cmd.Println("Next Steps:")
-			cmd.Println()
-			cmd.Println("  1. Enroll CLI credentials:")
-			cmd.Printf("       %s auth enroll\n", getBinaryName())
-			cmd.Println()
-			cmd.Println("  2. Connect remote operators (choose one):")
-			cmd.Printf("       Deploy:        %s operator deploy --hosts <host1,host2>\n", getBinaryName())
-			cmd.Printf("       Stream:        %s operator stream --hosts <host1,host2>\n", getBinaryName())
-			cmd.Printf("       PKI enroll:    %s gw security pki enroll -e %s\n", getBinaryName(), externalIP)
-			cmd.Printf("       Remote script: curl -fsSL http://%s:%d/g8e-operator.sh | bash  (Linux/macOS)\n", externalIP, constants.Ports.OperatorHttp)
-			cmd.Printf("                      irm http://%s:%d/g8e-operator.ps1 | iex          (Windows)\n", externalIP, constants.Ports.OperatorHttp)
-			cmd.Println()
-			cmd.Println("  3. Connect AI agents:")
-			cmd.Printf("       %s mcp show    Print MCP client configuration\n", getBinaryName())
-			cmd.Printf("       %s mcp stdio   Run Operator as MCP stdio server (L1-L5 governance)\n", getBinaryName())
-			cmd.Println()
-			cmd.Println("Console UI:")
-			cmd.Printf("  %s/console/  (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-			cmd.Println()
-			cmd.Println("Manage & Monitor:")
-			cmd.Printf("  %s gw status | logs -f | restart | settings | reset | clean\n", getBinaryName())
-			cmd.Printf("  %s gw data operators | users | audit list --operator-session-id <session-id>\n", getBinaryName())
-
-			if runtime.GOOS == "windows" {
-				cmd.Println()
-				cmd.Println("Windows (Passkey Authentication):")
-				cmd.Printf("  %s auth enroll-windows  Enroll via Windows Certificate Store\n", getBinaryName())
-			}
+			printNextSteps(cmd, postureObj, externalIP)
 
 			if follow {
 				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it

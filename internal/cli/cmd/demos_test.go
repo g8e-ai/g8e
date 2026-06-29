@@ -616,6 +616,41 @@ func TestDoWScenarioDescriptions(t *testing.T) {
 	})
 }
 
+func TestCheckDockerAvailable(t *testing.T) {
+	t.Run("checkDockerAvailable function exists", func(t *testing.T) {
+		assert.NotNil(t, checkDockerAvailable)
+	})
+
+	t.Run("returns error when docker is not on PATH", func(t *testing.T) {
+		originalPath := os.Getenv("PATH")
+		defer os.Setenv("PATH", originalPath)
+
+		os.Setenv("PATH", "/nonexistent/path")
+
+		err := checkDockerAvailable()
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrServiceUnavailable)
+	})
+}
+
+func TestToDockerPath(t *testing.T) {
+	t.Run("converts backslashes to forward slashes on Windows", func(t *testing.T) {
+		if runtime.GOOS != "windows" {
+			t.Skip("test only applies to Windows")
+		}
+		result := toDockerPath(`D:\g8e\demos\dhs\compose.yml`)
+		assert.Equal(t, "D:/g8e/demos/dhs/compose.yml", result)
+	})
+
+	t.Run("returns path unchanged on non-Windows", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("test only applies to non-Windows")
+		}
+		result := toDockerPath("/home/user/g8e/demos/dhs/compose.yml")
+		assert.Equal(t, "/home/user/g8e/demos/dhs/compose.yml", result)
+	})
+}
+
 func TestDHSScenarioDescriptions(t *testing.T) {
 	t.Run("scenario descriptions are documented in run command", func(t *testing.T) {
 		cmd := demosRunCmd()
