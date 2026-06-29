@@ -134,8 +134,9 @@ The passkey HTTP layer is split into two components: `PasskeyService` (domain lo
 - `handleApprovalChallenge` - generates WebAuthn challenge for OOB approval
 - `handleApprovalVerify` - verifies WebAuthn assertion for OOB approval
 - `handleCLIApprovalStatus` - `GET /api/v1/approvals/status/{txHash}` (mTLS-protected)
+- `handleCLIListSuspended` - `GET /api/v1/approvals/pending` (mTLS-protected, returns non-approved suspended transactions only)
 - `handleApprovalPage` - redirects to console SPA for browser-based approval
-- `handleListSuspendedTransactions` - lists pending approvals (WebSession-protected)
+- `handleListSuspendedTransactions` - lists pending approvals (WebSession-protected, returns all suspended transactions including approved)
 
 Dependencies for approval handlers are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` on `PasskeyHandler` after construction, since the MCP gateway is created later in the startup sequence.
 

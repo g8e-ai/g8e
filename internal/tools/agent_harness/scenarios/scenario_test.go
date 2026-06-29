@@ -799,7 +799,7 @@ func TestRegistryScenarioOrder(t *testing.T) {
 
 	// Last scenario should be a governance, dow, or dhs scenario
 	lastName := scenarios[len(scenarios)-1].Name
-	validLastPrefixes := []string{"consensus", "envelope", "notary", "tribunal", "delegation", "dow", "dhs"}
+	validLastPrefixes := []string{"consensus", "envelope", "notary", "tribunal", "delegation", "dow", "dhs", "gov", "finance"}
 	found := false
 	for _, p := range validLastPrefixes {
 		if strings.Contains(lastName, p) {
@@ -826,7 +826,7 @@ func TestRegistryUniqueNames(t *testing.T) {
 
 func TestRegistryCount(t *testing.T) {
 	scenarios := Registry()
-	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dowScenarios()) + len(dhsScenarios())
+	expectedCount := len(mcpScenarios()) + len(a2aScenarios()) + len(governanceScenarios()) + len(dowScenarios()) + len(dhsScenarios()) + len(govFinanceScenarios())
 
 	if len(scenarios) != expectedCount {
 		t.Errorf("Registry should have %d scenarios (sum of module functions), got %d", expectedCount, len(scenarios))

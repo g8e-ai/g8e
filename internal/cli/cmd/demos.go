@@ -884,6 +884,103 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 	return nil
 }
 
+type twoLayerScenarioConfig struct {
+	scenarioName      string
+	metrics           string
+	httpPort          string
+	harnessScenario   string
+	provesDescription string
+	step3Label        string
+	step3Description  string
+	passMessage       string
+}
+
+func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioResult, error) {
+	var result scenarioResult
+	var hasErrors bool
+
+	result.number = "1"
+	result.name = cfg.scenarioName
+	result.status = "PASS"
+	result.metrics = cfg.metrics
+
+	fmt.Printf("\n%s\n", strings.Repeat("─", 60))
+	fmt.Printf("  Scenario 1 — %s\n", cfg.scenarioName)
+	fmt.Println(strings.Repeat("─", 60))
+	fmt.Println()
+	fmt.Printf("  PROVES: %s\n", cfg.provesDescription)
+	fmt.Println()
+
+	fmt.Println("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
+	if err := demoStep(demoDir, "gateway health",
+		false,
+		"curl", "-s", "http://localhost:"+cfg.httpPort+"/api/v1/health",
+	); err != nil {
+		fmt.Println("  (gateway health check failed — is the demo running?)")
+		fmt.Println()
+		hasErrors = true
+	}
+
+	fmt.Println("  ── Step 2: Verify operator enrollment (mTLS certs) ────────────")
+	if err := demoStep(demoDir, "enrollment check",
+		false,
+		"docker", "compose", "exec", "-T", "operator",
+		"test", "-f", "/root/.g8e/pki/operator.crt",
+	); err != nil {
+		fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
+		fmt.Println()
+		hasErrors = true
+	}
+
+	fmt.Printf("  ── Step 3: %s ───────\n", cfg.step3Label)
+	fmt.Printf("  %s\n", cfg.step3Description)
+	fmt.Println()
+	if err := demoStep(demoDir, cfg.harnessScenario+" via agent-harness",
+		false,
+		"docker", "compose", "exec", "-T", "agent-runtime",
+		"/g8e", "agent-harness", "run",
+		"--mtls-url", "https://g8e.local:8443",
+		"--public-url", "http://g8e.local:"+cfg.httpPort,
+		"--cert", "/root/.g8e/pki/operator.crt",
+		"--key", "/root/.g8e/pki/operator.key",
+		"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+		cfg.harnessScenario,
+	); err != nil {
+		fmt.Println("  (agent-harness scenario failed)")
+		fmt.Println()
+		hasErrors = true
+	}
+
+	fmt.Println("  ── Step 4: Verify doctrine rejection in gateway logs ──────────")
+	_ = demoStep(demoDir, "audit tail",
+		false,
+		"docker", "compose", "logs", "observability", "--tail", "10",
+	)
+
+	fmt.Println("  ── Step 5: Network isolation (supplementary proof) ───────────")
+	fmt.Println("  bad-actor (net_untrusted) → target-system (net_secure) — should timeout")
+	fmt.Println()
+	_ = demoStep(demoDir, "network isolation",
+		false,
+		"docker", "compose", "exec", "-T", "bad-actor",
+		"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",
+	)
+
+	fmt.Println("  Copy-paste to inspect the enforcement audit:")
+	fmt.Println()
+	fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+	fmt.Println()
+
+	if hasErrors {
+		result.status = "FAIL"
+		fmt.Printf("  [FAIL] Scenario 1 — One or more steps failed.\n")
+	} else {
+		fmt.Printf("  [PASS] %s\n", cfg.passMessage)
+	}
+
+	return result, nil
+}
+
 func demosAuditCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit <org> [action]",

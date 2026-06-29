@@ -88,7 +88,15 @@ docker compose logs -f observability
 g8e demos run finance 1
 ```
 
-**Proves**: Network isolation prevents a bad-actor on net_untrusted from reaching the trading ledger on net_secure. The g8e gateway enforces doctrine on all inbound requests.
+**Proves**: Two-layer defense against unauthorized trading.
+
+The scenario runs a 5-step flow:
+
+1. **Gateway health check** — confirms the g8e gateway is live
+2. **Operator enrollment verification** — confirms mTLS certs exist
+3. **Agent-harness mTLS transaction** — submits a `finance-unauthorized-trade` scenario via the real gateway; L1 doctrine blocks the unauthorized trade execution payload at confidence >= 0.90
+4. **Audit log tail** — verifies doctrine rejection in gateway logs
+5. **Network isolation proof** — bad-actor on net_untrusted has no route to net_secure (supplementary proof)
 
 ### Run all scenarios
 

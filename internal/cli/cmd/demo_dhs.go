@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -22,6 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 func runDHSScenario(demoDir, scenario string) error {
@@ -248,18 +250,23 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		// Step 4: Extract the suspended transaction hash from the gateway's SQLite DB
-		fmt.Println("  ── Step 4: Extract suspended transaction hash ────────────────────")
+		// Step 4: Query the gateway's pending approvals API (mTLS) for the suspended tx hash
+		fmt.Println("  ── Step 4: Query gateway for suspended transaction hash ──────────")
+		fmt.Println("  Using GET /api/v1/approvals/pending (mTLS-authenticated):")
+		fmt.Println()
 		txHashBytes, err := exec.Command("docker", "compose", "exec", "-T", "gateway",
-			"sqlite3", "/root/.g8e/data/suspended_transactions.db",
-			"SELECT transaction_hash FROM suspended_transactions WHERE approved=0 ORDER BY created_at DESC LIMIT 1").Output()
+			"curl", "-sf",
+			"--cert", "/root/.g8e/pki/operator.crt",
+			"--key", "/root/.g8e/pki/operator.key",
+			"--cacert", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+			"https://localhost:8443/api/v1/approvals/pending").Output()
 		if err != nil {
-			fmt.Printf("  [WARNING] Could not query suspended transaction: %v\n", err)
+			fmt.Printf("  [WARNING] Could not query pending approvals API: %v\n", err)
 			hasErrors = true
 		} else {
-			txHash := strings.TrimSpace(string(txHashBytes))
+			txHash := extractFirstTxHash(string(txHashBytes))
 			if txHash == "" {
-				fmt.Println("  [WARNING] No suspended transaction found in gateway DB")
+				fmt.Println("  [WARNING] No pending suspended transaction found via API")
 				hasErrors = true
 			} else {
 				fmt.Printf("  Suspended transaction hash: %s\n", txHash)
@@ -536,4 +543,15 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 	return result, nil
 }
 
-// Made with Bob
+// extractFirstTxHash parses the JSON response from GET /api/v1/approvals/pending
+// and returns the first transaction_hash, or "" if none found.
+func extractFirstTxHash(jsonBody string) string {
+	var resp models.SuspendedTransactionsResponse
+	if err := json.Unmarshal([]byte(jsonBody), &resp); err != nil {
+		return ""
+	}
+	if len(resp.Transactions) == 0 {
+		return ""
+	}
+	return resp.Transactions[0].TransactionHash
+}

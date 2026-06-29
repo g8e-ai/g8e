@@ -14,12 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Seed-Based Ensemble Key Generation** — Added `NewEnsembleFromSeed(keyID, n, seedHex)` and `SeedHex()` to `internal/tools/agent_harness/client/envelope.go` for deterministic Ed25519 key generation. Added `--consensus-seed` and `--tribunal-id` flags to `agent-harness run`. The `Ensemble.TribunalID` field is now configurable (defaults to `"test-tribunal"`).
 * **Consensus Phase Support for DHS Demo** — Added `consensus` case to `selectAgentHarnessScenarios` in `agent_harness.go`. Updated `demos/dhs/compose.yml` to consensus posture with tribunal bootstrap. Un-skipped Scenario 4 (predictive cueing with L2 quorum vs veto). Refactored `dhsHarnessRun` to use `dhsHarnessConfig` struct with named fields.
 * **DHS Scenario 2 — Cross-Domain Release with Notary Posture** — Implemented as a real interactive platform demo. Scenario 2 restarts the gateway in notary mode, runs the agent harness to submit the transaction (which suspends on the real gateway), extracts the transaction hash from the gateway's SQLite database, runs `g8e approve` for WebAuthn passkey approval in the browser, verifies the RELEASE execution on the datasvc L5 actuator, and restores the gateway to consensus posture. `G8E_GATEWAY_POSTURE` environment variable added to `demos/dhs/compose.yml`.
+* **CLI Pending Approvals Endpoint** — Added `GET /api/v1/approvals/pending` (mTLS-authenticated) for listing non-approved suspended transactions. Replaces the direct SQLite query previously used in DHS scenario 2. Registered in `gateway_http_router.go` and `constants/api_paths.go`.
+* **Gov & Finance Demo Agent-Harness Upgrades** — Rewrote gov and finance demo scenario 1 as a 5-step two-layer defense flow: gateway health check, operator enrollment verification, agent-harness mTLS transaction submission, audit log tail, and network isolation proof. Upgraded `agent-runtime` service in `demos/gov/compose.yml` and `demos/finance/compose.yml` from `alpine:latest` to build from the root `Dockerfile` (g8e binary). Added `gov-cui-exfil-block` and `finance-unauthorized-trade` agent-harness scenarios in `internal/tools/agent_harness/scenarios/gov_finance.go`.
+* **DHS Scenario 2 API Refactor** — Replaced direct SQLite database query with mTLS-authenticated `curl` against `https://localhost:8443/api/v1/approvals/pending` to extract the suspended transaction hash. Added `extractFirstTxHash` helper to parse the JSON response.
 
 ### Changed
 
 * **Relaxed Consensus Quorum Validation** — `ValidateConsensusStartup` in `internal/config/config.go` now accepts `quorum >= 1` (was `>= 2`). Single-member ensembles producing one signed vote per envelope are valid for demo deployments.
 * **Developer Documentation Overhaul** — Significantly condensed and restructured `docs/devs/devs.md` from verbose prose to a concise Always/Never/Examples format with concrete code snippets for error handling, path constants, and test tiers. Condensed `docs/devs/docs.md` and `docs/devs/tests.md` to remove redundancy and stale guidance. Updated `demos/README.md` with DHS demo entry. Updated `docs/architecture/governance.md` with consensus posture clarification.
 * **Encryption Architecture Doc Update** — Updated `docs/architecture/encryption.md` to v1.3.2 with accurate references, added `internal/constants/env_vars.go` to References section.
+* **Suspended Transaction Handler Deduplication** — Extracted shared `listSuspendedTransactions(w, r, filterApproved bool)` helper in `passkey_service_approvals.go`; `handleCLIListSuspended` and `handleListSuspendedTransactions` now delegate to it, eliminating ~30 lines of copy-paste.
+* **Gov/Finance Demo Scenario Deduplication** — Extracted `runTwoLayerScenario` helper and `twoLayerScenarioConfig` struct in `demos.go`; `demo_gov.go` and `demo_finance.go` now delegate to it with demo-specific parameters, eliminating ~90% code duplication.
+* **extractFirstTxHash Type Reuse** — Replaced inline anonymous structs in `extractFirstTxHash` with `models.SuspendedTransactionsResponse` to avoid drift if the response model changes.
 
 ### Fixed
 
@@ -43,6 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added `TestSelectAgentHarnessScenarios_Consensus` and `TestApplyAgentHarnessFlags_ConsensusSeedAndTribunalID` in `agent_harness_extra_test.go`.
 * Added `TestNewEnsembleFromSeed`, `TestSeedHex`, `TestEnsemble_TribunalID` in `envelope_test.go`.
 * Updated `TestReExecArgsMatchServeCmdFlags` in `gateway_test.go` to include `TribunalBootstrap`.
+* Added `TestExtractFirstTxHash` (7 subtests) in `internal/cli/cmd/demo_dhs_test.go` covering single/multiple/empty/invalid JSON responses.
+* Added `TestPasskeyService_HandleCLIListSuspended` (5 subtests) in `internal/services/gateway/passkey_service_approvals_test.go` covering method validation, auth, empty list, pending transactions, and approved filtering.
+* Updated `TestRegistryScenarioOrder` and `TestRegistryCount` in `internal/tools/agent_harness/scenarios/scenario_test.go` for `govFinanceScenarios` registration.
 
 ---
 
