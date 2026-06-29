@@ -53,6 +53,7 @@ type startConfig struct {
 	SecretsDir         string
 	PasskeyRpID        string
 	PasskeyRpName      string
+	PasskeyRpOrigins   []string
 	RateLimitRPS       float64
 	RateLimitBurst     int
 	LogLevel           string
@@ -171,6 +172,7 @@ func gatewayStartCmd() *cobra.Command {
 	var vaultRequireUnlock bool
 	var passkeyRpID string
 	var passkeyRpName string
+	var passkeyRpOrigins []string
 	var rateLimitRPS float64
 	var rateLimitBurst int
 	var logLevel string
@@ -218,6 +220,7 @@ func gatewayStartCmd() *cobra.Command {
 				SecretsDir:         secretsDir,
 				PasskeyRpID:        passkeyRpID,
 				PasskeyRpName:      passkeyRpName,
+				PasskeyRpOrigins:   passkeyRpOrigins,
 				RateLimitRPS:       rateLimitRPS,
 				RateLimitBurst:     rateLimitBurst,
 				LogLevel:           logLevel,
@@ -260,6 +263,7 @@ func gatewayStartCmd() *cobra.Command {
 				VaultRequireUnlock: startCfg.VaultRequireUnlock,
 				PasskeyRpID:        startCfg.PasskeyRpID,
 				PasskeyRpName:      startCfg.PasskeyRpName,
+				PasskeyRpOrigins:   startCfg.PasskeyRpOrigins,
 				RateLimitRPS:       startCfg.RateLimitRPS,
 				RateLimitBurst:     startCfg.RateLimitBurst,
 				LogLevel:           startCfg.LogLevel,
@@ -283,34 +287,7 @@ func gatewayStartCmd() *cobra.Command {
 
 			cmd.Printf("[g8e] Gateway started (PID: %d)\n", pid)
 			cmd.Println()
-			cmd.Println("Next Steps:")
-			cmd.Println()
-			cmd.Println("  1. Enroll CLI credentials:")
-			cmd.Printf("       %s auth enroll\n", getBinaryName())
-			cmd.Println()
-			cmd.Println("  2. Connect remote operators (choose one):")
-			cmd.Printf("       Deploy:        %s operator deploy --hosts <host1,host2>\n", getBinaryName())
-			cmd.Printf("       Stream:        %s operator stream --hosts <host1,host2>\n", getBinaryName())
-			cmd.Printf("       PKI enroll:    %s gw security pki enroll -e %s\n", getBinaryName(), externalIP)
-			cmd.Printf("       Remote script: curl -fsSL http://%s:%d/g8e-operator.sh | bash  (Linux/macOS)\n", externalIP, constants.Ports.OperatorHttp)
-			cmd.Printf("                      iwr http://%s:%d/g8e-operator.ps1 | iex          (Windows)\n", externalIP, constants.Ports.OperatorHttp)
-			cmd.Println()
-			cmd.Println("  3. Connect AI agents:")
-			cmd.Printf("       %s mcp show    Print MCP client configuration\n", getBinaryName())
-			cmd.Printf("       %s mcp stdio   Run Operator as MCP stdio server (L1-L5 governance)\n", getBinaryName())
-			cmd.Println()
-			cmd.Println("Console UI:")
-			cmd.Printf("  %s/console/  (WebAuthn/passkey dashboard)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))
-			cmd.Println()
-			cmd.Println("Manage & Monitor:")
-			cmd.Printf("  %s gw status | logs -f | restart | settings | reset | clean\n", getBinaryName())
-			cmd.Printf("  %s gw data operators | users | audit list --operator-session-id <session-id>\n", getBinaryName())
-
-			if runtime.GOOS == "windows" {
-				cmd.Println()
-				cmd.Println("Windows (Passkey Authentication):")
-				cmd.Printf("  %s auth enroll-windows  Enroll via Windows Certificate Store\n", getBinaryName())
-			}
+			printNextSteps(cmd, postureObj, externalIP)
 
 			if follow {
 				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it
@@ -335,6 +312,7 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	cmd.Flags().StringArrayVar(&passkeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
@@ -361,6 +339,7 @@ func gatewayServeCmd() *cobra.Command {
 	var vaultRequireUnlock bool
 	var passkeyRpID string
 	var passkeyRpName string
+	var passkeyRpOrigins []string
 	var rateLimitRPS float64
 	var rateLimitBurst int
 	var logLevel string
@@ -396,6 +375,7 @@ func gatewayServeCmd() *cobra.Command {
 				VaultRequireUnlock:  vaultRequireUnlock,
 				PasskeyRpID:         passkeyRpID,
 				PasskeyRpName:       passkeyRpName,
+				PasskeyRpOrigins:    passkeyRpOrigins,
 				RateLimitRPS:        rateLimitRPS,
 				RateLimitBurst:      rateLimitBurst,
 				LogLevel:            logLevel,
@@ -425,6 +405,7 @@ func gatewayServeCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	cmd.Flags().StringArrayVar(&passkeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")

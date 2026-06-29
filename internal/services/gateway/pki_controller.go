@@ -61,6 +61,13 @@ func newPKIController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBSe
 	}
 }
 
+func (c *PKIController) gatewayHTTPPort() string {
+	if c.cfg != nil && c.cfg.Gateway.HTTPPort != 0 {
+		return strconv.Itoa(c.cfg.Gateway.HTTPPort)
+	}
+	return strconv.Itoa(constants.Ports.OperatorHttp)
+}
+
 func (c *PKIController) readBody(r *http.Request) ([]byte, error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, c.cfg.Gateway.MaxPayloadBytes)
 	return io.ReadAll(r.Body)
@@ -492,7 +499,7 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 		gatewayHost = h
 	}
 
-	port := strconv.Itoa(constants.Ports.OperatorHttp)
+	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
 	binaryName := constants.BinaryNameLinux
@@ -565,7 +572,7 @@ func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Re
 		gatewayHost = h
 	}
 
-	port := strconv.Itoa(constants.Ports.OperatorHttp)
+	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	binaryName := constants.BinaryNameDarwin
 	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
@@ -651,7 +658,7 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 		}
 	}
 
-	port := strconv.Itoa(constants.Ports.OperatorHttp)
+	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
 	binaryName := constants.BinaryNameWindows
@@ -796,7 +803,7 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 	gatewayHost := c.extractGatewayHost(r.Host)
 	data := scripts.TemplateData{
 		GatewayHost: gatewayHost,
-		GatewayPort: strconv.Itoa(constants.Ports.OperatorHttp),
+		GatewayPort: c.gatewayHTTPPort(),
 	}
 
 	script, err := scripts.RenderLinuxDeployScript(data)
@@ -860,7 +867,7 @@ func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http
 
 	data := scripts.TemplateData{
 		GatewayHost: gatewayHost,
-		GatewayPort: strconv.Itoa(constants.Ports.OperatorHttp),
+		GatewayPort: c.gatewayHTTPPort(),
 	}
 
 	script, err := scripts.RenderWindowsDeployScript(data)

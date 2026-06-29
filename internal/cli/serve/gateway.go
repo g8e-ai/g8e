@@ -55,6 +55,7 @@ type GatewayConfig struct {
 	VaultRequireUnlock  bool
 	PasskeyRpID         string
 	PasskeyRpName       string
+	PasskeyRpOrigins    []string
 	RateLimitRPS        float64
 	RateLimitBurst      int
 	LogLevel            string
@@ -123,6 +124,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		SecretsDir:          cfg.SecretsDir,
 		PasskeyRpID:         cfg.PasskeyRpID,
 		PasskeyRpName:       cfg.PasskeyRpName,
+		PasskeyRpOrigins:    cfg.PasskeyRpOrigins,
 		RateLimitRPS:        cfg.RateLimitRPS,
 		RateLimitBurst:      cfg.RateLimitBurst,
 		CertMode:            cfg.CertIdentityMode,

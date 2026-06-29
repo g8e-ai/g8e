@@ -82,6 +82,30 @@ func toDockerPath(path string) string {
 	return path
 }
 
+// checkDockerAvailable verifies that Docker is installed and the daemon is running.
+// It returns a user-friendly error with platform-specific guidance if Docker is
+// not available.
+func checkDockerAvailable() error {
+	if _, err := exec.LookPath("docker"); err != nil {
+		if runtime.GOOS == "windows" {
+			return fmt.Errorf("%w: Docker is not installed or not on PATH. Install Docker Desktop from https://www.docker.com/products/docker-desktop/", constants.ErrServiceUnavailable)
+		}
+		return fmt.Errorf("%w: Docker is not installed or not on PATH. Install Docker and ensure 'docker' is in your PATH", constants.ErrServiceUnavailable)
+	}
+
+	infoCmd := exec.Command("docker", "info")
+	infoCmd.Stdout = nil
+	infoCmd.Stderr = nil
+	if err := infoCmd.Run(); err != nil {
+		if runtime.GOOS == "windows" {
+			return fmt.Errorf("%w: Docker daemon is not running. Start Docker Desktop and wait for it to be ready, then try again", constants.ErrServiceUnavailable)
+		}
+		return fmt.Errorf("%w: Docker daemon is not running. Start the Docker daemon (e.g. 'sudo systemctl start docker') and try again", constants.ErrServiceUnavailable)
+	}
+
+	return nil
+}
+
 func demosCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "demos",
@@ -177,14 +201,21 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	}
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		fmt.Printf("Warning: g8e binary not found at %s\n", binPath)
-		fmt.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
+		if runtime.GOOS == "windows" {
+			fmt.Printf("Run 'make build' from the repository root, then copy the binary:\n  copy g8e.exe %s\\%s\\g8e.exe\n", constants.DemosDirname, constants.DemosBinDirname)
+		} else {
+			fmt.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
+		}
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	// Start the demo environment
 	fmt.Printf("Starting demo environment: %s\n", org)
-	dockerPath := toDockerPath(composePath)
-	fmt.Printf("Debug: composePath=%s, dockerPath=%s\n", composePath, dockerPath)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", dockerPath, "up", "-d")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "up", "-d")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
@@ -209,27 +240,37 @@ func printDemoEndpoints(org string) {
 	case "healthcare":
 		fmt.Println("  Gateway HTTP:  http://localhost:8081")
 		fmt.Println("  Gateway HTTPS: https://localhost:8444")
+		fmt.Println("  Console:       https://localhost:8444/console/")
 		fmt.Println("  RabbitMQ UI:   http://localhost:15673")
 		fmt.Println("  PostgreSQL:    localhost:5433")
 		fmt.Println("  Metabase:      http://localhost:3001")
 	case "gov":
 		fmt.Println("  Gateway HTTP:  http://localhost:8080")
 		fmt.Println("  Gateway HTTPS: https://localhost:8443")
+		fmt.Println("  Console:       https://localhost:8443/console/")
 		fmt.Println("  Demo UI:       http://localhost:3000")
 	case "finance":
 		fmt.Println("  Gateway HTTP:  http://localhost:8082")
 		fmt.Println("  Gateway HTTPS: https://localhost:8445")
+		fmt.Println("  Console:       https://localhost:8445/console/")
 		fmt.Println("  Demo UI:       http://localhost:3002")
 	case "secure-data":
 		fmt.Println("  Gateway HTTP:  http://localhost:8083")
 		fmt.Println("  Gateway HTTPS: https://localhost:8446")
+		fmt.Println("  Console:       https://localhost:8446/console/")
 		fmt.Println("  Demo UI:       http://localhost:3003")
 	case "dow":
 		fmt.Println("  Gateway HTTP:  http://localhost:8086")
 		fmt.Println("  Gateway HTTPS: https://localhost:8449")
+		fmt.Println("  Console:       https://localhost:8449/console/")
 	case "dhs":
 		fmt.Println("  Gateway HTTP:  http://localhost:8087")
 		fmt.Println("  Gateway HTTPS: https://localhost:8450")
+		fmt.Println("  Console:       https://localhost:8450/console/")
+	case "swarm":
+		fmt.Println("  Gateway HTTP:  http://localhost:8085")
+		fmt.Println("  Gateway HTTPS: https://localhost:8448")
+		fmt.Println("  Console:       https://localhost:8448/console/")
 	default:
 		fmt.Printf("  No endpoint information available for '%s'\n", org)
 	}
@@ -263,6 +304,11 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	// Stop the demo environment
@@ -309,6 +355,11 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	// Show status
@@ -386,6 +437,11 @@ func cleanSingleDemo(cmd *cobra.Command, demosDir, org string, skipConfirm bool)
 		}
 	}
 
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
+	}
+
 	cmd.Printf("Cleaning demo environment: %s\n", org)
 	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down", "-v")
 	dockerComposeCmd.Dir = demoDir
@@ -457,6 +513,11 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 			cmd.Println("Clean cancelled.")
 			return nil
 		}
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	var failed []string
@@ -531,6 +592,11 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
 	if _, err := os.Stat(composePath); os.IsNotExist(err) {
 		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	}
+
+	// Pre-flight: verify Docker is available and running
+	if err := checkDockerAvailable(); err != nil {
+		return err
 	}
 
 	fmt.Printf("Stopping demo environment: %s\n", org)
@@ -816,6 +882,103 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 		return fmt.Errorf("%s failed (non-fatal): %w", label, err)
 	}
 	return nil
+}
+
+type twoLayerScenarioConfig struct {
+	scenarioName      string
+	metrics           string
+	httpPort          string
+	harnessScenario   string
+	provesDescription string
+	step3Label        string
+	step3Description  string
+	passMessage       string
+}
+
+func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioResult, error) {
+	var result scenarioResult
+	var hasErrors bool
+
+	result.number = "1"
+	result.name = cfg.scenarioName
+	result.status = "PASS"
+	result.metrics = cfg.metrics
+
+	fmt.Printf("\n%s\n", strings.Repeat("─", 60))
+	fmt.Printf("  Scenario 1 — %s\n", cfg.scenarioName)
+	fmt.Println(strings.Repeat("─", 60))
+	fmt.Println()
+	fmt.Printf("  PROVES: %s\n", cfg.provesDescription)
+	fmt.Println()
+
+	fmt.Println("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
+	if err := demoStep(demoDir, "gateway health",
+		false,
+		"curl", "-s", "http://localhost:"+cfg.httpPort+"/api/v1/health",
+	); err != nil {
+		fmt.Println("  (gateway health check failed — is the demo running?)")
+		fmt.Println()
+		hasErrors = true
+	}
+
+	fmt.Println("  ── Step 2: Verify operator enrollment (mTLS certs) ────────────")
+	if err := demoStep(demoDir, "enrollment check",
+		false,
+		"docker", "compose", "exec", "-T", "operator",
+		"test", "-f", "/root/.g8e/pki/operator.crt",
+	); err != nil {
+		fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
+		fmt.Println()
+		hasErrors = true
+	}
+
+	fmt.Printf("  ── Step 3: %s ───────\n", cfg.step3Label)
+	fmt.Printf("  %s\n", cfg.step3Description)
+	fmt.Println()
+	if err := demoStep(demoDir, cfg.harnessScenario+" via agent-harness",
+		false,
+		"docker", "compose", "exec", "-T", "agent-runtime",
+		"/g8e", "agent-harness", "run",
+		"--mtls-url", "https://g8e.local:8443",
+		"--public-url", "http://g8e.local:"+cfg.httpPort,
+		"--cert", "/root/.g8e/pki/operator.crt",
+		"--key", "/root/.g8e/pki/operator.key",
+		"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+		cfg.harnessScenario,
+	); err != nil {
+		fmt.Println("  (agent-harness scenario failed)")
+		fmt.Println()
+		hasErrors = true
+	}
+
+	fmt.Println("  ── Step 4: Verify doctrine rejection in gateway logs ──────────")
+	_ = demoStep(demoDir, "audit tail",
+		false,
+		"docker", "compose", "logs", "observability", "--tail", "10",
+	)
+
+	fmt.Println("  ── Step 5: Network isolation (supplementary proof) ───────────")
+	fmt.Println("  bad-actor (net_untrusted) → target-system (net_secure) — should timeout")
+	fmt.Println()
+	_ = demoStep(demoDir, "network isolation",
+		false,
+		"docker", "compose", "exec", "-T", "bad-actor",
+		"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",
+	)
+
+	fmt.Println("  Copy-paste to inspect the enforcement audit:")
+	fmt.Println()
+	fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
+	fmt.Println()
+
+	if hasErrors {
+		result.status = "FAIL"
+		fmt.Printf("  [FAIL] Scenario 1 — One or more steps failed.\n")
+	} else {
+		fmt.Printf("  [PASS] %s\n", cfg.passMessage)
+	}
+
+	return result, nil
 }
 
 func demosAuditCmd() *cobra.Command {

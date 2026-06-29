@@ -111,6 +111,11 @@ func NewPublicRouteRegistry(jwksEnabled bool) *PublicRouteRegistry {
 	// WebSessionAuth public prefix for /api/v1/approvals.
 	r.addExcludedPrefix("/api/v1/approvals/status/")
 
+	// Exclude mTLS-protected CLI pending approvals endpoint.
+	// The CLI queries this with mTLS; it must NOT bypass mTLS via the
+	// WebSessionAuth public prefix for /api/v1/approvals.
+	r.addExcludedPrefix("/api/v1/approvals/pending")
+
 	// Exclude JIT passkey sub-paths when JWKS is not configured.
 	// When JWKS is enabled, the JIT prefix is added below as a public prefix,
 	// and exact paths are checked before exclusions in IsPublic.

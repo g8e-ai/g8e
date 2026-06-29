@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-06-28
-Version: v1.3.2
+Last Updated: 2026-06-29
+Version: v1.3.3
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
@@ -48,7 +48,7 @@ Plain HTTP is used only for the bootstrap and CLI enrollment paths because the C
 **Trusting the Self-Signed CA**: Since the g8e Gateway uses self-signed certificates for its internal PKI, non-Windows clients must trust the platform's Root CA before browser-based passkey registration can succeed. The platform provides automated trust scripts for this purpose:
 - **Linux**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca | sh`
 - **macOS**: `curl -fsSL http://<gateway-ip>:8080/bootstrap-ca-macos | sh`
-- **Windows**: `iwr http://<gateway-ip>:8080/bootstrap-ca.ps1 -UseBasicParsing | iex`
+- **Windows**: `irm http://<gateway-ip>:8080/bootstrap-ca.ps1 | iex`
 
 **CRITICAL**: After running a trust script, the user **MUST restart all open browsers** for the newly installed CA to be recognized. Failure to do so will result in WebAuthn registration errors in the browser.
 
@@ -116,6 +116,8 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 
 The passkey HTTP layer is split into two components: `PasskeyService` (domain logic) and `PasskeyHandler` (HTTP layer). `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) holds domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`) and retains `VerifyL3Proof` for L3 binding to transaction hashes. `PasskeyHandler` (`internal/services/gateway/passkey_service.go:283`) embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`). All former `AuthController` passkey handlers are consolidated into 4 factory methods and 3 direct handler methods on `PasskeyHandler`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
 
+**Injectable RP Origins**: The `--passkey-rp-origin` flag (repeatable) appends additional origins to the WebAuthn allowlist via `PasskeyConfig.RpOrigins`. The `buildRPOrigins` pure function (`passkey_service.go`) constructs the full origin list: localhost defaults (HTTP/HTTPS on both `localhost` and `127.0.0.1` at the configured ports) or a single `https://<custom-rp-id>` for custom RP IDs, followed by any injected origins. This enables demos that publish the gateway on remapped host ports (e.g. `http://localhost:8087`) to accept WebAuthn ceremonies from the browser without cert changes — TLS cert validity is not port-sensitive and `http://localhost:<port>` is a secure context.
+
 **Factory Methods** (return `http.HandlerFunc`):
 - `RegisterChallenge(cfg)` - WebAuthn registration challenge
 - `RegisterVerify(cfg)` - WebAuthn registration verification
@@ -132,8 +134,9 @@ The passkey HTTP layer is split into two components: `PasskeyService` (domain lo
 - `handleApprovalChallenge` - generates WebAuthn challenge for OOB approval
 - `handleApprovalVerify` - verifies WebAuthn assertion for OOB approval
 - `handleCLIApprovalStatus` - `GET /api/v1/approvals/status/{txHash}` (mTLS-protected)
+- `handleCLIListSuspended` - `GET /api/v1/approvals/pending` (mTLS-protected, returns non-approved suspended transactions only)
 - `handleApprovalPage` - redirects to console SPA for browser-based approval
-- `handleListSuspendedTransactions` - lists pending approvals (WebSession-protected)
+- `handleListSuspendedTransactions` - lists pending approvals (WebSession-protected, returns all suspended transactions including approved)
 
 Dependencies for approval handlers are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` on `PasskeyHandler` after construction, since the MCP gateway is created later in the startup sequence.
 

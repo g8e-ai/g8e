@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-06-28
-Version: v1.3.2
+Last Updated: 2026-06-29
+Version: v1.3.3
 
 ---
 
@@ -45,7 +45,7 @@ curl -fsSL http://<gateway-ip>:8080/g8e-operator.sh | bash
 **Windows:**
 
 ```powershell
-iwr http://<gateway-ip>:8080/g8e-operator.ps1 -UseBasicParsing | iex
+irm http://<gateway-ip>:8080/g8e-operator.ps1 | iex
 ```
 
 #### 2. Operator Remote Management CLI Commands

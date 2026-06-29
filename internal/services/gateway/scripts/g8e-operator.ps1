@@ -43,7 +43,7 @@ Remove-Item -Force "g8e.exe" -ErrorAction SilentlyContinue
 
 # Download binary
 try {
-    Invoke-WebRequest -Uri $BinaryUrl -OutFile "g8e.exe" -UseBasicParsing
+    Invoke-RestMethod -Uri $BinaryUrl -OutFile "g8e.exe"
 } catch {
     Write-Host "Failed to download g8e: $_" -ForegroundColor Red
     exit 1

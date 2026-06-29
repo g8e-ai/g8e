@@ -15,10 +15,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func runFinanceScenario(demoDir, scenario string) error {
@@ -27,50 +23,25 @@ func runFinanceScenario(demoDir, scenario string) error {
 }
 
 func runFinanceScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
-	var result scenarioResult
-
 	switch scenario {
 	case "1":
-		result.number = "1"
-		result.name = "Unauthorized Trade Blocked"
-		result.status = "PASS"
-		result.metrics = "Network isolation: net_untrusted → net_secure blocked"
-
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — Unauthorized Trade Blocked")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Network isolation prevents a bad-actor on net_untrusted")
-		fmt.Println("          from reaching the trading ledger on net_secure.")
-		fmt.Println()
-
-		fmt.Println("  ── Layer 1: Network isolation ────────────────────────────────")
-		_ = demoStep(demoDir, "network isolation",
-			false,
-			"docker", "compose", "exec", "-T", "finance-bad-actor",
-			"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal'",
-		)
-
-		fmt.Println("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
-		fmt.Println("  Confirming the gateway is live:")
-		fmt.Println()
-		_ = demoStep(demoDir, "gateway health",
-			false,
-			"curl", "-s", "http://localhost:8082/api/v1/health",
-		)
-
-		fmt.Println("  Copy-paste to inspect the enforcement audit:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
-		fmt.Println()
-
-		fmt.Println("  [PASS] Scenario 1 — Unauthorized trade blocked.")
-		fmt.Println("         Net_untrusted has no route to net_internal or net_secure.")
-
+		return runTwoLayerScenario(demoDir, twoLayerScenarioConfig{
+			scenarioName:    "Unauthorized Trade Blocked",
+			metrics:         "L1 doctrine: unauthorized_trade_execution (0.90 conf) // Network isolation: net_untrusted blocked",
+			httpPort:        "8082",
+			harnessScenario: "finance-unauthorized-trade",
+			provesDescription: "Two-layer defense against unauthorized trading.\n" +
+				"    Layer 1 — Network isolation: bad-actor on net_untrusted has no\n" +
+				"              route to the trading ledger on net_secure.\n" +
+				"    Layer 2 — Doctrine enforcement: the g8e gateway blocks unauthorized\n" +
+				"              trade execution payloads at confidence >= 0.90.",
+			step3Label:       "Submit unauthorized trade via agent-harness",
+			step3Description: "The agent-harness submits a GovernanceEnvelope through the real\n  gateway via mTLS, attempting to execute an unauthorized trade.\n  L1 doctrine must block this at the gateway before execution:",
+			passMessage: "Unauthorized trade blocked at both layers.\n" +
+				"         Layer 1: network isolation (net_untrusted has no route to net_secure).\n" +
+				"         Layer 2: doctrine unauthorized_trade_execution loaded at confidence 0.90.",
+		})
 	default:
 		return scenarioResult{}, fmt.Errorf("invalid scenario number for finance: %q (valid: 1)", scenario)
 	}
-	return result, nil
 }
-
-// Made with Bob

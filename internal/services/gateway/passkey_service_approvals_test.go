@@ -285,6 +285,101 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	})
 }
 
+func TestPasskeyService_HandleCLIListSuspended(t *testing.T) {
+	t.Run("Failure - method not allowed", func(t *testing.T) {
+		t.Parallel()
+		s, _, _ := setupTestPasskeyService(t)
+		testMethodNotAllowed(t, s.handleCLIListSuspended, http.MethodPost, "/api/v1/approvals/pending")
+	})
+
+	t.Run("Failure - unauthorized", func(t *testing.T) {
+		t.Parallel()
+		s, _, _ := setupTestPasskeyService(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/pending", nil)
+		rr := httptest.NewRecorder()
+
+		s.handleCLIListSuspended(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Contains(t, rr.Body.String(), constants.ErrGatewayUnauthorized.Error())
+	})
+
+	t.Run("Success - empty list", func(t *testing.T) {
+		t.Parallel()
+		s, userSvc, _ := setupTestPasskeyService(t)
+		user, err := userSvc.CreateUser()
+		require.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/pending", nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+
+		s.handleCLIListSuspended(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp models.SuspendedTransactionsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Empty(t, resp.Transactions)
+	})
+
+	t.Run("Success - returns pending transaction", func(t *testing.T) {
+		t.Parallel()
+		s, userSvc, suspendedStore := setupTestPasskeyService(t)
+		user, err := userSvc.CreateUser()
+		require.NoError(t, err)
+
+		txHash := "txhash-pending"
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: txHash,
+			UserID:          user.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte("{}"),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+		}
+		require.NoError(t, suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/pending", nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+
+		s.handleCLIListSuspended(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp models.SuspendedTransactionsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		require.Len(t, resp.Transactions, 1)
+		assert.Equal(t, txHash, resp.Transactions[0].TransactionHash)
+	})
+
+	t.Run("Success - filters out approved transactions", func(t *testing.T) {
+		t.Parallel()
+		s, userSvc, suspendedStore := setupTestPasskeyService(t)
+		user, err := userSvc.CreateUser()
+		require.NoError(t, err)
+
+		suspendedTx := &models.SuspendedTransaction{
+			TransactionHash: "approved-tx",
+			UserID:          user.ID,
+			ToolName:        "test-tool",
+			ToolArguments:   []byte("{}"),
+			ExpiresAt:       time.Now().Add(5 * time.Minute),
+			Approved:        true,
+		}
+		require.NoError(t, suspendedStore.StoreSuspendedTransaction(context.Background(), suspendedTx))
+
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/pending", nil)
+		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
+		rr := httptest.NewRecorder()
+
+		s.handleCLIListSuspended(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		var resp models.SuspendedTransactionsResponse
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
+		assert.Empty(t, resp.Transactions)
+	})
+}
+
 func TestPasskeyService_HandleApprovalPage(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
 		t.Parallel()
