@@ -53,6 +53,7 @@ type startConfig struct {
 	SecretsDir         string
 	PasskeyRpID        string
 	PasskeyRpName      string
+	PasskeyRpOrigins   []string
 	RateLimitRPS       float64
 	RateLimitBurst     int
 	LogLevel           string
@@ -171,6 +172,7 @@ func gatewayStartCmd() *cobra.Command {
 	var vaultRequireUnlock bool
 	var passkeyRpID string
 	var passkeyRpName string
+	var passkeyRpOrigins []string
 	var rateLimitRPS float64
 	var rateLimitBurst int
 	var logLevel string
@@ -218,6 +220,7 @@ func gatewayStartCmd() *cobra.Command {
 				SecretsDir:         secretsDir,
 				PasskeyRpID:        passkeyRpID,
 				PasskeyRpName:      passkeyRpName,
+				PasskeyRpOrigins:   passkeyRpOrigins,
 				RateLimitRPS:       rateLimitRPS,
 				RateLimitBurst:     rateLimitBurst,
 				LogLevel:           logLevel,
@@ -260,6 +263,7 @@ func gatewayStartCmd() *cobra.Command {
 				VaultRequireUnlock: startCfg.VaultRequireUnlock,
 				PasskeyRpID:        startCfg.PasskeyRpID,
 				PasskeyRpName:      startCfg.PasskeyRpName,
+				PasskeyRpOrigins:   startCfg.PasskeyRpOrigins,
 				RateLimitRPS:       startCfg.RateLimitRPS,
 				RateLimitBurst:     startCfg.RateLimitBurst,
 				LogLevel:           startCfg.LogLevel,
@@ -335,6 +339,7 @@ func gatewayStartCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	cmd.Flags().StringArrayVar(&passkeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
@@ -361,6 +366,7 @@ func gatewayServeCmd() *cobra.Command {
 	var vaultRequireUnlock bool
 	var passkeyRpID string
 	var passkeyRpName string
+	var passkeyRpOrigins []string
 	var rateLimitRPS float64
 	var rateLimitBurst int
 	var logLevel string
@@ -396,6 +402,7 @@ func gatewayServeCmd() *cobra.Command {
 				VaultRequireUnlock:  vaultRequireUnlock,
 				PasskeyRpID:         passkeyRpID,
 				PasskeyRpName:       passkeyRpName,
+				PasskeyRpOrigins:    passkeyRpOrigins,
 				RateLimitRPS:        rateLimitRPS,
 				RateLimitBurst:      rateLimitBurst,
 				LogLevel:            logLevel,
@@ -425,6 +432,7 @@ func gatewayServeCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	cmd.Flags().StringArrayVar(&passkeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
 	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
 	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
 	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")

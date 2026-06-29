@@ -86,6 +86,7 @@ Docker resource limits prove g8e's governance layer fits within tactical payload
 |---------|------|
 | Gateway HTTP | 8086 |
 | Gateway HTTPS | 8449 |
+| Console | https://localhost:8449/console/ |
 
 ## Doctrine Rules
 
@@ -152,9 +153,9 @@ docker stats dow-gateway dow-operator dow-agent-sigint dow-agent-eoir dow-agent-
 
 ```bash
 # agent-sigint is a real g8e binary — run the cross-cue harness scenario
-docker compose run --rm agent-sigint agent-harness run --insecure \
-  --mtls-url https://10.42.0.10:8443 \
-  --public-url http://10.42.0.10:8080 \
+docker compose run --rm agent-sigint agent-harness run \
+  --mtls-url https://g8e.local:8443 \
+  --public-url http://g8e.local:8080 \
   --cert /root/.g8e/pki/operator.crt \
   --key /root/.g8e/pki/operator.key \
   --ca /root/.g8e/pki/trust/g8eg-ca-bundle.pem \

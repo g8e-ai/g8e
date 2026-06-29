@@ -65,7 +65,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["gw", "start", "-f"]
+    command: ["gw", "start", "-f", "--passkey-rp-origin", "http://localhost:8086", "--passkey-rp-origin", "https://localhost:8449"]
 
   operator:
     build:
@@ -131,9 +131,9 @@ services:
     environment:
       - SENSOR_ID=SIGINT-01
       - SENSOR_TYPE=sigint
-    command: ["agent-harness", "run", "--insecure",
-              "--mtls-url", "https://10.42.0.10:8443",
-              "--public-url", "http://10.42.0.10:8080",
+    command: ["agent-harness", "run",
+              "--mtls-url", "https://g8e.local:8443",
+              "--public-url", "http://g8e.local:8080",
               "--cert", "/root/.g8e/pki/operator.crt",
               "--key", "/root/.g8e/pki/operator.key",
               "--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",

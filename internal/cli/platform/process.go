@@ -67,6 +67,7 @@ type OperatorStartOptions struct {
 	VaultRequireUnlock bool
 	PasskeyRpID        string
 	PasskeyRpName      string
+	PasskeyRpOrigins   []string
 	RateLimitRPS       float64
 	RateLimitBurst     int
 	LogLevel           string
@@ -316,6 +317,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	}
 	if opts.PasskeyRpName != "" {
 		args = append(args, "--passkey-rp-name", opts.PasskeyRpName)
+	}
+	for _, origin := range opts.PasskeyRpOrigins {
+		args = append(args, "--passkey-rp-origin", origin)
 	}
 	if opts.RateLimitRPS > 0 {
 		args = append(args, "--rate-limit-rps", fmt.Sprintf("%.1f", opts.RateLimitRPS))

@@ -15,8 +15,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 )
@@ -45,8 +48,8 @@ type dhsHarnessConfig struct {
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
 func defaultDHSHarnessConfig() dhsHarnessConfig {
 	return dhsHarnessConfig{
-		MTLSURL:       "https://10.62.0.10:8443",
-		PublicURL:     "http://10.62.0.10:8080",
+		MTLSURL:       "https://g8e.local:8443",
+		PublicURL:     "http://g8e.local:8080",
 		CertPath:      "/root/.g8e/pki/operator.crt",
 		KeyPath:       "/root/.g8e/pki/operator.key",
 		CAPath:        "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
@@ -85,7 +88,7 @@ func dhsHarnessRun(scenario string, cfg dhsHarnessConfig) []string {
 	cmd := []string{
 		"docker", "compose", "exec", "-T",
 		"agent-coalition",
-		"/g8e", "agent-harness", "run", "--insecure",
+		"/g8e", "agent-harness", "run",
 		"--mtls-url", cfg.MTLSURL,
 		"--public-url", cfg.PublicURL,
 		"--cert", cfg.CertPath,
@@ -117,6 +120,34 @@ func dhsScenarioStep(demoDir, desc string, cmd []string) bool {
 	return true
 }
 
+// ensureDHSPosture restarts the DHS gateway container with the specified posture.
+// It sets the G8E_GATEWAY_POSTURE environment variable and recreates the container.
+func ensureDHSPosture(demoDir, posture string) error {
+	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
+
+	// Stop the gateway container
+	if err := exec.Command("docker", "compose", "-f", composePath, "stop", "gateway").Run(); err != nil {
+		return fmt.Errorf("stop gateway: %w", err)
+	}
+
+	// Recreate the gateway with the new posture via environment variable
+	cmd := exec.Command("docker", "compose", "-f", composePath, "up", "-d", "--no-deps", "gateway")
+	cmd.Env = append(os.Environ(), "G8E_GATEWAY_POSTURE="+posture)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("restart gateway with posture %s: %w", posture, err)
+	}
+
+	// Wait for the gateway to become healthy
+	for i := 0; i < 30; i++ {
+		time.Sleep(3 * time.Second)
+		if err := exec.Command("curl", "-sf", "http://localhost:8087/api/v1/health").Run(); err == nil {
+			fmt.Printf("  Gateway is live in %s posture.\n", posture)
+			return nil
+		}
+	}
+	return fmt.Errorf("gateway did not become healthy in %s posture after 90s", posture)
+}
+
 func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
 	var result scenarioResult
@@ -141,6 +172,8 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          receipt is written to the hash-chained ledger —")
 		fmt.Println("          provable chain-of-custody.")
 		fmt.Println()
+
+		_ = ensureDHSPosture(demoDir, "consensus")
 
 		if !dhsScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
@@ -186,9 +219,122 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 	case "2":
-		return dhsSkipScenario("2", "Cross-Domain Release requires Notary authority",
-			"notary", hcfg.Posture,
-			"Deferred to Phase 3 — the L3 mock is incompatible with gateway-mode notary (requires WebAuthn passkey). See plan §11.2.")
+		result.number = "2"
+		result.name = "Cross-Domain Release requires Notary authority"
+		result.status = "PASS"
+		result.metrics = "Notary posture // L3 suspend → human passkey approval → L5 actuator records RELEASE"
+
+		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
+		fmt.Println("  Scenario 2 — Cross-Domain Release requires Notary authority (LOE 1 & 2)")
+		fmt.Println(strings.Repeat("─", 60))
+		fmt.Println()
+		fmt.Println("  PROVES: A cross-domain release is submitted with L2 consensus")
+		fmt.Println("          only. Under notary posture the Gateway suspends the")
+		fmt.Println("          transaction pending an out-of-band L3 human approval")
+		fmt.Println("          via WebAuthn passkey. The release executes only after")
+		fmt.Println("          a real human authorizes the exact transaction hash.")
+		fmt.Println()
+
+		// Step 1: Restart gateway in notary posture
+		fmt.Println("  ── Step 1: Restart gateway in notary posture ────────────────────")
+		fmt.Println("  Switching from consensus → notary (L1/L2/L3 strictly enforced):")
+		fmt.Println()
+		if err := ensureDHSPosture(demoDir, "notary"); err != nil {
+			fmt.Printf("  [WARNING] Failed to switch to notary posture: %v\n", err)
+			fmt.Println("  Continuing — the gateway may already be in notary mode.")
+		}
+
+		// Step 2: Confirm gateway is live in notary posture
+		if !dhsScenarioStep(demoDir, "Step 2: Confirm gateway is live (notary posture)",
+			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
+			hasErrors = true
+		}
+
+		// Step 3: Submit dhs-release via agent-harness (L2-only → suspend)
+		fmt.Println("  ── Step 3: Submit dhs-release via agent-harness (L2-only → suspend) ──")
+		fmt.Println("  Connector requests cross-domain release of TRK-MIL-0007.")
+		fmt.Println("  Under notary posture, the gateway suspends pending human L3 approval:")
+		fmt.Println()
+		notaryCfg := hcfg
+		notaryCfg.Posture = "notary"
+		notaryCfg.L3Mode = "suspend"
+		if err := demoStep(demoDir, "dhs-release via agent-harness (notary suspend)",
+			false,
+			dhsHarnessRun("dhs-release", notaryCfg)...,
+		); err != nil {
+			fmt.Println("  (dhs-release harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		// Step 4: Extract the suspended transaction hash from the gateway's SQLite DB
+		fmt.Println("  ── Step 4: Extract suspended transaction hash ────────────────────")
+		txHashBytes, err := exec.Command("docker", "compose", "exec", "-T", "gateway",
+			"sqlite3", "/root/.g8e/data/suspended_transactions.db",
+			"SELECT transaction_hash FROM suspended_transactions WHERE approved=0 ORDER BY created_at DESC LIMIT 1").Output()
+		if err != nil {
+			fmt.Printf("  [WARNING] Could not query suspended transaction: %v\n", err)
+			hasErrors = true
+		} else {
+			txHash := strings.TrimSpace(string(txHashBytes))
+			if txHash == "" {
+				fmt.Println("  [WARNING] No suspended transaction found in gateway DB")
+				hasErrors = true
+			} else {
+				fmt.Printf("  Suspended transaction hash: %s\n", txHash)
+				fmt.Println()
+
+				// Step 5: Prompt user for passkey enrollment + approval
+				fmt.Println("  ── Step 5: Human passkey approval (WebAuthn) ────────────────────")
+				fmt.Println("  A browser window will open for passkey enrollment/approval.")
+				fmt.Println("  If you have no passkey registered, the console will guide you")
+				fmt.Println("  through enrollment first, then the approval ceremony.")
+				fmt.Println()
+				fmt.Printf("  Console URL: http://localhost:8087/console/\n")
+				fmt.Println()
+
+				// Run g8e approve <txHash> — this opens the browser and polls
+				approveCmd := exec.Command("g8e", "approve", txHash)
+				approveCmd.Stdout = os.Stdout
+				approveCmd.Stderr = os.Stderr
+				approveCmd.Stdin = os.Stdin
+				if err := approveCmd.Run(); err != nil {
+					fmt.Printf("  [WARNING] g8e approve did not complete: %v\n", err)
+					hasErrors = true
+				} else {
+					fmt.Println("  Transaction approved via WebAuthn passkey!")
+					fmt.Println()
+				}
+			}
+		}
+
+		// Step 6: Verify the RELEASE was executed by the L5 actuator
+		if !dhsScenarioStep(demoDir, "Step 6: Verify the Sovereign Data Service recorded the RELEASE",
+			[]string{"docker", "compose", "exec", "-T", "datasvc",
+				"python", "/app/verify_ops.py", "RELEASE"}) {
+			hasErrors = true
+		}
+
+		// Step 7: Restore gateway to consensus posture
+		fmt.Println("  ── Step 7: Restore gateway to consensus posture ─────────────────")
+		if err := ensureDHSPosture(demoDir, "consensus"); err != nil {
+			fmt.Printf("  [WARNING] Failed to restore consensus posture: %v\n", err)
+		}
+
+		fmt.Println("  Copy-paste to inspect the audit trail:")
+		fmt.Println()
+		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sh -c 'cd /root/.g8e/data/ledger/files && git log --oneline'")
+		fmt.Println()
+
+		if hasErrors {
+			result.status = "FAIL"
+			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
+		} else {
+			fmt.Println("  [PASS] Scenario 2 — Cross-domain release governed by human passkey approval.")
+			fmt.Println("         L1 doctrine admitted; L2 consensus quorum met;")
+			fmt.Println("         L3 notary required real human WebAuthn authorization.")
+			fmt.Println("         L5 actuator recorded the RELEASE after approval.")
+		}
 
 	case "3":
 		result.number = "3"
@@ -207,6 +353,8 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          loss of sovereign control. State reconciles when the link")
 		fmt.Println("          is restored.")
 		fmt.Println()
+
+		_ = ensureDHSPosture(demoDir, "consensus")
 
 		if !dhsScenarioStep(demoDir, "Step 1: Confirm gateway is live before disconnect",
 			[]string{"curl", "-s", "http://localhost:8087/api/v1/health"}) {
@@ -286,6 +434,8 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          gate, not just an audit annotation.")
 		fmt.Println()
 
+		_ = ensureDHSPosture(demoDir, "consensus")
+
 		if !dhsScenarioStep(demoDir, "Step 1: Confirm the governance gateway is live (consensus)",
 			[]string{"curl", "-sf", "http://localhost:8087/api/v1/health"}) {
 			hasErrors = true
@@ -352,6 +502,8 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          with L2 consensus quorum met, and the L5 actuator records")
 		fmt.Println("          the PURGE with a cryptographic destruction receipt.")
 		fmt.Println()
+
+		_ = ensureDHSPosture(demoDir, "consensus")
 
 		fmt.Println("  ── Step 1: Run dhs-evidence-block via agent-harness (L1 reject) ──")
 		fmt.Println("  L1 doctrine detects 'rm -rf /var/log/g8e' → rejected at admission:")

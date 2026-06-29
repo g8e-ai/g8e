@@ -121,8 +121,8 @@ func TestGatewayConfig_Equality(t *testing.T) {
 	c := a
 	c.HTTPPort = 9090
 
-	require.True(t, a == b, "structs with identical fields should be equal")
-	require.False(t, a == c, "structs differing in any field should not be equal")
+	assert.Equal(t, a, b, "structs with identical fields should be equal")
+	assert.NotEqual(t, a, c, "structs differing in any field should not be equal")
 }
 
 func TestGatewayConfig_PartialAssignment(t *testing.T) {
@@ -260,6 +260,7 @@ func gatewayConfigToOptions(cfg GatewayConfig) config.GatewayOptions {
 		SecretsDir:          cfg.SecretsDir,
 		PasskeyRpID:         cfg.PasskeyRpID,
 		PasskeyRpName:       cfg.PasskeyRpName,
+		PasskeyRpOrigins:    cfg.PasskeyRpOrigins,
 		RateLimitRPS:        cfg.RateLimitRPS,
 		RateLimitBurst:      cfg.RateLimitBurst,
 		CertMode:            cfg.CertIdentityMode,
@@ -767,6 +768,31 @@ func TestGatewayConfig_PasskeyEmptyDefaults(t *testing.T) {
 
 	assert.Equal(t, "", opts.PasskeyRpID)
 	assert.Equal(t, "", opts.PasskeyRpName)
+	assert.Nil(t, opts.PasskeyRpOrigins)
+}
+
+func TestGatewayConfig_PasskeyRpOriginsWiring(t *testing.T) {
+	t.Run("single origin", func(t *testing.T) {
+		cfg := GatewayConfig{
+			PasskeyRpOrigins: []string{"http://localhost:8087"},
+		}
+		opts := gatewayConfigToOptions(cfg)
+		assert.Equal(t, []string{"http://localhost:8087"}, opts.PasskeyRpOrigins)
+	})
+
+	t.Run("multiple origins", func(t *testing.T) {
+		cfg := GatewayConfig{
+			PasskeyRpOrigins: []string{"http://localhost:8087", "https://localhost:8450"},
+		}
+		opts := gatewayConfigToOptions(cfg)
+		assert.Equal(t, []string{"http://localhost:8087", "https://localhost:8450"}, opts.PasskeyRpOrigins)
+	})
+
+	t.Run("empty slice preserved as nil", func(t *testing.T) {
+		var cfg GatewayConfig
+		opts := gatewayConfigToOptions(cfg)
+		assert.Nil(t, opts.PasskeyRpOrigins)
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -866,6 +892,7 @@ func TestGatewayConfigToOptions_RoundTripIntegrity(t *testing.T) {
 		SecretsDir:          "/secrets",
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
+		PasskeyRpOrigins:    []string{"http://localhost:8087", "https://localhost:8450"},
 		RateLimitRPS:        10.0,
 		RateLimitBurst:      20,
 		CertIdentityMode:    "full",
@@ -886,6 +913,7 @@ func TestGatewayConfigToOptions_RoundTripIntegrity(t *testing.T) {
 	assert.Equal(t, original.SecretsDir, opts.SecretsDir)
 	assert.Equal(t, original.PasskeyRpID, opts.PasskeyRpID)
 	assert.Equal(t, original.PasskeyRpName, opts.PasskeyRpName)
+	assert.Equal(t, original.PasskeyRpOrigins, opts.PasskeyRpOrigins)
 	assert.Equal(t, original.RateLimitRPS, opts.RateLimitRPS)
 	assert.Equal(t, original.RateLimitBurst, opts.RateLimitBurst)
 	assert.Equal(t, original.CertIdentityMode, opts.CertMode)

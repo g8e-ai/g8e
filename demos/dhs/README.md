@@ -84,6 +84,7 @@ Scenarios that require a higher posture than the current phase are **skipped** w
 |---|---|
 | Gateway HTTP | 8087 |
 | Gateway HTTPS | 8450 |
+| Console | https://localhost:8450/console/ |
 
 ## Doctrine rules
 

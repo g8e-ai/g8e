@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+* **Injectable Passkey RP Origins** — Added repeatable `--passkey-rp-origin` flag to `gw start`/`gw serve` that appends additional WebAuthn origins to the RP allowlist. Extracted `buildRPOrigins` as a pure function in `passkey_service.go` for testability. All demo `compose.yml` files now inject `--passkey-rp-origin http://localhost:<http-port> --passkey-rp-origin https://localhost:<https-port>` so WebAuthn passkey registration and OOB approval work from browsers hitting the externally-mapped console URLs. `printDemoEndpoints` now prints the console URL for every demo.
 * **Declarative Tribunal Bootstrap** — Added `--tribunal-bootstrap` flag to `gw start`/`gw serve` that accepts a JSON config file path. At startup, `bootstrapTribunalPolicy` seeds trusted signers and a TribunalPolicy from the config, enabling deterministic demo deployments where the gateway and agent harness share the same Ed25519 seed. The config contains `tribunal_id`, `member_app_ids`, `quorum`, and optional `seed_hex`. Idempotent: skips if the tribunal already exists.
 * **Seed-Based Ensemble Key Generation** — Added `NewEnsembleFromSeed(keyID, n, seedHex)` and `SeedHex()` to `internal/tools/agent_harness/client/envelope.go` for deterministic Ed25519 key generation. Added `--consensus-seed` and `--tribunal-id` flags to `agent-harness run`. The `Ensemble.TribunalID` field is now configurable (defaults to `"test-tribunal"`).
 * **Consensus Phase Support for DHS Demo** — Added `consensus` case to `selectAgentHarnessScenarios` in `agent_harness.go`. Updated `demos/dhs/compose.yml` to consensus posture with tribunal bootstrap. Un-skipped Scenario 4 (predictive cueing with L2 quorum vs veto). Refactored `dhsHarnessRun` to use `dhsHarnessConfig` struct with named fields.
@@ -33,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Tests
 
+* Added 8 Tier 1 unit tests for `buildRPOrigins` pure function in `internal/services/gateway/passkey_rp_origins_test.go` covering localhost defaults, custom ports, injected origins, custom RP IDs, and back-compat.
+* Added `TestGatewayConfig_PasskeyRpOriginsWiring` and updated `TestGatewayConfigToOptions_RoundTripIntegrity` in `internal/cli/serve/gateway_test.go` for `PasskeyRpOrigins` config wiring.
+* Updated `TestPrintDemoEndpoints` in `internal/cli/cmd/demos_test.go` with console URL assertions and swarm test case.
 * Added 22 Tier 1 unit tests for tribunal bootstrap helpers (`parseTribunalBootstrapConfig`, `deriveSeedPublicKey`, `bootstrapTribunalPolicy` error paths) in `internal/cli/serve/gateway_test.go`.
 * Added `TestSelectAgentHarnessScenarios_Consensus` and `TestApplyAgentHarnessFlags_ConsensusSeedAndTribunalID` in `agent_harness_extra_test.go`.
 * Added `TestNewEnsembleFromSeed`, `TestSeedHex`, `TestEnsemble_TribunalID` in `envelope_test.go`.

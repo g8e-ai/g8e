@@ -85,6 +85,7 @@ Flags:
       --mcp-downstream-url string   URL of a downstream MCP server to proxy discovery and execution to (default: none)
       --passkey-rp-id string        RP ID for passkey operations (default: localhost)
       --passkey-rp-name string      RP Name for passkey operations (default: g8e)
+      --passkey-rp-origin strings   Additional WebAuthn RP origin to allowlist (e.g. http://localhost:8087). Repeatable for multiple origins. Used by demos with remapped host ports.
       --pki-dir string              Directory for TLS certificates (default: .g8e/pki)
       --posture string              Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced) (default "doctrine")
       --rate-limit-burst int        Gateway rate limit burst size

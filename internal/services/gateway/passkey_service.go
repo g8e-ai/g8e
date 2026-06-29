@@ -85,8 +85,11 @@ type PasskeyService struct {
 
 // PasskeyConfig holds configuration for passkey operations.
 type PasskeyConfig struct {
-	RpID   string
-	RpName string
+	RpID      string
+	RpName    string
+	RpOrigins []string
+	HTTPPort  int
+	HTTPSPort int
 }
 
 // encodeCredID encodes a WebAuthn credential ID (raw bytes) as a base64 URL string.
@@ -236,6 +239,35 @@ func (c *realWebauthnClient) ValidateLogin(user webauthn.User, session webauthn.
 	return c.w.ValidateLogin(user, session, parsedResponse)
 }
 
+// buildRPOrigins constructs the WebAuthn RPOrigins list from PasskeyConfig.
+// It is extracted as a pure function so tests can verify the origins list
+// without constructing a full PasskeyService or depending on webauthn internals.
+func buildRPOrigins(cfg *PasskeyConfig) []string {
+	httpPort := cfg.HTTPPort
+	if httpPort == 0 {
+		httpPort = constants.Ports.OperatorHttp
+	}
+	httpsPort := cfg.HTTPSPort
+	if httpsPort == 0 {
+		httpsPort = constants.Ports.OperatorHttps
+	}
+
+	var rpOrigins []string
+	if cfg.RpID == "localhost" || cfg.RpID == "127.0.0.1" {
+		rpOrigins = []string{cfg.RpID,
+			"http://localhost", fmt.Sprintf("http://localhost:%d", httpPort),
+			"http://127.0.0.1", fmt.Sprintf("http://127.0.0.1:%d", httpPort),
+			"https://localhost", fmt.Sprintf("https://localhost:%d", httpsPort),
+			"https://127.0.0.1", fmt.Sprintf("https://127.0.0.1:%d", httpsPort),
+		}
+	} else {
+		rpOrigins = []string{"https://" + cfg.RpID}
+	}
+
+	rpOrigins = append(rpOrigins, cfg.RpOrigins...)
+	return rpOrigins
+}
+
 // NewPasskeyService creates a new PasskeyService with the given configuration.
 func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *PasskeyConfig) (*PasskeyService, error) {
 	rpName := cfg.RpName
@@ -243,20 +275,7 @@ func NewPasskeyService(db *CanonicalDBService, logger *slog.Logger, cfg *Passkey
 		rpName = "g8e"
 	}
 
-	// For localhost and 127.0.0.1, include both HTTP and HTTPS origins
-	// since the console is served on both ports (8080 HTTP, 8443 HTTPS)
-	// and WebAuthn treats each scheme+host+port as a distinct origin.
-	rpOrigins := []string{cfg.RpID}
-	if cfg.RpID == "localhost" || cfg.RpID == "127.0.0.1" {
-		rpOrigins = append(rpOrigins,
-			"http://localhost", "http://localhost:8080",
-			"http://127.0.0.1", "http://127.0.0.1:8080",
-			"https://localhost", "https://localhost:8443",
-			"https://127.0.0.1", "https://127.0.0.1:8443",
-		)
-	} else {
-		rpOrigins = []string{"https://" + cfg.RpID}
-	}
+	rpOrigins := buildRPOrigins(cfg)
 
 	w, err := webauthn.New(&webauthn.Config{
 		RPID:          cfg.RpID,

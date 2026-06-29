@@ -116,6 +116,8 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 
 The passkey HTTP layer is split into two components: `PasskeyService` (domain logic) and `PasskeyHandler` (HTTP layer). `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) holds domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`) and retains `VerifyL3Proof` for L3 binding to transaction hashes. `PasskeyHandler` (`internal/services/gateway/passkey_service.go:283`) embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`). All former `AuthController` passkey handlers are consolidated into 4 factory methods and 3 direct handler methods on `PasskeyHandler`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
 
+**Injectable RP Origins**: The `--passkey-rp-origin` flag (repeatable) appends additional origins to the WebAuthn allowlist via `PasskeyConfig.RpOrigins`. The `buildRPOrigins` pure function (`passkey_service.go`) constructs the full origin list: localhost defaults (HTTP/HTTPS on both `localhost` and `127.0.0.1` at the configured ports) or a single `https://<custom-rp-id>` for custom RP IDs, followed by any injected origins. This enables demos that publish the gateway on remapped host ports (e.g. `http://localhost:8087`) to accept WebAuthn ceremonies from the browser without cert changes — TLS cert validity is not port-sensitive and `http://localhost:<port>` is a secure context.
+
 **Factory Methods** (return `http.HandlerFunc`):
 - `RegisterChallenge(cfg)` - WebAuthn registration challenge
 - `RegisterVerify(cfg)` - WebAuthn registration verification
