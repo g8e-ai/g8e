@@ -15,6 +15,12 @@ See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gatew
 
 ## Getting Started
 
+Requires `make` and Go 1.26+ installed. If you don't have them, run the setup script for your platform to install them automatically:
+
+- **Linux:** `bash scripts/linux-setup.sh`
+- **macOS:** `bash scripts/macos-setup.sh`
+- **Windows:** `pwsh scripts/windows-setup.ps1`
+
 ```bash
 make build          # Build the g8e Operator binary
 ./g8e --help        # Complete command reference

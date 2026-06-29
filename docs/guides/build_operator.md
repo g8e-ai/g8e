@@ -53,6 +53,12 @@ The binary always starts in CLI mode. Use `gw start` or `operator run` subcomman
 ### Prerequisites
 
 - **Go 1.26.4+**, required for building the reference operator.
+- **Make**, required to run build targets.
+
+> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
+> - **Linux:** `bash scripts/linux-setup.sh`
+> - **macOS:** `bash scripts/macos-setup.sh`
+> - **Windows:** `pwsh scripts/windows-setup.ps1`
 
 ### Build from Source
 

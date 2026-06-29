@@ -1,6 +1,6 @@
 # ----------------------------------------------------------
-# g8e_windows-setup.ps1 - FINAL STABLE VERSION (PowerShell Idioms Applied)
-# Single Script for full setup and validation on Windows environments.
+# g8e_windows-setup.ps1 - Setup and validation for Windows environments
+# Single Script for full setup and validation on Windows.
 # ==========================================================
 
 # Requires PowerShell 7+ (pwsh)
@@ -8,95 +8,65 @@ $ErrorActionPreference = "Stop" # Stops script execution on non-terminating erro
 
 Write-Host "`n[SETUP] Starting g8e Environment Setup and Validation...`n" -ForegroundColor Cyan
 
-function Install-Dependency {
-    param(
-        [string]$Name,
-        [scriptblock]$InstallationLogic
-    )
-    try {
-        Write-Host "Attempting to check/install '$Name'..." -ForegroundColor Cyan
-        # Execute the logic block provided by the caller.
-        Invoke-Command -ScriptBlock $InstallationLogic
-        Write-Host "$Name dependency check PASSED." -ForegroundColor Green
-    } catch {
-        Write-Error "Dependency Check FAILED for '$Name'. Review the output above for details on why it failed."
-    }
+# --- SECTION 1: Dependency Validation & Installation ---
+Write-Host "[STEP 1/3] Validating required dependencies (make, go)..." -ForegroundColor Yellow
+
+$Missing = @()
+
+if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+    $Missing += "make"
+} else {
+    Write-Host "  make: detected" -ForegroundColor Green
 }
 
-# --- SECTION 1: Dependency Validation (Robust Checks) ---
-Write-Host "[STEP 1/5] Validating required dependencies (go, buf, protoc)..." -ForegroundColor Yellow
-
-# A. Validate Go Environment
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
-    Write-Error "FATAL: 'go' command not found in PATH. Please install Go to proceed."
+    $Missing += "go"
 } else {
-    Write-Host "Go environment detected." -ForegroundColor Green
+    Write-Host "  go: detected" -ForegroundColor Green
 }
 
-# B. Validate Buf CLI
-Install-Dependency -Name "Buf" -InstallationLogic {
-    # This block runs the check/install logic for Buf.
-    & { buf version }
-}
+if ($Missing.Count -gt 0) {
+    Write-Host "`nThe following dependencies are missing: $($Missing -join ', ')" -ForegroundColor Yellow
 
-# C. Validate protoc
-Write-Host "Checking for local 'protoc' executable..." -ForegroundColor Cyan
-if (-not (Get-Command protoc -ErrorAction SilentlyContinue)) {
-    Write-Warning "WARNING: Protobuf Compiler (protoc) not found in PATH."
-    Write-Warning "ACTION REQUIRED: Please install it manually or via a package manager like Chocolatey (choco install protobuf)."
-} else {
-    Write-Host "Protoc compiler detected." -ForegroundColor Green
-}
-
-# --- SECTION 2: Protobuf Generation Fix (The Core Logic) ---
-Write-Host "`n[STEP 2/5] Running Protobuf Code Generation..." -ForegroundColor Yellow
-
-$ProtoDir = "protocol/proto"
-if (Test-Path $ProtoDir) {
-    Write-Host "Searching for .proto files in: $ProtoDir" -ForegroundColor Cyan
-    # Use PowerShell to gather all *.proto paths, which handles OS path normalization correctly.
-    $ProtoFiles = Get-ChildItem -Path $ProtoDir -Filter "*.proto" -Recurse | Select-Object -ExpandProperty FullName;
-
-    if ($ProtoFiles) {
-        Write-Host "Found $($ProtoFiles.Count) proto files. Attempting Buf generate..." -ForegroundColor Green
-        try {
-            # Passing the array directly is safer than string concatenation.
-            & { buf generate $ProtoFiles }
-            Write-Host "Protobuf generation logic executed successfully." -ForegroundColor Green
-        } catch {
-             Write-Error "Buf execution failed. Check if Buf CLI is installed and if all paths are valid."
-        }
+    # Determine available package manager
+    $PackageManager = $null
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        $PackageManager = "winget"
+    } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
+        $PackageManager = "choco"
     } else {
-        Write-Warning "Could not find any *.proto files to generate in $ProtoDir."
+        Write-Host "FATAL: No supported package manager found (winget or choco)." -ForegroundColor Red
+        Write-Host "Install winget (App Installer from Microsoft Store) or Chocolatey (https://chocolatey.org)." -ForegroundColor Yellow
+        Write-Host "Then install: $($Missing -join ', ')" -ForegroundColor Yellow
+        exit 1
     }
-} else {
-    Write-Error "Directory '$ProtoDir' not found. Cannot run proto generation."
+
+    $InstallCmd = switch ($PackageManager) {
+        "winget" { "winget install --id Golang.Go --accept-package-agreements --accept-source-agreements; if ($Missing -contains 'make') { winget install --id GnuWin32.Make --accept-package-agreements --accept-source-agreements }" }
+        "choco"  { "choco install -y golang make" }
+    }
+
+    Write-Host "They can be installed via: $PackageManager" -ForegroundColor Yellow
+    $response = Read-Host "Would you like to install them now? [y/N]"
+    if ($response -match '^[Yy]$') {
+        Write-Host "Installing: $($Missing -join ', ')..." -ForegroundColor Cyan
+        Invoke-Expression $InstallCmd
+        # Refresh PATH for the current session
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        Write-Host "Installation complete." -ForegroundColor Green
+    } else {
+        Write-Host "FATAL: Required dependencies not installed. Please install them manually." -ForegroundColor Red
+        exit 1
+    }
 }
 
+# --- SECTION 2: Build ---
+Write-Host "`n[STEP 2/3] Building g8e..." -ForegroundColor Yellow
+make build
+Write-Host "Build successful." -ForegroundColor Green
 
-# --- SECTION 3: Full Build and Test Validation (Placeholder) ---
-Write-Host "`n[STEP 3/5] Starting Build & Test Validation..." -ForegroundColor Yellow
-
-# --- BUILD SIMULATION ---
-Write-Host "-----------------------------------" -ForegroundColor White
-Write-Host "BUILD PHASE (ACTION REQUIRED)" -ForegroundColor Magenta
-Write-Warning "The 'Makefile' build logic needs to be ported here for this script to function fully."
-# Example: Manual cross-compilation command for Windows/AMD64
-try {
-    $ExeName = "bin\g8e-windows-amd64.exe"
-    Write-Host "Executing simulated build for windows/amd64..."
-    & { go build -ldflags "-X main.platform=windows_amd64" -o $ExeName cmd/operator/main.go }
-    Write-Host "Build simulation successful (binary created in 'bin')." -ForegroundColor Green
-} catch {
-    Write-Error "BUILD FAILED during simulation: $($_.Exception.Message)"
-}
-
-# --- TEST SIMULATION ---
-Write-Host "\n-----------------------------------" -ForegroundColor White
-Write-Host "TEST PHASE (ACTION REQUIRED)" -ForegroundColor Magenta
-Write-Warning "Run 'go test' commands directly or integrate them properly here."
-
-# CLEANUP: The manual steps were moved to the end.
+# --- SECTION 3: Complete ---
 Write-Host "`n[SETUP COMPLETE]" -ForegroundColor Green
 Write-Host "---------------------------------------------------------------" -ForegroundColor White
-Write-Host "ACTION REQUIRED: The structural issues are fixed in logic, but running this script requires 'go', 'buf', and a correctly structured 'Makefile' or native build system." -ForegroundColor Yellow
+Write-Host "Binary available at: .\g8e.exe"
+Write-Host "Start the gateway with: .\g8e.exe gw start"
