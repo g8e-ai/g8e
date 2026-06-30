@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
+	"github.com/g8e-ai/g8e/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -54,8 +55,7 @@ func newSecretManagerTestDB(t *testing.T) *sqliteutil.DB {
 // newTestSecretManager creates a SecretManager with the in-memory keyring.
 func newTestSecretManager(t *testing.T, db *sqliteutil.DB, secretsDir string) *SecretManager {
 	t.Helper()
-	keyring, err := keystore.NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 	ks, err := keystore.NewWithKeyring(secretsDir, testutil.NewTestLogger(), keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())

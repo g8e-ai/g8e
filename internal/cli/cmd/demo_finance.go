@@ -35,8 +35,8 @@ func runFinanceScenarioWithResult(demoDir, scenario string) (scenarioResult, err
 				"              route to the trading ledger on net_secure.\n" +
 				"    Layer 2 — Doctrine enforcement: the g8e gateway blocks unauthorized\n" +
 				"              trade execution payloads at confidence >= 0.90.",
-			step3Label:       "Submit unauthorized trade via agent-harness",
-			step3Description: "The agent-harness submits a GovernanceEnvelope through the real\n  gateway via mTLS, attempting to execute an unauthorized trade.\n  L1 doctrine must block this at the gateway before execution:",
+			step3Label:       "Submit unauthorized trade via agent",
+			step3Description: "The agent submits a GovernanceEnvelope through the real\n  gateway via mTLS, attempting to execute an unauthorized trade.\n  L1 doctrine must block this at the gateway before execution:",
 			passMessage: "Unauthorized trade blocked at both layers.\n" +
 				"         Layer 1: network isolation (net_untrusted has no route to net_secure).\n" +
 				"         Layer 2: doctrine unauthorized_trade_execution loaded at confidence 0.90.",

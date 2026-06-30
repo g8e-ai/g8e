@@ -75,7 +75,7 @@ func DefaultTestSQLAuditStoreConfig() *TestSQLAuditStoreConfig {
 	return &TestSQLAuditStoreConfig{
 		DataDir:                   ".g8e/data",
 		DBPath:                    "g8e.db",
-		LedgerDir:                 "ledger",
+		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               2048,
 		RetentionDays:             90,
 		PruneIntervalMinutes:      60,

@@ -496,7 +496,6 @@ func TestGetReceipt_Success(t *testing.T) {
 			ClientCert: clientCertPath,
 			ClientKey:  clientKeyPath,
 			CABundle:   caBundlePath,
-			Insecure:   false,
 		},
 	}
 
@@ -602,7 +601,6 @@ func TestGetReceipt_NotFound(t *testing.T) {
 			ClientCert: clientCertPath,
 			ClientKey:  clientKeyPath,
 			CABundle:   caBundlePath,
-			Insecure:   false,
 		},
 	}
 
@@ -685,7 +683,6 @@ func TestGetReceipt_ServerError(t *testing.T) {
 			ClientCert: clientCertPath,
 			ClientKey:  clientKeyPath,
 			CABundle:   caBundlePath,
-			Insecure:   false,
 		},
 	}
 
@@ -772,7 +769,6 @@ func TestGetReceipt_InvalidJSON(t *testing.T) {
 			ClientCert: clientCertPath,
 			ClientKey:  clientKeyPath,
 			CABundle:   caBundlePath,
-			Insecure:   false,
 		},
 	}
 

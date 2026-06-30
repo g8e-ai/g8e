@@ -175,13 +175,13 @@ func TestFirstToolEdgeCases(t *testing.T) {
 func TestMCPScenarios(t *testing.T) {
 	scenarios := mcpScenarios()
 
-	// Should have 5 MCP scenarios (3 core + 2 healthcare)
-	if len(scenarios) != 5 {
-		t.Errorf("mcpScenarios should return 5 scenarios, got %d", len(scenarios))
+	// Should have 7 MCP scenarios (3 core + 4 healthcare)
+	if len(scenarios) != 7 {
+		t.Errorf("mcpScenarios should return 7 scenarios, got %d", len(scenarios))
 	}
 
 	// Should have expected names
-	expectedNames := []string{"mcp-plain", "mcp-advanced", "mcp-secured", "healthcare-success", "healthcare-phi-blocked"}
+	expectedNames := []string{"mcp-plain", "mcp-advanced", "mcp-secured", "healthcare-success", "healthcare-phi-blocked", "healthcare-gold-card", "healthcare-sla-breach"}
 	nameSet := make(map[string]bool)
 	for _, sc := range scenarios {
 		nameSet[sc.Name] = true
@@ -230,6 +230,8 @@ func TestMCPScenarioNames(t *testing.T) {
 		"mcp-secured":            true,
 		"healthcare-success":     true,
 		"healthcare-phi-blocked": true,
+		"healthcare-gold-card":   true,
+		"healthcare-sla-breach":  true,
 	}
 
 	for _, sc := range scenarios {
@@ -264,6 +266,8 @@ func TestMCPScenarioPersonas(t *testing.T) {
 		"mcp-secured":            "enterprise-agent",
 		"healthcare-success":     "clinical-agent",
 		"healthcare-phi-blocked": "clinical-agent",
+		"healthcare-gold-card":   "clinical-agent",
+		"healthcare-sla-breach":  "clinical-agent",
 	}
 
 	for _, sc := range scenarios {
@@ -308,6 +312,8 @@ func TestMCPScenarioTitles(t *testing.T) {
 		"mcp-secured":            "MCP with simple security (mTLS/API key + L1 gate)",
 		"healthcare-success":     "Authorized FHIR PA Submission",
 		"healthcare-phi-blocked": "PHI Exfiltration Blocked by Doctrine",
+		"healthcare-gold-card":   "Gold Card Auto-Approval (HB 3134 §6)",
+		"healthcare-sla-breach":  "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)",
 	}
 
 	for _, sc := range scenarios {

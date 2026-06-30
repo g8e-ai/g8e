@@ -243,7 +243,7 @@ func TestInitWithBase_RuntimePathsPrefixedWithBase(t *testing.T) {
 
 	for _, tc := range runtimePaths {
 		t.Run(tc.name, func(t *testing.T) {
-			if !strings.HasPrefix(tc.val, base) {
+			if !strings.HasPrefix(filepath.ToSlash(tc.val), filepath.ToSlash(base)) {
 				t.Errorf("%s = %q, expected prefix %q", tc.name, tc.val, base)
 			}
 		})
@@ -509,7 +509,7 @@ func TestGetAgentConfigPaths_DifferentHomeDirs(t *testing.T) {
 	for _, home := range homes {
 		t.Run(home, func(t *testing.T) {
 			got := GetAgentConfigPaths(home)
-			if !strings.HasPrefix(got.CursorConfigDir, home) {
+			if !strings.HasPrefix(filepath.ToSlash(got.CursorConfigDir), filepath.ToSlash(home)) {
 				t.Errorf("CursorConfigDir %q should start with %q", got.CursorConfigDir, home)
 			}
 		})

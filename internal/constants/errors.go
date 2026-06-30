@@ -87,6 +87,7 @@ var (
 	ErrKeyStoreDeleteFile         = errors.New("failed to delete secret file")
 	ErrKeyStoreChmodDir           = errors.New("failed to chmod secrets directory")
 	ErrKeyStoreChmodFile          = errors.New("failed to chmod secret file")
+	ErrKeyStorePurgeFailed        = errors.New("purge failed with one or more errors")
 
 	// Ledger errors
 	ErrLedgerDisabled       = errors.New("ledger is disabled")
@@ -111,6 +112,8 @@ var (
 
 	// CLI authentication errors
 	ErrNotAuthenticated              = errors.New("not authenticated")
+	ErrNotEnrolled                   = errors.New("not enrolled")
+	ErrGatewayNotReachable           = errors.New("gateway not reachable")
 	ErrFailedToLoadCredentials       = errors.New("failed to load credentials")
 	ErrFailedToLoadClientCertificate = errors.New("failed to load client certificate")
 	ErrFailedToReadTrustBundle       = errors.New("failed to read trust bundle")
@@ -344,6 +347,7 @@ var (
 
 	// PubSub service errors
 	ErrPubSubEmptyPayload                 = errors.New("empty payload")
+	ErrPayloadExceedsLimit                = errors.New("payload exceeds maximum size limit")
 	ErrPubSubTransactionVerifier          = errors.New("transaction verifier not configured")
 	ErrPubSubActuator                     = errors.New("actuator not configured")
 	ErrPubSubL4Warden                     = errors.New("L4Warden not configured")
@@ -499,6 +503,7 @@ var (
 	ErrVaultResetConfirmation  = errors.New("vault reset requires explicit confirmation")
 	ErrVaultInvalidPrivateKey  = errors.New("invalid private key for this vault")
 	ErrVaultCiphertextTooShort = errors.New("ciphertext too short")
+	ErrVaultStdinReadFailed    = errors.New("failed to read from stdin")
 
 	// Vault crypto errors
 	ErrVaultInvalidKeySize      = errors.New("invalid key size: must be 32 bytes")
@@ -959,4 +964,10 @@ var (
 	ErrUserCreationFailed         = errors.New("user creation failed")
 	ErrCLISessionInvalid          = errors.New("invalid CLI session")
 	ErrCLICertBindingCheckFailed  = errors.New("CLI cert binding check failed")
+
+	// Agent harness errors
+	ErrHarnessNoScenarios = errors.New("no scenarios selected")
+
+	// CanonicalDB service errors
+	ErrTestKeystoreNil = errors.New("testKeystore must not be nil in test mode")
 )

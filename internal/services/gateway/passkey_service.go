@@ -306,6 +306,8 @@ type PasskeyHandler struct {
 	maxPayload     int64
 	mcpSvc         MCPServiceProvider
 	suspendedStore storage.SuspendedTransactionStore
+	sseStore       *SSEEventService
+	pubsub         *GatewayWebSocketHandler
 }
 
 // NewPasskeyHandler creates a new PasskeyHandler wrapping the given PasskeyService
@@ -326,6 +328,14 @@ func NewPasskeyHandler(svc *PasskeyService, webSessionSvc *WebSessionService, re
 func (h *PasskeyHandler) SetApprovalDependencies(mcpSvc MCPServiceProvider, suspendedStore storage.SuspendedTransactionStore) {
 	h.mcpSvc = mcpSvc
 	h.suspendedStore = suspendedStore
+}
+
+// SetSSEDependencies injects the SSE event store and pub/sub broker needed by
+// the passkey registration handler to emit real-time notifications to CLI clients.
+// Called after both the PasskeyHandler and gateway services are constructed.
+func (h *PasskeyHandler) SetSSEDependencies(sseStore *SSEEventService, pubsub *GatewayWebSocketHandler) {
+	h.sseStore = sseStore
+	h.pubsub = pubsub
 }
 
 // ChallengeData stores a pending challenge for registration or authentication.

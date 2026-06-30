@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package keystore
+package keystoretest
 
 import (
 	"testing"
@@ -22,15 +22,13 @@ import (
 )
 
 func TestNewMemoryKeyring(t *testing.T) {
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := NewMemoryKeyring()
 	require.NotNil(t, keyring)
 	assert.Equal(t, "memory", keyring.Name())
 }
 
 func TestMemoryKeyring_RetrieveMasterKey_NotFound(t *testing.T) {
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := NewMemoryKeyring()
 
 	key, err := keyring.RetrieveMasterKey()
 	require.Error(t, err)
@@ -39,11 +37,10 @@ func TestMemoryKeyring_RetrieveMasterKey_NotFound(t *testing.T) {
 }
 
 func TestMemoryKeyring_StoreAndRetrieveMasterKey(t *testing.T) {
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := NewMemoryKeyring()
 
 	testKey := []byte("test-master-key-32-bytes-long-12345")
-	err = keyring.StoreMasterKey(testKey)
+	err := keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
 	retrievedKey, err := keyring.RetrieveMasterKey()
@@ -52,11 +49,10 @@ func TestMemoryKeyring_StoreAndRetrieveMasterKey(t *testing.T) {
 }
 
 func TestMemoryKeyring_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := NewMemoryKeyring()
 
 	testKey := []byte("test-master-key-32-bytes-long-12345")
-	err = keyring.StoreMasterKey(testKey)
+	err := keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
 	retrievedKey1, err := keyring.RetrieveMasterKey()
@@ -71,11 +67,10 @@ func TestMemoryKeyring_RetrieveMasterKey_ReturnsCopy(t *testing.T) {
 }
 
 func TestMemoryKeyring_DeleteMasterKey(t *testing.T) {
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := NewMemoryKeyring()
 
 	testKey := []byte("test-master-key-32-bytes-long-12345")
-	err = keyring.StoreMasterKey(testKey)
+	err := keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
 	err = keyring.DeleteMasterKey()
@@ -88,19 +83,17 @@ func TestMemoryKeyring_DeleteMasterKey(t *testing.T) {
 }
 
 func TestMemoryKeyring_DeleteMasterKey_NotFound(t *testing.T) {
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := NewMemoryKeyring()
 
-	err = keyring.DeleteMasterKey()
+	err := keyring.DeleteMasterKey()
 	require.NoError(t, err)
 }
 
 func TestMemoryKeyring_OverwriteMasterKey(t *testing.T) {
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := NewMemoryKeyring()
 
 	key1 := []byte("first-master-key-32-bytes-long-123")
-	err = keyring.StoreMasterKey(key1)
+	err := keyring.StoreMasterKey(key1)
 	require.NoError(t, err)
 
 	key2 := []byte("second-master-key-32-bytes-long-4")

@@ -34,8 +34,8 @@ import (
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test",
-		Short: "Run test suites (unit, integration, e2e, lint, agent-harness, chaos)",
-		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Agent-harness runs demos against a real Gateway/Operator. Chaos generates governance events for testing.`,
+		Short: "Run test suites (unit, integration, e2e, lint, agent, chaos)",
+		Long:  `Run different tiers of the g8e test suite. Unit tests run fast without external dependencies. Integration tests use in-memory components. E2E tests require a running gateway. Lint runs static analysis. Agent runs demos against a real Gateway/Operator. Chaos generates governance events for testing.`,
 	}
 
 	cmd.AddCommand(

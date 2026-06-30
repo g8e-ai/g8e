@@ -67,7 +67,7 @@ type Client struct {
 // New builds a Client with mTLS material loaded per config. The MCP/A2A surface
 // also accepts an API key; both are attached automatically when present.
 func New(cfg config.Config) (*Client, error) {
-	tlsCfg := &tls.Config{InsecureSkipVerify: cfg.Auth.Insecure} //nolint:gosec // local dev opt-in
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS13}
 
 	if cfg.Auth.CABundle != "" {
 		if pem, err := os.ReadFile(cfg.Auth.CABundle); err == nil {

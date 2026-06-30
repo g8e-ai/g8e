@@ -142,7 +142,7 @@ func operatorRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&workingDir, "working-dir", "", "Working directory for command execution")
 	cmd.Flags().BoolVarP(&cloud, "cloud", "c", false, "Cloud operator mode")
 	cmd.Flags().StringVarP(&provider, "provider", "p", "", "Cloud provider (aws, gcp, azure)")
-	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", false, "Enable execution vault (data stays in working directory)")
+	cmd.Flags().BoolVarP(&executionVault, "execution-vault", "s", true, "Enable execution vault (data stays in working directory)")
 	cmd.Flags().BoolVarP(&noGit, "no-git", "G", false, "Disable Git integration")
 	cmd.Flags().StringVarP(&logLevel, "log", "l", "info", "Log level: info, error, debug")
 	cmd.Flags().IntVar(&heartbeatInterval, "heartbeat-interval", 30, "Heartbeat interval in seconds")

@@ -728,9 +728,29 @@ services:
     depends_on:
       gateway:
         condition: service_healthy
-    command: ["sh", "-c", "pip install flask -q && python -c 'from flask import Flask; app = Flask(__name__); @app.route(\"/\"); def index(): return \"Drone Swarm Command Interface - Fleet Status: ACTIVE\"; app.run(host=\"0.0.0.0\", port=5000)'"]
+    command: ["sh", "-c", "python3 -c 'import http.server\nclass H(http.server.BaseHTTPRequestHandler):\n def do_GET(self):\n  self.send_response(200)\n  self.send_header(\"Content-Type\",\"text/plain\")\n  self.end_headers()\n  self.wfile.write(b\"Drone Swarm Command Interface - Fleet Status: ACTIVE\")\nhttp.server.HTTPServer((\"0.0.0.0\",5000),H).serve_forever()'"]
     ports:
       - "5005:5000"
+
+  # Agent runtime for g8e agent-harness scenario execution
+  agent-runtime:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: swarm-agent
+    networks:
+      net_internal:
+    extra_hosts:
+      - "g8e.local:10.32.0.10"
+    volumes:
+      - operator_1_state:/root/.g8e:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+      operator-1:
+        condition: service_healthy
+    working_dir: /root
+    entrypoint: ["sh", "-c", "sleep infinity"]
 
   # Simulated adversary attempting to compromise drone swarm
   adversary:

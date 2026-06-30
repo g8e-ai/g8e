@@ -82,6 +82,46 @@ func mcpScenarios() []Scenario {
 			},
 		},
 		{
+			Name: "healthcare-gold-card", Title: "Gold Card Auto-Approval (HB 3134 §6)", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "submit_pa", map[string]any{
+					"resourceType":   "ClaimResponse",
+					"status":         "active",
+					"use":            "preauthorization",
+					"provider_npi":   "1234567890",
+					"provider_name":  "Dr. Priya Nair",
+					"procedure_code": "99214",
+					"request_id":     "PA-2026-0043",
+				})
+				if err != nil {
+					return err
+				}
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("gold card PA submission failed: %s", resp.Error.Message)
+				}
+				r.note("PA-2026-0043 submitted through governed endpoint (Dr. Priya Nair, 96%% historic approval)")
+				r.note("exemption engine evaluated provider against 90%% threshold — auto-approved")
+				return nil
+			},
+		},
+		{
+			Name: "healthcare-sla-breach", Title: "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)", Persona: clinicalAgent, RequiresPosture: Consensus,
+			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
+				resp, err := c.MCPToolsCall(ctx, clinicalAgent, "query_pa_status", map[string]any{
+					"request_id": "PA-2026-0044",
+				})
+				if err != nil {
+					return err
+				}
+				if resp != nil && resp.Error != nil {
+					return fmt.Errorf("SLA breach query failed: %s", resp.Error.Message)
+				}
+				r.note("PA-2026-0044 queried through governed endpoint (Dr. James O'Brien, 10 days elapsed)")
+				r.note("SLA enforcement: alert at day 5, breach at day 7 — reportable_to_oha=true")
+				return nil
+			},
+		},
+		{
 			Name: "mcp-advanced", Title: "Advanced MCP: resources, prompts, chained calls", Persona: cursor, RequiresPosture: Doctrine,
 			Run: func(ctx context.Context, c *clientpkg.Client, r *Result) error {
 				if _, err := c.MCPResourcesList(ctx, cursor); err != nil {

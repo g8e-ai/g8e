@@ -14,103 +14,100 @@
 package auth
 
 import (
-	"crypto/tls"
-	"crypto/x509"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	"net/url"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
+	"github.com/g8e-ai/g8e/internal/cli/sse"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// RegisterPasskeyViaBrowser opens the gateway's console UI in the user's browser
-// for passkey registration, then polls the mTLS passkey status endpoint until
-// registration is detected or the timeout expires. This replaces the legacy
-// localhost bootstrap server approach and works identically on all platforms.
-func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) error {
-	consoleURL := cfg.OperatorPublicURL() + "/console/#register=1"
+// passkeyEnrollTimeout is the maximum time to wait for passkey registration
+// via SSE before giving up.
+const passkeyEnrollTimeout = 5 * time.Minute
 
-	fmt.Printf("\n")
-	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
-	fmt.Printf("  PASSKEY REGISTRATION REQUIRED\n")
-	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
-	fmt.Printf("\n")
-	fmt.Printf("To complete your CLI enrollment, you need to register a passkey.\n")
-	fmt.Printf("This will enable secure passwordless authentication.\n")
-	fmt.Printf("\n")
-	fmt.Printf("Opening your browser to the g8e console...\n")
-	fmt.Printf("\n")
-	fmt.Printf("  %s\n", consoleURL)
-	fmt.Printf("\n")
-	fmt.Printf("The console will guide you through creating a WebAuthn/FIDO2 passkey.\n")
-	fmt.Printf("You can use Face ID, Touch ID, Windows Hello, or a security key.\n")
-	fmt.Printf("\n")
-	fmt.Printf("Waiting for passkey registration...\n")
-	fmt.Printf("═══════════════════════════════════════════════════════════════\n")
-	fmt.Printf("\n")
+// RegisterPasskeyViaBrowser opens the gateway's console UI in the user's browser
+// for passkey registration, then subscribes to an SSE stream scoped to the CLI
+// session. When the browser completes WebAuthn registration, the gateway emits
+// a passkey.registered event that the CLI receives in real-time, replacing the
+// legacy polling approach.
+func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) error {
+	consoleURL := fmt.Sprintf("%s/console/#register=1&user_id=%s&cli_session_id=%s",
+		cfg.OperatorPublicURL(),
+		url.QueryEscape(userID),
+		url.QueryEscape(cliSessionID))
 
 	_ = platform.OpenBrowser(consoleURL)
 
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
-
-	for i := 0; i < 100; i++ { // 5 minute timeout
-		<-ticker.C
-		hasPasskey, err := VerifyPasskeyRegistration(cfg, userID)
-		if err != nil {
-			continue
-		}
-		if hasPasskey {
-			fmt.Printf("\n✓ Passkey registered successfully!\n\n")
-			return nil
-		}
-		if i%10 == 0 && i > 0 {
-			fmt.Printf("  Still waiting... (%ds elapsed)\n", i*3)
-		}
+	mtlsClient, err := BuildMTLSClient(cfg, 0)
+	if err != nil {
+		return err
 	}
 
-	return constants.ErrPasskeyRegistrationTimedOut
+	sseURL := fmt.Sprintf("%s%s?cli_session_id=%s&since_id=1",
+		cfg.OperatorPublicURL(),
+		constants.APIPaths.SSEStream,
+		url.QueryEscape(cliSessionID))
+
+	sseClient := sse.NewClient(sseURL, mtlsClient)
+	sseClient.SetHeader(constants.HeaderCLISessionID, cliSessionID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), passkeyEnrollTimeout)
+	defer cancel()
+
+	model := newEnrollModel(consoleURL)
+	p := tea.NewProgram(model)
+
+	go func() {
+		sseClient.Run(ctx, func(eventType, data string) {
+			if eventType == "passkey.registered" {
+				p.Send(passkeyRegisteredMsg{})
+			}
+		})
+		if ctx.Err() != nil {
+			p.Send(enrollErrMsg{err: constants.ErrPasskeyRegistrationTimedOut})
+		}
+	}()
+
+	finalModel, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("passkey enrollment: %w", err)
+	}
+
+	m, ok := finalModel.(enrollModel)
+	if !ok {
+		return nil
+	}
+	return m.err
 }
 
-// VerifyPasskeyRegistration checks if a user has a passkey registered
-func VerifyPasskeyRegistration(cfg *config.Config, userID string) (bool, error) {
-	url := fmt.Sprintf("%s%s", cfg.OperatorPublicURL(), constants.APIPaths.AuthPasskeysCLIStatus)
+// VerifyPasskeyRegistration checks if a user has a passkey registered by
+// querying the gateway's mTLS passkey status endpoint. The cliSessionID
+// parameter is sent as the X-G8E-CLI-Session-ID header so the gateway's
+// mTLS auth middleware can route the request to handleCLIAuth.
+func VerifyPasskeyRegistration(cfg *config.Config, userID, cliSessionID string) (bool, error) {
+	statusURL := fmt.Sprintf("%s%s", cfg.OperatorPublicURL(), constants.APIPaths.AuthPasskeysCLIStatus)
 
-	// Load CLI mTLS certificate for authentication
-	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	httpClient, err := BuildMTLSClient(cfg, httpTimeout)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
+		return false, err
 	}
 
-	// Load CA bundle for server verification
-	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
+	req, err := http.NewRequest(http.MethodGet, statusURL, nil)
 	if err != nil {
-		return false, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+		return false, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caBundleBytes) {
-		return false, constants.ErrCAParseFailed
-	}
+	req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
 
-	// Create HTTP client with TLS configuration
-	tlsCfg := &tls.Config{
-		Certificates: []tls.Certificate{cliCert},
-		RootCAs:      caPool,
-		MinVersion:   tls.VersionTLS13,
-	}
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsCfg,
-		},
-		Timeout: httpTimeout,
-	}
-
-	resp, err := httpClient.Get(url)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return false, fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}

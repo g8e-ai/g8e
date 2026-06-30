@@ -39,7 +39,7 @@ const (
 func getDefaultNodeBinaryDir() string {
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
-		if fallbackErr := paths.InitWithBase(constants.ProjectRootFromCurrentDir); fallbackErr != nil {
+		if fallbackErr := paths.InitWithBase(constants.PathCurrentDir); fallbackErr != nil {
 			fmt.Fprintf(os.Stderr, "[stream] failed to initialize paths: %v\n", fallbackErr)
 		}
 	}

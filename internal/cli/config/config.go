@@ -16,6 +16,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -284,6 +285,9 @@ func (c *Config) OperatorHTTPURL() string {
 		if strings.Contains(endpointOverride, "://") {
 			return endpointOverride
 		}
+		if _, _, err := net.SplitHostPort(endpointOverride); err != nil {
+			return fmt.Sprintf("https://%s:%d", endpointOverride, constants.Ports.OperatorHttps)
+		}
 		return fmt.Sprintf("https://%s", endpointOverride)
 	}
 	if c.Paths != nil && strings.Contains(c.Paths.Host, "://") {
@@ -307,6 +311,9 @@ func (c *Config) OperatorPublicURL() string {
 		if strings.Contains(endpointOverride, "://") {
 			return endpointOverride
 		}
+		if _, _, err := net.SplitHostPort(endpointOverride); err != nil {
+			return fmt.Sprintf("https://%s:%d", endpointOverride, constants.Ports.OperatorHttps)
+		}
 		return fmt.Sprintf("https://%s", endpointOverride)
 	}
 	return netutil.LocalhostHTTPSURL(c.OperatorHTTPSPort())
@@ -317,6 +324,9 @@ func (c *Config) OperatorDiscoveryURL() string {
 	if endpointOverride != "" {
 		if strings.Contains(endpointOverride, "://") {
 			return endpointOverride
+		}
+		if _, _, err := net.SplitHostPort(endpointOverride); err != nil {
+			return fmt.Sprintf("http://%s:%d", endpointOverride, constants.Ports.OperatorHttp)
 		}
 		return fmt.Sprintf("http://%s", endpointOverride)
 	}

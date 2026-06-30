@@ -14,16 +14,19 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/spf13/cobra"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 type apiClient interface {
@@ -86,34 +89,38 @@ status endpoint until the transaction is approved or times out.`,
 			ticker := time.NewTicker(approvePollInterval)
 			defer ticker.Stop()
 
-			type statusResponse struct {
-				Status   string `json:"status"`
-				TxHash   string `json:"tx_hash,omitempty"`
-				ToolName string `json:"tool_name,omitempty"`
+			ctx := cmd.Context()
+			if ctx == nil {
+				ctx = context.Background()
 			}
 
 			for i := 0; i < approveMaxIterations; i++ {
-				<-ticker.C
+				select {
+				case <-ctx.Done():
+					return fmt.Errorf("approve: cancelled: %w", ctx.Err())
+				case <-ticker.C:
+				}
+
 				resp, err := client.Get(statusPath)
 				if err != nil {
 					continue
 				}
 
-				var status statusResponse
+				var status models.ApprovalStatusResponse
 				if err := json.Unmarshal(resp, &status); err != nil {
 					continue
 				}
 
 				switch status.Status {
-				case "approved":
+				case string(constants.SuspendedTxStatusApproved):
 					cmd.Printf("\n✓ Transaction %s approved successfully\n", txHash)
 					if status.ToolName != "" {
 						cmd.Printf("  Tool: %s\n", status.ToolName)
 					}
 					return nil
-				case "expired_or_not_found":
+				case string(constants.SuspendedTxStatusExpiredOrNotFound):
 					return fmt.Errorf("approve: transaction %s expired or not found", txHash)
-				case "pending":
+				case string(constants.SuspendedTxStatusPending):
 					if i%10 == 0 && i > 0 {
 						cmd.Printf("  Still waiting... (%ds elapsed)\n", i*int(approvePollInterval.Seconds()))
 					}

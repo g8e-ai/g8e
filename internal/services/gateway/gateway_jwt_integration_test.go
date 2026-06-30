@@ -27,7 +27,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -35,7 +34,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -133,22 +131,14 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+	ks := newTestKeystore(t, secretsDir, logger)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-
-	os.RemoveAll(secretsDir)
-	os.MkdirAll(secretsDir, 0755)
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	keyring, err := keystore.NewMemoryKeyring()
-	require.NoError(t, err)
-	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
-	require.NoError(t, err)
-	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: secretsDir,
@@ -290,22 +280,14 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+	ks := newTestKeystore(t, secretsDir, logger)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-
-	os.RemoveAll(secretsDir)
-	os.MkdirAll(secretsDir, 0755)
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	keyring, err := keystore.NewMemoryKeyring()
-	require.NoError(t, err)
-	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
-	require.NoError(t, err)
-	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: secretsDir,
@@ -462,22 +444,14 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+	ks := newTestKeystore(t, secretsDir, logger)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
-
-	os.RemoveAll(secretsDir)
-	os.MkdirAll(secretsDir, 0755)
 
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
 
-	keyring, err := keystore.NewMemoryKeyring()
-	require.NoError(t, err)
-	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
-	require.NoError(t, err)
-	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
 		secretsDir: secretsDir,
@@ -633,22 +607,17 @@ func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+	ks := newTestKeystore(t, secretsDir, logger)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	os.RemoveAll(secretsDir)
-	os.MkdirAll(secretsDir, 0755)
-
-	keyring, err := keystore.NewMemoryKeyring()
-	require.NoError(t, err)
-	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
-	require.NoError(t, err)
-	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnforcePermissions())
-
-	sm, err := NewSecretManager(db.db, secretsDir, logger)
-	require.NoError(t, err)
+	sm := &SecretManager{
+		db:         db.db,
+		secretsDir: secretsDir,
+		logger:     logger,
+		keystore:   ks,
+	}
 
 	pki := newPKIAuthority(dbDir, pkiDir, db, sm, logger)
 	err = pki.InitializePKI(nil)

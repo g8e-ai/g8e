@@ -505,7 +505,7 @@ docker compose logs healthcare-metabase-setup
 If the service exited non-zero, re-run the setup script against the live Metabase:
 
 ```bash
-docker compose run --rm metabase-setup sh -c "pip install requests -q && python /app/setup_metabase.py"
+docker compose run --rm metabase-setup python /app/setup_metabase.py
 ```
 
 Or create the queries manually through the Metabase UI using the SQL provided in the documentation.

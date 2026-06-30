@@ -32,7 +32,6 @@ Practical Coverage:
 
 import (
 	"bytes"
-	"crypto/tls"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -361,7 +360,7 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	fixture.SetPublicBaseURL(publicURL)
 
 	t.Run("api key rejected", func(t *testing.T) {
-		plainClient := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+		plainClient := fixtures.CreateNoCertClient(t, fixture)
 		reqBody := `{"jsonrpc":"2.0","id":1,"method":"a2a/call","params":{"skill_name":"test"}}`
 
 		// Test with API key in header

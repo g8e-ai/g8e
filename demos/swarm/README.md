@@ -123,14 +123,30 @@ The demo includes simulated battlefield intelligence in `target-data/`:
 
 ## Demo Scenarios
 
-### Scenario 1: Normal Operations
-All 20 drones operate within doctrine rules, conducting reconnaissance and surveillance missions.
+The swarm demo includes 3 real scenarios integrated into the `g8e demos run` CLI command. Each scenario submits a real `GovernanceEnvelope` through the gateway via mTLS using the agent-harness.
 
-### Scenario 2: Adversary Interception
-The adversary service attempts to intercept drone communications. Doctrine rules detect and block unauthorized access attempts.
+### Scenario 1: Authorized Recon Mission (Governed Drone Deployment)
+```bash
+g8e demos run swarm 1
+```
+Submits a `GovernanceEnvelope` for a drone recon mission through the gateway via `harnessRun("swarm-recon-mission")`. Verifies gateway health, operator enrollment, doctrine loaded, L2 consensus admission, and ledger receipt.
 
-### Scenario 3: Safety Violation Detection
-Simulate a drone attempting to enter a no-fly zone or target friendly forces. Doctrine rules trigger alerts and prevent violations.
+### Scenario 2: Weapons Safety Doctrine Block
+```bash
+g8e demos run swarm 2
+```
+Runs `harnessRun("swarm-weapon-release-block")` which attempts an unauthorized weapon release via MCP tool call. Verifies L1 Doctrine blocks it before any operator execution.
+
+### Scenario 3: Navigation Boundary Violation Block
+```bash
+g8e demos run swarm 3
+```
+Runs `harnessRun("swarm-restricted-airspace-block")` which attempts to navigate a drone into restricted airspace via MCP tool call. Verifies L1 Doctrine blocks the navigation command.
+
+Use `-v` for verbose step-by-step output:
+```bash
+g8e demos run swarm 1 -v
+```
 
 ## Troubleshooting
 

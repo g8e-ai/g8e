@@ -393,7 +393,7 @@ func TestSubmitEnvelope(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -434,7 +434,7 @@ func TestSubmitEnvelope(t *testing.T) {
 func TestSubmitEnvelope_MarshalError(t *testing.T) {
 	cfg := config.Config{
 		MTLSBaseURL: "https://example.com",
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -571,7 +571,7 @@ func TestSubmitMaximal(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -647,7 +647,7 @@ func TestSubmitMaximal_DefaultTTL(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -689,7 +689,7 @@ func TestSubmitMaximal_WithL2(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -736,7 +736,7 @@ func TestSubmitMaximal_WithL3(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)

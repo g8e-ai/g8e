@@ -13,7 +13,7 @@
 
 package constants
 
-// System path constants for critical system directories and files
+// System paths (Unix) for critical system directories and files.
 const (
 	PathEtc                                                   = "/etc"
 	PathEtcPasswd                                             = "/etc/passwd"
@@ -59,28 +59,21 @@ const (
 	PathBinBash                                               = "/bin/bash"
 	PathUsrBinBash                                            = "/usr/bin/bash"
 	PathUsrBinSh                                              = "/usr/bin/sh"
+	PathBinSh                                                 = "/bin/sh"
 	PathLib                                                   = "/lib"
 	PathLib64                                                 = "/lib64"
 	PathUsrLib                                                = "/usr/lib"
 	PathProc                                                  = "/proc"
 	PathSys                                                   = "/sys"
 	PathDev                                                   = "/dev"
-	PathDevNull                                               = "/dev/null"
-	PathDevZero                                               = "/dev/zero"
 	PathVar                                                   = "/var"
-	PathVarLib                                                = "/var/lib"
-	PathVarLog                                                = "/var/log"
 	PathVarLogDmesg                                           = "/var/log/dmesg"
-	PathVarWWW                                                = "/var/www"
 	PathTmp                                                   = "/tmp"
-	PathOpt                                                   = "/opt"
 	PathHome                                                  = "/home"
 	PathEtcHostname                                           = "/etc/hostname"
 	PathEtcMachineID                                          = "/etc/machine-id"
 	PathVarLibDbusMachineID                                   = "/var/lib/dbus/machine-id"
 	PathProcSysKernelRandomBootID                             = "/proc/sys/kernel/random/boot_id"
-	PathProcSelfCgroup                                        = "/proc/self/cgroup"
-	PathProcSelfMountinfo                                     = "/proc/self/mountinfo"
 	PathProcMounts                                            = "/proc/mounts"
 	PathProcLoadAvg                                           = "/proc/loadavg"
 	PathProcMemInfo                                           = "/proc/meminfo"
@@ -97,47 +90,54 @@ const (
 	PathEtcOSRelease                                          = "/etc/os-release"
 	PathEtcTimezone                                           = "/etc/timezone"
 	PathEtcLocaltime                                          = "/etc/localtime"
-	PathBinSh                                                 = "/bin/sh"
 	PathRoot                                                  = "/"
 	PathLibraryPreferencesSystemConfigurationPreferencesPlist = "/Library/Preferences/SystemConfiguration/preferences.plist"
 
 	// Relative path components
 	PathParentDir = ".."
+)
 
-	// SSH paths
-	PathEtcSshKnownHosts            = "/etc/ssh/known_hosts"
-	PathEtcSshSshKnownHosts         = "/etc/ssh/ssh_known_hosts"
-	PathHomeSshKnownHosts           = "$HOME/.ssh/known_hosts"
-	PathWindowsSshKnownHosts        = "$USERPROFILE\\.ssh\\known_hosts"
-	PathWindowsProgramDataSsh       = "C:\\ProgramData\\ssh\\known_hosts"
+// System paths (Windows) for registry, hosts, and Git Bash locations.
+const (
 	PathWindowsSystemRoot           = "SystemRoot"
 	PathWindowsHostsFile            = "System32\\drivers\\etc\\hosts"
 	PathWindowsRegistryCryptography = "SOFTWARE\\Microsoft\\Cryptography"
 	PathWindowsRegistryMachineGuid  = "MachineGuid"
-
-	// Windows Git Bash paths
-	PathWindowsGitBinBash    = "C:\\Program Files\\Git\\bin\\bash.exe"
-	PathWindowsGitUsrBinBash = "C:\\Program Files\\Git\\usr\\bin\\bash.exe"
-	PathWindowsGitBinSh      = "C:\\Program Files\\Git\\bin\\sh.exe"
-	PathWindowsMsys64Bash    = "C:\\msys64\\usr\\bin\\bash.exe"
-	PathWindowsCygwin64Bash  = "C:\\cygwin64\\bin\\bash.exe"
+	PathWindowsGitBinBash           = "C:\\Program Files\\Git\\bin\\bash.exe"
+	PathWindowsGitUsrBinBash        = "C:\\Program Files\\Git\\usr\\bin\\bash.exe"
+	PathWindowsGitBinSh             = "C:\\Program Files\\Git\\bin\\sh.exe"
+	PathWindowsMsys64Bash           = "C:\\msys64\\usr\\bin\\bash.exe"
+	PathWindowsCygwin64Bash         = "C:\\cygwin64\\bin\\bash.exe"
 )
 
-// Environment variable constants
+// SSH path constants for known_hosts and config locations.
+const (
+	PathEtcSshKnownHosts      = "/etc/ssh/known_hosts"
+	PathEtcSshSshKnownHosts   = "/etc/ssh/ssh_known_hosts"
+	PathHomeSshKnownHosts     = "$HOME/.ssh/known_hosts"
+	PathWindowsSshKnownHosts  = "$USERPROFILE\\.ssh\\known_hosts"
+	PathWindowsProgramDataSsh = "C:\\ProgramData\\ssh\\known_hosts"
+)
+
+// Environment variable constants.
 const (
 	EnvPathDefault = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 )
 
-// PKI filesystem constants for subdirectories and filenames.
+// PKI constants for subdirectories, filenames, and extensions.
 const (
-	PkiDirname           = "pki"
-	PkiSubdirRoot        = "root"
-	PkiSubdirAuthorities = "authorities"
-	PkiSubdirIssued      = "issued"
-	PkiSubdirTrust       = "trust"
-	PkiSubdirRevocation  = "revocation"
-	PkiSubdirBinaries    = "binaries"
-	PkiSubdirClient      = "client"
+	PkiDirname              = "pki"
+	PkiSubdirRoot           = "root"
+	PkiSubdirAuthorities    = "authorities"
+	PkiSubdirIssued         = "issued"
+	PkiSubdirTrust          = "trust"
+	PkiSubdirRevocation     = "revocation"
+	PkiSubdirBinaries       = "binaries"
+	PkiSubdirClient         = "client"
+	PkiSubdirHub            = "hub"
+	PkiSubdirGatewayPeer    = "gateway-peer"
+	PkiSubdirApps           = "apps"
+	PkiSubdirTrustedSigners = "trusted_signers"
 
 	// File extensions
 	FileExtCert = ".crt"
@@ -145,6 +145,7 @@ const (
 	FileExtPEM  = ".pem"
 	FileExtJSON = ".json"
 
+	// CA and bundle filenames
 	PkiFileRootCA          = "root_ca.crt"
 	PkiFileRootCAKey       = "root_ca.key"
 	PkiFileHubCA           = "hub_ca.crt"
@@ -155,15 +156,33 @@ const (
 	PkiFileOperatorBundle  = "operator-bundle.pem"
 	PkiFileTrustDomainJSON = "trust-domain.json"
 	PkiFileWardenPub       = "warden_pub.pem"
-	PkiFileOperatorCert    = "operator.crt"
-	PkiFileOperatorKey     = "operator.key"
-	PkiFileOperatorChain   = "operator.chain.pem"
-	PkiFileGatewayCert     = "operator-gateway.crt"
-	PkiFileGatewayKey      = "operator-gateway.key"
-	PkiFileGatewayChain    = "operator-gateway.chain.pem"
 	PkiFileBootstrapCA     = "bootstrap_ca.crt"
 	PkiFileBootstrapBundle = "bootstrap-bundle.pem"
 
+	// Operator certificate and key filenames
+	PkiFileOperatorCert  = "operator.crt"
+	PkiFileOperatorKey   = "operator.key"
+	PkiFileOperatorChain = "operator.chain.pem"
+
+	// Gateway certificate and key filenames
+	PkiFileGatewayCert  = "operator-gateway.crt"
+	PkiFileGatewayKey   = "operator-gateway.key"
+	PkiFileGatewayChain = "operator-gateway.chain.pem"
+
+	// Peer certificate filenames
+	PeerCertFilename  = "peer.crt"
+	PeerKeyFilename   = "peer.key"
+	PeerChainFilename = "peer.chain.pem"
+	PeerSubdir        = "peer"
+
+	// CLI certificate and key filenames
+	CliCertFilename     = "cli.crt"
+	CliKeyFilename      = "cli.key"
+	CredentialsFilename = "credentials"
+)
+
+// Storage constants for database filenames and paths.
+const (
 	DbFilename             = "g8e.db"
 	VaultKeyFilename       = "key"
 	VaultNewKeyFilename    = "key.new"
@@ -172,6 +191,24 @@ const (
 	ReceiptsFilename       = "receipts.json"
 	ReceiptsExportFilename = "receipts-export.json"
 
+	// Storage DB filenames (used with filepath.Join)
+	ReplayStoreDBFilename    = "replay_store.db"
+	ExecutionVaultDBFilename = "execution_vault.db"
+	LocalStateDBFilename     = "local_state.db"
+	AuditVaultDBFilename     = "audit_vault.db"
+
+	// Full relative storage DB paths (relative to project root, used as config defaults)
+	ReplayStoreDBPath          = RuntimeDirname + "/" + ReplayStoreDBFilename
+	ExecutionVaultDBPath       = RuntimeDirname + "/" + ExecutionVaultDBFilename
+	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
+
+	// Key filenames
+	MasterKeyFilename = ".master_key"
+	PublicKeySuffix   = ".pub"
+)
+
+// Secrets filenames for bootstrap and runtime secret material.
+const (
 	SecretsFileSessionEncryptionKey    = "session_encryption_key"
 	SecretsFileBootstrapDigest         = "bootstrap_digest.json"
 	SecretsFileActuatorSigningKey      = "actuator_signing_key"
@@ -182,7 +219,10 @@ const (
 	SecretsFileCLIPrivateKey           = "cli_private_key"
 	SecretsFileSessionToken            = "session_token"
 	SecretsFileTribunalMemberKeyPrefix = "tribunal_member_"
+)
 
+// Demos constants for organization names, doctrine files, and compose config.
+const (
 	DemosDirname                = "demos"
 	DemosComposeFile            = "compose.yml"
 	DemosBinDirname             = "bin"
@@ -194,29 +234,34 @@ const (
 	DemosSecureDataDoctrineFile = "secure_data_transfer_doctrine.json"
 	DemosDoWDoctrineFile        = "dow_tactical_doctrine.json"
 	DemosDHSDoctrineFile        = "dhs_sovereign_doctrine.json"
+	DemosSwarmDoctrineFile      = "drone_operations_doctrine.json"
 	DemosOrgHealthcare          = "healthcare"
 	DemosOrgFinance             = "finance"
 	DemosOrgGov                 = "gov"
 	DemosOrgSecureData          = "secure-data"
 	DemosOrgDoW                 = "dow"
 	DemosOrgDHS                 = "dhs"
+	DemosOrgSwarm               = "swarm"
+)
 
+// Container paths for Docker exec commands in demo environments.
+// These are paths inside the g8e Docker containers, not local filesystem paths.
+const (
+	ContainerRootG8E          = "/root/.g8e"
+	ContainerPKIDir           = ContainerRootG8E + "/" + PkiDirname
+	ContainerOperatorCert     = ContainerPKIDir + "/" + PkiFileOperatorCert
+	ContainerOperatorKey      = ContainerPKIDir + "/" + PkiFileOperatorKey
+	ContainerCABundle         = ContainerPKIDir + "/" + PkiSubdirTrust + "/" + PkiFileGatewayBundle
+	ContainerDataDir          = ContainerRootG8E + "/" + DataDirname
+	ContainerAuditVaultDB     = ContainerDataDir + "/" + AuditVaultDBFilename
+	ContainerExecutionVaultDB = ContainerDataDir + "/" + ExecutionVaultDBFilename
+	ContainerLedgerFilesDir   = ContainerRootG8E + "/" + LedgerDirname + "/" + FilesDirname
+)
+
+// Component filenames for gateway, operator, and shared services.
+const (
 	SwaggerFilename          = "swagger.json"
 	ComplianceReportFilename = "compliance-report.json"
-
-	PkiSubdirHub            = "hub"
-	PkiSubdirGatewayPeer    = "gateway-peer"
-	PkiSubdirApps           = "apps"
-	PkiSubdirTrustedSigners = "trusted_signers"
-
-	// Directory names
-	BinDirname = "bin"
-	LogDirname = "logs"
-
-	// CLI certificate and key filenames
-	CliCertFilename     = "cli.crt"
-	CliKeyFilename      = "cli.key"
-	CredentialsFilename = "credentials"
 
 	// Gateway-specific filenames
 	GatewayIDFilename       = "gateway-id"
@@ -229,38 +274,25 @@ const (
 	OperatorPostureFilename = "operator.posture"
 	OperatorBinaryFilename  = "g8e-operator"
 	OperatorLogFilename     = "operator.log"
-
-	// Peer certificate filenames
-	PeerCertFilename  = "peer.crt"
-	PeerKeyFilename   = "peer.key"
-	PeerChainFilename = "peer.chain.pem"
-	PeerSubdir        = "peer"
 )
 
-// Project root discovery constants for test path initialization
+// Runtime directory constants for the .g8e/ state tree.
 const (
-	ProjectRootFromTestDir    = "../../"
-	ProjectRootFromCurrentDir = "."
-	PathCurrentDir            = "."
+	ProjectRootFromTestDir = "../../"
+	PathCurrentDir         = "."
 
-	// Directory names (single path segment, no separators)
 	RuntimeDirname           = ".g8e"
 	DataDirname              = "data"
 	VaultDirname             = "vault"
 	SecretsDirname           = "secrets"
 	LedgerDirname            = "ledger"
-	SshConfigFilename        = "ssh_config"
-	SshDirname               = ".ssh"
-	SshConfigBasename        = "config"
-	SshKnownHostsBasename    = "known_hosts"
-	SshKeyEd25519            = "id_ed25519"
-	SshKeyECDSA              = "id_ecdsa"
-	SshKeyRSA                = "id_rsa"
 	PidDirname               = "pids"
 	DocsDirname              = "docs"
 	ProtocolDirname          = "protocol"
 	ProtocolConstantsDirname = "constants"
 	ProtocolModelsDirname    = "models"
+	BinDirname               = "bin"
+	LogDirname               = "logs"
 
 	// Ledger-specific directory and file names
 	FilesDirname      = "files"
@@ -268,23 +300,21 @@ const (
 	GitDirname        = ".git"
 	GitignoreFilename = ".gitignore"
 	GoModFilename     = "go.mod"
+)
 
-	// Key filenames
-	MasterKeyFilename = ".master_key"
-	PublicKeySuffix   = ".pub"
+// SSH config constants for basenames and key filenames.
+const (
+	SshConfigFilename     = "ssh_config"
+	SshDirname            = ".ssh"
+	SshConfigBasename     = "config"
+	SshKnownHostsBasename = "known_hosts"
+	SshKeyEd25519         = "id_ed25519"
+	SshKeyECDSA           = "id_ecdsa"
+	SshKeyRSA             = "id_rsa"
+)
 
-	// Storage DB filenames (used with filepath.Join)
-	ReplayStoreDBFilename    = "replay_store.db"
-	ExecutionVaultDBFilename = "execution_vault.db"
-	LocalStateDBFilename     = "local_state.db"
-	AuditVaultDBFilename     = "audit_vault.db"
-
-	// Full relative storage DB paths (relative to project root, used as config defaults)
-	ReplayStoreDBPath          = RuntimeDirname + "/replay_store.db"
-	ExecutionVaultDBPath       = RuntimeDirname + "/execution_vault.db"
-	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
-
-	// Agent config directory and file names (relative to home directory)
+// Agent config constants for AI tool config directories and filenames.
+const (
 	AgentConfigDirCursor    = ".cursor"
 	AgentConfigDirDevin     = ".codeium/windsurf"
 	AgentConfigDirGemini    = ".gemini"
@@ -297,83 +327,78 @@ const (
 	AgentConfigFileMCPDevin = "mcp_config.json"
 	AgentConfigFileSettings = "settings.json"
 	AgentConfigFileAider    = ".aider.conf.yml"
+)
 
-	// File permission modes (octal)
+// API path constants for enrollment and well-known endpoints.
+const (
+	APIPathAuthDeviceEnroll = "/api/v1/auth/device/enroll"
+	APIPathPKIDevicesEnroll = "/api/v1/pki/devices/enroll"
+	WellKnownPKICABundle    = "/.well-known/g8e/pki/ca-bundle"
+)
+
+// CLI default paths for config and help text (derived from primitives).
+const (
+	DefaultVaultDirDesc     = RuntimeDirname + "/" + VaultDirname
+	DefaultVaultKeyDesc     = RuntimeDirname + "/" + SecretsDirname + "/" + VaultKeyFilename
+	DefaultOperatorKeyDesc  = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorKey
+	DefaultClientKeyDesc    = RuntimeDirname + "/" + PkiDirname + "/" + CliKeyFilename
+	DefaultOperatorCertDesc = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorCert
+	DefaultClientCertDesc   = RuntimeDirname + "/" + PkiDirname + "/" + CliCertFilename
+
+	DefaultDataDir    = RuntimeDirname + "/" + DataDirname
+	DefaultPKIDir     = RuntimeDirname + "/" + PkiDirname
+	DefaultSecretsDir = RuntimeDirname + "/" + SecretsDirname
+)
+
+// File permission modes (octal).
+const (
 	PermDirPrivate  = 0700 // rwx------
 	PermDirStandard = 0755 // rwxr-xr-x
 	PermFilePrivate = 0600 // rw-------
 	PermFilePublic  = 0644 // rw-r--r--
+)
 
-	// API path constants
-	APIPathAuthDeviceEnroll = "/api/v1/auth/device/enroll"
-	APIPathPKIDevicesEnroll = "/api/v1/pki/devices/enroll"
-	WellKnownPKICABundle    = "/.well-known/g8e/pki/ca-bundle"
-
-	// Default path descriptions for CLI help text
-	DefaultVaultDirDesc     = ".g8e/vault"
-	DefaultVaultKeyDesc     = ".g8e/secrets/vault.key"
-	DefaultOperatorKeyDesc  = ".g8e/pki/operator.key"
-	DefaultClientKeyDesc    = ".g8e/pki/client.key"
-	DefaultOperatorCertDesc = ".g8e/pki/operator.crt"
-	DefaultClientCertDesc   = ".g8e/pki/client.crt"
-
-	// Default path constants for CLI config (relative paths)
-	DefaultDataDir    = RuntimeDirname + "/" + DataDirname
-	DefaultPKIDir     = RuntimeDirname + "/" + PkiDirname
-	DefaultSecretsDir = RuntimeDirname + "/" + SecretsDirname
-
-	// Test-specific filename constants (for isolated test environments)
-	TestEmptyMachineIDFilename = "empty-machine-id"
-	TestDBSubdirName           = "db"
-	TestLedgerDirname          = "ledger"
-	TestGitDirname             = ".git"
-	TestFileTxtFilename        = "test.txt"
-	TestNonexistentTxtFilename = "nonexistent.txt"
-	TestResultsDirname         = "test-results"
-
-	// Test-specific directory names
-	TestVaultDirname             = "test-vault"
-	TestProtocolDirname          = "protocol"
-	TestProtocolConstantsDirname = "constants"
-	TestDocsDirname              = "docs"
-
-	// Test-specific database filenames
-	TestLocalStateDBFilename    = "local_state.db"
-	TestAuditVaultDBFilename    = "audit_vault.db"
+// Test-specific constants for isolated test environments.
+const (
+	TestEmptyMachineIDFilename  = "empty-machine-id"
+	TestFileTxtFilename         = "test.txt"
+	TestNonexistentTxtFilename  = "nonexistent.txt"
+	TestResultsDirname          = "test-results"
+	TestVaultDirname            = "test-vault"
 	TestSecretManagerDBFilename = "secret_manager_test.db"
 	TestCertFilename            = "test-cert.pem"
 	TestKeyFilename             = "test-key.pem"
+)
 
-	// File system listing limits
+// Operational limits for filesystem, grep, and execution operations.
+const (
 	FsListMaxDepth       = 3
 	FsListDefaultDepth   = 0
 	FsListMaxEntries     = 500
 	FsListDefaultEntries = 100
 	FsListBatchSize      = 100
 
-	// FsGrep limits
 	FsGrepDefaultMaxMatches     = 100
 	FsGrepMaxMatches            = 500
 	FsGrepScannerInitialBufSize = 64 * 1024
 	FsGrepScannerMaxBufSize     = 1024 * 1024
 
-	// Temporary file suffix for atomic writes
-	TmpFileSuffix = ".tmp"
-
-	// Backup file suffix pattern (for use with fmt.Sprintf)
-	BackupFileSuffixPattern = ".backup-%s-%s"
-
-	// SQLite file suffixes
-	SQLiteWALSuffix = "-wal"
-	SQLiteSHMSuffix = "-shm"
-
-	// Execution stream size limits
 	ExecutionMaxStreamSize = 10 * 1024 * 1024 // 10MB per stream
 	ExecutionMaxLines      = 50               // Max lines for terminal output preview
 	ExecutionPreviewLength = 300              // Max characters for log preview
 	FileEditMaxSize        = 50 * 1024 * 1024 // 50MB max file size for operations
+)
 
-	// Reporting output directory and file names
+// File suffixes for temp, backup, and SQLite artifacts.
+const (
+	TmpFileSuffix           = ".tmp"
+	BackupFileSuffixPattern = ".backup-%s-%s"
+	SQLiteWALSuffix         = "-wal"
+	SQLiteSHMSuffix         = "-shm"
+)
+
+// Reporting constants for output directory and filenames.
+const (
 	ReportsDirname                 = "reports"
 	ReportReceiptsFilename         = "receipts.csv"
 	ReportSessionsFilename         = "sessions.csv"

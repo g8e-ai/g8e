@@ -187,7 +187,7 @@ func TestTLSCertInspectTool_Execute_Host(t *testing.T) {
 	port, _ := strconv.Atoi(portStr)
 
 	tool := &TLSCertInspectTool{}
-	args := json.RawMessage(fmt.Sprintf(`{"host": %q, "port": %d, "insecure_skip_verify": true}`, host, port))
+	args := json.RawMessage(fmt.Sprintf(`{"host": %q, "port": %d}`, host, port))
 	result, err := tool.Execute(context.Background(), args)
 	require.NoError(t, err)
 

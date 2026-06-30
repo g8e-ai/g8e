@@ -23,7 +23,13 @@ The reference implementation is the g8e Node running in gateway mode. The same g
 ### Prerequisites
 
 - **Go 1.26.4+** - Required for building the reference gateway.
+- **Make** - Required to run build targets.
 - **OpenSSL** - Required for PKI operations during runtime.
+
+> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
+> - **Linux:** `bash scripts/linux-setup.sh`
+> - **macOS:** `bash scripts/macos-setup.sh`
+> - **Windows:** `pwsh scripts/windows-setup.ps1`
 
 ### Build from Source
 

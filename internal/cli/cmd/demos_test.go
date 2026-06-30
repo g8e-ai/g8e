@@ -228,10 +228,11 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 3, scenarioCounts["secure-data"])
 		assert.Equal(t, 3, scenarioCounts["dow"])
 		assert.Equal(t, 5, scenarioCounts["dhs"])
+		assert.Equal(t, 3, scenarioCounts["swarm"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs"}
+		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs", "swarm"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -446,6 +447,13 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1-5")
 	})
 
+	t.Run("returns error for invalid swarm scenario", func(t *testing.T) {
+		err := runSwarmScenario("/tmp", "99")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid scenario number for swarm")
+		assert.Contains(t, err.Error(), "valid: 1-3")
+	})
+
 	t.Run("healthcare scenario functions exist", func(t *testing.T) {
 		// Verify the scenario function exists and doesn't panic on valid input
 		// We don't execute it since it requires Docker
@@ -506,6 +514,12 @@ func TestRunAllScenarios(t *testing.T) {
 
 	t.Run("dow has 3 scenarios", func(t *testing.T) {
 		count, ok := scenarioCounts["dow"]
+		assert.True(t, ok)
+		assert.Equal(t, 3, count)
+	})
+
+	t.Run("swarm has 3 scenarios", func(t *testing.T) {
+		count, ok := scenarioCounts["swarm"]
 		assert.True(t, ok)
 		assert.Equal(t, 3, count)
 	})
@@ -660,5 +674,296 @@ func TestDHSScenarioDescriptions(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Resilient Disconnected Operations")
 		assert.Contains(t, cmd.Long, "Governed Predictive Cueing")
 		assert.Contains(t, cmd.Long, "Sovereign Destruction + tamper-proof audit")
+	})
+}
+
+func TestDefaultHarnessConfig(t *testing.T) {
+	t.Run("returns standard demo topology defaults", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		assert.Equal(t, "agent-runtime", cfg.Container)
+		assert.Equal(t, "https://g8e.local:8443", cfg.MTLSURL)
+		assert.Equal(t, "http://g8e.local:8080", cfg.PublicURL)
+		assert.Equal(t, "/root/.g8e/pki/operator.crt", cfg.CertPath)
+		assert.Equal(t, "/root/.g8e/pki/operator.key", cfg.KeyPath)
+		assert.Equal(t, "/root/.g8e/pki/trust/g8eg-ca-bundle.pem", cfg.CAPath)
+		assert.Equal(t, 3, cfg.EnsembleSize)
+		assert.Equal(t, "mock", cfg.L3Mode)
+		assert.False(t, cfg.UseRun)
+	})
+
+	t.Run("container name is parameterized", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-sigint")
+		assert.Equal(t, "agent-sigint", cfg.Container)
+	})
+}
+
+func TestHarnessRun(t *testing.T) {
+	t.Run("exec mode builds docker compose exec command", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cmd := harnessRun("gov-cui-exfil-block", cfg)
+		assert.Equal(t, []string{
+			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "agent", "run",
+			"--mtls-url", "https://g8e.local:8443",
+			"--public-url", "http://g8e.local:8080",
+			"--cert", "/root/.g8e/pki/operator.crt",
+			"--key", "/root/.g8e/pki/operator.key",
+			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+			"--ensemble", "3",
+			"--l3-mode", "mock",
+			"gov-cui-exfil-block",
+		}, cmd)
+	})
+
+	t.Run("run mode builds docker compose run --rm command", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-sigint")
+		cfg.UseRun = true
+		cmd := harnessRun("dow-cross-cue", cfg)
+		assert.Equal(t, "run", cmd[2])
+		assert.Equal(t, "--rm", cmd[3])
+		assert.Contains(t, cmd, "dow-cross-cue")
+	})
+
+	t.Run("includes consensus seed and tribunal id when set", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cfg.ConsensusSeed = "deadbeef"
+		cfg.TribunalID = "test-tribunal"
+		cmd := harnessRun("dhs-cue", cfg)
+		assert.Contains(t, cmd, "--consensus-seed")
+		assert.Contains(t, cmd, "deadbeef")
+		assert.Contains(t, cmd, "--tribunal-id")
+		assert.Contains(t, cmd, "test-tribunal")
+	})
+
+	t.Run("omits ensemble and l3-mode when zero/empty", func(t *testing.T) {
+		cfg := harnessConfig{
+			Container: "agent-runtime",
+			MTLSURL:   "https://g8e.local:8443",
+			PublicURL: "http://g8e.local:8080",
+			CertPath:  "/cert",
+			KeyPath:   "/key",
+			CAPath:    "/ca",
+		}
+		cmd := harnessRun("test-scenario", cfg)
+		assert.NotContains(t, cmd, "--ensemble")
+		assert.NotContains(t, cmd, "--l3-mode")
+	})
+
+	t.Run("scenario is always the last argument", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cmd := harnessRun("my-scenario", cfg)
+		assert.Equal(t, "my-scenario", cmd[len(cmd)-1])
+	})
+}
+
+func TestDemoScenarioFilesCallHarnessRun(t *testing.T) {
+	demoFiles := []string{
+		"demo_gov.go",
+		"demo_finance.go",
+		"demo_healthcare.go",
+		"demo_secure_data.go",
+		"demo_dow.go",
+		"demo_dhs.go",
+		"demo_swarm.go",
+	}
+
+	for _, file := range demoFiles {
+		t.Run(file+" uses harnessRun or runTwoLayerScenario", func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(".", file)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			src := string(data)
+			assert.True(t, strings.Contains(src, "harnessRun") || strings.Contains(src, "runTwoLayerScenario"),
+				"%s must call harnessRun (directly or via runTwoLayerScenario) to submit real GovernanceEnvelopes", file)
+		})
+	}
+}
+
+func TestNoGatewayBypassInDemoFiles(t *testing.T) {
+	demoFiles := []string{
+		"demo_gov.go",
+		"demo_finance.go",
+		"demo_healthcare.go",
+		"demo_secure_data.go",
+		"demo_dow.go",
+		"demo_dhs.go",
+		"demo_swarm.go",
+	}
+
+	for _, file := range demoFiles {
+		t.Run(file+" has no curl POST bypass", func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(".", file)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			src := string(data)
+			assert.NotContains(t, src, "curl -X POST",
+				"%s must not use curl -X POST to bypass the gateway", file)
+			assert.NotContains(t, src, "curl --request POST",
+				"%s must not use curl --request POST to bypass the gateway", file)
+		})
+	}
+}
+
+func TestNoSqliteBackdoorInScenarioFiles(t *testing.T) {
+	scenarioFiles := []string{
+		"demo_gov.go",
+		"demo_finance.go",
+		"demo_healthcare.go",
+		"demo_secure_data.go",
+		"demo_dow.go",
+		"demo_dhs.go",
+		"demo_swarm.go",
+	}
+
+	for _, file := range scenarioFiles {
+		t.Run(file+" has no sqlite3 backdoor", func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(".", file)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			src := string(data)
+			assert.NotContains(t, src, "exec.Command(\"sqlite3\"",
+				"%s must not directly access gateway SQLite databases via exec.Command", file)
+			assert.NotContains(t, src, "\"sqlite3\"",
+				"%s must not reference sqlite3 at all — use g8e audit vault instead", file)
+		})
+	}
+}
+
+func TestSqliteOnlyInAuditCmdVaultAction(t *testing.T) {
+	t.Run("demos.go references sqlite3 only in vault audit action", func(t *testing.T) {
+		path := filepath.Join(".", "demos.go")
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		src := string(data)
+
+		// sqlite3 should appear in demos.go (for the vault audit action)
+		assert.Contains(t, src, "sqlite3",
+			"demos.go should reference sqlite3 for the vault audit action")
+
+		// But never via exec.Command("sqlite3" — it should go through runDockerComposeExec
+		assert.NotContains(t, src, "exec.Command(\"sqlite3\"",
+			"demos.go must not call exec.Command with sqlite3 directly — use runDockerComposeExec")
+
+		// sqlite3 should only appear in the audit command context (runDemosAudit)
+		// Verify it appears in the vault case block, not in scenario functions
+		auditIdx := strings.Index(src, "func runDemosAudit")
+		require.True(t, auditIdx >= 0, "runDemosAudit function should exist")
+
+		beforeAudit := src[:auditIdx]
+		afterAudit := src[auditIdx:]
+
+		assert.NotContains(t, beforeAudit, "sqlite3",
+			"sqlite3 must not appear before runDemosAudit — only the audit vault action may use it")
+		assert.Contains(t, afterAudit, "sqlite3",
+			"sqlite3 should appear in runDemosAudit for the vault action")
+	})
+}
+
+func TestNoCopyPasteInScenarioFiles(t *testing.T) {
+	scenarioFiles := []string{
+		"demo_gov.go",
+		"demo_finance.go",
+		"demo_healthcare.go",
+		"demo_secure_data.go",
+		"demo_dow.go",
+		"demo_dhs.go",
+		"demo_swarm.go",
+	}
+
+	for _, file := range scenarioFiles {
+		t.Run(file+" has no copy-paste instructions", func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(".", file)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			src := string(data)
+			assert.NotContains(t, src, "Copy-paste to inspect",
+				"%s must not print copy-paste instructions — use 'g8e audit' instead", file)
+			assert.NotContains(t, src, "Copy-paste to query",
+				"%s must not print copy-paste instructions — use 'g8e audit' instead", file)
+			assert.NotContains(t, src, "Copy-paste to confirm",
+				"%s must not print copy-paste instructions — use 'g8e audit' instead", file)
+		})
+	}
+}
+
+func TestCaptureCommand(t *testing.T) {
+	t.Run("captures stdout from echo command", func(t *testing.T) {
+		output, err := captureCommand(t.TempDir(), "echo", "hello world")
+		require.NoError(t, err)
+		assert.Equal(t, "hello world\n", output)
+	})
+
+	t.Run("returns error for non-existent command", func(t *testing.T) {
+		_, err := captureCommand(t.TempDir(), "nonexistent-command-12345")
+		assert.Error(t, err)
+	})
+
+	t.Run("returns empty string for command with no output", func(t *testing.T) {
+		output, err := captureCommand(t.TempDir(), "true")
+		require.NoError(t, err)
+		assert.Empty(t, strings.TrimSpace(output))
+	})
+
+	t.Run("captures multi-line output", func(t *testing.T) {
+		output, err := captureCommand(t.TempDir(), "printf", "line1\nline2\n")
+		require.NoError(t, err)
+		assert.Equal(t, "line1\nline2\n", output)
+	})
+}
+
+func TestDemoPrintln(t *testing.T) {
+	t.Run("demoPrintln is no-op when not verbose", func(t *testing.T) {
+		original := demoVerbose
+		demoVerbose = false
+		defer func() { demoVerbose = original }()
+
+		// Should not panic and should produce no output
+		demoPrintln("test", "output")
+		demoPrintln()
+	})
+
+	t.Run("demoPrintf is no-op when not verbose", func(t *testing.T) {
+		original := demoVerbose
+		demoVerbose = false
+		defer func() { demoVerbose = original }()
+
+		demoPrintf("test %s %d", "format", 42)
+	})
+
+	t.Run("demoPrintln does not panic when verbose", func(t *testing.T) {
+		original := demoVerbose
+		demoVerbose = true
+		defer func() { demoVerbose = original }()
+
+		demoPrintln("test output")
+		demoPrintf("test %s", "format")
+	})
+}
+
+func TestRunG8EAuditCmd(t *testing.T) {
+	t.Run("function exists and is callable", func(t *testing.T) {
+		assert.NotNil(t, runG8EAuditCmd)
+	})
+
+	t.Run("returns error when demo not running", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		composePath := filepath.Join(tmpDir, "compose.yml")
+		err := runG8EAuditCmd(tmpDir, composePath, "receipts")
+		assert.Error(t, err)
+	})
+}
+
+func TestPrintDataDump(t *testing.T) {
+	t.Run("function exists and is callable", func(t *testing.T) {
+		assert.NotNil(t, printDataDump)
+	})
+
+	t.Run("does not panic with non-existent demo dir", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Should handle missing compose file gracefully without panicking
+		printDataDump(tmpDir)
 	})
 }

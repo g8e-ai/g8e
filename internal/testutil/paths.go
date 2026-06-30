@@ -51,8 +51,8 @@ func NewTestPaths(baseDir string) *TestPaths {
 	secretsDir := filepath.Join(runtimeDir, constants.SecretsDirname)
 	vaultDir := filepath.Join(runtimeDir, constants.VaultDirname)
 	testVaultDir := filepath.Join(runtimeDir, constants.TestVaultDirname)
-	protocolDir := filepath.Join(runtimeDir, constants.TestProtocolDirname)
-	docsDir := filepath.Join(runtimeDir, constants.TestDocsDirname)
+	protocolDir := filepath.Join(runtimeDir, constants.ProtocolDirname)
+	docsDir := filepath.Join(runtimeDir, constants.DocsDirname)
 
 	return &TestPaths{
 		BaseDir:           baseDir,
@@ -67,8 +67,8 @@ func NewTestPaths(baseDir string) *TestPaths {
 		DocsDir:           docsDir,
 		SshConfigPath:     filepath.Join(runtimeDir, constants.SshConfigFilename),
 		DbPath:            filepath.Join(dataDir, constants.DbFilename),
-		LocalStateDBPath:  filepath.Join(runtimeDir, constants.TestLocalStateDBFilename),
-		AuditVaultDBPath:  filepath.Join(dataDir, constants.TestAuditVaultDBFilename),
+		LocalStateDBPath:  filepath.Join(runtimeDir, constants.LocalStateDBFilename),
+		AuditVaultDBPath:  filepath.Join(dataDir, constants.AuditVaultDBFilename),
 		SuspendedTxDBPath: filepath.Join(dataDir, constants.SuspendedTxFilename),
 	}
 }

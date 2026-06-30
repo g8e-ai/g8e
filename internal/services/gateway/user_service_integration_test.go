@@ -36,7 +36,7 @@ func TestUserService_CreateUser_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -62,7 +62,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -103,7 +103,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -132,7 +132,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -160,7 +160,7 @@ func TestUserService_Disable_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -183,7 +183,7 @@ func TestUserService_DeleteUser_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -211,7 +211,7 @@ func TestUserService_UpdatePasskeyCredentials_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -244,7 +244,7 @@ func TestUserService_HasAnyUsers_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -264,7 +264,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -289,7 +289,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -304,7 +304,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -319,7 +319,7 @@ func TestPersonaService_MapRolesToPersona_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -339,7 +339,7 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -362,7 +362,7 @@ func TestUserService_docToUser_Integration(t *testing.T) {
 		t.Parallel()
 		logger := testutil.NewTestLogger()
 		testPaths := testutil.NewTestPathsFromTemp(t)
-		db, err := OpenCanonicalDBService(testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger, true, "", false, nil)
+		db, err := openTestDB(t, testPaths.DataDir, testPaths.SecretsDir, testPaths.VaultDir, logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 

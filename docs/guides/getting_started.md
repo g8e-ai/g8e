@@ -39,9 +39,15 @@ Everything, including the Go compiler, OpenSSL, and Git, runs inside the contain
 | Requirement | Notes |
 |---|---|
 | Go | 1.26.4, required to build from source |
+| Make | Any recent version, required to run build targets |
 | Git | Any recent version, required for the audit vault's Git-backed ledger |
 | OpenSSL | Any recent version, required for PKI operations at runtime |
 | Python | 3.11+, optional, required only for demo environments and protocol library development |
+
+> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
+> - **Linux:** `bash scripts/linux-setup.sh`
+> - **macOS:** `bash scripts/macos-setup.sh`
+> - **Windows:** `pwsh scripts/windows-setup.ps1`
 
 ---
 
@@ -60,7 +66,7 @@ cd g8e
 
 ### Build locally
 
-Requires Go 1.26+ installed on your machine.
+Requires `make` and Go 1.26+ installed on your machine. If you're not sure, run the [setup script](#local-path-build-and-run-natively) to check and install them automatically.
 
 ```bash
 make build

@@ -1300,7 +1300,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	creds, err := auth.LoadCredentials(cfg)
 	if err != nil || creds == nil {
 		fmt.Fprintf(os.Stderr, "[g8e] No CLI credentials found, enrolling...\n")
-		if err := auth.EnrollCLI(cfg); err != nil {
+		if err := auth.EnrollCLI(cfg, false); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrEnrollmentFailed, err)
 		}
 		fmt.Fprintf(os.Stderr, "[g8e] CLI enrolled successfully\n")
@@ -1317,7 +1317,7 @@ func launchAgentWithGovernance(agentID string, extraArgs []string) error {
 	}
 
 	// Require an authenticated human with passkey registration; auto-register if missing
-	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID)
+	hasPasskey, err := auth.VerifyPasskeyRegistration(cfg, creds.UserID, creds.CLISessionID)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrNoPasskeysRegistered, err)
 	}

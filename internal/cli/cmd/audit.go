@@ -66,7 +66,7 @@ func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return fmt.Errorf("%w: failed to create API client", err)
+				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -93,7 +93,7 @@ func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return fmt.Errorf("%w: failed to fetch audit data", err)
+				return fmt.Errorf("audit: fetch receipts: %w", err)
 			}
 
 			if jsonOutput {
@@ -180,7 +180,7 @@ func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error),
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return fmt.Errorf("%w: failed to create API client", err)
+				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -203,7 +203,7 @@ func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error),
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return fmt.Errorf("%w: failed to fetch audit data", err)
+				return fmt.Errorf("audit: fetch export: %w", err)
 			}
 
 			// Write to file
@@ -220,7 +220,7 @@ func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error),
 	}
 
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID")
-	cmd.Flags().StringVar(&outPath, "out", "./receipts-export.json", "Output file path")
+	cmd.Flags().StringVar(&outPath, "out", constants.ReceiptsExportFilename, "Output file path")
 
 	return cmd
 }
@@ -244,7 +244,7 @@ func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error),
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return fmt.Errorf("%w: failed to create API client", err)
+				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -267,21 +267,10 @@ func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error),
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return fmt.Errorf("%w: failed to fetch audit data", err)
+				return fmt.Errorf("audit: fetch report: %w", err)
 			}
 
-			var reportResp struct {
-				Success bool `json:"success"`
-				Report  struct {
-					GeneratedAt       string        `json:"generated_at"`
-					OperatorSessionID string        `json:"operator_session_id"`
-					Events            []interface{} `json:"events"`
-					EventsCount       int           `json:"events_count"`
-					Receipts          []interface{} `json:"receipts"`
-					ReceiptsCount     int           `json:"receipts_count"`
-					TotalRecords      int           `json:"total_records"`
-				} `json:"report"`
-			}
+			var reportResp models.AuditReportResponse
 			if err := json.Unmarshal(resp, &reportResp); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
@@ -307,7 +296,7 @@ func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error),
 	}
 
 	cmd.Flags().StringVar(&operatorSessionID, "session", "", "Operator session ID")
-	cmd.Flags().StringVar(&outDir, "out", "./reports", "Output directory")
+	cmd.Flags().StringVar(&outDir, "out", constants.ReportsDirname, "Output directory")
 
 	return cmd
 }
@@ -337,7 +326,7 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error),
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return fmt.Errorf("%w: failed to create API client", err)
+				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -362,7 +351,7 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error),
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return fmt.Errorf("%w: failed to fetch audit data", err)
+				return fmt.Errorf("audit: fetch events: %w", err)
 			}
 
 			if jsonOutput {
@@ -370,18 +359,7 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error),
 				return nil
 			}
 
-			var eventsResp struct {
-				Success bool `json:"success"`
-				Events  []struct {
-					ID                int64  `json:"id"`
-					OperatorSessionID string `json:"operator_session_id"`
-					Timestamp         string `json:"timestamp"`
-					Type              string `json:"type"`
-					CommandRaw        string `json:"command_raw"`
-					CommandExitCode   int    `json:"command_exit_code"`
-				} `json:"events"`
-				Count int `json:"count"`
-			}
+			var eventsResp models.AuditEventsResponse
 			if err := json.Unmarshal(resp, &eventsResp); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
@@ -452,7 +430,7 @@ func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error)
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return fmt.Errorf("%w: failed to create API client", err)
+				return fmt.Errorf("audit: create API client: %w", err)
 			}
 
 			// Auto-discover session ID if not provided
@@ -475,17 +453,10 @@ func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error)
 
 			resp, err := client.Get(path)
 			if err != nil {
-				return fmt.Errorf("%w: failed to fetch audit data", err)
+				return fmt.Errorf("audit: fetch summary: %w", err)
 			}
 
-			var summaryResp struct {
-				Success         bool           `json:"success"`
-				EventsSummary   map[string]int `json:"events_summary"`
-				EventsTotal     int            `json:"events_total"`
-				ReceiptsSummary map[string]int `json:"receipts_summary"`
-				ReceiptsTotal   int            `json:"receipts_total"`
-				TotalRecords    int            `json:"total_records"`
-			}
+			var summaryResp models.AuditSummaryResponse
 			if err := json.Unmarshal(resp, &summaryResp); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}

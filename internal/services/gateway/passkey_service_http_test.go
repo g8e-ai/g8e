@@ -492,3 +492,54 @@ func TestPasskeyReadBodyRejectsOversized(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "http: request body too large")
 }
+
+func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
+	t.Run("emitPasskeyRegisteredSSE appends event and publishes", func(t *testing.T) {
+		db := newTestDB(t)
+		logger := testutil.NewTestLogger()
+		webSessionSvc := NewWebSessionService(db, logger)
+		resp := response.NewWriter(logger)
+		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		require.NoError(t, err)
+		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+
+		sseStore := NewSSEEventService(db.GetDB(), logger)
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+		handler.SetSSEDependencies(sseStore, pubsub)
+
+		const cliSessionID = "cli-sse-test-1"
+		const userID = "u-sse-test-1"
+
+		handler.emitPasskeyRegisteredSSE(userID, cliSessionID)
+
+		route := SSERoute{CLISessionID: cliSessionID}
+		events, err := sseStore.SSEEventsListSince(route, 0, 10)
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		assert.Equal(t, "passkey.registered", events[0].EventType)
+		assert.Contains(t, events[0].Payload, cliSessionID)
+		assert.Contains(t, events[0].Payload, userID)
+	})
+
+	t.Run("no SSE emission when dependencies not set", func(t *testing.T) {
+		db := newTestDB(t)
+		logger := testutil.NewTestLogger()
+		webSessionSvc := NewWebSessionService(db, logger)
+		resp := response.NewWriter(logger)
+		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		require.NoError(t, err)
+		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+
+		const cliSessionID = "cli-no-sse-1"
+		const userID = "u-no-sse-1"
+
+		handler.emitPasskeyRegisteredSSE(userID, cliSessionID)
+
+		sseStore := NewSSEEventService(db.GetDB(), logger)
+		route := SSERoute{CLISessionID: cliSessionID}
+		events, err := sseStore.SSEEventsListSince(route, 0, 10)
+		require.NoError(t, err)
+		assert.Empty(t, events)
+	})
+}

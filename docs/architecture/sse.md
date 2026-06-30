@@ -16,8 +16,8 @@ The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastru
 The SSE system provides three endpoints:
 
 - **`POST /api/v1/sse/push`**: App workloads push events (authenticated via mTLS)
-- **`GET /api/v1/sse/events`**: Poll for historical events (with `since_id` and `limit` params)
-- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery (mTLS authenticated). All clients (CLI, browser, dashboard) use this single endpoint.
+- **`GET /api/v1/sse/events`**: Poll for historical events (with `since_id` and `limit` params). Dual auth: mTLS for CLI/operator, web session cookie for browser.
+- **`GET /api/v1/sse/stream`**: Real-time SSE stream with live event delivery. Dual auth: mTLS for CLI/operator, web session cookie for browser. All clients (CLI, browser, dashboard) use this single endpoint.
 
 Events are stored in the `sse_events` table and routed by one of three identifiers:
 - `web_session_id`: Web UI session events
@@ -52,8 +52,8 @@ flowchart TD
     db --> events
     db --> stream
     pubsub --> stream
-    browser -- "mTLS GET /api/v1/sse/stream" --> stream
-    browser -- "mTLS GET /api/v1/sse/events" --> events
+    browser -- "mTLS or cookie GET /api/v1/sse/stream" --> stream
+    browser -- "mTLS or cookie GET /api/v1/sse/events" --> events
 ```
 
 ---
@@ -100,7 +100,7 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 
 ### GET /api/v1/sse/events
 
-**Authentication**: mTLS with Operator session
+**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used; otherwise, the `g8e_session` cookie is validated.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session
@@ -128,15 +128,18 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 Unset routing fields are omitted from the JSON response (the `SSEEventRow` model uses `omitempty` tags on `web_session_id`, `cli_session_id`, and `user_id`).
 
 **Behavior**:
-1. Validates Operator session authorization for requested route.
-2. Queries `sse_events` table for events matching route and `since_id`.
-3. Returns ordered list (ascending by ID).
+1. Reads auth identity from request context (set by unified auth middleware).
+2. Validates authorization for the requested route via `authorizeSSERoute` helper:
+   - **mTLS path**: Operator session ownership checks (operator owns the requested `web_session_id` / `cli_session_id` / `user_id`).
+   - **Cookie path**: Web session ID must match context; for `cli_session_id`, verifies `cliSess.UserID == userID` from context; for `user_id`, verifies `route.UserID == userID` from context.
+3. Queries `sse_events` table for events matching route and `since_id`.
+4. Returns ordered list (ascending by ID).
 
 ---
 
 ### GET /api/v1/sse/stream
 
-**Authentication**: mTLS with Operator session. All clients (CLI, browser, dashboard) authenticate via mTLS client certificate. There is no cookie-based auth path; the transport determines identity, not the browser session.
+**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used (stronger auth takes precedence); otherwise, the `g8e_session` cookie is validated. Both auth paths stamp the request context with identity values (`ContextKeyOperatorSessionID` for mTLS, `ContextKeyWebSessionID` + `ContextKeyUserID` for cookie) that the SSE handlers use for authorization.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session
@@ -162,12 +165,13 @@ data: {"type":"...","data":{...}}
 ```
 
 **Behavior**:
-1. Validates Operator session authorization for requested route.
-2. Sets SSE response headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no` (for Nginx), and permissive CORS headers based on the request `Origin`.
-3. Subscribes to the Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`) using a buffered channel of 100 entries. If the buffer is full, incoming events are dropped with a back-pressure warning log.
-4. If `since_id` is greater than 0, replays historical events from the `sse_events` table since `since_id` (up to 1000 rows) in SSE format, including the `id:` field for each row. If `since_id` is 0 or absent, no replay occurs and the stream begins with only real-time events.
-5. Streams new events as they arrive from Pub/Sub. Real-time events are emitted without an `id:` field; the `event:` field carries the extracted type and the `data:` field carries the full push payload.
-6. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
+1. Reads auth identity from request context (set by unified auth middleware).
+2. Validates authorization for the requested route via `authorizeSSERoute` helper (same dual-path ownership checks as events endpoint).
+3. Sets SSE response headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no` (for Nginx), and permissive CORS headers based on the request `Origin`.
+4. Subscribes to the Pub/Sub channel for real-time events (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`) using a buffered channel of 100 entries. If the buffer is full, incoming events are dropped with a back-pressure warning log.
+5. If `since_id` is greater than 0, replays historical events from the `sse_events` table since `since_id` (up to 1000 rows) in SSE format, including the `id:` field for each row. If `since_id` is 0 or absent, no replay occurs and the stream begins with only real-time events.
+6. Streams new events as they arrive from Pub/Sub. Real-time events are emitted without an `id:` field; the `event:` field carries the extracted type and the `data:` field carries the full push payload.
+7. Sends heartbeat comments every 30 seconds (SSE comment format `: heartbeat\n\n`).
 
 ---
 
@@ -237,15 +241,17 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 - The app identity must be associated with the target session or user. Ownership is verified via `protocol.WorkloadIdentity.MatchesApp` against bound Operator sessions. The event is appended to the database before the ownership check; if ownership verification fails, the handler returns 403 but the row remains persisted.
 
 ### Consumer Authorization
-- All SSE endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS with an authenticated Operator session. There is no cookie-based auth path.
-- The Operator must be authorized for the requested route:
-  - For `web_session_id`: Must own the web session.
-  - For `cli_session_id`: Must own the CLI session.
-  - For `user_id`: Must be the user.
+- SSE consumer endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) support dual auth: mTLS with an authenticated Operator session (CLI/operator) OR web session cookie (browser). The `RouteAuthRegistry` classifies these routes as `RouteAuthDual`.
+- When both a client certificate and cookie are present, mTLS takes precedence (stronger auth).
+- Authorization is enforced via the `authorizeSSERoute` helper, which reads identity from request context (stamped by the unified auth middleware):
+  - **mTLS path** (Operator session): For `web_session_id`, must own the web session. For `cli_session_id`, must own the CLI session. For `user_id`, must be the user.
+  - **Cookie path** (web session): For `web_session_id`, must match the authenticated session. For `cli_session_id`, verifies `cliSess.UserID == userID` from context. For `user_id`, verifies `route.UserID == userID` from context.
+- SSE handlers never extract auth identity from raw TLS state directly; they read from context values stamped by the middleware.
 - Multi-tenant isolation is enforced at the database query level.
 
 ### Transport Security
-- All SSE endpoints (`/api/v1/sse/push`, `/api/v1/sse/events`, `/api/v1/sse/stream`) require mTLS (HTTPS port 8443).
+- SSE push (`/api/v1/sse/push`) requires mTLS (HTTPS port 8443) with app workload identity.
+- SSE consumer endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) support dual auth on HTTPS port 8443: mTLS for CLI/operator clients, web session cookie for browser clients.
 - Not available on HTTP bootstrap port (8080).
 - Pub/Sub channels are scoped to routing targets (format: `sse:cli:<id>`, `sse:web:<id>`, `sse:user:<id>`)
 

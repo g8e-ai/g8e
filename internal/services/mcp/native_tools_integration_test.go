@@ -23,7 +23,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,17 +63,7 @@ func TestNativeToolsIntegration_DatabaseTools(t *testing.T) {
 	}
 
 	// Check if Operator is reachable
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v. Run './g8e gw start' to enable.", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	// Setup mTLS client (requires ./g8e login)
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
@@ -207,17 +199,7 @@ func TestNativeToolsIntegration_LogTools(t *testing.T) {
 		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
 	require.NoError(t, err)
@@ -271,17 +253,7 @@ func TestNativeToolsIntegration_ProcessTools(t *testing.T) {
 		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
 	require.NoError(t, err)
@@ -355,17 +327,7 @@ func TestNativeToolsIntegration_ProcTree(t *testing.T) {
 		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
 	require.NoError(t, err)
@@ -401,17 +363,7 @@ func TestNativeToolsIntegration_NetworkTools(t *testing.T) {
 		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
 	require.NoError(t, err)
@@ -499,17 +451,7 @@ func TestNativeToolsIntegration_Concurrency(t *testing.T) {
 		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
 	require.NoError(t, err)
@@ -583,17 +525,7 @@ func TestNativeToolsIntegration_PropertyBasedTests(t *testing.T) {
 		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
 	require.NoError(t, err)
@@ -719,17 +651,7 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 		operatorURL = netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)
 	}
 
-	insecureClient := &http.Client{
-		Timeout: 5 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-	}
-	if resp, err := insecureClient.Get(operatorURL + constants.APIPaths.Health); err != nil {
-		t.Skipf("Operator not reachable at %s: %v", operatorURL, err)
-	} else {
-		resp.Body.Close()
-	}
+	checkOperatorReachable(t, operatorURL)
 
 	mtlsClient, sessionID, err := setupMTLSClient(t, operatorURL)
 	require.NoError(t, err)
@@ -777,6 +699,21 @@ func TestNativeToolsIntegration_NegativeControls(t *testing.T) {
 }
 
 // Helper functions
+
+func checkOperatorReachable(t *testing.T, operatorURL string) {
+	t.Helper()
+	parsedURL, err := url.Parse(operatorURL)
+	require.NoError(t, err)
+	hostPort := parsedURL.Host
+	if strings.HasPrefix(hostPort, "localhost:") {
+		hostPort = "127.0.0.1" + hostPort[9:]
+	}
+	conn, err := net.DialTimeout("tcp", hostPort, 5*time.Second)
+	if err != nil {
+		t.Skipf("Operator not reachable at %s: %v. Run './g8e gw start' to enable.", operatorURL, err)
+	}
+	conn.Close()
+}
 
 func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, error) {
 	cwd, err := os.Getwd()

@@ -160,7 +160,7 @@ const MaxPayloadSize = 5 * 1024 * 1024
 // unmarshalPayload converts the raw bytes into a typed proto.Message for the given event type.
 func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Message, error) {
 	if len(payload) > MaxPayloadSize {
-		return nil, fmt.Errorf("payload exceeds maximum size limit (%d bytes)", MaxPayloadSize)
+		return nil, fmt.Errorf("payload exceeds maximum size limit (%d bytes): %w", MaxPayloadSize, constants.ErrPayloadExceedsLimit)
 	}
 	var m proto.Message
 	switch eventType {

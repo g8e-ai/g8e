@@ -35,8 +35,8 @@ func runGovScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 				"              route to net_internal or net_secure.\n" +
 				"    Layer 2 — Doctrine enforcement: the g8e gateway blocks CUI\n" +
 				"              exfiltration payloads at confidence >= 0.95 (cui_exfil_attempt).",
-			step3Label:       "Submit CUI exfiltration attempt via agent-harness",
-			step3Description: "The agent-harness submits a GovernanceEnvelope through the real\n  gateway via mTLS, attempting to read CUI documents for exfiltration.\n  L1 doctrine must block this at the gateway before execution:",
+			step3Label:       "Submit CUI exfiltration attempt via agent",
+			step3Description: "The agent submits a GovernanceEnvelope through the real\n  gateway via mTLS, attempting to read CUI documents for exfiltration.\n  L1 doctrine must block this at the gateway before execution:",
 			passMessage: "CUI exfiltration blocked at both layers.\n" +
 				"         Layer 1: network isolation (net_untrusted has no route to net_secure).\n" +
 				"         Layer 2: doctrine cui_exfil_attempt loaded at confidence 0.95.",

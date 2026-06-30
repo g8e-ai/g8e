@@ -223,9 +223,9 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 		s.handleCLIApprovalStatus(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.ApprovalStatusResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "expired_or_not_found", resp["status"])
+		assert.Equal(t, string(constants.SuspendedTxStatusExpiredOrNotFound), resp.Status)
 	})
 
 	t.Run("Success - pending", func(t *testing.T) {
@@ -251,10 +251,10 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 		s.handleCLIApprovalStatus(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
-		var resp map[string]interface{}
+		var resp models.ApprovalStatusResponse
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
-		assert.Equal(t, "pending", resp["status"])
-		assert.Equal(t, txHash, resp["tx_hash"])
+		assert.Equal(t, string(constants.SuspendedTxStatusPending), resp.Status)
+		assert.Equal(t, txHash, resp.TxHash)
 	})
 
 	t.Run("Failure - transaction belongs to another user", func(t *testing.T) {

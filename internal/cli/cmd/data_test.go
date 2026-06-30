@@ -22,13 +22,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
+
+	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 func TestDataCmd(t *testing.T) {
@@ -206,48 +208,6 @@ func setupDataTestConfig(t *testing.T, tmpDir string) *config.Config {
 			},
 		},
 	}
-}
-
-func TestSqlDBQuery(t *testing.T) {
-	t.Run("returns error for non-existent database", func(t *testing.T) {
-		_, err := sqlDBQuery("/nonexistent/path/to/db.db", "SELECT 1")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unable to open database file")
-	})
-
-	t.Run("returns error for invalid SQL syntax", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		dbPath := filepath.Join(tmpDir, "test.db")
-
-		// Create an empty database file
-		require.NoError(t, os.WriteFile(dbPath, []byte{}, 0644))
-
-		_, err := sqlDBQuery(dbPath, "INVALID SQL SYNTAX")
-		require.Error(t, err)
-	})
-
-	t.Run("executes valid query with in-memory database", func(t *testing.T) {
-		// Use :memory: for in-memory SQLite database
-		rows, err := sqlDBQuery(":memory:", "SELECT 1 as result")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		assert.True(t, rows.Next())
-		var result int
-		require.NoError(t, rows.Scan(&result))
-		assert.Equal(t, 1, result)
-	})
-
-	t.Run("executes query with parameters", func(t *testing.T) {
-		rows, err := sqlDBQuery(":memory:", "SELECT ? as value", 42)
-		require.NoError(t, err)
-		defer rows.Close()
-
-		assert.True(t, rows.Next())
-		var value int
-		require.NoError(t, rows.Scan(&value))
-		assert.Equal(t, 42, value)
-	})
 }
 
 func TestDataAuditSummaryCmd(t *testing.T) {
@@ -428,9 +388,9 @@ func TestDataCommandJSONUnmarshaling(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:        "valid SettingsResponse JSON",
-			jsonData:    `{"settings":{"key1":"value1","key2":123}}`,
-			targetType:  &SettingsResponse{},
+			name:        "valid SettingsDocument JSON",
+			jsonData:    `{"settings":{"actuator_key_id":"key1"},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}`,
+			targetType:  &models.SettingsDocument{},
 			expectError: false,
 		},
 	}
@@ -658,64 +618,6 @@ func TestDataAuditSummaryWithSessionFilter(t *testing.T) {
 	})
 }
 
-func TestDataAuditSummaryQueryConstruction(t *testing.T) {
-	t.Run("SQL query construction without session filter", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		// Initialize global paths to use tmpDir
-		require.NoError(t, paths.InitWithBase(tmpDir))
-
-		// Create data directory and database
-		dataDir := paths.Infra.DataDir
-		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := paths.Infra.DbPath
-
-		db, err := sql.Open("sqlite", dbPath)
-		require.NoError(t, err)
-		defer db.Close()
-
-		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
-		require.NoError(t, err)
-
-		// Test the query directly
-		rows, err := sqlDBQuery(dbPath, "SELECT type, COUNT(*) as count FROM events GROUP BY type")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		// Should return no rows for empty table
-		assert.False(t, rows.Next())
-	})
-
-	t.Run("SQL query construction with session filter", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		setupDataTestConfig(t, tmpDir)
-
-		// Initialize global paths to use tmpDir
-		require.NoError(t, paths.InitWithBase(tmpDir))
-
-		// Create data directory and database
-		dataDir := paths.Infra.DataDir
-		require.NoError(t, os.MkdirAll(dataDir, 0755))
-		dbPath := paths.Infra.DbPath
-
-		db, err := sql.Open("sqlite", dbPath)
-		require.NoError(t, err)
-		defer db.Close()
-
-		_, err = db.Exec("CREATE TABLE events (type TEXT, operator_session_id TEXT)")
-		require.NoError(t, err)
-
-		// Test the query with parameter
-		rows, err := sqlDBQuery(dbPath, "SELECT type, COUNT(*) as count FROM events WHERE operator_session_id = ? GROUP BY type", "test-session")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		// Should return no rows for empty table
-		assert.False(t, rows.Next())
-	})
-}
-
 func TestDataAuditSummaryOutputFormatting(t *testing.T) {
 	t.Run("summary formats output correctly with multiple event types", func(t *testing.T) {
 		tmpDir := t.TempDir()
@@ -834,7 +736,7 @@ func TestDataCommandErrorHandling(t *testing.T) {
 
 	t.Run("settings command handles JSON parse errors", func(t *testing.T) {
 		invalidJSON := `{invalid}`
-		var settings SettingsResponse
+		var settings models.SettingsDocument
 		err := json.Unmarshal([]byte(invalidJSON), &settings)
 		require.Error(t, err)
 	})
@@ -842,7 +744,7 @@ func TestDataCommandErrorHandling(t *testing.T) {
 	t.Run("settings command handles missing settings field", func(t *testing.T) {
 		// Valid JSON but missing required field
 		invalidJSON := `{"other_field": "value"}`
-		var settings SettingsResponse
+		var settings models.SettingsDocument
 		err := json.Unmarshal([]byte(invalidJSON), &settings)
 		require.NoError(t, err) // JSON is valid, just empty settings
 		assert.Nil(t, settings.Settings)
@@ -965,48 +867,5 @@ func TestDataCommandSubcommandRegistration(t *testing.T) {
 
 		assert.True(t, subcommandNames["list"], "missing list subcommand")
 		assert.True(t, subcommandNames[string(constants.StreamStatusSummary)], "missing summary subcommand")
-	})
-}
-
-func TestDataSqlDBQueryEdgeCases(t *testing.T) {
-	t.Run("sqlDBQuery handles empty result set", func(t *testing.T) {
-		rows, err := sqlDBQuery(":memory:", "SELECT 1 WHERE 1=0")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		assert.False(t, rows.Next())
-	})
-
-	t.Run("sqlDBQuery handles multiple parameters", func(t *testing.T) {
-		rows, err := sqlDBQuery(":memory:", "SELECT ? + ? as result", 10, 20)
-		require.NoError(t, err)
-		defer rows.Close()
-
-		assert.True(t, rows.Next())
-		var result int
-		require.NoError(t, rows.Scan(&result))
-		assert.Equal(t, 30, result)
-	})
-
-	t.Run("sqlDBQuery handles string parameters", func(t *testing.T) {
-		rows, err := sqlDBQuery(":memory:", "SELECT ? as result", "test-string")
-		require.NoError(t, err)
-		defer rows.Close()
-
-		assert.True(t, rows.Next())
-		var result string
-		require.NoError(t, rows.Scan(&result))
-		assert.Equal(t, "test-string", result)
-	})
-
-	t.Run("sqlDBQuery handles NULL parameters", func(t *testing.T) {
-		rows, err := sqlDBQuery(":memory:", "SELECT ? as result", nil)
-		require.NoError(t, err)
-		defer rows.Close()
-
-		assert.True(t, rows.Next())
-		var result interface{}
-		require.NoError(t, rows.Scan(&result))
-		assert.Nil(t, result)
 	})
 }

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 )
@@ -45,7 +46,7 @@ func NewEncryptedKVAdapter(kv *KVStoreService, v *vault.Vault) *EncryptedKVAdapt
 
 func (a *EncryptedKVAdapter) KVSet(_ context.Context, key, value string, ttlSeconds int) error {
 	if !a.vault.IsUnlocked() {
-		return fmt.Errorf("vault is locked, cannot encrypt value for key %s", key)
+		return fmt.Errorf("encrypted_kv_adapter: cannot encrypt key %s: %w", key, constants.ErrVaultLocked)
 	}
 	encrypted, err := a.vault.Encrypt([]byte(value))
 	if err != nil {
@@ -57,10 +58,10 @@ func (a *EncryptedKVAdapter) KVSet(_ context.Context, key, value string, ttlSeco
 func (a *EncryptedKVAdapter) KVGet(_ context.Context, key string) (string, error) {
 	value, found := a.kv.KVGet(sentinelKeyPrefix + key)
 	if !found {
-		return "", fmt.Errorf("key not found: %s", key)
+		return "", fmt.Errorf("encrypted_kv_adapter: key %s: %w", key, constants.ErrKeyNotFound)
 	}
 	if !a.vault.IsUnlocked() {
-		return "", fmt.Errorf("vault is locked, cannot decrypt value for key %s", key)
+		return "", fmt.Errorf("encrypted_kv_adapter: cannot decrypt key %s: %w", key, constants.ErrVaultLocked)
 	}
 	decrypted, err := a.vault.Decrypt([]byte(value))
 	if err != nil {
@@ -76,7 +77,7 @@ func (a *EncryptedKVAdapter) KVScanPrefix(_ context.Context, prefix string) (map
 	}
 
 	if !a.vault.IsUnlocked() {
-		return nil, fmt.Errorf("vault is locked, cannot decrypt values for prefix %s", prefix)
+		return nil, fmt.Errorf("encrypted_kv_adapter: cannot decrypt prefix %s: %w", prefix, constants.ErrVaultLocked)
 	}
 
 	result := make(map[string]string, len(fullKeys))

@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"runtime"
-
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -18,13 +16,20 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	cmd.Println("Next Steps:")
 	cmd.Println()
 
-	// Step 1: Enroll CLI credentials (all postures)
-	cmd.Println("  1. Enroll CLI credentials:")
+	// Step 1: Trust the gateway CA (enables trusted HTTPS)
+	cmd.Println("  1. Trust the gateway CA for HTTPS (run on this machine):")
+	cmd.Printf("       curl -fsSL http://%s:%d/bootstrap-ca | sh        (Linux)\n", externalIP, httpPort)
+	cmd.Printf("       curl -fsSL http://%s:%d/bootstrap-ca-macos | sh  (macOS)\n", externalIP, httpPort)
+	cmd.Printf("       irm http://%s:%d/bootstrap-ca.ps1 | iex           (Windows)\n", externalIP, httpPort)
+	cmd.Println()
+
+	// Step 2: Enroll CLI credentials (all postures)
+	cmd.Println("  2. Enroll CLI credentials:")
 	cmd.Printf("       %s auth enroll\n", bin)
 	cmd.Println()
 
-	// Step 2: Posture-specific governance setup
-	stepNum := 2
+	// Step 3: Posture-specific governance setup
+	stepNum := 3
 	switch posture.Name() {
 	case "doctrine":
 		cmd.Printf("  %d. Governance posture: doctrine (L1 enforced, L2/L3 audited)\n", stepNum)
@@ -49,9 +54,6 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 		cmd.Printf("                     --tribunal-id <id> --tribunal-url <url>\n")
 		cmd.Println()
 		cmd.Printf("       Passkey:    %s auth enroll  (registers WebAuthn credential)\n", bin)
-		if runtime.GOOS == "windows" {
-			cmd.Printf("       Windows:    %s auth enroll-windows  (Windows Certificate Store)\n", bin)
-		}
 		cmd.Println()
 	}
 	stepNum++
@@ -68,7 +70,8 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 
 	// Step 4: Connect AI agents
 	cmd.Printf("  %d. Connect AI agents:\n", stepNum)
-	cmd.Printf("       %s mcp show    Print MCP client configuration\n", bin)
+	cmd.Printf("       %s mcp agent show <agent>   Print MCP client configuration for a specific agent\n", bin)
+	cmd.Printf("       %s mcp agent list           List supported agents (goose, claude, cursor, ...)\n", bin)
 	cmd.Printf("       %s mcp stdio   Run Operator as MCP stdio server (L1-L5 governance)\n", bin)
 	cmd.Println()
 

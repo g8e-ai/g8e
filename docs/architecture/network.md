@@ -109,15 +109,14 @@ The platform supports setup without requiring `/etc/hosts` changes or DNS config
 
 ### Windows Certificate Store Enrollment
 
-Windows users can enroll via the Windows Certificate Store for managed browser authentication:
+On Windows, `g8e auth enroll` auto-detects the platform and uses the Windows Certificate Store for CLI session enrollment. This is a CLI session enrollment (mTLS cert-based), distinct from the browser-based WebAuthn passkey flow (cookie-based web session).
 
-1. **CLI Enrollment**: Run `./g8e auth enroll-windows [--tpm]` to generate an ECDSA P-256 keypair.
+1. **CLI Enrollment**: Run `./g8e auth enroll [--tpm]` to generate an ECDSA P-256 keypair in the Windows Certificate Store.
 2. **CSR Signing**: The CLI submits a CSR to the g8e Gateway and receives a signed certificate with SPIFFE URI SAN.
-3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store (experimental).
-4. **Browser Authentication**: Chrome and Edge automatically present certificates from the Windows Personal store when the g8e Gateway issues a TLS CertificateRequest.
-5. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates an `operator_session_id` bound to the user identity.
+3. **Certificate Import**: The signed certificate is imported to `Cert:\CurrentUser\My` in the Windows Certificate Store for Windows Hello native API access.
+4. **Session Binding**: The g8e Gateway extracts the SPIFFE URI SAN from the client certificate and creates a `cli_session_id` bound to the user identity.
 
-**TPM-Backed Keys**: The `--tpm` flag utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
+**TPM-Backed Keys**: The `--tpm` flag (Windows-only) utilizes the Microsoft Platform Crypto Provider KSP to generate keys in hardware. Currently, the implementation uses a software-backed key with TPM annotation as the full CNG API integration is pending.
 
 ---
 

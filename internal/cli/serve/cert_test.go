@@ -36,6 +36,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -570,7 +571,9 @@ func TestExportActuatorPublicKey_CreatesNestedDir(t *testing.T) {
 
 	info, err := os.Stat(filepath.Join(pkiDir, constants.ActuatorPubPEMFilename))
 	require.NoError(t, err)
-	assert.True(t, info.Mode().Perm() == 0600)
+	if runtime.GOOS != "windows" {
+		assert.True(t, info.Mode().Perm() == 0600)
+	}
 }
 
 // ---------------------------------------------------------------------------
