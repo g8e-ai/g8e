@@ -94,20 +94,12 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		fmt.Println("  ── Step 5: Run real g8e cross-cue (governed envelope → L2 → L5) ──")
+		hcfg := defaultHarnessConfig("agent-sigint")
+		hcfg.UseRun = true
+		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "dow-cross-cue via agent",
 			false,
-			"docker", "compose", "run", "--rm", "-T",
-			"--no-deps",
-			"agent-sigint",
-			"agent", "run",
-			"--mtls-url", "https://g8e.local:8443",
-			"--public-url", "http://g8e.local:8080",
-			"--cert", "/root/.g8e/pki/operator.crt",
-			"--key", "/root/.g8e/pki/operator.key",
-			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
-			"--ensemble", "3",
-			"--l3-mode", "mock",
-			"dow-cross-cue",
+			harnessRun("dow-cross-cue", hcfg)...,
 		); err != nil {
 			fmt.Println("  (cross-cue harness scenario failed)")
 			fmt.Println()
@@ -166,7 +158,28 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("          fails L2 verification, and the g8e-operator fails closed.")
 		fmt.Println()
 
-		fmt.Println("  ── Step 1: Inspect PNT sources (including spoofed) ─────────────")
+		fmt.Println("  ── Step 1: Confirm g8e gateway is live (consensus posture) ──────")
+		if err := demoStep(demoDir, "gateway health",
+			false,
+			"curl", "-sf", "http://localhost:8086/api/v1/health",
+		); err != nil {
+			fmt.Println("  (gateway health check failed — is the demo running?)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 2: Verify agent enrollment (operator mTLS certs) ────────")
+		if err := demoStep(demoDir, "enrollment check",
+			false,
+			"docker", "compose", "exec", "-T", "operator",
+			"test", "-f", "/root/.g8e/pki/operator.crt",
+		); err != nil {
+			fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 3: Inspect PNT sources (including spoofed) ─────────────")
 		if err := demoStep(demoDir, "pnt sources",
 			false,
 			"docker", "compose", "exec", "-T", "agent-pnt-fusion",
@@ -175,16 +188,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Run PNT fusion with BFT consensus voting ────────────")
-		if err := demoStep(demoDir, "pnt fusion bft",
-			false,
-			"docker", "compose", "exec", "-T", "agent-pnt-fusion",
-			"python", "/app/dow_simulator.py", "PNT-FUSION-01", "pnt_fusion", "1",
-		); err != nil {
-			hasErrors = true
-		}
-
-		fmt.Println("  ── Step 3: Confirm spoofing detection doctrine is loaded ───────")
+		fmt.Println("  ── Step 4: Confirm spoofing detection doctrine is loaded ───────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosDoWDoctrineFile, "pnt_diversion_detected"); err == nil {
 			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 pnt_diversion_detected\n", constants.DemosDoWDoctrineFile)
 			fmt.Printf("  id:         %s\n", rule.ID)
@@ -198,21 +202,20 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Confirm GPS spoofing doctrine is loaded ─────────────")
-		if rule, err := readDoctrineRule(demoDir, constants.DemosDoWDoctrineFile, "gps_spoofing_detection"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 gps_spoofing_detection\n", constants.DemosDoWDoctrineFile)
-			fmt.Printf("  id:         %s\n", rule.ID)
-			fmt.Printf("  severity:   %s\n", rule.Severity)
-			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
-			fmt.Printf("  pattern:    %s\n", rule.Pattern)
-			fmt.Println()
-		} else {
-			fmt.Printf("  (doctrine rule inspection failed: %v)\n", err)
+		fmt.Println("  ── Step 5: Run BFT veto via agent-harness (spoofed GNSS) ───────")
+		hcfg := defaultHarnessConfig("agent-sigint")
+		hcfg.UseRun = true
+		hcfg.PublicURL = "http://g8e.local:8080"
+		if err := demoStep(demoDir, "dow-bft-veto via agent",
+			false,
+			harnessRun("dow-bft-veto", hcfg)...,
+		); err != nil {
+			fmt.Println("  (BFT veto harness scenario failed)")
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 5: Verify operator fail-closed behavior ────────────────")
+		fmt.Println("  ── Step 6: Verify operator fail-closed behavior ────────────────")
 		fmt.Println("  The g8e-operator verifies the GovernanceEnvelope against its")
 		fmt.Println("  local state root. A failed L2 consensus causes the operator to")
 		fmt.Println("  reject the mutation and fail closed — the drone is not hijacked.")
@@ -285,20 +288,12 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		fmt.Println("  Running a governed cross-cue through the gateway with the datalink")
 		fmt.Println("  severed — the operator must process it entirely locally:")
 		fmt.Println()
+		hcfg := defaultHarnessConfig("agent-sigint")
+		hcfg.UseRun = true
+		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "dow-cross-cue while disconnected",
 			false,
-			"docker", "compose", "run", "--rm", "-T",
-			"--no-deps",
-			"agent-sigint",
-			"agent", "run",
-			"--mtls-url", "https://g8e.local:8443",
-			"--public-url", "http://g8e.local:8080",
-			"--cert", "/root/.g8e/pki/operator.crt",
-			"--key", "/root/.g8e/pki/operator.key",
-			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
-			"--ensemble", "3",
-			"--l3-mode", "mock",
-			"dow-cross-cue",
+			harnessRun("dow-cross-cue", hcfg)...,
 		); err != nil {
 			fmt.Println("  (cross-cue while disconnected failed — operator may not be processing locally)")
 			fmt.Println()

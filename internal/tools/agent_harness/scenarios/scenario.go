@@ -70,6 +70,7 @@ func Registry() []Scenario {
 	s = append(s, dowScenarios()...)
 	s = append(s, dhsScenarios()...)
 	s = append(s, govFinanceScenarios()...)
+	s = append(s, secureDataScenarios()...)
 	return s
 }
 

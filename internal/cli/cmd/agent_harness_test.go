@@ -74,7 +74,7 @@ func TestAgentHarnessRunCmd(t *testing.T) {
 		cmd := agentHarnessRunCmd()
 		require.NotNil(t, cmd)
 
-		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "insecure", "out", "l3-mode", "ensemble", "verbose", "phase"}
+		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "out", "l3-mode", "ensemble", "verbose", "phase"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
@@ -112,7 +112,7 @@ func TestAgentHarnessAuditCmd(t *testing.T) {
 		cmd := agentHarnessAuditCmd()
 		require.NotNil(t, cmd)
 
-		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "insecure", "out"}
+		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "out"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
@@ -168,14 +168,6 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 		applyAgentHarnessFlags(&cfg)
 		assert.Equal(t, "test-api-key", cfg.Auth.APIKey)
 		harnessAPIKey = ""
-	})
-
-	t.Run("applyAgentHarnessFlags sets insecure flag", func(t *testing.T) {
-		harnessInsecure = true
-		cfg := config.Default()
-		applyAgentHarnessFlags(&cfg)
-		assert.True(t, cfg.Auth.Insecure)
-		harnessInsecure = false
 	})
 
 	t.Run("applyAgentHarnessFlags sets operator session ID", func(t *testing.T) {

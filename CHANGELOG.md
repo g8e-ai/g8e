@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+* **Removed Unused llm-backend Containers** — Removed the placeholder `llm-backend` service (Alpine `sleep 3600` loop) from `demos/gov/compose.yml`, `demos/finance/compose.yml`, and `demos/healthcare/compose.yml`. These containers were unused display-only placeholders with no integration to the g8e platform.
+* **Demos README Service Placement Table** — Removed LLM backend row from the service placement table. Updated invariant #5 to reflect that all `agent-runtime` containers now build from the root Dockerfile with `sleep infinity` entrypoint for exec-based agent-harness invocation (no bind-mounted binaries).
+
+### Tests
+
+* Added `TestDefaultHarnessConfig` and `TestHarnessRun` unit tests in `demos_test.go` covering exec mode, run mode, consensus seed/tribunal ID flags, ensemble/L3-mode omission, and scenario-as-last-argument.
+* Added `TestDemoScenarioFilesCallHarnessRun` source-file assertion test verifying every demo scenario file (`demo_gov.go`, `demo_finance.go`, `demo_healthcare.go`, `demo_secure_data.go`, `demo_dow.go`, `demo_dhs.go`) calls `harnessRun` to submit real GovernanceEnvelopes.
+* Added `TestNoGatewayBypassInDemoFiles` source-file assertion test verifying no demo scenario file uses `curl -X POST` or `curl --request POST` to bypass the gateway.
+* Added `TestNoSqliteBackdoorInDemoFiles` source-file assertion test verifying no demo scenario file directly accesses SQLite databases.
+
+---
+
 ## [1.3.3] - 2026-06-29
 
 ### Overview

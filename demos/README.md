@@ -84,7 +84,6 @@ The `secure-data` demo replaces the standard five-network topology with a two-do
 | Demo UI / Notary approval UI | | ✓ | | | |
 | Gateway | | ✓ | ✓ | ✓† | |
 | AI agent runtime | | | ✓ | | |
-| LLM backend | | | ✓ | | |
 | Operator | | | ✓* | ✓ | |
 | Target system | | | | ✓ | |
 | Observability stack | | | | | ✓ |
@@ -285,7 +284,7 @@ The following must hold in every org environment:
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted. The `healthcare` agent-runtime is the sole exception: it bind-mounts the host-built `g8e` binary at `../../g8e:/usr/local/bin/g8e:ro` because it runs as an Alpine container without the Go toolchain.
+5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted. All `agent-runtime` containers build from the root Dockerfile with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based agent-harness invocation.
 
 ## Port Mappings
 

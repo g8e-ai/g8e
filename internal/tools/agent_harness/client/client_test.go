@@ -34,11 +34,9 @@ func TestNew(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "minimal config with insecure skip verify",
+			name: "minimal config",
 			cfg: config.Config{
-				Auth: config.Auth{
-					Insecure: true,
-				},
+				Auth: config.Auth{},
 			},
 			wantErr: false,
 		},
@@ -46,7 +44,6 @@ func TestNew(t *testing.T) {
 			name: "config with CA bundle",
 			cfg: config.Config{
 				Auth: config.Auth{
-					Insecure: false,
 					CABundle: "nonexistent.pem",
 				},
 			},
@@ -56,7 +53,6 @@ func TestNew(t *testing.T) {
 			name: "config with client cert/key",
 			cfg: config.Config{
 				Auth: config.Auth{
-					Insecure:   false,
 					ClientCert: "nonexistent.crt",
 					ClientKey:  "nonexistent.key",
 				},
@@ -97,7 +93,6 @@ BnRlc3RjYTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAwT8kQCE6x5V8U2v7
 
 	cfg := config.Config{
 		Auth: config.Auth{
-			Insecure:   false,
 			CABundle:   caPath,
 			ClientCert: certPath, // doesn't exist, should be tolerated
 			ClientKey:  keyPath,  // doesn't exist, should be tolerated
@@ -128,7 +123,6 @@ func TestNew_InvalidKeyPair(t *testing.T) {
 
 	cfg := config.Config{
 		Auth: config.Auth{
-			Insecure:   false,
 			ClientCert: certPath,
 			ClientKey:  keyPath,
 		},
@@ -143,9 +137,7 @@ func TestNew_InvalidKeyPair(t *testing.T) {
 func TestClient_Config(t *testing.T) {
 	cfg := config.Config{
 		MTLSBaseURL: "https://example.com",
-		Auth: config.Auth{
-			Insecure: true,
-		},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -157,13 +149,10 @@ func TestClient_Config(t *testing.T) {
 	if retrievedCfg.MTLSBaseURL != cfg.MTLSBaseURL {
 		t.Errorf("Config() returned different MTLSBaseURL")
 	}
-	if retrievedCfg.Auth.Insecure != cfg.Auth.Insecure {
-		t.Errorf("Config() returned different Insecure setting")
-	}
 }
 
 func TestClient_Record(t *testing.T) {
-	cfg := config.Config{Auth: config.Auth{Insecure: true}}
+	cfg := config.Config{Auth: config.Auth{}}
 	client, err := New(cfg)
 	if err != nil {
 		t.Fatalf("New() failed: %v", err)
@@ -267,7 +256,7 @@ func TestClient_StateRoot(t *testing.T) {
 			cfg := config.Config{
 				PublicBaseURL: server.URL,
 				MTLSBaseURL:   server.URL,
-				Auth:          config.Auth{Insecure: true},
+				Auth:          config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -368,7 +357,7 @@ func TestClient_RegisterSigner(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -444,7 +433,7 @@ func TestClient_Approve(t *testing.T) {
 
 			cfg := config.Config{
 				PublicBaseURL: server.URL,
-				Auth:          config.Auth{Insecure: true},
+				Auth:          config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -606,7 +595,7 @@ func TestClient_do(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -657,7 +646,7 @@ func TestClient_do_Recording(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -707,7 +696,7 @@ func TestClient_do_Verbose(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 		Verbose:     true,
 	}
 

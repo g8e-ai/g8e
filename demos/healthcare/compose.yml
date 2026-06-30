@@ -230,11 +230,13 @@ services:
         condition: service_started
       reporting-db:
         condition: service_healthy
-    command: ["sh", "-c", "pip install requests -q && python /app/setup_metabase.py"]
+    command: ["sh", "-c", "python /app/setup_metabase.py"]
 
   # Authorized AI agent simulating a payer system submitting PA requests via FHIR through the g8e gateway.
   agent-runtime:
-    image: alpine:latest
+    build:
+      context: ../..
+      dockerfile: Dockerfile
     container_name: healthcare-agent
     networks:
       net_internal:
@@ -243,24 +245,14 @@ services:
     environment:
       - G8E_GATEWAY_URL=https://g8e.local:8443/mcp
     volumes:
-      - ../../g8e:/usr/local/bin/g8e:ro
       - operator_state:/root/.g8e:ro
     depends_on:
       gateway:
         condition: service_healthy
       operator:
         condition: service_healthy
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
-
-  llm-backend:
-    image: alpine:latest
-    container_name: healthcare-llm
-    networks:
-      net_internal:
-    depends_on:
-      gateway:
-        condition: service_healthy
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    working_dir: /root
+    entrypoint: ["sh", "-c", "sleep infinity"]
 
   # Simulates an unauthorized party attempting to exfiltrate PHI or bypass the PA workflow.
   bad-actor:

@@ -151,35 +151,23 @@ services:
   # Each connector holds an mTLS identity issued by src-gateway.
   # It submits envelopes; src-operator executes the actual transfer tool.
 
-  connector-rclone:
-    image: rclone/rclone:latest
-    container_name: secure-data-connector-rclone
+  agent-runtime:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: secure-data-agent-runtime
     networks:
       net_src_internal:
         ipv4_address: 10.20.0.30
     extra_hosts:
-      - "src-gateway:10.20.0.10"
+      - "g8e.local:10.20.0.10"
     volumes:
       - src_operator_state:/root/.g8e:ro
     depends_on:
       src-operator:
         condition: service_healthy
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
-
-  connector-sharepoint:
-    image: alpine:latest
-    container_name: secure-data-connector-sharepoint
-    networks:
-      net_src_internal:
-        ipv4_address: 10.20.0.31
-    extra_hosts:
-      - "src-gateway:10.20.0.10"
-    volumes:
-      - src_operator_state:/root/.g8e:ro
-    depends_on:
-      src-operator:
-        condition: service_healthy
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    working_dir: /root
+    entrypoint: ["sh", "-c", "sleep infinity"]
 
   # ── Storage endpoints ──────────────────────────────────────────────────────
   # source-storage: simulates source (SharePoint On-Prem / file server / S3).

@@ -38,7 +38,6 @@ var (
 	harnessKey           string
 	harnessCA            string
 	harnessAPIKey        string
-	harnessInsecure      bool
 	harnessSessionID     string
 	harnessOutDir        string
 	harnessL3Mode        string
@@ -95,7 +94,6 @@ func agentHarnessRunCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
 	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key for MCP/A2A surface")
 	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "scope audit to a specific Operator session")
-	cmd.Flags().BoolVar(&harnessInsecure, "insecure", false, "skip TLS verify (local dev only)")
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
 	cmd.Flags().StringVar(&harnessL3Mode, "l3-mode", "", "mock|suspend")
 	cmd.Flags().IntVar(&harnessEnsemble, "ensemble", 3, "mock consensus voters")
@@ -122,7 +120,6 @@ func agentHarnessAuditCmd() *cobra.Command {
 	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
 	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key")
 	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "operator session id")
-	cmd.Flags().BoolVar(&harnessInsecure, "insecure", false, "skip TLS verify")
 	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
 
 	return cmd
@@ -230,9 +227,6 @@ func applyAgentHarnessFlags(cfg *config.Config) {
 	}
 	if harnessAPIKey != "" {
 		cfg.Auth.APIKey = harnessAPIKey
-	}
-	if harnessInsecure {
-		cfg.Auth.Insecure = harnessInsecure
 	}
 	if harnessSessionID != "" {
 		cfg.OperatorSessionID = harnessSessionID

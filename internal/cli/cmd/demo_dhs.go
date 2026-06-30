@@ -32,63 +32,22 @@ func runDHSScenario(demoDir, scenario string) error {
 	return err
 }
 
-// dhsHarnessConfig holds the parameters for building a docker compose run
-// command for a DHS agent-harness scenario. Centralising these in a struct
-// avoids positional-argument drift as flags are added across phases.
-type dhsHarnessConfig struct {
-	MTLSURL       string
-	PublicURL     string
-	CertPath      string
-	KeyPath       string
-	CAPath        string
-	EnsembleSize  int
-	L3Mode        string
-	Posture       string
-	ConsensusSeed string
-	TribunalID    string
-}
+// dhsHarnessConfig is a backward-compatible alias for harnessConfig.
+// Kept so existing DHS scenario code doesn't need to change all call sites.
+type dhsHarnessConfig = harnessConfig
 
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
-func defaultDHSHarnessConfig() dhsHarnessConfig {
-	return dhsHarnessConfig{
-		MTLSURL:       "https://g8e.local:8443",
-		PublicURL:     "http://g8e.local:8080",
-		CertPath:      "/root/.g8e/pki/operator.crt",
-		KeyPath:       "/root/.g8e/pki/operator.key",
-		CAPath:        "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
-		EnsembleSize:  3,
-		L3Mode:        "mock",
-		Posture:       "consensus",
-		ConsensusSeed: "/etc/g8e/ensemble-seed.hex",
-		TribunalID:    "dhs-tribunal",
-	}
+func defaultDHSHarnessConfig() harnessConfig {
+	cfg := defaultHarnessConfig("agent-coalition")
+	cfg.ConsensusSeed = "/etc/g8e/ensemble-seed.hex"
+	cfg.TribunalID = "dhs-tribunal"
+	return cfg
 }
 
 // dhsHarnessRun builds the docker compose exec command for a DHS agent-harness
-// scenario from a dhsHarnessConfig. Uses exec (not run) because agent-coalition
-// is a long-running sleep-infinity container with a fixed IP; `run` would try
-// to create a second container with the same IP and fail.
-func dhsHarnessRun(scenario string, cfg dhsHarnessConfig) []string {
-	cmd := []string{
-		"docker", "compose", "exec", "-T",
-		"agent-coalition",
-		"/g8e", "agent", "run",
-		"--mtls-url", cfg.MTLSURL,
-		"--public-url", cfg.PublicURL,
-		"--cert", cfg.CertPath,
-		"--key", cfg.KeyPath,
-		"--ca", cfg.CAPath,
-		"--ensemble", fmt.Sprintf("%d", cfg.EnsembleSize),
-		"--l3-mode", cfg.L3Mode,
-	}
-	if cfg.ConsensusSeed != "" {
-		cmd = append(cmd, "--consensus-seed", cfg.ConsensusSeed)
-	}
-	if cfg.TribunalID != "" {
-		cmd = append(cmd, "--tribunal-id", cfg.TribunalID)
-	}
-	cmd = append(cmd, scenario)
-	return cmd
+// scenario. Delegates to the shared harnessRun.
+func dhsHarnessRun(scenario string, cfg harnessConfig) []string {
+	return harnessRun(scenario, cfg)
 }
 
 // dhsScenarioStep runs a single demo step: prints the description, executes

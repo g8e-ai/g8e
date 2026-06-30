@@ -662,3 +662,152 @@ func TestDHSScenarioDescriptions(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Sovereign Destruction + tamper-proof audit")
 	})
 }
+
+func TestDefaultHarnessConfig(t *testing.T) {
+	t.Run("returns standard demo topology defaults", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		assert.Equal(t, "agent-runtime", cfg.Container)
+		assert.Equal(t, "https://g8e.local:8443", cfg.MTLSURL)
+		assert.Equal(t, "http://g8e.local:8080", cfg.PublicURL)
+		assert.Equal(t, "/root/.g8e/pki/operator.crt", cfg.CertPath)
+		assert.Equal(t, "/root/.g8e/pki/operator.key", cfg.KeyPath)
+		assert.Equal(t, "/root/.g8e/pki/trust/g8eg-ca-bundle.pem", cfg.CAPath)
+		assert.Equal(t, 3, cfg.EnsembleSize)
+		assert.Equal(t, "mock", cfg.L3Mode)
+		assert.False(t, cfg.UseRun)
+	})
+
+	t.Run("container name is parameterized", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-sigint")
+		assert.Equal(t, "agent-sigint", cfg.Container)
+	})
+}
+
+func TestHarnessRun(t *testing.T) {
+	t.Run("exec mode builds docker compose exec command", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cmd := harnessRun("gov-cui-exfil-block", cfg)
+		assert.Equal(t, []string{
+			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "agent", "run",
+			"--mtls-url", "https://g8e.local:8443",
+			"--public-url", "http://g8e.local:8080",
+			"--cert", "/root/.g8e/pki/operator.crt",
+			"--key", "/root/.g8e/pki/operator.key",
+			"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+			"--ensemble", "3",
+			"--l3-mode", "mock",
+			"gov-cui-exfil-block",
+		}, cmd)
+	})
+
+	t.Run("run mode builds docker compose run --rm command", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-sigint")
+		cfg.UseRun = true
+		cmd := harnessRun("dow-cross-cue", cfg)
+		assert.Equal(t, "run", cmd[2])
+		assert.Equal(t, "--rm", cmd[3])
+		assert.Contains(t, cmd, "dow-cross-cue")
+	})
+
+	t.Run("includes consensus seed and tribunal id when set", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cfg.ConsensusSeed = "deadbeef"
+		cfg.TribunalID = "test-tribunal"
+		cmd := harnessRun("dhs-cue", cfg)
+		assert.Contains(t, cmd, "--consensus-seed")
+		assert.Contains(t, cmd, "deadbeef")
+		assert.Contains(t, cmd, "--tribunal-id")
+		assert.Contains(t, cmd, "test-tribunal")
+	})
+
+	t.Run("omits ensemble and l3-mode when zero/empty", func(t *testing.T) {
+		cfg := harnessConfig{
+			Container: "agent-runtime",
+			MTLSURL:   "https://g8e.local:8443",
+			PublicURL: "http://g8e.local:8080",
+			CertPath:  "/cert",
+			KeyPath:   "/key",
+			CAPath:    "/ca",
+		}
+		cmd := harnessRun("test-scenario", cfg)
+		assert.NotContains(t, cmd, "--ensemble")
+		assert.NotContains(t, cmd, "--l3-mode")
+	})
+
+	t.Run("scenario is always the last argument", func(t *testing.T) {
+		cfg := defaultHarnessConfig("agent-runtime")
+		cmd := harnessRun("my-scenario", cfg)
+		assert.Equal(t, "my-scenario", cmd[len(cmd)-1])
+	})
+}
+
+func TestDemoScenarioFilesCallHarnessRun(t *testing.T) {
+	demoFiles := []string{
+		"demo_gov.go",
+		"demo_finance.go",
+		"demo_healthcare.go",
+		"demo_secure_data.go",
+		"demo_dow.go",
+		"demo_dhs.go",
+	}
+
+	for _, file := range demoFiles {
+		t.Run(file+" uses harnessRun or runTwoLayerScenario", func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(".", file)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			src := string(data)
+			assert.True(t, strings.Contains(src, "harnessRun") || strings.Contains(src, "runTwoLayerScenario"),
+				"%s must call harnessRun (directly or via runTwoLayerScenario) to submit real GovernanceEnvelopes", file)
+		})
+	}
+}
+
+func TestNoGatewayBypassInDemoFiles(t *testing.T) {
+	demoFiles := []string{
+		"demo_gov.go",
+		"demo_finance.go",
+		"demo_healthcare.go",
+		"demo_secure_data.go",
+		"demo_dow.go",
+		"demo_dhs.go",
+	}
+
+	for _, file := range demoFiles {
+		t.Run(file+" has no curl POST bypass", func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(".", file)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			src := string(data)
+			assert.NotContains(t, src, "curl -X POST",
+				"%s must not use curl -X POST to bypass the gateway", file)
+			assert.NotContains(t, src, "curl --request POST",
+				"%s must not use curl --request POST to bypass the gateway", file)
+		})
+	}
+}
+
+func TestNoSqliteBackdoorInDemoFiles(t *testing.T) {
+	demoFiles := []string{
+		"demo_gov.go",
+		"demo_finance.go",
+		"demo_healthcare.go",
+		"demo_secure_data.go",
+		"demo_dow.go",
+		"demo_dhs.go",
+	}
+
+	for _, file := range demoFiles {
+		t.Run(file+" has no sqlite3 backdoor", func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(".", file)
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+			src := string(data)
+			assert.NotContains(t, src, "exec.Command(\"sqlite3\"",
+				"%s must not directly access gateway SQLite databases via exec.Command", file)
+		})
+	}
+}

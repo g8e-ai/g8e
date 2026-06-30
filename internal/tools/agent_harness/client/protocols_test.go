@@ -75,7 +75,7 @@ func TestMCPToolsList(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -170,7 +170,7 @@ func TestMCPToolsCall(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -222,7 +222,7 @@ func TestMCPResourcesList(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -280,7 +280,7 @@ func TestMCPResourcesRead(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -329,7 +329,7 @@ func TestMCPPromptsList(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -387,7 +387,7 @@ func TestMCPPromptsGet(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -481,7 +481,7 @@ func TestA2ACall(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -560,7 +560,7 @@ func TestA2ACallProto(t *testing.T) {
 
 	cfg := config.Config{
 		MTLSBaseURL: server.URL,
-		Auth:        config.Auth{Insecure: true},
+		Auth:        config.Auth{},
 	}
 
 	client, err := New(cfg)
@@ -1024,7 +1024,7 @@ func TestRPC(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)

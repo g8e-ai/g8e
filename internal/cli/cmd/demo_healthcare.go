@@ -14,53 +14,11 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/paths"
 )
-
-// PARequest represents a PA request from the healthcare demo
-type PARequest struct {
-	ID              string  `json:"id"`
-	ProviderName    string  `json:"provider_name"`
-	ProviderNPI     string  `json:"provider_npi"`
-	ApprovalRate    float64 `json:"historic_approval_rate"`
-	ProcedureCode   string  `json:"procedure_code"`
-	ProcedureName   string  `json:"procedure_name"`
-	DaysElapsed     int     `json:"days_elapsed"`
-	Status          string  `json:"status"`
-	RequestType     string  `json:"request_type"`
-	ReportableToOHA bool    `json:"reportable_to_oha"`
-}
-
-// PARequestsFile represents the structure of pa_requests.json
-type PARequestsFile struct {
-	PAQueue []PARequest `json:"pa_queue"`
-}
-
-// readPARequest reads a PA request from the target data
-func readPARequest(demoDir, requestID string) (*PARequest, error) {
-	data, err := os.ReadFile(paths.Infra.DemosHealthcarePARequestsPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read PA requests file: %w", err)
-	}
-
-	var paFile PARequestsFile
-	if err := json.Unmarshal(data, &paFile); err != nil {
-		return nil, fmt.Errorf("failed to parse PA requests JSON: %w", err)
-	}
-
-	for _, req := range paFile.PAQueue {
-		if req.ID == requestID {
-			return &req, nil
-		}
-	}
-
-	return nil, fmt.Errorf("PA request %q not found", requestID)
-}
 
 func runHealthcareScenario(demoDir, scenario string) error {
 	_, err := runHealthcareScenarioWithResult(demoDir, scenario)
@@ -72,6 +30,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 
 	switch scenario {
 	case "1":
+		var hasErrors bool
 		result.number = "1"
 		result.name = "Authorized Agent Submits a FHIR PA Request"
 		result.status = "PASS"
@@ -99,26 +58,14 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("  ── Step 2: Submit FHIR PA request through the gateway ───────")
 		fmt.Println("  Request path: agent-runtime → gateway (g8e.local:8443) [Governed MCP Tools Call]")
 		fmt.Println()
+		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg.PublicURL = "http://g8e.local:8081"
 		if err := demoStep(demoDir, "fhir request", true,
-			"docker", "compose", "exec", "-T", "agent-runtime",
-			"g8e", "agent", "run",
-			"--mtls-url", "https://g8e.local:8443",
-			"--cert", "/root/.g8e/pki/operator.crt",
-			"--key", "/root/.g8e/pki/operator.key",
-			"--ca", "/root/.g8e/pki/ca.crt",
-			"healthcare-success",
+			harnessRun("healthcare-success", hcfg)...,
 		); err != nil {
-			// Fallback: direct to PA API if gateway proxy isn't wired yet
-			fmt.Println("  (gateway proxy path unavailable, sending direct to PA API)")
+			fmt.Println("  (healthcare-success harness scenario failed)")
 			fmt.Println()
-			if err2 := demoStep(demoDir, "fhir request direct", true,
-				"docker", "compose", "exec", "-T", "agent-runtime",
-				"wget", "-qO-", "http://10.22.0.30:8000/",
-				"--post-data={\"resourceType\":\"ClaimResponse\",\"status\":\"active\",\"use\":\"preauthorization\"}",
-				"--header=Content-Type: application/fhir+json",
-			); err2 != nil {
-				return scenarioResult{}, err2
-			}
+			hasErrors = true
 		}
 
 		fmt.Println("  ── Step 3: View g8e enforcement audit ───────────────────────")
@@ -131,10 +78,16 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			"docker", "compose", "logs", "observability", "--tail", "10",
 		)
 
-		fmt.Println("  [PASS] Scenario 1 — FHIR PA request received and queued.")
-		fmt.Println("         Doctrine engine evaluated the payload against all 11 PHI/HIPAA rules.")
+		if hasErrors {
+			result.status = "FAIL"
+			fmt.Println("  [FAIL] Scenario 1 — One or more steps failed.")
+		} else {
+			fmt.Println("  [PASS] Scenario 1 — FHIR PA request received and queued.")
+			fmt.Println("         Doctrine engine evaluated the payload against all 11 PHI/HIPAA rules.")
+		}
 
 	case "2":
+		var hasErrors bool
 		result.number = "2"
 		result.name = "Gold Card Auto-Approval (HB 3134 §6)"
 		result.status = "PASS"
@@ -149,35 +102,51 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("          review. PA-2026-0043 (Dr. Priya Nair, 96%) is the proof case.")
 		fmt.Println()
 
-		fmt.Println("  ── Step 1: Read exemption engine threshold ───────────────────")
-		if err := demoStep(demoDir, "exemption config", true,
-			"docker", "compose", "exec", "-T", "provider-exemption-rules",
-			"sh", "-c", "env | grep EXEMPTION",
+		fmt.Println("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
+		if err := demoStep(demoDir, "gateway health",
+			false,
+			"curl", "-s", "http://localhost:8081/api/v1/health",
 		); err != nil {
-			return scenarioResult{}, err
-		}
-
-		fmt.Println("  ── Step 2: Inspect the AUTO_APPROVED seed record ────────────")
-		if req, err := readPARequest(demoDir, "PA-2026-0043"); err == nil {
-			fmt.Printf("  $ cat /var/g8e/target/pa_requests.json | grep -A 15 PA-2026-0043\n")
-			reqJSON, _ := json.MarshalIndent(req, "  ", "  ")
-			fmt.Printf("  %s\n", string(reqJSON))
-			fmt.Println()
-		} else {
-			fmt.Printf("  (seed data inspection failed: %v)\n", err)
+			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
 		}
 
-		fmt.Println("  ── Proof ─────────────────────────────────────────────────────")
+		fmt.Println("  ── Step 2: Submit gold-card PA through the gateway ───────────")
+		fmt.Println("  PA-2026-0043 (Dr. Priya Nair, 96% historic approval rate) is submitted")
+		fmt.Println("  through the governed endpoint. The exemption engine evaluates the")
+		fmt.Println("  provider against the 90% threshold (HB 3134 §6).")
+		fmt.Println()
+		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg.PublicURL = "http://g8e.local:8081"
+		if err := demoStep(demoDir, "gold-card PA via agent",
+			false,
+			harnessRun("healthcare-gold-card", hcfg)...,
+		); err != nil {
+			fmt.Println("  (healthcare-gold-card harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		}
+
+		fmt.Println("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		fmt.Println("  Copy-paste to confirm AUTO_APPROVED in the audit log:")
 		fmt.Println()
 		fmt.Println("    docker compose -f " + paths.Infra.DemosHealthcareComposePath + " logs observability | grep -i auto_approved")
 		fmt.Println()
+		_ = demoStep(demoDir, "audit tail",
+			false,
+			"docker", "compose", "logs", "observability", "--tail", "10",
+		)
 
-		fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
-		fmt.Println("         PA-2026-0043 qualifies (96%): zero-day decision, no manual review.")
+		if hasErrors {
+			result.status = "FAIL"
+			fmt.Println("  [FAIL] Scenario 2 — One or more steps failed.")
+		} else {
+			fmt.Println("  [PASS] Scenario 2 — Gold carding configured at 90% threshold.")
+			fmt.Println("         PA-2026-0043 qualifies (96%): zero-day decision, no manual review.")
+		}
 
 	case "3":
+		var hasErrors bool
 		result.number = "3"
 		result.name = "SLA Breach and OHA Reporting (2026 CCO Medicaid Rule)"
 		result.status = "PASS"
@@ -192,23 +161,29 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("          PA-2026-0044 (Dr. James O'Brien, 10 days) is the proof case.")
 		fmt.Println()
 
-		fmt.Println("  ── Step 1: Read SLA enforcement configuration ────────────────")
-		if err := demoStep(demoDir, "sla config", true,
-			"docker", "compose", "exec", "-T", "pa-processing-worker",
-			"sh", "-c", "env | grep SLA",
+		fmt.Println("  ── Step 1: Confirm g8e gateway is live ──────────────────────")
+		if err := demoStep(demoDir, "gateway health",
+			false,
+			"curl", "-s", "http://localhost:8081/api/v1/health",
 		); err != nil {
-			return scenarioResult{}, err
+			fmt.Println("  (gateway health check failed — is the demo running?)")
+			fmt.Println()
 		}
 
-		fmt.Println("  ── Step 2: Inspect the SLA_BREACHED seed record ─────────────")
-		if req, err := readPARequest(demoDir, "PA-2026-0044"); err == nil {
-			fmt.Printf("  $ cat /var/g8e/target/pa_requests.json | grep -A 15 PA-2026-0044\n")
-			reqJSON, _ := json.MarshalIndent(req, "  ", "  ")
-			fmt.Printf("  %s\n", string(reqJSON))
+		fmt.Println("  ── Step 2: Query SLA-breach status through the gateway ──────")
+		fmt.Println("  PA-2026-0044 (Dr. James O'Brien, 10 days elapsed) is queried through")
+		fmt.Println("  the governed endpoint. The SLA worker tracks days-elapsed per request")
+		fmt.Println("  and flags breaches for mandatory DCBS/OHA annual reporting.")
+		fmt.Println()
+		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg.PublicURL = "http://g8e.local:8081"
+		if err := demoStep(demoDir, "SLA breach query via agent",
+			false,
+			harnessRun("healthcare-sla-breach", hcfg)...,
+		); err != nil {
+			fmt.Println("  (healthcare-sla-breach harness scenario failed)")
 			fmt.Println()
-		} else {
-			fmt.Printf("  (seed data inspection failed: %v)\n", err)
-			fmt.Println()
+			hasErrors = true
 		}
 
 		fmt.Println("  ── Step 3: Compliance dashboard ──────────────────────────────")
@@ -225,8 +200,13 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("      -c \"SELECT id, provider_name, days_elapsed, status, reportable_to_oha FROM pa_requests WHERE status='SLA_BREACHED';\"")
 		fmt.Println()
 
-		fmt.Println("  [PASS] Scenario 3 — SLA enforcement active (alert: day 5, breach: day 7).")
-		fmt.Println("         PA-2026-0044 is SLA_BREACHED with reportable_to_oha=true.")
+		if hasErrors {
+			result.status = "FAIL"
+			fmt.Println("  [FAIL] Scenario 3 — One or more steps failed.")
+		} else {
+			fmt.Println("  [PASS] Scenario 3 — SLA enforcement active (alert: day 5, breach: day 7).")
+			fmt.Println("         PA-2026-0044 is SLA_BREACHED with reportable_to_oha=true.")
+		}
 
 	case "4":
 		result.number = "4"
@@ -258,15 +238,11 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		fmt.Println("  Submit a PHI exfiltration attempt through the production-ready")
 		fmt.Println("  governed endpoint (mTLS + Protocol Envelopes):")
 		fmt.Println()
+		hcfg := defaultHarnessConfig("agent-runtime")
+		hcfg.PublicURL = "http://g8e.local:8081"
 		_ = demoStep(demoDir, "phi exfiltration",
 			false,
-			"docker", "compose", "exec", "-T", "agent-runtime",
-			"g8e", "agent", "run",
-			"--mtls-url", "https://g8e.local:8443",
-			"--cert", "/root/.g8e/pki/operator.crt",
-			"--key", "/root/.g8e/pki/operator.key",
-			"--ca", "/root/.g8e/pki/ca.crt",
-			"healthcare-phi-blocked",
+			harnessRun("healthcare-phi-blocked", hcfg)...,
 		)
 		fmt.Println("  Then inspect the enforcement audit:")
 		fmt.Println()
@@ -280,7 +256,6 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 	default:
 		return scenarioResult{}, fmt.Errorf("invalid scenario number for healthcare: %q (valid: 1-4)", scenario)
 	}
+
 	return result, nil
 }
-
-// Made with Bob

@@ -117,16 +117,6 @@ services:
     working_dir: /root
     entrypoint: ["sh", "-c", "sleep infinity"]
 
-  llm-backend:
-    image: alpine:latest
-    container_name: finance-llm
-    networks:
-      net_internal:
-    depends_on:
-      gateway:
-        condition: service_healthy
-    command: ["sh", "-c", "while true; do sleep 3600; done"]
-
   demo-ui:
     image: nginx:alpine
     container_name: finance-demo-ui

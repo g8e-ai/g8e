@@ -993,6 +993,73 @@ type twoLayerScenarioConfig struct {
 	passMessage       string
 }
 
+// harnessConfig holds the parameters for building a docker compose exec/run
+// command for an agent-harness scenario. Centralising these in a struct
+// avoids positional-argument drift as flags are added across demos.
+type harnessConfig struct {
+	Container     string
+	MTLSURL       string
+	PublicURL     string
+	CertPath      string
+	KeyPath       string
+	CAPath        string
+	EnsembleSize  int
+	L3Mode        string
+	Posture       string
+	ConsensusSeed string
+	TribunalID    string
+	UseRun        bool // true for `docker compose run --rm`, false for `exec`
+}
+
+// defaultHarnessConfig returns the config matching the standard demo topology:
+// g8e.local gateway on 8443/8080, operator mTLS certs in /root/.g8e/pki,
+// ensemble size 3, mock L3 mode.
+func defaultHarnessConfig(container string) harnessConfig {
+	return harnessConfig{
+		Container:    container,
+		MTLSURL:      "https://g8e.local:8443",
+		PublicURL:    "http://g8e.local:8080",
+		CertPath:     "/root/.g8e/pki/operator.crt",
+		KeyPath:      "/root/.g8e/pki/operator.key",
+		CAPath:       "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+		EnsembleSize: 3,
+		L3Mode:       "mock",
+	}
+}
+
+// harnessRun builds the docker compose command for an agent-harness scenario.
+// Uses exec by default (long-running sleep-infinity container with a fixed IP).
+// When cfg.UseRun is true, uses `docker compose run --rm` instead.
+func harnessRun(scenario string, cfg harnessConfig) []string {
+	var cmd []string
+	if cfg.UseRun {
+		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps", cfg.Container, "agent", "run"}
+	} else {
+		cmd = []string{"docker", "compose", "exec", "-T", cfg.Container, "/g8e", "agent", "run"}
+	}
+	cmd = append(cmd,
+		"--mtls-url", cfg.MTLSURL,
+		"--public-url", cfg.PublicURL,
+		"--cert", cfg.CertPath,
+		"--key", cfg.KeyPath,
+		"--ca", cfg.CAPath,
+	)
+	if cfg.EnsembleSize > 0 {
+		cmd = append(cmd, "--ensemble", fmt.Sprintf("%d", cfg.EnsembleSize))
+	}
+	if cfg.L3Mode != "" {
+		cmd = append(cmd, "--l3-mode", cfg.L3Mode)
+	}
+	if cfg.ConsensusSeed != "" {
+		cmd = append(cmd, "--consensus-seed", cfg.ConsensusSeed)
+	}
+	if cfg.TribunalID != "" {
+		cmd = append(cmd, "--tribunal-id", cfg.TribunalID)
+	}
+	cmd = append(cmd, scenario)
+	return cmd
+}
+
 func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioResult, error) {
 	var result scenarioResult
 	var hasErrors bool
@@ -1033,16 +1100,11 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	fmt.Printf("  ── Step 3: %s ───────\n", cfg.step3Label)
 	fmt.Printf("  %s\n", cfg.step3Description)
 	fmt.Println()
+	hcfg := defaultHarnessConfig("agent-runtime")
+	hcfg.PublicURL = "http://g8e.local:" + cfg.httpPort
 	if err := demoStep(demoDir, cfg.harnessScenario+" via agent",
 		false,
-		"docker", "compose", "exec", "-T", "agent-runtime",
-		"/g8e", "agent", "run",
-		"--mtls-url", "https://g8e.local:8443",
-		"--public-url", "http://g8e.local:"+cfg.httpPort,
-		"--cert", "/root/.g8e/pki/operator.crt",
-		"--key", "/root/.g8e/pki/operator.key",
-		"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
-		cfg.harnessScenario,
+		harnessRun(cfg.harnessScenario, hcfg)...,
 	); err != nil {
 		fmt.Println("  (agent scenario failed)")
 		fmt.Println()
