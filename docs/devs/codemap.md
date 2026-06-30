@@ -392,11 +392,11 @@ The following packages are test-only and are not part of the production dependen
 **`demos/secure-data/`** - Secure data handling demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, audit). Contains `harnessConfig` struct, `defaultHarnessConfig`, `harnessRun` helper for building docker compose exec/run commands for agent-harness scenarios, and `runTwoLayerScenario` reusable orchestrator.
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, audit). Contains `harnessConfig` struct, `defaultHarnessConfig`, `harnessRun` helper for building docker compose exec/run commands for agent-harness scenarios, and `runTwoLayerScenario` reusable orchestrator. Phase 6 additions: `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `captureCommand` (runs command, returns stdout string), `printDataDump` (queries gateway mTLS API for receipts/events/summary/ledger/logs after scenarios), `runG8EAuditCmd` (runs `g8e audit` inside operator container), `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `demosAuditCmd` with `receipts`/`events`/`summary` actions.
 - `demo_gov.go` - Gov demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
 - `demo_secure_data.go` - Secure-data demo scenarios (3 scenarios, each calls `harnessRun`)
 - `demo_dow.go` - DoW demo scenarios (3 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `ensureDHSPosture` helpers.
-- `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, and source-file assertions (harnessRun usage, no curl POST bypass, no sqlite3 backdoor).
+- `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, and source-file assertions (harnessRun usage, no curl POST bypass, no sqlite3 backdoor, no copy-paste blocks). Phase 6 tests: `TestCaptureCommand`, `TestDemoPrintln`, `TestRunG8EAuditCmd`, `TestPrintDataDump`, `TestNoSqliteBackdoorInScenarioFiles`, `TestSqliteOnlyInAuditCmdVaultAction`, `TestNoCopyPasteInScenarioFiles`.

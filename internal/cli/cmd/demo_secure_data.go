@@ -36,16 +36,16 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		result.status = "PASS"
 		result.metrics = "Two-Operator Topology: src-operator → dst-operator // Chain of Custody Proof"
 
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — Governed Migration with Chain-of-Custody Receipts")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: A SharePoint migration moves data from source to destination")
-		fmt.Println("          only through the governed connector pipeline. Both operators")
-		fmt.Println("          emit signed receipts, forming a cryptographic chain of custody.")
-		fmt.Println()
+		demoPrintf("\n%s\n", strings.Repeat("─", 60))
+		demoPrintln("  Scenario 1 — Governed Migration with Chain-of-Custody Receipts")
+		demoPrintln(strings.Repeat("─", 60))
+		demoPrintln()
+		demoPrintln("  PROVES: A SharePoint migration moves data from source to destination")
+		demoPrintln("          only through the governed connector pipeline. Both operators")
+		demoPrintln("          emit signed receipts, forming a cryptographic chain of custody.")
+		demoPrintln()
 
-		fmt.Println("  ── Step 1: Confirm source and destination gateways are live ──────")
+		demoPrintln("  ── Step 1: Confirm source and destination gateways are live ──────")
 		if err := demoStep(demoDir, "src-gateway health",
 			false,
 			"curl", "-s", "http://localhost:8083/api/v1/health",
@@ -63,7 +63,7 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Verify operator enrollment (mTLS certs) ──────────────")
+		demoPrintln("  ── Step 2: Verify operator enrollment (mTLS certs) ──────────────")
 		if err := demoStep(demoDir, "enrollment check",
 			false,
 			"docker", "compose", "exec", "-T", "src-operator",
@@ -74,21 +74,21 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Confirm the migration doctrines are loaded ───────────")
+		demoPrintln("  ── Step 3: Confirm the migration doctrines are loaded ───────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosSecureDataDoctrineFile, "migration_manifest_required"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 migration_manifest_required\n", constants.DemosSecureDataDoctrineFile)
-			fmt.Printf("  id:         %s\n", rule.ID)
-			fmt.Printf("  severity:   %s\n", rule.Severity)
-			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
-			fmt.Printf("  pattern:    %s\n", rule.Pattern)
-			fmt.Println()
+			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 migration_manifest_required\n", constants.DemosSecureDataDoctrineFile)
+			demoPrintf("  id:         %s\n", rule.ID)
+			demoPrintf("  severity:   %s\n", rule.Severity)
+			demoPrintf("  confidence: %.2f\n", rule.Confidence)
+			demoPrintf("  pattern:    %s\n", rule.Pattern)
+			demoPrintln()
 		} else {
 			fmt.Printf("  (doctrine rule inspection failed: %v)\n", err)
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Run governed migration via agent-harness (mTLS) ──────")
+		demoPrintln("  ── Step 4: Run governed migration via agent-harness (mTLS) ──────")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "secure-data-migration via agent",
@@ -100,7 +100,7 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 5: Verify chain-of-custody receipt in ledger ────────────")
+		demoPrintln("  ── Step 5: Verify chain-of-custody receipt in ledger ────────────")
 		if err := demoStep(demoDir, "ledger verification",
 			false,
 			"docker", "compose", "exec", "-T", "src-operator",
@@ -125,15 +125,15 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		result.status = "PASS"
 		result.metrics = "Doctrine: connector_bypass_attempt (0.93 conf) // Layer 1 Blocked"
 
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 2 — Connector Bypass Attempt Blocked")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Direct invocation of transfer tools (rclone, scp, robocopy)")
-		fmt.Println("          is blocked by doctrine when not wrapped in a GovernanceEnvelope.")
-		fmt.Println()
+		demoPrintf("\n%s\n", strings.Repeat("─", 60))
+		demoPrintln("  Scenario 2 — Connector Bypass Attempt Blocked")
+		demoPrintln(strings.Repeat("─", 60))
+		demoPrintln()
+		demoPrintln("  PROVES: Direct invocation of transfer tools (rclone, scp, robocopy)")
+		demoPrintln("          is blocked by doctrine when not wrapped in a GovernanceEnvelope.")
+		demoPrintln()
 
-		fmt.Println("  ── Step 1: Confirm src-gateway is live ──────────────────────────")
+		demoPrintln("  ── Step 1: Confirm src-gateway is live ──────────────────────────")
 		if err := demoStep(demoDir, "gateway health",
 			false,
 			"curl", "-s", "http://localhost:8083/api/v1/health",
@@ -143,21 +143,21 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Confirm bypass doctrine is loaded ────────────────────")
+		demoPrintln("  ── Step 2: Confirm bypass doctrine is loaded ────────────────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosSecureDataDoctrineFile, "connector_bypass_attempt"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 connector_bypass_attempt\n", constants.DemosSecureDataDoctrineFile)
-			fmt.Printf("  id:         %s\n", rule.ID)
-			fmt.Printf("  severity:   %s\n", rule.Severity)
-			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
-			fmt.Printf("  pattern:    %s\n", rule.Pattern)
-			fmt.Println()
+			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 connector_bypass_attempt\n", constants.DemosSecureDataDoctrineFile)
+			demoPrintf("  id:         %s\n", rule.ID)
+			demoPrintf("  severity:   %s\n", rule.Severity)
+			demoPrintf("  confidence: %.2f\n", rule.Confidence)
+			demoPrintf("  pattern:    %s\n", rule.Pattern)
+			demoPrintln()
 		} else {
 			fmt.Printf("  (doctrine rule inspection failed: %v)\n", err)
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Run bypass attempt via agent-harness (mTLS) ──────────")
+		demoPrintln("  ── Step 3: Run bypass attempt via agent-harness (mTLS) ──────────")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "secure-data-bypass-attempt via agent",
@@ -169,7 +169,7 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Verify doctrine rejection in gateway logs ────────────")
+		demoPrintln("  ── Step 4: Verify doctrine rejection in gateway logs ────────────")
 		_ = demoStep(demoDir, "audit tail",
 			false,
 			"docker", "compose", "logs", "observability", "--tail", "10",
@@ -188,15 +188,15 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		result.status = "PASS"
 		result.metrics = "Doctrine: cross_tenant_data_leak (0.88 conf) // Intent Rejected"
 
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 3 — Cross-Tenant Leak Doctrine Triggered")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: Envelopes targeting destinations not in the signed manifest")
-		fmt.Println("          are rejected before execution.")
-		fmt.Println()
+		demoPrintf("\n%s\n", strings.Repeat("─", 60))
+		demoPrintln("  Scenario 3 — Cross-Tenant Leak Doctrine Triggered")
+		demoPrintln(strings.Repeat("─", 60))
+		demoPrintln()
+		demoPrintln("  PROVES: Envelopes targeting destinations not in the signed manifest")
+		demoPrintln("          are rejected before execution.")
+		demoPrintln()
 
-		fmt.Println("  ── Step 1: Confirm src-gateway is live ──────────────────────────")
+		demoPrintln("  ── Step 1: Confirm src-gateway is live ──────────────────────────")
 		if err := demoStep(demoDir, "gateway health",
 			false,
 			"curl", "-s", "http://localhost:8083/api/v1/health",
@@ -206,23 +206,23 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Confirm cross-tenant doctrine is loaded ──────────────")
+		demoPrintln("  ── Step 2: Confirm cross-tenant doctrine is loaded ──────────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosSecureDataDoctrineFile, "cross_tenant_data_leak"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 cross_tenant_data_leak\n", constants.DemosSecureDataDoctrineFile)
-			fmt.Printf("  id:         %s\n", rule.ID)
-			fmt.Printf("  severity:   %s\n", rule.Severity)
-			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
-			fmt.Printf("  pattern:    %s\n", rule.Pattern)
-			fmt.Println()
+			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 cross_tenant_data_leak\n", constants.DemosSecureDataDoctrineFile)
+			demoPrintf("  id:         %s\n", rule.ID)
+			demoPrintf("  severity:   %s\n", rule.Severity)
+			demoPrintf("  confidence: %.2f\n", rule.Confidence)
+			demoPrintf("  pattern:    %s\n", rule.Pattern)
+			demoPrintln()
 		} else {
 			fmt.Printf("  (doctrine rule inspection failed: %v)\n", err)
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Run cross-tenant leak attempt via agent-harness (mTLS)")
-		fmt.Println("    Target: rogue-tenant.sharepoint.com")
-		fmt.Println()
+		demoPrintln("  ── Step 3: Run cross-tenant leak attempt via agent-harness (mTLS)")
+		demoPrintln("    Target: rogue-tenant.sharepoint.com")
+		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "secure-data-cross-tenant via agent",
@@ -234,7 +234,7 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Verify doctrine rejection in gateway logs ────────────")
+		demoPrintln("  ── Step 4: Verify doctrine rejection in gateway logs ────────────")
 		_ = demoStep(demoDir, "audit tail",
 			false,
 			"docker", "compose", "logs", "observability", "--tail", "10",

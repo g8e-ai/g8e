@@ -159,20 +159,19 @@ g8e demos rebuild <org>
 # Reset a demo environment (clean and restart)
 g8e demos reset <org>
 
-# Run a specific demo scenario
+# Run a specific demo scenario (concise output by default)
 g8e demos run <org> <scenario>
 
-# View audit logs and ledger history for a running demo
-g8e demos audit <org>
+# Run with verbose step-by-step output
+g8e demos run <org> <scenario> -v
+
+# View audit receipts, events, and summary via g8e audit CLI
+g8e demos audit <org> receipts
+g8e demos audit <org> events
+g8e demos audit <org> summary
 
 # Tail the observability log stream
 g8e demos audit <org> logs
-
-# Open the gateway audit database (SQLite)
-g8e demos audit <org> gateway-db
-
-# Open the operator audit database (SQLite)
-g8e demos audit <org> operator-db
 
 # View the git ledger log
 g8e demos audit <org> ledger-log
@@ -224,6 +223,18 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run dhs 5` - Sovereign Destruction + tamper-proof audit (LOE 2)
 
 The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
+
+### Demo Output Format
+
+By default, `g8e demos run` produces concise output: each scenario prints its number, name, and PASS/FAIL result. After all scenarios complete, a results table and a **Platform Data Dump** section are printed, showing:
+
+- **Receipts** — Transaction hash, action, resource, status, and execution timestamp (via `GET /api/v1/audit/receipts`)
+- **Audit Events** — Event ID, timestamp, type, exit code, and command (via `GET /api/v1/audit/events`)
+- **Summary** — Event and receipt counts by type (via `GET /api/v1/audit/summary`)
+- **Ledger Files** — File listing from the operator's git ledger
+- **Gateway Logs** — Last 15 log lines from the gateway container
+
+Use `-v` (or `--verbose`) to see full step-by-step command output, scenario descriptions, and `PROVES:` annotations.
 
 Note: The `g8e demos run` command automatically starts the demo environment if it is not already running.
 

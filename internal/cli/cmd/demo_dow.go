@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -37,19 +36,19 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		result.status = "PASS"
 		result.metrics = "A2A cross-cue: SIGINT→EO/IR // L2 Consensus (quorum 2/3) // Zero ground station"
 
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 1 — Autonomous SIGINT-to-EO/IR Cross-Cueing (Challenge 5)")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: The agent-sigint sensor detects a mock RF signal and emits")
-		fmt.Println("          a governed cross-cue request to the g8e-gateway, which wraps")
-		fmt.Println("          it in a GovernanceEnvelope and forces L2 Consensus on the target")
-		fmt.Println("          coordinates. The g8e-operator verifies the proofs and executes")
-		fmt.Println("          the camera slew via the L5 Actuator — with ZERO ground station")
-		fmt.Println("          intervention.")
-		fmt.Println()
+		demoPrintf("\n%s\n", strings.Repeat("─", 60))
+		demoPrintln("  Scenario 1 — Autonomous SIGINT-to-EO/IR Cross-Cueing (Challenge 5)")
+		demoPrintln(strings.Repeat("─", 60))
+		demoPrintln()
+		demoPrintln("  PROVES: The agent-sigint sensor detects a mock RF signal and emits")
+		demoPrintln("          a governed cross-cue request to the g8e-gateway, which wraps")
+		demoPrintln("          it in a GovernanceEnvelope and forces L2 Consensus on the target")
+		demoPrintln("          coordinates. The g8e-operator verifies the proofs and executes")
+		demoPrintln("          the camera slew via the L5 Actuator — with ZERO ground station")
+		demoPrintln("          intervention.")
+		demoPrintln()
 
-		fmt.Println("  ── Step 1: Confirm g8e gateway is live (consensus posture) ──────")
+		demoPrintln("  ── Step 1: Confirm g8e gateway is live (consensus posture) ──────")
 		if err := demoStep(demoDir, "gateway health",
 			false,
 			"curl", "-sf", "http://localhost:8086/api/v1/health",
@@ -59,7 +58,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Verify agent enrollment (operator mTLS certs) ────────")
+		demoPrintln("  ── Step 2: Verify agent enrollment (operator mTLS certs) ────────")
 		if err := demoStep(demoDir, "enrollment check",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
@@ -70,21 +69,21 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Confirm cross-cue doctrine is loaded ────────────────")
+		demoPrintln("  ── Step 3: Confirm cross-cue doctrine is loaded ────────────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosDoWDoctrineFile, "unauthorized_cross_cue"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 unauthorized_cross_cue\n", constants.DemosDoWDoctrineFile)
-			fmt.Printf("  id:         %s\n", rule.ID)
-			fmt.Printf("  severity:   %s\n", rule.Severity)
-			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
-			fmt.Printf("  pattern:    %s\n", rule.Pattern)
-			fmt.Println()
+			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 unauthorized_cross_cue\n", constants.DemosDoWDoctrineFile)
+			demoPrintf("  id:         %s\n", rule.ID)
+			demoPrintf("  severity:   %s\n", rule.Severity)
+			demoPrintf("  confidence: %.2f\n", rule.Confidence)
+			demoPrintf("  pattern:    %s\n", rule.Pattern)
+			demoPrintln()
 		} else {
 			fmt.Printf("  (doctrine rule inspection failed: %v)\n", err)
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Inspect the tactical environment (RF signals) ────────")
+		demoPrintln("  ── Step 4: Inspect the tactical environment (RF signals) ────────")
 		if err := demoStep(demoDir, "tactical environment",
 			false,
 			"docker", "compose", "exec", "-T", "agent-eoir",
@@ -93,7 +92,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 5: Run real g8e cross-cue (governed envelope → L2 → L5) ──")
+		demoPrintln("  ── Step 5: Run real g8e cross-cue (governed envelope → L2 → L5) ──")
 		hcfg := defaultHarnessConfig("agent-sigint")
 		hcfg.UseRun = true
 		hcfg.PublicURL = "http://g8e.local:8080"
@@ -106,7 +105,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 6: Verify gimbal received the slew command ─────────────")
+		demoPrintln("  ── Step 6: Verify gimbal received the slew command ─────────────")
 		if err := demoStep(demoDir, "gimbal slew verification",
 			false,
 			"docker", "compose", "exec", "-T", "gimbal",
@@ -117,7 +116,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 7: Verify SWaP constraints (governance overhead) ───────")
+		demoPrintln("  ── Step 7: Verify SWaP constraints (governance overhead) ───────")
 		_ = demoStep(demoDir, "swap verification",
 			false,
 			"docker", "stats", "--no-stream",
@@ -125,10 +124,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			"dow-gateway", "dow-operator",
 		)
 
-		fmt.Println("  Copy-paste to inspect the BFT consensus audit:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " logs observability --tail 20")
-		fmt.Println()
+		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
 			result.status = "FAIL"
@@ -146,19 +142,19 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		result.status = "PASS"
 		result.metrics = "BFT: 3 trusted vs 1 spoofed // L2 rejects spoofed GNSS // Operator fails closed"
 
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 2 — BFT Spoofing Defense (Challenge 8)")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: A spoofed GNSS coordinate is injected into the PNT fusion")
-		fmt.Println("          engine, simulating a near-peer EW attack. The BFT consensus")
-		fmt.Println("          engine (L2Consensus) detects divergence between the spoofed")
-		fmt.Println("          GNSS source and Visual Odometry/MAGNAV sources. The poisoned")
-		fmt.Println("          model is outvoted by the ensemble. The GovernanceEnvelope")
-		fmt.Println("          fails L2 verification, and the g8e-operator fails closed.")
-		fmt.Println()
+		demoPrintf("\n%s\n", strings.Repeat("─", 60))
+		demoPrintln("  Scenario 2 — BFT Spoofing Defense (Challenge 8)")
+		demoPrintln(strings.Repeat("─", 60))
+		demoPrintln()
+		demoPrintln("  PROVES: A spoofed GNSS coordinate is injected into the PNT fusion")
+		demoPrintln("          engine, simulating a near-peer EW attack. The BFT consensus")
+		demoPrintln("          engine (L2Consensus) detects divergence between the spoofed")
+		demoPrintln("          GNSS source and Visual Odometry/MAGNAV sources. The poisoned")
+		demoPrintln("          model is outvoted by the ensemble. The GovernanceEnvelope")
+		demoPrintln("          fails L2 verification, and the g8e-operator fails closed.")
+		demoPrintln()
 
-		fmt.Println("  ── Step 1: Confirm g8e gateway is live (consensus posture) ──────")
+		demoPrintln("  ── Step 1: Confirm g8e gateway is live (consensus posture) ──────")
 		if err := demoStep(demoDir, "gateway health",
 			false,
 			"curl", "-sf", "http://localhost:8086/api/v1/health",
@@ -168,7 +164,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Verify agent enrollment (operator mTLS certs) ────────")
+		demoPrintln("  ── Step 2: Verify agent enrollment (operator mTLS certs) ────────")
 		if err := demoStep(demoDir, "enrollment check",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
@@ -179,7 +175,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Inspect PNT sources (including spoofed) ─────────────")
+		demoPrintln("  ── Step 3: Inspect PNT sources (including spoofed) ─────────────")
 		if err := demoStep(demoDir, "pnt sources",
 			false,
 			"docker", "compose", "exec", "-T", "agent-pnt-fusion",
@@ -188,21 +184,21 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Confirm spoofing detection doctrine is loaded ───────")
+		demoPrintln("  ── Step 4: Confirm spoofing detection doctrine is loaded ───────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosDoWDoctrineFile, "pnt_diversion_detected"); err == nil {
-			fmt.Printf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 pnt_diversion_detected\n", constants.DemosDoWDoctrineFile)
-			fmt.Printf("  id:         %s\n", rule.ID)
-			fmt.Printf("  severity:   %s\n", rule.Severity)
-			fmt.Printf("  confidence: %.2f\n", rule.Confidence)
-			fmt.Printf("  pattern:    %s\n", rule.Pattern)
-			fmt.Println()
+			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 pnt_diversion_detected\n", constants.DemosDoWDoctrineFile)
+			demoPrintf("  id:         %s\n", rule.ID)
+			demoPrintf("  severity:   %s\n", rule.Severity)
+			demoPrintf("  confidence: %.2f\n", rule.Confidence)
+			demoPrintf("  pattern:    %s\n", rule.Pattern)
+			demoPrintln()
 		} else {
 			fmt.Printf("  (doctrine rule inspection failed: %v)\n", err)
 			fmt.Println()
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 5: Run BFT veto via agent-harness (spoofed GNSS) ───────")
+		demoPrintln("  ── Step 5: Run BFT veto via agent-harness (spoofed GNSS) ───────")
 		hcfg := defaultHarnessConfig("agent-sigint")
 		hcfg.UseRun = true
 		hcfg.PublicURL = "http://g8e.local:8080"
@@ -215,11 +211,11 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 6: Verify operator fail-closed behavior ────────────────")
-		fmt.Println("  The g8e-operator verifies the GovernanceEnvelope against its")
-		fmt.Println("  local state root. A failed L2 consensus causes the operator to")
-		fmt.Println("  reject the mutation and fail closed — the drone is not hijacked.")
-		fmt.Println()
+		demoPrintln("  ── Step 6: Verify operator fail-closed behavior ────────────────")
+		demoPrintln("  The g8e-operator verifies the GovernanceEnvelope against its")
+		demoPrintln("  local state root. A failed L2 consensus causes the operator to")
+		demoPrintln("  reject the mutation and fail closed — the drone is not hijacked.")
+		demoPrintln()
 		_ = demoStep(demoDir, "operator health",
 			false,
 			"docker", "compose", "logs", "operator", "--tail", "10",
@@ -241,19 +237,19 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		result.status = "PASS"
 		result.metrics = "Datalink severed // Local governance continues // Git ledger + SQLite audit vault"
 
-		fmt.Printf("\n%s\n", strings.Repeat("─", 60))
-		fmt.Println("  Scenario 3 — Disconnected Operations (Challenge 6)")
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println()
-		fmt.Println("  PROVES: The tactical datalink is severed, simulating a comms-denied")
-		fmt.Println("          environment. The g8e-gateway and g8e-operator continue to")
-		fmt.Println("          process cross-cueing events locally. Raw data and execution")
-		fmt.Println("          histories are committed to g8e's Git-backed ledger and SQLite")
-		fmt.Println("          local audit vault — with no cloud connectivity and no OEM")
-		fmt.Println("          permission keys.")
-		fmt.Println()
+		demoPrintf("\n%s\n", strings.Repeat("─", 60))
+		demoPrintln("  Scenario 3 — Disconnected Operations (Challenge 6)")
+		demoPrintln(strings.Repeat("─", 60))
+		demoPrintln()
+		demoPrintln("  PROVES: The tactical datalink is severed, simulating a comms-denied")
+		demoPrintln("          environment. The g8e-gateway and g8e-operator continue to")
+		demoPrintln("          process cross-cueing events locally. Raw data and execution")
+		demoPrintln("          histories are committed to g8e's Git-backed ledger and SQLite")
+		demoPrintln("          local audit vault — with no cloud connectivity and no OEM")
+		demoPrintln("          permission keys.")
+		demoPrintln()
 
-		fmt.Println("  ── Step 1: Confirm gateway is live before disconnect ───────────")
+		demoPrintln("  ── Step 1: Confirm gateway is live before disconnect ───────────")
 		if err := demoStep(demoDir, "gateway health (pre-disconnect)",
 			false,
 			"curl", "-s", "http://localhost:8086/api/v1/health",
@@ -263,18 +259,18 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 2: Sever the tactical datalink ──────────────────────────")
-		fmt.Println("  Simulating comms-denied environment by disconnecting ground-station")
-		fmt.Println("  from net_perimeter:")
-		fmt.Println()
+		demoPrintln("  ── Step 2: Sever the tactical datalink ──────────────────────────")
+		demoPrintln("  Simulating comms-denied environment by disconnecting ground-station")
+		demoPrintln("  from net_perimeter:")
+		demoPrintln()
 		_ = demoStep(demoDir, "sever datalink",
 			false,
 			"docker", "network", "disconnect", "dow-demo_net_perimeter", "dow-ground-station",
 		)
 
-		fmt.Println("  ── Step 3: Verify gateway continues operating locally ───────────")
-		fmt.Println("  The gateway should still be healthy even with the datalink severed:")
-		fmt.Println()
+		demoPrintln("  ── Step 3: Verify gateway continues operating locally ───────────")
+		demoPrintln("  The gateway should still be healthy even with the datalink severed:")
+		demoPrintln()
 		if err := demoStep(demoDir, "gateway health (post-disconnect)",
 			false,
 			"curl", "-s", "http://localhost:8086/api/v1/health",
@@ -284,10 +280,10 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 4: Trigger local cross-cue while disconnected ──────────")
-		fmt.Println("  Running a governed cross-cue through the gateway with the datalink")
-		fmt.Println("  severed — the operator must process it entirely locally:")
-		fmt.Println()
+		demoPrintln("  ── Step 4: Trigger local cross-cue while disconnected ──────────")
+		demoPrintln("  Running a governed cross-cue through the gateway with the datalink")
+		demoPrintln("  severed — the operator must process it entirely locally:")
+		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-sigint")
 		hcfg.UseRun = true
 		hcfg.PublicURL = "http://g8e.local:8080"
@@ -300,7 +296,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 5: Verify local ledger exists on operator ───────────────")
+		demoPrintln("  ── Step 5: Verify local ledger exists on operator ───────────────")
 		if err := demoStep(demoDir, "local ledger",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
@@ -311,7 +307,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 6: Verify local audit vault exists on operator ──────────")
+		demoPrintln("  ── Step 6: Verify local audit vault exists on operator ──────────")
 		if err := demoStep(demoDir, "audit vault",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
@@ -322,17 +318,13 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 7: Restore the tactical datalink ────────────────────────")
+		demoPrintln("  ── Step 7: Restore the tactical datalink ────────────────────────")
 		_ = demoStep(demoDir, "restore datalink",
 			false,
 			"docker", "network", "connect", "dow-demo_net_perimeter", "dow-ground-station",
 		)
 
-		fmt.Println("  Copy-paste to inspect the local audit trail:")
-		fmt.Println()
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sh -c 'cd /root/.g8e/data/ledger/files && git log --oneline'")
-		fmt.Println("    docker compose -f " + filepath.Join(demoDir, constants.DemosComposeFile) + " exec operator sqlite3 /root/.g8e/data/g8e.db 'SELECT * FROM events ORDER BY id DESC LIMIT 20;'")
-		fmt.Println()
+		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 
 		if hasErrors {
 			result.status = "FAIL"

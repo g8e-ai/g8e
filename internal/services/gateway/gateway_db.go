@@ -212,10 +212,10 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *keystore.Keystore) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
-		return err
+		return fmt.Errorf("canonicalDB: init test schema: %w", err)
 	}
 	if testKeystore == nil {
-		return errors.New("testKeystore must not be nil in test mode")
+		return constants.ErrTestKeystoreNil
 	}
 	sm := &SecretManager{
 		db:                  s.db,
@@ -225,7 +225,7 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 		keystore:            testKeystore,
 	}
 	if err := sm.InitAppSettings(); err != nil {
-		return err
+		return fmt.Errorf("canonicalDB: init test schema: app settings: %w", err)
 	}
 
 	return nil
@@ -235,19 +235,21 @@ func (s *CanonicalDBService) initStateRoot() error {
 	var count int
 	err := s.db.QueryRowWithRetry("SELECT COUNT(*) FROM state_root").Scan(&count)
 	if err != nil {
-		return err
+		return fmt.Errorf("canonicalDB: init state root: count: %w", err)
 	}
 	if count == 0 {
 		root, err := s.StateRootSvc.CalculateStateRoot()
 		if err != nil {
-			return err
+			return fmt.Errorf("canonicalDB: init state root: calculate: %w", err)
 		}
 		_, err = s.db.ExecWithRetry(
 			"INSERT INTO state_root (id, root, updated_at) VALUES (1, ?, ?)",
 			root,
 			sqliteutil.FormatTimestamp(time.Now().UTC()),
 		)
-		return err
+		if err != nil {
+			return fmt.Errorf("canonicalDB: init state root: insert: %w", err)
+		}
 	}
 	return nil
 }
@@ -282,15 +284,15 @@ func (s *CanonicalDBService) RunMaintenance(ctx context.Context) {
 func (s *CanonicalDBService) initSchema(secretsDir string) error {
 	_, err := s.db.ExecWithRetry(gatewaySchema)
 	if err != nil {
-		return err
+		return fmt.Errorf("canonicalDB: init schema: %w", err)
 	}
 
 	sm, err := NewSecretManager(s.db, secretsDir, s.logger)
 	if err != nil {
-		return err
+		return fmt.Errorf("canonicalDB: init schema: secret manager: %w", err)
 	}
 	if err := sm.InitAppSettings(); err != nil {
-		return err
+		return fmt.Errorf("canonicalDB: init schema: app settings: %w", err)
 	}
 
 	return nil

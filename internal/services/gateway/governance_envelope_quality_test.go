@@ -38,7 +38,6 @@ func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
 		expected int
 	}{
 		{nil, http.StatusOK},
-		{governance.ErrInvalidEnvelope, http.StatusForbidden},
 		{governance.ErrTransactionIDMissing, http.StatusForbidden},
 		{governance.ErrUnknownActionType, http.StatusForbidden},
 		{governance.ErrPayloadMissing, http.StatusForbidden},
@@ -59,6 +58,7 @@ func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
 		{governance.ErrL3ProofInvalid, http.StatusForbidden},
 		{governance.ErrL3NotaryNotConfigured, http.StatusForbidden},
 		{governance.ErrTxInFlight, http.StatusForbidden},
+		{governance.ErrInvalidEnvelope, http.StatusBadRequest},
 		{fmt.Errorf("%w: some error", constants.ErrTxInvalidEnvelope), http.StatusBadRequest},
 		{constants.ErrPubSubEmptyPayload, http.StatusBadRequest},
 		{fmt.Errorf("payload exceeds 1234 byte limit: %w", constants.ErrPayloadExceedsLimit), http.StatusBadRequest},

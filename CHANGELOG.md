@@ -7,8 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* **Secure-Data Agent-Harness Scenarios** — Added `secureDataScenarios` in `internal/tools/agent_harness/scenarios/secure_data.go` with three scenarios: `secure-data-migration` (consensus: governed migration with chain-of-custody receipt), `secure-data-bypass-attempt` (doctrine: direct transfer without GovernanceEnvelope blocked by L1), and `secure-data-cross-tenant` (doctrine: unauthorized tenant envelope rejected by L1).
+* **Healthcare Agent-Harness Scenarios** — Added `healthcare-gold-card` and `healthcare-sla-breach` scenarios in `mcp_a2a.go` for gold-card PA approval and SLA breach reporting through the gateway via mTLS.
+* **Demo Verbose Flag** — Added `-v` / `--verbose` flag to `g8e demos run`. In default (non-verbose) mode, step-by-step command output is suppressed; scenario result lines, results table, and data dump are always shown.
+* **`printDataDump` Function** — Added `printDataDump(demoDir)` in `demos.go` that queries the gateway's mTLS API after all scenarios complete and prints receipts, audit events, summary, ledger files, and gateway logs in tabbed tables. Each section gracefully degrades to `(unavailable)` on error.
+* **`captureCommand` Helper** — Added `captureCommand` in `demos.go` that runs a command and returns stdout as a string (used by `printDataDump`).
+* **`demoPrintln` / `demoPrintf` Helpers** — Added verbose-aware print helpers in `demos.go` that no-op when `!demoVerbose`. Used for scenario step descriptions, `PROVES:` text, and supplementary output.
+* **`runG8EAuditCmd` Helper** — Added `runG8EAuditCmd` in `demos.go` that runs `g8e audit <subcommand>` inside the operator container for demo audit inspection.
+* **`gov_finance_test.go`** — New test file for `govFinanceScenarios` covering scenario registration, title, persona, and registry inclusion tests.
+* **`secure_data_test.go`** — New test file for `secureDataScenarios` covering scenario registration, title, persona, posture, and registry inclusion tests.
+
 ### Changed
 
+* **Shared `harnessConfig` / `harnessRun` Helper** — Extracted shared `harnessConfig` struct, `defaultHarnessConfig()`, and `harnessRun()` into `demos.go`. All demos (gov, finance, healthcare, secure-data, DoW, DHS) now use the shared helper. DoW uses `UseRun: true` for `docker compose run --rm` mode. DHS `dhsHarnessConfig`/`dhsHarnessRun` are thin aliases delegating to the shared helpers.
+* **Healthcare Demo Rewritten** — Scenarios 2–3 now run `healthcare-gold-card` and `healthcare-sla-breach` agent-harness scenarios through the gateway via mTLS. Scenario 1 fallback backdoor removed — fails properly if gateway path fails. `agent-runtime` in `healthcare/compose.yml` now builds from root Dockerfile (no bind-mounted host binary). Runtime `pip install requests` removed from `metabase-setup` command.
+* **Secure-Data Demo Rewritten** — `connector-rclone` and `connector-sharepoint` containers replaced with a single `agent-runtime` container built from root Dockerfile. All 3 scenarios now use `harnessRun` to submit real GovernanceEnvelopes via mTLS. Raw `curl -X POST` backdoor removed from scenario 3.
+* **DoW Demo Rewritten** — Scenario 2 now runs `dow-bft-veto` agent-harness scenario via `harnessRun` with `UseRun: true`, submitting a real GovernanceEnvelope with spoofed GNSS data (L2 decision=false). Scenarios 1 & 3 converted from inline `docker compose run` to shared `harnessRun` helper.
+* **DHS Scenario 2 — SQLite Backdoor Removed** — Replaced direct `docker compose exec sqlite3` query with `GET /api/v1/approvals/pending` gateway API call (mTLS-authenticated). Added `extractFirstTxHash` helper to parse JSON response.
+* **Demo Output Redesigned** — `demoStep` now suppresses stdout/stderr when `!demoVerbose`. `fmt.Println`/`fmt.Printf` calls for step descriptions replaced with `demoPrintln`/`demoPrintf` across all scenario files. In non-verbose mode, output is: scenario number + name + PASS/FAIL, followed by results table and data dump.
+* **Copy-Paste Inspection Blocks Replaced** — All "Copy-paste to inspect..." blocks in `demos.go`, `demo_dow.go`, `demo_dhs.go`, and `demo_healthcare.go` replaced with `g8e audit receipts | g8e audit events | g8e audit summary` references (shown only in verbose mode).
+* **`demosAuditCmd` Updated** — `gateway-db` and `operator-db` actions replaced with `receipts`, `events`, `summary` actions that run `g8e audit <subcommand>` inside the operator container via `runG8EAuditCmd`. `ledger-*` and `vault` actions retained as-is.
 * **Removed Unused llm-backend Containers** — Removed the placeholder `llm-backend` service (Alpine `sleep 3600` loop) from `demos/gov/compose.yml`, `demos/finance/compose.yml`, and `demos/healthcare/compose.yml`. These containers were unused display-only placeholders with no integration to the g8e platform.
 * **Demos README Service Placement Table** — Removed LLM backend row from the service placement table. Updated invariant #5 to reflect that all `agent-runtime` containers now build from the root Dockerfile with `sleep infinity` entrypoint for exec-based agent-harness invocation (no bind-mounted binaries).
 
@@ -17,7 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added `TestDefaultHarnessConfig` and `TestHarnessRun` unit tests in `demos_test.go` covering exec mode, run mode, consensus seed/tribunal ID flags, ensemble/L3-mode omission, and scenario-as-last-argument.
 * Added `TestDemoScenarioFilesCallHarnessRun` source-file assertion test verifying every demo scenario file (`demo_gov.go`, `demo_finance.go`, `demo_healthcare.go`, `demo_secure_data.go`, `demo_dow.go`, `demo_dhs.go`) calls `harnessRun` to submit real GovernanceEnvelopes.
 * Added `TestNoGatewayBypassInDemoFiles` source-file assertion test verifying no demo scenario file uses `curl -X POST` or `curl --request POST` to bypass the gateway.
-* Added `TestNoSqliteBackdoorInDemoFiles` source-file assertion test verifying no demo scenario file directly accesses SQLite databases.
+* Split `TestNoSqliteBackdoorInDemoFiles` into `TestNoSqliteBackdoorInScenarioFiles` (asserts no scenario file references `sqlite3` at all — stricter than before) and `TestSqliteOnlyInAuditCmdVaultAction` (asserts `sqlite3` appears only in `runDemosAudit` in `demos.go`, never via `exec.Command("sqlite3"`).
+* Added `TestNoCopyPasteInScenarioFiles` source-file assertion test verifying no scenario file prints "Copy-paste to inspect", "Copy-paste to query", or "Copy-paste to confirm" text.
+* Added `TestCaptureCommand` (echo output, non-existent command, empty output, multi-line output), `TestDemoPrintln` (no-op when `!demoVerbose`, non-panic when `demoVerbose`), `TestRunG8EAuditCmd` (function exists, returns error when demo not running), and `TestPrintDataDump` (function exists, does not panic with non-existent demo dir) in `demos_test.go`.
+* Added `gov_finance_test.go` with scenario registration, title, persona, and registry inclusion tests for `gov-cui-exfil-block` and `finance-unauthorized-trade`.
+* Added `secure_data_test.go` with scenario registration, title, persona, posture, and registry inclusion tests for all three secure-data scenarios.
 
 ---
 
