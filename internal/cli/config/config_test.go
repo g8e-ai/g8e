@@ -423,7 +423,7 @@ func TestLoadWithPaths(t *testing.T) {
 
 	t.Run("resolves absolute paths as-is", func(t *testing.T) {
 		tempDir := t.TempDir()
-		absPath := "/absolute/path/to/cert.pem"
+		absPath := filepath.Join(t.TempDir(), "absolute", "path", "to", "cert.pem")
 
 		customPaths := DefaultInfraPaths()
 		customPaths.Infra.CACertPath = absPath
@@ -518,7 +518,7 @@ func TestResolveInfraPaths(t *testing.T) {
 
 	t.Run("preserves absolute paths unchanged", func(t *testing.T) {
 		projectRoot := "/project/root"
-		absPath := "/absolute/path"
+		absPath := filepath.Join(os.TempDir(), "absolute")
 		paths := &PathsConfig{
 			Infra: struct {
 				AppCertDir           string `json:"app_cert_dir"`

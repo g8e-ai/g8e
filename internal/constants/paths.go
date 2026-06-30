@@ -65,22 +65,14 @@ const (
 	PathProc                                                  = "/proc"
 	PathSys                                                   = "/sys"
 	PathDev                                                   = "/dev"
-	PathDevNull                                               = "/dev/null"
-	PathDevZero                                               = "/dev/zero"
 	PathVar                                                   = "/var"
-	PathVarLib                                                = "/var/lib"
-	PathVarLog                                                = "/var/log"
 	PathVarLogDmesg                                           = "/var/log/dmesg"
-	PathVarWWW                                                = "/var/www"
 	PathTmp                                                   = "/tmp"
-	PathOpt                                                   = "/opt"
 	PathHome                                                  = "/home"
 	PathEtcHostname                                           = "/etc/hostname"
 	PathEtcMachineID                                          = "/etc/machine-id"
 	PathVarLibDbusMachineID                                   = "/var/lib/dbus/machine-id"
 	PathProcSysKernelRandomBootID                             = "/proc/sys/kernel/random/boot_id"
-	PathProcSelfCgroup                                        = "/proc/self/cgroup"
-	PathProcSelfMountinfo                                     = "/proc/self/mountinfo"
 	PathProcMounts                                            = "/proc/mounts"
 	PathProcLoadAvg                                           = "/proc/loadavg"
 	PathProcMemInfo                                           = "/proc/meminfo"
@@ -239,9 +231,8 @@ const (
 
 // Project root discovery constants for test path initialization
 const (
-	ProjectRootFromTestDir    = "../../"
-	ProjectRootFromCurrentDir = "."
-	PathCurrentDir            = "."
+	ProjectRootFromTestDir = "../../"
+	PathCurrentDir         = "."
 
 	// Directory names (single path segment, no separators)
 	RuntimeDirname           = ".g8e"
@@ -280,8 +271,8 @@ const (
 	AuditVaultDBFilename     = "audit_vault.db"
 
 	// Full relative storage DB paths (relative to project root, used as config defaults)
-	ReplayStoreDBPath          = RuntimeDirname + "/replay_store.db"
-	ExecutionVaultDBPath       = RuntimeDirname + "/execution_vault.db"
+	ReplayStoreDBPath          = RuntimeDirname + "/" + ReplayStoreDBFilename
+	ExecutionVaultDBPath       = RuntimeDirname + "/" + ExecutionVaultDBFilename
 	SuspendedTransactionDBPath = RuntimeDirname + "/" + SuspendedTxFilename
 
 	// Agent config directory and file names (relative to home directory)
@@ -309,37 +300,25 @@ const (
 	APIPathPKIDevicesEnroll = "/api/v1/pki/devices/enroll"
 	WellKnownPKICABundle    = "/.well-known/g8e/pki/ca-bundle"
 
-	// Default path descriptions for CLI help text
-	DefaultVaultDirDesc     = ".g8e/vault"
-	DefaultVaultKeyDesc     = ".g8e/secrets/vault.key"
-	DefaultOperatorKeyDesc  = ".g8e/pki/operator.key"
-	DefaultClientKeyDesc    = ".g8e/pki/client.key"
-	DefaultOperatorCertDesc = ".g8e/pki/operator.crt"
-	DefaultClientCertDesc   = ".g8e/pki/client.crt"
+	// Default path descriptions for CLI help text (derived from primitives)
+	DefaultVaultDirDesc     = RuntimeDirname + "/" + VaultDirname
+	DefaultVaultKeyDesc     = RuntimeDirname + "/" + SecretsDirname + "/" + VaultKeyFilename
+	DefaultOperatorKeyDesc  = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorKey
+	DefaultClientKeyDesc    = RuntimeDirname + "/" + PkiDirname + "/" + CliKeyFilename
+	DefaultOperatorCertDesc = RuntimeDirname + "/" + PkiDirname + "/" + PkiFileOperatorCert
+	DefaultClientCertDesc   = RuntimeDirname + "/" + PkiDirname + "/" + CliCertFilename
 
 	// Default path constants for CLI config (relative paths)
 	DefaultDataDir    = RuntimeDirname + "/" + DataDirname
 	DefaultPKIDir     = RuntimeDirname + "/" + PkiDirname
 	DefaultSecretsDir = RuntimeDirname + "/" + SecretsDirname
 
-	// Test-specific filename constants (for isolated test environments)
-	TestEmptyMachineIDFilename = "empty-machine-id"
-	TestDBSubdirName           = "db"
-	TestLedgerDirname          = "ledger"
-	TestGitDirname             = ".git"
-	TestFileTxtFilename        = "test.txt"
-	TestNonexistentTxtFilename = "nonexistent.txt"
-	TestResultsDirname         = "test-results"
-
-	// Test-specific directory names
-	TestVaultDirname             = "test-vault"
-	TestProtocolDirname          = "protocol"
-	TestProtocolConstantsDirname = "constants"
-	TestDocsDirname              = "docs"
-
-	// Test-specific database filenames
-	TestLocalStateDBFilename    = "local_state.db"
-	TestAuditVaultDBFilename    = "audit_vault.db"
+	// Test-specific constants (truly test-only values that differ from production)
+	TestEmptyMachineIDFilename  = "empty-machine-id"
+	TestFileTxtFilename         = "test.txt"
+	TestNonexistentTxtFilename  = "nonexistent.txt"
+	TestResultsDirname          = "test-results"
+	TestVaultDirname            = "test-vault"
 	TestSecretManagerDBFilename = "secret_manager_test.db"
 	TestCertFilename            = "test-cert.pem"
 	TestKeyFilename             = "test-key.pem"

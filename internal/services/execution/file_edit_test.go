@@ -510,7 +510,7 @@ func TestFileEditService_ExecuteFileEdit_Patch(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, operatorv1.ExecutionStatus_EXECUTION_STATUS_FAILED, result.Status)
-		assert.Contains(t, result.ErrorMessage, "no such file or directory")
+		assert.Contains(t, result.ErrorMessage, constants.ErrPathNotFound.Error())
 	})
 }
 

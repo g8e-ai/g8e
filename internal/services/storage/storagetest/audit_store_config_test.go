@@ -39,7 +39,7 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 	// Default DataDir is now a relative path - caller must resolve based on workDir
 	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
-	assert.Equal(t, constants.TestLedgerDirname, config.LedgerDir)
+	assert.Equal(t, constants.LedgerDirname, config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)
 	assert.Equal(t, 90, config.RetentionDays)
 	assert.Equal(t, 102400, config.OutputTruncationThreshold)
@@ -62,7 +62,7 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 constants.TestLedgerDirname,
+		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -79,14 +79,14 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 
 	// Verify directory structure was created
 	assert.DirExists(t, tempDir)
-	assert.DirExists(t, filepath.Join(tempDir, constants.TestLedgerDirname))
-	assert.DirExists(t, filepath.Join(tempDir, constants.TestLedgerDirname, "files"))
+	assert.DirExists(t, filepath.Join(tempDir, constants.LedgerDirname))
+	assert.DirExists(t, filepath.Join(tempDir, constants.LedgerDirname, "files"))
 
 	// Verify database was created
 	assert.FileExists(t, filepath.Join(tempDir, "test.db"))
 
 	// Verify git was initialized
-	assert.DirExists(t, filepath.Join(tempDir, constants.TestLedgerDirname, constants.TestGitDirname))
+	assert.DirExists(t, filepath.Join(tempDir, constants.LedgerDirname, constants.GitDirname))
 
 	assert.Equal(t, tempDir, avs.GetDataDir())
 }
@@ -104,7 +104,7 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 constants.TestLedgerDirname,
+		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -137,7 +137,7 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 constants.TestLedgerDirname,
+		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -151,7 +151,7 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 	defer avs.Close()
 
 	ledgerPath := avs.GetLedgerPath()
-	assert.Contains(t, ledgerPath, constants.TestLedgerDirname)
+	assert.Contains(t, ledgerPath, constants.LedgerDirname)
 	assert.DirExists(t, ledgerPath)
 
 	// Nil service
@@ -185,7 +185,7 @@ func TestSQLAuditStore_DefaultConfig(t *testing.T) {
 	config := DefaultTestSQLAuditStoreConfig()
 	assert.Equal(t, ".g8e/data", config.DataDir)
 	assert.Equal(t, "g8e.db", config.DBPath)
-	assert.Equal(t, constants.TestLedgerDirname, config.LedgerDir)
+	assert.Equal(t, constants.LedgerDirname, config.LedgerDir)
 	assert.Equal(t, int64(2048), config.MaxDBSizeMB)
 	assert.Equal(t, 90, config.RetentionDays)
 }
@@ -241,7 +241,7 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 constants.TestLedgerDirname,
+		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
@@ -274,7 +274,7 @@ func TestSQLAuditStore_WALMode(t *testing.T) {
 	config := &TestSQLAuditStoreConfig{
 		DataDir:                   tempDir,
 		DBPath:                    "test.db",
-		LedgerDir:                 constants.TestLedgerDirname,
+		LedgerDir:                 constants.LedgerDirname,
 		MaxDBSizeMB:               100,
 		RetentionDays:             7,
 		PruneIntervalMinutes:      60,
