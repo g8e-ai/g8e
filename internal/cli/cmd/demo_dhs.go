@@ -32,10 +32,6 @@ func runDHSScenario(demoDir, scenario string) error {
 	return err
 }
 
-// dhsHarnessConfig is a backward-compatible alias for harnessConfig.
-// Kept so existing DHS scenario code doesn't need to change all call sites.
-type dhsHarnessConfig = harnessConfig
-
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
 func defaultDHSHarnessConfig() harnessConfig {
 	cfg := defaultHarnessConfig("agent-coalition")
