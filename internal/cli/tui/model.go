@@ -68,7 +68,6 @@ type Model struct {
 
 	// Status
 	quitting bool
-	err      error
 }
 
 // NewModel constructs a Model with all pipeline stages idle and tribunal

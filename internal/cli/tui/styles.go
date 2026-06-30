@@ -23,7 +23,6 @@ var (
 	colorPassed   = lipgloss.Color("34")  // muted green
 	colorWaiting  = lipgloss.Color("226") // bright yellow
 	colorCritical = lipgloss.Color("196") // bright red
-	colorBgCrit   = lipgloss.Color("52")  // dark red background
 	colorApprove  = lipgloss.Color("34")  // green
 	colorVeto     = lipgloss.Color("196") // red
 	colorPending  = lipgloss.Color("245") // gray
@@ -51,10 +50,6 @@ var (
 
 // Text styles.
 var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(colorHeader)
-
 	pipelineHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(colorHeader).
@@ -100,9 +95,6 @@ var (
 			Foreground(colorCritical).
 			Bold(true)
 
-	tribunalMemberStyle = lipgloss.NewStyle().
-				Padding(0, 1)
-
 	tribunalApproveStyle = lipgloss.NewStyle().
 				Foreground(colorApprove).
 				Bold(true)
@@ -128,9 +120,6 @@ var (
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
-	errorStyle = lipgloss.NewStyle().
-			Foreground(colorCritical).
-			Bold(true)
 )
 
 // statusIcon returns the display icon for a pipeline stage status.
