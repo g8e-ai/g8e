@@ -234,6 +234,7 @@ const (
 	DemosSecureDataDoctrineFile = "secure_data_transfer_doctrine.json"
 	DemosDoWDoctrineFile        = "dow_tactical_doctrine.json"
 	DemosDHSDoctrineFile        = "dhs_sovereign_doctrine.json"
+	DemosSwarmDoctrineFile      = "drone_operations_doctrine.json"
 	DemosOrgHealthcare          = "healthcare"
 	DemosOrgFinance             = "finance"
 	DemosOrgGov                 = "gov"

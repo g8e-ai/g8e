@@ -763,6 +763,7 @@ var scenarioCounts = map[string]int{
 	constants.DemosOrgSecureData: 3,
 	constants.DemosOrgDoW:        3,
 	constants.DemosOrgDHS:        5,
+	constants.DemosOrgSwarm:      3,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -796,7 +797,11 @@ Available scenarios:
     2 - Cross-Domain Release requires Notary authority (LOE 1 & 2)
     3 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
     4 - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
-    5 - Sovereign Destruction + tamper-proof audit (LOE 2)`,
+    5 - Sovereign Destruction + tamper-proof audit (LOE 2)
+  swarm: 1-3
+    1 - Authorized Recon Mission (Governed Drone Deployment)
+    2 - Weapons Safety Doctrine Block
+    3 - Navigation Boundary Violation Block`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDemosRun(cmd, args, useTUI)
@@ -973,6 +978,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runDoWScenarioWithResult(demoDir, scenario)
 	case constants.DemosOrgDHS:
 		return runDHSScenarioWithResult(demoDir, scenario)
+	case constants.DemosOrgSwarm:
+		return runSwarmScenarioWithResult(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}

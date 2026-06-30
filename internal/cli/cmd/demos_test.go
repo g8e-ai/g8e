@@ -228,10 +228,11 @@ func TestScenarioCounts(t *testing.T) {
 		assert.Equal(t, 3, scenarioCounts["secure-data"])
 		assert.Equal(t, 3, scenarioCounts["dow"])
 		assert.Equal(t, 5, scenarioCounts["dhs"])
+		assert.Equal(t, 3, scenarioCounts["swarm"])
 	})
 
 	t.Run("scenario counts map has expected entries", func(t *testing.T) {
-		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs"}
+		expectedOrgs := []string{"healthcare", "gov", "finance", "secure-data", "dow", "dhs", "swarm"}
 		for _, org := range expectedOrgs {
 			_, exists := scenarioCounts[org]
 			assert.True(t, exists, "scenarioCounts should have entry for %s", org)
@@ -446,6 +447,13 @@ func TestRunScenario(t *testing.T) {
 		assert.Contains(t, err.Error(), "valid: 1-5")
 	})
 
+	t.Run("returns error for invalid swarm scenario", func(t *testing.T) {
+		err := runSwarmScenario("/tmp", "99")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid scenario number for swarm")
+		assert.Contains(t, err.Error(), "valid: 1-3")
+	})
+
 	t.Run("healthcare scenario functions exist", func(t *testing.T) {
 		// Verify the scenario function exists and doesn't panic on valid input
 		// We don't execute it since it requires Docker
@@ -506,6 +514,12 @@ func TestRunAllScenarios(t *testing.T) {
 
 	t.Run("dow has 3 scenarios", func(t *testing.T) {
 		count, ok := scenarioCounts["dow"]
+		assert.True(t, ok)
+		assert.Equal(t, 3, count)
+	})
+
+	t.Run("swarm has 3 scenarios", func(t *testing.T) {
+		count, ok := scenarioCounts["swarm"]
 		assert.True(t, ok)
 		assert.Equal(t, 3, count)
 	})
@@ -749,6 +763,7 @@ func TestDemoScenarioFilesCallHarnessRun(t *testing.T) {
 		"demo_secure_data.go",
 		"demo_dow.go",
 		"demo_dhs.go",
+		"demo_swarm.go",
 	}
 
 	for _, file := range demoFiles {
@@ -772,6 +787,7 @@ func TestNoGatewayBypassInDemoFiles(t *testing.T) {
 		"demo_secure_data.go",
 		"demo_dow.go",
 		"demo_dhs.go",
+		"demo_swarm.go",
 	}
 
 	for _, file := range demoFiles {
@@ -797,6 +813,7 @@ func TestNoSqliteBackdoorInScenarioFiles(t *testing.T) {
 		"demo_secure_data.go",
 		"demo_dow.go",
 		"demo_dhs.go",
+		"demo_swarm.go",
 	}
 
 	for _, file := range scenarioFiles {
@@ -852,6 +869,7 @@ func TestNoCopyPasteInScenarioFiles(t *testing.T) {
 		"demo_secure_data.go",
 		"demo_dow.go",
 		"demo_dhs.go",
+		"demo_swarm.go",
 	}
 
 	for _, file := range scenarioFiles {
