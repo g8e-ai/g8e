@@ -362,6 +362,9 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
 - `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with tribunal consensus
 - `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
+- `scenarios/gov_finance.go` - Gov/finance doctrine scenarios: `gov-cui-exfil-block` and `finance-unauthorized-trade`
+- `scenarios/secure_data.go` - Secure-data scenarios: `secure-data-migration` (consensus), `secure-data-bypass-attempt` (doctrine), `secure-data-cross-tenant` (doctrine)
+- `scenarios/swarm.go` - Swarm scenarios: `swarm-recon-mission` (consensus: governed drone deployment), `swarm-weapon-release-block` (doctrine: weapon release blocked), `swarm-restricted-airspace-block` (doctrine: restricted airspace blocked)
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 
 **`demos/dow/`** - Department of War tactical edge demo
@@ -399,4 +402,5 @@ The following packages are test-only and are not part of the production dependen
 - `demo_secure_data.go` - Secure-data demo scenarios (3 scenarios, each calls `harnessRun`)
 - `demo_dow.go` - DoW demo scenarios (3 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `ensureDHSPosture` helpers.
+- `demo_swarm.go` - Swarm demo scenarios (3 scenarios, each calls `harnessRun`): authorized recon mission, weapons safety doctrine block, navigation boundary violation block.
 - `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, and source-file assertions (harnessRun usage, no curl POST bypass, no sqlite3 backdoor, no copy-paste blocks). Phase 6 tests: `TestCaptureCommand`, `TestDemoPrintln`, `TestRunG8EAuditCmd`, `TestPrintDataDump`, `TestNoSqliteBackdoorInScenarioFiles`, `TestSqliteOnlyInAuditCmdVaultAction`, `TestNoCopyPasteInScenarioFiles`.

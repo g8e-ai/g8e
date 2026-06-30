@@ -15,8 +15,8 @@ func TestSwarmScenarios(t *testing.T) {
 	}
 
 	expectedNames := map[string]bool{
-		"swarm-recon-mission":           true,
-		"swarm-weapon-release-block":    true,
+		"swarm-recon-mission":             true,
+		"swarm-weapon-release-block":      true,
 		"swarm-restricted-airspace-block": true,
 	}
 
@@ -34,8 +34,8 @@ func TestSwarmScenarioTitles(t *testing.T) {
 	scenarios := swarmScenarios()
 
 	expectedTitles := map[string]string{
-		"swarm-recon-mission":           "Swarm: authorized recon mission with governed drone deployment",
-		"swarm-weapon-release-block":    "Swarm: unauthorized weapon release blocked by L1 doctrine",
+		"swarm-recon-mission":             "Swarm: authorized recon mission with governed drone deployment",
+		"swarm-weapon-release-block":      "Swarm: unauthorized weapon release blocked by L1 doctrine",
 		"swarm-restricted-airspace-block": "Swarm: restricted airspace navigation blocked by L1 doctrine",
 	}
 
@@ -68,8 +68,8 @@ func TestSwarmScenarioPostures(t *testing.T) {
 	scenarios := swarmScenarios()
 
 	expectedPostures := map[string]Posture{
-		"swarm-recon-mission":           Consensus,
-		"swarm-weapon-release-block":    Doctrine,
+		"swarm-recon-mission":             Consensus,
+		"swarm-weapon-release-block":      Doctrine,
 		"swarm-restricted-airspace-block": Doctrine,
 	}
 

@@ -222,7 +222,10 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run dhs 4` - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
 - `g8e demos run dhs 5` - Sovereign Destruction + tamper-proof audit (LOE 2)
 
-The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
+**Swarm Demo Scenarios:**
+- `g8e demos run swarm 1` - Authorized Recon Mission (Governed Drone Deployment)
+- `g8e demos run swarm 2` - Weapons Safety Doctrine Block
+- `g8e demos run swarm 3` - Navigation Boundary Violation Block
 
 ### Demo Output Format
 

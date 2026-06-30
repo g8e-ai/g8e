@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **`runG8EAuditCmd` Helper** — Added `runG8EAuditCmd` in `demos.go` that runs `g8e audit <subcommand>` inside the operator container for demo audit inspection.
 * **`gov_finance_test.go`** — New test file for `govFinanceScenarios` covering scenario registration, title, persona, and registry inclusion tests.
 * **`secure_data_test.go`** — New test file for `secureDataScenarios` covering scenario registration, title, persona, posture, and registry inclusion tests.
+* **Swarm Demo Integration** — Added `demo_swarm.go` with 3 real scenarios using `harnessRun`: `swarm-recon-mission` (consensus: governed drone deployment), `swarm-weapon-release-block` (doctrine: unauthorized weapon release blocked by L1), and `swarm-restricted-airspace-block` (doctrine: restricted airspace navigation blocked by L1). Added `swarmScenarios` in `internal/tools/agent_harness/scenarios/swarm.go` and registered in `scenario.go`. Added `DemosSwarmDoctrineFile` constant in `paths.go`. Updated `demos/swarm/compose.yml` with `agent-runtime` container and replaced `pip install flask` with Python stdlib `http.server`.
 
 ### Changed
 
@@ -42,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * Added `TestCaptureCommand` (echo output, non-existent command, empty output, multi-line output), `TestDemoPrintln` (no-op when `!demoVerbose`, non-panic when `demoVerbose`), `TestRunG8EAuditCmd` (function exists, returns error when demo not running), and `TestPrintDataDump` (function exists, does not panic with non-existent demo dir) in `demos_test.go`.
 * Added `gov_finance_test.go` with scenario registration, title, persona, and registry inclusion tests for `gov-cui-exfil-block` and `finance-unauthorized-trade`.
 * Added `secure_data_test.go` with scenario registration, title, persona, posture, and registry inclusion tests for all three secure-data scenarios.
+* Added `swarm_test.go` with scenario registration, title, persona, posture, and registry inclusion tests for all three swarm scenarios.
+* Updated `scenario_test.go` registry count and order assertions to include `swarmScenarios()`.
 
 ---
 
