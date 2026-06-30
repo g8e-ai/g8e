@@ -579,7 +579,6 @@ Flags:
       --ca string                gateway CA bundle PEM
       --api-key string           operator API key for MCP/A2A surface
       --operator-session string   scope audit to a specific Operator session
-      --insecure                 skip TLS verify (local dev only)
       --out string               report output dir
       --l3-mode string           mock|suspend
       --ensemble int             mock consensus voters (default 3)
@@ -606,7 +605,6 @@ Flags:
       --ca string                gateway CA bundle PEM
       --api-key string           operator API key
       --operator-session string   operator session id
-      --insecure                 skip TLS verify
       --out string               report output dir
   -h, --help                     help for audit
 ```
@@ -1522,7 +1520,6 @@ Flags:
       --ca string                gateway CA bundle PEM
       --api-key string           operator API key for MCP/A2A surface
       --operator-session string   scope audit to a specific Operator session
-      --insecure                 skip TLS verify (local dev only)
       --out string               report output dir
       --l3-mode string           mock|suspend
       --ensemble int             mock consensus voters (default 3)
@@ -1549,7 +1546,6 @@ Flags:
       --ca string                gateway CA bundle PEM
       --api-key string           operator API key
       --operator-session string   operator session id
-      --insecure                 skip TLS verify
       --out string               report output dir
   -h, --help                     help for audit
 ```

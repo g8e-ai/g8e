@@ -16,15 +16,42 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// tuiDeps holds the injectable dependencies for the TUI command,
+// enabling Tier 1 unit tests to stub external calls.
+type tuiDeps struct {
+	configLoader         func(string) (*config.Config, error)
+	checkOperatorRunning func(*config.Config) error
+	loadCredentials      func(*config.Config) (*auth.Credentials, error)
+	buildMTLSClient      func(*config.Config, time.Duration) (*http.Client, error)
+	tuiRun               func(context.Context, tui.Options) error
+}
+
+func defaultTUIDeps() tuiDeps {
+	return tuiDeps{
+		configLoader:         loadConfig,
+		checkOperatorRunning: auth.CheckOperatorRunning,
+		loadCredentials:      auth.LoadCredentials,
+		buildMTLSClient:      auth.BuildMTLSClient,
+		tuiRun:               tui.Run,
+	}
+}
+
 func tuiCmd() *cobra.Command {
+	return tuiCmdWithDeps(defaultTUIDeps())
+}
+
+func tuiCmdWithDeps(deps tuiDeps) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tui",
 		Short: "Launch the Tactical Governance Console (TUI)",
@@ -41,25 +68,27 @@ Controls:
   k / ↑        Scroll ledger up (older)
   G            Jump to ledger bottom (newest)
   g            Jump to ledger top (oldest)`,
-		RunE: runTUI,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTUI(cmd, args, deps)
+		},
 	}
 
 	return cmd
 }
 
-func runTUI(cmd *cobra.Command, args []string) error {
-	cfg, err := loadConfig("")
+func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
+	cfg, err := deps.configLoader("")
 	if err != nil {
 		return err
 	}
 
 	// Verify the gateway is reachable.
-	if err := auth.CheckOperatorRunning(cfg); err != nil {
+	if err := deps.checkOperatorRunning(cfg); err != nil {
 		return fmt.Errorf("gateway not reachable — start it with 'g8e gw start': %w", err)
 	}
 
 	// Load CLI credentials (must be enrolled).
-	creds, err := auth.LoadCredentials(cfg)
+	creds, err := deps.loadCredentials(cfg)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
@@ -68,7 +97,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	}
 
 	// Build mTLS HTTP client for SSE streaming (no timeout — context-controlled).
-	httpClient, err := auth.BuildMTLSClient(cfg, 0)
+	httpClient, err := deps.buildMTLSClient(cfg, 0)
 	if err != nil {
 		return err
 	}
@@ -85,7 +114,7 @@ func runTUI(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	return tui.Run(ctx, tui.Options{
+	return deps.tuiRun(ctx, tui.Options{
 		Version:    version,
 		NodeName:   creds.OperatorID,
 		NetLabel:   "mTLS",
