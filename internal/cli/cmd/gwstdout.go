@@ -16,13 +16,20 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	cmd.Println("Next Steps:")
 	cmd.Println()
 
-	// Step 1: Enroll CLI credentials (all postures)
-	cmd.Println("  1. Enroll CLI credentials:")
+	// Step 1: Trust the gateway CA (enables trusted HTTPS)
+	cmd.Println("  1. Trust the gateway CA for HTTPS (run on this machine):")
+	cmd.Printf("       curl -fsSL http://%s:%d/bootstrap-ca | sh        (Linux)\n", externalIP, httpPort)
+	cmd.Printf("       curl -fsSL http://%s:%d/bootstrap-ca-macos | sh  (macOS)\n", externalIP, httpPort)
+	cmd.Printf("       irm http://%s:%d/bootstrap-ca.ps1 | iex           (Windows)\n", externalIP, httpPort)
+	cmd.Println()
+
+	// Step 2: Enroll CLI credentials (all postures)
+	cmd.Println("  2. Enroll CLI credentials:")
 	cmd.Printf("       %s auth enroll\n", bin)
 	cmd.Println()
 
-	// Step 2: Posture-specific governance setup
-	stepNum := 2
+	// Step 3: Posture-specific governance setup
+	stepNum := 3
 	switch posture.Name() {
 	case "doctrine":
 		cmd.Printf("  %d. Governance posture: doctrine (L1 enforced, L2/L3 audited)\n", stepNum)
