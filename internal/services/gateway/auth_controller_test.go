@@ -28,7 +28,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/response"
-	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
@@ -53,22 +52,14 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	ks := newTestKeystore(t, secretsDir, logger)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, ks)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
-	os.RemoveAll(secretsDir)
-	os.MkdirAll(secretsDir, 0755)
-
-	keyring, err := keystore.NewMemoryKeyring()
-	require.NoError(t, err)
-	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
-	require.NoError(t, err)
-	require.NoError(t, ks.Initialize())
-	require.NoError(t, ks.EnforcePermissions())
 	sm := &SecretManager{
 		db:         db.db,
-		secretsDir: t.TempDir(),
+		secretsDir: secretsDir,
 		logger:     logger,
 		keystore:   ks,
 	}
@@ -125,7 +116,7 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, t.TempDir(), filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, t.TempDir(), filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

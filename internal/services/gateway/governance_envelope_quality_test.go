@@ -26,53 +26,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
-
-func TestIndexOf(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		s        string
-		sub      string
-		expected int
-	}{
-		{"hello world", "world", 6},
-		{"hello world", "hello", 0},
-		{"hello world", "cat", -1},
-		{"hello world", "", -1},
-		{"", "hello", -1},
-		{"short", "longer-string", -1},
-		{"aaaaa", "aa", 0},
-	}
-
-	for _, tc := range cases {
-		t.Run(fmt.Sprintf("s=%s,sub=%s", tc.s, tc.sub), func(t *testing.T) {
-			require.Equal(t, tc.expected, indexOf(tc.s, tc.sub))
-		})
-	}
-}
-
-func TestContainsAny(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		s        string
-		subs     []string
-		expected bool
-	}{
-		{"hello world", []string{"world", "cat"}, true},
-		{"hello world", []string{"dog", "cat"}, false},
-		{"hello world", []string{""}, false},
-		{"hello world", []string{}, false},
-		{"hello world", []string{"hello"}, true},
-	}
-
-	for _, tc := range cases {
-		t.Run(fmt.Sprintf("s=%s,subs=%v", tc.s, tc.subs), func(t *testing.T) {
-			require.Equal(t, tc.expected, containsAny(tc.s, tc.subs...))
-		})
-	}
-}
 
 func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
 	t.Parallel()
@@ -102,9 +59,9 @@ func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
 		{governance.ErrL3ProofInvalid, http.StatusForbidden},
 		{governance.ErrL3NotaryNotConfigured, http.StatusForbidden},
 		{governance.ErrTxInFlight, http.StatusForbidden},
-		{fmt.Errorf("invalid GovernanceEnvelope: some error"), http.StatusBadRequest},
-		{fmt.Errorf("empty payload"), http.StatusBadRequest},
-		{fmt.Errorf("payload exceeds 1234"), http.StatusBadRequest},
+		{fmt.Errorf("%w: some error", constants.ErrTxInvalidEnvelope), http.StatusBadRequest},
+		{constants.ErrPubSubEmptyPayload, http.StatusBadRequest},
+		{fmt.Errorf("payload exceeds 1234 byte limit: %w", constants.ErrPayloadExceedsLimit), http.StatusBadRequest},
 		{fmt.Errorf("some random error"), http.StatusInternalServerError},
 	}
 

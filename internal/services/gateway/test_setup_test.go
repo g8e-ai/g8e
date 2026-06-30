@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/keystore"
+	"github.com/g8e-ai/g8e/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
@@ -52,6 +53,26 @@ type TestInfrastructure struct {
 	SecretsDir         string
 }
 
+// newTestKeystore creates an initialized keystore using an in-memory keyring.
+// Callers must pass this to OpenCanonicalDBService when testMode is true.
+func newTestKeystore(tb testing.TB, secretsDir string, logger *slog.Logger) *keystore.Keystore {
+	tb.Helper()
+	keyring := keystoretest.NewMemoryKeyring()
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
+	require.NoError(tb, err)
+	require.NoError(tb, ks.Initialize())
+	require.NoError(tb, ks.EnforcePermissions())
+	return ks
+}
+
+// openTestDB wraps OpenCanonicalDBService for tests, creating a keystore
+// with an in-memory keyring so callers don't need to manage testKeystore.
+func openTestDB(t *testing.T, dataDir, secretsDir, vaultDir string, logger *slog.Logger) (*CanonicalDBService, error) {
+	t.Helper()
+	ks := newTestKeystore(t, secretsDir, logger)
+	return OpenCanonicalDBService(dataDir, secretsDir, vaultDir, logger, true, "", false, ks)
+}
+
 // setupTestInfrastructure creates common test infrastructure for gateway tests.
 // It initializes DB, PKI, auth services, and other shared components.
 func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfrastructure {
@@ -63,24 +84,7 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	var ks *keystore.Keystore
-	if resetKeystoreStorage {
-		keyring, err := keystore.NewMemoryKeyring()
-		require.NoError(t, err)
-		ks, err = keystore.NewWithKeyring(secretsDir, logger, keyring)
-		require.NoError(t, err)
-		require.NoError(t, ks.Initialize())
-		require.NoError(t, ks.EnforcePermissions())
-	} else {
-		// Reuse the keystore from shared test storage
-		keyring, err := keystore.NewMemoryKeyring()
-		require.NoError(t, err)
-		ks, err = keystore.NewWithKeyring(secretsDir, logger, keyring)
-		require.NoError(t, err)
-		// Initialize will retrieve the existing master key from shared test storage
-		require.NoError(t, ks.Initialize())
-		require.NoError(t, ks.EnforcePermissions())
-	}
+	ks := newTestKeystore(t, secretsDir, logger)
 
 	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)

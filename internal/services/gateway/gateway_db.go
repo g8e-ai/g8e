@@ -214,31 +214,15 @@ func (s *CanonicalDBService) initTestSchema(secretsDir string, testKeystore *key
 	if err != nil {
 		return err
 	}
-	var ks *keystore.Keystore
-	if testKeystore != nil {
-		ks = testKeystore
-	} else {
-		keyring, err := keystore.NewMemoryKeyring()
-		if err != nil {
-			return err
-		}
-		ks, err = keystore.NewWithKeyring(secretsDir, s.logger, keyring)
-		if err != nil {
-			return err
-		}
-		if err := ks.Initialize(); err != nil {
-			return err
-		}
-		if err := ks.EnforcePermissions(); err != nil {
-			return err
-		}
+	if testKeystore == nil {
+		return errors.New("testKeystore must not be nil in test mode")
 	}
 	sm := &SecretManager{
 		db:                  s.db,
 		secretsDir:          secretsDir,
 		bootstrapDigestPath: filepath.Join(secretsDir, constants.SecretsFileBootstrapDigest),
 		logger:              s.logger,
-		keystore:            ks,
+		keystore:            testKeystore,
 	}
 	if err := sm.InitAppSettings(); err != nil {
 		return err

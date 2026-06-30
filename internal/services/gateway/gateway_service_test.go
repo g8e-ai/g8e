@@ -24,10 +24,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 func TestNewGatewayModeService(t *testing.T) {
@@ -42,7 +45,7 @@ func TestNewGatewayModeService(t *testing.T) {
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
 		t.Parallel()
-		db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger, true, "", false, nil)
+		db, err := openTestDB(t, cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -71,7 +74,7 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	cfg.Gateway.PKIDir = t.TempDir()
 	cfg.Gateway.SecretsDir = t.TempDir()
 
-	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -130,7 +133,7 @@ func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -158,7 +161,7 @@ func TestGatewayModeService_Getters(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -219,7 +222,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := t.TempDir()
 		pkiDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -246,7 +249,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := t.TempDir()
 		pkiDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -273,7 +276,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := t.TempDir()
 		pkiDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -300,7 +303,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		dbDir := t.TempDir()
 		pkiDir := t.TempDir()
 		secretsDir := t.TempDir()
-		db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+		db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
 
@@ -339,7 +342,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -374,7 +377,7 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -441,7 +444,7 @@ func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -478,7 +481,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -505,14 +508,20 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 		err = db.DocStore.DocSet("operators", "op-123", opBytes)
 		require.NoError(t, err)
 
-		// Publish a heartbeat
-		heartbeat := map[string]interface{}{
-			"operator_id": "op-123",
-			"intent_data": map[string]interface{}{
-				"uptime": 12345,
+		// Publish a heartbeat as a protojson-encoded GovernanceEnvelope
+		envelope := &commonv1.GovernanceEnvelope{
+			OperatorId: "op-123",
+			IntentData: &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					"uptime": structpb.NewStructValue(&structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"seconds": structpb.NewNumberValue(12345),
+						},
+					}),
+				},
 			},
 		}
-		heartbeatBytes, err := json.Marshal(heartbeat)
+		heartbeatBytes, err := protojson.Marshal(envelope)
 		require.NoError(t, err)
 
 		ls.handleHeartbeatPublish("test-channel", heartbeatBytes)
@@ -532,10 +541,10 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 
 	t.Run("Missing operator_id returns without write", func(t *testing.T) {
 		t.Parallel()
-		heartbeat := map[string]interface{}{
-			"intent_data": map[string]interface{}{},
+		envelope := &commonv1.GovernanceEnvelope{
+			IntentData: &structpb.Struct{},
 		}
-		heartbeatBytes, err := json.Marshal(heartbeat)
+		heartbeatBytes, err := protojson.Marshal(envelope)
 		require.NoError(t, err)
 
 		// Should not panic
@@ -551,7 +560,7 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -582,7 +591,7 @@ func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
 	dbDir := t.TempDir()
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, nil)
+	db, err := openTestDB(t, dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 

@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -187,7 +186,7 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 
 func TestGovernanceEnvelope_DecodeFailure_Returns400(t *testing.T) {
 	t.Parallel()
-	proc := &fakeEnvelopeProcessor{err: errors.New("invalid GovernanceEnvelope: unexpected token")}
+	proc := &fakeEnvelopeProcessor{err: fmt.Errorf("%w: unexpected token", constants.ErrTxInvalidEnvelope)}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`not-json`)))
@@ -200,7 +199,7 @@ func TestGovernanceEnvelope_DecodeFailure_Returns400(t *testing.T) {
 
 func TestGovernanceEnvelope_OversizedPayload_Returns400(t *testing.T) {
 	t.Parallel()
-	proc := &fakeEnvelopeProcessor{err: errors.New("payload exceeds 1048576 byte limit")}
+	proc := &fakeEnvelopeProcessor{err: fmt.Errorf("payload exceeds 1048576 byte limit: %w", constants.ErrPayloadExceedsLimit)}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))

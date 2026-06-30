@@ -87,6 +87,7 @@ var (
 	ErrKeyStoreDeleteFile         = errors.New("failed to delete secret file")
 	ErrKeyStoreChmodDir           = errors.New("failed to chmod secrets directory")
 	ErrKeyStoreChmodFile          = errors.New("failed to chmod secret file")
+	ErrKeyStorePurgeFailed        = errors.New("purge failed with one or more errors")
 
 	// Ledger errors
 	ErrLedgerDisabled       = errors.New("ledger is disabled")
@@ -346,6 +347,7 @@ var (
 
 	// PubSub service errors
 	ErrPubSubEmptyPayload                 = errors.New("empty payload")
+	ErrPayloadExceedsLimit                = errors.New("payload exceeds maximum size limit")
 	ErrPubSubTransactionVerifier          = errors.New("transaction verifier not configured")
 	ErrPubSubActuator                     = errors.New("actuator not configured")
 	ErrPubSubL4Warden                     = errors.New("L4Warden not configured")

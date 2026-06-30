@@ -14,7 +14,6 @@
 package gateway
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -161,7 +160,7 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 	// Skip identity binding if no TLS is present (test mode)
 	if r.TLS != nil {
 		if err := verifyEnvelopeIdentityBinding(r, body); err != nil {
-			h.responder.Error(w, http.StatusForbidden, fmt.Errorf("handleGovernanceEnvelope: %w: %w", constants.ErrIdentityBindingFailed, err).Error())
+			h.responder.Error(w, http.StatusForbidden, fmt.Errorf("handleGovernanceEnvelope: identity binding: %w", err).Error())
 			return
 		}
 	}
@@ -186,21 +185,19 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 }
 
 // classifyEnvelopeError maps a governance verification error to an HTTP status.
-// Decode failures are 400 (malformed input); all governance sentinel errors
-// are 403 (caller-side proof failures); anything else is 500.
+// Caller-side bad input (decode failures, empty/oversized payloads) maps to 400;
+// all governance sentinel errors are 403 (caller-side proof failures);
+// anything else is 500.
 func classifyEnvelopeError(err error) int {
 	if err == nil {
 		return http.StatusOK
 	}
-	// Decode failures are caller-side bad input.
-	var jsonErr *json.SyntaxError
-	if errors.As(err, &jsonErr) {
-		return http.StatusBadRequest
-	}
-	msg := err.Error()
 	switch {
-	case errors.Is(err, constants.ErrTxInvalidEnvelope),
-		errors.Is(err, constants.ErrTxTransactionIDMissing),
+	case errors.Is(err, constants.ErrPubSubEmptyPayload),
+		errors.Is(err, constants.ErrPayloadExceedsLimit),
+		errors.Is(err, constants.ErrTxInvalidEnvelope):
+		return http.StatusBadRequest
+	case errors.Is(err, constants.ErrTxTransactionIDMissing),
 		errors.Is(err, constants.ErrTxUnknownActionType),
 		errors.Is(err, constants.ErrTxPayloadMissing),
 		errors.Is(err, constants.ErrTxPayloadDecodeFailed),
@@ -224,35 +221,5 @@ func classifyEnvelopeError(err error) int {
 		errors.Is(err, constants.ErrTxInFlight):
 		return http.StatusForbidden
 	}
-	// Wrapped invalid-envelope decode error from ProcessEnvelope.
-	if len(msg) > 0 && (containsAny(msg, "invalid GovernanceEnvelope", "empty payload", "payload exceeds")) {
-		return http.StatusBadRequest
-	}
 	return http.StatusInternalServerError
-}
-
-func containsAny(s string, subs ...string) bool {
-	for _, sub := range subs {
-		if len(sub) == 0 {
-			continue
-		}
-		if indexOf(s, sub) >= 0 {
-			return true
-		}
-	}
-	return false
-}
-
-// indexOf is a tiny dependency-free substring index to avoid pulling strings
-// just for two predicates inside a status classifier.
-func indexOf(s, sub string) int {
-	if len(sub) == 0 || len(s) < len(sub) {
-		return -1
-	}
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
 }

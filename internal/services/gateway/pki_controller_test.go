@@ -43,7 +43,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
-	"github.com/g8e-ai/g8e/internal/services/keystore"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
@@ -78,24 +77,14 @@ func setupTestPKIController(t *testing.T) (*PKIController, *config.Config, *Cano
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, nil)
+	ks := newTestKeystore(t, secretsDir, logger)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err, "failed to open gateway DB service")
 	t.Cleanup(func() { db.Close() })
 
-	require.NoError(t, os.RemoveAll(secretsDir), "failed to clean secrets dir")
-	require.NoError(t, os.MkdirAll(secretsDir, 0755), "failed to create secrets dir")
-
-	keyring, err := keystore.NewMemoryKeyring()
-	require.NoError(t, err, "failed to create test keystore keyring")
-
-	ks, err := keystore.NewWithKeyring(t.TempDir(), logger, keyring)
-	require.NoError(t, err, "failed to create keystore")
-	require.NoError(t, ks.Initialize(), "failed to initialize keystore")
-	require.NoError(t, ks.EnforcePermissions(), "failed to enforce keystore permissions")
-
 	sm := &SecretManager{
 		db:         db.db,
-		secretsDir: t.TempDir(),
+		secretsDir: secretsDir,
 		logger:     logger,
 		keystore:   ks,
 	}
