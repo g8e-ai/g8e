@@ -168,17 +168,13 @@ func (bs *BootstrapService) requestHTTPAuth(ctx context.Context) (*BootstrapConf
 		return nil, fmt.Errorf("%w: %w", constants.ErrBootstrapRequestMarshal, err)
 	}
 
-	// Use g8e.local for the hostname when endpoint is an IP address to match TLS ServerName
-	hostname := bs.config.Endpoint
-	if bs.config.TLSServerName != "" {
-		hostname = bs.config.TLSServerName
-	}
-	// Use the HTTPS port for the authentication URL
+	// Use the endpoint IP for the TCP connection; TLS ServerName is already
+	// set on the HTTP client's TLS config (g8e.local) so the cert validates.
 	httpsPort := bs.config.HTTPSPort
 	if httpsPort == 0 {
 		httpsPort = constants.Ports.OperatorHttps
 	}
-	authURL := fmt.Sprintf("https://%s:%d/api/v1/operators/reauth", hostname, httpsPort)
+	authURL := fmt.Sprintf("https://%s:%d/api/v1/operators/reauth", bs.config.Endpoint, httpsPort)
 
 	var lastErr error
 	delay := bootstrapBaseDelay
