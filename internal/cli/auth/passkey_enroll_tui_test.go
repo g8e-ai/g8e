@@ -46,7 +46,9 @@ func TestEnrollModelUpdate(t *testing.T) {
 		m := newEnrollModel("http://localhost")
 		next, cmd := m.Update(passkeyRegisteredMsg{})
 		assert.True(t, next.(enrollModel).done)
-		assert.Equal(t, tea.Quit, cmd)
+		assert.NotNil(t, cmd)
+		_, ok := cmd().(tea.QuitMsg)
+		assert.True(t, ok, "cmd should return tea.QuitMsg")
 	})
 
 	t.Run("enrollErrMsg sets err and quits", func(t *testing.T) {
@@ -54,20 +56,26 @@ func TestEnrollModelUpdate(t *testing.T) {
 		m := newEnrollModel("http://localhost")
 		next, cmd := m.Update(enrollErrMsg{err: testErr})
 		assert.Equal(t, testErr, next.(enrollModel).err)
-		assert.Equal(t, tea.Quit, cmd)
+		assert.NotNil(t, cmd)
+		_, ok := cmd().(tea.QuitMsg)
+		assert.True(t, ok, "cmd should return tea.QuitMsg")
 	})
 
 	t.Run("q key quits", func(t *testing.T) {
 		m := newEnrollModel("http://localhost")
 		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-		assert.Equal(t, tea.Quit, cmd)
+		assert.NotNil(t, cmd)
+		_, ok := cmd().(tea.QuitMsg)
+		assert.True(t, ok, "cmd should return tea.QuitMsg")
 		_ = next
 	})
 
 	t.Run("ctrl+c quits", func(t *testing.T) {
 		m := newEnrollModel("http://localhost")
 		next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-		assert.Equal(t, tea.Quit, cmd)
+		assert.NotNil(t, cmd)
+		_, ok := cmd().(tea.QuitMsg)
+		assert.True(t, ok, "cmd should return tea.QuitMsg")
 		_ = next
 	})
 

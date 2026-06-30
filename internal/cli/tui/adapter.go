@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -46,13 +47,50 @@ func NewAdapter(sseURL, token string, program *tea.Program, client *http.Client)
 
 // Run starts the adapter goroutine. It connects to the SSE stream and
 // translates events into tea.Msg values until the context is cancelled.
+// It emits ConnStatusMsg to keep the TUI informed about connection state.
 func (a *Adapter) Run(ctx context.Context) {
-	a.sseClient.Run(ctx, func(eventType, data string) {
-		msg := translateSSEEvent(eventType, data)
-		if msg != nil {
-			a.program.Send(msg)
+	if a.sseClient == nil || a.program == nil {
+		return
+	}
+
+	a.program.Send(ConnStatusMsg{Status: ConnConnecting})
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
 		}
-	})
+
+		err := a.sseClient.ConnectOnce(ctx, func(eventType, data string) {
+			msg := translateSSEEvent(eventType, data)
+			if msg != nil {
+				a.program.Send(msg)
+			}
+		})
+		if err == nil {
+			return
+		}
+
+		a.program.Send(ConnStatusMsg{Status: ConnReconnecting, Detail: err.Error()})
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(3 * time.Second):
+		}
+
+		a.program.Send(ConnStatusMsg{Status: ConnConnecting})
+	}
+}
+
+// NotifyConnected sends a ConnConnected message to the program. Called by
+// the SSE client wrapper when the first event is received.
+func (a *Adapter) NotifyConnected() {
+	if a.program == nil {
+		return
+	}
+	a.program.Send(ConnStatusMsg{Status: ConnConnected})
 }
 
 // translateSSEEvent maps an SSE event_type + data payload to a tea.Msg.

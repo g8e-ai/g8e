@@ -59,6 +59,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ConsensusMsg:
 		m = m.applyConsensusMsg(msg)
 
+	case ConnStatusMsg:
+		m.connStatus = msg.Status
+		m.connDetail = msg.Detail
+
 	case TickMsg:
 		m.blinkOn = !m.blinkOn
 		if m.hasBlinkingState() {

@@ -503,7 +503,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		require.NoError(t, err)
 		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
 
-		sseStore := NewSSEEventService(db, logger)
+		sseStore := NewSSEEventService(db.GetDB(), logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
 		handler.SetSSEDependencies(sseStore, pubsub)
@@ -536,7 +536,7 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 
 		handler.emitPasskeyRegisteredSSE(userID, cliSessionID)
 
-		sseStore := NewSSEEventService(db, logger)
+		sseStore := NewSSEEventService(db.GetDB(), logger)
 		route := SSERoute{CLISessionID: cliSessionID}
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)

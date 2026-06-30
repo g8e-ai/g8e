@@ -28,7 +28,14 @@ func Run(ctx context.Context, opts Options) error {
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	adapter := NewAdapter(opts.SSEURL, opts.Token, p, opts.HTTPClient)
-	go adapter.Run(ctx)
+
+	// Wrap the event handler to emit ConnConnected on first event.
+	go func() {
+		if opts.SSEURL == "" {
+			return
+		}
+		adapter.Run(ctx)
+	}()
 
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("tui: run: %w", err)

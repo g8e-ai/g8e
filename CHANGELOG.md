@@ -149,7 +149,7 @@ v1.3.0 is a layered authorization and architectural remediation release. This ve
 ### Changed
 
 * **Passkey Unification** — Eliminated duplicate login path (`handlePublicAuthLoginVerify`) and unified cookie creation via `setWebSessionCookie` helper. Fixed IDOR vulnerabilities in `ListCredentials`, `RevokeCredential`, and `handleListSuspendedTransactions`. Fixed `readBody` nil `ResponseWriter` bug in `AuthController`.
-* **Unified CLI Enrollment** — `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens console UI for passkey registration and polls `VerifyPasskeyRegistration` (mTLS) until complete.
+* **Unified CLI Enrollment** — `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens console UI for passkey registration and subscribes to an SSE stream (`passkey.registered` event) via a shared `sse.Client` with mTLS, eliminating polling. `VerifyPasskeyRegistration` is retained for the agent launch path (`mcp.go`) with the `X-G8E-CLI-Session-ID` header fix.
 * **Console SPA** — Handles `NeedsSetup: true` for first-login passkey registration. Auto-triggers URL-encoded approvals upon successful login.
 * **SuspendedTransactionStore Interface Standardization** — Changed `gateway_service.go` and `g8eo.go` suspended transaction fields to interface type (`storage.SuspendedTransactionStore`), retaining concrete `suspendedTxCloser` reference for `Close()` lifecycle.
 * **Public Route Registry Cleanup** — Removed deprecated passkey alias routes and `AuthLoginVerify` from public registry. Added SSE consumer endpoints (`/api/v1/sse/stream`, `/api/v1/sse/events`) as public with handler-level dual auth. Added `/api/v1/approvals/status/` as mTLS-excluded prefix.

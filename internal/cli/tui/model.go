@@ -62,6 +62,10 @@ type Model struct {
 	// Animation
 	blinkOn bool
 
+	// Connection state (SSE adapter)
+	connStatus ConnStatus
+	connDetail string
+
 	// Status
 	quitting bool
 	err      error

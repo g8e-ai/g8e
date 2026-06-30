@@ -47,7 +47,7 @@ func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) 
 
 	_ = platform.OpenBrowser(consoleURL)
 
-	mtlsClient, err := buildMTLSClient(cfg, 0)
+	mtlsClient, err := BuildMTLSClient(cfg, 0)
 	if err != nil {
 		return err
 	}
@@ -96,7 +96,7 @@ func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) 
 func VerifyPasskeyRegistration(cfg *config.Config, userID, cliSessionID string) (bool, error) {
 	statusURL := fmt.Sprintf("%s%s", cfg.OperatorPublicURL(), constants.APIPaths.AuthPasskeysCLIStatus)
 
-	httpClient, err := buildMTLSClient(cfg, httpTimeout)
+	httpClient, err := BuildMTLSClient(cfg, httpTimeout)
 	if err != nil {
 		return false, err
 	}

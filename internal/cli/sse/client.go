@@ -101,6 +101,9 @@ func (c *Client) ConnectOnce(ctx context.Context, handler EventHandler) error {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return fmt.Errorf("sse client: connect: %w", err)
 	}
 	defer resp.Body.Close()

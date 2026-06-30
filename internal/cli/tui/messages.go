@@ -33,11 +33,11 @@ func (s PipelineStage) String() string {
 	case StageL2:
 		return "L2: Consensus Tribunal"
 	case StageL3:
-		return "L3: Authorization"
+		return "L3: Notary"
 	case StageL4:
-		return "L4: State Root Check"
+		return "L4: Warden"
 	case StageL5:
-		return "L5: Warden Pre-Dispatch"
+		return "L5: Actuator"
 	default:
 		return "Unknown"
 	}
@@ -139,6 +139,40 @@ type ConsensusMsg struct {
 	Total    int
 	Result   ConsensusResult
 	Hash     string
+}
+
+// ConnStatus represents the SSE adapter connection state.
+type ConnStatus int
+
+const (
+	ConnIdle ConnStatus = iota
+	ConnConnecting
+	ConnConnected
+	ConnReconnecting
+	ConnFailed
+)
+
+func (c ConnStatus) String() string {
+	switch c {
+	case ConnIdle:
+		return "IDLE"
+	case ConnConnecting:
+		return "CONNECTING"
+	case ConnConnected:
+		return "CONNECTED"
+	case ConnReconnecting:
+		return "RECONNECTING"
+	case ConnFailed:
+		return "FAILED"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// ConnStatusMsg updates the TUI's connection status indicator.
+type ConnStatusMsg struct {
+	Status ConnStatus
+	Detail string
 }
 
 // TickMsg drives the blink/pulse animation for waiting and failed states.

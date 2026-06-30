@@ -1018,11 +1018,13 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 	require.NoError(t, h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
 
 	t.Run("CLI mTLS auth with matching user ID passes auth", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, userID)
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
 		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEStream(rr, req)
+		cancel()
 		assert.NotEqual(t, http.StatusUnauthorized, rr.Code)
 		assert.NotEqual(t, http.StatusForbidden, rr.Code)
 	})

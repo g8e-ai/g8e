@@ -107,7 +107,7 @@ func (m Model) renderPipeline(width, height int) string {
 
 // renderLedger renders the right pane: the Sovereign Audit Ledger.
 func (m Model) renderLedger(width, height int) string {
-	header := ledgerHeaderStyle.Render("SOVEREIGN AUDIT LEDGER (LFAAA)")
+	header := ledgerHeaderStyle.Render("SOVEREIGN AUDIT LEDGER")
 
 	var lines []string
 	lines = append(lines, header, "")
@@ -194,11 +194,29 @@ func (m Model) renderTribunal(width int) string {
 	return borderTribunal.Width(width).Render(content)
 }
 
-// renderStatusBar renders the bottom status bar with version, node, and network info.
+// renderStatusBar renders the bottom status bar with version, node, network, and connection info.
 func (m Model) renderStatusBar(width int) string {
 	left := fmt.Sprintf(" g8e OPERATOR CONSOLE %s | NODE: %s | NET: %s",
 		m.version, m.nodeName, m.netLabel)
-	right := "q: quit | j/k: scroll ledger"
+
+	var connPart string
+	switch m.connStatus {
+	case ConnConnected:
+		connPart = "SSE: CONNECTED"
+	case ConnConnecting:
+		connPart = "SSE: CONNECTING..."
+	case ConnReconnecting:
+		connPart = "SSE: RECONNECTING..."
+	case ConnFailed:
+		connPart = "SSE: DISCONNECTED"
+	default:
+		connPart = "SSE: IDLE"
+	}
+	if m.connDetail != "" {
+		connPart += " (" + m.connDetail + ")"
+	}
+
+	right := connPart + " | q: quit | j/k: scroll"
 
 	gap := width - len(left) - len(right)
 	if gap < 1 {
