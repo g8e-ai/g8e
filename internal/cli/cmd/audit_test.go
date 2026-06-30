@@ -92,7 +92,7 @@ func TestAuditExportCmd(t *testing.T) {
 	t.Run("export has default out path", func(t *testing.T) {
 		cmd := auditExportCmd()
 		outFlag := cmd.Flags().Lookup("out")
-		assert.Equal(t, "./receipts-export.json", outFlag.DefValue)
+		assert.Equal(t, constants.ReceiptsExportFilename, outFlag.DefValue)
 	})
 }
 
@@ -115,7 +115,7 @@ func TestAuditReportCmd(t *testing.T) {
 	t.Run("report has default out directory", func(t *testing.T) {
 		cmd := auditReportCmd()
 		outFlag := cmd.Flags().Lookup("out")
-		assert.Equal(t, "./reports", outFlag.DefValue)
+		assert.Equal(t, constants.ReportsDirname, outFlag.DefValue)
 	})
 }
 
@@ -245,18 +245,7 @@ func TestAuditEventsResponseParsing(t *testing.T) {
 			"count": 1
 		}`
 
-		var resp struct {
-			Success bool `json:"success"`
-			Events  []struct {
-				ID                int64  `json:"id"`
-				OperatorSessionID string `json:"operator_session_id"`
-				Timestamp         string `json:"timestamp"`
-				Type              string `json:"type"`
-				CommandRaw        string `json:"command_raw"`
-				CommandExitCode   int    `json:"command_exit_code"`
-			} `json:"events"`
-			Count int `json:"count"`
-		}
+		var resp models.AuditEventsResponse
 		err := json.Unmarshal([]byte(jsonResp), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
@@ -281,18 +270,7 @@ func TestAuditEventsResponseParsing(t *testing.T) {
 			"count": 1
 		}`
 
-		var resp struct {
-			Success bool `json:"success"`
-			Events  []struct {
-				ID                int64  `json:"id"`
-				OperatorSessionID string `json:"operator_session_id"`
-				Timestamp         string `json:"timestamp"`
-				Type              string `json:"type"`
-				CommandRaw        string `json:"command_raw"`
-				CommandExitCode   int    `json:"command_exit_code"`
-			} `json:"events"`
-			Count int `json:"count"`
-		}
+		var resp models.AuditEventsResponse
 		err := json.Unmarshal([]byte(jsonResp), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
@@ -317,14 +295,7 @@ func TestAuditSummaryResponseParsing(t *testing.T) {
 			"total_records": 25
 		}`
 
-		var resp struct {
-			Success         bool           `json:"success"`
-			EventsSummary   map[string]int `json:"events_summary"`
-			EventsTotal     int            `json:"events_total"`
-			ReceiptsSummary map[string]int `json:"receipts_summary"`
-			ReceiptsTotal   int            `json:"receipts_total"`
-			TotalRecords    int            `json:"total_records"`
-		}
+		var resp models.AuditSummaryResponse
 		err := json.Unmarshal([]byte(jsonResp), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
@@ -345,14 +316,7 @@ func TestAuditSummaryResponseParsing(t *testing.T) {
 			"total_records": 0
 		}`
 
-		var resp struct {
-			Success         bool           `json:"success"`
-			EventsSummary   map[string]int `json:"events_summary"`
-			EventsTotal     int            `json:"events_total"`
-			ReceiptsSummary map[string]int `json:"receipts_summary"`
-			ReceiptsTotal   int            `json:"receipts_total"`
-			TotalRecords    int            `json:"total_records"`
-		}
+		var resp models.AuditSummaryResponse
 		err := json.Unmarshal([]byte(jsonResp), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)
@@ -375,18 +339,7 @@ func TestAuditReportResponseParsing(t *testing.T) {
 			}
 		}`
 
-		var resp struct {
-			Success bool `json:"success"`
-			Report  struct {
-				GeneratedAt       string        `json:"generated_at"`
-				OperatorSessionID string        `json:"operator_session_id"`
-				Events            []interface{} `json:"events"`
-				EventsCount       int           `json:"events_count"`
-				Receipts          []interface{} `json:"receipts"`
-				ReceiptsCount     int           `json:"receipts_count"`
-				TotalRecords      int           `json:"total_records"`
-			} `json:"report"`
-		}
+		var resp models.AuditReportResponse
 		err := json.Unmarshal([]byte(jsonResp), &resp)
 		require.NoError(t, err)
 		assert.True(t, resp.Success)

@@ -86,9 +86,9 @@ func (t *TLSCertInspectTool) InputSchema() *InputSchema {
 // Execute implements the tool logic.
 func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req struct {
-		CertPath           string `json:"cert_path,omitempty"`
-		Host               string `json:"host,omitempty"`
-		Port               int    `json:"port,omitempty"`
+		CertPath string `json:"cert_path,omitempty"`
+		Host     string `json:"host,omitempty"`
+		Port     int    `json:"port,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)

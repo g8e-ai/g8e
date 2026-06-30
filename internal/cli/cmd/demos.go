@@ -25,10 +25,11 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/spf13/cobra"
+
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
-	"github.com/spf13/cobra"
 )
 
 // demoEmitter is the active TUI event emitter, or nil when --tui is not set.
@@ -158,6 +159,26 @@ func checkDockerAvailable() error {
 	return nil
 }
 
+func checkDemoDirExists(demoDir, org string) error {
+	if _, err := os.Stat(demoDir); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+		}
+		return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+	}
+	return nil
+}
+
+func checkComposeFileExists(composePath, org string) error {
+	if _, err := os.Stat(composePath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+		}
+		return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+	}
+	return nil
+}
+
 func demosCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "demos",
@@ -235,15 +256,13 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
-	// Verify demo directory exists
-	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	if err := checkDemoDirExists(demoDir, org); err != nil {
+		return err
 	}
 
-	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
 	}
 
 	// Check if g8e binary exists in demos/bin
@@ -251,7 +270,10 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	if runtime.GOOS == "windows" {
 		binPath += ".exe"
 	}
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+	if _, err := os.Stat(binPath); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+		}
 		fmt.Printf("Warning: g8e binary not found at %s\n", binPath)
 		if runtime.GOOS == "windows" {
 			fmt.Printf("Run 'make build' from the repository root, then copy the binary:\n  copy g8e.exe %s\\%s\\g8e.exe\n", constants.DemosDirname, constants.DemosBinDirname)
@@ -289,37 +311,37 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 func printDemoEndpoints(org string) {
 	fmt.Println("\nAvailable endpoints:")
 	switch org {
-	case "healthcare":
+	case constants.DemosOrgHealthcare:
 		fmt.Println("  Gateway HTTP:  http://localhost:8081")
 		fmt.Println("  Gateway HTTPS: https://localhost:8444")
 		fmt.Println("  Console:       https://localhost:8444/console/")
 		fmt.Println("  RabbitMQ UI:   http://localhost:15673")
 		fmt.Println("  PostgreSQL:    localhost:5433")
 		fmt.Println("  Metabase:      http://localhost:3001")
-	case "gov":
+	case constants.DemosOrgGov:
 		fmt.Println("  Gateway HTTP:  http://localhost:8080")
 		fmt.Println("  Gateway HTTPS: https://localhost:8443")
 		fmt.Println("  Console:       https://localhost:8443/console/")
 		fmt.Println("  Demo UI:       http://localhost:3000")
-	case "finance":
+	case constants.DemosOrgFinance:
 		fmt.Println("  Gateway HTTP:  http://localhost:8082")
 		fmt.Println("  Gateway HTTPS: https://localhost:8445")
 		fmt.Println("  Console:       https://localhost:8445/console/")
 		fmt.Println("  Demo UI:       http://localhost:3002")
-	case "secure-data":
+	case constants.DemosOrgSecureData:
 		fmt.Println("  Gateway HTTP:  http://localhost:8083")
 		fmt.Println("  Gateway HTTPS: https://localhost:8446")
 		fmt.Println("  Console:       https://localhost:8446/console/")
 		fmt.Println("  Demo UI:       http://localhost:3003")
-	case "dow":
+	case constants.DemosOrgDoW:
 		fmt.Println("  Gateway HTTP:  http://localhost:8086")
 		fmt.Println("  Gateway HTTPS: https://localhost:8449")
 		fmt.Println("  Console:       https://localhost:8449/console/")
-	case "dhs":
+	case constants.DemosOrgDHS:
 		fmt.Println("  Gateway HTTP:  http://localhost:8087")
 		fmt.Println("  Gateway HTTPS: https://localhost:8450")
 		fmt.Println("  Console:       https://localhost:8450/console/")
-	case "swarm":
+	case constants.DemosOrgSwarm:
 		fmt.Println("  Gateway HTTP:  http://localhost:8085")
 		fmt.Println("  Gateway HTTPS: https://localhost:8448")
 		fmt.Println("  Console:       https://localhost:8448/console/")
@@ -347,15 +369,13 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
-	// Verify demo directory exists
-	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	if err := checkDemoDirExists(demoDir, org); err != nil {
+		return err
 	}
 
-	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
 	}
 
 	// Pre-flight: verify Docker is available and running
@@ -398,15 +418,13 @@ func runDemosStatus(cmd *cobra.Command, args []string) error {
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
-	// Verify demo directory exists
-	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	if err := checkDemoDirExists(demoDir, org); err != nil {
+		return err
 	}
 
-	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
 	}
 
 	// Pre-flight: verify Docker is available and running
@@ -466,13 +484,13 @@ func runDemosClean(cmd *cobra.Command, args []string, skipConfirm bool) error {
 func cleanSingleDemo(cmd *cobra.Command, demosDir, org string, skipConfirm bool) error {
 	demoDir := filepath.Join(demosDir, org)
 
-	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	if err := checkDemoDirExists(demoDir, org); err != nil {
+		return err
 	}
 
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
 	}
 
 	if !skipConfirm {
@@ -637,13 +655,13 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
-	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	if err := checkDemoDirExists(demoDir, org); err != nil {
+		return err
 	}
 
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
 	}
 
 	// Pre-flight: verify Docker is available and running
@@ -715,12 +733,12 @@ func runDemosReset(cmd *cobra.Command, args []string) error {
 
 // scenarioCounts maps each org to the number of defined scenarios.
 var scenarioCounts = map[string]int{
-	"healthcare":  4,
-	"gov":         1,
-	"finance":     1,
-	"secure-data": 3,
-	"dow":         3,
-	"dhs":         5,
+	constants.DemosOrgHealthcare: 4,
+	constants.DemosOrgGov:        1,
+	constants.DemosOrgFinance:    1,
+	constants.DemosOrgSecureData: 3,
+	constants.DemosOrgDoW:        3,
+	constants.DemosOrgDHS:        5,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -781,13 +799,13 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
-	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	if err := checkDemoDirExists(demoDir, org); err != nil {
+		return err
 	}
 
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
 	}
 
 	// Check if demo is running, start if not
@@ -916,17 +934,17 @@ func runScenario(org, demoDir, scenario string) error {
 
 func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error) {
 	switch org {
-	case "healthcare":
+	case constants.DemosOrgHealthcare:
 		return runHealthcareScenarioWithResult(demoDir, scenario)
-	case "gov":
+	case constants.DemosOrgGov:
 		return runGovScenarioWithResult(demoDir, scenario)
-	case "finance":
+	case constants.DemosOrgFinance:
 		return runFinanceScenarioWithResult(demoDir, scenario)
-	case "secure-data":
+	case constants.DemosOrgSecureData:
 		return runSecureDataScenarioWithResult(demoDir, scenario)
-	case "dow":
+	case constants.DemosOrgDoW:
 		return runDoWScenarioWithResult(demoDir, scenario)
-	case "dhs":
+	case constants.DemosOrgDHS:
 		return runDHSScenarioWithResult(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
@@ -1012,16 +1030,16 @@ type harnessConfig struct {
 }
 
 // defaultHarnessConfig returns the config matching the standard demo topology:
-// g8e.local gateway on 8443/8080, operator mTLS certs in /root/.g8e/pki,
+// g8e.local gateway on 8443/8080, operator mTLS certs in the container PKI dir,
 // ensemble size 3, mock L3 mode.
 func defaultHarnessConfig(container string) harnessConfig {
 	return harnessConfig{
 		Container:    container,
 		MTLSURL:      "https://g8e.local:8443",
 		PublicURL:    "http://g8e.local:8080",
-		CertPath:     "/root/.g8e/pki/operator.crt",
-		KeyPath:      "/root/.g8e/pki/operator.key",
-		CAPath:       "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
+		CertPath:     constants.ContainerOperatorCert,
+		KeyPath:      constants.ContainerOperatorKey,
+		CAPath:       constants.ContainerCABundle,
 		EnsembleSize: 3,
 		L3Mode:       "mock",
 	}
@@ -1090,7 +1108,7 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	if err := demoStep(demoDir, "enrollment check",
 		false,
 		"docker", "compose", "exec", "-T", "operator",
-		"test", "-f", "/root/.g8e/pki/operator.crt",
+		"test", "-f", constants.ContainerOperatorCert,
 	); err != nil {
 		fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
 		fmt.Println()
@@ -1112,19 +1130,23 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	}
 
 	fmt.Println("  ── Step 4: Verify doctrine rejection in gateway logs ──────────")
-	_ = demoStep(demoDir, "audit tail",
+	if err := demoStep(demoDir, "audit tail",
 		false,
 		"docker", "compose", "logs", "observability", "--tail", "10",
-	)
+	); err != nil {
+		fmt.Println("  (audit tail failed)")
+	}
 
 	fmt.Println("  ── Step 5: Network isolation (supplementary proof) ───────────")
 	fmt.Println("  bad-actor (net_untrusted) → target-system (net_secure) — should timeout")
 	fmt.Println()
-	_ = demoStep(demoDir, "network isolation",
+	if err := demoStep(demoDir, "network isolation",
 		false,
 		"docker", "compose", "exec", "-T", "bad-actor",
 		"sh", "-c", "wget -qO- -T 5 http://10.23.0.30:8000/var/g8e/target/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_secure'",
-	)
+	); err != nil {
+		fmt.Println("  (network isolation check failed)")
+	}
 
 	fmt.Println("  Copy-paste to inspect the enforcement audit:")
 	fmt.Println()
@@ -1172,15 +1194,13 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 	}
 	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
 
-	// Verify demo directory exists
-	if _, err := os.Stat(demoDir); os.IsNotExist(err) {
-		return fmt.Errorf("%w: demo environment '%s'. Run 'g8e demos list' to see available demos", constants.ErrNotFound, org)
+	if err := checkDemoDirExists(demoDir, org); err != nil {
+		return err
 	}
 
-	// Verify compose.yml exists
 	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if _, err := os.Stat(composePath); os.IsNotExist(err) {
-		return fmt.Errorf("%w: compose.yml in demo directory '%s'", constants.ErrNotFound, org)
+	if err := checkComposeFileExists(composePath, org); err != nil {
+		return err
 	}
 
 	// Check if demo is running
@@ -1188,16 +1208,8 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: demo environment '%s' is not running. Run 'g8e demos start %s' first", constants.ErrServiceUnavailable, org, org)
 	}
 
-	// Determine service names based on org
-	var gatewayService, operatorService string
-	switch org {
-	case "healthcare", "gov", "finance":
-		gatewayService = "gateway"
-		operatorService = "operator"
-	default:
-		gatewayService = "gateway"
-		operatorService = "operator"
-	}
+	gatewayService := "gateway"
+	operatorService := "operator"
 
 	if len(args) == 1 {
 		fmt.Printf("Audit logs and ledger history for: %s\n", org)
@@ -1214,10 +1226,10 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 		// View audit database
 		fmt.Println("2. Audit vault database (SQLite):")
 		fmt.Printf("   Action: gateway-db\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 /root/.g8e/data/audit_vault.db\n", composePath, gatewayService)
+		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 %s\n", composePath, gatewayService, constants.ContainerAuditVaultDB)
 		fmt.Println()
 		fmt.Printf("   Action: operator-db\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 /root/.g8e/data/audit_vault.db\n", composePath, operatorService)
+		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 %s\n", composePath, operatorService, constants.ContainerAuditVaultDB)
 		fmt.Println()
 		fmt.Println("   Useful SQL queries:")
 		fmt.Println("   SELECT * FROM sessions;")
@@ -1229,22 +1241,22 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 		// View git ledger
 		fmt.Println("3. Git ledger history:")
 		fmt.Printf("   Action: ledger-log\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git log --oneline'\n", composePath, gatewayService)
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git log --oneline'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
 		fmt.Println()
 		fmt.Printf("   Action: ledger-files\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git ls-files'\n", composePath, gatewayService)
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git ls-files'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
 		fmt.Println()
 		fmt.Printf("   Action: ledger-history <file>\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git log --follow -- path/to/file'\n", composePath, gatewayService)
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git log --follow -- path/to/file'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
 		fmt.Println()
 		fmt.Printf("   Action: ledger-show <hash>\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd /root/.g8e/ledger/files && git show <commit-hash>'\n", composePath, gatewayService)
+		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git show <commit-hash>'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
 		fmt.Println()
 
 		// View execution vault
 		fmt.Println("4. Execution vault (command results and file diffs):")
 		fmt.Printf("   Action: vault\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 /root/.g8e/execution_vault.db\n", composePath, gatewayService)
+		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 %s\n", composePath, gatewayService, constants.ContainerExecutionVaultDB)
 		fmt.Println()
 		fmt.Println("   Useful SQL queries:")
 		fmt.Println("   SELECT * FROM execution_log ORDER BY timestamp_utc DESC LIMIT 20;")
@@ -1258,25 +1270,25 @@ func runDemosAudit(cmd *cobra.Command, args []string) error {
 	case "logs":
 		return runDockerComposeLogs(demoDir, composePath, "observability")
 	case "gateway-db":
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", "/root/.g8e/data/audit_vault.db")
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", constants.ContainerAuditVaultDB)
 	case "operator-db":
-		return runDockerComposeExec(demoDir, composePath, operatorService, "sqlite3", "/root/.g8e/data/audit_vault.db")
+		return runDockerComposeExec(demoDir, composePath, operatorService, "sqlite3", constants.ContainerAuditVaultDB)
 	case "ledger-log":
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git log --oneline")
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git log --oneline")
 	case "ledger-files":
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git ls-files")
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git ls-files")
 	case "ledger-history":
 		if len(args) < 3 {
 			return fmt.Errorf("%w: ledger-history requires a file path", constants.ErrMissingRequiredField)
 		}
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git log --follow -- \"$1\"", "--", args[2])
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git log --follow -- \"$1\"", "--", args[2])
 	case "ledger-show":
 		if len(args) < 3 {
 			return fmt.Errorf("%w: ledger-show requires a commit hash", constants.ErrMissingRequiredField)
 		}
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd /root/.g8e/ledger/files && git show \"$1\"", "--", args[2])
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git show \"$1\"", "--", args[2])
 	case "vault":
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", "/root/.g8e/execution_vault.db")
+		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", constants.ContainerExecutionVaultDB)
 	default:
 		return fmt.Errorf("%w: unknown audit action: %s", constants.ErrValidationFailed, action)
 	}

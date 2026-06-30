@@ -119,7 +119,6 @@ var (
 
 	statusBarStyle = lipgloss.NewStyle().
 			Foreground(colorMuted)
-
 )
 
 // statusIcon returns the display icon for a pipeline stage status.

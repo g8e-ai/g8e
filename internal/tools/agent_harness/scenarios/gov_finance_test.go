@@ -15,7 +15,7 @@ func TestGovFinanceScenarios(t *testing.T) {
 	}
 
 	expectedNames := map[string]bool{
-		"gov-cui-exfil-block":       true,
+		"gov-cui-exfil-block":        true,
 		"finance-unauthorized-trade": true,
 	}
 
@@ -36,7 +36,7 @@ func TestGovFinanceScenarioTitles(t *testing.T) {
 	scenarios := govFinanceScenarios()
 
 	expectedTitles := map[string]string{
-		"gov-cui-exfil-block":       "CUI exfiltration blocked by L1 doctrine",
+		"gov-cui-exfil-block":        "CUI exfiltration blocked by L1 doctrine",
 		"finance-unauthorized-trade": "Unauthorized trade blocked by L1 doctrine",
 	}
 
@@ -56,7 +56,7 @@ func TestGovFinanceScenarioPersonas(t *testing.T) {
 	scenarios := govFinanceScenarios()
 
 	expectedPersonas := map[string]string{
-		"gov-cui-exfil-block":       "gov-agent",
+		"gov-cui-exfil-block":        "gov-agent",
 		"finance-unauthorized-trade": "finance-agent",
 	}
 

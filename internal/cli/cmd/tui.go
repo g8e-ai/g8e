@@ -79,12 +79,12 @@ Controls:
 func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 	cfg, err := deps.configLoader("")
 	if err != nil {
-		return err
+		return fmt.Errorf("tui: load config: %w", err)
 	}
 
 	// Verify the gateway is reachable.
 	if err := deps.checkOperatorRunning(cfg); err != nil {
-		return fmt.Errorf("gateway not reachable — start it with 'g8e gw start': %w", err)
+		return fmt.Errorf("%w — start it with 'g8e gw start': %w", constants.ErrGatewayNotReachable, err)
 	}
 
 	// Load CLI credentials (must be enrolled).
@@ -93,13 +93,13 @@ func runTUI(cmd *cobra.Command, args []string, deps tuiDeps) error {
 		return fmt.Errorf("%w: %w", constants.ErrFailedToLoadCredentials, err)
 	}
 	if creds == nil {
-		return fmt.Errorf("not enrolled — run 'g8e auth enroll' first")
+		return fmt.Errorf("%w — run 'g8e auth enroll' first", constants.ErrNotEnrolled)
 	}
 
 	// Build mTLS HTTP client for SSE streaming (no timeout — context-controlled).
 	httpClient, err := deps.buildMTLSClient(cfg, 0)
 	if err != nil {
-		return err
+		return fmt.Errorf("tui: build mTLS client: %w", err)
 	}
 
 	// Construct the SSE stream URL.

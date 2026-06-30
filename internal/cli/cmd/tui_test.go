@@ -133,7 +133,7 @@ func TestTUI_GatewayNotReachable(t *testing.T) {
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "gateway not reachable")
+		assert.ErrorIs(t, err, constants.ErrGatewayNotReachable)
 		assert.ErrorIs(t, err, gwErr)
 	})
 }
@@ -168,7 +168,7 @@ func TestTUI_NotEnrolled(t *testing.T) {
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not enrolled")
+		assert.ErrorIs(t, err, constants.ErrNotEnrolled)
 		assert.Contains(t, err.Error(), "g8e auth enroll")
 	})
 }
@@ -298,7 +298,7 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 		cmd.SetArgs([]string{})
 		err := cmd.Execute()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "gateway not reachable")
+		assert.ErrorIs(t, err, constants.ErrGatewayNotReachable)
 	})
 }
 
@@ -325,7 +325,7 @@ func TestTUI_RealCredentialsNotEnrolled(t *testing.T) {
 		cmd.SetArgs([]string{})
 		err = cmd.Execute()
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "not enrolled")
+		assert.ErrorIs(t, err, constants.ErrNotEnrolled)
 	})
 }
 

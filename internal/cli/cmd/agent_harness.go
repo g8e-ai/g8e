@@ -146,7 +146,7 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 
 	selected := selectAgentHarnessScenarios(harnessPhase, names)
 	if len(selected) == 0 {
-		return fmt.Errorf("agent run: no scenarios selected")
+		return fmt.Errorf("agent run: %w", constants.ErrHarnessNoScenarios)
 	}
 
 	if needsGovKit(selected) {
@@ -165,8 +165,12 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 		opSession = client.DiscoverOperatorSession(ctx)
 	}
 	if export, err := client.ExportReceipts(ctx, opSession); err == nil && len(export) > 0 {
-		_ = os.MkdirAll(cfg.OutDir, 0o755)
-		_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsExportFilename), export, 0o644)
+		if mkErr := os.MkdirAll(cfg.OutDir, constants.PermDirStandard); mkErr != nil {
+			return fmt.Errorf("agent run: create output dir: %w", mkErr)
+		}
+		if writeErr := os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsExportFilename), export, constants.PermFilePublic); writeErr != nil {
+			return fmt.Errorf("agent run: write receipts export: %w", writeErr)
+		}
 	}
 
 	printAgentHarnessSummary(cmd.OutOrStdout(), results, "", "")
@@ -198,11 +202,15 @@ func runAgentHarnessAudit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("agent audit: %w", err)
 	}
-	_ = os.MkdirAll(cfg.OutDir, 0o755)
-	_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsFilename), raw, 0o644)
+	if err := os.MkdirAll(cfg.OutDir, constants.PermDirStandard); err != nil {
+		return fmt.Errorf("agent audit: create output dir: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsFilename), raw, constants.PermFilePublic); err != nil {
+		return fmt.Errorf("agent audit: write receipts: %w", err)
+	}
 	w := cmd.OutOrStdout()
 	fmt.Fprintf(w, "operator session: %s\n", opSession)
-	fmt.Fprintf(w, "signed receipts: %d (raw written to %s/receipts.json)\n", len(receipts), cfg.OutDir)
+	fmt.Fprintf(w, "signed receipts: %d (raw written to %s/%s)\n", len(receipts), cfg.OutDir, constants.ReceiptsFilename)
 	for _, r := range receipts {
 		fmt.Fprintf(w, "  %-12s %-14s %s\n", trunc(r.TransactionHash, 12), r.ActionType, r.Status)
 	}
@@ -309,12 +317,12 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 		}
 		ens, err = clientpkg.NewEnsembleFromSeed(cfg.ConsensusKeyID, cfg.EnsembleSize, seedHex)
 		if err != nil {
-			return err
+			return fmt.Errorf("setup gov kit: ensemble from seed: %w", err)
 		}
 	} else {
 		ens, err = clientpkg.NewEnsemble(cfg.ConsensusKeyID, cfg.EnsembleSize)
 		if err != nil {
-			return err
+			return fmt.Errorf("setup gov kit: ensemble: %w", err)
 		}
 	}
 	if cfg.TribunalID != "" {
@@ -322,7 +330,7 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	}
 	prin, err := clientpkg.NewPrincipal(cfg.PrincipalKeyID)
 	if err != nil {
-		return err
+		return fmt.Errorf("setup gov kit: principal: %w", err)
 	}
 	opID := cfg.OperatorSessionID
 	opSessionID := ""

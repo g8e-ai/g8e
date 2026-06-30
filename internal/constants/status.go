@@ -353,8 +353,9 @@ const (
 type SuspendedTxStatus string
 
 const (
-	SuspendedTxStatusPending  SuspendedTxStatus = "pending"
-	SuspendedTxStatusApproved SuspendedTxStatus = "approved"
+	SuspendedTxStatusPending          SuspendedTxStatus = "pending"
+	SuspendedTxStatusApproved         SuspendedTxStatus = "approved"
+	SuspendedTxStatusExpiredOrNotFound SuspendedTxStatus = "expired_or_not_found"
 )
 
 // HistoryActor is a typed string for history actor.

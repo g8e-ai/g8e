@@ -20,12 +20,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
-	"github.com/spf13/cobra"
 )
 
 func securityCmd() *cobra.Command {
@@ -75,8 +76,12 @@ func securityValidateCmd() *cobra.Command {
 				}
 			}
 			for _, file := range pkiFiles {
-				if _, err := os.Stat(file); os.IsNotExist(err) {
-					cmd.Printf("  [FAIL] %s missing\n", file)
+				if _, err := os.Stat(file); err != nil {
+					if os.IsNotExist(err) {
+						cmd.Printf("  [FAIL] %s missing\n", file)
+					} else {
+						cmd.Printf("  [FAIL] %s: %v\n", file, err)
+					}
 					failed = true
 				} else {
 					cmd.Printf("  [OK]   %s exists\n", file)
@@ -100,8 +105,12 @@ func securityValidateCmd() *cobra.Command {
 				}
 			}
 			for _, file := range secretFiles {
-				if _, err := os.Stat(file); os.IsNotExist(err) {
-					cmd.Printf("  [FAIL] %s missing\n", file)
+				if _, err := os.Stat(file); err != nil {
+					if os.IsNotExist(err) {
+						cmd.Printf("  [FAIL] %s missing\n", file)
+					} else {
+						cmd.Printf("  [FAIL] %s: %v\n", file, err)
+					}
 					failed = true
 				} else {
 					cmd.Printf("  [OK]   %s exists\n", file)
@@ -162,12 +171,15 @@ func securityValidateCmd() *cobra.Command {
 					cmd.Printf("  [FAIL] Trust bundle is not valid PEM\n")
 					failed = true
 				}
+			} else if !os.IsNotExist(err) {
+				cmd.Printf("  [FAIL] failed to read trust bundle: %v\n", err)
+				failed = true
 			}
 
 			cmd.Println("\n=== Summary ===")
 			if failed {
 				cmd.Println("[FAIL] Security validation failed")
-				return fmt.Errorf("security: %w", constants.ErrValidationFailed)
+				return fmt.Errorf("security: validate: %w", constants.ErrValidationFailed)
 			}
 			cmd.Println("[OK]   Security validation passed")
 			return nil
@@ -215,12 +227,12 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 		Long:  `Generate a CSR and enroll with the Gateway to obtain Operator mTLS certificates.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if endpoint == "" {
-				return fmt.Errorf("security: %w", constants.ErrEndpointRequired)
+				return fmt.Errorf("security: enroll: %w", constants.ErrEndpointRequired)
 			}
 
 			cfg, err := configLoader("")
 			if err != nil {
-				return err
+				return fmt.Errorf("security: load config: %w", err)
 			}
 
 			// Use outputDir if specified, otherwise use project root
@@ -235,11 +247,11 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 			cmd.Println("Generating CSR for enrollment...")
 			hostname, err := os.Hostname()
 			if err != nil {
-				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrNetworkGetHostname, err))
+				return fmt.Errorf("security: get hostname: %w: %w", constants.ErrNetworkGetHostname, err)
 			}
 			opCSR, opKey, err := auth.GenerateCSR(fmt.Sprintf("g8e-operator-%s", hostname))
 			if err != nil {
-				return fmt.Errorf("security: %w", err)
+				return fmt.Errorf("security: generate CSR: %w", err)
 			}
 
 			// Append default HTTP port
@@ -247,15 +259,15 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 			cmd.Printf("Enrolling with Gateway at %s...\n", gatewayEndpoint)
 			regResp, err := enroll(cfg, gatewayEndpoint, opCSR, "", "")
 			if err != nil {
-				return fmt.Errorf("security: %w", err)
+				return fmt.Errorf("security: enroll: %w", err)
 			}
 
 			if regResp.OperatorCert == "" {
-				return fmt.Errorf("security: %w", constants.ErrMissingCertificate)
+				return fmt.Errorf("security: enroll: %w", constants.ErrMissingCertificate)
 			}
 
 			if err := os.MkdirAll(pkiDir, constants.PermDirPrivate); err != nil {
-				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err))
+				return fmt.Errorf("security: create PKI dir: %w: %w", constants.ErrDirCreateFailed, err)
 			}
 
 			certPath := filepath.Join(pkiDir, constants.PkiFileOperatorCert)
@@ -263,21 +275,21 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 			chainPath := filepath.Join(pkiDir, constants.PkiFileOperatorChain)
 
 			if err := auth.SaveCertAndKey(regResp.OperatorCert, regResp.OperatorCertChain, opKey, certPath, keyPath); err != nil {
-				return fmt.Errorf("security: %w", err)
+				return fmt.Errorf("security: save cert and key: %w", err)
 			}
 
 			if err := os.WriteFile(chainPath, []byte(regResp.OperatorCertChain), constants.PermFilePrivate); err != nil {
-				return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrChainSaveFailed, err))
+				return fmt.Errorf("security: save chain: %w: %w", constants.ErrChainSaveFailed, err)
 			}
 
 			if regResp.HubTrustBundle != "" {
 				trustDir := filepath.Join(pkiDir, constants.PkiSubdirTrust)
 				if err := os.MkdirAll(trustDir, constants.PermDirPrivate); err != nil {
-					return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err))
+					return fmt.Errorf("security: create trust dir: %w: %w", constants.ErrDirCreateFailed, err)
 				}
 				bundlePath := filepath.Join(trustDir, constants.PkiFileGatewayBundle)
 				if err := os.WriteFile(bundlePath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
-					return fmt.Errorf("security: %w", fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err))
+					return fmt.Errorf("security: save trust bundle: %w: %w", constants.ErrTrustSaveFailed, err)
 				}
 			}
 

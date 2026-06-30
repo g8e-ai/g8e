@@ -111,6 +111,8 @@ var (
 
 	// CLI authentication errors
 	ErrNotAuthenticated              = errors.New("not authenticated")
+	ErrNotEnrolled                   = errors.New("not enrolled")
+	ErrGatewayNotReachable           = errors.New("gateway not reachable")
 	ErrFailedToLoadCredentials       = errors.New("failed to load credentials")
 	ErrFailedToLoadClientCertificate = errors.New("failed to load client certificate")
 	ErrFailedToReadTrustBundle       = errors.New("failed to read trust bundle")
@@ -499,6 +501,7 @@ var (
 	ErrVaultResetConfirmation  = errors.New("vault reset requires explicit confirmation")
 	ErrVaultInvalidPrivateKey  = errors.New("invalid private key for this vault")
 	ErrVaultCiphertextTooShort = errors.New("ciphertext too short")
+	ErrVaultStdinReadFailed    = errors.New("failed to read from stdin")
 
 	// Vault crypto errors
 	ErrVaultInvalidKeySize      = errors.New("invalid key size: must be 32 bytes")
@@ -959,4 +962,7 @@ var (
 	ErrUserCreationFailed         = errors.New("user creation failed")
 	ErrCLISessionInvalid          = errors.New("invalid CLI session")
 	ErrCLICertBindingCheckFailed  = errors.New("CLI cert binding check failed")
+
+	// Agent harness errors
+	ErrHarnessNoScenarios = errors.New("no scenarios selected")
 )

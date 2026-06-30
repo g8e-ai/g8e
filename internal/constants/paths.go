@@ -240,6 +240,21 @@ const (
 	DemosOrgSecureData          = "secure-data"
 	DemosOrgDoW                 = "dow"
 	DemosOrgDHS                 = "dhs"
+	DemosOrgSwarm               = "swarm"
+)
+
+// Container paths for Docker exec commands in demo environments.
+// These are paths inside the g8e Docker containers, not local filesystem paths.
+const (
+	ContainerRootG8E          = "/root/.g8e"
+	ContainerPKIDir           = ContainerRootG8E + "/" + PkiDirname
+	ContainerOperatorCert     = ContainerPKIDir + "/" + PkiFileOperatorCert
+	ContainerOperatorKey      = ContainerPKIDir + "/" + PkiFileOperatorKey
+	ContainerCABundle         = ContainerPKIDir + "/" + PkiSubdirTrust + "/" + PkiFileGatewayBundle
+	ContainerDataDir          = ContainerRootG8E + "/" + DataDirname
+	ContainerAuditVaultDB     = ContainerDataDir + "/" + AuditVaultDBFilename
+	ContainerExecutionVaultDB = ContainerDataDir + "/" + ExecutionVaultDBFilename
+	ContainerLedgerFilesDir   = ContainerRootG8E + "/" + LedgerDirname + "/" + FilesDirname
 )
 
 // Component filenames for gateway, operator, and shared services.
