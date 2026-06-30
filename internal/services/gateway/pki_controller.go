@@ -777,7 +777,7 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 
 	if binaryPath == "" {
 		c.logger.Error("Binary not found", "filename", filename, "checked_paths", possiblePaths)
-		c.responder.Error(w, http.StatusNotFound, constants.ErrNotFound.Error())
+		c.responder.Error(w, http.StatusNotFound, fmt.Sprintf("binary %q not found on the Gateway. Run 'make build-all' on the Gateway host to build all platform binaries, then restart the Gateway.", filename))
 		return
 	}
 

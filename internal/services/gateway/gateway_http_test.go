@@ -17,6 +17,7 @@ package gateway
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -349,7 +350,7 @@ func TestAuthWebSocket(t *testing.T) {
 	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
-	handler := h.auth.WebSocketAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -588,7 +589,7 @@ func TestBuildPublicRouter(t *testing.T) {
 	// Endpoint requires mTLS, so we expect 401 Unauthorized, not 404 Not Found
 	assert.NotEqual(t, http.StatusNotFound, rr.Code, "PKIDevicesEnroll should be registered on public router")
 
-	// 1. WebSessionAuth routing tests for authed paths
+	// 1. RouteAuthWebSession routing tests for cookie-authed paths
 	authedPaths := []string{
 		"/api/v1/users/me",
 		"/api/v1/approvals/tx-123/challenge",
@@ -600,7 +601,7 @@ func TestBuildPublicRouter(t *testing.T) {
 		req = httptest.NewRequest(http.MethodGet, path, nil)
 		rr = httptest.NewRecorder()
 		router.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be wrapped in WebSessionAuth and return 401, not 302/404", path)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code, "Path %s should be RouteAuthWebSession and return 401, not 302/404", path)
 		assert.Contains(t, rr.Body.String(), constants.ErrWebSessionCookieRequired.Error(), "Path %s should return web session cookie required error", path)
 	}
 
@@ -622,12 +623,12 @@ func TestBuildPublicRouter(t *testing.T) {
 		assert.NotEqual(t, http.StatusNotFound, rr.Code, "Path %s should be registered", path)
 	}
 
-	// 3. CLI passkey status endpoint must be mTLS-gated (not bypassed by public passkeys prefix)
+	// 3. CLI passkey status endpoint must be mTLS-gated (exact path overrides RouteAuthWebSession prefix)
 	req = httptest.NewRequest(http.MethodGet, constants.APIPaths.AuthPasskeysCLIStatus, nil)
 	rr = httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
-	// The cli/status path is under /api/v1/auth/passkeys (public prefix) but excluded,
-	// so it must hit the mTLS middleware and return 401, not pass through.
+	// The cli/status path is under /api/v1/auth/passkeys (RouteAuthWebSession prefix) but registered
+	// as an exact RouteAuthMTLS path, so it must hit the mTLS middleware and return 401, not pass through.
 	assert.NotEqual(t, http.StatusNotFound, rr.Code, "cli/status should be registered on public router")
 	assert.Contains(t, rr.Body.String(), constants.ErrMTLSCertRequired.Error(), "cli/status should be mTLS-gated")
 
@@ -897,32 +898,59 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
 	})
 
-	t.Run("Missing operator session ID from mTLS", func(t *testing.T) {
+	t.Run("Missing auth identity (no context, no mTLS)", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"missing auth identity"}`, rr.Body.String())
 	})
 
-	t.Run("Missing required routing parameter", func(t *testing.T) {
+	t.Run("mTLS auth - missing routing parameter", func(t *testing.T) {
 		t.Parallel()
+		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
-		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestOperatorCert(t, "op-session-1")}}
+		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
 	})
 
-	t.Run("Multiple routing parameters provided", func(t *testing.T) {
+	t.Run("mTLS auth - multiple routing parameters", func(t *testing.T) {
 		t.Parallel()
+		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1&web_session_id=web-1", nil)
+		req = req.WithContext(ctx)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+	})
+
+	t.Run("cookie auth - missing routing parameter", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
+		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+	})
+
+	t.Run("cookie auth - web session mismatch", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-auth")
+		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?web_session_id=web-session-other", nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEEvents(rr, req)
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+		assert.Contains(t, rr.Body.String(), "web session does not match")
 	})
 }
 
@@ -939,13 +967,85 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 		assert.JSONEq(t, `{"error":"method not allowed"}`, rr.Body.String())
 	})
 
-	t.Run("Missing operator session ID from mTLS", func(t *testing.T) {
+	t.Run("Missing auth identity (no context, no mTLS)", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id=cli-1", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEStream(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-		assert.JSONEq(t, `{"error":"missing Operator session id"}`, rr.Body.String())
+		assert.JSONEq(t, `{"error":"missing auth identity"}`, rr.Body.String())
+	})
+
+	t.Run("mTLS auth - missing routing parameter", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+	})
+
+	t.Run("cookie auth - missing routing parameter", func(t *testing.T) {
+		t.Parallel()
+		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
+		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.JSONEq(t, `{"error":"exactly one routing target required"}`, rr.Body.String())
+	})
+}
+
+func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
+	t.Parallel()
+	h, _ := setupTestHTTPHandler(t)
+
+	const (
+		userID       = "u-cli-mtls"
+		cliSessionID = "cli-mtls-1"
+	)
+
+	cliSess := models.CLISession{
+		ID:        cliSessionID,
+		UserID:    userID,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	}
+	b, _ := json.Marshal(cliSess)
+	require.NoError(t, h.db.DocStore.DocSet(marshaler.CollectionName(constants.CollectionCLISessions), cliSessionID, b))
+
+	t.Run("CLI mTLS auth with matching user ID passes auth", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		ctx = context.WithValue(ctx, constants.ContextKeyUserID, userID)
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		cancel()
+		assert.NotEqual(t, http.StatusUnauthorized, rr.Code)
+		assert.NotEqual(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("CLI mTLS auth with wrong user ID is forbidden", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, "other-user")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+
+	t.Run("CLI mTLS auth with app ID is rejected as mTLS auth", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), constants.ContextKeyUserID, userID)
+		ctx = context.WithValue(ctx, constants.ContextKeyAppID, "app-1")
+		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id="+cliSessionID, nil)
+		req = req.WithContext(ctx)
+		rr := httptest.NewRecorder()
+		h.handleInternalSSEStream(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }
 

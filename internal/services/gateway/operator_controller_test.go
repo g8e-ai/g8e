@@ -16,6 +16,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
@@ -95,6 +96,9 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 			{URIs: []*url.URL{opURI}},
 		},
 	}
+
+	ctx := context.WithValue(req.Context(), constants.ContextKeyOperatorSessionID, operatorSessionID)
+	req = req.WithContext(ctx)
 
 	w := httptest.NewRecorder()
 

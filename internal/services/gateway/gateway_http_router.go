@@ -71,7 +71,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	browserBootstrapAuthCfg := passkeyHandlerConfig{source: sourceBrowserBootstrap, createWebSession: true, setCookie: true}
 
 	// JIT passkey bootstrap: allow first-credential registration via JWT
-	// This unblocks OIDC/JIT users who have zero credentials and cannot reach WebSessionAuth
+	// This unblocks OIDC/JIT users who have zero credentials and cannot reach RouteAuthWebSession routes
 	if h.auth != nil && h.auth.HasJWKS() {
 		jwtPasskeyMux := http.NewServeMux()
 		jwtPasskeyMux.HandleFunc(constants.APIPaths.AuthPasskeysJITRegisterChallenge, h.passkey.RegisterChallenge(jitCfg))
@@ -131,7 +131,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.Handle(constants.APIPaths.DataDB, http.HandlerFunc(h.dbController.handleDataDB))
 	mux.Handle(constants.APIPaths.KV, http.HandlerFunc(h.dbController.handleKV))
 	mux.HandleFunc(constants.APIPaths.PubSubPublish, h.dbController.handlePubSubPublish)
-	mux.Handle(constants.APIPaths.PubSubStream, h.auth.WebSocketAuth(http.HandlerFunc(h.pubsub.HandleWebSocket)))
+	mux.Handle(constants.APIPaths.PubSubStream, h.auth.Middleware(http.HandlerFunc(h.pubsub.HandleWebSocket)))
 
 	// PKI management routes (require mTLS)
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
@@ -145,29 +145,18 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Passkey CLI status (require mTLS)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeysCLIStatus, h.passkey.CLIStatus)
 
-	// Browser-facing data routes (require web session cookie)
-	authedMux := http.NewServeMux()
-	authedMux.HandleFunc(constants.APIPaths.UsersMe, h.authController.handleUserMe)
-	authedMux.HandleFunc(constants.APIPaths.AuthSessionsMe, h.authController.handleWebSession)
-
 	// OOB Approval UI for suspended MCP/A2A transactions
 	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkey.handleApprovalPage)
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.passkey.handleCLIApprovalStatus)
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIList, h.passkey.handleCLIListSuspended)
-	authedMux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.passkey.handleApprovalAction))
-	authedMux.HandleFunc(constants.APIPaths.Approvals, h.passkey.handleListSuspendedTransactions)
 
-	// Passkey management (list, revoke) under WebSessionAuth
-	authedMux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)
-	authedMux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkey.RevokeCredential))
-
-	// Wrap authed routes in WebSessionAuth middleware
-	mux.Handle("/api/v1/users/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/v1/auth/sessions/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/v1/approvals", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/v1/approvals/", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/v1/auth/passkeys", h.auth.WebSessionAuth(authedMux, h.db))
-	mux.Handle("/api/v1/auth/passkeys/", h.auth.WebSessionAuth(authedMux, h.db))
+	// Browser-facing routes (RouteAuthWebSession — unified middleware validates cookie)
+	mux.HandleFunc(constants.APIPaths.UsersMe, h.authController.handleUserMe)
+	mux.HandleFunc(constants.APIPaths.AuthSessionsMe, h.authController.handleWebSession)
+	mux.Handle(constants.APIPaths.ApprovalsByID, http.HandlerFunc(h.passkey.handleApprovalAction))
+	mux.HandleFunc(constants.APIPaths.Approvals, h.passkey.handleListSuspendedTransactions)
+	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)
+	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkey.RevokeCredential))
 
 	return h.pathTraversalGuard(h.auth.Middleware(mux))
 }

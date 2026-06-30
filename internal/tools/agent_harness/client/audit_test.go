@@ -225,7 +225,7 @@ func TestAuditReceipts(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -320,7 +320,7 @@ func TestExportReceipts(t *testing.T) {
 
 			cfg := config.Config{
 				MTLSBaseURL: server.URL,
-				Auth:        config.Auth{Insecure: true},
+				Auth:        config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -450,7 +450,7 @@ func TestDiscoverOperatorSession(t *testing.T) {
 				MTLSBaseURL:       server.URL,
 				OperatorSessionID: tt.cfgSessionID,
 				UseCLIConfig:      tt.useCLIConfig,
-				Auth:              config.Auth{Insecure: true},
+				Auth:              config.Auth{},
 			}
 
 			client, err := New(cfg)
@@ -483,7 +483,7 @@ func TestDiscoverOperatorSession_WithUserID(t *testing.T) {
 	cfg := config.Config{
 		MTLSBaseURL:  server.URL,
 		UseCLIConfig: true,
-		Auth:         config.Auth{Insecure: true},
+		Auth:         config.Auth{},
 	}
 
 	client, err := New(cfg)

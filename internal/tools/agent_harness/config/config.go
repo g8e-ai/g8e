@@ -29,8 +29,6 @@ type Auth struct {
 	CABundle string `json:"ca_bundle"`
 	// APIKey is the optional Operator API key for the MCP/A2A surface.
 	APIKey string `json:"api_key"`
-	// Insecure skips TLS verification. Local dev only. Never in a real audit.
-	Insecure bool `json:"insecure"`
 }
 
 // Config is the full Agent Harness runtime configuration.

@@ -217,12 +217,6 @@ type ReauthResponse struct {
 	Operator *OperatorDocumentGo `json:"operator"`
 }
 
-// AuditReceiptsResponse is the typed response for GET /api/audit/receipts.
-type AuditReceiptsResponse struct {
-	Success  bool                   `json:"success"`
-	Receipts []*ActionReceiptRecord `json:"receipts"`
-}
-
 // TrustedSignersResponse is the typed response for GET /api/governance/signers.
 type TrustedSignersResponse struct {
 	Success bool            `json:"success"`

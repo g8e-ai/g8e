@@ -84,7 +84,6 @@ The `secure-data` demo replaces the standard five-network topology with a two-do
 | Demo UI / Notary approval UI | | ✓ | | | |
 | Gateway | | ✓ | ✓ | ✓† | |
 | AI agent runtime | | | ✓ | | |
-| LLM backend | | | ✓ | | |
 | Operator | | | ✓* | ✓ | |
 | Target system | | | | ✓ | |
 | Observability stack | | | | | ✓ |
@@ -160,20 +159,19 @@ g8e demos rebuild <org>
 # Reset a demo environment (clean and restart)
 g8e demos reset <org>
 
-# Run a specific demo scenario
+# Run a specific demo scenario (concise output by default)
 g8e demos run <org> <scenario>
 
-# View audit logs and ledger history for a running demo
-g8e demos audit <org>
+# Run with verbose step-by-step output
+g8e demos run <org> <scenario> -v
+
+# View audit receipts, events, and summary via g8e audit CLI
+g8e demos audit <org> receipts
+g8e demos audit <org> events
+g8e demos audit <org> summary
 
 # Tail the observability log stream
 g8e demos audit <org> logs
-
-# Open the gateway audit database (SQLite)
-g8e demos audit <org> gateway-db
-
-# Open the operator audit database (SQLite)
-g8e demos audit <org> operator-db
 
 # View the git ledger log
 g8e demos audit <org> ledger-log
@@ -224,7 +222,22 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 - `g8e demos run dhs 4` - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
 - `g8e demos run dhs 5` - Sovereign Destruction + tamper-proof audit (LOE 2)
 
-The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
+**Swarm Demo Scenarios:**
+- `g8e demos run swarm 1` - Authorized Recon Mission (Governed Drone Deployment)
+- `g8e demos run swarm 2` - Weapons Safety Doctrine Block
+- `g8e demos run swarm 3` - Navigation Boundary Violation Block
+
+### Demo Output Format
+
+By default, `g8e demos run` produces concise output: each scenario prints its number, name, and PASS/FAIL result. After all scenarios complete, a results table and a **Platform Data Dump** section are printed, showing:
+
+- **Receipts** — Transaction hash, action, resource, status, and execution timestamp (via `GET /api/v1/audit/receipts`)
+- **Audit Events** — Event ID, timestamp, type, exit code, and command (via `GET /api/v1/audit/events`)
+- **Summary** — Event and receipt counts by type (via `GET /api/v1/audit/summary`)
+- **Ledger Files** — File listing from the operator's git ledger
+- **Gateway Logs** — Last 15 log lines from the gateway container
+
+Use `-v` (or `--verbose`) to see full step-by-step command output, scenario descriptions, and `PROVES:` annotations.
 
 Note: The `g8e demos run` command automatically starts the demo environment if it is not already running.
 
@@ -285,7 +298,7 @@ The following must hold in every org environment:
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted. The `healthcare` agent-runtime is the sole exception: it bind-mounts the host-built `g8e` binary at `../../g8e:/usr/local/bin/g8e:ro` because it runs as an Alpine container without the Go toolchain.
+5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted. All `agent-runtime` containers build from the root Dockerfile with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based agent-harness invocation.
 
 ## Port Mappings
 

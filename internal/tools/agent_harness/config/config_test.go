@@ -63,7 +63,6 @@ func TestLoadFile(t *testing.T) {
 			"client_key":  "/path/to/key.pem",
 			"ca_bundle":   "/path/to/ca.pem",
 			"api_key":     "test-api-key",
-			"insecure":    true,
 		},
 	}
 
@@ -109,9 +108,6 @@ func TestLoadFile(t *testing.T) {
 	}
 	if cfg.Auth.APIKey != "test-api-key" {
 		t.Errorf("APIKey not loaded correctly, got %s", cfg.Auth.APIKey)
-	}
-	if !cfg.Auth.Insecure {
-		t.Error("Insecure should be true after loading")
 	}
 }
 

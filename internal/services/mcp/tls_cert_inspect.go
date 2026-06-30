@@ -79,10 +79,6 @@ func (t *TLSCertInspectTool) InputSchema() *InputSchema {
 				Type:        "integer",
 				Description: "Port number for remote host (default 443)",
 			},
-			"insecure_skip_verify": {
-				Type:        "boolean",
-				Description: "Skip TLS certificate verification (default: false, use with caution)",
-			},
 		},
 	}
 }
@@ -90,10 +86,9 @@ func (t *TLSCertInspectTool) InputSchema() *InputSchema {
 // Execute implements the tool logic.
 func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) (CallToolResult, error) {
 	var req struct {
-		CertPath           string `json:"cert_path,omitempty"`
-		Host               string `json:"host,omitempty"`
-		Port               int    `json:"port,omitempty"`
-		InsecureSkipVerify bool   `json:"insecure_skip_verify,omitempty"`
+		CertPath string `json:"cert_path,omitempty"`
+		Host     string `json:"host,omitempty"`
+		Port     int    `json:"port,omitempty"`
 	}
 	if err := json.Unmarshal(args, &req); err != nil {
 		return CallToolResult{}, fmt.Errorf("%w: %v", constants.ErrMCPUnmarshalArguments, err)
@@ -115,7 +110,7 @@ func (t *TLSCertInspectTool) Execute(ctx context.Context, args json.RawMessage) 
 		if port <= 0 {
 			port = 443
 		}
-		cert, err = fetchCertFromHost(ctx, req.Host, port, req.InsecureSkipVerify)
+		cert, err = fetchCertFromHost(ctx, req.Host, port)
 		if err != nil {
 			return CallToolResult{}, fmt.Errorf("tls_cert_inspect: failed to fetch certificate from host: %w", err)
 		}
@@ -158,12 +153,12 @@ func loadCertFromFile(path string) (*x509.Certificate, error) {
 	return cert, nil
 }
 
-func fetchCertFromHost(ctx context.Context, host string, port int, insecureSkipVerify bool) (*x509.Certificate, error) {
+func fetchCertFromHost(ctx context.Context, host string, port int) (*x509.Certificate, error) {
 	address := net.JoinHostPort(host, strconv.Itoa(port))
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 
 	conn, err := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{
-		InsecureSkipVerify: insecureSkipVerify,
+		InsecureSkipVerify: true, //nolint:gosec // inspection tool must bypass verify to inspect invalid certs
 	})
 	if err != nil {
 		return nil, fmt.Errorf("tls_cert_inspect: failed to dial host: %w", err)

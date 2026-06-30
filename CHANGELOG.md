@@ -5,6 +5,76 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2026-06-30
+
+### Overview
+
+v1.3.4 is a TUI, onboarding UX, and demo integrity release. This version introduces a real-time Tactical Governance Console TUI built with Bubble Tea/Lipgloss, replaces passkey enrollment polling with SSE-based real-time notification, unifies the gateway auth middleware into a typed `RouteAuthRegistry` with four auth modes, consolidates Windows enrollment into the standard `auth enroll` command, and completes the demo integrity initiative — all demo scenarios now submit real GovernanceEnvelopes through the gateway via a shared `harnessRun` helper with no backdoors. See `docs/release_notes/v1.3.x/v1.3.4.md` for full details.
+
+### Added
+
+* **Tactical Governance Console (TUI)** — Added `g8e tui` command with real-time SSE-connected terminal UI (Bubble Tea/Lipgloss) visualizing the execution pipeline (L1–L5), Sovereign Audit Ledger, and L2 Tribunal Consensus. New packages: `internal/cli/tui/` and `internal/cli/cmd/tui.go`.
+* **SSE Client Package** — Added `internal/cli/sse/client.go` — reusable SSE client with reconnection, custom headers, and context cancellation.
+* **Passkey Enrollment via SSE** — `RegisterPasskeyViaBrowser` now subscribes to an SSE stream (`passkey.registered` event) via mTLS, replacing polling. Gateway emits the event from `PasskeyHandler.RegisterVerify`. Enrollment UI rendered as a Bubble Tea program with 5-minute timeout.
+* **Shared mTLS Client Builder** — Added `BuildMTLSClient` in `internal/cli/auth/tls.go` for reusable mTLS HTTP client creation.
+* **RouteAuthRegistry** — Replaced `PublicRouteRegistry` with `RouteAuthRegistry` in `gateway_auth.go`. Every route classified into `RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, or `RouteAuthDual`. Eliminates excluded-prefixes hack.
+* **Dual-Auth SSE Stream** — SSE stream and events endpoint now support mTLS OR web session cookie authentication. `authorizeSSERoute` reads identity from context for both auth paths.
+* **Swarm Demo** — Added `demo_swarm.go` with 3 real scenarios using `harnessRun`. Added `swarmScenarios` in `scenarios/swarm.go`.
+* **Secure-Data Agent-Harness Scenarios** — Added `secureDataScenarios` with three scenarios: `secure-data-migration`, `secure-data-bypass-attempt`, `secure-data-cross-tenant`.
+* **Healthcare Agent-Harness Scenarios** — Added `healthcare-gold-card` and `healthcare-sla-breach` scenarios in `mcp_a2a.go`.
+* **Typed Audit Models** — Added `internal/models/audit.go` with `AuditReceiptsResponse`, `AuditEventsResponse`, `AuditReportResponse`, `AuditSummaryResponse`.
+* **Demo Verbose Flag** — Added `-v` / `--verbose` flag to `g8e demos run`.
+* **Demo Data Dump** — Added `printDataDump(demoDir)` in `demos.go` for post-scenario audit output.
+* **Demo Helper Functions** — Added `captureCommand`, `demoPrintln`/`demoPrintf`, `runG8EAuditCmd` in `demos.go`.
+* **Gateway Startup Trust Scripts** — `printNextSteps` now includes CA trust script commands (curl|sh / irm|iex) using configured HTTP port.
+* **New Error Sentinels** — Added `ErrNotEnrolled`, `ErrGatewayNotReachable`, `ErrKeyStorePurgeFailed`, `ErrPayloadExceedsLimit`, `ErrVaultStdinReadFailed`, `ErrHarnessNoScenarios`, `ErrTestKeystoreNil`.
+* **New Path Constants** — Added `PkiSubdirHub`, `PkiSubdirGatewayPeer`, `PkiSubdirApps`, `PkiSubdirTrustedSigners`, `BinDirname`, `LogDirname`, `ReceiptsExportFilename`. Derived default path descriptions from primitives.
+
+### Changed
+
+* **Unified Windows Enrollment** — `g8e auth enroll` auto-detects Windows and uses Windows Certificate Store with optional `--tpm`. Removed separate `g8e auth enroll-windows` subcommand.
+* **Shared `harnessConfig` / `harnessRun` Helper** — All demos now use shared helper in `demos.go`. DoW uses `UseRun: true`. DHS delegates via thin aliases.
+* **Healthcare Demo Rewritten** — Scenarios 2–3 run agent-harness scenarios via mTLS. Backdoor removed. `agent-runtime` builds from root Dockerfile.
+* **Secure-Data Demo Rewritten** — Single `agent-runtime` container. All scenarios use `harnessRun`. `curl` backdoor removed.
+* **DoW Demo Rewritten** — Scenario 2 runs `dow-bft-veto` via `harnessRun`. Scenarios 1 & 3 converted to shared helper.
+* **DHS Scenario 2 — SQLite Backdoor Removed** — Replaced `sqlite3` query with `GET /api/v1/approvals/pending` API call.
+* **Demo Output Redesigned** — Verbose-aware output with `demoPrintln`/`demoPrintf`. Non-verbose mode shows scenario results + data dump only.
+* **`demosAuditCmd` Updated** — `gateway-db`/`operator-db` replaced with `receipts`/`events`/`summary` actions.
+* **Removed Unused llm-backend Containers** — Removed from gov, finance, and healthcare compose files.
+* **`paths.go` Reorganized** — Regrouped into logical `const()` blocks. Removed unused constants.
+* **Keystore Error Wrapping** — Changed `%v` to `%w` in `keystore.go`. Moved `keyring_memory.go` → `keystoretest/keyring.go`.
+* **Gateway Router Simplified** — Removed `authedMux`/`WebSessionAuth` wrapper. Routes registered directly with `RouteAuthWebSession` classification.
+* **`classifyEnvelopeError` Cleanup** — Replaced string-matching helpers with `errors.Is` checks.
+* **Heartbeat Publishing Uses Protojson** — `handleHeartbeatPublish` now uses `commonv1.GovernanceEnvelope` via `protojson.Unmarshal`.
+* **`approve` Command Context-Aware** — Now respects `cmd.Context()` for cancellation. Uses `models.ApprovalStatusResponse`.
+* **Audit CLI Error Wrapping** — Descriptive-context error patterns. Uses `models.Audit*Response` types and `constants` for default paths.
+* **Setup Script Improvements** — Linux/macOS scripts check for `make` + `go`, offer interactive dependency installation, always run `make build`.
+* **`security validate` Error Handling** — Distinguishes `os.IsNotExist` from other stat errors. Surfaces trust bundle read errors.
+* **`vault` Command Error Wrapping** — Uses `ErrWorkingDirFailed`, `PermDirPrivate`/`PermFilePrivate` constants.
+* **`encrypted_kv_adapter` Sentinel Errors** — Wraps `ErrVaultLocked`/`ErrKeyNotFound` sentinels.
+* **`gateway_db.go` Error Wrapping** — All bare `return err` wrapped with context. Test mode requires non-nil `testKeystore`.
+* **MCP Command Guidance** — Gateway startup shows `g8e mcp agent show <agent>` / `g8e mcp agent list`.
+* **Console SPA Registration Flow** — Reads `register`/`user_id`/`cli_session_id` from URL hash, auto-triggers registration.
+
+### Fixed
+
+* **TLS Cert Inspect — `insecure_skip_verify` Removed** — Removed user-controllable parameter from MCP tool. Tool always sets `InsecureSkipVerify: true` internally (required for cert inspection).
+* **SSE Authorization for CLI mTLS** — `authorizeSSERoute` handles CLI mTLS auth (user ID without operator session) for TUI and passkey enrollment SSE access.
+* **CanonicalDB Test Schema Keystore** — `initTestSchema` returns `ErrTestKeystoreNil` instead of silently creating a fallback keystore.
+
+### Tests
+
+* Added `internal/cli/tui/model_test.go` (511 lines), `adapter_test.go` (318 lines), `internal/cli/cmd/tui_test.go` (378 lines), `gwstdout_test.go` (331 lines), `internal/cli/sse/client_test.go` (240 lines), `passkey_enroll_tui_test.go` (120 lines).
+* Added `swarm_test.go` (112 lines), `secure_data_test.go` (112 lines), `gov_finance_test.go` (94 lines) for agent-harness scenario coverage.
+* Added `TestDefaultHarnessConfig`, `TestHarnessRun`, `TestDemoScenarioFilesCallHarnessRun`, `TestNoGatewayBypassInDemoFiles`, `TestNoCopyPasteInScenarioFiles`, and helper tests in `demos_test.go`.
+* Split `TestNoSqliteBackdoorInDemoFiles` into stricter `TestNoSqliteBackdoorInScenarioFiles` and `TestSqliteOnlyInAuditCmdVaultAction`.
+* Added `passkey_service_http_test.go` (51 lines) for SSE event emission.
+* Updated `gateway_auth_test.go`, `gateway_http_test.go`, and 12+ other test files for `RouteAuthRegistry` migration and error wrapping changes.
+* Updated `keystore_test.go` for `keystoretest` package migration.
+* Updated `native_tools_integration_test.go` — removed `insecure_skip_verify` test cases.
+
+---
+
 ## [1.3.3] - 2026-06-29
 
 ### Overview
@@ -149,7 +219,7 @@ v1.3.0 is a layered authorization and architectural remediation release. This ve
 ### Changed
 
 * **Passkey Unification** — Eliminated duplicate login path (`handlePublicAuthLoginVerify`) and unified cookie creation via `setWebSessionCookie` helper. Fixed IDOR vulnerabilities in `ListCredentials`, `RevokeCredential`, and `handleListSuspendedTransactions`. Fixed `readBody` nil `ResponseWriter` bug in `AuthController`.
-* **Unified CLI Enrollment** — `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens console UI for passkey registration and polls `VerifyPasskeyRegistration` (mTLS) until complete.
+* **Unified CLI Enrollment** — `performEnroll` replaces platform-specific enrollment paths. `RegisterPasskeyViaBrowser` opens console UI for passkey registration and subscribes to an SSE stream (`passkey.registered` event) via a shared `sse.Client` with mTLS, eliminating polling. `VerifyPasskeyRegistration` is retained for the agent launch path (`mcp.go`) with the `X-G8E-CLI-Session-ID` header fix.
 * **Console SPA** — Handles `NeedsSetup: true` for first-login passkey registration. Auto-triggers URL-encoded approvals upon successful login.
 * **SuspendedTransactionStore Interface Standardization** — Changed `gateway_service.go` and `g8eo.go` suspended transaction fields to interface type (`storage.SuspendedTransactionStore`), retaining concrete `suspendedTxCloser` reference for `Close()` lifecycle.
 * **Public Route Registry Cleanup** — Removed deprecated passkey alias routes and `AuthLoginVerify` from public registry. Added SSE consumer endpoints (`/api/v1/sse/stream`, `/api/v1/sse/events`) as public with handler-level dual auth. Added `/api/v1/approvals/status/` as mTLS-excluded prefix.

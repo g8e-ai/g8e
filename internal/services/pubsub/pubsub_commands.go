@@ -539,7 +539,7 @@ func (rs *OperatorPubSubService) ProcessEnvelope(ctx context.Context, payload []
 		return nil, constants.ErrPubSubEmptyPayload
 	}
 	if len(payload) > MaxPayloadSize {
-		return nil, fmt.Errorf("payload exceeds %d byte limit: %w", MaxPayloadSize, constants.ErrPubSubEmptyPayload)
+		return nil, fmt.Errorf("payload exceeds %d byte limit: %w", MaxPayloadSize, constants.ErrPayloadExceedsLimit)
 	}
 
 	envelope := &govpkg.GovernanceEnvelope{}

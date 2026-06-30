@@ -30,10 +30,11 @@ func VerifyCLICertificate(pki *PKIAuthority, cert *x509.Certificate, cliSessionI
 	}
 
 	// Check certificate expiry
-	if time.Now().After(cert.NotAfter) {
+	now := time.Now()
+	if now.After(cert.NotAfter) {
 		return constants.ErrCLIL3CertExpired
 	}
-	if time.Now().Before(cert.NotBefore) {
+	if now.Before(cert.NotBefore) {
 		return constants.ErrCLIL3CertNotYetValid
 	}
 
@@ -55,7 +56,7 @@ func VerifyCLICertificate(pki *PKIAuthority, cert *x509.Certificate, cliSessionI
 		return constants.ErrCLIL3PKINotConfigured
 	}
 	if err := pki.VerifyCertificate(cert); err != nil {
-		return fmt.Errorf("cli cert: verify certificate: %w", err)
+		return fmt.Errorf("%s: %w", constants.ErrCLIL3CertVerificationFailed, err)
 	}
 
 	return nil

@@ -22,11 +22,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/vault"
-	"github.com/spf13/cobra"
 )
 
 func vaultCmd() *cobra.Command {
@@ -80,7 +81,7 @@ func vaultInitCmd() *cobra.Command {
 			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				return fmt.Errorf("%w: %w", constants.ErrWorkingDirFailed, err)
 			}
 
 			if vaultDir == "" {
@@ -114,7 +115,7 @@ func vaultInitCmd() *cobra.Command {
 			}
 			vault.SecureZero(dek)
 
-			if err := os.MkdirAll(vaultDir, 0700); err != nil {
+			if err := os.MkdirAll(vaultDir, constants.PermDirPrivate); err != nil {
 				vault.SecureZero(privateKey)
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
@@ -125,12 +126,12 @@ func vaultInitCmd() *cobra.Command {
 			}
 
 			keyDir := filepath.Dir(keyPath)
-			if err := os.MkdirAll(keyDir, 0700); err != nil {
+			if err := os.MkdirAll(keyDir, constants.PermDirPrivate); err != nil {
 				vault.SecureZero(privateKey)
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 
-			if err := os.WriteFile(keyPath, []byte(hex.EncodeToString(privateKey)+"\n"), 0600); err != nil {
+			if err := os.WriteFile(keyPath, []byte(hex.EncodeToString(privateKey)+"\n"), constants.PermFilePrivate); err != nil {
 				vault.SecureZero(privateKey)
 				return fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
 			}
@@ -165,7 +166,7 @@ func vaultUnlockCmd() *cobra.Command {
 			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				return fmt.Errorf("%w: %w", constants.ErrWorkingDirFailed, err)
 			}
 
 			if vaultDir == "" {
@@ -188,7 +189,7 @@ func vaultUnlockCmd() *cobra.Command {
 
 			privateKey, err := readKeyFile(keyPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("vault unlock: %w", err)
 			}
 			defer vault.SecureZero(privateKey)
 
@@ -231,7 +232,7 @@ func vaultRekeyCmd() *cobra.Command {
 			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				return fmt.Errorf("%w: %w", constants.ErrWorkingDirFailed, err)
 			}
 
 			if vaultDir == "" {
@@ -260,7 +261,7 @@ func vaultRekeyCmd() *cobra.Command {
 
 			oldKey, err := readKeyFile(keyPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("vault rekey: %w", err)
 			}
 			defer vault.SecureZero(oldKey)
 
@@ -283,7 +284,7 @@ func vaultRekeyCmd() *cobra.Command {
 				return fmt.Errorf("%w: %w", constants.ErrVaultRekeyFailed, err)
 			}
 
-			if err := os.WriteFile(newKeyPath, []byte(hex.EncodeToString(newKey)+"\n"), 0600); err != nil {
+			if err := os.WriteFile(newKeyPath, []byte(hex.EncodeToString(newKey)+"\n"), constants.PermFilePrivate); err != nil {
 				vault.SecureZero(newKey)
 				return fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
 			}
@@ -318,7 +319,7 @@ func vaultStatusCmd() *cobra.Command {
 			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				return fmt.Errorf("%w: %w", constants.ErrWorkingDirFailed, err)
 			}
 
 			if vaultDir == "" {
@@ -375,7 +376,7 @@ func vaultResetCmd() *cobra.Command {
 			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				return fmt.Errorf("%w: %w", constants.ErrWorkingDirFailed, err)
 			}
 
 			if vaultDir == "" {
@@ -395,7 +396,7 @@ func vaultResetCmd() *cobra.Command {
 				cmd.Print("Type 'destroy' to confirm: ")
 				input, err := reader.ReadString('\n')
 				if err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+					return fmt.Errorf("%w: %w", constants.ErrVaultStdinReadFailed, err)
 				}
 				if strings.TrimSpace(input) != "destroy" {
 					cmd.Println("Reset cancelled.")
@@ -440,7 +441,7 @@ func vaultExportCmd() *cobra.Command {
 			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				return fmt.Errorf("%w: %w", constants.ErrWorkingDirFailed, err)
 			}
 
 			vaultDir := paths.Infra.VaultDir
@@ -457,7 +458,7 @@ func vaultExportCmd() *cobra.Command {
 
 			key, err := readKeyFile(keyPath)
 			if err != nil {
-				return err
+				return fmt.Errorf("vault export: %w", err)
 			}
 			defer vault.SecureZero(key)
 
@@ -486,7 +487,7 @@ func vaultImportCmd() *cobra.Command {
 			}
 			projectRoot, err := os.Getwd()
 			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
+				return fmt.Errorf("%w: %w", constants.ErrWorkingDirFailed, err)
 			}
 
 			vaultDir := paths.Infra.VaultDir
@@ -512,7 +513,7 @@ func vaultImportCmd() *cobra.Command {
 				cmd.Print("Enter vault key (hex): ")
 				input, readErr := reader.ReadString('\n')
 				if readErr != nil {
-					return fmt.Errorf("%w: %w", constants.ErrStatFailed, readErr)
+					return fmt.Errorf("%w: %w", constants.ErrVaultStdinReadFailed, readErr)
 				}
 				key, err = hex.DecodeString(strings.TrimSpace(input))
 				if err != nil {
@@ -526,12 +527,12 @@ func vaultImportCmd() *cobra.Command {
 			}
 
 			keyDir := filepath.Dir(keyPath)
-			if err := os.MkdirAll(keyDir, 0700); err != nil {
+			if err := os.MkdirAll(keyDir, constants.PermDirPrivate); err != nil {
 				vault.SecureZero(key)
 				return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 			}
 
-			if err := os.WriteFile(keyPath, []byte(hex.EncodeToString(key)+"\n"), 0600); err != nil {
+			if err := os.WriteFile(keyPath, []byte(hex.EncodeToString(key)+"\n"), constants.PermFilePrivate); err != nil {
 				vault.SecureZero(key)
 				return fmt.Errorf("%w: %w", constants.ErrVaultKeyWriteFailed, err)
 			}

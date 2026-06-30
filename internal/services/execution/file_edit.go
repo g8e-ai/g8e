@@ -537,6 +537,9 @@ func (fes *FileEditService) createBackup(filePath string) (backupPath string, er
 	// Calculate file hash for uniqueness (streaming)
 	file, err := os.Open(filePath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("%w: %s", constants.ErrPathNotFound, filePath)
+		}
 		return "", err
 	}
 	defer file.Close()

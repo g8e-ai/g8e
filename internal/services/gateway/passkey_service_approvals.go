@@ -169,7 +169,7 @@ func (h *PasskeyHandler) handleCLIApprovalStatus(w http.ResponseWriter, r *http.
 
 	if !found {
 		h.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
-			Status: "expired_or_not_found",
+			Status: string(constants.SuspendedTxStatusExpiredOrNotFound),
 		})
 		return
 	}
@@ -181,7 +181,7 @@ func (h *PasskeyHandler) handleCLIApprovalStatus(w http.ResponseWriter, r *http.
 
 	if suspendedTx.Approved {
 		h.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
-			Status:   "approved",
+			Status:   string(constants.SuspendedTxStatusApproved),
 			TxHash:   txHash,
 			ToolName: suspendedTx.ToolName,
 		})
@@ -189,7 +189,7 @@ func (h *PasskeyHandler) handleCLIApprovalStatus(w http.ResponseWriter, r *http.
 	}
 
 	h.responder.JSON(w, http.StatusOK, models.ApprovalStatusResponse{
-		Status:   "pending",
+		Status:   string(constants.SuspendedTxStatusPending),
 		TxHash:   txHash,
 		ToolName: suspendedTx.ToolName,
 	})

@@ -11,12 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package keystore
+package keystoretest
 
 import (
 	"sync"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/keystore"
 )
 
 // memoryKeyring is an in-memory keyring for testing only.
@@ -27,8 +28,8 @@ type memoryKeyring struct {
 }
 
 // NewMemoryKeyring creates an in-memory keyring for use in tests.
-func NewMemoryKeyring() (Keyring, error) {
-	return &memoryKeyring{}, nil
+func NewMemoryKeyring() keystore.Keyring {
+	return &memoryKeyring{}
 }
 
 func (m *memoryKeyring) Name() string {

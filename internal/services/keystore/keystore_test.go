@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package keystore
+package keystore_test
 
 import (
 	"encoding/base64"
@@ -22,6 +22,8 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/services/keystore"
+	"github.com/g8e-ai/g8e/internal/services/keystore/keystoretest"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/assert"
@@ -31,25 +33,21 @@ import (
 func TestNewWithKeyring(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NotNil(t, ks)
-	assert.Equal(t, secretsDir, ks.secretsDir)
-	assert.Equal(t, logger, ks.logger)
-	assert.Equal(t, keyring, ks.keyring)
+	assert.Equal(t, "memory", ks.KeyringName())
 }
 
 func TestNewWithKeyring_CreatesSecretsDir(t *testing.T) {
 	baseDir := t.TempDir()
 	secretsDir := filepath.Join(baseDir, "secrets")
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	_, err = NewWithKeyring(secretsDir, logger, keyring)
+	_, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 
 	info, err := os.Stat(secretsDir)
@@ -60,10 +58,9 @@ func TestNewWithKeyring_CreatesSecretsDir(t *testing.T) {
 func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 
 	err = ks.Initialize()
@@ -77,17 +74,16 @@ func TestKeystore_Initialize_GeneratesNewKey(t *testing.T) {
 func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
 	testKey := make([]byte, vault.KeySize)
 	for i := range testKey {
 		testKey[i] = byte(i)
 	}
-	err = keyring.StoreMasterKey(testKey)
+	err := keyring.StoreMasterKey(testKey)
 	require.NoError(t, err)
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 
 	err = ks.Initialize()
@@ -101,14 +97,13 @@ func TestKeystore_Initialize_RetrievesExistingKey(t *testing.T) {
 func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
 	shortKey := []byte("too-short")
-	err = keyring.StoreMasterKey(shortKey)
+	err := keyring.StoreMasterKey(shortKey)
 	require.NoError(t, err)
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 
 	err = ks.Initialize()
@@ -119,10 +114,9 @@ func TestKeystore_Initialize_RejectsInvalidKeyLength(t *testing.T) {
 func TestKeystore_EncryptSecret(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -138,10 +132,9 @@ func TestKeystore_EncryptSecret(t *testing.T) {
 func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -156,10 +149,9 @@ func TestKeystore_EncryptSecret_Atomically(t *testing.T) {
 func TestKeystore_DecryptSecret(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -175,10 +167,9 @@ func TestKeystore_DecryptSecret(t *testing.T) {
 func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -190,10 +181,9 @@ func TestKeystore_DecryptSecret_MissingFile(t *testing.T) {
 func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -210,10 +200,9 @@ func TestKeystore_DecryptSecret_CorruptedFile(t *testing.T) {
 func TestKeystore_DeleteSecret(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -231,10 +220,9 @@ func TestKeystore_DeleteSecret(t *testing.T) {
 func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -245,10 +233,9 @@ func TestKeystore_DeleteSecret_Nonexistent(t *testing.T) {
 func TestKeystore_Purge(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -272,10 +259,9 @@ func TestKeystore_Purge(t *testing.T) {
 func TestKeystore_EnsurePermissions(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -306,10 +292,9 @@ func TestKeystore_EnsurePermissions(t *testing.T) {
 func TestKeystore_KeyringName(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 
 	assert.Equal(t, "memory", ks.KeyringName())
@@ -318,10 +303,9 @@ func TestKeystore_KeyringName(t *testing.T) {
 func TestKeystore_Encrypt(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -335,10 +319,9 @@ func TestKeystore_Encrypt(t *testing.T) {
 func TestKeystore_Decrypt(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -354,10 +337,9 @@ func TestKeystore_Decrypt(t *testing.T) {
 func TestKeystore_EncryptDecrypt_RoundTrip(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -384,10 +366,9 @@ func TestKeystore_EncryptDecrypt_RoundTrip(t *testing.T) {
 func TestKeystore_Decrypt_InvalidBase64(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -399,10 +380,9 @@ func TestKeystore_Decrypt_InvalidBase64(t *testing.T) {
 func TestKeystore_Decrypt_InvalidJSON(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -415,14 +395,13 @@ func TestKeystore_Decrypt_InvalidJSON(t *testing.T) {
 func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
-	enc := EncryptedSecret{
+	enc := keystore.EncryptedSecret{
 		Version:    999,
 		Nonce:      make([]byte, vault.NonceSize),
 		Ciphertext: []byte("fake"),
@@ -439,15 +418,14 @@ func TestKeystore_Decrypt_UnsupportedVersion(t *testing.T) {
 func TestKeystore_Decrypt_InvalidCiphertext(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
-	enc := EncryptedSecret{
-		Version:    keyVersion,
+	enc := keystore.EncryptedSecret{
+		Version:    1,
 		Nonce:      make([]byte, vault.NonceSize),
 		Ciphertext: []byte("invalid ciphertext that will fail GCM"),
 	}
@@ -463,10 +441,9 @@ func TestKeystore_Decrypt_InvalidCiphertext(t *testing.T) {
 func TestKeystore_Encrypt_EmptyPlaintext(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -482,10 +459,9 @@ func TestKeystore_Encrypt_EmptyPlaintext(t *testing.T) {
 func TestKeystore_Encrypt_LargePlaintext(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -505,10 +481,9 @@ func TestKeystore_Encrypt_LargePlaintext(t *testing.T) {
 func TestKeystore_DecryptSecret_InvalidJSON(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
@@ -525,14 +500,13 @@ func TestKeystore_DecryptSecret_InvalidJSON(t *testing.T) {
 func TestKeystore_DecryptSecret_UnsupportedVersion(t *testing.T) {
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
-	keyring, err := NewMemoryKeyring()
-	require.NoError(t, err)
+	keyring := keystoretest.NewMemoryKeyring()
 
-	ks, err := NewWithKeyring(secretsDir, logger, keyring)
+	ks, err := keystore.NewWithKeyring(secretsDir, logger, keyring)
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
-	enc := EncryptedSecret{
+	enc := keystore.EncryptedSecret{
 		Version:    999,
 		Nonce:      make([]byte, vault.NonceSize),
 		Ciphertext: []byte("fake"),

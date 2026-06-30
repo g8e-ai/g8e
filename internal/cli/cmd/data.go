@@ -20,11 +20,13 @@ import (
 	"os"
 	"strings"
 
-	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/spf13/cobra"
 	_ "modernc.org/sqlite"
+
+	"github.com/g8e-ai/g8e/internal/cli/config"
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/paths"
 )
 
 type User struct {
@@ -46,10 +48,6 @@ type QueryFilter struct {
 
 type QueryRequest struct {
 	Filters []QueryFilter `json:"filters"`
-}
-
-type SettingsResponse struct {
-	Settings map[string]interface{} `json:"settings"`
 }
 
 type QueryRequestWithLimit struct {
@@ -91,12 +89,12 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("data: create API client: %w", err)
 			}
 
 			resp, err := client.Get("/api/users")
 			if err != nil {
-				return err
+				return fmt.Errorf("data: fetch users: %w", err)
 			}
 
 			var users []User
@@ -132,12 +130,12 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("data: create API client: %w", err)
 			}
 
 			resp, err := client.Get("/api/operators")
 			if err != nil {
-				return err
+				return fmt.Errorf("data: fetch operators: %w", err)
 			}
 
 			var operators []Operator
@@ -173,15 +171,15 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("data: create API client: %w", err)
 			}
 
 			resp, err := client.Get("/db/settings/platform_settings")
 			if err != nil {
-				return err
+				return fmt.Errorf("data: fetch settings: %w", err)
 			}
 
-			var settings SettingsResponse
+			var settings models.SettingsDocument
 			if err := json.Unmarshal(resp, &settings); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
@@ -189,8 +187,12 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 			cmd.Println("Platform Settings")
 			cmd.Println(strings.Repeat("=", 110))
 
-			for key, value := range settings.Settings {
-				cmd.Printf("  %s: %v\n", key, value)
+			if settings.Settings != nil {
+				data, err := json.MarshalIndent(settings.Settings, "", "  ")
+				if err != nil {
+					return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+				}
+				cmd.Println(string(data))
 			}
 
 			return nil
@@ -218,7 +220,7 @@ func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), c
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("data: create API client: %w", err)
 			}
 
 			if collection == "" {
@@ -232,7 +234,7 @@ func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				}
 				resp, err := client.Post(fmt.Sprintf("/db/%s/_query", collection), query)
 				if err != nil {
-					return err
+					return fmt.Errorf("data: query collection: %w", err)
 				}
 
 				cmd.Printf("Documents in collection '%s':\n", collection)
@@ -241,7 +243,7 @@ func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				// Get specific document
 				resp, err := client.Get(fmt.Sprintf("/db/%s/%s", collection, documentID))
 				if err != nil {
-					return err
+					return fmt.Errorf("data: fetch document: %w", err)
 				}
 
 				cmd.Printf("Document %s/%s:\n", collection, documentID)
@@ -291,7 +293,7 @@ func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error
 
 			client, err := clientFactory(cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("data: create API client: %w", err)
 			}
 
 			if operatorSessionID == "" {
@@ -307,7 +309,7 @@ func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error
 
 			resp, err := client.Post("/db/audit_events/_query", query)
 			if err != nil {
-				return err
+				return fmt.Errorf("data: query audit events: %w", err)
 			}
 
 			cmd.Printf("Audit events for session %s:\n", operatorSessionID)
@@ -335,6 +337,12 @@ func dataAuditSummaryCmd() *cobra.Command {
 				return fmt.Errorf("%w: %s", constants.ErrAuditVaultDatabaseNotFound, dbPath)
 			}
 
+			db, err := sql.Open("sqlite", dbPath)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrSQLDatabaseOpenFailed, err)
+			}
+			defer db.Close()
+
 			query := "SELECT type, COUNT(*) as count FROM events"
 			if operatorSessionID != "" {
 				query += " WHERE operator_session_id = ?"
@@ -342,11 +350,10 @@ func dataAuditSummaryCmd() *cobra.Command {
 			query += " GROUP BY type"
 
 			var rows *sql.Rows
-			var err error
 			if operatorSessionID != "" {
-				rows, err = sqlDBQuery(dbPath, query, operatorSessionID)
+				rows, err = db.Query(query, operatorSessionID)
 			} else {
-				rows, err = sqlDBQuery(dbPath, query)
+				rows, err = db.Query(query)
 			}
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrAuditQueryFailed, err)
@@ -363,6 +370,9 @@ func dataAuditSummaryCmd() *cobra.Command {
 				}
 				summary[eventType] = count
 				total += count
+			}
+			if err := rows.Err(); err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrAuditScanFailed, err)
 			}
 
 			if total == 0 {
@@ -384,19 +394,4 @@ func dataAuditSummaryCmd() *cobra.Command {
 	cmd.Flags().StringVar(&operatorSessionID, "operator-session-id", "", "Filter by Operator session ID")
 
 	return cmd
-}
-
-func sqlDBQuery(dbPath, query string, args ...interface{}) (*sql.Rows, error) {
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrSQLDatabaseOpenFailed, err)
-	}
-	defer db.Close()
-
-	rows, err := db.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrSQLQueryFailed, err)
-	}
-
-	return rows, nil
 }

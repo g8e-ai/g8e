@@ -33,6 +33,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/netutil"
@@ -44,6 +46,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/tribunal"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
 // GatewayModeService is the top-level orchestrator for gateway mode (operator).
@@ -183,6 +186,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	passkeyHandler.SetSSEDependencies(db.SSEStore, pubsub)
 
 	ls := &GatewayModeService{
 		cfg:                cfg,
@@ -356,6 +360,7 @@ func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger
 	}
 
 	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	passkeyHandler.SetSSEDependencies(db.SSEStore, pubsub)
 
 	ls := &GatewayModeService{
 		cfg:                cfg,
@@ -457,7 +462,8 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 
 	// TLS verification: client certs are accepted and verified when present, but not required.
 	// mTLS enforcement for protected routes happens at the application layer via auth.Middleware(),
-	// which checks client cert presence/validity for all routes not in PublicRouteRegistry.
+	// which uses RouteAuthRegistry to classify routes by auth mode (RouteAuthNone, RouteAuthMTLS,
+	// RouteAuthWebSession, RouteAuthDual) and enforces the appropriate authentication.
 	// Browser clients (console, WebAuthn flows) reach public routes without a client cert.
 	tlsConfig := pki.TLSConfig()
 	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
@@ -826,41 +832,50 @@ func (ls *GatewayModeService) renewServiceCertWithIdentity(ctx context.Context) 
 	return ls.pki.RenewServiceCertWithNames(extraIPs, extraDNSNames)
 }
 
+// heartbeatUpdate is the typed patch payload for operator document heartbeat updates.
+type heartbeatUpdate struct {
+	LatestHeartbeatSnapshot json.RawMessage `json:"latest_heartbeat_snapshot"`
+	UpdatedAt               time.Time       `json:"updated_at"`
+}
+
 // handleHeartbeatPublish processes a heartbeat published to the pub/sub broker,
 // updating the operator document's latest_heartbeat_snapshot in the DB.
 func (ls *GatewayModeService) handleHeartbeatPublish(channel string, data []byte) {
-	// The payload is a JSON-encoded GovernanceEnvelope.
-	var env struct {
-		OperatorID string          `json:"operator_id"`
-		IntentData json.RawMessage `json:"intent_data"`
-	}
-	if err := json.Unmarshal(data, &env); err != nil {
+	var env commonv1.GovernanceEnvelope
+	if err := protojson.Unmarshal(data, &env); err != nil {
 		ls.logger.Warn("heartbeat: failed to decode envelope", "channel", channel, "error", err)
 		return
 	}
-	if env.OperatorID == "" {
+	if env.GetOperatorId() == "" {
 		ls.logger.Warn("heartbeat: envelope missing operator_id", "channel", channel)
 		return
 	}
 
-	snapshot := env.IntentData
-	if len(snapshot) == 0 {
+	var snapshot json.RawMessage
+	if env.IntentData != nil {
+		snapshotBytes, err := protojson.Marshal(env.IntentData)
+		if err != nil {
+			ls.logger.Warn("heartbeat: failed to marshal intent data", "operator_id", env.GetOperatorId(), "error", err)
+			return
+		}
+		snapshot = snapshotBytes
+	} else {
 		snapshot = json.RawMessage(data)
 	}
 
-	update, err := json.Marshal(map[string]interface{}{
-		"latest_heartbeat_snapshot": snapshot,
-		"updated_at":                time.Now().UTC(),
+	update, err := json.Marshal(heartbeatUpdate{
+		LatestHeartbeatSnapshot: snapshot,
+		UpdatedAt:               time.Now().UTC(),
 	})
 	if err != nil {
-		ls.logger.Warn("heartbeat: failed to build update", "operator_id", env.OperatorID, "error", err)
+		ls.logger.Warn("heartbeat: failed to build update", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}
 
-	if _, err := ls.db.DocStore.DocUpdate(string(constants.CollectionOperators), env.OperatorID, update); err != nil {
-		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.OperatorID, "error", err)
+	if _, err := ls.db.DocStore.DocUpdate(string(constants.CollectionOperators), env.GetOperatorId(), update); err != nil {
+		ls.logger.Warn("heartbeat: failed to update operator document", "operator_id", env.GetOperatorId(), "error", err)
 		return
 	}
 
-	ls.logger.Debug("heartbeat: operator snapshot updated", "operator_id", env.OperatorID, "channel", channel)
+	ls.logger.Debug("heartbeat: operator snapshot updated", "operator_id", env.GetOperatorId(), "channel", channel)
 }

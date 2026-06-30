@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 )
@@ -197,7 +198,7 @@ func (c *OperatorController) handleReauth(w http.ResponseWriter, r *http.Request
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	operatorSessionID := c.auth.extractOperatorSessionIDFromMTLS(r)
+	operatorSessionID, _ := r.Context().Value(constants.ContextKeyOperatorSessionID).(string)
 	if operatorSessionID == "" {
 		c.responder.Error(w, http.StatusUnauthorized, "missing operator session id")
 		return

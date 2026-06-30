@@ -362,6 +362,9 @@ The following packages are test-only and are not part of the production dependen
 - `scenarios/dow_cross_cue.go` - DoW scenarios: `dow-cross-cue` (real slew envelope) and `dow-bft-veto` (veto envelope)
 - `scenarios/dhs_sovereign.go` - DHS sovereign operations scenarios: multi-step governance workflow with tribunal consensus
 - `scenarios/mcp_a2a.go` - MCP and A2A protocol scenarios: plain MCP, mTLS MCP, A2A JSON, A2A mTLS, A2A protobuf
+- `scenarios/gov_finance.go` - Gov/finance doctrine scenarios: `gov-cui-exfil-block` and `finance-unauthorized-trade`
+- `scenarios/secure_data.go` - Secure-data scenarios: `secure-data-migration` (consensus), `secure-data-bypass-attempt` (doctrine), `secure-data-cross-tenant` (doctrine)
+- `scenarios/swarm.go` - Swarm scenarios: `swarm-recon-mission` (consensus: governed drone deployment), `swarm-weapon-release-block` (doctrine: weapon release blocked), `swarm-restricted-airspace-block` (doctrine: restricted airspace blocked)
 - `scenarios/scenario.go` - Scenario registry, `Execute`, `Posture` types
 
 **`demos/dow/`** - Department of War tactical edge demo
@@ -390,3 +393,14 @@ The following packages are test-only and are not part of the production dependen
 **`demos/gov/`** - Government operations demo
 
 **`demos/secure-data/`** - Secure data handling demo
+
+**CLI Demo Scenario Files** (`internal/cli/cmd/`):
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, audit). Contains `harnessConfig` struct, `defaultHarnessConfig`, `harnessRun` helper for building docker compose exec/run commands for agent-harness scenarios, and `runTwoLayerScenario` reusable orchestrator. Phase 6 additions: `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `captureCommand` (runs command, returns stdout string), `printDataDump` (queries gateway mTLS API for receipts/events/summary/ledger/logs after scenarios), `runG8EAuditCmd` (runs `g8e audit` inside operator container), `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `demosAuditCmd` with `receipts`/`events`/`summary` actions.
+- `demo_gov.go` - Gov demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
+- `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
+- `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
+- `demo_secure_data.go` - Secure-data demo scenarios (3 scenarios, each calls `harnessRun`)
+- `demo_dow.go` - DoW demo scenarios (3 scenarios, each calls `harnessRun`)
+- `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `ensureDHSPosture` helpers.
+- `demo_swarm.go` - Swarm demo scenarios (3 scenarios, each calls `harnessRun`): authorized recon mission, weapons safety doctrine block, navigation boundary violation block.
+- `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, and source-file assertions (harnessRun usage, no curl POST bypass, no sqlite3 backdoor, no copy-paste blocks). Phase 6 tests: `TestCaptureCommand`, `TestDemoPrintln`, `TestRunG8EAuditCmd`, `TestPrintDataDump`, `TestNoSqliteBackdoorInScenarioFiles`, `TestSqliteOnlyInAuditCmdVaultAction`, `TestNoCopyPasteInScenarioFiles`.

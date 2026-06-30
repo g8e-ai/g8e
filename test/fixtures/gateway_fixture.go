@@ -531,6 +531,27 @@ func EnrollClientIdentity(t *testing.T, f *GatewayFixture, userID, organizationI
 	}
 }
 
+// CreateNoCertClient creates an HTTP client that trusts the gateway's CA bundle
+// but does not present a client certificate. This is useful for testing endpoints
+// that should reject unauthenticated connections (e.g., API key rejection).
+func CreateNoCertClient(t *testing.T, f *GatewayFixture) *http.Client {
+	t.Helper()
+
+	rootPEM := testutil.ReadRootCA(t, f.PKIDir)
+	operatorPEM := testutil.ReadOperatorCA(t, f.PKIDir)
+	rootPool := x509.NewCertPool()
+	require.True(t, rootPool.AppendCertsFromPEM(rootPEM), "failed to parse root CA PEM")
+	require.True(t, rootPool.AppendCertsFromPEM(operatorPEM), "failed to parse operator CA PEM")
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				RootCAs: rootPool,
+			},
+		},
+	}
+}
+
 // CreateMTLSClient creates an HTTP client configured for mTLS using the enrolled identity.
 func CreateMTLSClient(t *testing.T, f *GatewayFixture, identity *ClientIdentity) *http.Client {
 	t.Helper()
