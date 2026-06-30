@@ -94,12 +94,12 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		fmt.Println("  ── Step 5: Run real g8e cross-cue (governed envelope → L2 → L5) ──")
-		if err := demoStep(demoDir, "dow-cross-cue via agent-harness",
+		if err := demoStep(demoDir, "dow-cross-cue via agent",
 			false,
 			"docker", "compose", "run", "--rm", "-T",
 			"--no-deps",
 			"agent-sigint",
-			"agent-harness", "run",
+			"agent", "run",
 			"--mtls-url", "https://g8e.local:8443",
 			"--public-url", "http://g8e.local:8080",
 			"--cert", "/root/.g8e/pki/operator.crt",
@@ -290,7 +290,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			"docker", "compose", "run", "--rm", "-T",
 			"--no-deps",
 			"agent-sigint",
-			"agent-harness", "run",
+			"agent", "run",
 			"--mtls-url", "https://g8e.local:8443",
 			"--public-url", "http://g8e.local:8080",
 			"--cert", "/root/.g8e/pki/operator.crt",

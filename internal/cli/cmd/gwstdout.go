@@ -63,7 +63,8 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 
 	// Step 4: Connect AI agents
 	cmd.Printf("  %d. Connect AI agents:\n", stepNum)
-	cmd.Printf("       %s mcp show    Print MCP client configuration\n", bin)
+	cmd.Printf("       %s mcp agent show <agent>   Print MCP client configuration for a specific agent\n", bin)
+	cmd.Printf("       %s mcp agent list           List supported agents (goose, claude, cursor, ...)\n", bin)
 	cmd.Printf("       %s mcp stdio   Run Operator as MCP stdio server (L1-L5 governance)\n", bin)
 	cmd.Println()
 

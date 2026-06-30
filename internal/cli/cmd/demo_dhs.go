@@ -72,7 +72,7 @@ func dhsHarnessRun(scenario string, cfg dhsHarnessConfig) []string {
 	cmd := []string{
 		"docker", "compose", "exec", "-T",
 		"agent-coalition",
-		"/g8e", "agent-harness", "run",
+		"/g8e", "agent", "run",
 		"--mtls-url", cfg.MTLSURL,
 		"--public-url", cfg.PublicURL,
 		"--cert", cfg.CertPath,
@@ -173,13 +173,13 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		fmt.Println("  ── Step 3: Run real dhs-ingest via agent-harness ────────────────")
+		fmt.Println("  ── Step 3: Run real dhs-ingest via agent ────────────────")
 		fmt.Println("  L1 doctrine admits; L2 consensus quorum met and verified → L5 actuator records INGEST:")
 		fmt.Println()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-ingest", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-ingest", "consensus quorum")
 		demoEmitter.Ledger(tui.LevelInfo, "L1 doctrine admitted envelope for dhs-ingest")
-		if err := demoStep(demoDir, "dhs-ingest via agent-harness",
+		if err := demoStep(demoDir, "dhs-ingest via agent",
 			false,
 			dhsHarnessRun("dhs-ingest", hcfg)...,
 		); err != nil {
@@ -251,9 +251,9 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 			hasErrors = true
 		}
 
-		// Step 3: Submit dhs-release via agent-harness (L2-only → suspend)
+		// Step 3: Submit dhs-release via agent (L2-only → suspend)
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-release", "doctrine check")
-		fmt.Println("  ── Step 3: Submit dhs-release via agent-harness (L2-only → suspend) ──")
+		fmt.Println("  ── Step 3: Submit dhs-release via agent (L2-only → suspend) ──")
 		fmt.Println("  Connector requests cross-domain release of TRK-MIL-0007.")
 		fmt.Println("  Under notary posture, the gateway suspends pending human L3 approval:")
 		fmt.Println()
@@ -263,7 +263,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		notaryCfg := hcfg
 		notaryCfg.Posture = "notary"
 		notaryCfg.L3Mode = "suspend"
-		if err := demoStep(demoDir, "dhs-release via agent-harness (notary suspend)",
+		if err := demoStep(demoDir, "dhs-release via agent (notary suspend)",
 			false,
 			dhsHarnessRun("dhs-release", notaryCfg)...,
 		); err != nil {
@@ -479,7 +479,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-cue", "doctrine check")
-		fmt.Println("  ── Step 2: Run dhs-cue via agent-harness (L2 quorum → admit) ────")
+		fmt.Println("  ── Step 2: Run dhs-cue via agent (L2 quorum → admit) ────")
 		fmt.Println("  L2 consensus quorum met (decision=true) → admitted → L5 actuator records CUE:")
 		fmt.Println()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue", "doctrine admitted")
@@ -487,7 +487,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoEmitter.Consensus("axiom", true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus("concord", true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus("variance", true, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(demoDir, "dhs-cue via agent-harness",
+		if err := demoStep(demoDir, "dhs-cue via agent",
 			false,
 			dhsHarnessRun("dhs-cue", hcfg)...,
 		); err != nil {
@@ -510,7 +510,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusPassed, "dhs-cue", "CUE recorded")
 		demoEmitter.Ledger(tui.LevelInfo, "L5 actuator recorded CUE — signed receipt in hash-chained ledger")
 
-		fmt.Println("  ── Step 4: Run dhs-cue-veto via agent-harness (L2 veto → reject) ─")
+		fmt.Println("  ── Step 4: Run dhs-cue-veto via agent (L2 veto → reject) ─")
 		fmt.Println("  L2 consensus decision=false → vetoed at quorum → operator fails closed (≥400):")
 		fmt.Println()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue-veto", "doctrine admitted")
@@ -519,7 +519,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoEmitter.Consensus("concord", true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus("variance", true, true, 3, 5, tui.ConsensusPending, "")
 		demoEmitter.Consensus("pragma", false, true, 3, 5, tui.ConsensusPending, "")
-		if err := demoStep(demoDir, "dhs-cue-veto via agent-harness",
+		if err := demoStep(demoDir, "dhs-cue-veto via agent",
 			false,
 			dhsHarnessRun("dhs-cue-veto", hcfg)...,
 		); err != nil {
@@ -570,11 +570,11 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		demoEmitter.Ledger(tui.LevelInfo, "Scenario 5 started: Sovereign Destruction + Tamper-Proof Audit")
 
-		fmt.Println("  ── Step 1: Run dhs-evidence-block via agent-harness (L1 reject) ──")
+		fmt.Println("  ── Step 1: Run dhs-evidence-block via agent (L1 reject) ──")
 		fmt.Println("  L1 doctrine detects 'rm -rf /var/log/g8e' → rejected at admission:")
 		fmt.Println()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-evidence-block", "doctrine check")
-		if err := demoStep(demoDir, "dhs-evidence-block via agent-harness",
+		if err := demoStep(demoDir, "dhs-evidence-block via agent",
 			false,
 			dhsHarnessRun("dhs-evidence-block", hcfg)...,
 		); err != nil {
@@ -586,11 +586,11 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusFailed, "dhs-evidence-block", "DATA DESTRUCTION ATTEMPT BLOCKED")
 		demoEmitter.Ledger(tui.LevelCritical, "L1 doctrine BLOCKED: 'rm -rf /var/log/g8e' — data-destruction threat detected at admission")
 
-		fmt.Println("  ── Step 2: Run dhs-purge via agent-harness (admit) ──────────────")
+		fmt.Println("  ── Step 2: Run dhs-purge via agent (admit) ──────────────")
 		fmt.Println("  L1 doctrine admits; L2 consensus quorum met → L5 actuator records PURGE:")
 		fmt.Println()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusActive, "dhs-purge", "doctrine check")
-		if err := demoStep(demoDir, "dhs-purge via agent-harness",
+		if err := demoStep(demoDir, "dhs-purge via agent",
 			false,
 			dhsHarnessRun("dhs-purge", hcfg)...,
 		); err != nil {

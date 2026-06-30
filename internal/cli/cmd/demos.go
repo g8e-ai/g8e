@@ -1033,10 +1033,10 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	fmt.Printf("  ── Step 3: %s ───────\n", cfg.step3Label)
 	fmt.Printf("  %s\n", cfg.step3Description)
 	fmt.Println()
-	if err := demoStep(demoDir, cfg.harnessScenario+" via agent-harness",
+	if err := demoStep(demoDir, cfg.harnessScenario+" via agent",
 		false,
 		"docker", "compose", "exec", "-T", "agent-runtime",
-		"/g8e", "agent-harness", "run",
+		"/g8e", "agent", "run",
 		"--mtls-url", "https://g8e.local:8443",
 		"--public-url", "http://g8e.local:"+cfg.httpPort,
 		"--cert", "/root/.g8e/pki/operator.crt",
@@ -1044,7 +1044,7 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 		"--ca", "/root/.g8e/pki/trust/g8eg-ca-bundle.pem",
 		cfg.harnessScenario,
 	); err != nil {
-		fmt.Println("  (agent-harness scenario failed)")
+		fmt.Println("  (agent scenario failed)")
 		fmt.Println()
 		hasErrors = true
 	}

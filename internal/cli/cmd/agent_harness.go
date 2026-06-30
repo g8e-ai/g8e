@@ -51,10 +51,10 @@ var (
 
 func agentHarnessCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "agent-harness",
-		Aliases: []string{"agent"},
+		Use:     "agent",
+		Aliases: []string{"agent-harness"},
 		Short:   "Universal agent harness for a real g8e Gateway/Operator",
-		Long: `agent-harness impersonates arbitrary AI tools and agents against a REAL g8e
+		Long: `agent impersonates arbitrary AI tools and agents against a REAL g8e
 Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A
 protobuf, and official governance envelopes with mock consensus + principal
 signing), then audits every result against the Operator's signed receipts.`,
@@ -144,12 +144,12 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 
 	client, err := clientpkg.New(cfg)
 	if err != nil {
-		return fmt.Errorf("agent-harness run: client: %w", err)
+		return fmt.Errorf("agent run: client: %w", err)
 	}
 
 	selected := selectAgentHarnessScenarios(harnessPhase, names)
 	if len(selected) == 0 {
-		return fmt.Errorf("agent-harness run: no scenarios selected")
+		return fmt.Errorf("agent run: no scenarios selected")
 	}
 
 	if needsGovKit(selected) {
@@ -191,7 +191,7 @@ func runAgentHarnessAudit(cmd *cobra.Command, args []string) error {
 
 	client, err := clientpkg.New(cfg)
 	if err != nil {
-		return fmt.Errorf("agent-harness audit: client: %w", err)
+		return fmt.Errorf("agent audit: client: %w", err)
 	}
 	opSession := cfg.OperatorSessionID
 	if opSession == "" {
@@ -199,7 +199,7 @@ func runAgentHarnessAudit(cmd *cobra.Command, args []string) error {
 	}
 	receipts, raw, err := client.AuditReceipts(ctx, opSession)
 	if err != nil {
-		return fmt.Errorf("agent-harness audit: %w", err)
+		return fmt.Errorf("agent audit: %w", err)
 	}
 	_ = os.MkdirAll(cfg.OutDir, 0o755)
 	_ = os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsFilename), raw, 0o644)
