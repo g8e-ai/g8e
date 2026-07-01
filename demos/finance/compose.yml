@@ -35,7 +35,7 @@ volumes:
 services:
   gateway:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: finance-gateway
     networks:
@@ -60,7 +60,7 @@ services:
 
   operator:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: finance-operator
     networks:
@@ -100,7 +100,7 @@ services:
 
   agent-runtime:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: finance-agent
     networks:

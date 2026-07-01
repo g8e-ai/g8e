@@ -45,7 +45,7 @@ services:
 
   src-gateway:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: secure-data-src-gateway
     networks:
@@ -70,7 +70,7 @@ services:
 
   src-operator:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: secure-data-src-operator
     networks:
@@ -98,7 +98,7 @@ services:
 
   dst-gateway:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: secure-data-dst-gateway
     networks:
@@ -123,7 +123,7 @@ services:
 
   dst-operator:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: secure-data-dst-operator
     networks:
@@ -153,7 +153,7 @@ services:
 
   agent-runtime:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: secure-data-agent-runtime
     networks:

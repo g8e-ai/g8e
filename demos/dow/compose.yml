@@ -36,7 +36,7 @@ volumes:
 services:
   gateway:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: dow-gateway
     networks:
@@ -69,7 +69,7 @@ services:
 
   operator:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: dow-operator
     networks:
@@ -106,7 +106,7 @@ services:
 
   agent-sigint:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: dow-agent-sigint
     networks:

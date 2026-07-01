@@ -37,7 +37,7 @@ volumes:
 services:
   gateway:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: healthcare-gateway
     networks:
@@ -62,7 +62,7 @@ services:
 
   operator:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: healthcare-operator
     networks:
@@ -235,7 +235,7 @@ services:
   # Authorized AI agent simulating a payer system submitting PA requests via FHIR through the g8e gateway.
   agent-runtime:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: healthcare-agent
     networks:

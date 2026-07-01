@@ -94,7 +94,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, or `demos/swarm` as reference. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the same `Dockerfile` with different command-line flags.
+3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, or `demos/swarm` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image — no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source) with different command-line flags.
 
 ### 2. Implementation on the Air-Gapped Target Host
 

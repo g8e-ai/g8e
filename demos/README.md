@@ -124,8 +124,9 @@ From the repository root:
 
 ```bash
 make build
-cp g8e demos/bin/g8e
 ```
+
+`make build` automatically copies the binary to `demos/bin/g8e`.
 
 ### Using the g8e CLI (recommended)
 
@@ -288,7 +289,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-The Dockerfile at the repository root is shared across all org directories. Docker Compose builds the g8e binary from source inside each container. No pre-built image is required.
+The `demos/Dockerfile` is shared across all org directories. It copies the pre-built binary from `demos/bin/g8e` into a minimal Debian image — no compilation happens inside the container. Run `make build` first to produce the binary.
 
 ## Invariants
 
@@ -298,7 +299,7 @@ The following must hold in every org environment:
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted. All `agent-runtime` containers build from the root Dockerfile with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based agent-harness invocation.
+5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All `agent-runtime` containers use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based agent-harness invocation.
 
 ## Port Mappings
 

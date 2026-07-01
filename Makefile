@@ -284,8 +284,11 @@ build:
 		echo "Error: Unable to copy binary - g8e gateway is currently running. Please stop it first with: ./$$ROOT_COPY gw stop"; \
 		exit 1; \
 	fi; \
-	cp $$NODE_BINARY $$ROOT_COPY
+	cp $$NODE_BINARY $$ROOT_COPY; \
+	mkdir -p demos/bin; \
+	cp $$ROOT_COPY demos/bin/g8e
 	@echo "Build complete. Binary: $(BIN_DIR)/g8e-$(HOST_OS)-$(HOST_ARCH)$(if $(filter windows,$(HOST_OS)),.exe,)"
+	@echo "Demo binary: demos/bin/g8e"
 
 .PHONY: build-all
 build-all:
