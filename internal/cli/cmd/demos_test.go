@@ -889,31 +889,6 @@ func TestNoCopyPasteInScenarioFiles(t *testing.T) {
 	}
 }
 
-func TestCaptureCommand(t *testing.T) {
-	t.Run("captures stdout from echo command", func(t *testing.T) {
-		output, err := captureCommand(t.TempDir(), "echo", "hello world")
-		require.NoError(t, err)
-		assert.Equal(t, "hello world\n", output)
-	})
-
-	t.Run("returns error for non-existent command", func(t *testing.T) {
-		_, err := captureCommand(t.TempDir(), "nonexistent-command-12345")
-		assert.Error(t, err)
-	})
-
-	t.Run("returns empty string for command with no output", func(t *testing.T) {
-		output, err := captureCommand(t.TempDir(), "true")
-		require.NoError(t, err)
-		assert.Empty(t, strings.TrimSpace(output))
-	})
-
-	t.Run("captures multi-line output", func(t *testing.T) {
-		output, err := captureCommand(t.TempDir(), "printf", "line1\nline2\n")
-		require.NoError(t, err)
-		assert.Equal(t, "line1\nline2\n", output)
-	})
-}
-
 func TestDemoPrintln(t *testing.T) {
 	t.Run("demoPrintln is no-op when not verbose", func(t *testing.T) {
 		original := demoVerbose
@@ -953,17 +928,5 @@ func TestRunG8EAuditCmd(t *testing.T) {
 		composePath := filepath.Join(tmpDir, "compose.yml")
 		err := runG8EAuditCmd(tmpDir, composePath, "receipts")
 		assert.Error(t, err)
-	})
-}
-
-func TestPrintDataDump(t *testing.T) {
-	t.Run("function exists and is callable", func(t *testing.T) {
-		assert.NotNil(t, printDataDump)
-	})
-
-	t.Run("does not panic with non-existent demo dir", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		// Should handle missing compose file gracefully without panicking
-		printDataDump(tmpDir)
 	})
 }
