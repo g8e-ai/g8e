@@ -718,7 +718,7 @@ services:
 
   # Command and Control Interface
   command-interface:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: swarm-command-interface
     networks:
       net_internal:
@@ -754,7 +754,7 @@ services:
 
   # Simulated adversary attempting to compromise drone swarm
   adversary:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: swarm-adversary
     networks:
       net_untrusted:
@@ -762,7 +762,7 @@ services:
 
   # Observability and monitoring
   observability:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: swarm-observability
     networks:
       net_mgmt:

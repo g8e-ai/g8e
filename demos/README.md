@@ -375,6 +375,88 @@ Verify target-data mount:
 docker compose exec target-system ls -la /var/g8e/target/
 ```
 
+## Air-Gapped Deployment
+
+g8e demos can be deployed in environments with no network access. All Go
+dependencies are vendored, all Docker images are pinned to sha256 digests, and
+no runtime `pip install` or external package fetches are required.
+
+### Prerequisites
+
+- Docker and Docker Compose installed on both the connected and air-gapped machines
+- The `g8e` binary built from source (or use `make build`)
+
+### Step 1: Pre-pull Images (Connected Machine)
+
+On a machine with internet access, pull all external images listed in the
+manifest:
+
+```bash
+g8e demos pull
+```
+
+This reads `demos/images.json` and pulls each image by its pinned digest.
+
+### Step 2: Export Images (Connected Machine)
+
+Save the pulled images to tar files for transfer:
+
+```bash
+./demos/airgap.sh export /tmp/g8e-images
+```
+
+This creates one `.tar` file per image in the specified output directory.
+
+### Step 3: Transfer to Air-Gapped Machine
+
+Copy the entire repository (including `vendor/` directories) and the exported
+image directory to the air-gapped machine via your approved transfer mechanism
+(e.g., secure USB, DLP-approved file transfer).
+
+### Step 4: Import Images (Air-Gapped Machine)
+
+Load the exported images into the local Docker daemon:
+
+```bash
+./demos/airgap.sh import /tmp/g8e-images
+```
+
+### Step 5: Build and Run (Air-Gapped Machine)
+
+The Dockerfile uses vendored Go modules and does not require network access
+during build:
+
+```bash
+make build
+g8e demos start <org>
+```
+
+### Verification
+
+Run the air-gap verification target to confirm everything is in order:
+
+```bash
+make test-airgap
+```
+
+This checks that:
+- `vendor/` and `protocol/vendor/` directories exist
+- The vendored build compiles without network access
+- `demos/images.json` manifest is present
+- No unpinned image references remain in compose files
+- No `pip install` or `import requests` references remain in demo Python files
+- `demos/airgap.sh` is executable
+
+### Image Manifest
+
+The `demos/images.json` file lists all external Docker images used across all
+demo environments, along with their pinned sha256 digests and which demos use
+each image. To list all images in the manifest:
+
+```bash
+./demos/airgap.sh list
+```
+
 ## License
 
 Apache 2.0

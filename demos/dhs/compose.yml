@@ -148,7 +148,7 @@ services:
   # ── Display-only source connectors (narrative, no real g8e identity) ────────
 
   connector-dhs:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-connector-dhs
     networks:
       net_internal:
@@ -159,7 +159,7 @@ services:
     command: ["sh", "-c", "while true; do echo '[DHS-CBP] NIPR feed active.'; sleep 30; done"]
 
   connector-mil:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-connector-mil
     networks:
       net_internal:
@@ -170,7 +170,7 @@ services:
     command: ["sh", "-c", "while true; do echo '[MIL-ISR] SIPR feed active.'; sleep 30; done"]
 
   connector-ic:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-connector-ic
     networks:
       net_internal:
@@ -181,7 +181,7 @@ services:
     command: ["sh", "-c", "while true; do echo '[IC-SIGINT] SIPR feed active.'; sleep 30; done"]
 
   connector-partner:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-connector-partner
     networks:
       net_untrusted:
@@ -193,7 +193,7 @@ services:
   # governance. Records governed ops to /var/vault/operations.jsonl.
 
   datasvc:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: dhs-datasvc
     networks:
       net_secure:
@@ -216,7 +216,7 @@ services:
   # coalition-shared network. Only caveat-cleared, minimized records reach it.
 
   fusion-cop:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-fusion-cop
     networks:
       net_perimeter:
@@ -226,7 +226,7 @@ services:
   # coalition-datalink is the link to the Mission Partner environment. Scenario 3
   # severs it to prove continuity of coverage under comms-denied conditions.
   coalition-datalink:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-coalition-datalink
     networks:
       net_perimeter:
@@ -239,7 +239,7 @@ services:
   # ── Partner-nation analyst: requests release across the sovereignty boundary ─
 
   analyst-partner:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-analyst-partner
     networks:
       net_untrusted:
@@ -249,7 +249,7 @@ services:
   # ── Bad actor: isolated on untrusted network, no path to vault or gateway ────
 
   bad-actor:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-bad-actor
     networks:
       net_untrusted:
@@ -258,7 +258,7 @@ services:
   # ── Observability: out-of-band audit tail ───────────────────────────────────
 
   observability:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dhs-observability
     networks:
       net_mgmt:

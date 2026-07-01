@@ -447,6 +447,25 @@ test-docker:
 	@go test -tags=e2e $(TEST_RACE) $(TEST_COUNT) -timeout 300s ./test/e2e/...
 
 
+# Air-Gap Verification: verify vendored build works without network access
+.PHONY: test-airgap
+test-airgap:
+	@echo "Running air-gap verification..."
+	@echo "  1. Verifying vendor directories exist..."
+	@test -d vendor/ || { echo "ERROR: vendor/ directory missing — run 'go mod vendor'"; exit 1; }
+	@test -d protocol/vendor/ || { echo "ERROR: protocol/vendor/ directory missing — run 'go mod vendor' in protocol/"; exit 1; }
+	@echo "  2. Building with vendored modules (-mod=vendor)..."
+	@go build -mod=vendor ./... || { echo "ERROR: vendored build failed"; exit 1; }
+	@echo "  3. Verifying images.json manifest exists..."
+	@test -f demos/images.json || { echo "ERROR: demos/images.json missing"; exit 1; }
+	@echo "  4. Checking compose files have no unpinned image references..."
+	@! grep -rn 'image:.*:latest\|image:.*:alpine\|image:.*:slim\|image:.*:bookworm' demos/*/compose.yml || { echo "ERROR: found unpinned image references in compose files"; exit 1; }
+	@echo "  5. Verifying no pip install or requests imports remain in demos..."
+	@! grep -rn 'pip install\|import requests' demos/ --include='*.py' || { echo "ERROR: found pip install or requests import in demo Python files"; exit 1; }
+	@echo "  6. Verifying airgap.sh is executable..."
+	@test -x demos/airgap.sh || { echo "ERROR: demos/airgap.sh is not executable"; exit 1; }
+	@echo "Air-gap verification PASSED."
+
 # Coverage tests
 .PHONY: test-coverage
 test-coverage:

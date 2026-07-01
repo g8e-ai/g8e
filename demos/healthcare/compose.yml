@@ -89,7 +89,7 @@ services:
   # HB 3134 (2027 API Mandate): FHIR R4-compliant PA submission endpoint replacing fax-based workflows.
   # Bridges net_internal so the g8e gateway can enforce PHI doctrine on inbound requests.
   pa-submission-service:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: healthcare-pa-api
     networks:
       net_internal:
@@ -113,7 +113,7 @@ services:
   # HB 3134 (Provider Exemptions / Gold Carding): auto-approves requests from providers whose
   # historic approval rate meets or exceeds EXEMPTION_THRESHOLD_PERCENTAGE.
   provider-exemption-rules:
-    image: node:20-alpine
+    image: node@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
     container_name: healthcare-exemption-rules
     networks:
       net_secure:
@@ -129,7 +129,7 @@ services:
   # 2026 CCO Medicaid Rule: tracks days-elapsed per request; alerts reviewers at day 5 to
   # prevent breach of the 7-day maximum turnaround SLA.
   pa-processing-worker:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: healthcare-pa-worker
     networks:
       net_secure:
@@ -148,7 +148,7 @@ services:
 
   # Async queue for PA requests; navigate to localhost:15673 to watch request throughput.
   message-broker:
-    image: rabbitmq:3-management
+    image: rabbitmq@sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69
     container_name: healthcare-message-broker
     networks:
       net_secure:
@@ -166,7 +166,7 @@ services:
 
   # Stores compliance metrics for mandatory DCBS/OHA annual reporting (March 1 & 31 deadlines).
   reporting-db:
-    image: postgres:15
+    image: postgres@sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012
     container_name: healthcare-reporting-db
     networks:
       net_secure:
@@ -190,7 +190,7 @@ services:
   # DCBS/OHA Reporting: Metabase dashboards for % denials (standard vs expedited) and median
   # decision time. Navigate to localhost:3001 to build required state compliance reports.
   compliance-dashboard:
-    image: metabase/metabase:latest
+    image: metabase/metabase@sha256:c37d32ea9cef073fd0f73514462fd3e3a847aaed78fbe99b3c3362879c9e62b6
     container_name: healthcare-compliance-ui
     networks:
       net_perimeter:
@@ -211,7 +211,7 @@ services:
   # One-shot service: configures Metabase admin account, database connection, and pre-loads
   # the two mandatory DCBS/OHA compliance queries. Exits after setup; never restarts.
   metabase-setup:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: healthcare-metabase-setup
     restart: "no"
     networks:
@@ -256,14 +256,14 @@ services:
 
   # Simulates an unauthorized party attempting to exfiltrate PHI or bypass the PA workflow.
   bad-actor:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: healthcare-bad-actor
     networks:
       net_untrusted:
     command: ["sh", "-c", "while true; do sleep 3600; done"]
 
   observability:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: healthcare-observability
     networks:
       net_mgmt:

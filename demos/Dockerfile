@@ -1,4 +1,4 @@
-FROM debian:bookworm
+FROM debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget ca-certificates \
