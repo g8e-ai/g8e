@@ -51,10 +51,12 @@ RUN /build/g8e --help
 
 # =============================================================================
 # Stage 2: Runtime
-# Use standard Debian with common utilities
+# The compiled binary is statically linked (CGO_ENABLED=0) and has zero runtime
+# dependencies. The packages below are container conveniences only (health-check
+# curl, CA certs for outbound TLS) — they are NOT required by the binary itself.
 FROM debian:bookworm
 
-# Install common utilities
+# Install container utilities (not binary dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*

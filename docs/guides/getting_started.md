@@ -32,7 +32,7 @@ There are two ways to run g8e: **entirely in Docker** (no local toolchain requir
 | Docker | 24.0+ |
 | Docker Compose | v2 (included in Docker Desktop 4.x and Docker Engine 24.0+) |
 
-Everything, including the Go compiler, OpenSSL, and Git, runs inside the container. No local toolchain is needed to build or run the gateway with Docker.
+Everything, including the Go compiler and build dependencies, runs inside the container. No local toolchain is needed to build or run the gateway with Docker.
 
 ### Local path (build and run natively)
 
@@ -40,8 +40,7 @@ Everything, including the Go compiler, OpenSSL, and Git, runs inside the contain
 |---|---|
 | Go | 1.26.4, required to build from source |
 | Make | Any recent version, required to run build targets |
-| Git | Any recent version, required for the audit vault's Git-backed ledger |
-| OpenSSL | Any recent version, required for PKI operations at runtime |
+| Git | Any recent version, required to clone the repository |
 | Python | 3.11+, optional, required only for demo environments and protocol library development |
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
@@ -72,7 +71,7 @@ Requires `make` and Go 1.26+ installed on your machine. If you're not sure, run 
 make build
 ```
 
-Produces the `g8e` binary in the repository root and platform-specific binaries in `bin/`. The binary is statically linked with no runtime dependencies.
+Produces the `g8e` binary in the repository root and platform-specific binaries in `bin/`. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, Git, or other external tools are needed on the target host.
 
 Additional build targets:
 

@@ -24,7 +24,6 @@ The reference implementation is the g8e Node running in gateway mode. The same g
 
 - **Go 1.26.4+** - Required for building the reference gateway.
 - **Make** - Required to run build targets.
-- **OpenSSL** - Required for PKI operations during runtime.
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
 > - **Linux:** `bash scripts/linux-setup.sh`
@@ -40,7 +39,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` g8e Node in the repository root and platform-specific binaries in the `bin/` directory. The g8e Node is statically linked and requires no runtime dependencies.
+This produces the `g8e` g8e Node in the repository root and platform-specific binaries in the `bin/` directory. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, or other external tools are needed on the target host.
 
 ### Build Targets
 
