@@ -5,10 +5,10 @@ parent: Guides
 
 # Air-Gap Architecture
 
-Last Updated: 2026-06-29
-Version: v1.3.3
+Last Updated: 2026-07-01
+Version: v1.3.5
 
-The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and local Go dependencies. The platform supports both binary deployment and containerized deployment via Docker.
+The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies (`vendor/` and `protocol/vendor/`). The platform supports both binary deployment and containerized deployment via Docker.
 
 ---
 
@@ -67,17 +67,18 @@ Verified operations are logged to a host-local ledger, and the Operator exposes 
 
 | Development Phase | Network Requirements | Air-Gap Isolation Strategy |
 | :--- | :--- | :--- |
-| **Build Phase** | External network access required. | Compile and resolve dependencies on a connected build host prior to deployment. |
+| **Build Phase** | Network access only needed for initial `go mod vendor`. Once vendored, builds are fully offline. | Compile and resolve dependencies on a connected build host, then transfer the vendored source tree to the air-gapped machine. |
 | **Runtime Phase** | Zero external network access required. | All communications occur over localhost interfaces or private local networks. |
 
 ### Dependency Resolution and Build Tools
 
 To ensure a self-contained installation, the build process packages all required components offline:
 
-- **Go Dependencies**: The core platform compiles into a single g8e Node, resolving dependencies defined in `go.mod`.
+- **Go Dependencies**: The core platform compiles into a single statically-linked g8e Node binary. All Go dependencies are vendored into `vendor/` (root module) and `protocol/vendor/` (protocol module). The build uses `-mod=vendor` and sets `GOFLAGS=-mod=vendor` in the Dockerfile, ensuring no network access is needed during compilation. Run `go mod vendor` on a connected host to populate or refresh these directories.
 - **Protocol Generation**: Protobuf compilation is performed offline using local tools without relying on the remote Buf Schema Registry (BSR). Configuration details are defined in `buf.gen.yaml` and `Makefile`.
 - **Build-Time Tooling**: Protobuf code and documentation generation requires `buf`, `protoc-gen-go`, `protoc-gen-go-grpc`, and `protoc-gen-doc` during the build phase. These binaries are not required on the target runtime host.
 - **Cross-Platform Setup Scripts**: The platform provides platform-specific setup scripts for automated installation and validation: `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, and `scripts/windows-setup.ps1`.
+- **Docker Build Context**: The `.dockerignore` file must **not** exclude `vendor/` or `protocol/vendor/` — these directories are required by the `Dockerfile`'s `COPY` instructions for air-gapped containerized builds.
 
 ---
 
@@ -94,7 +95,13 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, or `demos/swarm` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image — no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source) with different command-line flags.
+3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, or `demos/swarm` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image — no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source using vendored modules) with different command-line flags.
+4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:
+   ```bash
+   g8e demos pull
+   ./demos/airgap.sh export /tmp/g8e-images
+   ```
+   This pulls all images pinned by sha256 digest in `demos/images.json` and saves them as `.tar` files. Transfer the export directory to the air-gapped machine and load them with `./demos/airgap.sh import /tmp/g8e-images`.
 
 ### 2. Implementation on the Air-Gapped Target Host
 
@@ -108,6 +115,11 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    ./g8e auth enroll
    ```
 4. **Optional Remote Management**: Use operator remote management CLI commands (`cp`, `scp`, `deploy`, `stream`) to manage remote hosts within the air-gapped environment. These commands are defined in `internal/cli/cmd/operator.go`.
+5. **Verify Air-Gap Readiness**: Run the air-gap verification target to confirm vendored builds, image pinning, and script integrity:
+   ```bash
+   make test-airgap
+   ```
+   This checks that `vendor/` and `protocol/vendor/` exist, the vendored build compiles, `demos/images.json` is present, no unpinned image references remain in compose files, no `pip install` or `import requests` references remain in demo Python files, and `demos/airgap.sh` is executable.
 
 ---
 
@@ -125,4 +137,5 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Remote management commands (cp, scp, stream, deploy) for operators inside the air-gapped environment.
 - **[Docker Gateway](docker_gateway.md)**: Containerized deployment details for gateway and operator services.
+- **[Demos README](../demos/README.md)**: Step-by-step air-gapped Docker image export/import workflow using `demos/airgap.sh` and `demos/images.json`.
 
