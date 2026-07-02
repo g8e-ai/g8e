@@ -96,6 +96,9 @@ reports/*
 /g8e
 *buf
 *operator
+# Exception: don't ignore vendored operator proto package
+!vendor/github.com/g8e-ai/g8e/protocol/proto/g8e/operator/
+!vendor/github.com/g8e-ai/g8e/protocol/proto/g8e/operator/**
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding
