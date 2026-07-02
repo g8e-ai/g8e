@@ -252,6 +252,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "localhost:5433")
 		assert.Contains(t, output, "http://localhost:3001")
 		assert.Contains(t, output, "https://localhost:8444/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8081")
 	})
 
 	t.Run("prints gov endpoints", func(t *testing.T) {
@@ -272,6 +273,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8443")
 		assert.Contains(t, output, "http://localhost:3000")
 		assert.Contains(t, output, "https://localhost:8443/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8080")
 	})
 
 	t.Run("prints finance endpoints", func(t *testing.T) {
@@ -292,6 +294,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8445")
 		assert.Contains(t, output, "http://localhost:3002")
 		assert.Contains(t, output, "https://localhost:8445/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8082")
 	})
 
 	t.Run("prints secure-data endpoints", func(t *testing.T) {
@@ -312,6 +315,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "https://localhost:8446")
 		assert.Contains(t, output, "http://localhost:3003")
 		assert.Contains(t, output, "https://localhost:8446/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8083")
 	})
 
 	t.Run("prints dow endpoints", func(t *testing.T) {
@@ -331,6 +335,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8086")
 		assert.Contains(t, output, "https://localhost:8449")
 		assert.Contains(t, output, "https://localhost:8449/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8086")
 	})
 
 	t.Run("prints dhs endpoints", func(t *testing.T) {
@@ -350,6 +355,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8087")
 		assert.Contains(t, output, "https://localhost:8450")
 		assert.Contains(t, output, "https://localhost:8450/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8087")
 	})
 
 	t.Run("prints swarm endpoints", func(t *testing.T) {
@@ -369,6 +375,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		assert.Contains(t, output, "http://localhost:8085")
 		assert.Contains(t, output, "https://localhost:8448")
 		assert.Contains(t, output, "https://localhost:8448/console/")
+		assert.Contains(t, output, "g8e auth enroll -e localhost:8085")
 	})
 
 	t.Run("prints default message for unknown org", func(t *testing.T) {
@@ -386,6 +393,7 @@ func TestPrintDemoEndpoints(t *testing.T) {
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
 		assert.Contains(t, output, "No endpoint information available for 'unknown-org'")
+		assert.NotContains(t, output, "auth enroll")
 	})
 }
 

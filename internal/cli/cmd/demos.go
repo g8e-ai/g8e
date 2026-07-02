@@ -423,6 +423,38 @@ func printDemoEndpoints(org string) {
 	default:
 		fmt.Printf("  No endpoint information available for '%s'\n", org)
 	}
+
+	if port := demoHTTPPort(org); port != "" {
+		fmt.Println()
+		fmt.Println("  Enroll a passkey for human approval:")
+		fmt.Printf("    g8e auth enroll -e localhost:%s\n", port)
+		fmt.Println()
+		fmt.Println("  This enrolls your CLI session and registers a WebAuthn passkey")
+		fmt.Println("  in your browser. The passkey is required for all governed operations.")
+	}
+}
+
+// demoHTTPPort returns the Docker-published HTTP port for the given demo org.
+// Returns empty string for unknown orgs.
+func demoHTTPPort(org string) string {
+	switch org {
+	case constants.DemosOrgHealthcare:
+		return "8081"
+	case constants.DemosOrgGov:
+		return "8080"
+	case constants.DemosOrgFinance:
+		return "8082"
+	case constants.DemosOrgSecureData:
+		return "8083"
+	case constants.DemosOrgDoW:
+		return "8086"
+	case constants.DemosOrgDHS:
+		return "8087"
+	case constants.DemosOrgSwarm:
+		return "8085"
+	default:
+		return ""
+	}
 }
 
 func demosStopCmd() *cobra.Command {

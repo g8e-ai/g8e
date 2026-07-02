@@ -293,7 +293,6 @@ func TestOperatorStreamCmd(t *testing.T) {
 		}{
 			{"hosts", ""},
 			{"arch", ""},
-			{"endpoint", ""},
 			{"ssh-identity-file", ""},
 		}
 
