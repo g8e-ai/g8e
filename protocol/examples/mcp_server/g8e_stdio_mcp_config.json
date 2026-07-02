@@ -1,0 +1,10 @@
+{
+  "_comment": "Stdio transport example. The g8e binary runs as a subprocess MCP server exposing all 30 native tools with L1 inline doctrine (MITRE ATT&CK). No gateway required. Compatible with Cursor, Devin, VS Code, and Claude Code MCP clients. Use 'g8e mcp agent show <agent>' to generate agent-specific configs.",
+  "mcpServers": {
+    "g8e-native": {
+      "command": "/path/to/g8e",
+      "args": ["mcp", "stdio"],
+      "disabled": false
+    }
+  }
+}
