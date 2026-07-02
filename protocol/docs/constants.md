@@ -246,6 +246,13 @@ Typed environment variable names, typed as `EnvVarKey` and grouped in a struct `
 
 - `TribunalID` (`G8E_TRIBUNAL_ID`)
 - `TribunalURL` (`G8E_TRIBUNAL_URL`)
+- `VaultDir` (`G8E_VAULT_DIR`)
+- `VaultKey` (`G8E_VAULT_KEY`)
+- `VaultRequireUnlock` (`G8E_VAULT_REQUIRE_UNLOCK`)
+- `Shell` (`SHELL`)
+- `Lang` (`LANG`)
+- `Term` (`TERM`)
+- `TZ` (`TZ`)
 
 ### Field Paths (`field_paths.go`)
 
@@ -371,6 +378,15 @@ Timestamp format constants:
 
 - `FormatRFC3339`: canonical RFC3339 format string with timezone offset
 - `TimestampFormat`: RFC3339 with nanosecond precision (`time.RFC3339Nano`)
+
+### Mappings (`mappings.go`)
+
+Functions mapping between event types, action types, and execution statuses:
+
+- `MapEventTypeToActionType`: Maps `EventType` to `ActionType` using a static `eventToAction` map (e.g., `OperatorCommandRequested` to `ActionTypeExecuteBash`). Unmapped events pass through as-is.
+- `MapActionTypeToEventType`: Reverse mapping derived from `eventToAction` at init time.
+- `MapEventTypeToResultActionType`: Maps completion/failure events to result action types (e.g., `EXECUTE_BASH_RESULT`, `EXECUTE_BASH_CANCELLED`) via `eventToResultAction`.
+- `ProtoToExecutionStatus`: Maps protobuf `ExecutionStatus` enum values to internal `ExecutionStatus` constants.
 
 ## JSON Reference Files
 

@@ -5,7 +5,7 @@ parent: Guides
 
 # Air-Gap Architecture
 
-Last Updated: 2026-07-01
+Last Updated: 2026-07-02
 Version: v1.3.5
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies (`vendor/` and `protocol/vendor/`). The platform supports both binary deployment and containerized deployment via Docker.
@@ -78,7 +78,7 @@ To ensure a self-contained installation, the build process packages all required
 - **Protocol Generation**: Protobuf compilation is performed offline using local tools without relying on the remote Buf Schema Registry (BSR). Configuration details are defined in `buf.gen.yaml` and `Makefile`.
 - **Build-Time Tooling**: Protobuf code and documentation generation requires `buf`, `protoc-gen-go`, `protoc-gen-go-grpc`, and `protoc-gen-doc` during the build phase. These binaries are not required on the target runtime host.
 - **Cross-Platform Setup Scripts**: The platform provides platform-specific setup scripts for automated installation and validation: `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, and `scripts/windows-setup.ps1`.
-- **Docker Build Context**: The `.dockerignore` file must **not** exclude `vendor/` or `protocol/vendor/` — these directories are required by the `Dockerfile`'s `COPY` instructions for air-gapped containerized builds.
+- **Docker Build Context**: The `.dockerignore` file must **not** exclude `vendor/` or `protocol/vendor/`; these directories are required by the `Dockerfile`'s `COPY` instructions for air-gapped containerized builds.
 
 ---
 
@@ -95,7 +95,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 2. **Package Runtime Configurations**: Archive the build artifacts and the protocol schemas:
    - The compiled `bin/g8e` g8e Node.
    - The protocol configuration files under the `protocol/` directory.
-3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, or `demos/swarm` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image — no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source using vendored modules) with different command-line flags.
+3. **Optional Container Build**: For containerized deployments, use the demo configurations in `demos/healthcare`, `demos/gov`, `demos/finance`, `demos/secure-data`, `demos/dow`, `demos/dhs`, or `demos/swarm` as reference. The `demos/Dockerfile` copies the pre-built binary into a minimal image; no compilation happens inside the container. The root `docker-compose.yml` defines both `g8e-gateway` and `g8e-operator` services using the root `Dockerfile` (which compiles from source using vendored modules) with different command-line flags.
 4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:
    ```bash
    g8e demos pull
