@@ -51,6 +51,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		); err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
+			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 2: Submit FHIR PA request through the gateway ───────")
@@ -105,6 +106,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		); err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
+			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 2: Submit gold-card PA through the gateway ───────────")
@@ -162,6 +164,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		); err != nil {
 			fmt.Println("  (gateway health check failed — is the demo running?)")
 			fmt.Println()
+			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 2: Query SLA-breach status through the gateway ──────")
@@ -200,6 +203,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		}
 
 	case "4":
+		var hasErrors bool
 		result.number = "4"
 		result.name = "Bad Actor PHI Exfiltration Blocked"
 		result.status = "PASS"
@@ -219,11 +223,14 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		demoPrintln("  ── Layer 1: Network isolation ────────────────────────────────")
 		demoPrintln("  bad-actor (net_untrusted) → PA API (net_internal) — should timeout")
 		demoPrintln()
-		_ = demoStep(demoDir, "network isolation",
+		if err := demoStep(demoDir, "network isolation",
 			false,
 			"docker", "compose", "exec", "-T", "bad-actor",
 			"sh", "-c", "wget -qO- -T 5 http://10.22.0.30:8000/ 2>&1 || echo 'BLOCKED: no route from net_untrusted to net_internal (production network policy)'",
-		)
+		); err != nil {
+			fmt.Println("  (network isolation check failed)")
+			hasErrors = true
+		}
 
 		demoPrintln("  ── Layer 2: g8e doctrine enforcement ─────────────────────────")
 		demoPrintln("  Submit a PHI exfiltration attempt through the production-ready")
@@ -231,16 +238,25 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.PublicURL = "http://g8e.local:8081"
-		_ = demoStep(demoDir, "phi exfiltration",
+		if err := demoStep(demoDir, "phi exfiltration",
 			false,
 			harnessRun("healthcare-phi-blocked", hcfg)...,
-		)
+		); err != nil {
+			fmt.Println("  (healthcare-phi-blocked harness scenario failed)")
+			fmt.Println()
+			hasErrors = true
+		}
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 		demoPrintln()
 
-		fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")
-		fmt.Println("         Layer 1: network isolation (net_untrusted has no route to net_internal).")
-		fmt.Println("         Layer 2: doctrine phi_exfil_attempt loaded at confidence 0.95.")
+		if hasErrors {
+			result.status = "FAIL"
+			fmt.Println("  [FAIL] Scenario 4 — One or more steps failed.")
+		} else {
+			fmt.Println("  [PASS] Scenario 4 — PHI exfiltration blocked at both layers.")
+			fmt.Println("         Layer 1: network isolation (net_untrusted has no route to net_internal).")
+			fmt.Println("         Layer 2: doctrine phi_exfil_attempt loaded at confidence 0.95.")
+		}
 
 	default:
 		return scenarioResult{}, fmt.Errorf("invalid scenario number for healthcare: %q (valid: 1-4)", scenario)

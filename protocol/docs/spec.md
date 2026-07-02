@@ -4,8 +4,8 @@ title: g8e Protocol
 
 # g8e Protocol
 
-Last Updated: 2026-06-29
-Version: v1.3.3
+Last Updated: 2026-07-03
+Version: v1.3.5
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -18,7 +18,7 @@ The g8e Protocol is the foundational wire contract for all mutations in the g8e 
 ### Core Design Principles
 
 - **Canonical JSON Wire Format**: All client-facing surfaces (HTTP, WSS pub/sub, receipts, audit exports) carry the `GovernanceEnvelope` as canonical JSON (protojson). Node binary protobuf is strictly reserved for internal storage.
-- **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data (see [Network Architecture](./network.md)).
+- **g8e.local Canonical Alias**: The platform uses `g8e.local` as the stable internal hostname. The gateway translates this alias to installation-specific peer identity and endpoint data (see [Network Architecture](../../docs/architecture/network.md)).
 - **Hash-Based Signing**: A deterministic `transaction_hash` is computed from normalized envelope fields. The verifier enforces `id == transaction_hash == SHA256(canonical_fields)`.
 - **Fail-Closed Verification**: Any malformed envelope, expired transaction, reused nonce, stale state root, or missing proof is rejected immediately before execution.
 - **Body-Embedded Context**: Business and execution context (`web_session_id`, `cli_session_id`, `operator_session_id`, `user_id`) lives inside the envelope via typed fields.
@@ -131,7 +131,7 @@ The transaction lifecycle follows a strict sequence from intent to audited execu
 3. The payload is embedded into a `GovernanceEnvelope` alongside `nonce`, `expires_at`, and `state_merkle_root`.
 4. An L2 Consensus producer computes the `transaction_hash` and attaches a signature.
 5. For mutations, an L3 Notary (human) signs the same hash via WebAuthn, unless auto-approval policy applies.
-6. The client submits the canonical-JSON envelope over mTLS to the g8e Gateway, which validates and dispatches it to the target g8e Operator over WSS. Remote peers are resolved via `g8e.local` translation (see [Network Architecture](./network.md)).
+6. The client submits the canonical-JSON envelope over mTLS to the g8e Gateway, which validates and dispatches it to the target g8e Operator over WSS. Remote peers are resolved via `g8e.local` translation (see [Network Architecture](../../docs/architecture/network.md)).
 
 ### Verification Phase (L4Warden)
 
@@ -352,7 +352,7 @@ The g8e Gateway exposes two logical protocol surfaces in a consolidated 2-port c
 - **HTTP port 8080**: Bootstrap and MCP routes for initial setup and stdio-based AI IDE connections
 - **HTTPS port 8443**: mTLS API and public surface for secure client communication
 
-See [Network Architecture](./network.md) for detailed port topology, authentication requirements, and port constraints.
+See [Network Architecture](../../docs/architecture/network.md) for detailed port topology, authentication requirements, and port constraints.
 
 ### Configuration
 
@@ -445,7 +445,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 | Token store | `../../internal/services/storage/token_store.go` |
 | Suspended transaction store | `../../internal/services/storage/suspended_transaction_store.go` |
 | Network identity detector | `../../internal/services/network/identity.go` |
-| Network architecture | `./network.md` |
+| Network architecture | [../../docs/architecture/network.md](../../docs/architecture/network.md) |
 | Gateway envelope construction | `../../internal/services/gateway/governance_envelope.go` |
 | Gateway HTTP handler | `../../internal/services/gateway/gateway_http.go` |
 | Gateway HTTP routing | `../../internal/services/gateway/gateway_http_router.go` |

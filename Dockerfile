@@ -17,7 +17,7 @@
 # =============================================================================
 
 # Stage 1: Build
-FROM golang:1.26 AS builder
+FROM golang@sha256:f96cc555eb8db430159a3aa6797cd5bae561945b7b0fe7d0e284c63a3b291609 AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -27,13 +27,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set working directory
 WORKDIR /build
 
-# Copy go mod files for dependency caching
-COPY go.mod go.sum ./
-COPY protocol/go.mod protocol/go.sum ./protocol/
+# Copy go mod files and vendored dependencies for air-gapped builds
+COPY go.mod go.sum vendor/ ./
+COPY protocol/go.mod protocol/go.sum protocol/vendor/ ./protocol/
 
-# Download dependencies
-RUN go mod download
-RUN cd protocol && go mod download
+# Use vendored modules — no network access required
+ENV GOFLAGS=-mod=vendor
 
 # Copy entire source code
 COPY . .
@@ -41,7 +40,7 @@ COPY . .
 # Build the binary
 # Use build flags from Makefile for consistency
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build \
+    go build -mod=vendor \
     -ldflags "-s -w -X main.version=$(cat VERSION) -X main.buildID=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=linux_amd64" \
     -o /build/g8e \
     ./cmd/operator
@@ -51,10 +50,12 @@ RUN /build/g8e --help
 
 # =============================================================================
 # Stage 2: Runtime
-# Use standard Debian with common utilities
-FROM debian:bookworm
+# The compiled binary is statically linked (CGO_ENABLED=0) and has zero runtime
+# dependencies. The packages below are container conveniences only (health-check
+# curl, CA certs for outbound TLS) — they are NOT required by the binary itself.
+FROM debian@sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168
 
-# Install common utilities
+# Install container utilities (not binary dependencies)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl wget ca-certificates \
     && rm -rf /var/lib/apt/lists/*

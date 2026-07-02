@@ -124,8 +124,9 @@ From the repository root:
 
 ```bash
 make build
-cp g8e demos/bin/g8e
 ```
+
+`make build` automatically copies the binary to `demos/bin/g8e`.
 
 ### Using the g8e CLI (recommended)
 
@@ -288,7 +289,7 @@ Then:
 cd demos/neworg && docker compose up
 ```
 
-The Dockerfile at the repository root is shared across all org directories. Docker Compose builds the g8e binary from source inside each container. No pre-built image is required.
+The `demos/Dockerfile` is shared across all org directories. It copies the pre-built binary from `demos/bin/g8e` into a minimal Debian image — no compilation happens inside the container. Run `make build` first to produce the binary.
 
 ## Invariants
 
@@ -298,7 +299,7 @@ The following must hold in every org environment:
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The Dockerfile at the repository root is the only build artifact shared across org directories. Each compose file references `build: context: ../..` to compile the g8e binary from source inside the container. No pre-built binary is bind-mounted. All `agent-runtime` containers build from the root Dockerfile with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based agent-harness invocation.
+5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All `agent-runtime` containers use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based agent-harness invocation.
 
 ## Port Mappings
 
@@ -372,6 +373,88 @@ docker compose exec gateway cat /etc/g8e/doctrine/*.json
 Verify target-data mount:
 ```bash
 docker compose exec target-system ls -la /var/g8e/target/
+```
+
+## Air-Gapped Deployment
+
+g8e demos can be deployed in environments with no network access. All Go
+dependencies are vendored, all Docker images are pinned to sha256 digests, and
+no runtime `pip install` or external package fetches are required.
+
+### Prerequisites
+
+- Docker and Docker Compose installed on both the connected and air-gapped machines
+- The `g8e` binary built from source (or use `make build`)
+
+### Step 1: Pre-pull Images (Connected Machine)
+
+On a machine with internet access, pull all external images listed in the
+manifest:
+
+```bash
+g8e demos pull
+```
+
+This reads `demos/images.json` and pulls each image by its pinned digest.
+
+### Step 2: Export Images (Connected Machine)
+
+Save the pulled images to tar files for transfer:
+
+```bash
+./demos/airgap.sh export /tmp/g8e-images
+```
+
+This creates one `.tar` file per image in the specified output directory.
+
+### Step 3: Transfer to Air-Gapped Machine
+
+Copy the entire repository (including `vendor/` directories) and the exported
+image directory to the air-gapped machine via your approved transfer mechanism
+(e.g., secure USB, DLP-approved file transfer).
+
+### Step 4: Import Images (Air-Gapped Machine)
+
+Load the exported images into the local Docker daemon:
+
+```bash
+./demos/airgap.sh import /tmp/g8e-images
+```
+
+### Step 5: Build and Run (Air-Gapped Machine)
+
+The Dockerfile uses vendored Go modules and does not require network access
+during build:
+
+```bash
+make build
+g8e demos start <org>
+```
+
+### Verification
+
+Run the air-gap verification target to confirm everything is in order:
+
+```bash
+make test-airgap
+```
+
+This checks that:
+- `vendor/` and `protocol/vendor/` directories exist
+- The vendored build compiles without network access
+- `demos/images.json` manifest is present
+- No unpinned image references remain in compose files
+- No `pip install` or `import requests` references remain in demo Python files
+- `demos/airgap.sh` is executable
+
+### Image Manifest
+
+The `demos/images.json` file lists all external Docker images used across all
+demo environments, along with their pinned sha256 digests and which demos use
+each image. To list all images in the manifest:
+
+```bash
+./demos/airgap.sh list
 ```
 
 ## License

@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2026-07-02
+
+### Overview
+
+v1.3.5 is an air-gap readiness and demo infrastructure release. This version introduces fully vendored Go dependencies (`vendor/` and `protocol/vendor/`), pinned Docker image digests across all demo compose files, a dedicated demo Dockerfile that copies the pre-built binary, an air-gap export/import helper (`demos/airgap.sh`), and a `make test-airgap` verification target. The release also removes the `demos audit` subcommand and associated helper functions, clarifies zero runtime dependencies across documentation, and updates the Dockerfile to use vendored modules with `-mod=vendor`.
+
+### Added
+
+* **Vendored Go Dependencies** — Added `vendor/` (root module) and `protocol/vendor/` (protocol module) directories with all dependencies vendored. The Dockerfile now uses `-mod=vendor` and sets `GOFLAGS=-mod=vendor`, enabling fully offline builds without network access.
+* **Pinned Docker Image Digests** — All demo compose files now reference images by sha256 digest instead of mutable tags (e.g., `alpine@sha256:...` instead of `alpine:latest`). Added `demos/images.json` manifest listing all external images with their digests and associated demos.
+* **Air-Gap Export/Import Helper** — Added `demos/airgap.sh` script with `export`, `import`, and `list` subcommands for saving Docker images to tar files on a connected host and loading them on an air-gapped machine.
+* **Demo Dockerfile** — Added `demos/Dockerfile` that copies the pre-built `g8e` binary into a minimal Debian image, eliminating in-container compilation for demo environments.
+* **`g8e demos pull` Command** — Added `demosPullCmd` that pre-pulls all images from `demos/images.json` by digest, preparing a connected host for air-gapped export.
+* **`make test-airgap` Target** — Added Makefile target that verifies vendored build compiles, `demos/images.json` exists, no unpinned image references remain in compose files, no `pip install` or `import requests` in demo Python files, and `demos/airgap.sh` is executable.
+* **Demo Binary Copy in Build** — `make build` now copies the compiled binary to `demos/bin/g8e` for use by `demos/Dockerfile`.
+* **Demos README** — Added comprehensive `demos/README.md` with quick start, demo catalog, and air-gapped deployment workflow documentation.
+
+### Changed
+
+* **Demo Compose Files Use `demos/Dockerfile`** — All demo compose files changed build context from `../..` to `..` and use `demos/Dockerfile` instead of the root `Dockerfile`. Operator commands updated to `["operator", "run", "-e", ...]` format.
+* **Dockerfile Uses Vendored Modules** — Root `Dockerfile` copies `vendor/` and `protocol/vendor/` and uses `-mod=vendor` for both build and runtime stages. Removed `go mod download` steps. Base images pinned by digest.
+* **Zero Runtime Dependencies Clarification** — Updated `README.md`, `docs/guides/build_gateway.md`, `docs/guides/build_operator.md`, `docs/guides/getting_started.md`, `docs/guides/air_gap.md`, and `docs/reference/compliance-alignment.md` to clarify that the compiled binary is statically linked (`CGO_ENABLED=0`) with zero runtime dependencies. Removed OpenSSL and Git from runtime dependency lists.
+* **Air-Gap Guide Updated** — `docs/guides/air_gap.md` updated with vendored dependency workflow, `demos/airgap.sh` export/import instructions, and `make test-airgap` verification step.
+* **Protocol Python Version** — Updated `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` to v1.3.5.
+
+### Removed
+
+* **`demos audit` Subcommand** — Removed `demosAuditCmd`, `runDemosAudit`, `runG8EAuditCmd`, `runDockerComposeExec`, `runDockerComposeLogs`, `captureCommand`, and `printDataDump` helper functions from `demos.go`. The `g8e audit` command remains available directly on the gateway operator.
+* **SQLite Backdoor Tests** — Removed `TestDemosAuditCmd`, `TestSqliteOnlyInAuditCmdVaultAction`, `TestCaptureCommand`, `TestRunG8EAuditCmd`, and `TestPrintDataDump` tests that validated the now-removed audit subcommand infrastructure.
+
+### Fixed
+
+* **Healthcare Demo Setup** — Updated `demos/healthcare/setup_metabase.py` to remove `pip install` and `import requests` references, ensuring air-gapped compatibility.
+
+---
+
 ## [1.3.4] - 2026-06-30
 
 ### Overview

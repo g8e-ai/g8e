@@ -53,7 +53,7 @@ volumes:
 services:
   gateway:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-gateway
     networks:
@@ -79,7 +79,7 @@ services:
   # Drone Operator 1 - Recon
   operator-1:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-1
     networks:
@@ -106,12 +106,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 2 - Recon
   operator-2:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-2
     networks:
@@ -138,12 +138,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 3 - Recon
   operator-3:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-3
     networks:
@@ -170,12 +170,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 4 - Recon
   operator-4:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-4
     networks:
@@ -202,12 +202,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 5 - Recon
   operator-5:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-5
     networks:
@@ -234,12 +234,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 6 - Recon
   operator-6:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-6
     networks:
@@ -266,12 +266,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 7 - Recon
   operator-7:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-7
     networks:
@@ -298,12 +298,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 8 - Recon
   operator-8:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-8
     networks:
@@ -330,12 +330,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 9 - Attack
   operator-9:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-9
     networks:
@@ -362,12 +362,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 10 - Attack
   operator-10:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-10
     networks:
@@ -394,12 +394,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 11 - Attack
   operator-11:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-11
     networks:
@@ -426,12 +426,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 12 - Attack
   operator-12:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-12
     networks:
@@ -458,12 +458,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 13 - Attack
   operator-13:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-13
     networks:
@@ -490,12 +490,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 14 - Attack
   operator-14:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-14
     networks:
@@ -522,12 +522,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 15 - Support
   operator-15:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-15
     networks:
@@ -554,12 +554,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 16 - Support
   operator-16:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-16
     networks:
@@ -586,12 +586,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 17 - Support
   operator-17:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-17
     networks:
@@ -618,12 +618,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 18 - Support
   operator-18:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-18
     networks:
@@ -650,12 +650,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 19 - Relay
   operator-19:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-19
     networks:
@@ -682,12 +682,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Drone Operator 20 - Relay
   operator-20:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-operator-20
     networks:
@@ -714,11 +714,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["-e", "10.32.0.10"]
+    command: ["operator", "run", "-e", "10.32.0.10"]
 
   # Command and Control Interface
   command-interface:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: swarm-command-interface
     networks:
       net_internal:
@@ -735,7 +735,7 @@ services:
   # Agent runtime for g8e agent-harness scenario execution
   agent-runtime:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: swarm-agent
     networks:
@@ -754,7 +754,7 @@ services:
 
   # Simulated adversary attempting to compromise drone swarm
   adversary:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: swarm-adversary
     networks:
       net_untrusted:
@@ -762,7 +762,7 @@ services:
 
   # Observability and monitoring
   observability:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: swarm-observability
     networks:
       net_mgmt:

@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -61,7 +62,6 @@ func TestDemos(t *testing.T) {
 			"reset",
 			"rebuild",
 			"run",
-			"audit",
 		}
 
 		for _, subcmd := range expectedSubcommands {
@@ -74,15 +74,6 @@ func TestDemos(t *testing.T) {
 			}
 			assert.True(t, found, "demos command should have %s subcommand", subcmd)
 		}
-	})
-}
-
-func TestDemosAuditCmd(t *testing.T) {
-	t.Run("audit command has correct structure", func(t *testing.T) {
-		cmd := demosAuditCmd()
-		assert.Equal(t, "audit <org> [action]", cmd.Use)
-		assert.Contains(t, cmd.Short, "View audit logs and ledger history")
-		assert.NotNil(t, cmd.RunE)
 	})
 }
 
@@ -831,36 +822,6 @@ func TestNoSqliteBackdoorInScenarioFiles(t *testing.T) {
 	}
 }
 
-func TestSqliteOnlyInAuditCmdVaultAction(t *testing.T) {
-	t.Run("demos.go references sqlite3 only in vault audit action", func(t *testing.T) {
-		path := filepath.Join(".", "demos.go")
-		data, err := os.ReadFile(path)
-		require.NoError(t, err)
-		src := string(data)
-
-		// sqlite3 should appear in demos.go (for the vault audit action)
-		assert.Contains(t, src, "sqlite3",
-			"demos.go should reference sqlite3 for the vault audit action")
-
-		// But never via exec.Command("sqlite3" — it should go through runDockerComposeExec
-		assert.NotContains(t, src, "exec.Command(\"sqlite3\"",
-			"demos.go must not call exec.Command with sqlite3 directly — use runDockerComposeExec")
-
-		// sqlite3 should only appear in the audit command context (runDemosAudit)
-		// Verify it appears in the vault case block, not in scenario functions
-		auditIdx := strings.Index(src, "func runDemosAudit")
-		require.True(t, auditIdx >= 0, "runDemosAudit function should exist")
-
-		beforeAudit := src[:auditIdx]
-		afterAudit := src[auditIdx:]
-
-		assert.NotContains(t, beforeAudit, "sqlite3",
-			"sqlite3 must not appear before runDemosAudit — only the audit vault action may use it")
-		assert.Contains(t, afterAudit, "sqlite3",
-			"sqlite3 should appear in runDemosAudit for the vault action")
-	})
-}
-
 func TestNoCopyPasteInScenarioFiles(t *testing.T) {
 	scenarioFiles := []string{
 		"demo_gov.go",
@@ -889,28 +850,39 @@ func TestNoCopyPasteInScenarioFiles(t *testing.T) {
 	}
 }
 
-func TestCaptureCommand(t *testing.T) {
-	t.Run("captures stdout from echo command", func(t *testing.T) {
-		output, err := captureCommand(t.TempDir(), "echo", "hello world")
-		require.NoError(t, err)
-		assert.Equal(t, "hello world\n", output)
+func TestDemosPullCmd(t *testing.T) {
+	t.Run("pull subcommand is registered on demos command", func(t *testing.T) {
+		root := demosCmd()
+		var found bool
+		for _, c := range root.Commands() {
+			if c.Use == "pull" {
+				found = true
+				assert.Contains(t, c.Short, "air-gapped")
+				break
+			}
+		}
+		assert.True(t, found, "demos command should have a 'pull' subcommand")
 	})
 
-	t.Run("returns error for non-existent command", func(t *testing.T) {
-		_, err := captureCommand(t.TempDir(), "nonexistent-command-12345")
-		assert.Error(t, err)
+	t.Run("pull command has correct metadata", func(t *testing.T) {
+		cmd := demosPullCmd()
+		assert.Equal(t, "pull", cmd.Use)
+		assert.Contains(t, cmd.Short, "Pre-pull")
+		assert.Contains(t, cmd.Long, "images.json")
+		assert.NotNil(t, cmd.RunE)
 	})
 
-	t.Run("returns empty string for command with no output", func(t *testing.T) {
-		output, err := captureCommand(t.TempDir(), "true")
+	t.Run("imageManifestEntry struct has expected JSON tags", func(t *testing.T) {
+		entry := imageManifestEntry{
+			Image:  "alpine",
+			Tag:    "latest",
+			Digest: "sha256:abc123",
+			Demos:  []string{"gov"},
+		}
+		data, err := json.Marshal(entry)
 		require.NoError(t, err)
-		assert.Empty(t, strings.TrimSpace(output))
-	})
-
-	t.Run("captures multi-line output", func(t *testing.T) {
-		output, err := captureCommand(t.TempDir(), "printf", "line1\nline2\n")
-		require.NoError(t, err)
-		assert.Equal(t, "line1\nline2\n", output)
+		assert.Contains(t, string(data), `"image":"alpine"`)
+		assert.Contains(t, string(data), `"digest":"sha256:abc123"`)
 	})
 }
 
@@ -940,30 +912,5 @@ func TestDemoPrintln(t *testing.T) {
 
 		demoPrintln("test output")
 		demoPrintf("test %s", "format")
-	})
-}
-
-func TestRunG8EAuditCmd(t *testing.T) {
-	t.Run("function exists and is callable", func(t *testing.T) {
-		assert.NotNil(t, runG8EAuditCmd)
-	})
-
-	t.Run("returns error when demo not running", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		composePath := filepath.Join(tmpDir, "compose.yml")
-		err := runG8EAuditCmd(tmpDir, composePath, "receipts")
-		assert.Error(t, err)
-	})
-}
-
-func TestPrintDataDump(t *testing.T) {
-	t.Run("function exists and is callable", func(t *testing.T) {
-		assert.NotNil(t, printDataDump)
-	})
-
-	t.Run("does not panic with non-existent demo dir", func(t *testing.T) {
-		tmpDir := t.TempDir()
-		// Should handle missing compose file gracefully without panicking
-		printDataDump(tmpDir)
 	})
 }

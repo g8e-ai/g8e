@@ -4,7 +4,7 @@ title: MCP Protocol
 
 # MCP Protocol
 
-Last Updated: 2026-06-29
+Last Updated: 2026-07-03
 
 The g8e Operator in gateway mode supports Model Context Protocol (MCP) integration. MCP clients send JSON-RPC tool calls to the gateway, which wraps them in the g8e governance envelope, runs them through the 5-layer governance verification sequence (L1Doctrine/L2Consensus/L3Notary/L4Warden/L5Actuator), and dispatches verified payloads to downstream MCP servers or to the in-process execution service for local execution.
 
@@ -418,7 +418,7 @@ Default ports (configurable via flags or paths.json):
 
 ### Configuration
 
-The g8e platform uses **ZERO environment variables** for production configuration. All paths are computed relative to project root, and all configuration is via CLI flags:
+The g8e platform uses CLI flags for production configuration. All paths are computed relative to project root. See [g8e Protocol](./spec.md) for the full environment variable list. Configuration is via CLI flags:
 
 - `--data-dir <dir>`: Data directory for SQLite database (default: `.g8e/data` in working directory)
 - `--pki-dir <dir>`: Directory for TLS certificates (default: `.g8e/pki`)
@@ -461,7 +461,7 @@ Sessions are cryptographically bound to their authentication mechanism and canno
 | Governance proxy (agent run) | `internal/cli/cmd/mcp.go` (runMCPAgentRun) |
 | Gateway entry | `internal/cli/cmd/gateway.go` (gatewayStartCmd, gatewayServeCmd) |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
-| HTTP routing | `internal/services/gateway/gateway_http.go` |
+| HTTP routing | `internal/services/gateway/gateway_http_router.go` |
 | MCP/A2A translation | `internal/services/mcp/gateway.go` |
 | MCP models | `internal/services/mcp/models.go` |
 | Unified MCP endpoint | `internal/services/mcp/mcp_endpoint.go` |
