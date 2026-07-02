@@ -17,8 +17,10 @@ Auto-setup script for Metabase compliance dashboard.
 Runs once on first startup to configure the admin account, database connection,
 and pre-load the two required DCBS/OHA compliance queries.
 """
+import json
 import time
-import requests
+import urllib.error
+import urllib.request
 import sys
 import os
 
@@ -31,15 +33,33 @@ DB_USER = os.environ.get("DB_USER", "compliance_admin")
 DB_PASS = os.environ.get("DB_PASS", "secure_hipaa_password")
 
 
+def _http_get(url, headers=None, timeout=10):
+    req = urllib.request.Request(url, headers=headers or {})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read().decode("utf-8")
+        return resp.status, body
+
+
+def _http_post(url, payload, headers=None, timeout=10):
+    data = json.dumps(payload).encode("utf-8")
+    hdrs = {"Content-Type": "application/json"}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, data=data, headers=hdrs, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read().decode("utf-8")
+        return resp.status, body
+
+
 def wait_for_metabase(timeout=180):
     print("Waiting for Metabase to be ready...")
     for i in range(timeout):
         try:
-            r = requests.get(f"{METABASE_URL}/api/health", timeout=5)
-            if r.status_code == 200 and r.json().get("status") == "ok":
+            status, body = _http_get(f"{METABASE_URL}/api/health", timeout=5)
+            if status == 200 and json.loads(body).get("status") == "ok":
                 print("Metabase is ready.")
                 return True
-        except requests.exceptions.RequestException:
+        except (urllib.error.URLError, OSError):
             pass
         if i % 10 == 0 and i > 0:
             print(f"  still waiting... ({i}s)")
@@ -50,9 +70,9 @@ def wait_for_metabase(timeout=180):
 
 def get_setup_token():
     try:
-        r = requests.get(f"{METABASE_URL}/api/session/properties", timeout=5)
-        if r.status_code == 200:
-            return r.json().get("setup-token")
+        status, body = _http_get(f"{METABASE_URL}/api/session/properties", timeout=5)
+        if status == 200:
+            return json.loads(body).get("setup-token")
     except Exception:
         pass
     return None
@@ -75,38 +95,49 @@ def complete_setup(token):
             "allow_tracking": False,
         },
     }
-    r = requests.post(f"{METABASE_URL}/api/setup", json=payload, timeout=30)
-    if r.status_code == 200:
+    try:
+        status, body = _http_post(f"{METABASE_URL}/api/setup", payload, timeout=30)
+    except urllib.error.HTTPError as e:
+        print(f"Setup failed ({e.code}): {e.read().decode('utf-8', errors='replace')}")
+        return False
+    if status == 200:
         print("Initial setup complete.")
         return True
-    print(f"Setup failed ({r.status_code}): {r.text}")
+    print(f"Setup failed ({status}): {body}")
     return False
 
 
 def authenticate():
-    r = requests.post(
-        f"{METABASE_URL}/api/session",
-        json={"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
-        timeout=10,
-    )
-    if r.status_code == 200:
-        token = r.json().get("id")
+    try:
+        status, body = _http_post(
+            f"{METABASE_URL}/api/session",
+            {"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+            timeout=10,
+        )
+    except urllib.error.HTTPError as e:
+        print(f"Authentication failed ({e.code}): {e.read().decode('utf-8', errors='replace')}")
+        return None
+    if status == 200:
+        token = json.loads(body).get("id")
         print(f"Authenticated as {ADMIN_EMAIL}.")
         return token
-    print(f"Authentication failed ({r.status_code}): {r.text}")
+    print(f"Authentication failed ({status}): {body}")
     return None
 
 
 def find_database(token):
-    r = requests.get(
-        f"{METABASE_URL}/api/database",
-        headers={"X-Metabase-Session": token},
-        timeout=10,
-    )
-    if r.status_code != 200:
+    try:
+        status, body = _http_get(
+            f"{METABASE_URL}/api/database",
+            headers={"X-Metabase-Session": token},
+            timeout=10,
+        )
+    except urllib.error.HTTPError:
         return None
-    body = r.json()
-    dbs = body.get("data", body) if isinstance(body, dict) else body
+    if status != 200:
+        return None
+    parsed = json.loads(body)
+    dbs = parsed.get("data", parsed) if isinstance(parsed, dict) else parsed
     for db in dbs:
         if db.get("name") == DB_NAME:
             return db["id"]
@@ -115,27 +146,31 @@ def find_database(token):
 
 def add_database(token):
     print(f"Adding {DB_NAME} database connection...")
-    r = requests.post(
-        f"{METABASE_URL}/api/database",
-        headers={"X-Metabase-Session": token},
-        json={
-            "engine": "postgres",
-            "name": DB_NAME,
-            "details": {
-                "host": DB_HOST,
-                "port": 5432,
-                "user": DB_USER,
-                "password": DB_PASS,
-                "dbname": DB_NAME,
+    try:
+        status, body = _http_post(
+            f"{METABASE_URL}/api/database",
+            {
+                "engine": "postgres",
+                "name": DB_NAME,
+                "details": {
+                    "host": DB_HOST,
+                    "port": 5432,
+                    "user": DB_USER,
+                    "password": DB_PASS,
+                    "dbname": DB_NAME,
+                },
             },
-        },
-        timeout=30,
-    )
-    if r.status_code == 200:
-        db_id = r.json()["id"]
+            headers={"X-Metabase-Session": token},
+            timeout=30,
+        )
+    except urllib.error.HTTPError as e:
+        print(f"Failed to add database ({e.code}): {e.read().decode('utf-8', errors='replace')}")
+        return None
+    if status == 200:
+        db_id = json.loads(body)["id"]
         print(f"Database added (id={db_id}).")
         return db_id
-    print(f"Failed to add database ({r.status_code}): {r.text}")
+    print(f"Failed to add database ({status}): {body}")
     return None
 
 
@@ -153,13 +188,17 @@ def wait_for_database(token, retries=12, delay=5):
 
 
 def questions_exist(token):
-    r = requests.get(
-        f"{METABASE_URL}/api/card",
-        headers={"X-Metabase-Session": token},
-        timeout=10,
-    )
-    if r.status_code == 200:
-        cards = r.json() if isinstance(r.json(), list) else []
+    try:
+        status, body = _http_get(
+            f"{METABASE_URL}/api/card",
+            headers={"X-Metabase-Session": token},
+            timeout=10,
+        )
+    except urllib.error.HTTPError:
+        return False
+    if status == 200:
+        parsed = json.loads(body)
+        cards = parsed if isinstance(parsed, list) else []
         names = {c["name"] for c in cards}
         return (
             "DCBS March 1 Filing - Denial Rates by Request Type" in names
@@ -170,26 +209,30 @@ def questions_exist(token):
 
 def create_question(token, db_id, name, sql, description):
     print(f"Creating question: {name}")
-    r = requests.post(
-        f"{METABASE_URL}/api/card",
-        headers={"X-Metabase-Session": token},
-        json={
-            "name": name,
-            "description": description,
-            "dataset_query": {
-                "type": "native",
-                "native": {"query": sql},
-                "database": db_id,
+    try:
+        status, body = _http_post(
+            f"{METABASE_URL}/api/card",
+            {
+                "name": name,
+                "description": description,
+                "dataset_query": {
+                    "type": "native",
+                    "native": {"query": sql},
+                    "database": db_id,
+                },
+                "display": "table",
+                "visualization_settings": {},
             },
-            "display": "table",
-            "visualization_settings": {},
-        },
-        timeout=10,
-    )
-    if r.status_code == 200:
-        print(f"  Created (id={r.json()['id']}).")
+            headers={"X-Metabase-Session": token},
+            timeout=10,
+        )
+    except urllib.error.HTTPError as e:
+        print(f"  Failed ({e.code}): {e.read().decode('utf-8', errors='replace')}")
+        return False
+    if status == 200:
+        print(f"  Created (id={json.loads(body)['id']}).")
         return True
-    print(f"  Failed ({r.status_code}): {r.text}")
+    print(f"  Failed ({status}): {body}")
     return False
 
 

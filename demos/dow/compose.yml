@@ -36,7 +36,7 @@ volumes:
 services:
   gateway:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: dow-gateway
     networks:
@@ -69,7 +69,7 @@ services:
 
   operator:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: dow-operator
     networks:
@@ -106,7 +106,7 @@ services:
 
   agent-sigint:
     build:
-      context: ../..
+      context: ..
       dockerfile: Dockerfile
     container_name: dow-agent-sigint
     networks:
@@ -142,7 +142,7 @@ services:
               "dow-cross-cue"]
 
   agent-eoir:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: dow-agent-eoir
     networks:
       net_internal:
@@ -168,7 +168,7 @@ services:
     command: ["python", "dow_simulator.py", "EOIR-01", "eoir"]
 
   agent-pnt-fusion:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: dow-agent-pnt-fusion
     networks:
       net_internal:
@@ -193,7 +193,7 @@ services:
     command: ["python", "dow_simulator.py", "PNT-FUSION-01", "pnt_fusion"]
 
   gimbal:
-    image: python:3.11-slim
+    image: python@sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6
     container_name: dow-gimbal
     networks:
       net_secure:
@@ -217,7 +217,7 @@ services:
     command: ["python", "gimbal.py"]
 
   ground-station:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dow-ground-station
     networks:
       net_perimeter:
@@ -228,14 +228,14 @@ services:
     command: ["sh", "-c", "while true; do echo '[GROUND-STATION] Tactical datalink active. Monitoring EDGE-01...'; sleep 30; done"]
 
   ew-adversary:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dow-ew-adversary
     networks:
       net_untrusted:
     command: ["sh", "-c", "while true; do echo '[EW-ADVERSARY] Emitting spoofed GNSS signals on L1/L2...'; echo '[EW-ADVERSARY] Attempting tactical datalink jam on UHF...'; sleep 30; done"]
 
   observability:
-    image: alpine:latest
+    image: alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
     container_name: dow-observability
     networks:
       net_mgmt:

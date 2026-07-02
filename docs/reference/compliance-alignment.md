@@ -1,7 +1,7 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.3.3  
-**Last Updated:** 2026-06-29  
+**Document Version:** 1.3.5  
+**Last Updated:** 2026-07-02  
 **Platform:** g8e v1.3.3  
 **Maintained by:** Lateralus Labs, LLC.
 
@@ -274,7 +274,7 @@ This document provides a comprehensive alignment of the g8e platform's security 
 | **SC-12** | Cryptographic key establishment and management | PKI hierarchy with root/intermediate CA |
 | **SC-13** | Use of cryptography | ECDSA P-256, Ed25519, SHA-256 |
 | **SC-17** | Public key infrastructure certificates | Certificate issuance, revocation, CRL |
-| **SC-18** | Mobile code | Single binary, no external dependencies |
+| **SC-18** | Mobile code | Single binary, no runtime dependencies (build-time only) |
 | **SC-20** | Secure name/address resolution | g8e.local canonical alias with internal translation |
 | **SC-21** | Domain name services | Customer-controlled DNS |
 | **SC-22** | Architecture and provisioning | Local-first, air-gap capable |
@@ -488,7 +488,7 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 - **Hardware-bound human authentication** via WebAuthn/FIDO2
 - **PII/secret scrubbing** before cloud transmission
 - **Certificate revocation** with CRL and database denylist
-- **Air-gap capable** with no external dependencies
+- **Air-gap capable** with no runtime dependencies (all dependencies resolved at build time)
 - **g8e Console SPA** for browser-based passkey registration and transaction approval
 - **PrivilegedRouteRegistry** blocking app certificates from governance envelope submission
 - **JIT capability minting** with self-dissolving execution scopes

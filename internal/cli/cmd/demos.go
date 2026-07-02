@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,7 +30,6 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 )
 
@@ -221,7 +219,7 @@ Each org environment is hermetically sealed with no shared state, volumes, or cr
 		demosResetCmd(),
 		demosRebuildCmd(),
 		demosRunCmd(),
-		demosAuditCmd(),
+		demosPullCmd(),
 	)
 
 	return cmd
@@ -258,6 +256,59 @@ func runDemosList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	return nil
+}
+
+// imageManifestEntry represents a single image in demos/images.json.
+type imageManifestEntry struct {
+	Image  string   `json:"image"`
+	Tag    string   `json:"tag"`
+	Digest string   `json:"digest"`
+	Demos  []string `json:"demos"`
+}
+
+func demosPullCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pull",
+		Short: "Pre-pull all external images for air-gapped deployment",
+		Long: `Pulls all external Docker images listed in demos/images.json.
+This is the first step for air-gapped deployment: run this on a connected machine,
+then use demos/airgap.sh export to create a tar bundle for transfer.`,
+		RunE: runDemosPull,
+	}
+
+	return cmd
+}
+
+func runDemosPull(cmd *cobra.Command, args []string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	}
+	manifestPath := filepath.Join(cwd, constants.DemosDirname, "images.json")
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading images manifest %s: %w", manifestPath, err)
+	}
+	var entries []imageManifestEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return fmt.Errorf("parsing images manifest: %w", err)
+	}
+
+	fmt.Printf("Pulling %d images from demos/images.json...\n", len(entries))
+	for i, e := range entries {
+		ref := fmt.Sprintf("%s@%s", e.Image, e.Digest)
+		fmt.Printf("[%d/%d] Pulling %s\n", i+1, len(entries), ref)
+		pullCmd := exec.Command("docker", "pull", ref)
+		pullCmd.Stdout = os.Stdout
+		pullCmd.Stderr = os.Stderr
+		if err := pullCmd.Run(); err != nil {
+			return fmt.Errorf("pulling %s: %w", ref, err)
+		}
+	}
+
+	fmt.Println("\nAll images pulled successfully.")
+	fmt.Println("Next step: run demos/airgap.sh export to create a transfer bundle.")
 	return nil
 }
 
@@ -485,7 +536,7 @@ This is a destructive operation that removes all associated Docker volumes and n
 		},
 	}
 
-	cmd.Flags().BoolVar(&skipConfirm, "yes", false, "Skip interactive confirmation")
+	cmd.Flags().BoolVar(&skipConfirm, "yes", true, "Skip interactive confirmation (default: true)")
 
 	return cmd
 }
@@ -537,14 +588,16 @@ func cleanSingleDemo(cmd *cobra.Command, demosDir, org string, skipConfirm bool)
 	}
 
 	cmd.Printf("Cleaning demo environment: %s\n", org)
-	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down", "-v")
+	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down", "-v", "--remove-orphans", "-t", "0")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
 	dockerComposeCmd.Stderr = os.Stderr
 
 	if err := dockerComposeCmd.Run(); err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
+		cmd.Printf("Warning: compose down for '%s' had issues: %v\n", org, err)
 	}
+
+	forceRemoveLeftovers(cmd, org+"-demo")
 
 	cmd.Printf("\nDemo environment '%s' cleaned successfully.\n", org)
 	return nil
@@ -617,16 +670,17 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 	var failed []string
 	for _, d := range demos {
 		cmd.Printf("\nCleaning demo environment: %s\n", d.name)
-		dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(d.composePath), "down", "-v")
+		dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(d.composePath), "down", "-v", "--remove-orphans", "-t", "0")
 		dockerComposeCmd.Dir = d.demoDir
 		dockerComposeCmd.Stdout = os.Stdout
 		dockerComposeCmd.Stderr = os.Stderr
 
 		if err := dockerComposeCmd.Run(); err != nil {
-			cmd.Printf("Error cleaning '%s': %v\n", d.name, err)
-			failed = append(failed, d.name)
-			continue
+			cmd.Printf("Warning: compose down for '%s' had issues: %v\n", d.name, err)
 		}
+
+		forceRemoveLeftovers(cmd, d.name+"-demo")
+
 		cmd.Printf("Demo environment '%s' cleaned successfully.\n", d.name)
 	}
 
@@ -637,6 +691,38 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 	}
 	cmd.Printf("All %d demo environment(s) cleaned successfully.\n", len(demos))
 	return nil
+}
+
+func forceRemoveLeftovers(cmd *cobra.Command, projectPrefix string) {
+	// Force-remove any leftover volumes matching the project prefix
+	volList := exec.Command("docker", "volume", "ls", "-q", "--filter", "name="+projectPrefix+"_")
+	volOut, err := volList.Output()
+	if err == nil {
+		volumes := strings.Fields(string(volOut))
+		for _, v := range volumes {
+			rm := exec.Command("docker", "volume", "rm", "-f", v)
+			rm.Stdout = os.Stdout
+			rm.Stderr = os.Stderr
+			if err := rm.Run(); err != nil {
+				cmd.Printf("Warning: could not force-remove volume '%s': %v\n", v, err)
+			}
+		}
+	}
+
+	// Force-remove any leftover networks matching the project prefix
+	netList := exec.Command("docker", "network", "ls", "-q", "--filter", "name="+projectPrefix+"_")
+	netOut, err := netList.Output()
+	if err == nil {
+		networks := strings.Fields(string(netOut))
+		for _, n := range networks {
+			rm := exec.Command("docker", "network", "rm", "-f", n)
+			rm.Stdout = os.Stdout
+			rm.Stderr = os.Stderr
+			if err := rm.Run(); err != nil {
+				cmd.Printf("Warning: could not force-remove network '%s': %v\n", n, err)
+			}
+		}
+	}
 }
 
 func confirmAction(cmd *cobra.Command, prompt string) bool {
@@ -948,7 +1034,6 @@ func runAllScenarios(org, demoDir string) error {
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 	}
 
-	printDataDump(demoDir)
 	return nil
 }
 
@@ -1014,158 +1099,6 @@ func printResultsTable(org string, results []scenarioResult) {
 	fmt.Println()
 }
 
-// printDataDump queries the gateway's audit API and ledger from inside the
-// Docker demo containers, then prints the actual data in tabbed tables.
-// This gives the user real receipts, events, and ledger state after a demo run.
-func printDataDump(demoDir string) {
-	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-
-	fmt.Printf("\n%s\n  Platform Data Dump\n%s\n",
-		strings.Repeat("═", 60), strings.Repeat("═", 60))
-
-	// Build the curl command to query the gateway mTLS API from the operator container.
-	// The operator has the client certs and network access to the gateway.
-	curlBase := []string{
-		"docker", "compose", "-f", toDockerPath(composePath),
-		"exec", "-T", "operator",
-		"curl", "-s",
-		"--cert", constants.ContainerOperatorCert,
-		"--key", constants.ContainerOperatorKey,
-		"--cacert", constants.ContainerCABundle,
-	}
-
-	mtlsURL := "https://g8e.local:8443"
-
-	// ── Receipts ──
-	receiptsJSON, err := captureCommand(demoDir, append(curlBase, mtlsURL+constants.APIPaths.AuditReceipts)...)
-	if err != nil || strings.TrimSpace(receiptsJSON) == "" {
-		fmt.Println("\n  [Receipts] (unavailable)")
-	} else {
-		var resp models.AuditReceiptsResponse
-		if err := json.Unmarshal([]byte(receiptsJSON), &resp); err != nil || !resp.Success {
-			fmt.Println("\n  [Receipts] (parse error)")
-		} else if len(resp.Receipts) == 0 {
-			fmt.Println("\n  [Receipts] None recorded")
-		} else {
-			fmt.Printf("\n  [Receipts] (%d total)\n", len(resp.Receipts))
-			fmt.Printf("  %-16s %-20s %-40s %-8s %s\n",
-				"TX HASH", "ACTION", "RESOURCE", "STATUS", "EXECUTED AT")
-			fmt.Printf("  %s\n", strings.Repeat("─", 100))
-			for _, r := range resp.Receipts {
-				txHash := r.TransactionHash
-				if len(txHash) > 14 {
-					txHash = txHash[:14] + "…"
-				}
-				resource := r.TargetResource
-				if len(resource) > 38 {
-					resource = resource[:38] + "…"
-				}
-				action := string(r.ActionType)
-				if len(action) > 18 {
-					action = action[:18] + "…"
-				}
-				fmt.Printf("  %-16s %-20s %-40s %-8s %s\n",
-					txHash, action, resource, r.Status.String(),
-					r.ExecutedAt.Format(time.RFC3339))
-			}
-		}
-	}
-
-	// ── Audit Events ──
-	eventsJSON, err := captureCommand(demoDir, append(curlBase, mtlsURL+constants.APIPaths.AuditEvents+"?limit=20")...)
-	if err != nil || strings.TrimSpace(eventsJSON) == "" {
-		fmt.Println("\n  [Audit Events] (unavailable)")
-	} else {
-		var resp models.AuditEventsResponse
-		if err := json.Unmarshal([]byte(eventsJSON), &resp); err != nil || !resp.Success {
-			fmt.Println("\n  [Audit Events] (parse error)")
-		} else if len(resp.Events) == 0 {
-			fmt.Println("\n  [Audit Events] None recorded")
-		} else {
-			fmt.Printf("\n  [Audit Events] (%d shown, %d total)\n", len(resp.Events), resp.Count)
-			fmt.Printf("  %-6s %-22s %-30s %-6s %s\n",
-				"ID", "TIMESTAMP", "TYPE", "EXIT", "COMMAND")
-			fmt.Printf("  %s\n", strings.Repeat("─", 100))
-			for _, e := range resp.Events {
-				ts := e.Timestamp
-				if len(ts) > 20 {
-					ts = ts[:20]
-				}
-				et := e.Type
-				if len(et) > 28 {
-					et = et[:28] + "…"
-				}
-				cmd := e.CommandRaw
-				if len(cmd) > 35 {
-					cmd = cmd[:35] + "…"
-				}
-				exitCode := "-"
-				if e.CommandExitCode != 0 {
-					exitCode = fmt.Sprintf("%d", e.CommandExitCode)
-				}
-				fmt.Printf("  %-6d %-22s %-30s %-6s %s\n", e.ID, ts, et, exitCode, cmd)
-			}
-		}
-	}
-
-	// ── Summary ──
-	summaryJSON, err := captureCommand(demoDir, append(curlBase, mtlsURL+constants.APIPaths.AuditSummary)...)
-	if err != nil || strings.TrimSpace(summaryJSON) == "" {
-		fmt.Println("\n  [Summary] (unavailable)")
-	} else {
-		var resp models.AuditSummaryResponse
-		if err := json.Unmarshal([]byte(summaryJSON), &resp); err != nil || !resp.Success {
-			fmt.Println("\n  [Summary] (parse error)")
-		} else {
-			fmt.Printf("\n  [Summary]\n")
-			if resp.EventsTotal > 0 {
-				fmt.Printf("  Events (%d total):\n", resp.EventsTotal)
-				for et, count := range resp.EventsSummary {
-					fmt.Printf("    %-40s %d\n", et, count)
-				}
-			}
-			if resp.ReceiptsTotal > 0 {
-				fmt.Printf("  Receipts (%d total):\n", resp.ReceiptsTotal)
-				for key, count := range resp.ReceiptsSummary {
-					fmt.Printf("    %-40s %d\n", key, count)
-				}
-			}
-			fmt.Printf("  Total records: %d\n", resp.TotalRecords)
-		}
-	}
-
-	// ── Ledger Files ──
-	ledgerOut, err := captureCommand(demoDir,
-		"docker", "compose", "-f", toDockerPath(composePath),
-		"exec", "-T", "operator",
-		"ls", "-la", constants.ContainerLedgerFilesDir+"/",
-	)
-	if err != nil || strings.TrimSpace(ledgerOut) == "" {
-		fmt.Println("\n  [Ledger] (unavailable)")
-	} else {
-		fmt.Println("\n  [Ledger Files]")
-		for _, line := range strings.Split(strings.TrimSpace(ledgerOut), "\n") {
-			fmt.Printf("  %s\n", line)
-		}
-	}
-
-	// ── Recent Gateway Logs ──
-	logsOut, err := captureCommand(demoDir,
-		"docker", "compose", "-f", toDockerPath(composePath),
-		"logs", "--tail", "15", "gateway",
-	)
-	if err != nil || strings.TrimSpace(logsOut) == "" {
-		fmt.Println("\n  [Gateway Logs] (unavailable)")
-	} else {
-		fmt.Println("\n  [Gateway Logs] (last 15 lines)")
-		for _, line := range strings.Split(strings.TrimSpace(logsOut), "\n") {
-			fmt.Printf("  %s\n", line)
-		}
-	}
-
-	fmt.Println()
-}
-
 // demoStep prints a labeled command and runs it, streaming output inline.
 // In non-verbose mode, output is suppressed. Always returns error if command
 // fails, but only stops execution if fatal is true.
@@ -1193,20 +1126,6 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 		return fmt.Errorf("%s failed (non-fatal): %w", label, err)
 	}
 	return nil
-}
-
-// captureCommand runs a command and returns its stdout as a string.
-// Used by printDataDump to fetch data from the gateway API.
-func captureCommand(demoDir string, args ...string) (string, error) {
-	var buf bytes.Buffer
-	c := exec.Command(args[0], args[1:]...)
-	c.Dir = demoDir
-	c.Stdout = &buf
-	c.Stderr = io.Discard
-	if err := c.Run(); err != nil {
-		return "", err
-	}
-	return buf.String(), nil
 }
 
 type twoLayerScenarioConfig struct {
@@ -1367,171 +1286,4 @@ func runTwoLayerScenario(demoDir string, cfg twoLayerScenarioConfig) (scenarioRe
 	}
 
 	return result, nil
-}
-
-func demosAuditCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "audit <org> [action]",
-		Short: "View audit logs and ledger history for a demo environment",
-		Long: `View audit logs and ledger history for a demo environment.
-Without an action, it prints a summary of available audit resources.
-
-Actions:
-  logs              Tail the observability logs
-  receipts          List signed receipts from the gateway
-  events            Query raw audit events from the gateway
-  summary           Aggregate audit events and receipts by type
-  ledger-log        View the git ledger log
-  ledger-files      List all files in the git ledger
-  ledger-history <file> View git history for a specific file
-  ledger-show <hash> View a specific git commit diff
-  vault             Open the execution vault database (SQLite)`,
-		Args: cobra.MinimumNArgs(1),
-		RunE: runDemosAudit,
-	}
-
-	return cmd
-}
-
-func runDemosAudit(cmd *cobra.Command, args []string) error {
-	org := args[0]
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
-	}
-	demoDir := filepath.Join(cwd, constants.DemosDirname, org)
-
-	if err := checkDemoDirExists(demoDir, org); err != nil {
-		return err
-	}
-
-	composePath := filepath.Join(demoDir, constants.DemosComposeFile)
-	if err := checkComposeFileExists(composePath, org); err != nil {
-		return err
-	}
-
-	// Check if demo is running
-	if !isDemoRunning(demoDir, composePath) {
-		return fmt.Errorf("%w: demo environment '%s' is not running. Run 'g8e demos start %s' first", constants.ErrServiceUnavailable, org, org)
-	}
-
-	gatewayService := "gateway"
-
-	if len(args) == 1 {
-		fmt.Printf("Audit logs and ledger history for: %s\n", org)
-		fmt.Println(strings.Repeat("─", 60))
-		fmt.Println("Run 'g8e demos audit <org> <action>' to execute these directly.")
-		fmt.Println()
-
-		// View operator log (real-time audit stream)
-		fmt.Println("1. Real-time audit log stream (operator.log):")
-		fmt.Printf("   Action: logs\n")
-		fmt.Printf("   Command: docker compose -f %s logs -f observability\n", composePath)
-		fmt.Println()
-
-		// Query audit data via g8e CLI
-		fmt.Println("2. Audit receipts (signed governance receipts):")
-		fmt.Printf("   Action: receipts\n")
-		fmt.Printf("   Command: g8e audit receipts --json\n")
-		fmt.Println()
-
-		fmt.Println("3. Audit events (raw event log):")
-		fmt.Printf("   Action: events\n")
-		fmt.Printf("   Command: g8e audit events --limit 20\n")
-		fmt.Println()
-
-		fmt.Println("4. Audit summary (aggregated by type):")
-		fmt.Printf("   Action: summary\n")
-		fmt.Printf("   Command: g8e audit summary\n")
-		fmt.Println()
-
-		// View git ledger
-		fmt.Println("5. Git ledger history:")
-		fmt.Printf("   Action: ledger-log\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git log --oneline'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
-		fmt.Println()
-		fmt.Printf("   Action: ledger-files\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git ls-files'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
-		fmt.Println()
-		fmt.Printf("   Action: ledger-history <file>\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git log --follow -- path/to/file'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
-		fmt.Println()
-		fmt.Printf("   Action: ledger-show <hash>\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sh -c 'cd %s && git show <commit-hash>'\n", composePath, gatewayService, constants.ContainerLedgerFilesDir)
-		fmt.Println()
-
-		// View execution vault
-		fmt.Println("6. Execution vault (command results and file diffs):")
-		fmt.Printf("   Action: vault\n")
-		fmt.Printf("   Command: docker compose -f %s exec %s sqlite3 %s\n", composePath, gatewayService, constants.ContainerExecutionVaultDB)
-		fmt.Println()
-		fmt.Println("   Useful SQL queries:")
-		fmt.Println("   SELECT * FROM execution_log ORDER BY timestamp_utc DESC LIMIT 20;")
-		fmt.Println("   SELECT * FROM file_diff_log ORDER BY timestamp_utc DESC LIMIT 20;")
-		fmt.Println()
-		return nil
-	}
-
-	action := args[1]
-	switch action {
-	case "logs":
-		return runDockerComposeLogs(demoDir, composePath, "observability")
-	case "receipts":
-		return runG8EAuditCmd(demoDir, composePath, "receipts")
-	case "events":
-		return runG8EAuditCmd(demoDir, composePath, "events")
-	case "summary":
-		return runG8EAuditCmd(demoDir, composePath, "summary")
-	case "ledger-log":
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git log --oneline")
-	case "ledger-files":
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git ls-files")
-	case "ledger-history":
-		if len(args) < 3 {
-			return fmt.Errorf("%w: ledger-history requires a file path", constants.ErrMissingRequiredField)
-		}
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git log --follow -- \"$1\"", "--", args[2])
-	case "ledger-show":
-		if len(args) < 3 {
-			return fmt.Errorf("%w: ledger-show requires a commit hash", constants.ErrMissingRequiredField)
-		}
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sh", "-c", "cd "+constants.ContainerLedgerFilesDir+" && git show \"$1\"", "--", args[2])
-	case "vault":
-		return runDockerComposeExec(demoDir, composePath, gatewayService, "sqlite3", constants.ContainerExecutionVaultDB)
-	default:
-		return fmt.Errorf("%w: unknown audit action: %s", constants.ErrValidationFailed, action)
-	}
-}
-
-func runDockerComposeExec(demoDir, composePath, service string, args ...string) error {
-	fullArgs := []string{"compose", "-f", toDockerPath(composePath), "exec", service}
-	fullArgs = append(fullArgs, args...)
-
-	cmd := exec.Command("docker", fullArgs...)
-	cmd.Dir = demoDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	return cmd.Run()
-}
-
-func runDockerComposeLogs(demoDir, composePath, service string) error {
-	cmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "logs", "-f", service)
-	cmd.Dir = demoDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
-}
-
-// runG8EAuditCmd runs `g8e audit <subcommand>` inside the operator container,
-// which has the mTLS credentials and network access to query the gateway API.
-func runG8EAuditCmd(demoDir, composePath, subcommand string) error {
-	fullArgs := []string{"compose", "-f", toDockerPath(composePath), "exec", "-T", "operator", "/g8e", "audit", subcommand}
-	cmd := exec.Command("docker", fullArgs...)
-	cmd.Dir = demoDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }

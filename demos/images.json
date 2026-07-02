@@ -1,0 +1,56 @@
+[
+  {
+    "image": "alpine",
+    "tag": "latest",
+    "digest": "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
+    "demos": ["gov", "finance", "healthcare", "secure-data", "dow", "dhs", "swarm"]
+  },
+  {
+    "image": "python",
+    "tag": "3.11-slim",
+    "digest": "sha256:b27df5841f3355e9473f9a516d38a6783b6c8dfeacaf2d14a240f443b368ddb6",
+    "demos": ["healthcare", "dow", "dhs", "swarm"]
+  },
+  {
+    "image": "nginx",
+    "tag": "alpine",
+    "digest": "sha256:54f2a904c251d5a34adf545a72d32515a15e08418dae0266e23be2e18c66fefa",
+    "demos": ["gov", "finance"]
+  },
+  {
+    "image": "node",
+    "tag": "20-alpine",
+    "digest": "sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293",
+    "demos": ["healthcare"]
+  },
+  {
+    "image": "rabbitmq",
+    "tag": "3-management",
+    "digest": "sha256:e582c0bc7766f3342496d8485efb5a1df782b5ce3886ad017e2eaae442311f69",
+    "demos": ["healthcare"]
+  },
+  {
+    "image": "postgres",
+    "tag": "15",
+    "digest": "sha256:3b0d656f5fff31c7d8a64f500a703dcf3f35e98ce78f602831a73059a5e6a012",
+    "demos": ["healthcare"]
+  },
+  {
+    "image": "metabase/metabase",
+    "tag": "latest",
+    "digest": "sha256:c37d32ea9cef073fd0f73514462fd3e3a847aaed78fbe99b3c3362879c9e62b6",
+    "demos": ["healthcare"]
+  },
+  {
+    "image": "golang",
+    "tag": "1.26",
+    "digest": "sha256:f96cc555eb8db430159a3aa6797cd5bae561945b7b0fe7d0e284c63a3b291609",
+    "demos": ["_build"]
+  },
+  {
+    "image": "debian",
+    "tag": "bookworm",
+    "digest": "sha256:30482e873082e906a4908c10529180aefb6f77620aea7404b909829fadc5d168",
+    "demos": ["_build", "_runtime"]
+  }
+]

@@ -5,8 +5,8 @@ parent: Guides
 
 # Building a g8e-Compliant Agentic System
 
-**Last Updated:** 2026-06-29  
-**Version:** v1.3.3
+**Last Updated:** 2026-07-02  
+**Version:** v1.3.5
 
 This guide documents the architecture, persona system, prompt design, memory model, and
 consensus cascade of a g8e-compliant agentic ensemble. It is the canonical reference for

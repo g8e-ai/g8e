@@ -94,6 +94,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.PKIAuthority
 │   ├── gateway.UserService
 │   ├── gateway.PersonaService
+│   │   └── gateway.CanonicalDBService [SHARED]
 │   ├── gateway.JWKSProvider (optional, for external IdP JWT auth)
 │   └── response.Writer
 ├── gateway.PKIAuthority
@@ -114,7 +115,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.WebSessionService (for session creation on browser flows)
 │   ├── response.Writer (for HTTP responses)
 │   ├── gateway.MCPServiceProvider (set post-construction via SetApprovalDependencies)
-│   └── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
+│   ├── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
+│   ├── gateway.SSEEventService (set post-construction via SetSSEDependencies)
+│   └── gateway.GatewayWebSocketHandler (set post-construction via SetSSEDependencies)
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
@@ -134,7 +137,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.RegistrationService
 │   ├── gateway.PasskeyHandler (includes approval handlers via passkey_service_approvals.go)
 │   │   ├── gateway.MCPServiceProvider (set post-construction via SetApprovalDependencies)
-│   │   └── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
+│   │   ├── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
+│   │   ├── gateway.SSEEventService (set post-construction via SetSSEDependencies)
+│   │   └── gateway.GatewayWebSocketHandler (set post-construction via SetSSEDependencies)
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
 │   │   ├── gateway.CanonicalDBService [SHARED]
@@ -146,18 +151,21 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
 │   ├── gateway.DBController (audit receipts, audit events, data DB, KV, blobs, governance signers, pub/sub)
 │   ├── gateway.AuthController (bootstrap, CLI enrollment, device enrollment, user management, web session)
+│   │   ├── gateway.AuthService [SHARED]
 │   │   ├── gateway.PasskeyHandler [SHARED]
+│   │   ├── gateway.UserService [SHARED]
 │   │   ├── gateway.RegistrationService [SHARED]
 │   │   ├── gateway.PKIAuthority [SHARED]
 │   │   ├── gateway.WebSessionService [SHARED]
 │   │   ├── gateway.CLISessionService [SHARED]
 │   │   ├── gateway.OperatorSessionService [SHARED]
+│   │   ├── gateway.CanonicalDBService [SHARED]
+│   │   ├── response.Writer
 │   │   └── actuatorKeyReader (fileActuatorKeyReader, reads actuator public key from disk)
 │   ├── gateway.AdminController (app policies, tribunals, app revocation)
 │   ├── gateway.OperatorController (operator list, terminate, bind/unbind, target context, reauth)
 │   └── response.Writer
 ├── governance.gatewayNotary (via governance.NewGatewayL3Notary, implements governance.L3Notary)
-│   ├── storage.SuspendedTransactionService (as storage.SuspendedTransactionStore)
 │   ├── gateway.cliSessionVerifier (via NewCLISessionVerifier, implements governance.CLISessionVerifier)
 │   │   ├── gateway.CanonicalDBService [SHARED]
 │   │   ├── gateway.PKIAuthority
@@ -242,7 +250,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`passkey_service.go`**: `PasskeyService` reduced to domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`). `NewPasskeyService` signature simplified to `(db, logger, cfg)`. Retains domain logic: `VerifyL3Proof`, `GenerateRegistrationChallenge`, `VerifyRegistration`, `GenerateAuthenticationChallenge`, `VerifyAuthentication`, `GenerateApprovalChallenge`, `addCredential`, `listCredentials`, `revokeCredential`, `getUser`. `VerifyL3Proof` stays on `PasskeyService` (L3 binding to transaction hash per architectural guardrails).
 - **`passkey_service_http.go`**: All passkey HTTP handlers now live on `*PasskeyHandler` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). All 7 methods have Swagger annotations (`@Summary`/`@Router`/`@Success`/`@Failure`).
 - **`passkey_service_approvals.go`**: 6 approval functions (`handleApprovalAction` dispatcher, `handleApprovalChallenge`, `handleApprovalVerify`, `handleCLIApprovalStatus`, `handleApprovalPage`, `handleListSuspendedTransactions`) now live on `*PasskeyHandler`. Dependencies are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` after construction on `PasskeyHandler`.
-- **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`). `NewPasskeyHandler` constructor added.
+- **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`). `NewPasskeyHandler` constructor added. `sseStore` and `pubsub` are injected post-construction via `SetSSEDependencies`.
 - **`gateway_service.go`**: `passkey` field → `*PasskeyHandler`, both constructors updated, `GetGovernanceDeps` passes `ls.passkey.PasskeyService` to `NewGatewayL3Notary`.
 - **`gateway_http.go`**: `HTTPHandlerDeps.Passkey` and `HTTPHandler.passkey` → `*PasskeyHandler`. `GetPasskeyService()` renamed to `GetPasskeyHandler()`.
 - **`auth_controller.go`**: `AuthController.passkey` field and `newAuthController` param → `*PasskeyHandler`.
@@ -262,7 +270,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### Gateway HTTP Dual-Router Architecture
 - **`buildPublicRouter`** (HTTPS port): Full API surface with mTLS middleware via `auth.Middleware`. Routes include governance envelopes, audit, PKI management, user management, MCP/A2A ingress, SSE, pub/sub, console SPA, passkey endpoints, and approval UI. WebSessionAuth-protected routes bypass mTLS and use cookie-based auth with their own middleware.
 - **`buildHTTPRouter`** (HTTP port): Bootstrap-only surface for CA discovery, trust scripts, deploy scripts, CLI enrollment, and state endpoint. All other paths redirect to HTTPS. Wrapped with rate limiting and path traversal guard.
-- **`PublicRouteRegistry`** centralizes routes that bypass mTLS authentication: health, landing, state, PKI bootstrap, console SPA, passkey console routes, SSE consumer endpoints, and WebSessionAuth-protected prefixes. Excluded prefixes protect mTLS-only sub-paths under shared prefixes.
+- **`RouteAuthRegistry`** classifies every route by its authentication mode (`RouteAuthNone`, `RouteAuthMTLS`, `RouteAuthWebSession`, `RouteAuthDual`). Exact paths are matched with highest priority, then prefix matches. Unknown routes default to `RouteAuthMTLS` (fail-closed). When JWKS is enabled, MCP/A2A and JIT passkey routes are reclassified to `RouteAuthNone` (JWT middleware handles auth).
 - **`PrivilegedRouteRegistry`** blocks app certificates from governance envelope submission and query endpoints. Only operator and CLI auth are accepted on these routes.
 - **`gateway_http_middleware.go`**: `rateLimitMiddleware` applies per-IP token bucket rate limiting with 5-minute stale entry cleanup. `pathTraversalGuard` rejects requests containing `..` path segments before ServeMux normalization.
 - **`gateway_http_sse.go`**: SSE event bridge with three endpoints. `POST /api/v1/sse/push` for event production, `GET /api/v1/sse/events` for polling, `GET /api/v1/sse/stream` for SSE streaming. Events are routed by `web_session_id`, `cli_session_id`, or `user_id`.
@@ -311,7 +319,7 @@ All Model Context Protocol (MCP) native tools are registered explicitly in `inte
 
 The reporting system operates as a self-contained, offline verification utility invoked via CLI subcommands.
 
-- **`internal/services/reporting/`**: Reads from database and storage backends (including decrypted execution vault, replay store, git ledger directory, and suspended transaction store) to write flat, deterministic CSV evidence files. Modules: `commitments.go`, `events.go`, `executions.go`, `file_mutations.go`, `ledger.go`, `receipts.go`, `replay.go`, `rows.go`, `suspended.go`, `csvwriter.go`.
+- **`internal/services/reporting/`**: Reads from database and storage backends (including decrypted execution vault, replay store, git ledger directory, and suspended transaction store) to write flat, deterministic CSV evidence files. Modules: `reporter.go` (orchestrator), `verification.go` (cryptographic verification pass), `commitments.go`, `events.go`, `executions.go`, `file_mutations.go`, `ledger.go`, `receipts.go`, `replay.go`, `rows.go`, `suspended.go`, `csvwriter.go`.
 - **Cryptographic Verification**: Re-validates receipt signatures, verifies the sequential commitment hash chain, and checks the git ledger Merkle root to ensure system integrity.
 - **Test Coverage**: `verification_test.go` provides 15 hermetic tests covering all 5 verification checks (commitment chain integrity, git merkle root, file mutation linkage, receipt/commitment cross-link, context cancellation) with real SQLite + vault. `verification.go` at 80.8% coverage.
 

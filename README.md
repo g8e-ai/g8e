@@ -6,7 +6,7 @@
 
 </div>
 
-g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over commitments, while state, keys, and raw data remain on the host that owns them. The platform is implemented as a single static Go binary with zero external dependencies.
+g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over commitments, while state, keys, and raw data remain on the host that owns them. The platform is implemented as a single static Go binary. All dependencies are resolved at build time; the compiled binary is statically linked and has zero runtime dependencies.
 
 <p align="center">
   <img src="docs/media/jit-mcp-with-receipts.png" alt="JIT MCP with governance receipts" width="720" />

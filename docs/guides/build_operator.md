@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-06-29
-Version: v1.3.3
+Last Updated: 2026-07-02
+Version: v1.3.5
 
 ---
 
@@ -69,7 +69,7 @@ git clone https://github.com/g8e-ai/g8e.git && cd g8e
 make build
 ```
 
-This produces the `g8e` binary in the repository root. The binary is statically linked and requires no runtime dependencies.
+This produces the `g8e` binary in the repository root. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, or other external tools are needed on the target host.
 
 **Self-Contained Deployment**: The compiled g8e binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
 

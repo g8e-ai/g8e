@@ -5,7 +5,7 @@ parent: Core
 
 # About g8e
 
-g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over tokenized projections and cryptographic commitments, while state, keys, and raw data remain on the host that owns them. The platform is implemented as a single static Go binary with zero external dependencies.
+g8e is a sovereign execution platform that delivers frontier AI reasoning to the edge without surrendering data custody. It reduces cloud providers to stateless co-processors: the model reasons over tokenized projections and cryptographic commitments, while state, keys, and raw data remain on the host that owns them. The platform is implemented as a single static Go binary. All dependencies are resolved at build time; the compiled binary is statically linked and has zero runtime dependencies.
 
 The core invariant is narrow: every mutation is a typed, signed, state-bound `GovernanceEnvelope` serialized as canonical JSON. Every envelope must clear a fail-closed verification pipeline of Doctrine (L1Doctrine), Consensus (L2Consensus), Notary (L3Notary), and Warden (L4Warden) before the Actuator (L5Actuator) executes. The operator re-derives every proof from scratch against its own local state before any mutation occurs.
 
