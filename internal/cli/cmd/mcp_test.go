@@ -1090,3 +1090,340 @@ func TestMcpStdioCmd(t *testing.T) {
 		assert.NotNil(t, cmd.RunE, "should have RunE function")
 	})
 }
+
+func TestWriteAgentConfig(t *testing.T) {
+	t.Run("cursor writes config file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("cursor", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("devin writes config file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("devin", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("vscode writes config file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("vscode", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("continue writes config file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("continue", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("goose writes config file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("goose", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("codeium writes config file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("codeium", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("tabby writes config file", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("tabby", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+	})
+
+	t.Run("gemini writes config file with existing settings merge", func(t *testing.T) {
+		tmpHome := t.TempDir()
+		t.Setenv("HOME", tmpHome)
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("gemini", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+		if cleanup != nil {
+			cleanup()
+		}
+
+		data, err := os.ReadFile(configPath)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "g8e")
+		assert.Contains(t, string(data), "excludeTools")
+	})
+
+	t.Run("aider returns error when config already exists", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Chdir(tmpDir)
+
+		existingPath := filepath.Join(tmpDir, ".aider.conf.yml")
+		require.NoError(t, os.WriteFile(existingPath, []byte("existing"), 0644))
+
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		_, _, err = WriteAgentConfig("aider", binaryPath)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrConfigFileExists)
+	})
+
+	t.Run("aider writes config when no existing file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Chdir(tmpDir)
+
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, _, err := WriteAgentConfig("aider", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+
+		data, err := os.ReadFile(configPath)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "g8e")
+	})
+
+	t.Run("ollama writes temp file with cleanup", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("ollama", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+
+		_, err = os.Stat(configPath)
+		require.NoError(t, err)
+
+		cleanup()
+
+		_, err = os.Stat(configPath)
+		assert.True(t, os.IsNotExist(err))
+	})
+
+	t.Run("unknown agent writes temp file with cleanup", func(t *testing.T) {
+		t.Setenv("HOME", t.TempDir())
+		binaryPath, err := os.Executable()
+		require.NoError(t, err)
+
+		configPath, cleanup, err := WriteAgentConfig("unknown-agent", binaryPath)
+		require.NoError(t, err)
+		assert.NotEmpty(t, configPath)
+
+		_, err = os.Stat(configPath)
+		require.NoError(t, err)
+
+		cleanup()
+
+		_, err = os.Stat(configPath)
+		assert.True(t, os.IsNotExist(err))
+	})
+}
+
+func TestAgentLaunchArgs(t *testing.T) {
+	t.Run("claude returns governance flags", func(t *testing.T) {
+		args, err := agentLaunchArgs("claude", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Contains(t, args, "--mcp-config")
+		assert.Contains(t, args, "/path/to/config.json")
+		assert.Contains(t, args, "--strict-mcp-config")
+		assert.Contains(t, args, "--disallowed-tools")
+	})
+
+	t.Run("codex returns governance flags", func(t *testing.T) {
+		args, err := agentLaunchArgs("codex", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Contains(t, args, "--mcp-config")
+		assert.Contains(t, args, "--strict-mcp-config")
+	})
+
+	t.Run("cursor returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("cursor", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("devin returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("devin", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("continue returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("continue", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("aider returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("aider", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("goose returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("goose", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("vscode returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("vscode", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("codeium returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("codeium", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("tabby returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("tabby", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("gemini returns empty args", func(t *testing.T) {
+		args, err := agentLaunchArgs("gemini", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Empty(t, args)
+	})
+
+	t.Run("ollama returns error", func(t *testing.T) {
+		_, err := agentLaunchArgs("ollama", "/path/to/config.json")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+	})
+
+	t.Run("unknown agent returns error", func(t *testing.T) {
+		_, err := agentLaunchArgs("unknown-agent", "/path/to/config.json")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrAgentNotSupported)
+	})
+
+	t.Run("case-insensitive", func(t *testing.T) {
+		args, err := agentLaunchArgs("CLAUDE", "/path/to/config.json")
+		require.NoError(t, err)
+		assert.Contains(t, args, "--mcp-config")
+	})
+}
+
+func TestRunMCPAgentRun_NoArgs(t *testing.T) {
+	t.Run("returns error when no args and no url", func(t *testing.T) {
+		err := runMCPAgentRun(nil, "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "specify an agent name")
+	})
+
+	t.Run("returns error for unknown agent", func(t *testing.T) {
+		err := runMCPAgentRun([]string{"unknown-agent-xyz"}, "")
+		require.Error(t, err)
+	})
+}
+
+func TestSubprocessMCPProxy_ForwardError(t *testing.T) {
+	t.Run("forward returns error when stdin is nil", func(t *testing.T) {
+		proxy := &subprocessMCPProxy{
+			command: "echo",
+			args:    []string{"test"},
+			logger:  slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		}
+
+		_, err := proxy.forward(JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/list",
+		})
+		require.Error(t, err)
+	})
+}
+
+func TestHttpMCPProxy(t *testing.T) {
+	t.Run("forward proxies to server", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			resp := JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      float64(1),
+				Result:  map[string]interface{}{"status": "ok"},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		proxy := &httpMCPProxy{
+			url:    server.URL,
+			client: &http.Client{Timeout: 5 * time.Second},
+		}
+
+		resp, err := proxy.forward(JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/list",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "2.0", resp.JSONRPC)
+	})
+
+	t.Run("stop is safe to call", func(t *testing.T) {
+		proxy := &httpMCPProxy{
+			url:    "http://localhost:1",
+			client: &http.Client{},
+		}
+		assert.NotPanics(t, func() {
+			proxy.stop()
+		})
+	})
+}

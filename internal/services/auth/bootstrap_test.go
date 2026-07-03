@@ -573,6 +573,49 @@ func TestSetHTTPClient(t *testing.T) {
 	assert.Same(t, customClient, svc.httpClient)
 }
 
+func TestNewBootstrapService_NilTLSConfig(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+
+	_, err := NewBootstrapService(cfg, logger, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrBootstrapTLSConfig)
+	assert.Contains(t, err.Error(), "TLS config is required")
+}
+
+func TestRequestHTTPAuth_ContextCancellation(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(5 * time.Second)
+	}))
+	defer server.Close()
+
+	svc := newTestBootstrapService(t, server)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := svc.requestHTTPAuth(ctx)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestGenerateSystemFingerprint_DeterministicAndNonEmpty(t *testing.T) {
+	t.Parallel()
+	logger := testutil.NewTestLogger()
+
+	fp1, err := GenerateSystemFingerprint(logger)
+	require.NoError(t, err)
+	require.NotNil(t, fp1)
+	assert.NotEmpty(t, fp1.Fingerprint)
+	assert.Len(t, fp1.Fingerprint, 64)
+
+	fp2, err := GenerateSystemFingerprint(logger)
+	require.NoError(t, err)
+	assert.Equal(t, fp1.Fingerprint, fp2.Fingerprint, "fingerprint must be deterministic")
+}
+
 func TestRebuildTransportWithOperatorCert(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)

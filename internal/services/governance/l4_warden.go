@@ -168,9 +168,7 @@ func NewFilesystemSignerStore(dir string, logger *slog.Logger) (*FilesystemSigne
 			continue
 		}
 
-		var pubKey ed25519.PublicKey
-		copy(pubKey, pubKeyBytes)
-		signers[keyID] = pubKey
+		signers[keyID] = ed25519.PublicKey(pubKeyBytes)
 		loadedCount++
 	}
 
