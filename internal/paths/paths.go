@@ -87,9 +87,9 @@ var Infra struct {
 	OperatorLogFile string
 
 	// PID paths
-	PidDir               string
-	OperatorPostureFile  string
-	OperatorPIDFile      string
+	PidDir              string
+	OperatorPostureFile string
+	OperatorPIDFile     string
 
 	// Storage DB paths
 	ExecutionVaultDBPath string
@@ -161,9 +161,9 @@ var Infra struct {
 	LogDir          string
 	OperatorLogFile string
 
-	PidDir               string
-	OperatorPostureFile  string
-	OperatorPIDFile      string
+	PidDir              string
+	OperatorPostureFile string
+	OperatorPIDFile     string
 
 	ExecutionVaultDBPath string
 	ReplayStoreDBPath    string
@@ -227,8 +227,8 @@ var Infra struct {
 	SessionEncKeyPath:   constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileSessionEncryptionKey,
 	BootstrapDigestPath: constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileBootstrapDigest,
 
-	LogDir:          constants.RuntimeDirname + "/" + constants.LogDirname,
-	OperatorLogFile: constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.OperatorLogFilename,
+	LogDir:              constants.RuntimeDirname + "/" + constants.LogDirname,
+	OperatorLogFile:     constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.OperatorLogFilename,
 	PidDir:              constants.RuntimeDirname + "/" + constants.PidDirname,
 	OperatorPostureFile: constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPostureFilename,
 	OperatorPIDFile:     constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPIDFilename,

@@ -655,6 +655,9 @@ func TestInfraDefaults_BeforeInit(t *testing.T) {
 		BootstrapDigestPath              string
 		LogDir                           string
 		OperatorLogFile                  string
+		PidDir                           string
+		OperatorPostureFile              string
+		OperatorPIDFile                  string
 		ExecutionVaultDBPath             string
 		ReplayStoreDBPath                string
 		LedgerDir                        string

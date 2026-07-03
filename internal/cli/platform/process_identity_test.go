@@ -66,7 +66,7 @@ func TestNetworkIdentityArgs(t *testing.T) {
 			if tt.checkPerms && runtime.GOOS != "windows" {
 				info, err := os.Stat(expectedPath)
 				require.NoError(t, err)
-				assert.Equal(t, constants.PermFilePrivate, info.Mode().Perm())
+				assert.Equal(t, os.FileMode(constants.PermFilePrivate), info.Mode().Perm())
 			}
 		})
 	}
