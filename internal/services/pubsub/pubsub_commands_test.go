@@ -27,6 +27,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
@@ -35,7 +36,6 @@ import (
 	storagetest "github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	govpkg "github.com/g8e-ai/g8e/internal/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"

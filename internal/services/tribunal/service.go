@@ -22,9 +22,9 @@ import (
 	"net/http"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/response"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/internal/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 )

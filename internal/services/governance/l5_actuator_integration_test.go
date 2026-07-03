@@ -24,10 +24,10 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/uuid"
-	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/stretchr/testify/require"
 
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"

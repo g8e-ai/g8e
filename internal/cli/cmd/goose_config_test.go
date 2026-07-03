@@ -1,5 +1,3 @@
-//go:build integration
-
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tests
+package cmd
 
 import (
 	"encoding/json"
@@ -23,36 +21,33 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/internal/cli/cmd"
 )
 
 func TestGooseGovernanceConfig(t *testing.T) {
-	// Setup a fake home directory
-	tmpDir, err := os.MkdirTemp("", "g8e-goose-test-*")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-	os.Setenv("HOME", tmpDir)
+	t.Setenv("HOME", t.TempDir())
 
-	configDir := filepath.Join(tmpDir, ".goose")
+	homeDir, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	configDir := filepath.Join(homeDir, ".goose")
 	err = os.MkdirAll(configDir, 0755)
 	require.NoError(t, err)
 
-	// Create an existing settings.json to test the backup mechanism
 	existingConfigPath := filepath.Join(configDir, "settings.json")
 	existingData := []byte(`{"mcpServers": {"existing": {}}}`)
 	err = os.WriteFile(existingConfigPath, existingData, 0644)
 	require.NoError(t, err)
 
-	// Call writeAgentConfig for goose
-	configPath, cleanup, err := cmd.WriteAgentConfig("goose", "/path/to/g8e")
+	binaryPath, err := os.Executable()
+	require.NoError(t, err)
+
+	configPath, cleanup, err := WriteAgentConfig("goose", binaryPath)
 	require.NoError(t, err)
 	if cleanup != nil {
 		defer cleanup()
 	}
 	assert.Equal(t, existingConfigPath, configPath)
 
-	// Verify Backup
 	backupPath := configPath + ".bak"
 	_, err = os.Stat(backupPath)
 	require.NoError(t, err, "Backup file should exist")
@@ -61,7 +56,6 @@ func TestGooseGovernanceConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, existingData, backupData)
 
-	// Verify Governance (excludeTools)
 	configData, err := os.ReadFile(configPath)
 	require.NoError(t, err)
 
