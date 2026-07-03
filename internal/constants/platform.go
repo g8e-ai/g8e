@@ -97,3 +97,11 @@ const (
 	PostureConsensus = "consensus"
 	PostureNotary    = "notary"
 )
+
+// Log level names.
+const (
+	LogLevelInfo    = "info"
+	LogLevelError   = "error"
+	LogLevelDebug   = "debug"
+	LogLevelDefault = LogLevelInfo
+)

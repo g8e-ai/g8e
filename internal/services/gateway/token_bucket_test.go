@@ -55,7 +55,7 @@ func TestTokenBucket_RefillCappedAtBurst(t *testing.T) {
 }
 
 func TestTokenBucket_ConcurrentAllow(t *testing.T) {
-	tb := newTokenBucket(1000, 100)
+	tb := newTokenBucket(0, 100)
 	done := make(chan bool, 200)
 	allowed := 0
 	var mu sync.Mutex

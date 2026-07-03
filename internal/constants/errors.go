@@ -138,7 +138,9 @@ var (
 	ErrPIDWriteFailed     = errors.New("failed to write PID file")
 	ErrPostureReadFailed  = errors.New("failed to read posture file")
 	ErrPostureWriteFailed = errors.New("failed to write posture file")
-	ErrProcessInterrupted = errors.New("process interrupted")
+	ErrProcessInterrupted      = errors.New("process interrupted")
+	ErrProcessSigKillTimeout   = errors.New("process did not exit after SIGKILL")
+	ErrProcessForceKillTimeout = errors.New("process did not exit after force kill")
 
 	// File system errors
 	ErrPathNotFound         = errors.New("path not found")
@@ -972,6 +974,9 @@ var (
 
 	// Agent harness errors
 	ErrHarnessNoScenarios = errors.New("no scenarios selected")
+
+	// Browser errors
+	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")
 
 	// CanonicalDB service errors
 	ErrTestKeystoreNil = errors.New("testKeystore must not be nil in test mode")

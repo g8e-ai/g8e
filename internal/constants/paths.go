@@ -108,6 +108,11 @@ const (
 	PathWindowsGitBinSh             = "C:\\Program Files\\Git\\bin\\sh.exe"
 	PathWindowsMsys64Bash           = "C:\\msys64\\usr\\bin\\bash.exe"
 	PathWindowsCygwin64Bash         = "C:\\cygwin64\\bin\\bash.exe"
+
+	// Windows temp directory prefixes and filenames for cert store operations
+	WindowsTempCertImportPrefix = "g8e-cert-import-*"
+	WindowsTempCATrustPrefix    = "g8e-ca-trust-*"
+	WindowsTempCertFilename     = "certificate.pem"
 )
 
 // SSH path constants for known_hosts and config locations.

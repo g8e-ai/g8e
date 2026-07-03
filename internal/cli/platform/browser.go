@@ -18,6 +18,8 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // browserCommandExecutor is an interface for executing commands, allowing dependency injection for testing.
@@ -43,12 +45,12 @@ func OpenBrowser(urlStr string) error {
 // openBrowserWithExecutor opens the browser using the provided command executor.
 func openBrowserWithExecutor(urlStr string, executor browserCommandExecutor) error {
 	if urlStr == "" {
-		return fmt.Errorf("failed to open browser: URL cannot be empty")
+		return constants.ErrBrowserURLEmpty
 	}
 
 	// Validate URL format
 	if _, err := url.Parse(urlStr); err != nil {
-		return fmt.Errorf("failed to open browser: invalid URL: %w", err)
+		return fmt.Errorf("platform: parse URL: %w", err)
 	}
 
 	var cmdName string
@@ -67,7 +69,7 @@ func openBrowserWithExecutor(urlStr string, executor browserCommandExecutor) err
 	}
 
 	if err := executor.start(cmdName, cmdArgs...); err != nil {
-		return fmt.Errorf("failed to open browser: %w", err)
+		return fmt.Errorf("platform: start browser: %w", err)
 	}
 
 	return nil

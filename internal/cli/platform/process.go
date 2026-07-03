@@ -35,6 +35,7 @@ const (
 	HealthCheckInterval = 500 * time.Millisecond
 	MaxHealthChecks     = 20
 	MaxPortAttempts     = 100
+	SigKillPollInterval = 100 * time.Millisecond
 )
 
 // CommandExecutor defines an interface for executing external commands.
@@ -112,10 +113,10 @@ func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 	pkiDir := paths.Infra.PkiDir
 	secretsDir := paths.Infra.SecretsDir
 	dataDir := paths.Infra.DataDir
-	logDir := filepath.Join(runtimeDir, constants.LogDirname)
-	pidDir := filepath.Join(runtimeDir, constants.PidDirname)
-	logFile := filepath.Join(logDir, paths.OperatorLogPath)
-	postureFile := filepath.Join(pidDir, constants.OperatorPostureFilename)
+	logDir := paths.Infra.LogDir
+	pidDir := paths.Infra.PidDir
+	logFile := paths.Infra.OperatorLogFile
+	postureFile := paths.Infra.OperatorPostureFile
 
 	return &ProcessManager{
 		projectRoot: projectRoot,
@@ -130,10 +131,10 @@ func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 	}, nil
 }
 
-func (pm *ProcessManager) ensureDirectories() error {
+func (pm *ProcessManager) createDirectories() error {
 	dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0700); err != nil {
+		if err := os.MkdirAll(dir, constants.PermDirPrivate); err != nil {
 			return fmt.Errorf("%w: %s: %v", constants.ErrDirCreateFailed, dir, err)
 		}
 	}
@@ -155,14 +156,14 @@ func (pm *ProcessManager) networkIdentityArgs(identityData []byte) ([]string, er
 
 func (pm *ProcessManager) writeNetworkIdentityFile(identityData []byte) (string, error) {
 	identityFile := filepath.Join(pm.runtimeDir, constants.NetworkIdentityFilename)
-	if err := os.WriteFile(identityFile, identityData, 0600); err != nil {
+	if err := os.WriteFile(identityFile, identityData, constants.PermFilePrivate); err != nil {
 		return "", fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 	return identityFile, nil
 }
 
 func (pm *ProcessManager) checkPortAvailable(port int, name string) error {
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf("%s:%d", constants.LocalhostIP, port)
 	listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
 	if err != nil {
 		return fmt.Errorf("%w: port %d (%s): %v", constants.ErrPortUnavailable, port, name, err)
@@ -185,7 +186,7 @@ func (pm *ProcessManager) findAvailablePort(startPort int, name string) (int, er
 
 	for attempt := 0; attempt < MaxPortAttempts; attempt++ {
 		port := startPort + attempt
-		addr := fmt.Sprintf("127.0.0.1:%d", port)
+		addr := fmt.Sprintf("%s:%d", constants.LocalhostIP, port)
 		listener, err := net.Listen(string(constants.NetworkProtocolTCP), addr)
 		if err == nil {
 			listener.Close()
@@ -221,7 +222,7 @@ func (pm *ProcessManager) readPID(filename string) (int, error) {
 
 func (pm *ProcessManager) writePID(filename string, pid int) error {
 	pidFile := filepath.Join(pm.pidDir, filename)
-	return os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0600)
+	return os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), constants.PermFilePrivate)
 }
 
 func (pm *ProcessManager) deletePID(filename string) error {
@@ -233,7 +234,7 @@ func (pm *ProcessManager) deletePID(filename string) error {
 }
 
 func (pm *ProcessManager) writePosture(posture string) error {
-	return os.WriteFile(pm.postureFile, []byte(posture), 0600)
+	return os.WriteFile(pm.postureFile, []byte(posture), constants.PermFilePrivate)
 }
 
 func (pm *ProcessManager) readPosture() (string, error) {
@@ -246,8 +247,8 @@ func (pm *ProcessManager) readPosture() (string, error) {
 	}
 	posture := string(postureData)
 	// Validate posture is one of the allowed values
-	if posture != "" && posture != "doctrine" && posture != "consensus" && posture != "notary" {
-		return "", fmt.Errorf("%w: invalid value '%s': must be doctrine, consensus, or notary", constants.ErrInvalidPosture, posture)
+	if posture != "" && posture != constants.PostureDoctrine && posture != constants.PostureConsensus && posture != constants.PostureNotary {
+		return "", fmt.Errorf("%w: invalid value '%s': must be %s, %s, or %s", constants.ErrInvalidPosture, posture, constants.PostureDoctrine, constants.PostureConsensus, constants.PostureNotary)
 	}
 	return posture, nil
 }
@@ -338,7 +339,7 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 }
 
 func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		return err
 	}
 
@@ -355,8 +356,8 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 
 	// Normalize 127.0.0.1 to localhost for passkey RP ID
 	// WebAuthn requires RP ID to be a valid domain, not an IP address
-	if effectivePasskeyRpID == "127.0.0.1" {
-		effectivePasskeyRpID = "localhost"
+	if effectivePasskeyRpID == constants.LocalhostIP {
+		effectivePasskeyRpID = constants.LocalhostHostname
 	}
 	effectiveRateLimitRPS := opts.RateLimitRPS
 	effectiveRateLimitBurst := opts.RateLimitBurst
@@ -379,7 +380,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		effectiveSecretsDir = pm.secretsDir
 	}
 	if effectiveLogLevel == "" {
-		effectiveLogLevel = "info"
+		effectiveLogLevel = constants.LogLevelDefault
 	}
 
 	// Find the first available port starting from httpPort
@@ -402,7 +403,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return err
 	}
 
-	logHandle, err := os.OpenFile(pm.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	logHandle, err := os.OpenFile(pm.logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, constants.PermFilePrivate)
 	if err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
@@ -534,7 +535,7 @@ func (pm *ProcessManager) OperatorStatus() (bool, int, error) {
 }
 
 func (pm *ProcessManager) GetLogPath() string {
-	return filepath.Join(pm.logDir, paths.OperatorLogPath)
+	return pm.logFile
 }
 
 func (pm *ProcessManager) Reset() error {
@@ -550,7 +551,7 @@ func (pm *ProcessManager) Reset() error {
 		return fmt.Errorf("%w: secrets directory: %v", constants.ErrPathValidation, err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 

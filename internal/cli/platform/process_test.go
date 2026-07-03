@@ -58,7 +58,7 @@ func TestEnsureDirectories(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -129,7 +129,7 @@ func TestReadPID(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -175,7 +175,7 @@ func TestWritePID(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -219,7 +219,7 @@ func TestDeletePID(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -278,7 +278,7 @@ func TestOperatorStatus(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -344,7 +344,7 @@ func TestStopOperator(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -423,7 +423,7 @@ func TestReset(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -470,7 +470,7 @@ func TestClean(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -556,7 +556,7 @@ func TestProcessManagerConcurrency(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -589,7 +589,7 @@ func TestProcessManagerDirectoryPermissions(t *testing.T) {
 	}
 
 	// Test that ensureDirectories creates directories with correct permissions
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -617,7 +617,7 @@ func TestProcessManagerErrorHandling(t *testing.T) {
 	}
 
 	// Test reading PID from a directory instead of a file
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -639,7 +639,7 @@ func TestWritePIDPermissions(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -670,7 +670,7 @@ func TestReadPIDEmptyFile(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -693,7 +693,7 @@ func TestReadPIDWhitespace(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -734,7 +734,7 @@ func TestDeletePIDNonExistent(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -833,7 +833,7 @@ func TestWritePosture(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -871,7 +871,7 @@ func TestReadPosture(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -918,7 +918,7 @@ func TestDeletePosture(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 
@@ -949,7 +949,7 @@ func TestReadPosturePublic(t *testing.T) {
 		t.Fatalf("NewProcessManager failed: %v", err)
 	}
 
-	if err := pm.ensureDirectories(); err != nil {
+	if err := pm.createDirectories(); err != nil {
 		t.Fatalf("ensureDirectories failed: %v", err)
 	}
 

@@ -76,3 +76,10 @@ const (
 	// ExitCodeNone indicates no exit code is available (e.g. non-command event)
 	ExitCodeNone = -1
 )
+
+// Windows process exit codes
+const (
+	// StillActiveExitCode indicates a Windows process is still running.
+	// Equivalent to the Windows STILL_ACTIVE macro (259).
+	StillActiveExitCode = 259
+)
