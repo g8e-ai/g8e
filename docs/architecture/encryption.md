@@ -1,7 +1,7 @@
 # Encryption Architecture
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 ## Overview
 
@@ -314,7 +314,7 @@ Platform implementations:
 | Linux | `libsecretKeyring` (GNOME Keyring via libsecret) | `internal/services/keystore/keyring_libsecret.go` | `fileKeyring` |
 | macOS | `keychainKeyring` (macOS Keychain) | `internal/services/keystore/keyring_keychain.go` | None |
 | Windows | `fileKeyring` | `internal/services/keystore/keyring_file.go` | None |
-| Tests | `memoryKeyring` | `internal/services/keystore/keyring_memory.go` | N/A |
+| Tests | `memoryKeyring` | `internal/services/keystore/keystoretest/keyring.go` | N/A |
 
 The `fileKeyring` implementation (`internal/services/keystore/keyring_file.go`) stores the master key as a base64-encoded file on disk with `0600` permissions. Atomic writes are performed via temp file rename.
 

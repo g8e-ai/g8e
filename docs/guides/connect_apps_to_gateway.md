@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect Apps to g8e Gateway
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 ---
 
@@ -72,7 +72,7 @@ The g8e Gateway exposes two consolidated protocol surfaces. Each surface serves 
 
 The g8e Gateway enforces strict port separation for security:
 - **HTTP Surface**: Plain HTTP for health checks, bootstrap enrollment, PKI discovery, and catch-all redirect to HTTPS. No MCP, A2A, governance, or mutation endpoints are exposed on this surface.
-- **HTTPS Surface**: TLS with `tls.VerifyClientCertIfGiven`. Client certificates are verified when present but not required at the TLS layer. mTLS enforcement occurs at the application layer via `auth.Middleware()`, which checks certificate presence and validity for all routes not registered in `PublicRouteRegistry` (defined in `internal/services/gateway/gateway_auth.go`). Public routes (health, console SPA, bootstrap, passkey endpoints) bypass mTLS; all other routes require a valid client certificate.
+- **HTTPS Surface**: TLS with `tls.VerifyClientCertIfGiven`. Client certificates are verified when present but not required at the TLS layer. mTLS enforcement occurs at the application layer via `auth.Middleware()`, which uses `RouteAuthRegistry` (defined in `internal/services/gateway/gateway_auth.go`) to classify every route into one of four auth modes: `RouteAuthNone` (public, no auth), `RouteAuthMTLS` (client certificate required), `RouteAuthWebSession` (cookie-based browser auth), and `RouteAuthDual` (mTLS preferred, cookie fallback). Public routes (health, console SPA, bootstrap, passkey console, approval page) bypass mTLS; mTLS routes require a valid client certificate; web session routes validate a session cookie; dual routes try mTLS first and fall back to cookie auth.
 
 Port mixing is prohibited. The gateway fails startup if the HTTP and HTTPS surfaces are assigned to the same port, as this would conflate plain-HTTP bootstrap routes with TLS-protected API routes.
 
@@ -546,7 +546,7 @@ For custom g8e-compatible gateway implementations, connection follows the same o
 
 Custom gateways must support:
 - CLI flags for runtime parameters (ports, mode, paths)
-- Strict port separation with `tls.VerifyClientCertIfGiven` on the HTTPS surface and application-layer mTLS enforcement via a public route registry
+- Strict port separation with `tls.VerifyClientCertIfGiven` on the HTTPS surface and application-layer auth enforcement via `RouteAuthRegistry`
 
 ---
 

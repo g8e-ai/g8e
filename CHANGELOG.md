@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.6] - 2026-07-03
+
+### Overview
+
+v1.3.6 is a code quality, test coverage, and structural consolidation release. This version moves the governance types package from `pkg/governance` to `internal/governance`, replaces all `os.Exit` calls in the gateway boot sequence with proper error returns, eliminates the global `versionInfo` variable in favor of context-based propagation, and removes the loopback-only restriction from the bootstrap auth controller. Test coverage increased to 73% with 21 new edge and integration test files across CLI, gateway, governance, keystore, MCP, pubsub, reporting, scrubbing, sqliteutil, storage, and tribunal packages. Demo code was refactored with shared helpers to reduce duplication, and inline anonymous structs were replaced with typed models throughout.
+
+### Added
+
+* **E2E Docker CI Job** — Added `e2e` job to `.github/workflows/build-and-test.yml` running `make test-docker` on `ubuntu-latest` with Go 1.26.4 and 15-minute timeout.
+* **Demo Passkey Enrollment Hints** — `printDemoEndpoints` now prints `g8e auth enroll -e localhost:<port>` instructions with a `demoHTTPPort` helper mapping each demo org to its Docker-published HTTP port.
+* **Demo Helper Functions** — Added `demoScenarioStep` (combines print → demoStep → pass/fail into one call) and `demoStepWarn` (non-critical step with warning on failure) in `demos.go`, extracting repetitive patterns from scenario blocks.
+* **Cloud Metadata Testability** — `CloudMetadataTool` in `cloud_metadata.go` now uses injectable function variables (`detectCloudProviderFunc`, `httpGetFunc`) enabling unit testing without network calls.
+* **21 New Test Files** — Added edge and integration tests: `tls_edge_test.go`, `process_edge_test.go`, `g8eo_edge_test.go`, `token_bucket_test.go`, `warden_edge_test.go`, `keystore_edge_test.go`, `cloud_metadata_test.go`, `command_service_edge_test.go`, `file_ops_edge_test.go`, `reports_test.go`, `run_integration_test.go`, `ledger_integration_test.go`, `boundary_edge_test.go`, `db_edge_test.go`, `list_functions_test.go`, `factory_edge_test.go`, `local_deliberator_test.go`, `encrypted_kv_adapter_test.go`, `mcp_test.go`, `vault_test.go`, and TUI tests (`run_test.go`, `view_test.go`).
+
+### Changed
+
+* **Governance Package Moved to `internal/`** — `pkg/governance/types.go` → `internal/governance/envelope.go` (with test). All imports across the codebase updated from `pkg/governance` to `internal/governance` (l4_warden, l5_actuator, heartbeat_service, demos, etc.).
+* **`RunGateway` Returns Error** — `serve.RunGateway` signature changed from `func(cfg, vi)` to `func(cfg, vi) error`. All internal `os.Exit`/`fmt.Fprintf(os.Stderr)` calls replaced with wrapped error returns. Gateway now uses `sync.WaitGroup` + `errChan` for goroutine error propagation and graceful shutdown. `gatewayServeCmd` returns `RunGateway` result directly.
+* **Version Info via Context** — Replaced global `versionInfo` variable with `versionInfoKey{}` context key. `NewRootCmd` now accepts `serve.VersionInfo` parameter and stores it in the root context. `versionInfoFromCmd(cmd)` extracts it for `gateway serve` and `operator run` commands.
+* **Loopback Requirement Removed** — Removed `ErrLoopbackRequired` sentinel and loopback-only IP check from `auth_controller_bootstrap.go`. Gateway bootstrap no longer restricts enrollment to `127.0.0.1`/`localhost`.
+* **Typed Models Replace Inline Structs** — Replaced anonymous structs with typed models throughout: `models.DeviceEnrollRequest`, `models.DeviceEnrollmentResponse`, `models.OperatorRegistrationResponse`, `models.ActuatorPublicKeyExport`, `models.OperatorDocumentGo`, `models.User`, `models.DocQueryRequest`, `models.DocFilter`. Removed `renewalResponse` type from `cert.go` and duplicate `User`/`Operator`/`QueryFilter`/`QueryRequest`/`QueryRequestWithLimit` types from `data.go`.
+* **Context Propagation in Enrollment** — `PerformAutomaticEnrollment` and `RenewOperatorCertificate` now accept `context.Context`. `submitRenewal` accepts context and uses `http.NewRequestWithContext`. Enrollment HTTP client given 30-second timeout.
+* **Posture Names Use Constants** — `DoctrinePosture.Name()`, `ConsensusPosture.Name()`, `NotaryPosture.Name()`, and `ParseGovernancePosture` switch cases now use `constants.PostureDoctrine`/`PostureConsensus`/`PostureNotary` instead of string literals. `printNextSteps` in `gwstdout.go` updated similarly.
+* **Report Command Refactored** — `report.go` extracted `reportFlags` struct with `resolveOptions()` and `addFlags()` methods, eliminating duplicated flag declarations and path resolution logic across `all` and `verify` subcommands.
+* **`ensureGatewayRunning` Renamed** — Renamed to `startGatewayIfNeeded` in `mcp.go` for clarity. All call sites updated.
+* **Windows Crypto Consolidated** — `generateSoftwareBackedCSR` and `generateTPMBackedCSR` in `windows_crypto.go` both delegate to shared `generateECDSACSR` helper. TPM path documented as not-yet-implemented.
+* **Error Wrapping Standardized** — `%v` → `%w` throughout `windows_crypto.go`, `cert.go`, `mcp.go`, `gateway.go`, `stream.go`. Bare `return err` replaced with `fmt.Errorf("context: %w", err)` in gateway, MCP, and data commands.
+* **Stream Package Improvements** — `paths.Init()` moved from package-level to `RunStream` function entry. `errors.Is(err, flag.ErrHelp)` replaces `==` comparison. `emitJSON` return errors now checked. `collectHosts` uses named return with deferred close error checking.
+* **Operator Command Cleanup** — `operator run` uses persistent `--endpoint` flag from root command instead of local flag. Removed redundant `--endpoint` from `operator stream`. Uses `models.OperatorDocumentGo` for list display.
+* **Azure Region Parsing Fixed** — `getRegion` for Azure now uses safe type assertion chain (`metadata["compute"].(map[string]interface{})` → `["location"].(string)`) instead of panicking on nil intermediate values.
+* **Actuator Variables Unexported** — `ActuatorPriv`/`ActuatorPub`/`ActuatorKeyID` in `gateway.go` renamed to lowercase `actuatorPriv`/`actuatorPub`/`actuatorKeyID`.
+* **`GetLogPath` Simplified** — `ProcessManager.GetLogPath()` returns `pm.logFile` directly instead of reconstructing via `filepath.Join`.
+* **Demo Hardcoded Paths Replaced** — DHS demo scenarios now use `constants.ContainerVerifyOpsPy`, `constants.ContainerLedgerFilesDir`, `constants.ContainerAuditVaultDB`, and `constants.ContainerCABundle` instead of hardcoded strings.
+* **Demo Scenario Helpers Unified** — `dhsScenarioStep` replaced with shared `demoScenarioStep`. `dhsHarnessRun` replaced with shared `harnessRun`. Silently-discarded errors (`_ =`) replaced with proper warning output.
+* **Codemap Updated** — `docs/devs/codemap.md` updated with CLI command tree, new gateway files (`gateway_http_health.go`, `console/`), and revised serve layer descriptions.
+* **Makefile Coverage Exclusions** — Added `demo_dhs.go` and `demo_swarm.go` to `EXCLUDE_FILES` in Makefile.
+* **Protocol Python Version** — Updated `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` to v1.3.6.
+
+### Removed
+
+* **`ErrLoopbackRequired` Sentinel** — Removed from `internal/constants/errors.go` along with loopback IP check in `auth_controller_bootstrap.go`.
+* **Duplicate Type Definitions** — Removed `User`, `Operator`, `QueryFilter`, `QueryRequest`, `QueryRequestWithLimit` from `data.go` (replaced by `models` package types). Removed `renewalResponse` from `cert.go` (replaced by `models.OperatorRegistrationResponse`).
+* **`proxySessionToGatewayWithRetry` Wrapper** — Removed unnecessary wrapper function in `mcp.go` that delegated to `proxySessionToGatewayWithRetryContext` with `context.Background()`.
+* **Unused `failed` Slice** — Removed from `cleanAllDemos` in `demos.go`.
+* **`test/mcp_stdio_test.go`** — Deleted; replaced by `test/e2e/mcp_stdio_e2e_test.go` and `test/mcp_gateway_config_test.go`.
+
+### Tests
+
+* Relocated `test/goose_integration_test.go` → `internal/cli/cmd/goose_config_test.go` and `test/mcp_backup_integration_test.go` → `internal/cli/cmd/mcp_backup_test.go` to co-locate tests with implementation.
+* Expanded `TestVersionInfo` into table-driven tests covering zero value, full assignment, partial assignment, and individual field setability.
+* Updated `TestPrintDemoEndpoints` to assert passkey enrollment hints are printed for each demo org.
+* Added `operator_extra_test.go` covering operator list/run flag registration.
+* Test coverage reached 73% across the codebase.
+
+---
+
 ## [1.3.5] - 2026-07-02
 
 ### Overview
