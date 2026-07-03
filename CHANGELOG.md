@@ -470,7 +470,7 @@ v1.1.9 is a core architecture realignment release that corrects the governance v
 * **Posture-Specific Warden Tests** — Decomposed monolithic `l4_warden_test.go` into `l4_warden_consensus_test.go`, `l4_warden_doctrine_test.go`, and `l4_warden_notary_test.go` with posture-specific coverage.
 * **Capability Unit Tests** — New `internal/services/governance/capability_test.go` with comprehensive coverage of minting, verification, dissolution, and expiry.
 * **L3 Notary Unit Tests** — New `internal/services/governance/l3_notary_test.go` with 241 lines covering CLI L3 verification paths.
-* **L3 Proof Hash Exclusion Test** — New `TestGenerateMessageID_L3ProofNotInHash` in `pkg/governance/types_test.go` verifying L3 proof does not affect the transaction hash.
+* **L3 Proof Hash Exclusion Test** — New `TestGenerateMessageID_L3ProofNotInHash` in `internal/governance/envelope_test.go` verifying L3 proof does not affect the transaction hash.
 * **Architecture Documentation** — New `docs/architecture/governance.md` (absorbing `transaction-process.md`); detailed layer descriptions and transaction flow. Session & Identity Binding documentation added to `docs/architecture/auth.md`.
 
 ### Changed

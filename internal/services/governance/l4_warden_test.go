@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
-	"github.com/g8e-ai/g8e/pkg/governance"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
@@ -133,7 +133,7 @@ func signL2Vote(privKey ed25519.PrivateKey, keyID, hash string, decision bool) *
 	}
 }
 
-func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *governance.GovernanceEnvelope {
+func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey) *govtypes.GovernanceEnvelope {
 	t.Helper()
 	// Generate a safe nonce from action type and payload (handle empty payloads)
 	nonceSuffix := hex.EncodeToString(payload)
@@ -144,7 +144,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 		nonceSuffix = "empty"
 	}
 
-	env := &governance.GovernanceEnvelope{
+	env := &govtypes.GovernanceEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
@@ -159,7 +159,7 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	}
 	// Compute transaction hash before any governance metadata.
 	// Protocol ordering: L1 → L2 → L3 → L4. L2 signs the hash, then L3 is added.
-	hash, err := governance.GenerateMessageID(env)
+	hash, err := govtypes.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("failed to generate transaction hash: %v", err)
 	}
@@ -187,9 +187,9 @@ func signedEnvelope(t *testing.T, actionType constants.ActionType, payload []byt
 	return env
 }
 
-func rehash(t *testing.T, env *governance.GovernanceEnvelope) {
+func rehash(t *testing.T, env *govtypes.GovernanceEnvelope) {
 	t.Helper()
-	hash, err := governance.GenerateMessageID(env)
+	hash, err := govtypes.GenerateMessageID(env)
 	if err != nil {
 		t.Fatalf("failed to regenerate transaction hash: %v", err)
 	}
@@ -259,7 +259,7 @@ func createVerifierWithAppPolicyStore(t *testing.T, appPolicyStore AppPolicyStor
 }
 
 // signedEnvelopeWithAppID creates a signed envelope with a specific L2 KeyId.
-func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string) *governance.GovernanceEnvelope {
+func signedEnvelopeWithAppID(t *testing.T, actionType constants.ActionType, payload []byte, privKey ed25519.PrivateKey, appID string) *govtypes.GovernanceEnvelope {
 	t.Helper()
 	env := signedEnvelope(t, actionType, payload, privKey)
 	if env.Governance != nil && env.Governance.L2 != nil && len(env.Governance.L2.Votes) > 0 {

@@ -157,7 +157,7 @@ The payload must be serialized as protobuf bytes and base64-encoded in the final
 
 ### Step 4: Generate Transaction Hash
 
-Compute the deterministic transaction hash from the envelope fields using the canonicalization rules defined in `pkg/governance/types.go`. The hash is computed over:
+Compute the deterministic transaction hash from the envelope fields using the canonicalization rules defined in `internal/governance/envelope.go`. The hash is computed over:
 
 - action_type
 - target_resource
@@ -169,7 +169,7 @@ Compute the deterministic transaction hash from the envelope fields using the ca
 - requestor_user_id
 - acting_app_id
 
-Refer to the `GenerateMessageID` function in `pkg/governance/types.go` for the exact canonicalization algorithm.
+Refer to the `GenerateMessageID` function in `internal/governance/envelope.go` for the exact canonicalization algorithm.
 
 ### Step 5: Build Envelope
 
@@ -375,7 +375,7 @@ A reference g8e-compatible agentic ensemble demonstrates a maximal application i
 - Receipt verification and consumption
 - MCP/A2A integration
 
-Refer to `protocol/examples/governance_envelope/` for example envelope construction code and `pkg/governance/types.go` for the canonical hash implementation.
+Refer to `protocol/examples/governance_envelope/` for example envelope construction code and `internal/governance/envelope.go` for the canonical hash implementation.
 
 ---
 

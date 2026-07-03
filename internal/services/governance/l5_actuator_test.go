@@ -27,7 +27,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/g8e-ai/g8e/internal/uuid"
-	"github.com/g8e-ai/g8e/pkg/governance"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/stretchr/testify/require"
 
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -66,7 +66,7 @@ func TestL5ActuatorExecuteHappyPath(t *testing.T) {
 	// Configure handler to succeed (already set in newTestActuator)
 
 	// Create verified transaction
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		Id:                uuid.NewString(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -136,7 +136,7 @@ func TestL5ActuatorExecuteHandlerError(t *testing.T) {
 	handler := actuator.ExecutionHandler.(*mockExecutionHandler)
 	handler.err = errors.New("handler execution failed")
 
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		Id:                uuid.NewString(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -196,7 +196,7 @@ func TestL5ActuatorExecuteAuditWriteFailInitial(t *testing.T) {
 		return nil
 	}
 
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		Id:                uuid.NewString(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -230,7 +230,7 @@ func TestL5ActuatorExecuteReceiptPersistFail(t *testing.T) {
 		return errors.New("doc set failed")
 	}
 
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		Id:                uuid.NewString(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -256,7 +256,7 @@ func TestL5ActuatorExecuteMissingSigningKey(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 	actuator.SigningKey = nil
 
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		Id:                uuid.NewString(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",
@@ -282,7 +282,7 @@ func TestL5ActuatorExecuteMissingExecutionHandler(t *testing.T) {
 	actuator, _ := newTestActuator(t)
 	actuator.ExecutionHandler = nil
 
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		Id:                uuid.NewString(),
 		TransactionHash:   "test-hash-1234567890abcdef",
 		OperatorId:        "test-operator",

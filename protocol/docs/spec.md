@@ -431,7 +431,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 | Protobuf schemas | `../../protocol/proto/g8e/common/v1/common.proto` |
 | Event registry | `../../protocol/constants/events.json` |
 | Channel prefixes | `../../protocol/constants/channels.json` |
-| Envelope types | `../../pkg/governance/types.go` |
+| Envelope types | `../../internal/governance/envelope.go` |
 | L1 Doctrine logic | `../../internal/services/governance/l1_doctrine.go` |
 | L3 Notary logic | `../../internal/services/governance/l3_notary.go` |
 | L4 Warden logic | `../../internal/services/governance/l4_warden.go` |

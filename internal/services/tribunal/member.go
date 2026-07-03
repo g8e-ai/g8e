@@ -20,7 +20,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/pkg/governance"
+	"github.com/g8e-ai/g8e/internal/governance"
 )
 
 // TribunalMember represents a single member identity in the Tribunal.

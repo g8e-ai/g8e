@@ -31,7 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	"github.com/g8e-ai/g8e/internal/uuid"
-	govpkg "github.com/g8e-ai/g8e/pkg/governance"
+	govpkg "github.com/g8e-ai/g8e/internal/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
