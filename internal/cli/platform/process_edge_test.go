@@ -130,14 +130,14 @@ func TestBuildReExecArgs_WithIdentityData(t *testing.T) {
 	}
 
 	opts := OperatorStartOptions{
-		Posture:       "consensus",
-		HTTPPort:      8080,
-		HTTPSPort:     8443,
-		DataDir:       "/data",
-		PKIDir:        "/pki",
-		SecretsDir:    "/secrets",
-		LogLevel:      "info",
-		IdentityData:  []byte(`{"hostname":"test"}`),
+		Posture:      "consensus",
+		HTTPPort:     8080,
+		HTTPSPort:    8443,
+		DataDir:      "/data",
+		PKIDir:       "/pki",
+		SecretsDir:   "/secrets",
+		LogLevel:     "info",
+		IdentityData: []byte(`{"hostname":"test"}`),
 	}
 
 	args, err := pm.BuildReExecArgs(opts)

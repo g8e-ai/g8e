@@ -32,6 +32,10 @@ type Options struct {
 	SSEURL     string
 	Token      string
 	HTTPClient *http.Client
+
+	// ProgramOptions are appended to the default bubbletea program options
+	// (AltScreen, MouseCellMotion). Tests use this to inject headless options.
+	ProgramOptions []tea.ProgramOption
 }
 
 // Model is the bubbletea state container for the Tactical Governance Console.
@@ -74,11 +78,11 @@ type Model struct {
 // members in pending state.
 func NewModel(opts Options) Model {
 	members := []tribunalMemberState{
-		{name: string(constants.TribunalMemberAxiom)},
-		{name: string(constants.TribunalMemberConcord)},
-		{name: string(constants.TribunalMemberVariance)},
-		{name: string(constants.TribunalMemberPragma)},
-		{name: string(constants.TribunalMemberNemesis)},
+		{name: constants.TribunalMemberAxiom},
+		{name: constants.TribunalMemberConcord},
+		{name: constants.TribunalMemberVariance},
+		{name: constants.TribunalMemberPragma},
+		{name: constants.TribunalMemberNemesis},
 	}
 
 	quorum := opts.Quorum

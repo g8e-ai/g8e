@@ -22,6 +22,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	defaultTerminalWidth  = 100
+	defaultTerminalHeight = 30
+	leftPaneWidthRatio    = 2 // numerator; left pane = width * leftPaneWidthRatio / leftPaneWidthDivisor
+	leftPaneWidthDivisor  = 5
+	reservedBottomLines   = 7 // tribunal pane + status bar
+	minTopHeight          = 10
+	ledgerReservedLines   = 4 // header + border padding
+	hashDisplayLen        = 8
+)
+
 // View implements tea.Model. It renders the three-pane Tactical Governance Console.
 func (m Model) View() string {
 	if m.quitting {
@@ -30,21 +41,21 @@ func (m Model) View() string {
 
 	width := m.width
 	if width == 0 {
-		width = 100
+		width = defaultTerminalWidth
 	}
 	height := m.height
 	if height == 0 {
-		height = 30
+		height = defaultTerminalHeight
 	}
 
 	// Calculate pane widths: left 40%, right 60%
-	leftWidth := width * 2 / 5
+	leftWidth := width * leftPaneWidthRatio / leftPaneWidthDivisor
 	rightWidth := width - leftWidth
 
 	// Top section: pipeline + ledger side by side
-	topHeight := height - 7 // leave room for tribunal pane + status bar
-	if topHeight < 10 {
-		topHeight = 10
+	topHeight := height - reservedBottomLines
+	if topHeight < minTopHeight {
+		topHeight = minTopHeight
 	}
 
 	leftPane := m.renderPipeline(leftWidth, topHeight)
@@ -119,7 +130,7 @@ func (m Model) renderLedger(width, height int) string {
 		visibleEntries = m.ledger[:scrollOffset]
 	}
 
-	maxLines := height - 4
+	maxLines := height - ledgerReservedLines
 	start := 0
 	if len(visibleEntries) > maxLines {
 		start = len(visibleEntries) - maxLines
@@ -157,7 +168,7 @@ func (m Model) renderTribunal(width int) string {
 	var memberBlocks []string
 	for _, member := range m.tribunal {
 		icon := voteIcon(member)
-		name := strings.ToUpper(member.name)
+		name := strings.ToUpper(string(member.name))
 
 		var styled string
 		switch {
@@ -237,12 +248,12 @@ func (m Model) countAffirmative() int {
 	return count
 }
 
-// shortHash truncates a hash to 8 characters with ellipsis for display.
+// shortHash truncates a hash to hashDisplayLen characters with ellipsis for display.
 func shortHash(hash string) string {
-	if len(hash) <= 8 {
+	if len(hash) <= hashDisplayLen {
 		return hash
 	}
-	return hash[:8] + "..."
+	return hash[:hashDisplayLen] + "..."
 }
 
 // timeNow returns the current time. It is a package-level variable so tests

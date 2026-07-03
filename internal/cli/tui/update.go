@@ -92,8 +92,7 @@ func (m Model) applyPipelineMsg(msg PipelineMsg) Model {
 	return m
 }
 
-// applyLedgerMsg appends a ledger entry and trims the buffer if it exceeds
-// the maximum of 500 entries.
+// applyLedgerMsg appends a ledger entry to the buffer.
 func (m Model) applyLedgerMsg(msg LedgerMsg) Model {
 	entry := ledgerEntry{
 		level:   msg.Level,
@@ -104,9 +103,6 @@ func (m Model) applyLedgerMsg(msg LedgerMsg) Model {
 		entry.time = timeNow()
 	}
 	m.ledger = append(m.ledger, entry)
-	if len(m.ledger) > 500 {
-		m.ledger = m.ledger[len(m.ledger)-500:]
-	}
 	return m
 }
 

@@ -429,9 +429,9 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-cue", "consensus deliberation")
-		demoEmitter.Consensus("axiom", true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus("concord", true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus("variance", true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.TribunalMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.TribunalMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.TribunalMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
 		if err := demoStep(demoDir, "dhs-cue via agent",
 			false,
 			dhsHarnessRun("dhs-cue", hcfg)...,
@@ -443,7 +443,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusPassed, "dhs-cue", "quorum met (3/5)")
 		demoEmitter.Pipeline(tui.StageL5, tui.StatusActive, "dhs-cue", "actuator executing")
-		demoEmitter.Consensus("axiom", true, true, 3, 5, tui.ConsensusReached, "cue-hash-001")
+		demoEmitter.Consensus(constants.TribunalMemberAxiom, true, true, 3, 5, tui.ConsensusReached, "cue-hash-001")
 		demoEmitter.Ledger(tui.LevelInfo, "L2 consensus quorum met (3/5) — cue admitted")
 
 		if !dhsScenarioStep(demoDir, "Step 3: Verify the Sovereign Data Service recorded the CUE",
@@ -460,10 +460,10 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoPrintln()
 		demoEmitter.Pipeline(tui.StageL1, tui.StatusPassed, "dhs-cue-veto", "doctrine admitted")
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusActive, "dhs-cue-veto", "consensus deliberation")
-		demoEmitter.Consensus("axiom", true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus("concord", true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus("variance", true, true, 3, 5, tui.ConsensusPending, "")
-		demoEmitter.Consensus("pragma", false, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.TribunalMemberAxiom, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.TribunalMemberConcord, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.TribunalMemberVariance, true, true, 3, 5, tui.ConsensusPending, "")
+		demoEmitter.Consensus(constants.TribunalMemberPragma, false, true, 3, 5, tui.ConsensusPending, "")
 		if err := demoStep(demoDir, "dhs-cue-veto via agent",
 			false,
 			dhsHarnessRun("dhs-cue-veto", hcfg)...,
@@ -474,7 +474,7 @@ func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		demoEmitter.Pipeline(tui.StageL2, tui.StatusFailed, "dhs-cue-veto", "vetoed at quorum")
-		demoEmitter.Consensus("nemesis", true, true, 3, 5, tui.ConsensusRejected, "veto-hash-002")
+		demoEmitter.Consensus(constants.TribunalMemberNemesis, true, true, 3, 5, tui.ConsensusRejected, "veto-hash-002")
 		demoEmitter.Ledger(tui.LevelCritical, "L2 consensus REJECTED — Byzantine fault detected: pragma dissent (4/5 affirmative, quorum requires 3)")
 
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")

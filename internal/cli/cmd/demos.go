@@ -88,7 +88,7 @@ func (e *DemoEmitter) Ledger(level tui.LedgerLevel, message string) {
 }
 
 // Consensus emits a tribunal consensus update to the TUI.
-func (e *DemoEmitter) Consensus(member string, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
+func (e *DemoEmitter) Consensus(member constants.TribunalMember, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
 	if e == nil || e.program == nil {
 		return
 	}

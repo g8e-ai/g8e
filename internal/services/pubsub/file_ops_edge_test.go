@@ -200,10 +200,10 @@ func TestPayloadToFileEditRequest_WithTaskID(t *testing.T) {
 	payload, _ := proto.Marshal(req)
 	taskID := "task-123"
 	msg := &PubSubCommandMessage{
-		ID:              "msg-1",
-		EventType:       constants.Event.Operator.FileEdit.Requested,
-		TaskID:          &taskID,
-		Payload:         payload,
+		ID:        "msg-1",
+		EventType: constants.Event.Operator.FileEdit.Requested,
+		TaskID:    &taskID,
+		Payload:   payload,
 	}
 
 	editReq, err := payloadToFileEditRequest(msg)

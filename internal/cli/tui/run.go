@@ -16,28 +16,42 @@ package tui
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Run starts the Tactical Governance TUI. It blocks until the user presses
-// q or ctrl+c. The adapter runs in a goroutine and feeds events from the
-// SSE stream into the program.
+// q or ctrl+c. When an SSE URL is configured, the adapter runs in a
+// goroutine and feeds events from the SSE stream into the program.
 func Run(ctx context.Context, opts Options) error {
 	m := NewModel(opts)
-	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	programOpts := append(
+		[]tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()},
+		opts.ProgramOptions...,
+	)
+	p := tea.NewProgram(m, programOpts...)
 
-	adapter := NewAdapter(opts.SSEURL, opts.Token, p, opts.HTTPClient)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	// Wrap the event handler to emit ConnConnected on first event.
-	go func() {
-		if opts.SSEURL == "" {
-			return
-		}
-		adapter.Run(ctx)
-	}()
+	var wg sync.WaitGroup
+	if opts.SSEURL != "" {
+		adapter := NewAdapter(opts.SSEURL, opts.Token, p, opts.HTTPClient)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			adapter.Run(ctx)
+		}()
+	}
 
-	if _, err := p.Run(); err != nil {
+	_, err := p.Run()
+	cancel()
+	wg.Wait()
+
+	if err != nil {
 		return fmt.Errorf("tui: run: %w", err)
 	}
 	return nil
@@ -65,7 +79,7 @@ func EmitLedger(p *tea.Program, level LedgerLevel, message string) {
 
 // EmitConsensus sends a ConsensusMsg to the program from outside the bubbletea
 // loop.
-func EmitConsensus(p *tea.Program, member string, decision, signed bool, quorum, total int, result ConsensusResult, hash string) {
+func EmitConsensus(p *tea.Program, member constants.TribunalMember, decision, signed bool, quorum, total int, result ConsensusResult, hash string) {
 	p.Send(ConsensusMsg{
 		Member:   member,
 		Decision: decision,
