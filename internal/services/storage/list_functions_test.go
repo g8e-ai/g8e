@@ -117,13 +117,13 @@ func TestListExecutions_WithData(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		record := &models.ExecutionRecord{
-			ID:                fmt.Sprintf("exec-list-%d", i),
-			TimestampUTC:      time.Now().UTC(),
-			Command:           fmt.Sprintf("echo test%d", i),
-			ExitCode:          0,
-			DurationMs:        int64(i * 10),
-			StdoutCompressed:  []byte("output"),
-			StdoutSize:        6,
+			ID:               fmt.Sprintf("exec-list-%d", i),
+			TimestampUTC:     time.Now().UTC(),
+			Command:          fmt.Sprintf("echo test%d", i),
+			ExitCode:         0,
+			DurationMs:       int64(i * 10),
+			StdoutCompressed: []byte("output"),
+			StdoutSize:       6,
 		}
 		require.NoError(t, ev.StoreExecution(context.Background(), record))
 	}
@@ -140,11 +140,11 @@ func TestListExecutions_DefaultLimit(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		record := &models.ExecutionRecord{
-			ID:                fmt.Sprintf("exec-default-%d", i),
-			TimestampUTC:      time.Now().UTC(),
-			Command:           "test",
-			StdoutCompressed:  []byte("out"),
-			StdoutSize:        3,
+			ID:               fmt.Sprintf("exec-default-%d", i),
+			TimestampUTC:     time.Now().UTC(),
+			Command:          "test",
+			StdoutCompressed: []byte("out"),
+			StdoutSize:       3,
 		}
 		require.NoError(t, ev.StoreExecution(context.Background(), record))
 	}
@@ -161,11 +161,11 @@ func TestListExecutions_Pagination(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		record := &models.ExecutionRecord{
-			ID:                fmt.Sprintf("exec-page-%d", i),
-			TimestampUTC:      time.Now().UTC(),
-			Command:           "test",
-			StdoutCompressed:  []byte("out"),
-			StdoutSize:        3,
+			ID:               fmt.Sprintf("exec-page-%d", i),
+			TimestampUTC:     time.Now().UTC(),
+			Command:          "test",
+			StdoutCompressed: []byte("out"),
+			StdoutSize:       3,
 		}
 		require.NoError(t, ev.StoreExecution(context.Background(), record))
 	}
@@ -235,12 +235,12 @@ func TestListFileDiffs_DefaultLimit(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		record := &models.FileDiffRecord{
-			ID:                fmt.Sprintf("diff-default-%d", i),
-			TimestampUTC:      time.Now().UTC(),
-			FilePath:          "/test/file.txt",
-			Operation:         "write",
-			DiffCompressed:    []byte("diff"),
-			DiffSize:          4,
+			ID:             fmt.Sprintf("diff-default-%d", i),
+			TimestampUTC:   time.Now().UTC(),
+			FilePath:       "/test/file.txt",
+			Operation:      "write",
+			DiffCompressed: []byte("diff"),
+			DiffSize:       4,
 		}
 		require.NoError(t, ev.StoreFileDiff(context.Background(), record))
 	}
@@ -257,12 +257,12 @@ func TestListFileDiffs_Pagination(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		record := &models.FileDiffRecord{
-			ID:                fmt.Sprintf("diff-page-%d", i),
-			TimestampUTC:      time.Now().UTC(),
-			FilePath:          "/test/file.txt",
-			Operation:         "write",
-			DiffCompressed:    []byte("diff"),
-			DiffSize:          4,
+			ID:             fmt.Sprintf("diff-page-%d", i),
+			TimestampUTC:   time.Now().UTC(),
+			FilePath:       "/test/file.txt",
+			Operation:      "write",
+			DiffCompressed: []byte("diff"),
+			DiffSize:       4,
 		}
 		require.NoError(t, ev.StoreFileDiff(context.Background(), record))
 	}
