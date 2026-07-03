@@ -86,6 +86,11 @@ var Infra struct {
 	LogDir          string
 	OperatorLogFile string
 
+	// PID paths
+	PidDir              string
+	OperatorPostureFile string
+	OperatorPIDFile     string
+
 	// Storage DB paths
 	ExecutionVaultDBPath string
 	ReplayStoreDBPath    string
@@ -156,6 +161,10 @@ var Infra struct {
 	LogDir          string
 	OperatorLogFile string
 
+	PidDir              string
+	OperatorPostureFile string
+	OperatorPIDFile     string
+
 	ExecutionVaultDBPath string
 	ReplayStoreDBPath    string
 	LedgerDir            string
@@ -218,8 +227,11 @@ var Infra struct {
 	SessionEncKeyPath:   constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileSessionEncryptionKey,
 	BootstrapDigestPath: constants.RuntimeDirname + "/" + constants.SecretsDirname + "/" + constants.SecretsFileBootstrapDigest,
 
-	LogDir:          constants.RuntimeDirname + "/" + constants.LogDirname,
-	OperatorLogFile: constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.OperatorLogFilename,
+	LogDir:              constants.RuntimeDirname + "/" + constants.LogDirname,
+	OperatorLogFile:     constants.RuntimeDirname + "/" + constants.LogDirname + "/" + constants.OperatorLogFilename,
+	PidDir:              constants.RuntimeDirname + "/" + constants.PidDirname,
+	OperatorPostureFile: constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPostureFilename,
+	OperatorPIDFile:     constants.RuntimeDirname + "/" + constants.PidDirname + "/" + constants.OperatorPIDFilename,
 
 	ExecutionVaultDBPath: constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ExecutionVaultDBFilename,
 	ReplayStoreDBPath:    constants.RuntimeDirname + "/" + constants.DataDirname + "/" + constants.ReplayStoreDBFilename,
@@ -320,6 +332,9 @@ func InitWithBase(baseDir string) error {
 
 	Infra.LogDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.LogDirname)
 	Infra.OperatorLogFile = pathutil.SafeJoin(Infra.LogDir, constants.OperatorLogFilename)
+	Infra.PidDir = pathutil.SafeJoin(Infra.RuntimeDir, constants.PidDirname)
+	Infra.OperatorPostureFile = pathutil.SafeJoin(Infra.PidDir, constants.OperatorPostureFilename)
+	Infra.OperatorPIDFile = pathutil.SafeJoin(Infra.PidDir, constants.OperatorPIDFilename)
 
 	Infra.ExecutionVaultDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ExecutionVaultDBFilename)
 	Infra.ReplayStoreDBPath = pathutil.SafeJoin(Infra.DataDir, constants.ReplayStoreDBFilename)

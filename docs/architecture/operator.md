@@ -4,8 +4,8 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
@@ -34,10 +34,10 @@ When a command targets an Operator, it progresses through a strict, fail-closed 
 The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense, cannot be bypassed, and is defined in `internal/services/governance/l1_doctrine.go`.
 
 ### L2: Consensus
-The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The consensus mechanism is defined in `internal/services/governance/l2_consensus.go`.
+The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The consensus verification logic is implemented in `internal/services/governance/l4_warden.go` via the `verifyL2Posture` and `verifyL2Signature` methods.
 
 ### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented, unless specifically exempted by an `AutoApprove` policy for benign diagnostic commands. The notary verification logic is defined in `internal/services/governance/l3_notary.go`.
+The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. The notary verification logic is defined in `internal/services/governance/l3_notary.go`.
 
 ### L4: Warden (Pre-dispatch Gate)
 The **L4Warden** is the final verification gate before execution, defined in `internal/services/governance/l4_warden.go`. It enforces:
@@ -173,7 +173,7 @@ Confirm the g8e Gateway is running and accessible:
 For distributed enforcement across multiple hosts, enroll each remote operator:
 
 ```bash
-./g8e security pki enroll -e <gateway-ip>
+./g8e gw security pki enroll -e <gateway-ip>
 ```
 
 Each Operator receives a unique SPIFFE workload identity bound to its mTLS certificate.
@@ -183,15 +183,12 @@ Each Operator receives a unique SPIFFE workload identity bound to its mTLS certi
 Configure your AI client to connect to the Gateway's universal HTTP MCP endpoint:
 
 ```bash
-# Generate universal HTTP MCP configuration
-./g8e gw mcp-config
+# Generate MCP configuration for a specific agent
+./g8e mcp agent show cursor
 
-# Set environment variables for mTLS
-export G8E_CLIENT_CERT_PATH=.g8e/pki/client.crt
-export G8E_CLIENT_KEY_PATH=.g8e/pki/client.key
-export G8E_CA_CERT_PATH=.g8e/pki/ca.crt
-
-# Copy the JSON configuration output to your MCP client's config file
+# The command outputs JSON configurations for three transport modes:
+#   g8e.local (mTLS), IP Address (mTLS), and Stdio Transport
+# Copy the appropriate JSON configuration to your MCP client's config file
 ```
 
 **Protocol Integration:**
@@ -221,7 +218,7 @@ The Operator will:
 Query the local audit vault to verify governance enforcement:
 
 ```bash
-./g8e data query --collection audit_vault
+./g8e gw data audit list --operator-session-id <session-id>
 ```
 
 Each entry includes:
@@ -255,7 +252,7 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 | Execution Boundary (`L5Actuator`) | `internal/services/governance/l5_actuator.go` |
 | Scrubbing (Data Scrubbing) | `internal/services/scrubbing/boundary.go` |
 | Technical Bedrock (`L1Doctrine`) | `internal/services/governance/l1_doctrine.go` |
-| Consensus (`L2Consensus`) | `internal/services/governance/l2_consensus.go` |
+| Consensus (`L2Consensus`) | `internal/services/governance/l4_warden.go` |
 | Notary (`L3Notary`) | `internal/services/governance/l3_notary.go` |
 | Local Audit Vault | `internal/services/storage/audit_store.go` |
 | Native Git Ledger | `internal/services/storage/ledger.go` |

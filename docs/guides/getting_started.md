@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 ---
 
@@ -292,17 +292,18 @@ Each demo spins up a full isolated stack via Docker Compose:
 - **Target system**, mock EHR/trading/classified-doc API on `net_secure`
 - **Observability**, log aggregator and audit viewer on `net_mgmt`
 
-All demos build the gateway and operator images from the root `Dockerfile` using `build: context: ../..`, which compiles the g8e binary from source inside each container. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `agent-harness` scenarios, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
+All g8e services (gateway, operator, agent runtime) use `demos/Dockerfile` with `build: context: ..`, which copies the pre-built binary from `demos/bin/g8e` into a Debian-based image. Auxiliary services (agent runtime, LLM backend, bad actor, observability) use Alpine or slim base images. The secure-data demo deploys two gateway-operator pairs (source and destination domains) on separate subnets. The DoW demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) with SWaP resource limits on all g8e containers. The swarm demo deploys a single gateway with 20 operator containers. The DHS demo deploys a real `agent-coalition` container running `agent-harness` scenarios, a real `datasvc` Python HTTP actuator on `net_secure`, and display-only source connectors modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries.
 
 All demos use the `/api/v1/health` endpoint for gateway health checks.
 
-The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This check is advisory; the demo containers build the binary from source via Docker. The healthcare demo is the sole exception: it bind-mounts the host-built `g8e` binary at `../../g8e:/usr/local/bin/g8e:ro` for its Alpine-based agent-runtime container, which lacks the Go toolchain.
+The `g8e` demos CLI checks for a local binary at `demos/bin/g8e` and prints a warning if it is not found. This binary is required: `demos/Dockerfile` copies it into the container image. Run `make build` before starting any demo to produce the binary at `demos/bin/g8e`.
 
 ### Prerequisites for demos
 
 - Docker 24.0+ with Docker Compose v2
+- Go 1.26+ (or a pre-built `demos/bin/g8e` binary)
 
-Docker builds the g8e binary from source inside each container. No local Go toolchain is required. The healthcare demo bind-mounts a host-built `g8e` binary for its Alpine agent-runtime container; run `make build && cp g8e demos/bin/g8e` before starting it.
+Run `make build` before starting any demo. The build target compiles the g8e binary and copies it to `demos/bin/g8e`. The `demos/Dockerfile` copies this binary into each container image.
 
 ### Run a demo
 
@@ -331,8 +332,11 @@ Use the `g8e` CLI to manage demo environments:
 # Clean and restart in one step
 ./g8e demos reset healthcare
 
-# View audit logs and ledger history
-./g8e demos audit healthcare
+# Rebuild Docker images and restart
+./g8e demos rebuild healthcare
+
+# Pre-pull external images for air-gapped deployment
+./g8e demos pull
 ```
 
 Or use Docker Compose directly:
@@ -365,8 +369,9 @@ docker compose down -v
 | dhs | 3 | Resilient disconnected operations / continuity of coverage |
 | dhs | 4 | Governed predictive cueing (quorum vs veto) |
 | dhs | 5 | Sovereign destruction + tamper-proof audit |
-
-The `swarm` demo includes scenario descriptions in `demos/swarm/README.md`. Swarm scenarios are not integrated into the `g8e demos run` CLI command.
+| swarm | 1 | Authorized recon mission (governed drone deployment) |
+| swarm | 2 | Weapons safety doctrine block |
+| swarm | 3 | Navigation boundary violation block |
 
 ### Demo port mappings
 

@@ -31,12 +31,12 @@ import (
 func BuildMTLSClient(cfg *config.Config, timeout time.Duration) (*http.Client, error) {
 	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
+		return nil, fmt.Errorf("auth: %w: %w", constants.ErrFailedToLoadClientCertificate, err)
 	}
 
 	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
+		return nil, fmt.Errorf("auth: %w: %w", constants.ErrFailedToReadTrustBundle, err)
 	}
 	caPool := x509.NewCertPool()
 	if !caPool.AppendCertsFromPEM(caBundleBytes) {

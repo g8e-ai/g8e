@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestParseStage(t *testing.T) {
@@ -130,7 +132,7 @@ func TestTranslateSSEEvent(t *testing.T) {
 		msg := translateSSEEvent("consensus.vote", data)
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok)
-		assert.Equal(t, "axiom", cm.Member)
+		assert.Equal(t, constants.TribunalMemberAxiom, cm.Member)
 		assert.True(t, cm.Decision)
 		assert.True(t, cm.Signed)
 		assert.Equal(t, 3, cm.Quorum)
@@ -189,7 +191,7 @@ func TestParsePipelineEvent(t *testing.T) {
 			"tx_id":  "tx-xyz",
 			"detail": "warden verified",
 		})
-		msg := parsePipelineEvent("pipeline.passed", payload)
+		msg := parsePipelineEvent(payload)
 		pm, ok := msg.(PipelineMsg)
 		require.True(t, ok)
 		assert.Equal(t, StageL4, pm.Stage)
@@ -203,7 +205,7 @@ func TestParsePipelineEvent(t *testing.T) {
 			"stage":  "L1",
 			"status": "bogus",
 		})
-		msg := parsePipelineEvent("pipeline.unknown", payload)
+		msg := parsePipelineEvent(payload)
 		pm, ok := msg.(PipelineMsg)
 		require.True(t, ok)
 		assert.Equal(t, StatusIdle, pm.Status)
@@ -236,7 +238,7 @@ func TestParseLedgerEvent(t *testing.T) {
 				"level":   tt.level,
 				"message": "test message",
 			})
-			msg := parseLedgerEvent("ledger.entry", payload)
+			msg := parseLedgerEvent(payload)
 			lm, ok := msg.(LedgerMsg)
 			require.True(t, ok)
 			assert.Equal(t, tt.wantLevel, lm.Level)
@@ -257,10 +259,10 @@ func TestParseConsensusEvent(t *testing.T) {
 			"result":   "rejected",
 			"hash":     "deadbeef",
 		})
-		msg := parseConsensusEvent("consensus.result", payload)
+		msg := parseConsensusEvent(payload)
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok)
-		assert.Equal(t, "nemesis", cm.Member)
+		assert.Equal(t, constants.TribunalMemberNemesis, cm.Member)
 		assert.False(t, cm.Decision)
 		assert.True(t, cm.Signed)
 		assert.Equal(t, 3, cm.Quorum)
@@ -273,7 +275,7 @@ func TestParseConsensusEvent(t *testing.T) {
 		payload, _ := json.Marshal(map[string]interface{}{
 			"result": "approved",
 		})
-		msg := parseConsensusEvent("consensus.result", payload)
+		msg := parseConsensusEvent(payload)
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok)
 		assert.Equal(t, ConsensusReached, cm.Result)
@@ -283,7 +285,7 @@ func TestParseConsensusEvent(t *testing.T) {
 		payload, _ := json.Marshal(map[string]interface{}{
 			"result": "bogus",
 		})
-		msg := parseConsensusEvent("consensus.result", payload)
+		msg := parseConsensusEvent(payload)
 		cm, ok := msg.(ConsensusMsg)
 		require.True(t, ok)
 		assert.Equal(t, ConsensusPending, cm.Result)

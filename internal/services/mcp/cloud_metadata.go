@@ -29,6 +29,11 @@ import (
 // CloudMetadataTool provides cloud provider metadata detection and information for AWS, Azure, and GCP.
 type CloudMetadataTool struct{}
 
+var (
+	detectCloudProviderFunc = detectCloudProvider
+	httpGetFunc             = httpGetWithTimeout
+)
+
 // Name returns the tool identifier.
 func (t *CloudMetadataTool) Name() string {
 	return "cloud_metadata"
@@ -77,7 +82,7 @@ func (t *CloudMetadataTool) Execute(ctx context.Context, args json.RawMessage) (
 		}, nil
 	}
 
-	provider := detectCloudProvider()
+	provider := detectCloudProviderFunc()
 	if provider == "unknown" {
 		result := map[string]interface{}{
 			"operation": req.Operation,
@@ -225,7 +230,7 @@ func getInstanceMetadata(provider string) (map[string]interface{}, error) {
 }
 
 func getAWSInstanceMetadata() (map[string]interface{}, error) {
-	instanceID, err := httpGetWithTimeout("http://169.254.169.254/latest/meta-data/instance-id", nil)
+	instanceID, err := httpGetFunc("http://169.254.169.254/latest/meta-data/instance-id", nil)
 	if err != nil {
 		instanceID = "unknown"
 	}
@@ -238,7 +243,7 @@ func getAWSInstanceMetadata() (map[string]interface{}, error) {
 
 func getAzureInstanceMetadata() (map[string]interface{}, error) {
 	headers := map[string]string{"Metadata": "true"}
-	data, err := httpGetWithTimeout("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+	data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 	if err != nil {
 		return nil, err
 	}
@@ -254,12 +259,12 @@ func getAzureInstanceMetadata() (map[string]interface{}, error) {
 
 func getGCPInstanceMetadata() (map[string]interface{}, error) {
 	headers := map[string]string{"Metadata-Flavor": "Google"}
-	instanceID, err := httpGetWithTimeout("http://metadata.google.internal/computeMetadata/v1/id", headers)
+	instanceID, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/id", headers)
 	if err != nil {
 		instanceID = "unknown"
 	}
 
-	name, err := httpGetWithTimeout("http://metadata.google.internal/computeMetadata/v1/instance/name", headers)
+	name, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/name", headers)
 	if err != nil {
 		name = "unknown"
 	}
@@ -274,9 +279,9 @@ func getGCPInstanceMetadata() (map[string]interface{}, error) {
 func getRegion(provider string) (map[string]interface{}, error) {
 	switch provider {
 	case "aws":
-		region, err := httpGetWithTimeout("http://169.254.169.254/latest/meta-data/placement/region", nil)
+		region, err := httpGetFunc("http://169.254.169.254/latest/meta-data/placement/region", nil)
 		if err != nil {
-			az, err2 := httpGetWithTimeout("http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
+			az, err2 := httpGetFunc("http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
 			if err2 == nil && len(az) > 1 {
 				region = az[:len(az)-1]
 			} else {
@@ -289,7 +294,7 @@ func getRegion(provider string) (map[string]interface{}, error) {
 		}, nil
 	case "azure":
 		headers := map[string]string{"Metadata": "true"}
-		data, err := httpGetWithTimeout("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+		data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 		if err != nil {
 			return nil, err
 		}
@@ -297,11 +302,13 @@ func getRegion(provider string) (map[string]interface{}, error) {
 		if err := json.Unmarshal([]byte(data), &metadata); err != nil {
 			return nil, err
 		}
-		if location, ok := metadata["compute"].(map[string]interface{})["location"].(string); ok {
-			return map[string]interface{}{
-				"provider": "azure",
-				"region":   location,
-			}, nil
+		if compute, ok := metadata["compute"].(map[string]interface{}); ok {
+			if location, ok := compute["location"].(string); ok {
+				return map[string]interface{}{
+					"provider": "azure",
+					"region":   location,
+				}, nil
+			}
 		}
 		return map[string]interface{}{
 			"provider": "azure",
@@ -309,7 +316,7 @@ func getRegion(provider string) (map[string]interface{}, error) {
 		}, nil
 	case "gcp":
 		headers := map[string]string{"Metadata-Flavor": "Google"}
-		region, err := httpGetWithTimeout("http://metadata.google.internal/computeMetadata/v1/instance/region", headers)
+		region, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/region", headers)
 		if err != nil {
 			region = "unknown"
 		}
@@ -329,7 +336,7 @@ func getRegion(provider string) (map[string]interface{}, error) {
 func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 	switch provider {
 	case "aws":
-		az, err := httpGetWithTimeout("http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
+		az, err := httpGetFunc("http://169.254.169.254/latest/meta-data/placement/availability-zone", nil)
 		if err != nil {
 			az = "unknown"
 		}
@@ -339,7 +346,7 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 		}, nil
 	case "azure":
 		headers := map[string]string{"Metadata": "true"}
-		data, err := httpGetWithTimeout("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+		data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 		if err != nil {
 			return nil, err
 		}
@@ -347,11 +354,13 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 		if err := json.Unmarshal([]byte(data), &metadata); err != nil {
 			return nil, err
 		}
-		if faultDomain, ok := metadata["compute"].(map[string]interface{})["platformFaultDomain"].(string); ok {
-			return map[string]interface{}{
-				"provider":          "azure",
-				"availability_zone": faultDomain,
-			}, nil
+		if compute, ok := metadata["compute"].(map[string]interface{}); ok {
+			if faultDomain, ok := compute["platformFaultDomain"].(string); ok {
+				return map[string]interface{}{
+					"provider":          "azure",
+					"availability_zone": faultDomain,
+				}, nil
+			}
 		}
 		return map[string]interface{}{
 			"provider":          "azure",
@@ -359,7 +368,7 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 		}, nil
 	case "gcp":
 		headers := map[string]string{"Metadata-Flavor": "Google"}
-		zone, err := httpGetWithTimeout("http://metadata.google.internal/computeMetadata/v1/instance/zone", headers)
+		zone, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/zone", headers)
 		if err != nil {
 			zone = "unknown"
 		}
@@ -379,7 +388,7 @@ func getAvailabilityZone(provider string) (map[string]interface{}, error) {
 func getInstanceType(provider string) (map[string]interface{}, error) {
 	switch provider {
 	case "aws":
-		instanceType, err := httpGetWithTimeout("http://169.254.169.254/latest/meta-data/instance-type", nil)
+		instanceType, err := httpGetFunc("http://169.254.169.254/latest/meta-data/instance-type", nil)
 		if err != nil {
 			instanceType = "unknown"
 		}
@@ -389,7 +398,7 @@ func getInstanceType(provider string) (map[string]interface{}, error) {
 		}, nil
 	case "azure":
 		headers := map[string]string{"Metadata": "true"}
-		data, err := httpGetWithTimeout("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
+		data, err := httpGetFunc("http://169.254.169.254/metadata/instance?api-version=2021-02-01", headers)
 		if err != nil {
 			return nil, err
 		}
@@ -397,11 +406,13 @@ func getInstanceType(provider string) (map[string]interface{}, error) {
 		if err := json.Unmarshal([]byte(data), &metadata); err != nil {
 			return nil, err
 		}
-		if vmSize, ok := metadata["compute"].(map[string]interface{})["vmSize"].(string); ok {
-			return map[string]interface{}{
-				"provider":      "azure",
-				"instance_type": vmSize,
-			}, nil
+		if compute, ok := metadata["compute"].(map[string]interface{}); ok {
+			if vmSize, ok := compute["vmSize"].(string); ok {
+				return map[string]interface{}{
+					"provider":      "azure",
+					"instance_type": vmSize,
+				}, nil
+			}
 		}
 		return map[string]interface{}{
 			"provider":      "azure",
@@ -409,7 +420,7 @@ func getInstanceType(provider string) (map[string]interface{}, error) {
 		}, nil
 	case "gcp":
 		headers := map[string]string{"Metadata-Flavor": "Google"}
-		machineType, err := httpGetWithTimeout("http://metadata.google.internal/computeMetadata/v1/instance/machine-type", headers)
+		machineType, err := httpGetFunc("http://metadata.google.internal/computeMetadata/v1/instance/machine-type", headers)
 		if err != nil {
 			machineType = "unknown"
 		}

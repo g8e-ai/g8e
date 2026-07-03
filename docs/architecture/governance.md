@@ -1,7 +1,7 @@
 # Governance
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 ## Overview
 
@@ -130,7 +130,7 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | Check | Code Location | Doctrine | Consensus | Notary |
 |---|---|---|---|---|
 | L1 Doctrine validation | `l4_warden.go:466-469` | **Enforced** | **Enforced** | **Enforced** |
-| Transaction hash integrity (incl. L3 proof binding) | `l4_warden.go:477-493`, `pkg/governance/types.go:107-118` | **Enforced** | **Enforced** | **Enforced** |
+| Transaction hash integrity (incl. L3 proof binding) | `l4_warden.go:477-493`, `internal/governance/envelope.go:107-118` | **Enforced** | **Enforced** | **Enforced** |
 | Nonce replay protection | `l4_warden.go:325-359` | **Enforced** | **Enforced** | **Enforced** |
 | Expiry enforcement | `l4_warden.go:334-341` | **Enforced** | **Enforced** | **Enforced** |
 | State Merkle root validation | `l4_warden.go:500-526` | **Enforced** | **Enforced** | **Enforced** |

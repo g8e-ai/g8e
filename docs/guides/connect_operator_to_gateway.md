@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 ---
 
@@ -139,7 +139,7 @@ Check status:
 
 This reports:
 - Gateway running state (RUNNING or STOPPED)
-- Gateway endpoint URLs (Operator Bootstrap, Public API, MCP HTTP)
+- Gateway endpoint URLs (Operator Bootstrap, Public API, Console UI, MCP HTTP)
 - Process PID (when detected via ProcessManager fallback)
 
 ---
@@ -234,15 +234,9 @@ This command automatically checks certificate expiry and performs auto-renewal i
 ./g8e gw security pki enroll -e <gateway-ip>
 ```
 
-**Windows Passkey Enrollment:**
+**Windows Enrollment:**
 
-On Windows, enroll via the Windows Certificate Store:
-
-```bash
-./g8e auth enroll-windows
-```
-
-Note: This is now handled automatically by `./g8e auth enroll` on Windows. This command is for advanced use cases or manual re-enrollment.
+On Windows, `./g8e auth enroll` generates the CLI key in the Windows Certificate Store and imports the signed certificate for Windows Hello native API access. Use the `--tpm` flag to request TPM-backed key generation via Windows Hello for Business.
 
 ---
 

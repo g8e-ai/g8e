@@ -90,3 +90,18 @@ const (
 	OSDarwin  = "darwin"
 	OSWindows = "windows"
 )
+
+// Governance posture names.
+const (
+	PostureDoctrine  = "doctrine"
+	PostureConsensus = "consensus"
+	PostureNotary    = "notary"
+)
+
+// Log level names.
+const (
+	LogLevelInfo    = "info"
+	LogLevelError   = "error"
+	LogLevelDebug   = "debug"
+	LogLevelDefault = LogLevelInfo
+)

@@ -107,8 +107,16 @@ func dialSSH(ctx context.Context, r ssh.HostConfig, clientConfig *sshlib.ClientC
 			}
 			// Enable TCP keepalive on the connection
 			if tcpConn, ok := conn.(*net.TCPConn); ok {
-				_ = tcpConn.SetKeepAlive(true)
-				_ = tcpConn.SetKeepAlivePeriod(constants.SSHKeepaliveInterval)
+				if err := tcpConn.SetKeepAlive(true); err != nil {
+					conn.Close()
+					ch <- dialResult{nil, fmt.Errorf("ssh: set keepalive: %w", err)}
+					return
+				}
+				if err := tcpConn.SetKeepAlivePeriod(constants.SSHKeepaliveInterval); err != nil {
+					conn.Close()
+					ch <- dialResult{nil, fmt.Errorf("ssh: set keepalive period: %w", err)}
+					return
+				}
 			}
 		}
 
@@ -269,6 +277,19 @@ func streamToHost(
 		}
 
 		var client *sshlib.Client
+		var session *sshlib.Session
+		keepaliveDone := make(chan struct{})
+
+		cleanup := func() {
+			close(keepaliveDone)
+			if session != nil {
+				_ = session.Close()
+			}
+			if client != nil {
+				_ = client.Close()
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			emit(constants.StreamStatusCancelled, constants.ErrSSHContextCancelled)
@@ -277,16 +298,14 @@ func streamToHost(
 			if result.err != nil {
 				lastErr = result.err
 				if retryCount < constants.SSHMaxRetries && isTransientError(result.err) {
-					continue // Retry transient errors
+					continue
 				}
-				emit(constants.StreamStatusFailed, fmt.Errorf("ssh: dial: %s: %w (after %d retries)", addr, result.err, retryCount))
+				emit(constants.StreamStatusFailed, fmt.Errorf("ssh: dial: %s (after %d retries): %w", addr, retryCount, result.err))
 				return
 			}
 			client = result.client
 		}
-		defer func() {
-			_ = client.Close()
-		}()
+
 		go func() {
 			ticker := time.NewTicker(constants.SSHKeepaliveInterval)
 			defer ticker.Stop()
@@ -295,12 +314,14 @@ func streamToHost(
 				select {
 				case <-ctx.Done():
 					return
+				case <-keepaliveDone:
+					return
 				case <-ticker.C:
 					_, _, err := client.SendRequest(constants.SSHKeepaliveRequestType, true, nil)
 					if err != nil {
 						missedCount++
 						if missedCount >= constants.SSHKeepaliveMaxMissed {
-							client.Close()
+							_ = client.Close()
 							return
 						}
 					} else {
@@ -310,18 +331,17 @@ func streamToHost(
 			}
 		}()
 
-		session, err := client.NewSession()
+		session, err = client.NewSession()
 		if err != nil {
 			lastErr = err
 			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
-				continue // Retry transient errors
+				cleanup()
+				continue
 			}
-			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: session: %w (after %d retries)", err, retryCount))
+			cleanup()
+			emit(constants.StreamStatusFailed, fmt.Errorf("ssh: session (after %d retries): %w", retryCount, err))
 			return
 		}
-		defer func() {
-			_ = session.Close()
-		}()
 
 		// Wire binary data as the remote stdin.
 		session.Stdin = bytes.NewReader(binaryData)
@@ -355,28 +375,31 @@ func streamToHost(
 		if err != nil {
 			var exitErr *sshlib.ExitError
 			if errors.As(err, &exitErr) {
-				// For exited status, include exit code and captured remote output
 				msg := fmt.Errorf("ssh: exit code %d", exitErr.ExitStatus())
 				if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
 					msg = fmt.Errorf("%w: %s", msg, tail)
 				} else if tail := strings.TrimSpace(stdoutBuf.String()); tail != "" {
 					msg = fmt.Errorf("%w: %s", msg, tail)
 				}
+				cleanup()
 				emit(constants.StreamStatusExited, msg)
 				return
 			}
 			lastErr = err
 			if retryCount < constants.SSHMaxRetries && isTransientError(err) {
-				continue // Retry transient errors
+				cleanup()
+				continue
 			}
 			msg := fmt.Errorf("ssh: run: %w", err)
 			if tail := strings.TrimSpace(stderrBuf.String()); tail != "" {
 				msg = fmt.Errorf("%w: %s", msg, tail)
 			}
+			cleanup()
 			emit(constants.StreamStatusFailed, msg)
 			return
 		}
 
+		cleanup()
 		emit(constants.StreamStatusCompleted, nil)
 		return
 	}

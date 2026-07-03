@@ -218,7 +218,6 @@ func securityPKIEnrollCmd() *cobra.Command {
 }
 
 func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, error), enroll enrollFunc) *cobra.Command {
-	var endpoint string
 	var outputDir string
 
 	cmd := &cobra.Command{
@@ -226,6 +225,7 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 		Short: "Enroll an operator with the Gateway via CSR",
 		Long:  `Generate a CSR and enroll with the Gateway to obtain Operator mTLS certificates.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			endpoint, _ := cmd.Flags().GetString("endpoint")
 			if endpoint == "" {
 				return fmt.Errorf("security: enroll: %w", constants.ErrEndpointRequired)
 			}
@@ -306,7 +306,6 @@ func securityPKIEnrollCmdWithConfig(configLoader func(string) (*config.Config, e
 		},
 	}
 
-	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "Gateway IP address (e.g., 192.168.1.62)")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Output directory for certificates (default: project root)")
 
 	return cmd

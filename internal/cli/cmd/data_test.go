@@ -370,21 +370,21 @@ func TestDataCommandJSONUnmarshaling(t *testing.T) {
 	}{
 		{
 			name:        "valid User JSON",
-			jsonData:    `[{"id":"user1","name":"Test User"}]`,
-			targetType:  &[]User{},
+			jsonData:    `[{"id":"user1"}]`,
+			targetType:  &[]models.User{},
 			expectError: false,
 		},
 		{
 			name:        "invalid User JSON",
 			jsonData:    `invalid json`,
-			targetType:  &[]User{},
+			targetType:  &[]models.User{},
 			expectError: true,
 			errorMsg:    "failed to parse response",
 		},
 		{
-			name:        "valid Operator JSON",
+			name:        "valid OperatorDocumentGo JSON",
 			jsonData:    `[{"id":"op1","cloud_subtype":"aws","status":"active"}]`,
-			targetType:  &[]Operator{},
+			targetType:  &[]models.OperatorDocumentGo{},
 			expectError: false,
 		},
 		{
@@ -407,18 +407,18 @@ func TestDataCommandJSONUnmarshaling(t *testing.T) {
 	}
 }
 
-func TestDataQueryFilterTypes(t *testing.T) {
-	t.Run("QueryFilter struct serialization", func(t *testing.T) {
-		filter := QueryFilter{
+func TestDataDocFilterTypes(t *testing.T) {
+	t.Run("DocFilter struct serialization", func(t *testing.T) {
+		filter := models.DocFilter{
 			Field: "test_field",
 			Op:    "==",
-			Value: "test_value",
+			Value: json.RawMessage(`"test_value"`),
 		}
 
 		data, err := json.Marshal(filter)
 		require.NoError(t, err)
 
-		var decoded QueryFilter
+		var decoded models.DocFilter
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -427,18 +427,18 @@ func TestDataQueryFilterTypes(t *testing.T) {
 		assert.Equal(t, filter.Value, decoded.Value)
 	})
 
-	t.Run("QueryRequest struct serialization", func(t *testing.T) {
-		req := QueryRequest{
-			Filters: []QueryFilter{
-				{Field: "field1", Op: "==", Value: "value1"},
-				{Field: "field2", Op: "!=", Value: "value2"},
+	t.Run("DocQueryRequest struct serialization", func(t *testing.T) {
+		req := models.DocQueryRequest{
+			Filters: []models.DocFilter{
+				{Field: "field1", Op: "==", Value: json.RawMessage(`"value1"`)},
+				{Field: "field2", Op: "!=", Value: json.RawMessage(`"value2"`)},
 			},
 		}
 
 		data, err := json.Marshal(req)
 		require.NoError(t, err)
 
-		var decoded QueryRequest
+		var decoded models.DocQueryRequest
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -447,10 +447,10 @@ func TestDataQueryFilterTypes(t *testing.T) {
 		assert.Equal(t, "field2", decoded.Filters[1].Field)
 	})
 
-	t.Run("QueryRequestWithLimit struct serialization", func(t *testing.T) {
-		req := QueryRequestWithLimit{
-			Filters: []QueryFilter{
-				{Field: "session_id", Op: "==", Value: "sess-123"},
+	t.Run("DocQueryRequest with limit serialization", func(t *testing.T) {
+		req := models.DocQueryRequest{
+			Filters: []models.DocFilter{
+				{Field: "session_id", Op: "==", Value: json.RawMessage(`"sess-123"`)},
 			},
 			Limit: 50,
 		}
@@ -458,7 +458,7 @@ func TestDataQueryFilterTypes(t *testing.T) {
 		data, err := json.Marshal(req)
 		require.NoError(t, err)
 
-		var decoded QueryRequestWithLimit
+		var decoded models.DocQueryRequest
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -466,54 +466,54 @@ func TestDataQueryFilterTypes(t *testing.T) {
 		assert.Equal(t, 50, decoded.Limit)
 	})
 
-	t.Run("QueryFilter with numeric value", func(t *testing.T) {
-		filter := QueryFilter{
+	t.Run("DocFilter with numeric value", func(t *testing.T) {
+		filter := models.DocFilter{
 			Field: "count",
 			Op:    ">",
-			Value: 100,
+			Value: json.RawMessage("100"),
 		}
 
 		data, err := json.Marshal(filter)
 		require.NoError(t, err)
 
-		var decoded QueryFilter
+		var decoded models.DocFilter
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
 		assert.Equal(t, "count", decoded.Field)
 		assert.Equal(t, ">", decoded.Op)
-		assert.Equal(t, float64(100), decoded.Value) // JSON numbers unmarshal as float64
+		assert.Equal(t, json.RawMessage("100"), decoded.Value)
 	})
 
-	t.Run("QueryFilter with null value", func(t *testing.T) {
-		filter := QueryFilter{
+	t.Run("DocFilter with null value", func(t *testing.T) {
+		filter := models.DocFilter{
 			Field: "deleted_at",
 			Op:    "==",
-			Value: nil,
+			Value: json.RawMessage("null"),
 		}
 
 		data, err := json.Marshal(filter)
 		require.NoError(t, err)
 
-		var decoded QueryFilter
+		var decoded models.DocFilter
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
 		assert.Equal(t, "deleted_at", decoded.Field)
 		assert.Equal(t, "==", decoded.Op)
-		assert.Nil(t, decoded.Value)
+		assert.Equal(t, json.RawMessage("null"), decoded.Value)
 	})
 
-	t.Run("QueryRequestWithLimit with zero limit", func(t *testing.T) {
-		req := QueryRequestWithLimit{
-			Filters: []QueryFilter{},
+	t.Run("DocQueryRequest with zero limit", func(t *testing.T) {
+		req := models.DocQueryRequest{
+			Filters: []models.DocFilter{},
 			Limit:   0,
 		}
 
 		data, err := json.Marshal(req)
 		require.NoError(t, err)
 
-		var decoded QueryRequestWithLimit
+		var decoded models.DocQueryRequest
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
@@ -721,7 +721,7 @@ func TestDataCommandErrorHandling(t *testing.T) {
 		// This test verifies that the users command properly handles invalid JSON responses
 		// Since we can't mock the API client easily, we test the struct unmarshaling directly
 		invalidJSON := `not valid json`
-		var users []User
+		var users []models.User
 		err := json.Unmarshal([]byte(invalidJSON), &users)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid character")
@@ -729,7 +729,7 @@ func TestDataCommandErrorHandling(t *testing.T) {
 
 	t.Run("operators command handles JSON parse errors", func(t *testing.T) {
 		invalidJSON := `{invalid}`
-		var operators []Operator
+		var operators []models.OperatorDocumentGo
 		err := json.Unmarshal([]byte(invalidJSON), &operators)
 		require.Error(t, err)
 	})
@@ -751,79 +751,85 @@ func TestDataCommandErrorHandling(t *testing.T) {
 	})
 }
 
-func TestDataQueryFilterEdgeCases(t *testing.T) {
-	t.Run("QueryFilter with empty field", func(t *testing.T) {
-		filter := QueryFilter{
+func TestDataDocFilterEdgeCases(t *testing.T) {
+	t.Run("DocFilter with empty field", func(t *testing.T) {
+		filter := models.DocFilter{
 			Field: "",
 			Op:    "==",
-			Value: "value",
+			Value: json.RawMessage(`"value"`),
 		}
 
 		data, err := json.Marshal(filter)
 		require.NoError(t, err)
 
-		var decoded QueryFilter
+		var decoded models.DocFilter
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
 		assert.Equal(t, "", decoded.Field)
 	})
 
-	t.Run("QueryFilter with empty operator", func(t *testing.T) {
-		filter := QueryFilter{
+	t.Run("DocFilter with empty operator", func(t *testing.T) {
+		filter := models.DocFilter{
 			Field: "field",
 			Op:    "",
-			Value: "value",
+			Value: json.RawMessage(`"value"`),
 		}
 
 		data, err := json.Marshal(filter)
 		require.NoError(t, err)
 
-		var decoded QueryFilter
+		var decoded models.DocFilter
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
 		assert.Equal(t, "", decoded.Op)
 	})
 
-	t.Run("QueryFilter with complex value (object)", func(t *testing.T) {
+	t.Run("DocFilter with complex value (object)", func(t *testing.T) {
 		complexValue := map[string]interface{}{"nested": "value", "number": 42}
-		filter := QueryFilter{
+		valueBytes, err := json.Marshal(complexValue)
+		require.NoError(t, err)
+
+		filter := models.DocFilter{
 			Field: "metadata",
 			Op:    "==",
-			Value: complexValue,
+			Value: valueBytes,
 		}
 
 		data, err := json.Marshal(filter)
 		require.NoError(t, err)
 
-		var decoded QueryFilter
+		var decoded models.DocFilter
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
 		assert.Equal(t, "metadata", decoded.Field)
 		assert.Equal(t, "==", decoded.Op)
-		assert.IsType(t, map[string]interface{}{}, decoded.Value)
+		assert.JSONEq(t, string(valueBytes), string(decoded.Value))
 	})
 
-	t.Run("QueryFilter with array value", func(t *testing.T) {
+	t.Run("DocFilter with array value", func(t *testing.T) {
 		arrayValue := []string{"value1", "value2", "value3"}
-		filter := QueryFilter{
+		valueBytes, err := json.Marshal(arrayValue)
+		require.NoError(t, err)
+
+		filter := models.DocFilter{
 			Field: "tags",
 			Op:    "in",
-			Value: arrayValue,
+			Value: valueBytes,
 		}
 
 		data, err := json.Marshal(filter)
 		require.NoError(t, err)
 
-		var decoded QueryFilter
+		var decoded models.DocFilter
 		err = json.Unmarshal(data, &decoded)
 		require.NoError(t, err)
 
 		assert.Equal(t, "tags", decoded.Field)
 		assert.Equal(t, "in", decoded.Op)
-		assert.IsType(t, []interface{}{}, decoded.Value)
+		assert.JSONEq(t, string(valueBytes), string(decoded.Value))
 	})
 }
 

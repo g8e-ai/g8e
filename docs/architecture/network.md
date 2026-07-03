@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -105,7 +105,7 @@ Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust th
 
 ### No-DNS / Direct IP Configuration
 
-The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `internal/cli/cmd/mcp.go:279-331`.
+The platform supports setup without requiring `/etc/hosts` changes or DNS configuration. If `g8e.local` resolution fails, the system automatically falls back to direct IP access using the machine's external interface IP. This is implemented in `internal/cli/cmd/mcp.go:279-341`.
 
 ### Windows Certificate Store Enrollment
 

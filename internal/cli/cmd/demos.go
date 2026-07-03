@@ -88,7 +88,7 @@ func (e *DemoEmitter) Ledger(level tui.LedgerLevel, message string) {
 }
 
 // Consensus emits a tribunal consensus update to the TUI.
-func (e *DemoEmitter) Consensus(member string, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
+func (e *DemoEmitter) Consensus(member constants.TribunalMember, decision, signed bool, quorum, total int, result tui.ConsensusResult, hash string) {
 	if e == nil || e.program == nil {
 		return
 	}
@@ -285,7 +285,7 @@ func runDemosPull(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
-	manifestPath := filepath.Join(cwd, constants.DemosDirname, "images.json")
+	manifestPath := filepath.Join(cwd, constants.DemosDirname, constants.DemosImagesManifestFile)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("reading images manifest %s: %w", manifestPath, err)
@@ -422,6 +422,38 @@ func printDemoEndpoints(org string) {
 		fmt.Println("  Console:       https://localhost:8448/console/")
 	default:
 		fmt.Printf("  No endpoint information available for '%s'\n", org)
+	}
+
+	if port := demoHTTPPort(org); port != "" {
+		fmt.Println()
+		fmt.Println("  Enroll a passkey for human approval:")
+		fmt.Printf("    g8e auth enroll -e localhost:%s\n", port)
+		fmt.Println()
+		fmt.Println("  This enrolls your CLI session and registers a WebAuthn passkey")
+		fmt.Println("  in your browser. The passkey is required for all governed operations.")
+	}
+}
+
+// demoHTTPPort returns the Docker-published HTTP port for the given demo org.
+// Returns empty string for unknown orgs.
+func demoHTTPPort(org string) string {
+	switch org {
+	case constants.DemosOrgHealthcare:
+		return "8081"
+	case constants.DemosOrgGov:
+		return "8080"
+	case constants.DemosOrgFinance:
+		return "8082"
+	case constants.DemosOrgSecureData:
+		return "8083"
+	case constants.DemosOrgDoW:
+		return "8086"
+	case constants.DemosOrgDHS:
+		return "8087"
+	case constants.DemosOrgSwarm:
+		return "8085"
+	default:
+		return ""
 	}
 }
 
@@ -667,7 +699,6 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 		return err
 	}
 
-	var failed []string
 	for _, d := range demos {
 		cmd.Printf("\nCleaning demo environment: %s\n", d.name)
 		dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(d.composePath), "down", "-v", "--remove-orphans", "-t", "0")
@@ -685,10 +716,6 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 	}
 
 	cmd.Println()
-	if len(failed) > 0 {
-		cmd.Printf("Completed with errors. Failed: %s\n", strings.Join(failed, ", "))
-		return fmt.Errorf("%w: failed to clean: %s", constants.ErrProcessStopFailed, strings.Join(failed, ", "))
-	}
 	cmd.Printf("All %d demo environment(s) cleaned successfully.\n", len(demos))
 	return nil
 }
@@ -1126,6 +1153,27 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 		return fmt.Errorf("%s failed (non-fatal): %w", label, err)
 	}
 	return nil
+}
+
+// demoScenarioStep prints the step description, runs the command via demoStep,
+// prints pass/fail, and returns whether it succeeded. This extracts the
+// repetitive print → demoStep → error pattern from each scenario case block.
+func demoScenarioStep(demoDir, desc string, cmd []string) bool {
+	demoPrintf("  ── %s ──\n", desc)
+	if err := demoStep(demoDir, desc, false, cmd...); err != nil {
+		fmt.Printf("  (%s failed)\n\n", desc)
+		return false
+	}
+	return true
+}
+
+// demoStepWarn runs a non-critical demoStep and prints a warning on failure
+// without setting hasErrors. Use for supplementary verification steps whose
+// failure does not invalidate the scenario result.
+func demoStepWarn(demoDir, label string, args ...string) {
+	if err := demoStep(demoDir, label, false, args...); err != nil {
+		fmt.Printf("  (warning: %s failed)\n", label)
+	}
 }
 
 type twoLayerScenarioConfig struct {

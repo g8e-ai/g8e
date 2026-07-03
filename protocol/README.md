@@ -148,7 +148,9 @@ The `examples/` directory contains Go example programs:
 
 - `governance_envelope/main.go`: Demonstrates constructing a `GovernanceEnvelope` with L1, L2, and L3 governance metadata, a `CommandRequested` payload, and protojson round-trip serialization
 - `workload_identity/main.go`: Demonstrates SPIFFE workload identity generation, validation, extraction, and URL parsing for all six identity types
-- `mcp_server/g8e_gateway_mcp_config.json`: Example MCP server configuration for the g8e gateway
+- `mcp_server/g8e_gateway_mcp_config.json`: HTTP + mTLS MCP server configuration with literal cert paths for production deployments
+- `mcp_server/g8e_gateway_mcp_config_env.json`: HTTP + mTLS MCP server configuration with env-var cert paths for containerized deployments
+- `mcp_server/g8e_stdio_mcp_config.json`: Stdio MCP server configuration for local development with native tools and no gateway required
 
 The `python/examples/` directory contains Python example scripts:
 

@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/pkg/governance"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +34,7 @@ func TestMintCapability_BindsEnvelopeFields(t *testing.T) {
 
 	expiresAt := time.Now().Add(5 * time.Minute)
 	vt := &VerifiedTransaction{
-		Envelope: &governance.GovernanceEnvelope{
+		Envelope: &govtypes.GovernanceEnvelope{
 			TransactionHash:   "abc123hash",
 			OperatorId:        "op-1",
 			OperatorSessionId: "sess-1",
@@ -207,7 +207,7 @@ func TestL5Actuator_MintsAndDissolvesCapability(t *testing.T) {
 		return "ok", nil
 	}
 
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		TransactionHash:   "test-hash-cap-123",
 		OperatorId:        "op-1",
 		OperatorSessionId: "sess-1",
@@ -247,7 +247,7 @@ func TestL5Actuator_CapabilityDissolvedOnHandlerError(t *testing.T) {
 		return "", errors.New("simulated execution failure")
 	}
 
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		TransactionHash:   "test-hash-cap-err",
 		OperatorId:        "op-1",
 		OperatorSessionId: "sess-1",

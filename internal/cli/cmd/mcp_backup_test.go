@@ -1,5 +1,3 @@
-//go:build integration
-
 // Copyright (c) 2026 Lateralus Labs, LLC.
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tests
+package cmd
 
 import (
 	"os"
@@ -22,8 +20,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/internal/cli/cmd"
 )
 
 func TestBackupConfigFile(t *testing.T) {
@@ -33,7 +29,7 @@ func TestBackupConfigFile(t *testing.T) {
 	err := os.WriteFile(configPath, []byte("{}"), 0644)
 	require.NoError(t, err)
 
-	err = cmd.BackupConfigFile(configPath)
+	err = BackupConfigFile(configPath)
 	require.NoError(t, err)
 
 	backupPath := configPath + ".bak"
@@ -43,4 +39,16 @@ func TestBackupConfigFile(t *testing.T) {
 	content, err := os.ReadFile(backupPath)
 	require.NoError(t, err)
 	assert.Equal(t, "{}", string(content))
+}
+
+func TestBackupConfigFile_NoExistingFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	configPath := filepath.Join(tmpDir, "nonexistent.json")
+	err := BackupConfigFile(configPath)
+	require.NoError(t, err)
+
+	backupPath := configPath + ".bak"
+	_, err = os.Stat(backupPath)
+	assert.True(t, os.IsNotExist(err), "backup should not be created when source does not exist")
 }

@@ -31,12 +31,12 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	// Step 3: Posture-specific governance setup
 	stepNum := 3
 	switch posture.Name() {
-	case "doctrine":
+	case constants.PostureDoctrine:
 		cmd.Printf("  %d. Governance posture: doctrine (L1 enforced, L2/L3 audited)\n", stepNum)
 		cmd.Println("       No additional setup required. L2 consensus and L3 notary")
 		cmd.Println("       results are recorded for audit but do not block execution.")
 		cmd.Println()
-	case "consensus":
+	case constants.PostureConsensus:
 		cmd.Printf("  %d. Configure L2 Tribunal for consensus:\n", stepNum)
 		cmd.Println("       L2 multi-agent quorum is enforced. Mutations without a valid")
 		cmd.Println("       Tribunal quorum will be rejected.")
@@ -46,7 +46,7 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 		cmd.Println()
 		cmd.Println("       L3 notary is audited only -- no human approval required.")
 		cmd.Println()
-	case "notary":
+	case constants.PostureNotary:
 		cmd.Printf("  %d. Configure L2 Tribunal + L3 Notary:\n", stepNum)
 		cmd.Println("       L2 quorum AND L3 human approval are both enforced.")
 		cmd.Println("       All mutations require a WebAuthn/passkey ceremony.")
@@ -58,7 +58,7 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	}
 	stepNum++
 
-	// Step 3: Connect remote operators
+	// Connect remote operators
 	cmd.Printf("  %d. Connect remote operators (choose one):\n", stepNum)
 	cmd.Printf("       Deploy:        %s operator deploy --hosts <host1,host2>\n", bin)
 	cmd.Printf("       Stream:        %s operator stream --hosts <host1,host2>\n", bin)
@@ -68,7 +68,7 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	cmd.Println()
 	stepNum++
 
-	// Step 4: Connect AI agents
+	// Connect AI agents
 	cmd.Printf("  %d. Connect AI agents:\n", stepNum)
 	cmd.Printf("       %s mcp agent show <agent>   Print MCP client configuration for a specific agent\n", bin)
 	cmd.Printf("       %s mcp agent list           List supported agents (goose, claude, cursor, ...)\n", bin)

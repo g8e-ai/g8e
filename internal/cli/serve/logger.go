@@ -91,15 +91,19 @@ func (h *operatorHandler) Handle(_ context.Context, r slog.Record) error {
 	})
 
 	if len(attrs) > 0 {
+		groupPrefix := ""
+		if len(h.groups) > 0 {
+			groupPrefix = strings.Join(h.groups, ".") + "."
+		}
 		for _, attr := range attrs {
-			msg += fmt.Sprintf("\n  - %s: %v", attr.Key, attr.Value.Any())
+			msg += fmt.Sprintf("\n  - %s%s: %v", groupPrefix, attr.Key, attr.Value.Any())
 		}
 	}
 
 	msg += "\n"
 	_, err := h.output.Write([]byte(msg))
 	if err != nil {
-		return fmt.Errorf("operator handler: write: %w", err)
+		return fmt.Errorf("logger: write: %w", err)
 	}
 	return nil
 }

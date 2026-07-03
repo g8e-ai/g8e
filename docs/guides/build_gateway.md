@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 ---
 
@@ -128,13 +128,16 @@ To start the gateway, use the CLI gateway command:
 - `--vault-require-unlock` - Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 - `--passkey-rp-id <id>` - RP ID for passkey operations (default: localhost)
 - `--passkey-rp-name <name>` - RP Name for passkey operations (default: g8e)
+- `--passkey-rp-origin <origin>` - Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)
 - `--rate-limit-rps <rps>` - Gateway requests per second limit (set to 0 to disable, default: 0)
 - `--rate-limit-burst <burst>` - Gateway rate limit burst size (default: 0)
 - `--log <level>` - Log level: info, error, debug (default: info)
 - `--cert-mode <mode>` - Certificate mode: full (all hostnames/IPs), localhost (only localhost)
-- `--network-identity-file <path>` - Path to JSON file containing pre-detected network identity (skips runtime detection)
 - `--tribunal-id <id>` - ID of the TribunalPolicy for L2 consensus (required for consensus posture)
 - `--tribunal-url <url>` - URL of the Tribunal service for L2 deliberation (e.g., https://localhost:8443/tribunal/v1/deliberate)
+- `--tribunal-bootstrap <path>` - Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup
+- `--mcp-downstream-url <url>` - URL of a downstream MCP server to proxy discovery and execution to (default: none)
+- `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
 - `-f, --follow` - Follow log output after starting (like tail -f)
 
 ---

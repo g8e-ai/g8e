@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 This document details the authentication and authorization architecture of the g8e platform. The platform is built as a zero-trust execution environment where every mutation is typed, signed, and governed via a deterministic verification pipeline.
 
@@ -35,7 +35,7 @@ The platform uses a four-tier PKI hierarchy issued by the g8e Gateway. See [Netw
 
 #### CLI Enrollment Paths
 
-There are three distinct CLI enrollment paths depending on gateway and credential state. The `EnrollCLI` function (`internal/cli/auth/agent_enroll.go:35`) encapsulates the first two paths as a reusable, idempotent call used by both `g8e auth enroll` and the agent launcher.
+There are three distinct CLI enrollment paths depending on gateway and credential state. The `EnrollCLI` function (`internal/cli/auth/agent_enroll.go:39`) encapsulates the first two paths as a reusable, idempotent call used by both `g8e auth enroll` and the agent launcher.
 
 | Path | Trigger | Transport | Function |
 | :--- | :--- | :--- | :--- |
@@ -58,7 +58,7 @@ Plain HTTP is used only for the bootstrap and CLI enrollment paths because the C
 
 #### Agent App Enrollment (Delegated Credentials)
 
-When `g8e mcp agent run` launches an AI agent, it calls `EnrollAgentApp` (`internal/cli/auth/agent_enroll.go:82`) to issue the agent a short-lived delegated credential (1-hour certificate). This certificate carries:
+When `g8e mcp agent run` launches an AI agent, it calls `EnrollAgentApp` (`internal/cli/auth/agent_enroll.go:98`) to issue the agent a short-lived delegated credential (1-hour certificate). This certificate carries:
 - A SPIFFE URI SAN identifying the agent: `spiffe://g8e.local/app/<agent-name>`
 - The requestor's human identity (bound at issuance time on the gateway)
 
@@ -124,7 +124,7 @@ The OOB approval redirect (`/api/v1/approve/{txHash}`) sends a 302 to `/console/
 
 #### Passkey Service HTTP Architecture
 
-The passkey HTTP layer is split into two components: `PasskeyService` (domain logic) and `PasskeyHandler` (HTTP layer). `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) holds domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`) and retains `VerifyL3Proof` for L3 binding to transaction hashes. `PasskeyHandler` (`internal/services/gateway/passkey_service.go:283`) embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`). All former `AuthController` passkey handlers are consolidated into 4 factory methods and 3 direct handler methods on `PasskeyHandler`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
+The passkey HTTP layer is split into two components: `PasskeyService` (domain logic) and `PasskeyHandler` (HTTP layer). `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) holds domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`) and retains `VerifyL3Proof` for L3 binding to transaction hashes. `PasskeyHandler` (`internal/services/gateway/passkey_service.go:302`) embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`). All former `AuthController` passkey handlers are consolidated into 4 factory methods and 3 direct handler methods on `PasskeyHandler`, eliminating copy-pasted handler code and fragile URL-sniffing control flow.
 
 **Injectable RP Origins**: The `--passkey-rp-origin` flag (repeatable) appends additional origins to the WebAuthn allowlist via `PasskeyConfig.RpOrigins`. The `buildRPOrigins` pure function (`passkey_service.go`) constructs the full origin list: localhost defaults (HTTP/HTTPS on both `localhost` and `127.0.0.1` at the configured ports) or a single `https://<custom-rp-id>` for custom RP IDs, followed by any injected origins. This enables demos that publish the gateway on remapped host ports (e.g. `http://localhost:8087`) to accept WebAuthn ceremonies from the browser without cert changes — TLS cert validity is not port-sensitive and `http://localhost:<port>` is a secure context.
 
@@ -148,7 +148,7 @@ The passkey HTTP layer is split into two components: `PasskeyService` (domain lo
 - `handleApprovalPage` - redirects to console SPA for browser-based approval
 - `handleListSuspendedTransactions` - lists pending approvals (WebSession-protected, returns all suspended transactions including approved)
 
-Dependencies for approval handlers are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` on `PasskeyHandler` after construction, since the MCP gateway is created later in the startup sequence.
+Dependencies for approval and SSE handlers are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` and `SetSSEDependencies(sseStore, pubsub)` on `PasskeyHandler` after construction, since the MCP gateway and SSE services are created later in the startup sequence.
 
 **`passkeyHandlerConfig` Type**: Each factory method accepts a typed config struct that encodes the trust posture at route mount time:
 
@@ -162,7 +162,7 @@ Dependencies for approval handlers are injected via `SetApprovalDependencies(mcp
 | `setCookie` | Sets the `g8e_session` browser cookie (implies `createWebSession`) |
 | `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment; gated by `userStore.HasAnyUsers()` check, only fires when no users exist, preventing unauthorized user creation (`passkey_service_http.go:120-151`) |
 
-This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these. `SetApprovalDependencies(mcpSvc, suspendedStore)` is called on `PasskeyHandler` after both the handler and MCP GatewayService are constructed, since the MCP gateway is created later in the startup sequence.
+This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these. `SetApprovalDependencies(mcpSvc, suspendedStore)` and `SetSSEDependencies(sseStore, pubsub)` are called on `PasskeyHandler` after both the handler and MCP GatewayService are constructed, since the MCP gateway and SSE services are created later in the startup sequence.
 
 #### CLI Status Endpoint (mTLS-Gated)
 
@@ -192,11 +192,11 @@ The browser-based console flow (`/api/v1/auth/passkeys/console/*`) is the sole p
 - `AttestationType` is one of `"none"`, `"indirect"`, `"direct"`, `"enterprise"`
 - `CreatedAtUnixMs` is non-zero
 
-Called in `addCredential` at `passkey_service.go:666` before writing to disk. Typed error constants: `ErrPasskeyCredentialInvalidID`, `ErrPasskeyCredentialIDTooLong`, `ErrPasskeyCredentialInvalidPublicKey`, `ErrPasskeyCredentialInvalidAttestation`, `ErrPasskeyCredentialInvalidTimestamp`.
+Called in `addCredential` at `passkey_service.go:695` before writing to disk. Typed error constants: `ErrPasskeyCredentialInvalidID`, `ErrPasskeyCredentialIDTooLong`, `ErrPasskeyCredentialInvalidPublicKey`, `ErrPasskeyCredentialInvalidAttestation`, `ErrPasskeyCredentialInvalidTimestamp`.
 
-`encodeCredID([]byte) string` and `decodeCredID(string) ([]byte, error)` helpers (`passkey_service.go:92-100`) provide centralized base64 RawURL encoding/decoding for credential IDs, replacing scattered ad-hoc `base64.RawURLEncoding` calls.
+`encodeCredID([]byte) string` and `decodeCredID(string) ([]byte, error)` helpers (`passkey_service.go:97-104`) provide centralized base64 RawURL encoding/decoding for credential IDs, replacing scattered ad-hoc `base64.RawURLEncoding` calls.
 
-Safe byte comparisons use `bytes.Equal` instead of unsafe `string()` casts for credential ID matching (`passkey_service.go:509`).
+Safe byte comparisons use `bytes.Equal` instead of unsafe `string()` casts for credential ID matching (`passkey_service.go:538`).
 
 #### Challenge Lifecycle (Purge After Verify)
 
@@ -204,7 +204,7 @@ The `sessionStore` interface includes `DeleteSession(userID string) error`, impl
 
 #### Governance Envelope Authentication
 
-Governance envelope submission (`POST /api/v1/governance/envelopes`) and query endpoints (`/_query/*`) require operator or CLI mTLS certificates. App certificates (issued via `/api/v1/pki/apps/enroll`) are explicitly blocked from these endpoints by `handleAppAuth` in `gateway_auth.go`, which checks the `PrivilegedRouteRegistry` (`NewPrivilegedRouteRegistry` in `gateway_auth.go:184`). There is no API-key or Bearer token path for governance envelopes. Only operator certs (with a valid operator session in the database) and CLI certs (with `X-G8E-CLI-Session-ID` header) can submit envelopes.
+Governance envelope submission (`POST /api/v1/governance/envelopes`) and query endpoints (`/_query/*`) require operator or CLI mTLS certificates. App certificates (issued via `/api/v1/pki/apps/enroll`) are explicitly blocked from these endpoints by `handleAppAuth` in `gateway_auth.go`, which checks the `PrivilegedRouteRegistry` (`NewPrivilegedRouteRegistry` in `gateway_auth.go:193`). There is no API-key or Bearer token path for governance envelopes. Only operator certs (with a valid operator session in the database) and CLI certs (with `X-G8E-CLI-Session-ID` header) can submit envelopes.
 
 #### Operator Device Enrollment (Headless)
 
@@ -273,14 +273,14 @@ L3 ensures explicit human authorization for mutations.
 - **Outbound Mode**: When `passkeyVerifier == nil` (outbound L3 notary), only Ed25519 signature validation runs; no passkey is required. This is intentional for environments without a WebAuthn relying party.
 - **Approval Window**: Approvals are valid for 30 minutes from the time of approval. Transactions not dispatched within that window are rejected and must be re-approved.
 - **Unified Enrollment**: `performEnroll` is the single enrollment path for CLI sessions. On Windows, it auto-detects the platform and uses the Windows Certificate Store with `GenerateWindowsCSR`; on other platforms, it uses `GenerateCSR`. `RegisterPasskeyViaBrowser` opens the console UI for browser-based passkey registration (web session), then subscribes to an SSE stream (`GET /api/v1/sse/stream?cli_session_id=<id>`) via mTLS. When the browser completes WebAuthn registration, the gateway emits a `passkey.registered` SSE event that the CLI receives in real-time. `VerifyPasskeyRegistration` (mTLS) remains for the agent launch path (`g8e mcp agent run`) to check if a passkey is already registered.
-- **Gateway L3 Verification**: The `gatewayNotary` (`internal/services/governance/l3_notary.go:57`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:102`), implements the layered model. `NewGatewayL3Notary` accepts a `PasskeyService` (as `L3Notary`) for WebAuthn proof verification and a `CLISessionVerifier` for mTLS transport auth. The `PasskeyService` is passed as the `passkeyVerifier` delegate via `ls.passkey.PasskeyService` in `gateway_service.go:599`. Passkey verification always runs first; `ErrPasskeyProofRequired` is returned if the proof lacks a `credential_id`. CLI mTLS session verification runs as the second layer when `MtlsCertFingerprint` is present.
+- **Gateway L3 Verification**: The `gatewayNotary` (`internal/services/governance/l3_notary.go:57`), constructed by `NewGatewayL3Notary` (`internal/services/governance/l3_notary.go:102`), implements the layered model. `NewGatewayL3Notary` accepts a `PasskeyService` (as `L3Notary`) for WebAuthn proof verification and a `CLISessionVerifier` for mTLS transport auth. The `PasskeyService` is passed as the `passkeyVerifier` delegate via `ls.passkey.PasskeyService` in `gateway_service.go:611`. Passkey verification always runs first; `ErrPasskeyProofRequired` is returned if the proof lacks a `credential_id`. CLI mTLS session verification runs as the second layer when `MtlsCertFingerprint` is present.
 - **CLI Session Verifier**: The `cliSessionVerifier` (`internal/services/gateway/cli_session_verifier.go:31`) implements the `governance.CLISessionVerifier` interface and verifies that the user is active, the CLI session exists and belongs to the user, the certificate fingerprint matches the session's stored fingerprint (constant-time comparison), the session is active and not expired, and the certificate is not revoked via the PKI authority.
 - **Passkey Service**: The `PasskeyService` (`internal/services/gateway/passkey_service.go:77`) handles L3 proof brokerage for WebAuthn operations, moving L3 authorization into the gateway as the sovereign authority. `VerifyL3Proof` remains on `PasskeyService` (not `PasskeyHandler`) to maintain the L3 binding to the transaction hash per architectural guardrails.
 - **L3Proof**: A successful approval generates an `L3Proof` (defined in `protocol/proto/g8e/common/v1/common.proto:64`) containing the passkey WebAuthn fields (`credential_id`, `client_data_json`, `authenticator_data`, `signature`) and optional mTLS fields (`mtls_cert_fingerprint`), cryptographically bound to the `transaction_hash`.
 - **Transition for Old CLI Binaries**: Old CLI binaries that send Ed25519-only L3 proofs (without `credential_id`) receive `ErrPasskeyProofRequired` from the gateway, providing a clear error rather than silent failure.
 
 ### Layer 4: Warden (L4Warden)
-*Implementation: `internal/services/governance/l4_warden.go:246`*
+*Implementation: `internal/services/governance/l4_warden.go:244`*
 
 The Warden is the final fail-closed gate before execution. It verifies in the following order:
 1. **In-Flight Tracking**: Prevents concurrent processing of transactions with the same nonce via an in-memory `sync.Map` guard.
@@ -290,7 +290,7 @@ The Warden is the final fail-closed gate before execution. It verifies in the fo
 5. **Posture Validation**: L2 and L3 enforcement based on the configured `GovernancePosture` (Doctrine, Consensus, or Notary). L2 signature verification loads the `TribunalPolicy` from `TribunalStore`, verifies each signer is a tribunal member, resolves their Ed25519 public key from `SignerStore` by `key_id`, verifies the signature over `{transaction_hash}|{decision}`, and counts affirmative votes against the quorum threshold. L3 proof verification delegates to the configured `L3Notary` implementation, typically the `gatewayNotary` constructed by `NewGatewayL3Notary`, which routes to `PasskeyService` (WebAuthn) or `cliSessionVerifier` (mTLS) based on proof type.
 
 ### Layer 5: Actuator (L5Actuator)
-*Implementation: `internal/services/governance/l5_actuator.go:50`*
+*Implementation: `internal/services/governance/l5_actuator.go:59`*
 
 The Actuator represents the execution boundary and final audit commitment. L5Actuator does NOT re-verify L2 or L3 proofs. By design, L4Warden performs all pre-dispatch verification (L1 doctrine, L2 consensus, L3 notary) and embeds the results in `VerifiedTransaction`. L5 trusts that `VerifiedTransaction`, records the L2/L3 status in the `ActionReceipt` for audit, and focuses on execution safety. The separation between L4 (verification) and L5 (execution) is the defense-in-depth boundary: two independent components with distinct responsibilities.
 - **Fail-Closed Pre-Execution**: Receipt signing and initial audit logging must both succeed before the execution handler is invoked. If either fails, the transaction is aborted.
@@ -304,7 +304,7 @@ The Actuator represents the execution boundary and final audit commitment. L5Act
 
 ## 4. Governance Postures
 
-Postures define which layers of the bedrock are enforced as fail-closed gates. The `GovernancePosture` interface and its three implementations are defined in `internal/services/governance/posture.go:31`. When a layer is "Audited", verification still runs but failures do not block execution; results are recorded for audit. When a layer is "Enforced", any verification failure aborts the transaction.
+Postures define which layers of the bedrock are enforced as fail-closed gates. The `GovernancePosture` interface and its three implementations are defined in `internal/services/governance/posture.go:35`. When a layer is "Audited", verification still runs but failures do not block execution; results are recorded for audit. When a layer is "Enforced", any verification failure aborts the transaction.
 
 | Posture | L1 (Doctrine) | L2 (Consensus) | L3 (Notary) | Use Case |
 | :--- | :---: | :---: | :---: | :--- |
@@ -485,7 +485,7 @@ CLI mTLS cert (SPIFFE URI) → CLI session → OperatorSessionID → Operator se
 
 #### 7.2.2 `cliCertBoundToOperator`
 
-Location: `internal/services/gateway/gateway_auth.go:753`
+Location: `internal/services/gateway/gateway_auth.go:781`
 
 This function verifies that a presented client certificate belongs to a CLI session whose `OperatorSessionID` matches the claimed operator session. It is used during authentication to allow CLI clients to call internal APIs scoped by `cli_session_id` while presenting their CLI mTLS cert and the linked operator session as a Bearer token.
 
@@ -499,7 +499,7 @@ This function verifies that a presented client certificate belongs to a CLI sess
 
 #### 7.2.3 CLI Session Persistence
 
-Location: `internal/services/gateway/cli_session_service.go:44`
+Location: `internal/services/gateway/cli_session_service.go:46`
 
 `PersistCLISession` creates the CLI session document with the `OperatorSessionID` field that establishes the binding. The session record also stores the user ID, system fingerprint, certificate fingerprint, and certificate serial for later verification.
 
@@ -513,7 +513,7 @@ When external Identity Provider (IdP) JWT tokens are used for authentication, th
 
 #### 7.3.2 Flow
 
-Location: `internal/services/gateway/gateway_auth.go:881-965`
+Location: `internal/services/gateway/gateway_auth.go:884-965`
 
 1. JWT is validated against the configured JWKS endpoint.
 2. `PersonaService.MapRolesToPersona(jwt.Roles)` maps the JWT roles to a persona string. If mapping fails, `"default"` is used.
@@ -534,7 +534,7 @@ When `g8e mcp agent run` launches an AI agent, it requests a short-lived delegat
 
 #### 7.4.2 Implementation
 
-Location: `internal/services/gateway/pki_controller.go:357`
+Location: `internal/services/gateway/pki_controller.go:364`
 
 The `handlePKIAppsDelegated` handler:
 
@@ -582,7 +582,7 @@ When an app workload pushes an SSE event to a target session, the Gateway verifi
 
 #### 7.5.2 Stream Authorization (Consumer → Events)
 
-Location: `internal/services/gateway/gateway_http_sse.go:275-339`
+Location: `internal/services/gateway/gateway_http_sse.go:274-360`
 
 When a consumer connects to the SSE stream or polls for events, the Gateway verifies authorization via the `authorizeSSERoute` helper, which reads identity from request context (stamped by the unified auth middleware):
 

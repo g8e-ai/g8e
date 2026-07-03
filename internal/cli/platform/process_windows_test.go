@@ -25,6 +25,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // mockWindowsProcessChecker is a mock implementation for testing
@@ -76,7 +78,7 @@ func (m *mockWindowsProcessChecker) GetExitCodeProcess(handle uintptr, exitCode 
 	if m.getExitCodeFunc != nil {
 		return m.getExitCodeFunc(handle, exitCode)
 	}
-	*exitCode = 259 // STILL_ACTIVE
+	*exitCode = constants.StillActiveExitCode
 	return nil
 }
 
@@ -186,7 +188,7 @@ func TestIsProcessRunning_ProcessNotActive(t *testing.T) {
 func TestIsProcessRunning_ProcessActiveButNotG8e(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -209,7 +211,7 @@ func TestIsProcessRunning_ProcessActiveButNotG8e(t *testing.T) {
 func TestIsProcessRunning_ProcessActiveAndIsG8e(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -232,7 +234,7 @@ func TestIsProcessRunning_ProcessActiveAndIsG8e(t *testing.T) {
 func TestIsProcessRunning_TasklistFails(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -253,7 +255,7 @@ func TestIsProcessRunning_TasklistFails(t *testing.T) {
 func TestIsProcessRunning_HandleClosed(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -613,7 +615,7 @@ func TestStopProcess_ProcessNotRunning(t *testing.T) {
 func TestStopProcess_GracefulShutdownSucceeds(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE initially
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -646,7 +648,7 @@ func TestStopProcess_GracefulShutdownSucceeds(t *testing.T) {
 func TestStopProcess_GracefulShutdownFailsForceKillSucceeds(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -683,7 +685,7 @@ func TestStopProcess_GracefulShutdownFailsForceKillSucceeds(t *testing.T) {
 func TestStopProcess_ForceKillFails(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -704,13 +706,13 @@ func TestStopProcess_ForceKillFails(t *testing.T) {
 
 	err := pm.stopProcess(1234, "test")
 	assert.Error(t, err, "stopProcess should error when force kill fails")
-	assert.Contains(t, err.Error(), "failed to force kill process")
+	assert.ErrorIs(t, err, constants.ErrProcessStopFailed)
 }
 
 func TestStopProcess_WaitForExit(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -738,7 +740,7 @@ func TestStopProcess_WaitForExit(t *testing.T) {
 func TestStopProcess_CommandArguments(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = 259 // STILL_ACTIVE
+			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
@@ -774,6 +776,33 @@ func TestStopProcess_CommandArguments(t *testing.T) {
 	assert.Contains(t, call2.args, "/PID", "1234")
 	assert.Contains(t, call2.args, "/T")
 	assert.Contains(t, call2.args, "/F")
+}
+
+func TestStopProcess_ForceKillSucceedsButProcessDoesNotExit(t *testing.T) {
+	mockChecker := &mockWindowsProcessChecker{
+		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
+			*exitCode = constants.StillActiveExitCode
+			return nil
+		},
+	}
+	mockExecutor := &mockCommandExecutor{
+		runFunc: func(cmd *exec.Cmd) error {
+			return nil
+		},
+	}
+	pm := &ProcessManager{
+		windowsProcessChecker: mockChecker,
+		commandExecutor:       mockExecutor,
+	}
+
+	// Override isProcessRunning to always return true (process never exits)
+	pm.isProcessRunningFn = func(pid int) bool {
+		return true
+	}
+
+	err := pm.stopProcess(1234, "test")
+	assert.Error(t, err, "stopProcess should error when process does not exit after force kill")
+	assert.ErrorIs(t, err, constants.ErrProcessForceKillTimeout)
 }
 
 func TestRealWindowsProcessChecker(t *testing.T) {

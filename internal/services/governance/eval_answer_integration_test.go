@@ -24,8 +24,8 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 
@@ -70,7 +70,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	require.NoError(t, err, "Failed to marshal payload")
 
 	// Create envelope with proper structure
-	envelope := &governance.GovernanceEnvelope{
+	envelope := &govtypes.GovernanceEnvelope{
 		ProtocolVersion:   "1.0",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
@@ -85,7 +85,7 @@ func TestEvalAnswerVerification(t *testing.T) {
 	}
 
 	// Compute transaction hash
-	computedHash, err := governance.GenerateMessageID(envelope)
+	computedHash, err := govtypes.GenerateMessageID(envelope)
 	require.NoError(t, err, "Failed to compute transaction hash")
 	envelope.Id = computedHash
 	envelope.TransactionHash = computedHash

@@ -20,6 +20,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestNewModel(t *testing.T) {
@@ -179,30 +181,18 @@ func TestApplyLedgerMsg(t *testing.T) {
 		assert.Equal(t, fixedTime, m.ledger[0].time)
 	})
 
-	t.Run("trims buffer to 500 entries", func(t *testing.T) {
+	t.Run("retains all entries without trimming", func(t *testing.T) {
 		m := NewModel(Options{})
 		for i := 0; i < 505; i++ {
-			m = m.applyLedgerMsg(LedgerMsg{
-				Level:   LevelInfo,
-				Message: "entry",
-				Time:    fixedTime,
-			})
-		}
-		assert.Len(t, m.ledger, 500)
-	})
-
-	t.Run("preserves most recent entries after trim", func(t *testing.T) {
-		m := NewModel(Options{})
-		for i := 0; i < 502; i++ {
 			m = m.applyLedgerMsg(LedgerMsg{
 				Level:   LevelInfo,
 				Message: "entry",
 				Time:    fixedTime.Add(time.Duration(i) * time.Second),
 			})
 		}
-		require.Len(t, m.ledger, 500)
-		assert.Equal(t, fixedTime.Add(2*time.Second), m.ledger[0].time)
-		assert.Equal(t, fixedTime.Add(501*time.Second), m.ledger[499].time)
+		require.Len(t, m.ledger, 505)
+		assert.Equal(t, fixedTime, m.ledger[0].time)
+		assert.Equal(t, fixedTime.Add(504*time.Second), m.ledger[504].time)
 	})
 }
 
@@ -210,11 +200,11 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("updates member vote to approve", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   "axiom",
+			Member:   constants.TribunalMemberAxiom,
 			Decision: true,
 			Signed:   true,
 		})
-		assert.Equal(t, "axiom", m.tribunal[0].name)
+		assert.Equal(t, constants.TribunalMemberAxiom, m.tribunal[0].name)
 		assert.True(t, m.tribunal[0].decision)
 		assert.True(t, m.tribunal[0].signed)
 	})
@@ -222,11 +212,11 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("updates member vote to veto", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   "pragma",
+			Member:   constants.TribunalMemberPragma,
 			Decision: false,
 			Signed:   true,
 		})
-		assert.Equal(t, "pragma", m.tribunal[3].name)
+		assert.Equal(t, constants.TribunalMemberPragma, m.tribunal[3].name)
 		assert.False(t, m.tribunal[3].decision)
 		assert.True(t, m.tribunal[3].signed)
 	})
@@ -234,7 +224,7 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("updates quorum and total", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: "axiom",
+			Member: constants.TribunalMemberAxiom,
 			Quorum: 4,
 			Total:  5,
 		})
@@ -245,7 +235,7 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("updates result to rejected", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: "pragma",
+			Member: constants.TribunalMemberPragma,
 			Result: ConsensusRejected,
 			Hash:   "abcdef1234567890",
 		})
@@ -257,7 +247,7 @@ func TestApplyConsensusMsg(t *testing.T) {
 		m := NewModel(Options{})
 		m.result = ConsensusReached
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member: "axiom",
+			Member: constants.TribunalMemberAxiom,
 			Result: ConsensusPending,
 		})
 		assert.Equal(t, ConsensusReached, m.result)
@@ -266,7 +256,7 @@ func TestApplyConsensusMsg(t *testing.T) {
 	t.Run("ignores unknown member name", func(t *testing.T) {
 		m := NewModel(Options{})
 		m = m.applyConsensusMsg(ConsensusMsg{
-			Member:   "unknown",
+			Member:   constants.TribunalMember("unknown"),
 			Decision: true,
 			Signed:   true,
 		})
@@ -421,9 +411,9 @@ func TestCountAffirmative(t *testing.T) {
 	m := NewModel(Options{})
 	assert.Equal(t, 0, m.countAffirmative())
 
-	m = m.applyConsensusMsg(ConsensusMsg{Member: "axiom", Decision: true, Signed: true})
-	m = m.applyConsensusMsg(ConsensusMsg{Member: "concord", Decision: true, Signed: true})
-	m = m.applyConsensusMsg(ConsensusMsg{Member: "variance", Decision: false, Signed: true})
+	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.TribunalMemberAxiom, Decision: true, Signed: true})
+	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.TribunalMemberConcord, Decision: true, Signed: true})
+	m = m.applyConsensusMsg(ConsensusMsg{Member: constants.TribunalMemberVariance, Decision: false, Signed: true})
 	assert.Equal(t, 2, m.countAffirmative())
 }
 

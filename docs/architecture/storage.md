@@ -1,7 +1,7 @@
 # Storage Architecture
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 ## Overview
 
@@ -175,9 +175,9 @@ The `TokenStore` interface defines three methods: `KVSet` for writing a key-valu
 
 **Key Features:**
 
-- **Encryption at rest**: All values are encrypted with AES-256-GCM via the vault before being written to `kv_store`. `KVSet` returns an error if the vault is locked. `KVGet` returns an error if the vault is locked. `KVScanPrefix` silently skips entries that cannot be decrypted.
+- **Encryption at rest**: All values are encrypted with AES-256-GCM via the vault before being written to `kv_store`. `KVSet` returns an error if the vault is locked. `KVGet` returns an error if the vault is locked. `KVScanPrefix` returns an error if the vault is locked or if any entry fails to decrypt.
 - **TTL support**: TTL is delegated to `KVStoreService.KVSetObserved`, which stores the expiration timestamp.
-- **Prefix scanning**: `KVScanPrefix` retrieves all keys matching the prefix, decrypting each value. Decryption failures are silently skipped.
+- **Prefix scanning**: `KVScanPrefix` retrieves all keys matching the prefix, decrypting each value. Decryption failures return an error.
 - **No standalone database**: The adapter uses the shared `CanonicalDBService` database connection; no separate SQLite database or background pruner is required.
 
 `NewEncryptedKVAdapter` accepts a `KVStoreService` and a `vault.Vault`, and returns an `EncryptedKVAdapter` that implements `storage.TokenStore`.
@@ -315,7 +315,7 @@ Behavior when the vault is locked varies by service:
 
 - **Audit Store**: Returns an error if the vault is locked; events are not recorded until the vault is unlocked (fail-closed).
 - **Execution Vault**: Returns an error if the vault is locked. No plaintext fallback (fail-closed).
-- **Token Store (`EncryptedKVAdapter`)**: `KVSet` and `KVGet` return an error if the vault is locked. `KVScanPrefix` silently skips entries that cannot be decrypted. No plaintext fallback (fail-closed).
+- **Token Store (`EncryptedKVAdapter`)**: `KVSet` and `KVGet` return an error if the vault is locked. `KVScanPrefix` returns an error if the vault is locked or if any entry fails to decrypt. No plaintext fallback (fail-closed).
 - **Ledger**: `GetFileAtCommit` and `RestoreFileFromCommit` return an error if the vault is locked.
 - **Replay Store**: No encryption required as nonces contain no sensitive content.
 - **Suspended Transaction Store**: No encryption required for governance envelopes.

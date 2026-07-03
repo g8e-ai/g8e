@@ -16,6 +16,7 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/g8e-ai/g8e/internal/cli/sse"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // Adapter bridges external event sources to bubbletea messages.
@@ -31,6 +33,37 @@ import (
 type Adapter struct {
 	sseClient *sse.Client
 	program   *tea.Program
+}
+
+// sseEvent is the top-level envelope for SSE event data.
+type sseEvent struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// pipelinePayload is the JSON payload for pipeline.* events.
+type pipelinePayload struct {
+	Stage  string `json:"stage"`
+	Status string `json:"status"`
+	TxID   string `json:"tx_id"`
+	Detail string `json:"detail"`
+}
+
+// ledgerPayload is the JSON payload for ledger.* events.
+type ledgerPayload struct {
+	Level   string `json:"level"`
+	Message string `json:"message"`
+}
+
+// consensusPayload is the JSON payload for consensus.* events.
+type consensusPayload struct {
+	Member   string `json:"member"`
+	Decision bool   `json:"decision"`
+	Signed   bool   `json:"signed"`
+	Quorum   int    `json:"quorum"`
+	Total    int    `json:"total"`
+	Result   string `json:"result"`
+	Hash     string `json:"hash"`
 }
 
 // NewAdapter creates an Adapter that connects to the gateway's SSE stream.
@@ -97,10 +130,7 @@ func (a *Adapter) NotifyConnected() {
 // The SSE event types are free-form strings; this function maps known
 // patterns to the appropriate TUI message types.
 func translateSSEEvent(eventType, data string) tea.Msg {
-	var raw struct {
-		Type    string          `json:"type"`
-		Payload json.RawMessage `json:"payload"`
-	}
+	var raw sseEvent
 	if err := json.Unmarshal([]byte(data), &raw); err != nil {
 		return LedgerMsg{Level: LevelInfo, Message: data, Time: timeNow()}
 	}
@@ -112,25 +142,22 @@ func translateSSEEvent(eventType, data string) tea.Msg {
 
 	switch {
 	case strings.HasPrefix(innerType, "pipeline."):
-		return parsePipelineEvent(innerType, raw.Payload)
+		return parsePipelineEvent(raw.Payload)
 	case strings.HasPrefix(innerType, "ledger."):
-		return parseLedgerEvent(innerType, raw.Payload)
+		return parseLedgerEvent(raw.Payload)
 	case strings.HasPrefix(innerType, "consensus."):
-		return parseConsensusEvent(innerType, raw.Payload)
+		return parseConsensusEvent(raw.Payload)
 	default:
 		return LedgerMsg{Level: LevelInfo, Message: innerType + ": " + string(raw.Payload), Time: timeNow()}
 	}
 }
 
 // parsePipelineEvent translates a pipeline.* event into a PipelineMsg.
-func parsePipelineEvent(eventType string, payload json.RawMessage) tea.Msg {
-	var p struct {
-		Stage  string `json:"stage"`
-		Status string `json:"status"`
-		TxID   string `json:"tx_id"`
-		Detail string `json:"detail"`
+func parsePipelineEvent(payload json.RawMessage) tea.Msg {
+	var p pipelinePayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("pipeline: unmarshal: %s", err), Time: timeNow()}
 	}
-	_ = json.Unmarshal(payload, &p)
 
 	stage := parseStage(p.Stage)
 	status := parseStatus(p.Status)
@@ -144,12 +171,11 @@ func parsePipelineEvent(eventType string, payload json.RawMessage) tea.Msg {
 }
 
 // parseLedgerEvent translates a ledger.* event into a LedgerMsg.
-func parseLedgerEvent(eventType string, payload json.RawMessage) tea.Msg {
-	var p struct {
-		Level   string `json:"level"`
-		Message string `json:"message"`
+func parseLedgerEvent(payload json.RawMessage) tea.Msg {
+	var p ledgerPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("ledger: unmarshal: %s", err), Time: timeNow()}
 	}
-	_ = json.Unmarshal(payload, &p)
 
 	level := LevelInfo
 	switch strings.ToLower(p.Level) {
@@ -167,17 +193,11 @@ func parseLedgerEvent(eventType string, payload json.RawMessage) tea.Msg {
 }
 
 // parseConsensusEvent translates a consensus.* event into a ConsensusMsg.
-func parseConsensusEvent(eventType string, payload json.RawMessage) tea.Msg {
-	var p struct {
-		Member   string `json:"member"`
-		Decision bool   `json:"decision"`
-		Signed   bool   `json:"signed"`
-		Quorum   int    `json:"quorum"`
-		Total    int    `json:"total"`
-		Result   string `json:"result"`
-		Hash     string `json:"hash"`
+func parseConsensusEvent(payload json.RawMessage) tea.Msg {
+	var p consensusPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return LedgerMsg{Level: LevelWarn, Message: fmt.Sprintf("consensus: unmarshal: %s", err), Time: timeNow()}
 	}
-	_ = json.Unmarshal(payload, &p)
 
 	result := ConsensusPending
 	switch strings.ToLower(p.Result) {
@@ -188,7 +208,7 @@ func parseConsensusEvent(eventType string, payload json.RawMessage) tea.Msg {
 	}
 
 	return ConsensusMsg{
-		Member:   p.Member,
+		Member:   constants.TribunalMember(p.Member),
 		Decision: p.Decision,
 		Signed:   p.Signed,
 		Quorum:   p.Quorum,

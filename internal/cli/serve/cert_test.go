@@ -586,7 +586,7 @@ func TestRenewOperatorCertificate_NonExistentCertFile(t *testing.T) {
 	cfg := &config.Config{Endpoint: "https://fake:8443"}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, filepath.Join(t.TempDir(), "nonexistent.crt"), "nonexistent.key", ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, filepath.Join(t.TempDir(), "nonexistent.crt"), "nonexistent.key", ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrCertParseFailed))
 }
@@ -607,7 +607,7 @@ func TestRenewOperatorCertificate_CertNotExpiring(t *testing.T) {
 	cfg := &config.Config{Endpoint: "https://fake:8443"}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err = RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err = RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.NoError(t, err, "cert not expiring soon should return nil without making network calls")
 }
 
@@ -699,7 +699,7 @@ func TestPerformAutomaticEnrollment_Success(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
 		PkiTrustDir:       paths.Infra.PkiTrustDir,
 		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
 		OperatorCertPath:  paths.Infra.OperatorCertPath,
@@ -726,7 +726,7 @@ func TestPerformAutomaticEnrollment_TrustBundleFetchFailure(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
 		PkiTrustDir:       paths.Infra.PkiTrustDir,
 		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
 		OperatorCertPath:  paths.Infra.OperatorCertPath,
@@ -747,7 +747,7 @@ func TestPerformAutomaticEnrollment_EnrollmentHTTPError(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
 		PkiTrustDir:       paths.Infra.PkiTrustDir,
 		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
 		OperatorCertPath:  paths.Infra.OperatorCertPath,
@@ -769,7 +769,7 @@ func TestPerformAutomaticEnrollment_ErrorFieldInResponse(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
 		PkiTrustDir:       paths.Infra.PkiTrustDir,
 		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
 		OperatorCertPath:  paths.Infra.OperatorCertPath,
@@ -791,7 +791,7 @@ func TestPerformAutomaticEnrollment_MissingOperatorCert(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	_, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
 		PkiTrustDir:       paths.Infra.PkiTrustDir,
 		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
 		OperatorCertPath:  paths.Infra.OperatorCertPath,
@@ -841,7 +841,7 @@ func TestPerformAutomaticEnrollment_ActuatorPublicKeySaved(t *testing.T) {
 
 	constants.Ports.OperatorHttp = getServerPort(t, srv)
 
-	sessionID, err := PerformAutomaticEnrollment("127.0.0.1", t.TempDir(), CertPaths{
+	sessionID, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
 		PkiTrustDir:       paths.Infra.PkiTrustDir,
 		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
 		OperatorCertPath:  paths.Infra.OperatorCertPath,
@@ -955,7 +955,7 @@ func TestRenewOperatorCertificate_Success(t *testing.T) {
 	cfg := &config.Config{Endpoint: srv.URL}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.NoError(t, err)
 
 	savedCert, err := os.ReadFile(certPath)
@@ -980,7 +980,7 @@ func TestRenewOperatorCertificate_TrustBundleHTTPError(t *testing.T) {
 	cfg := &config.Config{Endpoint: srv.URL}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
@@ -999,7 +999,7 @@ func TestRenewOperatorCertificate_EnrollmentHTTPError(t *testing.T) {
 	cfg := &config.Config{Endpoint: srv.URL}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
 }
@@ -1019,7 +1019,7 @@ func TestRenewOperatorCertificate_ErrorFieldInResponse(t *testing.T) {
 	cfg := &config.Config{Endpoint: srv.URL}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
 }
@@ -1039,7 +1039,7 @@ func TestRenewOperatorCertificate_MissingCertsInResponse(t *testing.T) {
 	cfg := &config.Config{Endpoint: srv.URL}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrMissingRequiredField))
 }
@@ -1057,7 +1057,7 @@ func TestRenewOperatorCertificate_EmptyTrustBundle(t *testing.T) {
 	cfg := &config.Config{Endpoint: srv.URL}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrEmptyTrustBundle))
 }
@@ -1076,7 +1076,7 @@ func TestRenewOperatorCertificate_InvalidTrustBundlePEM(t *testing.T) {
 	cfg := &config.Config{Endpoint: srv.URL}
 	ci := certs.NewClientIdentity(tls.Certificate{})
 
-	err := RenewOperatorCertificate(cfg, certPath, keyPath, ci)
+	err := RenewOperatorCertificate(context.Background(), cfg, certPath, keyPath, ci)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrCAParseFailed))
 }

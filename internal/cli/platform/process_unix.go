@@ -22,6 +22,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // processFinder is an interface for finding processes
@@ -127,12 +129,12 @@ func (pm *ProcessManager) isProcessRunningWithFinder(pid int, finder processFind
 		return false
 	}
 
-	process, err := finder.FindProcess(pid)
+	proc, err := finder.FindProcess(pid)
 	if err != nil {
 		return false
 	}
 
-	err = process.Signal(syscall.Signal(0))
+	err = proc.Signal(syscall.Signal(0))
 	return err == nil
 }
 
@@ -142,11 +144,8 @@ func (pm *ProcessManager) findProcessOnPort(port int) int {
 	return pm.findProcessOnPortWithFactory(port, realCommandExecutor{})
 }
 
-// findProcessOnPortWithFactory finds the PID using a provided commandFactory (for testing)
+// findProcessOnPortWithFactory finds the PID using a provided CommandExecutor (for testing)
 func (pm *ProcessManager) findProcessOnPortWithFactory(port int, executor CommandExecutor) int {
-	if executor == nil {
-		executor = realCommandExecutor{}
-	}
 	cmd := executor.Command("lsof", "-ti", fmt.Sprintf(":%d", port))
 	output, err := executor.Output(cmd)
 	if err != nil {
@@ -186,7 +185,7 @@ func (pm *ProcessManager) findOperatorProcessWithExecutor(executor CommandExecut
 // stopProcess stops a process with the given PID on Unix systems.
 // It sends SIGTERM first, then SIGKILL if the process doesn't exit within the timeout.
 func (pm *ProcessManager) stopProcess(pid int, name string) error {
-	return pm.stopProcessWithDeps(pid, name, osProcessFinder{}, timeSleeper{}, timeTickerFactory{}, 10*time.Second)
+	return pm.stopProcessWithDeps(pid, name, osProcessFinder{}, timeSleeper{}, timeTickerFactory{}, ShutdownTimeout)
 }
 
 // stopProcessWithDeps stops a process using injected dependencies (for testing)
@@ -199,33 +198,32 @@ func (pm *ProcessManager) stopProcessWithDeps(pid int, name string, finder proce
 		return nil
 	}
 
-	process, err := finder.FindProcess(pid)
+	proc, err := finder.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("failed to find process: %w", err)
+		return fmt.Errorf("process_manager: find process: %w", err)
 	}
 
-	if err := process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to send SIGTERM: %w", err)
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		return fmt.Errorf("process_manager: send SIGTERM: %w", err)
 	}
 
 	timeout := time.After(timeoutDur)
-	ticker := tickerFactory.NewTicker(500 * time.Millisecond)
+	ticker := tickerFactory.NewTicker(HealthCheckInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-timeout:
-			if err := process.Signal(syscall.SIGKILL); err != nil {
-				return fmt.Errorf("failed to send SIGKILL: %w", err)
+			if err := proc.Signal(syscall.SIGKILL); err != nil {
+				return fmt.Errorf("process_manager: send SIGKILL: %w", err)
 			}
-			// Wait for process to actually exit after SIGKILL
-			for i := 0; i < 20; i++ {
-				sleep.Sleep(100 * time.Millisecond)
+			for i := 0; i < MaxHealthChecks; i++ {
+				sleep.Sleep(SigKillPollInterval)
 				if !pm.isProcessRunningWithFinder(pid, finder) {
 					return nil
 				}
 			}
-			return fmt.Errorf("process %d did not exit after SIGKILL", pid)
+			return fmt.Errorf("process_manager: %w (pid %d)", constants.ErrProcessSigKillTimeout, pid)
 		case <-ticker.C():
 			if !pm.isProcessRunningWithFinder(pid, finder) {
 				return nil

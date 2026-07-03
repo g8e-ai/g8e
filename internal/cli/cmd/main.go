@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -23,10 +24,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 )
 
-// versionInfo holds build-time version metadata for serve commands
-var versionInfo serve.VersionInfo
+type versionInfoKey struct{}
 
-func NewRootCmd(version string) *cobra.Command {
+func NewRootCmd(version string, vi serve.VersionInfo) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "g8e",
 		Version: version,
@@ -37,13 +37,22 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 			DisableDefaultCmd: true,
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			endpoint, _ := cmd.Flags().GetString("endpoint")
+			endpoint, err := cmd.Flags().GetString("endpoint")
+			if err != nil {
+				return fmt.Errorf("root: get endpoint flag: %w", err)
+			}
 			if endpoint != "" {
 				config.SetEndpointOverride(endpoint)
 			}
 			return nil
 		},
 	}
+
+	ctx := rootCmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	rootCmd.SetContext(context.WithValue(ctx, versionInfoKey{}, vi))
 
 	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port) for remote enrollment")
 
@@ -65,17 +74,22 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	return rootCmd
 }
 
-func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
-	rootCmd := NewRootCmd(version)
-	rootCmd.SetVersionTemplate(`{{with .Version}}{{printf "g8e version %s\n" .}}{{end}}`)
+func versionInfoFromCmd(cmd *cobra.Command) serve.VersionInfo {
+	if vi, ok := cmd.Context().Value(versionInfoKey{}).(serve.VersionInfo); ok {
+		return vi
+	}
+	return serve.VersionInfo{}
+}
 
-	// Store version info globally for serve commands
-	versionInfo = serve.VersionInfo{
+func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
+	vi := serve.VersionInfo{
 		Version:   version,
 		BuildID:   buildID,
 		BuildTime: buildTime,
 		Platform:  platform,
 	}
+	rootCmd := NewRootCmd(version, vi)
+	rootCmd.SetVersionTemplate(`{{with .Version}}{{printf "g8e version %s\n" .}}{{end}}`)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

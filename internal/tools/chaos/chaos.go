@@ -46,6 +46,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
@@ -54,7 +55,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/storage/storagetest"
 	"github.com/g8e-ai/g8e/internal/services/system"
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
-	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )

@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/cli/stream"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -72,7 +73,7 @@ func operatorListCmd() *cobra.Command {
 				return err
 			}
 
-			var operators []Operator
+			var operators []models.OperatorDocumentGo
 			if err := json.Unmarshal(resp, &operators); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
@@ -97,7 +98,6 @@ func operatorListCmd() *cobra.Command {
 }
 
 func operatorRunCmd() *cobra.Command {
-	var endpoint string
 	var key string
 	var clientCert string
 	var trustBundle string
@@ -114,6 +114,7 @@ func operatorRunCmd() *cobra.Command {
 		Short: "Run the g8e Operator in foreground (worker mode)",
 		Long:  `Run the g8e Operator in foreground as a worker. This connects to the Gateway and executes commands. This is the re-exec target for remote deployment and can also be run directly for debugging.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			endpoint, _ := cmd.Flags().GetString("endpoint")
 			opts := serve.ServeOperatorOptions{
 				LogLevel:          logLevel,
 				Endpoint:          endpoint,
@@ -130,12 +131,11 @@ func operatorRunCmd() *cobra.Command {
 			}
 
 			// Run operator (this blocks until shutdown)
-			serve.RunOperator(opts, versionInfo)
+			serve.RunOperator(opts, versionInfoFromCmd(cmd))
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVarP(&endpoint, "endpoint", "e", "", "Gateway endpoint (e.g., 192.168.1.100:8080)")
 	cmd.Flags().StringVarP(&key, "key", "k", "", "Path to operator private key")
 	cmd.Flags().StringVar(&clientCert, "cert", "", "Path to operator client certificate")
 	cmd.Flags().StringVar(&trustBundle, "trust-bundle", "", "Path to CA trust bundle")
@@ -508,7 +508,6 @@ func operatorStreamCmd() *cobra.Command {
 	cmd.Flags().String("hosts", "", "File of hosts (one per line) or - for stdin")
 	cmd.Flags().Int("concurrency", 50, "Max parallel SSH sessions")
 	cmd.Flags().Int("timeout", 60, "Per-host dial+inject timeout in seconds")
-	cmd.Flags().String("endpoint", "", "Platform endpoint - if set, starts Operator on each remote host")
 	cmd.Flags().Bool("no-git", false, "Disable ledger")
 	cmd.Flags().String("ssh-config", "", "Path to SSH config file (default: ~/.ssh/config)")
 	cmd.Flags().String("known-hosts", "", "Path to SSH known_hosts file (default: ~/.ssh/known_hosts)")

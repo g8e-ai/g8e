@@ -13,7 +13,9 @@
 
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+)
 
 // Color palette: muted for normal ops, violent for threats.
 var (
@@ -32,20 +34,13 @@ var (
 
 // Border styles for the three panes.
 var (
-	borderPipeline = lipgloss.NewStyle().
+	baseBorder = lipgloss.NewStyle().
 			BorderForeground(colorBorder).
-			Border(lipgloss.RoundedBorder()).
 			Padding(0, 1)
 
-	borderLedger = lipgloss.NewStyle().
-			BorderForeground(colorBorder).
-			Border(lipgloss.RoundedBorder()).
-			Padding(0, 1)
-
-	borderTribunal = lipgloss.NewStyle().
-			BorderForeground(colorBorder).
-			Border(lipgloss.RoundedBorder(), false, true, true, true).
-			Padding(0, 1)
+	borderPipeline = baseBorder.Border(lipgloss.RoundedBorder())
+	borderLedger   = baseBorder.Border(lipgloss.RoundedBorder())
+	borderTribunal = baseBorder.Border(lipgloss.RoundedBorder(), false, true, true, true)
 )
 
 // Text styles.

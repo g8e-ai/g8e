@@ -372,6 +372,14 @@ type DeviceEnrollmentResponse struct {
 	UserID            string `json:"user_id"`
 	ActuatorKeyID     string `json:"actuator_key_id,omitempty"`
 	ActuatorPubKey    string `json:"actuator_pub_key,omitempty"`
+	Error             string `json:"error,omitempty"`
+}
+
+// ActuatorPublicKeyExport is the typed JSON structure for exporting the Actuator's public key.
+type ActuatorPublicKeyExport struct {
+	KeyID     string `json:"key_id"`
+	PublicKey string `json:"public_key"`
+	Algorithm string `json:"algorithm"`
 }
 
 // PKIFingerprintResponse is the typed response for GET /.well-known/g8e/pki/fingerprint.

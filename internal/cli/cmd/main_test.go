@@ -23,11 +23,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/cli/serve"
 )
 
 func TestExecute(t *testing.T) {
 	t.Run("root command structure matches main.go implementation", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		assert.Equal(t, "g8e", rootCmd.Use)
 		assert.Contains(t, rootCmd.Short, "g8e Platform Manager")
@@ -37,7 +39,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("root command has all expected subcommands", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		expectedCommands := []string{"gw", "auth", "mcp", "operator", "vault", "test", "demos", "audit", "swagger", "report"}
 		for _, expected := range expectedCommands {
@@ -53,13 +55,13 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("root command has correct completion options", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		assert.True(t, rootCmd.CompletionOptions.DisableDefaultCmd, "default completion command should be disabled")
 	})
 
 	t.Run("root command help displays correctly", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -82,7 +84,7 @@ func TestExecute(t *testing.T) {
 	})
 
 	t.Run("root command long description contains key components", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		assert.Contains(t, rootCmd.Long, "zero-trust execution platform")
 		assert.Contains(t, rootCmd.Long, "agentic infrastructure")
@@ -112,7 +114,7 @@ func TestRootCommandValidation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rootCmd := NewRootCmd("dev")
+			rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 			assert.Contains(t, rootCmd.Use, tt.expectedUse)
 			assert.Contains(t, rootCmd.Short, tt.expectedShort)
@@ -135,7 +137,7 @@ func TestRootCommandValidation(t *testing.T) {
 
 func TestCommandExecutionErrorHandling(t *testing.T) {
 	t.Run("invalid command returns error", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -148,7 +150,7 @@ func TestCommandExecutionErrorHandling(t *testing.T) {
 	})
 
 	t.Run("no arguments shows help", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -210,7 +212,7 @@ func TestExecuteStderrErrorOutput(t *testing.T) {
 			r.Close()
 		}()
 
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		rootCmd.SetArgs([]string{"invalid-command"})
 		err := rootCmd.Execute()
@@ -229,7 +231,7 @@ func TestExecuteStderrErrorOutput(t *testing.T) {
 
 func TestRootCommandConsistency(t *testing.T) {
 	t.Run("subcommand names are unique", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		cmdNames := make(map[string]bool)
 		for _, cmd := range rootCmd.Commands() {
@@ -265,7 +267,7 @@ func TestRootCommandConsistency(t *testing.T) {
 
 func TestExecuteWithHelpFlag(t *testing.T) {
 	t.Run("--help flag displays help", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -282,7 +284,7 @@ func TestExecuteWithHelpFlag(t *testing.T) {
 	})
 
 	t.Run("help command displays help", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		var buf bytes.Buffer
 		rootCmd.SetOut(&buf)
@@ -300,7 +302,7 @@ func TestExecuteWithHelpFlag(t *testing.T) {
 
 func TestExecuteVersionConsistency(t *testing.T) {
 	t.Run("version command is available if configured", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 
 		rootCmd.SetArgs([]string{"--version"})
 		err := rootCmd.Execute()
@@ -312,7 +314,7 @@ func TestExecuteVersionConsistency(t *testing.T) {
 
 func TestRootCommandRunFunction(t *testing.T) {
 	t.Run("root command without subcommand shows help", func(t *testing.T) {
-		rootCmd := NewRootCmd("dev")
+		rootCmd := NewRootCmd("dev", serve.VersionInfo{})
 		rootCmd.Run = func(cmd *cobra.Command, args []string) {
 			cmd.Help()
 		}

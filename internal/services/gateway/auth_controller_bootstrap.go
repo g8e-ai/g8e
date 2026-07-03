@@ -15,7 +15,6 @@ package gateway
 
 import (
 	"encoding/json"
-	"net"
 	"net/http"
 	"time"
 
@@ -53,20 +52,6 @@ func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *h
 	// CLI CSR is handled by the dedicated /api/v1/auth/cli/enroll endpoint
 	// to avoid conflating CLI identity with operator identity.
 	csrRequested := req.CSRPEM != ""
-
-	// Enforce loopback gate for local bootstrap
-	if csrRequested {
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			host = r.RemoteAddr
-		}
-		ip := net.ParseIP(host)
-		if ip == nil || !ip.IsLoopback() {
-			c.logger.Warn("Local bootstrap CSR request rejected: not from loopback", "remote_addr", r.RemoteAddr)
-			c.responder.Error(w, http.StatusForbidden, "CSR auto-issue only available over loopback")
-			return
-		}
-	}
 
 	// Check for existing bootstrap user (plan §4.2, §9.1 rotation carve-out)
 	bootstrapUser, err := c.userSvc.FindBootstrapUser()
@@ -254,7 +239,7 @@ func (c *AuthController) handleLocalBootstrapWithURL(w http.ResponseWriter, r *h
 
 // handleCLIEnrollment issues a CLI certificate for an already-bootstrapped system.
 // This endpoint is strictly for CLI credential recovery when local credentials are
-// missing; it does NOT create or rotate operator state. Loopback-only for defense.
+// missing; it does NOT create or rotate operator state.
 func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -279,18 +264,6 @@ func (c *AuthController) handleCLIEnrollment(w http.ResponseWriter, r *http.Requ
 
 	if req.CLICSRPEM == "" {
 		c.responder.Error(w, http.StatusBadRequest, "cli_csr_pem is required")
-		return
-	}
-
-	// Enforce loopback gate for local CLI enrollment
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		c.logger.Warn("CLI enrollment request rejected: not from loopback", "remote_addr", r.RemoteAddr)
-		c.responder.Error(w, http.StatusForbidden, "CLI enrollment only available over loopback")
 		return
 	}
 

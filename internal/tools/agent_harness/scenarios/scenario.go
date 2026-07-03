@@ -26,6 +26,8 @@ const (
 	Doctrine  Posture = "doctrine"
 	Consensus Posture = "consensus"
 	Notary    Posture = "notary"
+
+	DhsScenarioPrefix = "dhs-"
 )
 
 // Result is the detailed, auditable record of one scenario run.

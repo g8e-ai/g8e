@@ -309,6 +309,234 @@ func TestVaultResetCmd(t *testing.T) {
 	})
 }
 
+func TestVaultUnlockCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("unlock not initialized", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		cmd := vaultUnlockCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultNotInitialized)
+	})
+
+	t.Run("unlock missing key file", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", tp.VaultDir)
+		initCmd.Flags().Set("key-path", tp.VaultKeyPath)
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultUnlockCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.Flags().Set("key-path", filepath.Join(tp.BaseDir, "nonexistent.key"))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+
+	t.Run("unlock corrupt key file", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", tp.VaultDir)
+		initCmd.Flags().Set("key-path", tp.VaultKeyPath)
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		require.NoError(t, os.WriteFile(tp.VaultKeyPath, []byte("corrupt-key-data"), 0600))
+
+		cmd := vaultUnlockCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+}
+
+func TestVaultRekeyCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("rekey not initialized", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		cmd := vaultRekeyCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultNotInitialized)
+	})
+
+	t.Run("rekey wrong old key", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", tp.VaultDir)
+		initCmd.Flags().Set("key-path", tp.VaultKeyPath)
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		wrongKey := make([]byte, vault.KeySize)
+		_, _ = rand.Read(wrongKey)
+		require.NoError(t, os.WriteFile(tp.VaultKeyPath, []byte(hex.EncodeToString(wrongKey)+"\n"), 0600))
+
+		cmd := vaultRekeyCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		newKeyPath := filepath.Join(tp.VaultDir, "new.key")
+		cmd.Flags().Set("new-key-path", newKeyPath)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+}
+
+func TestVaultResetCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("reset not initialized", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		cmd := vaultResetCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.Flags().Set("confirm", "true")
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultNotInitialized)
+	})
+
+	t.Run("interactive confirm with 'destroy' text", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", tp.VaultDir)
+		initCmd.Flags().Set("key-path", tp.VaultKeyPath)
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultResetCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.SetIn(strings.NewReader("destroy\n"))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Vault reset complete")
+		assert.False(t, vault.VaultHeaderExists(tp.VaultDir))
+	})
+
+	t.Run("interactive confirm with wrong text", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", tp.VaultDir)
+		initCmd.Flags().Set("key-path", tp.VaultKeyPath)
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		cmd := vaultResetCmd()
+		cmd.Flags().Set("vault-dir", tp.VaultDir)
+		cmd.SetIn(strings.NewReader("yes\n"))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Reset cancelled")
+		assert.True(t, vault.VaultHeaderExists(tp.VaultDir))
+	})
+}
+
+func TestVaultExportCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("export missing key file", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		cmd := vaultExportCmd()
+		cmd.Flags().Set("key-path", filepath.Join(tp.BaseDir, "nonexistent.key"))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+
+	t.Run("export corrupt key file", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		require.NoError(t, os.MkdirAll(filepath.Dir(tp.VaultKeyPath), constants.PermDirPrivate))
+		require.NoError(t, os.WriteFile(tp.VaultKeyPath, []byte("not-hex"), 0600))
+
+		cmd := vaultExportCmd()
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+	})
+}
+
+func TestVaultImportCmd_ErrorPaths(t *testing.T) {
+
+	t.Run("import invalid hex", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		cmd := vaultImportCmd()
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		cmd.Flags().Set("key-hex", "invalid-hex-string")
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultKeyDecodeFailed)
+	})
+
+	t.Run("import wrong key size", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		shortKey := hex.EncodeToString(make([]byte, 16))
+		cmd := vaultImportCmd()
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		cmd.Flags().Set("key-hex", shortKey)
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultKeyInvalidSize)
+	})
+
+	t.Run("import from stdin", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		key := make([]byte, vault.KeySize)
+		_, _ = rand.Read(key)
+		keyHex := hex.EncodeToString(key)
+
+		cmd := vaultImportCmd()
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		cmd.SetIn(strings.NewReader(keyHex + "\n"))
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		err := cmd.RunE(cmd, []string{})
+		require.NoError(t, err)
+		assert.Contains(t, out.String(), "Key imported")
+
+		read, _ := readKeyFile(tp.VaultKeyPath)
+		assert.Equal(t, key, read)
+	})
+
+	t.Run("import from stdin invalid hex", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		cmd := vaultImportCmd()
+		cmd.Flags().Set("key-path", tp.VaultKeyPath)
+		cmd.SetIn(strings.NewReader("not-valid-hex\n"))
+		err := cmd.RunE(cmd, []string{})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrVaultKeyDecodeFailed)
+	})
+}
+
 func TestVaultExportImport(t *testing.T) {
 
 	t.Run("export success", func(t *testing.T) {
@@ -352,5 +580,35 @@ func TestVaultExportImport(t *testing.T) {
 
 		read, _ := readKeyFile(tp.VaultKeyPath)
 		assert.Equal(t, key, read)
+	})
+
+	t.Run("export-import round-trip", func(t *testing.T) {
+		tp := testutil.NewTestPathsFromTemp(t)
+		require.NoError(t, paths.InitWithBase(tp.BaseDir))
+
+		initCmd := vaultInitCmd()
+		initCmd.Flags().Set("vault-dir", tp.VaultDir)
+		initCmd.Flags().Set("key-path", tp.VaultKeyPath)
+		require.NoError(t, initCmd.RunE(initCmd, []string{}))
+
+		exportCmd := vaultExportCmd()
+		exportCmd.Flags().Set("key-path", tp.VaultKeyPath)
+		var exportBuf bytes.Buffer
+		exportCmd.SetOut(&exportBuf)
+		require.NoError(t, exportCmd.RunE(exportCmd, []string{}))
+		exportedHex := strings.TrimSpace(exportBuf.String())
+
+		importKeyPath := filepath.Join(tp.BaseDir, "imported.key")
+		importCmd := vaultImportCmd()
+		importCmd.Flags().Set("key-path", importKeyPath)
+		importCmd.Flags().Set("key-hex", exportedHex)
+		var importBuf bytes.Buffer
+		importCmd.SetOut(&importBuf)
+		require.NoError(t, importCmd.RunE(importCmd, []string{}))
+		assert.Contains(t, importBuf.String(), "Key imported")
+
+		original, _ := readKeyFile(tp.VaultKeyPath)
+		imported, _ := readKeyFile(importKeyPath)
+		assert.Equal(t, original, imported)
 	})
 }
