@@ -285,7 +285,7 @@ func runDemosPull(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
-	manifestPath := filepath.Join(cwd, constants.DemosDirname, "images.json")
+	manifestPath := filepath.Join(cwd, constants.DemosDirname, constants.DemosImagesManifestFile)
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		return fmt.Errorf("reading images manifest %s: %w", manifestPath, err)
@@ -699,7 +699,6 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 		return err
 	}
 
-	var failed []string
 	for _, d := range demos {
 		cmd.Printf("\nCleaning demo environment: %s\n", d.name)
 		dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(d.composePath), "down", "-v", "--remove-orphans", "-t", "0")
@@ -717,10 +716,6 @@ func cleanAllDemos(cmd *cobra.Command, demosDir string, skipConfirm bool) error 
 	}
 
 	cmd.Println()
-	if len(failed) > 0 {
-		cmd.Printf("Completed with errors. Failed: %s\n", strings.Join(failed, ", "))
-		return fmt.Errorf("%w: failed to clean: %s", constants.ErrProcessStopFailed, strings.Join(failed, ", "))
-	}
 	cmd.Printf("All %d demo environment(s) cleaned successfully.\n", len(demos))
 	return nil
 }
@@ -1158,6 +1153,27 @@ func demoStep(demoDir, label string, fatal bool, args ...string) error {
 		return fmt.Errorf("%s failed (non-fatal): %w", label, err)
 	}
 	return nil
+}
+
+// demoScenarioStep prints the step description, runs the command via demoStep,
+// prints pass/fail, and returns whether it succeeded. This extracts the
+// repetitive print → demoStep → error pattern from each scenario case block.
+func demoScenarioStep(demoDir, desc string, cmd []string) bool {
+	demoPrintf("  ── %s ──\n", desc)
+	if err := demoStep(demoDir, desc, false, cmd...); err != nil {
+		fmt.Printf("  (%s failed)\n\n", desc)
+		return false
+	}
+	return true
+}
+
+// demoStepWarn runs a non-critical demoStep and prints a warning on failure
+// without setting hasErrors. Use for supplementary verification steps whose
+// failure does not invalidate the scenario result.
+func demoStepWarn(demoDir, label string, args ...string) {
+	if err := demoStep(demoDir, label, false, args...); err != nil {
+		fmt.Printf("  (warning: %s failed)\n", label)
+	}
 }
 
 type twoLayerScenarioConfig struct {

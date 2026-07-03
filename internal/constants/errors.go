@@ -963,6 +963,9 @@ var (
 	ErrCLISessionInvalid          = errors.New("invalid CLI session")
 	ErrCLICertBindingCheckFailed  = errors.New("CLI cert binding check failed")
 
+	// Stream errors
+	ErrStreamMarshalEvent = errors.New("failed to marshal stream event")
+
 	// Agent harness errors
 	ErrHarnessNoScenarios = errors.New("no scenarios selected")
 

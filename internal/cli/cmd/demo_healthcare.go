@@ -70,8 +70,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		demoPrintln("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 		demoPrintln()
-		_ = demoStep(demoDir, "audit tail",
-			false,
+		demoStepWarn(demoDir, "audit tail",
 			"docker", "compose", "logs", "observability", "--tail", "10",
 		)
 
@@ -128,8 +127,7 @@ func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		demoPrintln("  ── Step 3: View g8e enforcement audit ───────────────────────")
 		demoPrintln("  Inspect with: g8e audit receipts | g8e audit events | g8e audit summary")
 		demoPrintln()
-		_ = demoStep(demoDir, "audit tail",
-			false,
+		demoStepWarn(demoDir, "audit tail",
 			"docker", "compose", "logs", "observability", "--tail", "10",
 		)
 

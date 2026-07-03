@@ -17,6 +17,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -37,12 +38,6 @@ const (
 )
 
 func getDefaultNodeBinaryDir() string {
-	// Initialize paths relative to current working directory
-	if err := paths.Init(); err != nil {
-		if fallbackErr := paths.InitWithBase(constants.PathCurrentDir); fallbackErr != nil {
-			fmt.Fprintf(os.Stderr, "[stream] failed to initialize paths: %v\n", fallbackErr)
-		}
-	}
 	return pathutil.SafeJoin(paths.Infra.RuntimeDir, constants.PathParentDir, constants.BinDirname)
 }
 
@@ -67,6 +62,13 @@ type StreamStatusEvent struct {
 // It runs inside the g8ep container and streams the Node binary to
 // one or more remote hosts concurrently via native Go crypto/ssh.
 func RunStream(args []string) {
+	if err := paths.Init(); err != nil {
+		if fallbackErr := paths.InitWithBase(constants.PathCurrentDir); fallbackErr != nil {
+			fmt.Fprintf(os.Stderr, "[stream] failed to initialize paths: %v\n", fallbackErr)
+			os.Exit(constants.ExitGeneralError)
+		}
+	}
+
 	fs := flag.NewFlagSet("stream", flag.ContinueOnError)
 
 	var (
@@ -101,7 +103,7 @@ func RunStream(args []string) {
 
 	positionalHosts, err := parseInterleavedArgs(fs, args)
 	if err != nil {
-		if err == flag.ErrHelp {
+		if errors.Is(err, flag.ErrHelp) {
 			printStreamUsage()
 			os.Exit(constants.ExitSuccess)
 		}
@@ -196,7 +198,9 @@ func RunStream(args []string) {
 		TotalMs: totalMs,
 		Ts:      time.Now().UTC(),
 	}
-	emitJSON(&summary)
+	if err := emitJSON(&summary); err != nil {
+		fmt.Fprintf(os.Stderr, "[stream] %v\n", err)
+	}
 
 	fmt.Fprintf(os.Stderr, "[stream] done: %d/%d succeeded in %dms\n",
 		succeeded, len(hosts), totalMs)
@@ -260,7 +264,9 @@ func runConcurrentStream(
 		if res.Error != nil {
 			evt.Error = res.Error.Error()
 		}
-		emitJSON(&evt)
+		if err := emitJSON(&evt); err != nil {
+			fmt.Fprintf(os.Stderr, "[stream] %v\n", err)
+		}
 		if res.Error != nil {
 			fmt.Fprintf(os.Stderr, "[stream] FAIL  %-30s %v\n", res.Host, res.Error)
 		} else {
@@ -299,9 +305,8 @@ func parseInterleavedArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 
 // collectHosts merges positional CLI args, a --hosts file/stdin, deduplicates,
 // and returns the final list.
-func collectHosts(positional []string, hostsFile string) ([]string, error) {
+func collectHosts(positional []string, hostsFile string) (hosts []string, err error) {
 	seen := make(map[string]struct{})
-	var hosts []string
 
 	add := func(h string) {
 		h = strings.TrimSpace(h)
@@ -323,12 +328,14 @@ func collectHosts(positional []string, hostsFile string) ([]string, error) {
 		if hostsFile == "-" {
 			scanner = bufio.NewScanner(os.Stdin)
 		} else {
-			f, err := os.Open(hostsFile)
-			if err != nil {
-				return nil, fmt.Errorf("stream: collect hosts: %w", err)
+			f, openErr := os.Open(hostsFile)
+			if openErr != nil {
+				return nil, fmt.Errorf("stream: collect hosts: %w", openErr)
 			}
 			defer func() {
-				_ = f.Close()
+				if closeErr := f.Close(); closeErr != nil && err == nil {
+					err = fmt.Errorf("stream: collect hosts: close: %w", closeErr)
+				}
 			}()
 			scanner = bufio.NewScanner(f)
 		}
@@ -367,13 +374,13 @@ func shellQuote(s string) string {
 }
 
 // emitJSON writes a StreamStatusEvent as a JSON line to stdout.
-func emitJSON(evt *StreamStatusEvent) {
+func emitJSON(evt *StreamStatusEvent) error {
 	data, err := json.Marshal(evt)
 	if err != nil {
-		fmt.Printf("{\"error\":\"failed to marshal event\",\"details\":\"%s\"}\n", err)
-		return
+		return fmt.Errorf("stream: emit: %w: %w", constants.ErrStreamMarshalEvent, err)
 	}
 	fmt.Println(string(data))
+	return nil
 }
 
 // humanBytes formats a byte count as a human-readable string.

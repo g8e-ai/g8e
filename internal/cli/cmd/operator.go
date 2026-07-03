@@ -29,6 +29,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/cli/stream"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/spf13/cobra"
 )
 
@@ -72,7 +73,7 @@ func operatorListCmd() *cobra.Command {
 				return err
 			}
 
-			var operators []Operator
+			var operators []models.OperatorDocumentGo
 			if err := json.Unmarshal(resp, &operators); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}

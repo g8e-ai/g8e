@@ -29,32 +29,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/paths"
 )
 
-type User struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-type Operator struct {
-	ID           string `json:"id"`
-	CloudSubtype string `json:"cloud_subtype"`
-	Status       string `json:"status"`
-}
-
-type QueryFilter struct {
-	Field string      `json:"field"`
-	Op    string      `json:"op"`
-	Value interface{} `json:"value"`
-}
-
-type QueryRequest struct {
-	Filters []QueryFilter `json:"filters"`
-}
-
-type QueryRequestWithLimit struct {
-	Filters []QueryFilter `json:"filters"`
-	Limit   int           `json:"limit,omitempty"`
-}
-
 func dataCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "data",
@@ -97,7 +71,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 				return fmt.Errorf("data: fetch users: %w", err)
 			}
 
-			var users []User
+			var users []models.User
 			if err := json.Unmarshal(resp, &users); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
@@ -105,7 +79,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 			cmd.Printf("Users (%d total)\n", len(users))
 			cmd.Println(strings.Repeat("=", 110))
 			for _, user := range users {
-				cmd.Printf("  %s  %s\n", user.ID, user.Name)
+				cmd.Printf("  %s\n", user.ID)
 			}
 
 			return nil
@@ -138,7 +112,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 				return fmt.Errorf("data: fetch operators: %w", err)
 			}
 
-			var operators []Operator
+			var operators []models.OperatorDocumentGo
 			if err := json.Unmarshal(resp, &operators); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 			}
@@ -229,8 +203,8 @@ func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), c
 
 			if documentID == "" {
 				// List documents in collection
-				query := QueryRequest{
-					Filters: []QueryFilter{},
+				query := models.DocQueryRequest{
+					Filters: []models.DocFilter{},
 				}
 				resp, err := client.Post(fmt.Sprintf("/db/%s/_query", collection), query)
 				if err != nil {
@@ -300,9 +274,9 @@ func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error
 				return constants.ErrOperatorSessionIDRequired
 			}
 
-			query := QueryRequestWithLimit{
-				Filters: []QueryFilter{
-					{Field: "operator_session_id", Op: "==", Value: operatorSessionID},
+			query := models.DocQueryRequest{
+				Filters: []models.DocFilter{
+					{Field: "operator_session_id", Op: "==", Value: json.RawMessage(fmt.Sprintf("%q", operatorSessionID))},
 				},
 				Limit: limit,
 			}

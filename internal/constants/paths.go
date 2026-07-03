@@ -235,6 +235,7 @@ const (
 	DemosDoWDoctrineFile        = "dow_tactical_doctrine.json"
 	DemosDHSDoctrineFile        = "dhs_sovereign_doctrine.json"
 	DemosSwarmDoctrineFile      = "drone_operations_doctrine.json"
+	DemosImagesManifestFile     = "images.json"
 	DemosOrgHealthcare          = "healthcare"
 	DemosOrgFinance             = "finance"
 	DemosOrgGov                 = "gov"
@@ -255,7 +256,14 @@ const (
 	ContainerDataDir          = ContainerRootG8E + "/" + DataDirname
 	ContainerAuditVaultDB     = ContainerDataDir + "/" + AuditVaultDBFilename
 	ContainerExecutionVaultDB = ContainerDataDir + "/" + ExecutionVaultDBFilename
-	ContainerLedgerFilesDir   = ContainerRootG8E + "/" + LedgerDirname + "/" + FilesDirname
+	ContainerLedgerFilesDir   = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
+
+	ContainerDoctrineDir   = "/etc/g8e/" + DemosDoctrineDir
+	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
+	ContainerVerifyOpsPy   = "/app/verify_ops.py"
+	ContainerInspectRFPy   = "/app/inspect_rf.py"
+	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
+	ContainerVerifySlewsPy = "/app/verify_slews.py"
 )
 
 // Component filenames for gateway, operator, and shared services.
