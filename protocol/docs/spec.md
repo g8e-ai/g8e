@@ -5,7 +5,7 @@ title: g8e Protocol
 # g8e Protocol
 
 Last Updated: 2026-07-03
-Version: v1.3.5
+Version: v1.3.6
 
 The **g8e Protocol** is a zero-trust execution platform and compliance standard for agentic infrastructure. It defines the canonical `GovernanceEnvelope` that wraps all mutations passing through the g8e platform, enforcing fail-closed verification through the sequential 5-Layer interlock sequence. The platform uses `g8e.local` as the default internal hostname and canonical alias for all mesh communication.
 
@@ -431,7 +431,7 @@ All tests follow a Tier 1 philosophy where possible (no external network/DB requ
 | Protobuf schemas | `../../protocol/proto/g8e/common/v1/common.proto` |
 | Event registry | `../../protocol/constants/events.json` |
 | Channel prefixes | `../../protocol/constants/channels.json` |
-| Envelope types | `../../pkg/governance/types.go` |
+| Envelope types | `../../internal/governance/envelope.go` |
 | L1 Doctrine logic | `../../internal/services/governance/l1_doctrine.go` |
 | L3 Notary logic | `../../internal/services/governance/l3_notary.go` |
 | L4 Warden logic | `../../internal/services/governance/l4_warden.go` |

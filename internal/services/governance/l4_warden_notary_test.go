@@ -21,9 +21,9 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/pkg/governance"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -91,24 +91,24 @@ func TestL4Warden_Notary_FailClosedProofs(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
 		name   string
-		mutate func(*governance.GovernanceEnvelope)
+		mutate func(*govtypes.GovernanceEnvelope)
 		want   error
 	}{
-		{name: "missing id", mutate: func(env *governance.GovernanceEnvelope) { env.Id = "" }, want: ErrTransactionIDMissing},
-		{name: "unknown action", mutate: func(env *governance.GovernanceEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrUnknownActionType},
-		{name: "missing payload", mutate: func(env *governance.GovernanceEnvelope) { env.Payload = nil }, want: ErrPayloadMissing},
-		{name: "invalid typed payload", mutate: func(env *governance.GovernanceEnvelope) { env.Payload = []byte("not protobuf") }, want: ErrPayloadDecodeFailed},
-		{name: "missing transaction hash", mutate: func(env *governance.GovernanceEnvelope) { env.TransactionHash = "" }, want: ErrTransactionHashMissing},
-		{name: "hash mismatch", mutate: func(env *governance.GovernanceEnvelope) { env.TransactionHash = "wrong" }, want: ErrTransactionHashMismatch},
-		{name: "expired", mutate: func(env *governance.GovernanceEnvelope) {
+		{name: "missing id", mutate: func(env *govtypes.GovernanceEnvelope) { env.Id = "" }, want: ErrTransactionIDMissing},
+		{name: "unknown action", mutate: func(env *govtypes.GovernanceEnvelope) { env.ActionType = "UNKNOWN" }, want: ErrUnknownActionType},
+		{name: "missing payload", mutate: func(env *govtypes.GovernanceEnvelope) { env.Payload = nil }, want: ErrPayloadMissing},
+		{name: "invalid typed payload", mutate: func(env *govtypes.GovernanceEnvelope) { env.Payload = []byte("not protobuf") }, want: ErrPayloadDecodeFailed},
+		{name: "missing transaction hash", mutate: func(env *govtypes.GovernanceEnvelope) { env.TransactionHash = "" }, want: ErrTransactionHashMissing},
+		{name: "hash mismatch", mutate: func(env *govtypes.GovernanceEnvelope) { env.TransactionHash = "wrong" }, want: ErrTransactionHashMismatch},
+		{name: "expired", mutate: func(env *govtypes.GovernanceEnvelope) {
 			env.ExpiresAt = timestamppb.New(time.Now().UTC().Add(-time.Minute))
 			rehash(t, env)
 		}, want: ErrTransactionExpired},
-		{name: "missing nonce", mutate: func(env *governance.GovernanceEnvelope) { env.Nonce = ""; rehash(t, env) }, want: ErrNonceMissing},
-		{name: "missing state root", mutate: func(env *governance.GovernanceEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
-		{name: "missing l2", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
-		{name: "non-member signer", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].SignerKeyId = "" }, want: ErrL2QuorumNotMet},
-		{name: "invalid l2 signature", mutate: func(env *governance.GovernanceEnvelope) { env.Governance.L2.Votes[0].ConsensusSignature = "deadbeef" }, want: ErrL2QuorumNotMet},
+		{name: "missing nonce", mutate: func(env *govtypes.GovernanceEnvelope) { env.Nonce = ""; rehash(t, env) }, want: ErrNonceMissing},
+		{name: "missing state root", mutate: func(env *govtypes.GovernanceEnvelope) { env.StateMerkleRoot = ""; rehash(t, env) }, want: ErrStateRootRequired},
+		{name: "missing l2", mutate: func(env *govtypes.GovernanceEnvelope) { env.Governance.L2 = nil }, want: ErrL2SignatureMissing},
+		{name: "non-member signer", mutate: func(env *govtypes.GovernanceEnvelope) { env.Governance.L2.Votes[0].SignerKeyId = "" }, want: ErrL2QuorumNotMet},
+		{name: "invalid l2 signature", mutate: func(env *govtypes.GovernanceEnvelope) { env.Governance.L2.Votes[0].ConsensusSignature = "deadbeef" }, want: ErrL2QuorumNotMet},
 	}
 
 	for _, tc := range tests {

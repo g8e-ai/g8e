@@ -61,7 +61,7 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 		if err := demoStep(demoDir, "enrollment check",
 			false,
 			"docker", "compose", "exec", "-T", "operator-1",
-			"test", "-f", "/root/.g8e/pki/operator.crt",
+			"test", "-f", constants.ContainerOperatorCert,
 		); err != nil {
 			fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
 			fmt.Println()
@@ -70,7 +70,7 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 
 		demoPrintln("  ── Step 3: Confirm drone operations doctrine is loaded ──────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosSwarmDoctrineFile, "unauthorized_weapon_release"); err == nil {
-			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 unauthorized_weapon_release\n", constants.DemosSwarmDoctrineFile)
+			demoPrintf("  $ cat %s/%s | grep -A 10 unauthorized_weapon_release\n", constants.ContainerDoctrineDir, constants.DemosSwarmDoctrineFile)
 			demoPrintf("  id:         %s\n", rule.ID)
 			demoPrintf("  severity:   %s\n", rule.Severity)
 			demoPrintf("  confidence: %.2f\n", rule.Confidence)
@@ -85,7 +85,6 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 		demoPrintln("  ── Step 4: Run governed recon mission via agent-harness ────────")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.UseRun = true
-		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "swarm-recon-mission via agent",
 			false,
 			harnessRun("swarm-recon-mission", hcfg)...,
@@ -99,7 +98,7 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 		if err := demoStep(demoDir, "drone simulator verification",
 			false,
 			"docker", "compose", "exec", "-T", "operator-1",
-			"sh", "-c", "ls -la /root/.g8e/data/ledger/files/ 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
+			"sh", "-c", "ls -la "+constants.ContainerLedgerFilesDir+" 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
 		); err != nil {
 			fmt.Println("  (ledger directory not found — no file mutations have been recorded)")
 			fmt.Println()
@@ -148,7 +147,7 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 
 		demoPrintln("  ── Step 2: Confirm weapons safety doctrine is loaded ────────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosSwarmDoctrineFile, "unauthorized_weapon_release"); err == nil {
-			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 unauthorized_weapon_release\n", constants.DemosSwarmDoctrineFile)
+			demoPrintf("  $ cat %s/%s | grep -A 10 unauthorized_weapon_release\n", constants.ContainerDoctrineDir, constants.DemosSwarmDoctrineFile)
 			demoPrintf("  id:         %s\n", rule.ID)
 			demoPrintf("  severity:   %s\n", rule.Severity)
 			demoPrintf("  confidence: %.2f\n", rule.Confidence)
@@ -163,7 +162,6 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 		demoPrintln("  ── Step 3: Attempt weapon release via agent-harness (L1 block) ──")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.UseRun = true
-		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "swarm-weapon-release-block via agent",
 			false,
 			harnessRun("swarm-weapon-release-block", hcfg)...,
@@ -214,7 +212,7 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 
 		demoPrintln("  ── Step 2: Confirm navigation safety doctrine is loaded ─────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosSwarmDoctrineFile, "restricted_airspace_violation"); err == nil {
-			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 restricted_airspace_violation\n", constants.DemosSwarmDoctrineFile)
+			demoPrintf("  $ cat %s/%s | grep -A 10 restricted_airspace_violation\n", constants.ContainerDoctrineDir, constants.DemosSwarmDoctrineFile)
 			demoPrintf("  id:         %s\n", rule.ID)
 			demoPrintf("  severity:   %s\n", rule.Severity)
 			demoPrintf("  confidence: %.2f\n", rule.Confidence)
@@ -229,7 +227,6 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 		demoPrintln("  ── Step 3: Attempt restricted airspace navigation via agent ─────")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		hcfg.UseRun = true
-		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "swarm-restricted-airspace-block via agent",
 			false,
 			harnessRun("swarm-restricted-airspace-block", hcfg)...,

@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.3.5  
-**Last Updated:** 2026-07-02  
-**Platform:** g8e v1.3.3  
+**Document Version:** 1.3.6  
+**Last Updated:** 2026-07-03  
+**Platform:** g8e v1.3.6  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -585,6 +585,8 @@ For specific compliance questions or audit support, contact:
 | 1.1 | 2026-06-12 | Lateralus Labs | Corrected Sovereign Execution Boundary evidence path (`internal/services/scrubbing/boundary.go`); updated platform version to v1.1.1 |
 | 1.1.9 | 2026-06-23 | Lateralus Labs | Updated platform version to v1.1.9; replaced L2 Consensus references with Tribunal system (`internal/services/tribunal/service.go`); corrected DoD Zero Trust Reference Architecture naming; removed auto-approval references (removed in v1.1.9); corrected default posture configuration; fixed evidence repository paths to repository-relative format |
 | 1.3.1 | 2026-06-28 | Lateralus Labs | Updated platform version to v1.3.1; updated L3 Notary description to reflect two-layer model (passkey authorization plus mTLS transport); added PrivilegedRouteRegistry and JIT capability minting evidence; added g8e Console SPA to current strengths; corrected `.github/SECURITY.md` references to repository-relative paths; added governance architecture documentation to evidence repository; added reporting verification and L3 approval pipeline test evidence |
+| 1.3.5 | 2026-07-02 | Lateralus Labs | Updated platform version to v1.3.5; clarified zero runtime dependencies (statically linked binary, `CGO_ENABLED=0`); removed OpenSSL and Git from runtime dependency lists |
+| 1.3.6 | 2026-07-03 | Lateralus Labs | Updated platform version to v1.3.6; added missing v1.3.5 document control entry |
 
 ---
 

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // realWindowsProcessChecker implements the interface using actual Windows syscalls
@@ -81,7 +83,7 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 	}
 
 	// On Windows, we can check if the process is running by calling
-	// GetExitCodeProcess. If the process is still running, it returns STILL_ACTIVE (259).
+	// GetExitCodeProcess. If the process is still running, it returns STILL_ACTIVE.
 	handle, err := checker.OpenProcess(syscall.PROCESS_QUERY_INFORMATION, false, uint32(pid))
 	if err != nil {
 		return false
@@ -94,8 +96,8 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 		return false
 	}
 
-	// STILL_ACTIVE (259) indicates the process is still running
-	if exitCode != 259 {
+	// STILL_ACTIVE indicates the process is still running
+	if exitCode != constants.StillActiveExitCode {
 		return false
 	}
 
@@ -233,7 +235,7 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 	// Force kill if graceful shutdown failed
 	cmd = executor.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", pid), "/T")
 	if err := executor.Run(cmd); err != nil {
-		return fmt.Errorf("failed to force kill process: %w", err)
+		return fmt.Errorf("process_manager: %w: %v", constants.ErrProcessStopFailed, err)
 	}
 
 	// Wait for process to actually exit and release file handles
@@ -244,5 +246,5 @@ func (pm *ProcessManager) stopProcess(pid int, name string) error {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	return nil
+	return fmt.Errorf("process_manager: %w (pid %d)", constants.ErrProcessForceKillTimeout, pid)
 }

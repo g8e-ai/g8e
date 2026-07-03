@@ -108,6 +108,11 @@ const (
 	PathWindowsGitBinSh             = "C:\\Program Files\\Git\\bin\\sh.exe"
 	PathWindowsMsys64Bash           = "C:\\msys64\\usr\\bin\\bash.exe"
 	PathWindowsCygwin64Bash         = "C:\\cygwin64\\bin\\bash.exe"
+
+	// Windows temp directory prefixes and filenames for cert store operations
+	WindowsTempCertImportPrefix = "g8e-cert-import-*"
+	WindowsTempCATrustPrefix    = "g8e-ca-trust-*"
+	WindowsTempCertFilename     = "certificate.pem"
 )
 
 // SSH path constants for known_hosts and config locations.
@@ -235,6 +240,7 @@ const (
 	DemosDoWDoctrineFile        = "dow_tactical_doctrine.json"
 	DemosDHSDoctrineFile        = "dhs_sovereign_doctrine.json"
 	DemosSwarmDoctrineFile      = "drone_operations_doctrine.json"
+	DemosImagesManifestFile     = "images.json"
 	DemosOrgHealthcare          = "healthcare"
 	DemosOrgFinance             = "finance"
 	DemosOrgGov                 = "gov"
@@ -255,7 +261,20 @@ const (
 	ContainerDataDir          = ContainerRootG8E + "/" + DataDirname
 	ContainerAuditVaultDB     = ContainerDataDir + "/" + AuditVaultDBFilename
 	ContainerExecutionVaultDB = ContainerDataDir + "/" + ExecutionVaultDBFilename
-	ContainerLedgerFilesDir   = ContainerRootG8E + "/" + LedgerDirname + "/" + FilesDirname
+	ContainerLedgerFilesDir   = ContainerDataDir + "/" + LedgerDirname + "/" + FilesDirname
+
+	ContainerDoctrineDir   = "/etc/g8e/" + DemosDoctrineDir
+	ContainerEnsembleSeed  = "/etc/g8e/ensemble-seed.hex"
+	ContainerVerifyOpsPy   = "/app/verify_ops.py"
+	ContainerInspectRFPy   = "/app/inspect_rf.py"
+	ContainerInspectPNTPy  = "/app/inspect_pnt.py"
+	ContainerVerifySlewsPy = "/app/verify_slews.py"
+)
+
+// Local binary names for the g8e CLI executable.
+const (
+	LocalBinaryName        = "./g8e"
+	LocalBinaryNameWindows = "./g8e.exe"
 )
 
 // Component filenames for gateway, operator, and shared services.

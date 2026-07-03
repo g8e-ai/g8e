@@ -106,6 +106,7 @@ var (
 	ErrRequestMarshalFailed     = errors.New("failed to marshal request")
 	ErrTransactionApproveFailed = errors.New("failed to approve transaction")
 	ErrResponseParseFailed      = errors.New("failed to parse response")
+	ErrJSONMarshalFailed        = errors.New("failed to marshal JSON")
 
 	// Notary errors
 	ErrTransactionExpired = errors.New("transaction approval expired")
@@ -128,16 +129,18 @@ var (
 	ErrInvalidJSONResponse      = errors.New("invalid JSON response")
 
 	// Process manager errors
-	ErrProcessStartFailed = errors.New("process start failed")
-	ErrProcessStopFailed  = errors.New("process stop failed")
-	ErrProcessFindFailed  = errors.New("failed to find process")
-	ErrPortUnavailable    = errors.New("port unavailable")
-	ErrInvalidPosture     = errors.New("invalid posture")
-	ErrPIDReadFailed      = errors.New("failed to read PID file")
-	ErrPIDWriteFailed     = errors.New("failed to write PID file")
-	ErrPostureReadFailed  = errors.New("failed to read posture file")
-	ErrPostureWriteFailed = errors.New("failed to write posture file")
-	ErrProcessInterrupted = errors.New("process interrupted")
+	ErrProcessStartFailed      = errors.New("process start failed")
+	ErrProcessStopFailed       = errors.New("process stop failed")
+	ErrProcessFindFailed       = errors.New("failed to find process")
+	ErrPortUnavailable         = errors.New("port unavailable")
+	ErrInvalidPosture          = errors.New("invalid posture")
+	ErrPIDReadFailed           = errors.New("failed to read PID file")
+	ErrPIDWriteFailed          = errors.New("failed to write PID file")
+	ErrPostureReadFailed       = errors.New("failed to read posture file")
+	ErrPostureWriteFailed      = errors.New("failed to write posture file")
+	ErrProcessInterrupted      = errors.New("process interrupted")
+	ErrProcessSigKillTimeout   = errors.New("process did not exit after SIGKILL")
+	ErrProcessForceKillTimeout = errors.New("process did not exit after force kill")
 
 	// File system errors
 	ErrPathNotFound         = errors.New("path not found")
@@ -579,11 +582,9 @@ var (
 	ErrBootstrapResponseStatus     = errors.New("bootstrap: authentication failed with status")
 	ErrBootstrapResponseDecode     = errors.New("bootstrap: failed to decode auth response")
 	ErrBootstrapAuthFailed         = errors.New("bootstrap: authentication failed")
-	ErrBootstrapLoopbackOnly       = errors.New("CSR auto-issue only available over loopback")
 	ErrBootstrapUserDisabled       = errors.New("bootstrap user is disabled, cannot rotate")
 	ErrBootstrapUserDisabledEnroll = errors.New("bootstrap user is disabled, cannot enroll")
 	ErrBootstrapInitialSetupOnly   = errors.New("bootstrap only available for initial setup")
-	ErrCLIEnrollmentLoopbackOnly   = errors.New("CLI enrollment only available over loopback")
 	ErrCLIEnrollmentAfterBootstrap = errors.New("CLI enrollment only available after bootstrap")
 	ErrDeviceEnrollmentInitialOnly = errors.New("device enrollment only available for initial setup")
 	ErrCLICSRRequired              = errors.New("cli_csr_pem is required")
@@ -965,8 +966,17 @@ var (
 	ErrCLISessionInvalid          = errors.New("invalid CLI session")
 	ErrCLICertBindingCheckFailed  = errors.New("CLI cert binding check failed")
 
+	// Stream errors
+	ErrStreamMarshalEvent = errors.New("failed to marshal stream event")
+
+	// Tribunal bootstrap errors
+	ErrTribunalBootstrapMissingFields = errors.New("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
+
 	// Agent harness errors
 	ErrHarnessNoScenarios = errors.New("no scenarios selected")
+
+	// Browser errors
+	ErrBrowserURLEmpty = errors.New("browser URL cannot be empty")
 
 	// CanonicalDB service errors
 	ErrTestKeystoreNil = errors.New("testKeystore must not be nil in test mode")

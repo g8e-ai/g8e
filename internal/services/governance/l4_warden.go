@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/system"
-	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -168,9 +168,7 @@ func NewFilesystemSignerStore(dir string, logger *slog.Logger) (*FilesystemSigne
 			continue
 		}
 
-		var pubKey ed25519.PublicKey
-		copy(pubKey, pubKeyBytes)
-		signers[keyID] = pubKey
+		signers[keyID] = ed25519.PublicKey(pubKeyBytes)
 		loadedCount++
 	}
 
@@ -230,7 +228,7 @@ func (s *SimpleStateRootProvider) GetCurrentStateRoot() (string, error) {
 
 // VerifiedTransaction represents a fully verified transaction ready for execution.
 type VerifiedTransaction struct {
-	Envelope       *governance.GovernanceEnvelope
+	Envelope       *govtypes.GovernanceEnvelope
 	ActionType     constants.ActionType
 	Payload        []byte
 	DecodedPayload proto.Message
@@ -308,7 +306,7 @@ func NewL4Warden(
 // 1. Stateless: Basic structural, hash, and L1 Doctrine checks that don't require external state.
 // 2. Stateful: Checks requiring external state (expiry, state root, and early nonce reservation).
 // 3. Posture: Governance posture-aware checks (L2 Consensus and L3 Notary proofs).
-func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *governance.GovernanceEnvelope) (*VerifiedTransaction, error) {
+func (tv *L4Warden) VerifyEnvelope(ctx context.Context, envelope *govtypes.GovernanceEnvelope) (*VerifiedTransaction, error) {
 	if envelope == nil {
 		return nil, constants.ErrTxInvalidEnvelope
 	}
@@ -438,7 +436,7 @@ func (tv *L4Warden) isMutation(actionType constants.ActionType) bool {
 }
 
 // verifyStateless performs basic structural, hash, and L1 Doctrine checks.
-func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (proto.Message, string, error) {
+func (tv *L4Warden) verifyStateless(envelope *govtypes.GovernanceEnvelope) (proto.Message, string, error) {
 	if envelope.Id == "" {
 		return nil, "", constants.ErrTxTransactionIDMissing
 	}
@@ -496,7 +494,7 @@ func (tv *L4Warden) verifyStateless(envelope *governance.GovernanceEnvelope) (pr
 }
 
 // verifyStateful checks state root. Nonce and expiry are checked earlier in VerifyEnvelope.
-func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (time.Time, error) {
+func (tv *L4Warden) verifyStateful(envelope *govtypes.GovernanceEnvelope) (time.Time, error) {
 	if envelope.StateMerkleRoot == "" {
 		return time.Time{}, constants.ErrTxStateRootRequired
 	}
@@ -532,7 +530,7 @@ func (tv *L4Warden) verifyStateful(envelope *governance.GovernanceEnvelope) (tim
 // human's approval bond is spent only on transactions that have already
 // cleared tribunal consensus. A human should never be asked to authorize
 // content the machines have not yet vetted.
-func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.GovernanceEnvelope, computedHash string) (bool, bool, error) {
+func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *govtypes.GovernanceEnvelope, computedHash string) (bool, bool, error) {
 	l2Valid, err := tv.verifyL2Posture(envelope, computedHash)
 	if err != nil {
 		return false, false, err
@@ -546,7 +544,7 @@ func (tv *L4Warden) verifyPosture(ctx context.Context, envelope *governance.Gove
 	return l2Valid, l3Valid, nil
 }
 
-func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, computedHash string) (bool, error) {
+func (tv *L4Warden) verifyL2Posture(envelope *govtypes.GovernanceEnvelope, computedHash string) (bool, error) {
 	if envelope.Governance == nil || envelope.Governance.L2 == nil || len(envelope.Governance.L2.Votes) == 0 {
 		if tv.posture.RequiresL2Signature() {
 			tv.logger.Error("L2 votes missing but required by posture", "posture", tv.posture.Name())
@@ -638,7 +636,7 @@ func (tv *L4Warden) verifyL2Posture(envelope *governance.GovernanceEnvelope, com
 	return true, nil
 }
 
-func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *governance.GovernanceEnvelope) (bool, error) {
+func (tv *L4Warden) verifyL3Posture(ctx context.Context, envelope *govtypes.GovernanceEnvelope) (bool, error) {
 	actionType := constants.ActionType(envelope.ActionType)
 
 	hasProof := envelope.Governance != nil && envelope.Governance.L3 != nil && envelope.Governance.L3.Proof != nil
@@ -734,8 +732,8 @@ func (tv *L4Warden) decodePayloadForAction(actionType constants.ActionType, payl
 }
 
 // computeTransactionHash computes the canonical transaction hash.
-func (tv *L4Warden) computeTransactionHash(envelope *governance.GovernanceEnvelope) (string, error) {
-	return governance.GenerateMessageID(envelope)
+func (tv *L4Warden) computeTransactionHash(envelope *govtypes.GovernanceEnvelope) (string, error) {
+	return govtypes.GenerateMessageID(envelope)
 }
 
 // verifyL2Signature verifies an L2 ED25519 signature.

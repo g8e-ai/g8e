@@ -1,7 +1,7 @@
 # CLI Reference
 
 Last Updated: 2026-07-02
-Version: v1.3.5
+Version: v1.3.6
 
 This reference documents the g8e CLI commands for managing the g8e Gateway, g8e Operator, and platform setup.
 
@@ -19,12 +19,13 @@ Available Commands:
   mcp              MCP protocol operations (stdio transport with full governance)
   operator         Manage Operator instances
   vault            Manage the encryption vault
-  test             Run test suites (unit, integration, e2e, lint, agent-harness, chaos)
+  test             Run test suites (unit, integration, e2e, lint, agent, chaos)
   demos            Manage g8e demo environments
   audit            Run audit reports for compliance
   report           Generate CSV evidence reports from all persistent stores
   swagger          Manage Swagger/OpenAPI documentation
   agent-harness    Universal agent harness for a real g8e Gateway/Operator
+  tui              Launch the Tactical Governance Console (TUI)
   help             Help about any command
 
 Flags:
@@ -204,7 +205,6 @@ Usage:
 Available Commands:
   enroll          Enroll CLI with the running Gateway and register a passkey
   logout          Clear local Operator session and credentials
-  enroll-windows  Enroll via Windows Certificate Store (Windows only - advanced)
   approve         Approve a suspended L3 transaction via browser WebAuthn
 
 Flags:
@@ -235,20 +235,6 @@ Flags:
   -h, --help   help for logout
 ```
 
-### auth enroll-windows
-```
-Generate an ECDSA P-256 keypair in the Windows Certificate Store, submit a CSR to the Gateway, and import the signed certificate. Chrome/Edge will automatically present this cert. Use --tpm for TPM-backed keys via Windows Hello for Business.
-
-NOTE: This is now handled automatically by './g8e auth enroll' on Windows. This command is for advanced use cases or manual re-enrollment.
-
-Usage:
-  g8e auth enroll-windows [flags]
-
-Flags:
-      --tpm   Use TPM-backed key via Windows Hello for Business
-  -h, --help   help for enroll-windows
-```
-
 ### auth approve
 ```
 Approve a suspended transaction by opening the gateway's browser-based approval page.
@@ -260,17 +246,6 @@ Usage:
 
 Flags:
   -h, --help   help for approve
-```
-
-### auth logout
-```
-Clear local Operator session and credentials
-
-Usage:
-  g8e auth logout [flags]
-
-Flags:
-  -h, --help   help for logout
 ```
 
 ### gateway data
@@ -983,7 +958,7 @@ Available Commands:
   reset       Clean and restart a demo environment
   rebuild     Rebuild Docker images and restart a demo environment
   run         Run demo scenarios
-  audit       View audit logs and ledger history for a demo environment
+  pull        Pre-pull all external images for air-gapped deployment
 
 Flags:
   -h, --help   help for demos
@@ -1105,34 +1080,33 @@ Available scenarios:
     3 - Resilient Disconnected Operations / Continuity of Coverage (LOE 2)
     4 - Governed Predictive Cueing (quorum vs veto) (LOE 3 & 4)
     5 - Sovereign Destruction + tamper-proof audit (LOE 2)
+  swarm: 1-3
+    1 - Authorized Recon Mission (Governed Drone Deployment)
+    2 - Weapons Safety Doctrine Block
+    3 - Navigation Boundary Violation Block
 
 Usage:
   g8e demos run <org> [scenario] [flags]
 
 Flags:
-  -h, --help   help for run
+      --tui              Launch tactical governance TUI overlay
+  -v, --verbose          Show step-by-step command output
+  -h, --help             help for run
 ```
 
-### demos audit
+### demos pull
 ```
-View audit logs and ledger history for a demo environment.
-Without an action, it prints a summary of available audit resources.
+Pre-pull all external images for air-gapped deployment
 
-Actions:
-  logs              Tail the observability logs
-  gateway-db        Open the gateway audit database (SQLite)
-  operator-db       Open the operator audit database (SQLite)
-  ledger-log        View the git ledger log
-  ledger-files      List all files in the git ledger
-  ledger-history <file> View git history for a specific file
-  ledger-show <hash> View a specific git commit diff
-  vault             Open the execution vault database (SQLite)
+Pulls all external Docker images listed in demos/images.json.
+This is the first step for air-gapped deployment: run this on a connected machine,
+then use demos/airgap.sh export to create a tar bundle for transfer.
 
 Usage:
-  g8e demos audit <org> [action] [flags]
+  g8e demos pull [flags]
 
 Flags:
-  -h, --help   help for audit
+  -h, --help   help for pull
 ```
 
 ## mcp

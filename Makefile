@@ -79,10 +79,12 @@ EXCLUDE_PKGS := \
 EXCLUDE_FILES := \
 	internal/cli/cmd/demos.go \
 	internal/cli/cmd/demo_dow.go \
+	internal/cli/cmd/demo_dhs.go \
 	internal/cli/cmd/demo_finance.go \
 	internal/cli/cmd/demo_gov.go \
 	internal/cli/cmd/demo_healthcare.go \
 	internal/cli/cmd/demo_secure_data.go \
+	internal/cli/cmd/demo_swarm.go \
 	internal/cli/cmd/mcp_backup.go
 
 # Grep chains derived from the lists above — do not edit directly.

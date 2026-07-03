@@ -309,7 +309,7 @@ func TestOperatorHandler_Handle_WriteError(t *testing.T) {
 	err := handler.Handle(context.Background(), record)
 
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "operator handler: write:")
+	assert.Contains(t, err.Error(), "logger: write:")
 }
 
 func TestOperatorHandler_Handle_VariousAttrTypes(t *testing.T) {
@@ -428,6 +428,36 @@ func TestOperatorHandler_WithGroup_PreservesLevelOutputAndAttrs(t *testing.T) {
 	assert.Same(t, &buf, oh.output)
 	assert.Len(t, oh.attrs, 1)
 	assert.Equal(t, "x", oh.attrs[0].Key)
+}
+
+func TestOperatorHandler_Handle_WithGroup(t *testing.T) {
+	var buf bytes.Buffer
+	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	grouped := handler.WithGroup("requests")
+
+	record := slog.NewRecord(time.Now(), slog.LevelInfo, "incoming", 0)
+	record.AddAttrs(slog.String("method", "GET"))
+	err := grouped.Handle(context.Background(), record)
+
+	require.NoError(t, err)
+	output := buf.String()
+	assert.Contains(t, output, "requests.method:")
+	assert.Contains(t, output, "GET")
+}
+
+func TestOperatorHandler_Handle_WithGroupChained(t *testing.T) {
+	var buf bytes.Buffer
+	handler := newOperatorHandler(&buf, slog.LevelInfo)
+	grouped := handler.WithGroup("svc").WithGroup("http")
+
+	record := slog.NewRecord(time.Now(), slog.LevelInfo, "req", 0)
+	record.AddAttrs(slog.Int("status", 200))
+	err := grouped.Handle(context.Background(), record)
+
+	require.NoError(t, err)
+	output := buf.String()
+	assert.Contains(t, output, "svc.http.status:")
+	assert.Contains(t, output, "200")
 }
 
 type failingWriter struct{}

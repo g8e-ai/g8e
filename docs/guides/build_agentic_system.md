@@ -5,8 +5,8 @@ parent: Guides
 
 # Building a g8e-Compliant Agentic System
 
-**Last Updated:** 2026-07-02  
-**Version:** v1.3.5
+**Last Updated:** 2026-07-03  
+**Version:** v1.3.6
 
 This guide documents the architecture, persona system, prompt design, memory model, and
 consensus cascade of a g8e-compliant agentic ensemble. It is the canonical reference for
@@ -613,8 +613,8 @@ The agentic system maps to g8e's protocol surface as follows:
 | Tool discovery | MCP `tools/list` | Gateway MCP handler |
 | Tool execution (read-only) | MCP `tools/call` | Gateway → Operator Actuator |
 | Command execution (mutating) | `GovernanceEnvelope` with `CommandRequested` payload | Gateway admission gauntlet |
-| L2 consensus signing | Ed25519 signature over `transaction_hash` | Tribunal key → Gateway L2 verifier |
-| L3 authorization | WebAuthn/passkey assertion or mTLS cert fingerprint | Gateway L3 approver |
+| L2 consensus signing | Ed25519 signature over `transaction_hash` and decision | Tribunal key → Gateway L2 verifier |
+| L3 authorization | WebAuthn passkey assertion or signed CLI proof | Gateway L3 approver |
 | Result delivery | Pub/Sub result envelope | Operator → Gateway → Ensemble |
 | Audit trail | Signed receipts + LFAA events | Operator Audit Vault |
 
@@ -639,7 +639,8 @@ sequence before any tool dispatch occurs. Each layer is independent and fail-clo
   strings, MCP arguments, A2A payloads, and file edit content.
 - **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. The
   `L4Warden` in `internal/services/governance/l4_warden.go` verifies each `L2Vote` signature
-  against the transaction hash and enforces quorum policy from the configured `TribunalPolicy`.
+  against the transaction hash and decision, and enforces quorum policy from the configured
+  `TribunalPolicy`.
 - **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey assertion or signed CLI
   proof. Mutations require L3 proof; the Gateway suspends execution and returns an approval
   URL when L3 is missing.
@@ -656,7 +657,7 @@ sequence before any tool dispatch occurs. Each layer is independent and fail-clo
 ### Agent Harness (Test Tool)
 
 g8e also ships an **Agent Harness** in `internal/tools/agent_harness/`, a Go-based test
-tool that exercises the protocol surface with simple `Persona` structs (ID + UserAgent).
+tool that exercises the protocol surface with simple `Persona` structs.
 It tests MCP, A2A, governance envelopes, tribunal quorum/veto, and notary OOB flows
 against a real Gateway and Operator. The Agent Harness is not a reasoning system; it
 validates protocol mechanics. The agentic system documented here is what you build on top
@@ -678,8 +679,8 @@ To build a g8e-compliant agentic system in any language:
    tools through your Tribunal.
 4. **Implement the Tribunal cascade**: 5-member generation, voting, round 2, warden,
    auditor, L1 re-validation, envelope wrap.
-5. **Sign envelopes**: Use Ed25519 to sign the `transaction_hash` with your L2 Tribunal
-   key. Register the public key as a trusted signer with the Gateway.
+5. **Sign envelopes**: Use Ed25519 to sign the `transaction_hash` and decision with your L2
+   Tribunal key. Register the public key as a trusted signer with the Gateway.
 6. **Submit over mTLS**: Send the signed `GovernanceEnvelope` to the Gateway's admission
    endpoint. The Gateway and Operator independently re-verify everything.
 7. **Handle results**: Receive pub/sub result envelopes, scrub output, feed back into the

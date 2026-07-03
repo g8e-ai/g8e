@@ -36,13 +36,13 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govpkg "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/uuid"
-	govpkg "github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -157,9 +157,9 @@ type Dependencies struct {
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	// Validate posture parameter
 	validPostures := map[string]bool{
-		"doctrine":  true,
-		"consensus": true,
-		"notary":    true,
+		constants.PostureDoctrine:  true,
+		constants.PostureConsensus: true,
+		constants.PostureNotary:    true,
 	}
 	if deps.Posture != "" && !validPostures[deps.Posture] {
 		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)

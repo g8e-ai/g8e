@@ -21,6 +21,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // mockBrowserCommandExecutor is a mock implementation of browserCommandExecutor for testing.
@@ -49,8 +51,7 @@ func TestOpenBrowser(t *testing.T) {
 		}
 		err := openBrowserWithExecutor("", mock)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to open browser")
-		assert.Contains(t, err.Error(), "URL cannot be empty")
+		assert.ErrorIs(t, err, constants.ErrBrowserURLEmpty)
 		assert.Equal(t, 0, mock.callCount, "executor should not be called for empty URL")
 	})
 
@@ -151,8 +152,8 @@ func TestOpenBrowser(t *testing.T) {
 		urlStr := "https://example.com"
 		err := openBrowserWithExecutor(urlStr, mock)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to open browser")
-		assert.Contains(t, err.Error(), expectedErr.Error())
+		assert.Contains(t, err.Error(), "platform: start browser")
+		assert.ErrorIs(t, err, expectedErr)
 	})
 
 	t.Run("wraps executor error with context", func(t *testing.T) {
@@ -165,7 +166,7 @@ func TestOpenBrowser(t *testing.T) {
 		urlStr := "https://example.com"
 		err := openBrowserWithExecutor(urlStr, mock)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to open browser")
+		assert.Contains(t, err.Error(), "platform: start browser")
 	})
 
 	t.Run("handles URL with special characters", func(t *testing.T) {

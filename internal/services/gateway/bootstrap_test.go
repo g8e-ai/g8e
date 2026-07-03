@@ -84,7 +84,7 @@ func TestBootstrapFlow(t *testing.T) {
 	body, err := json.Marshal(bootstrapBody)
 	require.NoError(t, err)
 	req = httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(body))
-	req.RemoteAddr = "127.0.0.1:12345" // Simulate loopback
+	req.RemoteAddr = "127.0.0.1:12345"
 	rr = httptest.NewRecorder()
 	h.authController.handleLocalBootstrapWithURL(rr, req)
 	require.Equal(t, http.StatusCreated, rr.Code, "Bootstrap failed: %s", rr.Body.String())

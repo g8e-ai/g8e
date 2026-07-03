@@ -62,7 +62,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "enrollment check",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"test", "-f", "/root/.g8e/pki/operator.crt",
+			"test", "-f", constants.ContainerOperatorCert,
 		); err != nil {
 			fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
 			fmt.Println()
@@ -71,7 +71,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 
 		demoPrintln("  ── Step 3: Confirm cross-cue doctrine is loaded ────────────────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosDoWDoctrineFile, "unauthorized_cross_cue"); err == nil {
-			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 unauthorized_cross_cue\n", constants.DemosDoWDoctrineFile)
+			demoPrintf("  $ cat %s/%s | grep -A 10 unauthorized_cross_cue\n", constants.ContainerDoctrineDir, constants.DemosDoWDoctrineFile)
 			demoPrintf("  id:         %s\n", rule.ID)
 			demoPrintf("  severity:   %s\n", rule.Severity)
 			demoPrintf("  confidence: %.2f\n", rule.Confidence)
@@ -87,7 +87,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "tactical environment",
 			false,
 			"docker", "compose", "exec", "-T", "agent-eoir",
-			"python3", "/app/inspect_rf.py",
+			"python3", constants.ContainerInspectRFPy,
 		); err != nil {
 			hasErrors = true
 		}
@@ -95,7 +95,6 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoPrintln("  ── Step 5: Run real g8e cross-cue (governed envelope → L2 → L5) ──")
 		hcfg := defaultHarnessConfig("agent-sigint")
 		hcfg.UseRun = true
-		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "dow-cross-cue via agent",
 			false,
 			harnessRun("dow-cross-cue", hcfg)...,
@@ -109,7 +108,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "gimbal slew verification",
 			false,
 			"docker", "compose", "exec", "-T", "gimbal",
-			"python3", "/app/verify_slews.py",
+			"python3", constants.ContainerVerifySlewsPy,
 		); err != nil {
 			fmt.Println("  (gimbal did not record any slew — L5 actuation may have failed)")
 			fmt.Println()
@@ -117,8 +116,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		demoPrintln("  ── Step 7: Verify SWaP constraints (governance overhead) ───────")
-		_ = demoStep(demoDir, "swap verification",
-			false,
+		demoStepWarn(demoDir, "swap verification",
 			"docker", "stats", "--no-stream",
 			"--format", "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}",
 			"dow-gateway", "dow-operator",
@@ -168,7 +166,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "enrollment check",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"test", "-f", "/root/.g8e/pki/operator.crt",
+			"test", "-f", constants.ContainerOperatorCert,
 		); err != nil {
 			fmt.Println("  (operator cert not found — operator may not have enrolled correctly)")
 			fmt.Println()
@@ -179,14 +177,14 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "pnt sources",
 			false,
 			"docker", "compose", "exec", "-T", "agent-pnt-fusion",
-			"python3", "/app/inspect_pnt.py",
+			"python3", constants.ContainerInspectPNTPy,
 		); err != nil {
 			hasErrors = true
 		}
 
 		demoPrintln("  ── Step 4: Confirm spoofing detection doctrine is loaded ───────")
 		if rule, err := readDoctrineRule(demoDir, constants.DemosDoWDoctrineFile, "pnt_diversion_detected"); err == nil {
-			demoPrintf("  $ cat /etc/g8e/doctrine/%s | grep -A 10 pnt_diversion_detected\n", constants.DemosDoWDoctrineFile)
+			demoPrintf("  $ cat %s/%s | grep -A 10 pnt_diversion_detected\n", constants.ContainerDoctrineDir, constants.DemosDoWDoctrineFile)
 			demoPrintf("  id:         %s\n", rule.ID)
 			demoPrintf("  severity:   %s\n", rule.Severity)
 			demoPrintf("  confidence: %.2f\n", rule.Confidence)
@@ -201,7 +199,6 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoPrintln("  ── Step 5: Run BFT veto via agent-harness (spoofed GNSS) ───────")
 		hcfg := defaultHarnessConfig("agent-sigint")
 		hcfg.UseRun = true
-		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "dow-bft-veto via agent",
 			false,
 			harnessRun("dow-bft-veto", hcfg)...,
@@ -216,8 +213,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoPrintln("  local state root. A failed L2 consensus causes the operator to")
 		demoPrintln("  reject the mutation and fail closed — the drone is not hijacked.")
 		demoPrintln()
-		_ = demoStep(demoDir, "operator health",
-			false,
+		demoStepWarn(demoDir, "operator health",
 			"docker", "compose", "logs", "operator", "--tail", "10",
 		)
 
@@ -263,8 +259,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoPrintln("  Simulating comms-denied environment by disconnecting ground-station")
 		demoPrintln("  from net_perimeter:")
 		demoPrintln()
-		_ = demoStep(demoDir, "sever datalink",
-			false,
+		demoStepWarn(demoDir, "sever datalink",
 			"docker", "network", "disconnect", "dow-demo_net_perimeter", "dow-ground-station",
 		)
 
@@ -286,7 +281,6 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-sigint")
 		hcfg.UseRun = true
-		hcfg.PublicURL = "http://g8e.local:8080"
 		if err := demoStep(demoDir, "dow-cross-cue while disconnected",
 			false,
 			harnessRun("dow-cross-cue", hcfg)...,
@@ -300,7 +294,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "local ledger",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la /root/.g8e/data/ledger/files/ 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
+			"sh", "-c", "ls -la "+constants.ContainerLedgerFilesDir+" 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
 		); err != nil {
 			fmt.Println("  (ledger directory not found — no file mutations have been recorded)")
 			fmt.Println()
@@ -311,7 +305,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "audit vault",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la /root/.g8e/data/g8e.db 2>/dev/null || echo 'Audit vault DB not yet populated'",
+			"sh", "-c", "ls -la "+constants.ContainerAuditVaultDB+" 2>/dev/null || echo 'Audit vault DB not yet populated'",
 		); err != nil {
 			fmt.Println("  (audit vault DB not found — no audit events have been recorded)")
 			fmt.Println()
@@ -319,8 +313,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		}
 
 		demoPrintln("  ── Step 7: Restore the tactical datalink ────────────────────────")
-		_ = demoStep(demoDir, "restore datalink",
-			false,
+		demoStepWarn(demoDir, "restore datalink",
 			"docker", "network", "connect", "dow-demo_net_perimeter", "dow-ground-station",
 		)
 

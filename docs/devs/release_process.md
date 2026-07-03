@@ -104,7 +104,15 @@ The release notes file should mirror the CHANGELOG entry but can be more detaile
 
 ### C. Documentation with Version / Date Headers
 
-Every markdown file below carries a version and/or `Last Updated` header near the top. **Update every present header** to the new version and release date.
+Every markdown file below carries a version and/or `Last Updated` header near the top. **Only update headers in docs that were actually reviewed or modified as part of this release.** Do not blanket-bump all headers at release time — a doc whose content hasn't changed should not get a new version stamp.
+
+To determine which docs need header updates, diff the release range:
+
+```bash
+git diff --name-only <previous-tag>..HEAD -- docs/ protocol/docs/
+```
+
+Any file in the output that carries a version/date header should have that header updated to the new version and release date. Files not in the output are left as-is.
 
 > **Header formats vary** — they are not uniform across the repo. The [Verification](#verification) grep is written to catch all of them, but when editing by hand watch for:
 >
@@ -158,7 +166,7 @@ Every markdown file below carries a version and/or `Last Updated` header near th
 | 27 | `protocol/docs/a2a.md` | `Last Updated:` only — update the date |
 | 28 | `protocol/docs/mcp.md` | `Last Updated:` only — update the date |
 
-#### Update Pattern for Each Doc
+#### Update Pattern for Each Modified Doc
 
 For plain-format files, update the two header lines:
 
@@ -170,6 +178,8 @@ For plain-format files, update the two header lines:
 ```
 
 For bold-format and date-only files, update whichever of `Version`, `Document Version`, and `Last Updated` lines are present, preserving the existing markdown styling.
+
+> **Only update docs you actually reviewed.** If a doc's content didn't change in this release, leave its headers at the previous version. This keeps version stamps meaningful — they reflect the last time a human reviewed and updated the doc, not the last release tag.
 
 ### D. Docs Without Version Headers (No Version Update Required)
 
@@ -222,16 +232,10 @@ When preparing a release, work through this checklist in order:
 - [ ] **3. `protocol/python/pyproject.toml`** — Set `version = "X.Y.Z"` (no `v` prefix)
 - [ ] **4. `protocol/python/g8e/__init__.py`** — Set `__version__ = "X.Y.Z"` (must match item 3)
 - [ ] **5. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
-- [ ] **6–13. Architecture docs** — Update headers in all 8 files under `docs/architecture/`
-- [ ] **14–23. Guide docs** — Update headers in all 10 files under `docs/guides/` (note: `build_agentic_system.md` uses **bold** headers)
-- [ ] **24. `docs/reference/glossary.md`** — Update `Version:` and `Last Updated:`
-- [ ] **25. `docs/reference/compliance-alignment.md`** — Update `**Document Version:**` and `**Last Updated:**` (no `v` prefix)
-- [ ] **26. `protocol/docs/spec.md`** — Update `Version:` and `Last Updated:`
-- [ ] **27. `protocol/docs/a2a.md`** — Update `Last Updated:`
-- [ ] **28. `protocol/docs/mcp.md`** — Update `Last Updated:`
+- [ ] **6–28. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
 - [ ] **Content review** — Complete the [Content Accuracy Review](#content-accuracy-review)
 
-**Total: 28 version-bearing files to update on every release**, plus a content review of any docs affected by code changes.
+**Total: 5 core files to update on every release** (VERSION, CHANGELOG, Python package ×2, release notes), plus version/date header updates **only in docs actually modified** in the release, plus a content review of any docs affected by code changes.
 
 ---
 
@@ -258,18 +262,22 @@ grep -n '^version' protocol/python/pyproject.toml
 grep -n '__version__' protocol/python/g8e/__init__.py
 
 # 5. Find any doc version header (plain, bold, or "Document Version") NOT on the new
-#    version — should return nothing. Anchored to line start to skip prose mentions of
-#    "version"; release_notes excluded (historical entries are immutable).
+#    version — should return nothing for docs modified in this release. Docs NOT modified
+#    are expected to still show the old version (that's the point). To check only modified
+#    docs, pipe the git diff list:
+#      git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/ | xargs grep -niE '^(\*\*)?(document )?version:'
+#    and verify each shows the new version. Unmodified docs are expected to lag.
 grep -rniE '^(\*\*)?(document )?version:' docs/ protocol/docs/ --include='*.md' --exclude-dir=release_notes \
   | grep -viE "v?${RELEASE_NUM}([^0-9]|$)"
 
 # 6. Find any "Last Updated" header not on the release date — should return nothing,
-#    or only intentional entries (e.g., docs/devs/ docs on their own cadence).
+#    or only intentional entries (e.g., docs/devs/ docs on their own cadence, or docs
+#    not modified in this release which are expected to keep their old date).
 grep -rniE '^(\*\*)?last updated:' docs/ protocol/docs/ --include='*.md' --exclude-dir=release_notes \
   | grep -v "$RELEASE_DATE"
 ```
 
-If steps 5 or 6 return unexpected results, those files still carry an old version or date — update them before proceeding. If step 4 shows a mismatch between the two Python files, reconcile them.
+If step 4 shows a mismatch between the two Python files, reconcile them. Steps 5 and 6 will show old versions/dates for docs not modified in this release — that is expected and correct. Only investigate results for docs that *were* modified in this release (per the git diff).
 
 ---
 

@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -63,7 +64,12 @@ func TestOperatorCpCmdExecution(t *testing.T) {
 
 func TestOperatorRunCmdFlags(t *testing.T) {
 	t.Run("run command has all expected flags", func(t *testing.T) {
+		root := &cobra.Command{Use: "g8e"}
+		root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint")
 		cmd := operatorRunCmd()
+		root.AddCommand(cmd)
+		_ = cmd.ParseFlags([]string{})
+
 		expectedFlags := []string{
 			"endpoint", "key", "cert", "trust-bundle", "working-dir",
 			"cloud", "provider", "execution-vault", "no-git", "log", "heartbeat-interval",
@@ -75,7 +81,12 @@ func TestOperatorRunCmdFlags(t *testing.T) {
 	})
 
 	t.Run("run command endpoint has shorthand 'e'", func(t *testing.T) {
+		root := &cobra.Command{Use: "g8e"}
+		root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint")
 		cmd := operatorRunCmd()
+		root.AddCommand(cmd)
+		_ = cmd.ParseFlags([]string{})
+
 		flag := cmd.Flags().ShorthandLookup("e")
 		assert.NotNil(t, flag)
 	})

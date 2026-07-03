@@ -22,9 +22,9 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/testutil"
-	"github.com/g8e-ai/g8e/pkg/governance"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -227,12 +227,12 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 
 	payload := typedPayload(t, constants.ActionTypeFsList)
 
-	buildEnv := func(nonceTag, tribunalID string, votes []*commonv1.L2Vote) *governance.GovernanceEnvelope {
+	buildEnv := func(nonceTag, tribunalID string, votes []*commonv1.L2Vote) *govtypes.GovernanceEnvelope {
 		nonceSuffix := hex.EncodeToString(payload)
 		if len(nonceSuffix) > 8 {
 			nonceSuffix = nonceSuffix[:8]
 		}
-		env := &governance.GovernanceEnvelope{
+		env := &govtypes.GovernanceEnvelope{
 			ProtocolVersion:   "1.0",
 			Timestamp:         timestamppb.Now(),
 			ExpiresAt:         timestamppb.New(time.Now().UTC().Add(time.Hour)),
@@ -245,7 +245,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 			StateMerkleRoot:   "root-1",
 			Nonce:             "nonce-quorum-" + nonceTag + "-" + nonceSuffix,
 		}
-		hash, err := governance.GenerateMessageID(env)
+		hash, err := govtypes.GenerateMessageID(env)
 		if err != nil {
 			t.Fatalf("failed to generate hash: %v", err)
 		}
@@ -279,14 +279,14 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 	tests := []struct {
 		name     string
 		verifier *L4Warden
-		env      *governance.GovernanceEnvelope
+		env      *govtypes.GovernanceEnvelope
 		wantErr  error
 		wantL2   bool
 	}{
 		{
 			name:     "2-of-2 quorum pass",
 			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
+			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("2of2pass", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
@@ -301,7 +301,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		{
 			name:     "1 valid of quorum-2 fails",
 			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
+			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("1of2fail", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
@@ -315,7 +315,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		{
 			name:     "duplicate signer with require_distinct",
 			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
+			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("dupsign", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
@@ -330,7 +330,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		{
 			name:     "false vote does not count toward quorum",
 			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
+			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("falsevote", "trib-1", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
@@ -345,7 +345,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		{
 			name:     "unknown signer ignored, quorum-1 passes",
 			verifier: makeVerifier(partialSigners, map[string]*models.TribunalPolicy{"trib-2": enabledTribunal1of2}),
-			env: func() *governance.GovernanceEnvelope {
+			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("unknownsigner", "trib-2", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
@@ -367,7 +367,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		{
 			name:     "disabled tribunal policy",
 			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-disabled": disabledTribunal}),
-			env: func() *governance.GovernanceEnvelope {
+			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("disabledtrib", "trib-disabled", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{
@@ -382,7 +382,7 @@ func TestL4Warden_L2QuorumVerification(t *testing.T) {
 		{
 			name:     "unknown tribunal ID",
 			verifier: makeVerifier(allSigners, map[string]*models.TribunalPolicy{"trib-1": enabledTribunal2of2}),
-			env: func() *governance.GovernanceEnvelope {
+			env: func() *govtypes.GovernanceEnvelope {
 				env := buildEnv("unknowntrib", "nonexistent-trib", nil)
 				hash := env.TransactionHash
 				env.Governance.L2.Votes = []*commonv1.L2Vote{

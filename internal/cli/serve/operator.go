@@ -191,7 +191,7 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			CaCertPath:        paths.Infra.CaCertPath,
 			TrustedSignersDir: paths.Infra.TrustedSignersDir,
 		}
-		sessionID, err := PerformAutomaticEnrollment(opts.Endpoint, opts.LaunchDir, certPaths, logger)
+		sessionID, err := PerformAutomaticEnrollment(context.Background(), opts.Endpoint, certPaths, logger)
 		if err != nil {
 			logger.Error("Automatic enrollment failed", string(constants.ConnectionStateError), err)
 			fmt.Fprintf(os.Stderr, "Automatic enrollment failed: %v\n", err)

@@ -97,8 +97,8 @@ Each demo uses its own `compose.yml` file with isolated networks, volumes, and d
 ### Port Mapping
 
 The gateway exposes two primary ports:
-- **8080**: HTTP for bootstrap, MCP, and health checks.
-- **8443**: HTTPS for mTLS API and administrative interface.
+- **8080**: HTTP for bootstrap, health checks, and catch-all redirect to HTTPS.
+- **8443**: HTTPS for MCP, A2A, governance envelopes, document store, WebSocket pub/sub, and console SPA.
 
 Custom ports are configured via CLI flags or environment variables:
 

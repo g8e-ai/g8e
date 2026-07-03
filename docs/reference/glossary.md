@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -133,7 +133,7 @@ The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony a
 
 ## L4 Warden (L4Warden)
 
-The fail-closed transaction verification gate in the g8e Operator that enforces L1/L2/L3 governance before any execution. The Warden performs:
+The fail-closed transaction verification gate in the g8e Gateway that enforces L1/L2/L3 governance before any execution. The Warden performs:
 - Envelope integrity and decoding validation
 - Typed payload validation and action type matching
 - L1 forbidden pattern validation via L1Doctrine
@@ -142,7 +142,6 @@ The fail-closed transaction verification gate in the g8e Operator that enforces 
 - State root matching
 - L2 signature verification (when required by posture)
 - L3 Notary proof verification (when required by posture)
-- App policy enforcement for external apps (fail-closed: apps without an active policy receive deny-all)
 The Warden rejects transactions that fail any check; only verified transactions proceed to the L5 Actuator for execution.
 
 ---
@@ -197,7 +196,7 @@ The cryptographic infrastructure managed by the g8e Gateway for issuing and revo
 
 ## Replay Protection
 
-Security mechanisms that prevent captured requests from being replayed by attackers. Implemented through nonce tracking in the g8e Operator's replay store, timestamp validation (expiry), and transaction hash verification. The L4 Warden checks nonce uniqueness before accepting any transaction.
+Security mechanisms that prevent captured requests from being replayed by attackers. Implemented through nonce tracking in the g8e Gateway's replay store, timestamp validation (expiry), and transaction hash verification. The L4 Warden checks nonce uniqueness before accepting any transaction.
 
 ---
 

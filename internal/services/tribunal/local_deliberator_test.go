@@ -25,8 +25,8 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/governance"
 	govsvc "github.com/g8e-ai/g8e/internal/services/governance"
-	"github.com/g8e-ai/g8e/pkg/governance"
 )
 
 // TestLocalDeliberator_HappyPath verifies that LocalDeliberator correctly

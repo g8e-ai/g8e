@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
+	govtypes "github.com/g8e-ai/g8e/internal/governance"
 	"github.com/g8e-ai/g8e/internal/marshaler"
 	"github.com/g8e-ai/g8e/internal/models"
 	execution "github.com/g8e-ai/g8e/internal/services/execution"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
-	"github.com/g8e-ai/g8e/pkg/governance"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 )
 
@@ -294,7 +294,7 @@ func (w *L5Actuator) signReceipt(r *operatorv1.ActionReceipt) (string, error) {
 }
 
 // LogReceipt records the signed action receipt in the audit store and console_audit.
-func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) LogReceipt(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	docErr := w.logReceiptDocument(env, r)
 
 	if w.SQLAuditStore == nil {
@@ -333,7 +333,7 @@ func (w *L5Actuator) LogReceipt(env *governance.GovernanceEnvelope, r *operatorv
 	return docErr
 }
 
-func (w *L5Actuator) logReceiptDocument(env *governance.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
+func (w *L5Actuator) logReceiptDocument(env *govtypes.GovernanceEnvelope, r *operatorv1.ActionReceipt) error {
 	if w.ConsoleAuditStore == nil || env == nil {
 		return nil
 	}

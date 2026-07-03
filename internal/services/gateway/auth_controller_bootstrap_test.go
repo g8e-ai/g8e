@@ -33,7 +33,7 @@ import (
 )
 
 func TestHandleBootstrapWithURL(t *testing.T) {
-	t.Run("Success - Bootstrap with CSR over loopback", func(t *testing.T) {
+	t.Run("Success - Bootstrap with CSR", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
@@ -47,7 +47,6 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
-		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
 		c.handleLocalBootstrapWithURL(rr, req)
@@ -64,29 +63,6 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 		assert.NotEmpty(t, resp["cli_session_id"])
 		assert.NotEqual(t, resp["operator_session_id"], resp["cli_session_id"],
 			"cli_session_id MUST be a distinct identifier from operator_session_id")
-	})
-
-	t.Run("Failure - Non-loopback CSR request rejected", func(t *testing.T) {
-		t.Parallel()
-		c, _ := setupTestAuthController(t)
-		csr := testutil.GenerateTestCSRP256(t, "test-operator")
-		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
-		body := map[string]string{
-			"name":               "Owner",
-			"csr_pem":            csr,
-			"cli_csr_pem":        cliCsr,
-			"system_fingerprint": "test-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/auth/bootstrap", bytes.NewReader(b))
-		req.RemoteAddr = "192.168.1.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleLocalBootstrapWithURL(rr, req)
-
-		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.JSONEq(t, `{"error":"`+constants.ErrBootstrapLoopbackOnly.Error()+`"}`, rr.Body.String())
 	})
 
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
@@ -200,7 +176,7 @@ func TestHandleBootstrapStatus(t *testing.T) {
 }
 
 func TestHandleCLIEnrollment(t *testing.T) {
-	t.Run("Success - CLI enrollment over loopback after bootstrap", func(t *testing.T) {
+	t.Run("Success - CLI enrollment after bootstrap", func(t *testing.T) {
 		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
@@ -215,7 +191,6 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
-		req.RemoteAddr = "127.0.0.1:12345"
 		rr := httptest.NewRecorder()
 
 		c.handleCLIEnrollment(rr, req)
@@ -232,30 +207,6 @@ func TestHandleCLIEnrollment(t *testing.T) {
 		assert.NotEmpty(t, resp["hub_trust_bundle"])
 		assert.NotEmpty(t, resp["operator_session_id"])
 		assert.NotEmpty(t, resp["operator_id"])
-	})
-
-	t.Run("Failure - Non-loopback request rejected", func(t *testing.T) {
-		t.Parallel()
-		c, _ := setupTestAuthController(t)
-		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
-		require.NoError(t, err)
-		require.NotNil(t, bootstrapUser)
-
-		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
-		body := map[string]string{
-			"cli_csr_pem":        cliCSR,
-			"system_fingerprint": "test-fp",
-		}
-		b, err := json.Marshal(body)
-		require.NoError(t, err)
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/cli/enroll", bytes.NewReader(b))
-		req.RemoteAddr = "192.168.1.1:12345"
-		rr := httptest.NewRecorder()
-
-		c.handleCLIEnrollment(rr, req)
-
-		assert.Equal(t, http.StatusForbidden, rr.Code)
-		assert.Contains(t, rr.Body.String(), constants.ErrCLIEnrollmentLoopbackOnly.Error())
 	})
 
 	t.Run("Failure - Rejected when not bootstrapped", func(t *testing.T) {

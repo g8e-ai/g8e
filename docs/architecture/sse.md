@@ -4,8 +4,8 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-03
+Version: v1.3.6
 
 The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
 
@@ -130,7 +130,7 @@ Unset routing fields are omitted from the JSON response (the `SSEEventRow` model
 **Behavior**:
 1. Reads auth identity from request context (set by unified auth middleware).
 2. Validates authorization for the requested route via `authorizeSSERoute` helper:
-   - **mTLS path**: Operator session ownership checks (operator owns the requested `web_session_id` / `cli_session_id` / `user_id`).
+   - **mTLS path**: Operator session ownership checks (operator owns the requested `web_session_id` / `cli_session_id` / `user_id`), or CLI user ownership for `cli_session_id` when using CLI mTLS auth.
    - **Cookie path**: Web session ID must match context; for `cli_session_id`, verifies `cliSess.UserID == userID` from context; for `user_id`, verifies `route.UserID == userID` from context.
 3. Queries `sse_events` table for events matching route and `since_id`.
 4. Returns ordered list (ascending by ID).
@@ -139,7 +139,7 @@ Unset routing fields are omitted from the JSON response (the `SSEEventRow` model
 
 ### GET /api/v1/sse/stream
 
-**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used (stronger auth takes precedence); otherwise, the `g8e_session` cookie is validated. Both auth paths stamp the request context with identity values (`ContextKeyOperatorSessionID` for mTLS, `ContextKeyWebSessionID` + `ContextKeyUserID` for cookie) that the SSE handlers use for authorization.
+**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used (stronger auth takes precedence); otherwise, the `g8e_session` cookie is validated. Both auth paths stamp the request context with identity values that the SSE handlers use for authorization. Operator mTLS stamps `ContextKeyOperatorSessionID`; CLI mTLS stamps `ContextKeyUserID` without `ContextKeyOperatorSessionID`; cookie auth stamps `ContextKeyWebSessionID` + `ContextKeyUserID`.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session
@@ -244,7 +244,7 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 - SSE consumer endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) support dual auth: mTLS with an authenticated Operator session (CLI/operator) OR web session cookie (browser). The `RouteAuthRegistry` classifies these routes as `RouteAuthDual`.
 - When both a client certificate and cookie are present, mTLS takes precedence (stronger auth).
 - Authorization is enforced via the `authorizeSSERoute` helper, which reads identity from request context (stamped by the unified auth middleware):
-  - **mTLS path** (Operator session): For `web_session_id`, must own the web session. For `cli_session_id`, must own the CLI session. For `user_id`, must be the user.
+  - **mTLS path** (Operator or CLI session): For `web_session_id`, the Operator session must own the web session. For `cli_session_id`, the Operator session must own the CLI session, or the CLI user must match. For `user_id`, the Operator must belong to the user.
   - **Cookie path** (web session): For `web_session_id`, must match the authenticated session. For `cli_session_id`, verifies `cliSess.UserID == userID` from context. For `user_id`, verifies `route.UserID == userID` from context.
 - SSE handlers never extract auth identity from raw TLS state directly; they read from context values stamped by the middleware.
 - Multi-tenant isolation is enforced at the database query level.

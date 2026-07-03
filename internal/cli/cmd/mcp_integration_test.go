@@ -16,6 +16,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -80,7 +81,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 		l3ApprovalPollInterval = 1 * time.Millisecond
 		defer func() { l3ApprovalPollInterval = originalInterval }()
 
-		resp, err := proxySessionToGatewayWithRetry(conn, req, nil)
+		resp, err := proxySessionToGatewayWithRetryContext(context.Background(), conn, req, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 2, attempts)
 		assert.Equal(t, "success", resp.Result.(map[string]interface{})["status"])
@@ -131,7 +132,7 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 			l3ApprovalMaxIterations = originalMaxIterations
 		}()
 
-		resp, err := proxySessionToGatewayWithRetry(conn, req, nil)
+		resp, err := proxySessionToGatewayWithRetryContext(context.Background(), conn, req, nil)
 		require.NoError(t, err)
 		assert.True(t, isL3ApprovalResponse(resp))
 		// 1 initial + 2 retries = 3

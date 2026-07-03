@@ -13,7 +13,11 @@
 
 package tui
 
-import "time"
+import (
+	"time"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+)
 
 // PipelineStage identifies a layer in the 5-layer verification gauntlet.
 type PipelineStage int
@@ -89,7 +93,7 @@ func (l LedgerLevel) Tag() string {
 	case LevelCritical:
 		return "[CRIT]"
 	default:
-		return "[????]"
+		return "[UNKNOWN]"
 	}
 }
 
@@ -132,7 +136,7 @@ type LedgerMsg struct {
 
 // ConsensusMsg updates the tribunal voting status.
 type ConsensusMsg struct {
-	Member   string
+	Member   constants.TribunalMember
 	Decision bool
 	Signed   bool
 	Quorum   int
@@ -196,7 +200,7 @@ type ledgerEntry struct {
 
 // tribunalMemberState is the per-member state in the tribunal pane.
 type tribunalMemberState struct {
-	name     string
+	name     constants.TribunalMember
 	decision bool
 	signed   bool
 }

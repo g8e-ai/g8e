@@ -31,8 +31,9 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-// GenerateWindowsCSR generates a CSR using Windows CNG APIs.
-// If useTPM is true, the key is generated in the TPM via Windows Hello for Business.
+// GenerateWindowsCSR generates a CSR with an ECDSA P-256 key on Windows.
+// If useTPM is true, the caller requests TPM-backed key generation; TPM support
+// is not yet implemented and a software-backed key is used in its place.
 func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateKey, error) {
 	if useTPM {
 		return generateTPMBackedCSR(commonName)
@@ -40,52 +41,23 @@ func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateK
 	return generateSoftwareBackedCSR(commonName)
 }
 
-// generateSoftwareBackedCSR generates a CSR with a software-backed key in Windows cert store.
+// generateSoftwareBackedCSR generates a CSR with a software-backed ECDSA P-256 key.
 func generateSoftwareBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
-	// For software-backed keys, we use standard Go crypto but import to Windows cert store
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
-	}
-
-	template := x509.CertificateRequest{
-		Subject: pkix.Name{
-			CommonName:   commonName,
-			Organization: []string{"g8e"},
-		},
-		SignatureAlgorithm: x509.ECDSAWithSHA256,
-		DNSNames:           []string{"localhost", "g8e.local"},
-		ExtraExtensions: []pkix.Extension{
-			{
-				Id:       []int{2, 5, 29, 37}, // Extended Key Usage
-				Critical: false,
-				Value:    []byte{0x30, 0x14, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01}, // Client Auth + Server Auth OIDs
-			},
-		},
-	}
-
-	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
-	if err != nil {
-		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
-	}
-
-	csrPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "CERTIFICATE REQUEST",
-		Bytes: csrBytes,
-	})
-
-	return string(csrPEM), privKey, nil
+	return generateECDSACSR(commonName)
 }
 
-// generateTPMBackedCSR generates a CSR with a TPM-backed key via Windows Hello for Business.
-// This uses the Microsoft Platform Crypto Provider KSP.
+// generateTPMBackedCSR generates a CSR with a software-backed ECDSA P-256 key.
+// TPM-backed key generation via Windows Hello for Business (CNG KSP) is not yet
+// implemented; this function delegates to the same software-backed path.
 func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
-	// Windows Hello for Business requires CNG API calls
-	// For now, fall back to software key with TPM annotation
-	// Full implementation requires syscall access to CNG APIs
+	return generateECDSACSR(commonName)
+}
+
+// generateECDSACSR generates a CSR with an ECDSA P-256 key, Client Auth + Server Auth EKU.
+func generateECDSACSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
+		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	template := x509.CertificateRequest{
@@ -97,16 +69,16 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 		DNSNames:           []string{"localhost", "g8e.local"},
 		ExtraExtensions: []pkix.Extension{
 			{
-				Id:       []int{2, 5, 29, 37}, // Extended Key Usage
+				Id:       []int{2, 5, 29, 37},
 				Critical: false,
-				Value:    []byte{0x30, 0x14, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01}, // Client Auth + Server Auth OIDs
+				Value:    []byte{0x30, 0x14, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x02, 0x06, 0x08, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x07, 0x03, 0x01},
 			},
 		},
 	}
 
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &template, privKey)
 	if err != nil {
-		return "", nil, fmt.Errorf("%w: %v", constants.ErrCSRGenerationFailed, err)
+		return "", nil, fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
 	csrPEM := pem.EncodeToMemory(&pem.Block{
@@ -120,15 +92,15 @@ func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) 
 // ImportCertificateToWindowsStore imports a signed certificate into the Windows Personal store.
 func ImportCertificateToWindowsStore(certPEM string) error {
 	// Create a temporary file for the certificate
-	tmpDir, err := os.MkdirTemp("", "g8e-cert-import-*")
+	tmpDir, err := os.MkdirTemp("", constants.WindowsTempCertImportPrefix)
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrWindowsTempDirCreate, err)
+		return fmt.Errorf("%w: %w", constants.ErrWindowsTempDirCreate, err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	certFile := filepath.Join(tmpDir, "certificate.pem")
-	if err := os.WriteFile(certFile, []byte(certPEM), 0600); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrWindowsCertWriteFailed, err)
+	certFile := filepath.Join(tmpDir, constants.WindowsTempCertFilename)
+	if err := os.WriteFile(certFile, []byte(certPEM), constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrWindowsCertWriteFailed, err)
 	}
 
 	// Use PowerShell with .NET X509Store to import the certificate
@@ -155,7 +127,7 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 	psCmd := exec.Command("powershell", "-Command", psScript)
 	output, err := psCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%w: %v, output: %s", constants.ErrWindowsPowerShellImport, err, string(output))
+		return fmt.Errorf("%w: %w, output: %s", constants.ErrWindowsPowerShellImport, err, string(output))
 	}
 
 	return nil
@@ -170,15 +142,15 @@ func TrustRootCAInWindowsStore(caBundlePEM string) error {
 	}
 
 	// Create a temporary file for the certificate
-	tmpDir, err := os.MkdirTemp("", "g8e-ca-trust-*")
+	tmpDir, err := os.MkdirTemp("", constants.WindowsTempCATrustPrefix)
 	if err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrWindowsTempDirCreate, err)
+		return fmt.Errorf("%w: %w", constants.ErrWindowsTempDirCreate, err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	caFile := filepath.Join(tmpDir, "root_ca.crt")
-	if err := os.WriteFile(caFile, pem.EncodeToMemory(block), 0600); err != nil {
-		return fmt.Errorf("%w: %v", constants.ErrWindowsCertWriteFailed, err)
+	caFile := filepath.Join(tmpDir, constants.PkiFileRootCA)
+	if err := os.WriteFile(caFile, pem.EncodeToMemory(block), constants.PermFilePrivate); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrWindowsCertWriteFailed, err)
 	}
 
 	// Use PowerShell to import to Trusted Root store
@@ -210,7 +182,7 @@ func TrustRootCAInWindowsStore(caBundlePEM string) error {
 	psCmd := exec.Command("powershell", "-Command", psScript)
 	output, err := psCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%w: %v, output: %s", constants.ErrWindowsPowerShellTrust, err, string(output))
+		return fmt.Errorf("%w: %w, output: %s", constants.ErrWindowsPowerShellTrust, err, string(output))
 	}
 
 	return nil

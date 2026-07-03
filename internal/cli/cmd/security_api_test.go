@@ -33,11 +33,45 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 var errMockEnroll = errors.New("enrollment server error")
+
+// enrollCmdWithRoot wraps the enroll command under a root command that defines
+// the persistent --endpoint flag, matching the real CLI structure so that
+// cmd.Flags().GetString("endpoint") can find the inherited flag in tests.
+func enrollCmdWithRoot(configLoader func(string) (*config.Config, error), enroll enrollFunc) *cobra.Command {
+	root := &cobra.Command{Use: "g8e"}
+	root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port)")
+	enrollCmd := securityPKIEnrollCmdWithConfig(configLoader, enroll)
+	root.AddCommand(enrollCmd)
+	// Trigger cobra's persistent flag merging so cmd.Flags() can see the inherited --endpoint flag
+	_ = enrollCmd.ParseFlags([]string{})
+	return enrollCmd
+}
+
+// findSubCmd traverses a command tree by subcommand names, returning the leaf
+// command or nil if any name in the chain is not found.
+func findSubCmd(root *cobra.Command, names ...string) *cobra.Command {
+	cmd := root
+	for _, name := range names {
+		found := false
+		for _, sub := range cmd.Commands() {
+			if sub.Name() == name {
+				cmd = sub
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil
+		}
+	}
+	return cmd
+}
 
 // generateTestPEMCert creates a self-signed PEM certificate for testing.
 func generateTestPEMCert(t *testing.T) []byte {
@@ -79,7 +113,7 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPath(t *testing.T) {
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := securityPKIEnrollCmdWithConfig(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, mockEnroll)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	cmd.Flags().Set("output-dir", tmpDir)
 	var buf bytes.Buffer
@@ -110,7 +144,7 @@ func TestSecurityPKIEnrollCmd_API_MockHappyPathWithTrustBundle(t *testing.T) {
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := securityPKIEnrollCmdWithConfig(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, mockEnroll)
 	cmd.Flags().Set("endpoint", "192.168.1.50")
 	cmd.Flags().Set("output-dir", tmpDir)
 	var buf bytes.Buffer
@@ -131,7 +165,7 @@ func TestSecurityPKIEnrollCmd_API_MissingEndpoint(t *testing.T) {
 		return nil, nil
 	}
 
-	cmd := securityPKIEnrollCmdWithConfig(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, mockEnroll)
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -150,7 +184,7 @@ func TestSecurityPKIEnrollCmd_API_ConfigLoadError(t *testing.T) {
 		return nil, nil
 	}
 
-	cmd := securityPKIEnrollCmdWithConfig(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, mockEnroll)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -170,7 +204,7 @@ func TestSecurityPKIEnrollCmd_API_EnrollError(t *testing.T) {
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := securityPKIEnrollCmdWithConfig(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, mockEnroll)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -194,7 +228,7 @@ func TestSecurityPKIEnrollCmd_API_MissingCertInResponse(t *testing.T) {
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 
-	cmd := securityPKIEnrollCmdWithConfig(loader, mockEnroll)
+	cmd := enrollCmdWithRoot(loader, mockEnroll)
 	cmd.Flags().Set("endpoint", "127.0.0.1")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -212,12 +246,18 @@ func TestSecurityPKIEnrollCmd_API_PKICommandStructure(t *testing.T) {
 	})
 
 	t.Run("enroll command has endpoint and output-dir flags", func(t *testing.T) {
-		cmd := securityPKIEnrollCmd()
-		epFlag := cmd.Flags().Lookup("endpoint")
+		root := &cobra.Command{Use: "g8e"}
+		root.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port)")
+		root.AddCommand(securityCmd())
+		enrollCmd := findSubCmd(root, "security", "pki", "enroll")
+		require.NotNil(t, enrollCmd)
+		_ = enrollCmd.ParseFlags([]string{})
+
+		epFlag := enrollCmd.Flags().Lookup("endpoint")
 		require.NotNil(t, epFlag)
 		assert.Equal(t, "e", epFlag.Shorthand)
 
-		odFlag := cmd.Flags().Lookup("output-dir")
+		odFlag := enrollCmd.Flags().Lookup("output-dir")
 		require.NotNil(t, odFlag)
 	})
 }
