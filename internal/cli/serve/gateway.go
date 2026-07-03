@@ -23,12 +23,12 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/exitcode"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
@@ -71,30 +71,26 @@ type GatewayConfig struct {
 // RunGateway starts the Operator in gateway mode - the platform's central
 // persistence (operator) and pub/sub broker. In this mode, the Operator also
 // runs an in-process command service to act as the sovereign execution Gateway.
-func RunGateway(cfg GatewayConfig, vi VersionInfo) {
+func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// Initialize paths relative to current working directory
 	if err := paths.Init(); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to initialize paths: %v\n", err)
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: initialize paths: %w", err)
 	}
 
 	// Create log directory and file
 	if err := os.MkdirAll(paths.Infra.LogDir, 0700); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: create log directory: %w", err)
 	}
 
 	logHandle, err := os.OpenFile(paths.Infra.OperatorLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open log file: %v\n", err)
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: open log file: %w", err)
 	}
 	defer logHandle.Close()
 
 	logger, err := ConfigureLoggerWithOutput(cfg.LogLevel, logHandle)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "invalid log level '%s': %v\n", cfg.LogLevel, err)
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: configure logger: %w", err)
 	}
 
 	// Apply defaults for empty directory flags (constants are now absolute)
@@ -136,15 +132,13 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		AllowTestPortZero:   false,
 	})
 	if err != nil {
-		logger.Error("Failed to load gateway configuration", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: load configuration: %w", err)
 	}
 	gatewayCfg.Version = vi.Version
 
 	svc, err := gateway.NewGatewayModeService(gatewayCfg, logger)
 	if err != nil {
-		logger.Error("Failed to create gateway service", string(constants.ConnectionStateError), err)
-		os.Exit(exitcode.FromError(err))
+		return fmt.Errorf("gateway: create service: %w", err)
 	}
 
 	// Tribunal bootstrap: if --tribunal-bootstrap is set, seed the trusted
@@ -153,8 +147,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	// gateway and harness share the same Ed25519 seed.
 	if cfg.TribunalBootstrap != "" {
 		if err := bootstrapTribunalPolicy(svc, cfg.TribunalBootstrap, logger); err != nil {
-			logger.Error("Tribunal bootstrap failed", string(constants.ConnectionStateError), err)
-			os.Exit(constants.ExitConfigError)
+			return fmt.Errorf("gateway: tribunal bootstrap: %w", err)
 		}
 	}
 
@@ -163,22 +156,18 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	// must exist and be enabled in the database. Fail fast before starting
 	// any services.
 	if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, 1); err != nil {
-		logger.Error("Startup validation failed", string(constants.ConnectionStateError), err)
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: startup validation: %w", err)
 	}
 	if cfg.Posture == config.PostureConsensus {
 		policy, err := svc.GetDB().TribunalStore.GetTribunal(cfg.TribunalID)
 		if err != nil {
-			logger.Error("Failed to load Tribunal policy", "tribunal_id", cfg.TribunalID, string(constants.ConnectionStateError), err)
-			os.Exit(exitcode.FromError(err))
+			return fmt.Errorf("gateway: load tribunal policy: %w", err)
 		}
 		if policy == nil || !policy.Enabled {
-			logger.Error("Tribunal policy not found or disabled", "tribunal_id", cfg.TribunalID, string(constants.ConnectionStateError), constants.ErrTxL2TribunalNotConfigured)
-			os.Exit(constants.ExitConfigError)
+			return fmt.Errorf("gateway: tribunal policy not found or disabled: %w", constants.ErrTxL2TribunalNotConfigured)
 		}
 		if err := config.ValidateConsensusStartup(string(cfg.Posture), cfg.TribunalID, policy.Quorum); err != nil {
-			logger.Error("Startup validation failed", "tribunal_id", cfg.TribunalID, "quorum", policy.Quorum, string(constants.ConnectionStateError), err)
-			os.Exit(constants.ExitConfigError)
+			return fmt.Errorf("gateway: startup validation (quorum=%d): %w", policy.Quorum, err)
 		}
 		logger.Info("Tribunal policy validated", "tribunal_id", cfg.TribunalID, "members", len(policy.MemberAppIDs), "quorum", policy.Quorum)
 	}
@@ -199,22 +188,18 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	govDeps := svc.GetGovernanceDeps()
 	sm, err := svc.GetSecretManager()
 	if err != nil {
-		logger.Error("Failed to get secret manager", string(constants.ConnectionStateError), err)
-		cancel()
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: get secret manager: %w", err)
 	}
 
-	ActuatorPriv, ActuatorKeyID, err := sm.GetActuatorKey()
+	actuatorPriv, actuatorKeyID, err := sm.GetActuatorKey()
 	if err != nil {
-		logger.Error("Failed to load Actuator signing key - mutations will fail", string(constants.ConnectionStateError), err)
-		cancel()
-		os.Exit(constants.ExitConfigError)
+		return fmt.Errorf("gateway: load actuator signing key: %w", err)
 	}
 
 	// Export Actuator public key for receipt verification by evals harness
-	ActuatorPub := ActuatorPriv.Public().(ed25519.PublicKey)
-	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", ActuatorKeyID)
-	if err := ExportActuatorPublicKey(cfg.PKIDir, ActuatorPub, ActuatorKeyID, logger); err != nil {
+	actuatorPub := actuatorPriv.Public().(ed25519.PublicKey)
+	logger.Info("Exporting Actuator public key", "pki_dir", cfg.PKIDir, "key_id", actuatorKeyID)
+	if err := ExportActuatorPublicKey(cfg.PKIDir, actuatorPub, actuatorKeyID, logger); err != nil {
 		logger.Warn("Failed to export Actuator public key for evals harness receipt verification", "error", err)
 	}
 
@@ -255,15 +240,14 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		AppPolicyStore:     govDeps.AppPolicyStore,
 		TribunalStore:      govDeps.TribunalStore,
 		L3Notary:           govDeps.L3Notary,
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
+		ActuatorSigningKey: actuatorPriv,
+		ActuatorKeyID:      actuatorKeyID,
 		MCPGateway:         mcpSvc,
 	}
 
 	cmdSvc, err := pubsub.NewOperatorPubSubService(psConfig)
 	if err != nil {
-		logger.Error("Failed to initialize in-process command service", string(constants.ConnectionStateError), err)
-		os.Exit(exitcode.FromError(err))
+		return fmt.Errorf("gateway: initialize command service: %w", err)
 	}
 
 	// Wire the synchronous fail-closed mutation gate into the gateway HTTP
@@ -282,26 +266,31 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 	// (for in-process envelope processing). Under doctrine/notary posture,
 	// the Tribunal is not constructed.
 	if cfg.Posture == config.PostureConsensus && cfg.TribunalID != "" {
-		tribunalSvc, err := BootstrapTribunal(svc, cfg.TribunalID, ActuatorPriv, ActuatorKeyID, cfg.SecretsDir, logger)
+		tribunalSvc, err := BootstrapTribunal(svc, cfg.TribunalID, actuatorPriv, actuatorKeyID, cfg.SecretsDir, logger)
 		if err != nil {
-			logger.Error("Failed to bootstrap Tribunal service", string(constants.ConnectionStateError), err)
-			cancel()
-			os.Exit(exitcode.FromError(err))
+			return fmt.Errorf("gateway: bootstrap tribunal service: %w", err)
 		}
 		svc.SetTribunal(tribunalSvc)
 		mcpSvc.SetTribunalDeliberator(tribunal.NewLocalDeliberator(tribunalSvc))
 		logger.Info("Tribunal service bootstrapped", "tribunal_id", cfg.TribunalID)
 	}
 
+	var wg sync.WaitGroup
+	errChan := make(chan error, 2)
+
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		if err := svc.Start(ctx); err != nil {
 			logger.Error("Gateway service failed", string(constants.ConnectionStateError), err)
-			os.Exit(exitcode.FromError(err))
+			errChan <- err
 		}
 	}()
 
 	// Start the command service once the gateway service is ready
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for !svc.IsReady() {
 			time.Sleep(100 * time.Millisecond)
 			if ctx.Err() != nil {
@@ -311,18 +300,26 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		logger.Info("Gateway service ready, starting in-process command service")
 		if err := cmdSvc.Start(ctx); err != nil {
 			logger.Error("In-process command service failed to start", string(constants.ConnectionStateError), err)
+			errChan <- err
 		}
 	}()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigChan
-	logger.Info("Received signal, shutting down", "signal", sig.String())
+
+	select {
+	case sig := <-sigChan:
+		logger.Info("Received signal, shutting down", "signal", sig.String())
+	case err := <-errChan:
+		logger.Error("Gateway service failed during operation", string(constants.ConnectionStateError), err)
+	}
 	cancel()
+	wg.Wait()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer shutdownCancel()
 
+	var shutdownErr error
 	if cmdSvc != nil {
 		if cmdSvc.Actuator() != nil {
 			logger.Info("Waiting for in-flight transactions to drain...")
@@ -330,13 +327,22 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) {
 		}
 		if err := cmdSvc.Stop(); err != nil {
 			logger.Error("Command service stop error", string(constants.ConnectionStateError), err)
+			shutdownErr = fmt.Errorf("gateway: command service stop: %w", err)
 		}
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {
 		logger.Error("Gateway shutdown error", string(constants.ConnectionStateError), err)
+		shutdownErr = fmt.Errorf("gateway: service stop: %w", err)
 	}
 	logger.Info("Gateway mode stopped")
+
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		return shutdownErr
+	}
 }
 
 // tribunalBootstrapConfig is the typed JSON config for declarative tribunal
@@ -357,7 +363,7 @@ func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) 
 		return boot, fmt.Errorf("tribunal bootstrap: parse config: %w", err)
 	}
 	if boot.TribunalID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
-		return boot, fmt.Errorf("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
+		return boot, constants.ErrTribunalBootstrapMissingFields
 	}
 	return boot, nil
 }
@@ -401,7 +407,7 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 
 	boot, err := parseTribunalBootstrapConfig(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("tribunal bootstrap: parse config: %w", err)
 	}
 
 	// Check if tribunal already exists (idempotent)
@@ -419,7 +425,7 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 	if boot.SeedHex != "" {
 		pubHex, err = deriveSeedPublicKey(boot.SeedHex)
 		if err != nil {
-			return err
+			return fmt.Errorf("tribunal bootstrap: derive seed public key: %w", err)
 		}
 	} else {
 		pub, _, err := ed25519.GenerateKey(nil)

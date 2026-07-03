@@ -157,9 +157,9 @@ type Dependencies struct {
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 	// Validate posture parameter
 	validPostures := map[string]bool{
-		"doctrine":  true,
-		"consensus": true,
-		"notary":    true,
+		constants.PostureDoctrine:  true,
+		constants.PostureConsensus: true,
+		constants.PostureNotary:    true,
 	}
 	if deps.Posture != "" && !validPostures[deps.Posture] {
 		return nil, fmt.Errorf("gateway: invalid posture '%s': must be one of doctrine, consensus, or notary: %w", deps.Posture, constants.ErrGatewayInvalidPosture)

@@ -16,7 +16,6 @@ package cmd
 import (
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -45,41 +44,62 @@ the commitment hash chain, and the git merkle root.`,
 	return cmd
 }
 
+type reportFlags struct {
+	outDir     string
+	dataDir    string
+	runtimeDir string
+	ledgerDir  string
+}
+
+func (f *reportFlags) addFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&f.outDir, "out", "", "Output directory (default: reports/<timestamp>)")
+	cmd.Flags().StringVar(&f.dataDir, "data-dir", "", "Data directory (default: "+paths.Infra.DataDir+")")
+	cmd.Flags().StringVar(&f.runtimeDir, "runtime-dir", "", "Runtime directory (default: "+paths.Infra.RuntimeDir+")")
+	cmd.Flags().StringVar(&f.ledgerDir, "ledger-dir", "", "Ledger base directory (default: <runtime-dir>/ledger)")
+}
+
+func (f *reportFlags) resolveOptions() (reporting.Options, error) {
+	if err := paths.Init(); err != nil {
+		return reporting.Options{}, fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
+	}
+
+	dataDir := f.dataDir
+	if dataDir == "" {
+		dataDir = paths.Infra.DataDir
+	}
+	runtimeDir := f.runtimeDir
+	if runtimeDir == "" {
+		runtimeDir = paths.Infra.RuntimeDir
+	}
+	outDir := f.outDir
+	if outDir == "" {
+		outDir = filepath.Join(constants.ReportsDirname, time.Now().UTC().Format("2006-01-02T150405Z"))
+	}
+
+	return reporting.Options{
+		DataDir:                    dataDir,
+		RuntimeDir:                 runtimeDir,
+		LedgerDir:                  f.ledgerDir,
+		VaultDir:                   paths.Infra.VaultDir,
+		VaultKeyPath:               paths.Infra.VaultKeyPath,
+		OutDir:                     outDir,
+		ExecutionVaultDBPath:       paths.Infra.ExecutionVaultDBPath,
+		ReplayStoreDBPath:          paths.Infra.ReplayStoreDBPath,
+		SuspendedTransactionDBPath: paths.Infra.SuspendedTransactionsDBPath,
+		Logger:                     slog.Default(),
+	}, nil
+}
+
 func reportAllCmd() *cobra.Command {
-	var outDir string
-	var dataDir string
-	var runtimeDir string
-	var ledgerDir string
+	var f reportFlags
 
 	cmd := &cobra.Command{
 		Use:   "all",
 		Short: "Export all stores to CSV and run verification",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := paths.Init(); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
-			}
-
-			if dataDir == "" {
-				dataDir = paths.Infra.DataDir
-			}
-			if runtimeDir == "" {
-				runtimeDir = paths.Infra.RuntimeDir
-			}
-			if outDir == "" {
-				outDir = filepath.Join(constants.ReportsDirname, time.Now().UTC().Format("2006-01-02T150405Z"))
-			}
-
-			opts := reporting.Options{
-				DataDir:                    dataDir,
-				RuntimeDir:                 runtimeDir,
-				LedgerDir:                  ledgerDir,
-				VaultDir:                   paths.Infra.VaultDir,
-				VaultKeyPath:               paths.Infra.VaultKeyPath,
-				OutDir:                     outDir,
-				ExecutionVaultDBPath:       paths.Infra.ExecutionVaultDBPath,
-				ReplayStoreDBPath:          paths.Infra.ReplayStoreDBPath,
-				SuspendedTransactionDBPath: paths.Infra.SuspendedTransactionsDBPath,
-				Logger:                     slog.Default(),
+			opts, err := f.resolveOptions()
+			if err != nil {
+				return err
 			}
 
 			result, err := reporting.Run(cmd.Context(), opts)
@@ -101,53 +121,20 @@ func reportAllCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&outDir, "out", "", "Output directory (default: reports/<timestamp>)")
-	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory (default: "+paths.Infra.DataDir+")")
-	cmd.Flags().StringVar(&runtimeDir, "runtime-dir", "", "Runtime directory (default: "+paths.Infra.RuntimeDir+")")
-	cmd.Flags().StringVar(&ledgerDir, "ledger-dir", "", "Ledger base directory (default: <runtime-dir>/ledger)")
-
+	f.addFlags(cmd)
 	return cmd
 }
 
 func reportVerifyCmd() *cobra.Command {
-	var outDir string
-	var dataDir string
-	var runtimeDir string
-	var ledgerDir string
+	var f reportFlags
 
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Run verification checks and write verification_summary.csv",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := paths.Init(); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPathValidation, err)
-			}
-
-			if dataDir == "" {
-				dataDir = paths.Infra.DataDir
-			}
-			if runtimeDir == "" {
-				runtimeDir = paths.Infra.RuntimeDir
-			}
-			if outDir == "" {
-				outDir = filepath.Join(constants.ReportsDirname, time.Now().UTC().Format("2006-01-02T150405Z"))
-			}
-
-			if err := os.MkdirAll(outDir, 0755); err != nil {
-				return fmt.Errorf("%w: %s: %w", constants.ErrReportOutputDirFailed, outDir, err)
-			}
-
-			opts := reporting.Options{
-				DataDir:                    dataDir,
-				RuntimeDir:                 runtimeDir,
-				LedgerDir:                  ledgerDir,
-				VaultDir:                   paths.Infra.VaultDir,
-				VaultKeyPath:               paths.Infra.VaultKeyPath,
-				OutDir:                     outDir,
-				ExecutionVaultDBPath:       paths.Infra.ExecutionVaultDBPath,
-				ReplayStoreDBPath:          paths.Infra.ReplayStoreDBPath,
-				SuspendedTransactionDBPath: paths.Infra.SuspendedTransactionsDBPath,
-				Logger:                     slog.Default(),
+			opts, err := f.resolveOptions()
+			if err != nil {
+				return err
 			}
 
 			result, err := reporting.Run(cmd.Context(), opts)
@@ -166,10 +153,6 @@ func reportVerifyCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&outDir, "out", "", "Output directory (default: reports/<timestamp>)")
-	cmd.Flags().StringVar(&dataDir, "data-dir", "", "Data directory (default: "+paths.Infra.DataDir+")")
-	cmd.Flags().StringVar(&runtimeDir, "runtime-dir", "", "Runtime directory (default: "+paths.Infra.RuntimeDir+")")
-	cmd.Flags().StringVar(&ledgerDir, "ledger-dir", "", "Ledger base directory (default: <runtime-dir>/ledger)")
-
+	f.addFlags(cmd)
 	return cmd
 }

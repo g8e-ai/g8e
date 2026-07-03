@@ -131,12 +131,12 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 
 	if harnessConfigPath != "" {
 		if err := cfg.LoadFile(harnessConfigPath); err != nil {
-			cmd.Printf("warning: config %s: %v\n", harnessConfigPath, err)
+			return fmt.Errorf("agent run: load config: %w", err)
 		}
 	}
 
 	names := args
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(cmd.Context(), 5*time.Minute)
 	defer cancel()
 
 	client, err := clientpkg.New(cfg)
@@ -151,7 +151,7 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 
 	if needsGovKit(selected) {
 		if err := setupGovKit(ctx, client, cfg); err != nil {
-			cmd.Printf("warning: gov kit setup: %v\n", err)
+			return fmt.Errorf("agent run: gov kit setup: %w", err)
 		}
 	}
 
@@ -173,7 +173,7 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	printAgentHarnessSummary(cmd.OutOrStdout(), results, "", "")
+	printAgentHarnessSummary(cmd.OutOrStdout(), results)
 	return nil
 }
 
@@ -183,11 +183,11 @@ func runAgentHarnessAudit(cmd *cobra.Command, args []string) error {
 
 	if harnessConfigPath != "" {
 		if err := cfg.LoadFile(harnessConfigPath); err != nil {
-			cmd.Printf("warning: config %s: %v\n", harnessConfigPath, err)
+			return fmt.Errorf("agent audit: load config: %w", err)
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
 	defer cancel()
 
 	client, err := clientpkg.New(cfg)
@@ -205,12 +205,13 @@ func runAgentHarnessAudit(cmd *cobra.Command, args []string) error {
 	if err := os.MkdirAll(cfg.OutDir, constants.PermDirStandard); err != nil {
 		return fmt.Errorf("agent audit: create output dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsFilename), raw, constants.PermFilePublic); err != nil {
+	receiptsPath := filepath.Join(cfg.OutDir, constants.ReceiptsFilename)
+	if err := os.WriteFile(receiptsPath, raw, constants.PermFilePublic); err != nil {
 		return fmt.Errorf("agent audit: write receipts: %w", err)
 	}
 	w := cmd.OutOrStdout()
 	fmt.Fprintf(w, "operator session: %s\n", opSession)
-	fmt.Fprintf(w, "signed receipts: %d (raw written to %s/%s)\n", len(receipts), cfg.OutDir, constants.ReceiptsFilename)
+	fmt.Fprintf(w, "signed receipts: %d (raw written to %s)\n", len(receipts), receiptsPath)
 	for _, r := range receipts {
 		fmt.Fprintf(w, "  %-12s %-14s %s\n", trunc(r.TransactionHash, 12), r.ActionType, r.Status)
 	}
@@ -296,7 +297,7 @@ func selectAgentHarnessScenarios(phase string, names []string) []scenarios.Scena
 
 func needsGovKit(ss []scenarios.Scenario) bool {
 	for _, s := range ss {
-		if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary || strings.HasPrefix(s.Name, "dhs-") {
+		if s.RequiresPosture == scenarios.Consensus || s.RequiresPosture == scenarios.Notary || strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) {
 			return true
 		}
 	}
@@ -357,7 +358,7 @@ func setupGovKit(ctx context.Context, client *clientpkg.Client, cfg config.Confi
 	return nil
 }
 
-func printAgentHarnessSummary(w io.Writer, results []scenarios.Result, jsonPath, mdPath string) {
+func printAgentHarnessSummary(w io.Writer, results []scenarios.Result) {
 	fmt.Fprintln(w, "\n── summary ──")
 	ok := 0
 	for _, r := range results {
@@ -369,8 +370,6 @@ func printAgentHarnessSummary(w io.Writer, results []scenarios.Result, jsonPath,
 		fmt.Fprintf(w, "  %-18s %-9s %-18s %s\n", r.Name, r.RequiresPosture, r.Persona, status)
 	}
 	fmt.Fprintf(w, "\n%d/%d scenarios ok\n", ok, len(results))
-	fmt.Fprintf(w, "report:  %s\n", mdPath)
-	fmt.Fprintf(w, "json:    %s\n", jsonPath)
 }
 
 func trunc(s string, n int) string {

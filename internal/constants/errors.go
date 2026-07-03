@@ -106,6 +106,7 @@ var (
 	ErrRequestMarshalFailed     = errors.New("failed to marshal request")
 	ErrTransactionApproveFailed = errors.New("failed to approve transaction")
 	ErrResponseParseFailed      = errors.New("failed to parse response")
+	ErrJSONMarshalFailed        = errors.New("failed to marshal JSON")
 
 	// Notary errors
 	ErrTransactionExpired = errors.New("transaction approval expired")
@@ -965,6 +966,9 @@ var (
 
 	// Stream errors
 	ErrStreamMarshalEvent = errors.New("failed to marshal stream event")
+
+	// Tribunal bootstrap errors
+	ErrTribunalBootstrapMissingFields = errors.New("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
 
 	// Agent harness errors
 	ErrHarnessNoScenarios = errors.New("no scenarios selected")

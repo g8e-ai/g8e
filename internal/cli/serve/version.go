@@ -13,7 +13,7 @@
 
 package serve
 
-// VersionInfo holds build-time version metadata (set via ldflags in cmd/operator/main.go).
+// VersionInfo holds build-time version metadata passed from cmd/operator/main.go.
 type VersionInfo struct {
 	Version   string
 	BuildID   string

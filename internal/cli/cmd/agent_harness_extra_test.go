@@ -69,7 +69,7 @@ func TestNeedsGovKit(t *testing.T) {
 		all := scenarios.Registry()
 		var doctrineOnly []scenarios.Scenario
 		for _, s := range all {
-			if s.RequiresPosture == scenarios.Doctrine && !strings.HasPrefix(s.Name, "dhs-") {
+			if s.RequiresPosture == scenarios.Doctrine && !strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) {
 				doctrineOnly = append(doctrineOnly, s)
 			}
 		}
@@ -115,13 +115,13 @@ func TestPrintAgentHarnessSummary(t *testing.T) {
 		}
 
 		assert.NotPanics(t, func() {
-			printAgentHarnessSummary(io.Discard, results, "/path/to/json", "/path/to/md")
+			printAgentHarnessSummary(io.Discard, results)
 		})
 	})
 
 	t.Run("prints summary with empty results without panic", func(t *testing.T) {
 		assert.NotPanics(t, func() {
-			printAgentHarnessSummary(io.Discard, nil, "", "")
+			printAgentHarnessSummary(io.Discard, nil)
 		})
 	})
 }
@@ -154,7 +154,7 @@ func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 		result := selectAgentHarnessScenarios("consensus", nil)
 		var dhsCount int
 		for _, s := range result {
-			if strings.HasPrefix(s.Name, "dhs-") {
+			if strings.HasPrefix(s.Name, scenarios.DhsScenarioPrefix) {
 				dhsCount++
 			}
 		}

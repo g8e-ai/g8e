@@ -131,7 +131,7 @@ func operatorRunCmd() *cobra.Command {
 			}
 
 			// Run operator (this blocks until shutdown)
-			serve.RunOperator(opts, versionInfo)
+			serve.RunOperator(opts, versionInfoFromCmd(cmd))
 			return nil
 		},
 	}

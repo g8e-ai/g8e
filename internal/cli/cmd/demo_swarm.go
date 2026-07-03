@@ -98,7 +98,7 @@ func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error
 		if err := demoStep(demoDir, "drone simulator verification",
 			false,
 			"docker", "compose", "exec", "-T", "operator-1",
-			"sh", "-c", "ls -la " + constants.ContainerLedgerFilesDir + " 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
+			"sh", "-c", "ls -la "+constants.ContainerLedgerFilesDir+" 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
 		); err != nil {
 			fmt.Println("  (ledger directory not found — no file mutations have been recorded)")
 			fmt.Println()

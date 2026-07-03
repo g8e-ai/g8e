@@ -35,9 +35,9 @@ import (
 
 func getBinaryName() string {
 	if runtime.GOOS == "windows" {
-		return "./g8e.exe"
+		return constants.LocalBinaryNameWindows
 	}
-	return "./g8e"
+	return constants.LocalBinaryName
 }
 
 // startConfig holds resolved configuration for starting the gateway.
@@ -70,13 +70,13 @@ type startConfig struct {
 func resolveStartConfig(cfg startConfig) startConfig {
 	// Environment variables override CLI flags
 	if cfg.VaultDir == "" {
-		cfg.VaultDir = os.Getenv("G8E_VAULT_DIR")
+		cfg.VaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
 	}
 	if cfg.VaultKeyPath == "" {
-		cfg.VaultKeyPath = os.Getenv("G8E_VAULT_KEY")
+		cfg.VaultKeyPath = os.Getenv(string(constants.EnvVar.VaultKey))
 	}
 	if !cfg.VaultRequireUnlock {
-		cfg.VaultRequireUnlock = os.Getenv("G8E_VAULT_REQUIRE_UNLOCK") == "true"
+		cfg.VaultRequireUnlock = os.Getenv(string(constants.EnvVar.VaultRequireUnlock)) == "true"
 	}
 
 	if cfg.TribunalID == "" {
@@ -86,7 +86,7 @@ func resolveStartConfig(cfg startConfig) startConfig {
 		cfg.TribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
 	}
 	if cfg.TribunalBootstrap == "" {
-		cfg.TribunalBootstrap = os.Getenv("G8E_TRIBUNAL_BOOTSTRAP")
+		cfg.TribunalBootstrap = os.Getenv(string(constants.EnvVar.TribunalBootstrap))
 	}
 
 	return cfg
@@ -190,7 +190,7 @@ func gatewayStartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
-				return err
+				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -389,8 +389,7 @@ func gatewayServeCmd() *cobra.Command {
 			}
 
 			// Run gateway (this blocks until shutdown)
-			serve.RunGateway(cfg, versionInfo)
-			return nil
+			return serve.RunGateway(cfg, versionInfoFromCmd(cmd))
 		},
 	}
 
@@ -427,7 +426,7 @@ func gatewayStopCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
-				return err
+				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -463,7 +462,7 @@ func gatewayStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
-				return err
+				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
 			cmd.Println("g8e Gateway Status")
@@ -520,7 +519,7 @@ func gatewayRestartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
-				return err
+				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -593,7 +592,7 @@ func gatewayLogsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
-				return err
+				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
 			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
@@ -623,7 +622,7 @@ func gatewaySettingsCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
-				return err
+				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
 			client, err := api.NewClient(cfg)
@@ -712,7 +711,7 @@ func gatewayCleanCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
-				return err
+				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
 			if !force {

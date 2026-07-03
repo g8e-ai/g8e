@@ -268,7 +268,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 	if err == nil {
 		return exePath, nil
 	}
-	return "./g8e", nil
+	return constants.LocalBinaryName, nil
 }
 
 func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, error) {

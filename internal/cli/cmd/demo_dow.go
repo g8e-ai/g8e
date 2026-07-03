@@ -294,7 +294,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "local ledger",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la " + constants.ContainerLedgerFilesDir + " 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
+			"sh", "-c", "ls -la "+constants.ContainerLedgerFilesDir+" 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
 		); err != nil {
 			fmt.Println("  (ledger directory not found — no file mutations have been recorded)")
 			fmt.Println()
@@ -305,7 +305,7 @@ func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) 
 		if err := demoStep(demoDir, "audit vault",
 			false,
 			"docker", "compose", "exec", "-T", "operator",
-			"sh", "-c", "ls -la " + constants.ContainerAuditVaultDB + " 2>/dev/null || echo 'Audit vault DB not yet populated'",
+			"sh", "-c", "ls -la "+constants.ContainerAuditVaultDB+" 2>/dev/null || echo 'Audit vault DB not yet populated'",
 		); err != nil {
 			fmt.Println("  (audit vault DB not found — no audit events have been recorded)")
 			fmt.Println()

@@ -90,3 +90,10 @@ const (
 	OSDarwin  = "darwin"
 	OSWindows = "windows"
 )
+
+// Governance posture names.
+const (
+	PostureDoctrine  = "doctrine"
+	PostureConsensus = "consensus"
+	PostureNotary    = "notary"
+)

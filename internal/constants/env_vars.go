@@ -20,6 +20,7 @@ type EnvVarKey string
 var EnvVar = struct {
 	TribunalID         EnvVarKey
 	TribunalURL        EnvVarKey
+	TribunalBootstrap  EnvVarKey
 	VaultDir           EnvVarKey
 	VaultKey           EnvVarKey
 	VaultRequireUnlock EnvVarKey
@@ -30,6 +31,7 @@ var EnvVar = struct {
 }{
 	TribunalID:         EnvVarKey("G8E_TRIBUNAL_ID"),
 	TribunalURL:        EnvVarKey("G8E_TRIBUNAL_URL"),
+	TribunalBootstrap:  EnvVarKey("G8E_TRIBUNAL_BOOTSTRAP"),
 	VaultDir:           EnvVarKey("G8E_VAULT_DIR"),
 	VaultKey:           EnvVarKey("G8E_VAULT_KEY"),
 	VaultRequireUnlock: EnvVarKey("G8E_VAULT_REQUIRE_UNLOCK"),

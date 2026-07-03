@@ -13,7 +13,11 @@
 
 package governance
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+)
 
 // GovernancePosture defines which layers of the verification pipeline are
 // enforced as fail-closed gates versus audited.
@@ -46,7 +50,7 @@ type GovernancePosture interface {
 // L2 and L3 results are recorded for audit but do not gate execution.
 type DoctrinePosture struct{}
 
-func (p *DoctrinePosture) Name() string              { return "doctrine" }
+func (p *DoctrinePosture) Name() string              { return constants.PostureDoctrine }
 func (p *DoctrinePosture) Description() string       { return "doctrine (L1 enforced, L2/L3 audited)" }
 func (p *DoctrinePosture) RequiresL2Signature() bool { return false }
 func (p *DoctrinePosture) RequiresL3Proof() bool     { return false }
@@ -55,7 +59,7 @@ func (p *DoctrinePosture) RequiresL3Proof() bool     { return false }
 // L3 results are recorded for audit but do not gate execution.
 type ConsensusPosture struct{}
 
-func (p *ConsensusPosture) Name() string              { return "consensus" }
+func (p *ConsensusPosture) Name() string              { return constants.PostureConsensus }
 func (p *ConsensusPosture) Description() string       { return "consensus (L1/L2 enforced, L3 audited)" }
 func (p *ConsensusPosture) RequiresL2Signature() bool { return true }
 func (p *ConsensusPosture) RequiresL3Proof() bool     { return false }
@@ -64,7 +68,7 @@ func (p *ConsensusPosture) RequiresL3Proof() bool     { return false }
 // All three layers are fail-closed gates; any failure blocks execution.
 type NotaryPosture struct{}
 
-func (p *NotaryPosture) Name() string              { return "notary" }
+func (p *NotaryPosture) Name() string              { return constants.PostureNotary }
 func (p *NotaryPosture) Description() string       { return "notary (L1/L2/L3 strictly enforced)" }
 func (p *NotaryPosture) RequiresL2Signature() bool { return true }
 func (p *NotaryPosture) RequiresL3Proof() bool     { return true }
@@ -85,11 +89,11 @@ func NewGovernancePosture(posture string) GovernancePosture {
 // where a user-friendly error is preferable to a panic.
 func ParseGovernancePosture(posture string) (GovernancePosture, error) {
 	switch posture {
-	case "doctrine":
+	case constants.PostureDoctrine:
 		return &DoctrinePosture{}, nil
-	case "consensus":
+	case constants.PostureConsensus:
 		return &ConsensusPosture{}, nil
-	case "notary":
+	case constants.PostureNotary:
 		return &NotaryPosture{}, nil
 	default:
 		return nil, fmt.Errorf("invalid governance posture %q (must be one of: doctrine, consensus, notary)", posture)

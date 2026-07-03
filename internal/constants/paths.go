@@ -266,6 +266,12 @@ const (
 	ContainerVerifySlewsPy = "/app/verify_slews.py"
 )
 
+// Local binary names for the g8e CLI executable.
+const (
+	LocalBinaryName        = "./g8e"
+	LocalBinaryNameWindows = "./g8e.exe"
+)
+
 // Component filenames for gateway, operator, and shared services.
 const (
 	SwaggerFilename          = "swagger.json"

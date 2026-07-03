@@ -136,9 +136,9 @@ type MCPCapabilities struct {
 
 // InitializeResult is the result payload for initialize.
 type InitializeResult struct {
-	ProtocolVersion string         `json:"protocolVersion"`
+	ProtocolVersion string          `json:"protocolVersion"`
 	Capabilities    MCPCapabilities `json:"capabilities"`
-	ServerInfo      ServerInfo     `json:"serverInfo"`
+	ServerInfo      ServerInfo      `json:"serverInfo"`
 }
 
 // ServerInfo contains server information for initialize.

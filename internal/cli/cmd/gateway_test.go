@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/platform"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,14 +32,14 @@ func TestGetBinaryName(t *testing.T) {
 		if runtime.GOOS == "windows" {
 			t.Skip("Skipping non-Windows test on Windows")
 		}
-		assert.Equal(t, "./g8e", getBinaryName())
+		assert.Equal(t, constants.LocalBinaryName, getBinaryName())
 	})
 
 	t.Run("returns ./g8e.exe on Windows", func(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			t.Skip("Skipping Windows test on non-Windows platform")
 		}
-		assert.Equal(t, "./g8e.exe", getBinaryName())
+		assert.Equal(t, constants.LocalBinaryNameWindows, getBinaryName())
 	})
 }
 

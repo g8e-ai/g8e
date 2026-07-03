@@ -103,7 +103,7 @@ func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, 
 		if err := demoStep(demoDir, "ledger verification",
 			false,
 			"docker", "compose", "exec", "-T", "src-operator",
-			"sh", "-c", "ls -la " + constants.ContainerLedgerFilesDir + " 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
+			"sh", "-c", "ls -la "+constants.ContainerLedgerFilesDir+" 2>/dev/null || echo 'Ledger directory missing (bootstrap failed)'",
 		); err != nil {
 			fmt.Println("  (ledger directory not found — no file mutations recorded)")
 			fmt.Println()
