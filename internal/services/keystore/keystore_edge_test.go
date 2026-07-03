@@ -308,7 +308,7 @@ func TestKeystore_EnforcePermissions_ReadDirError(t *testing.T) {
 
 	err = ks.EnforcePermissions()
 	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrKeyStoreReadDir)
+	assert.ErrorIs(t, err, constants.ErrKeyStoreChmodDir)
 }
 
 func TestKeystore_Purge_ReadDirError(t *testing.T) {
@@ -376,9 +376,10 @@ func TestKeystore_DeleteSecret_Error(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ks.Initialize())
 
-	secretPath := filepath.Join(secretsDir, "test-secret")
-	require.NoError(t, os.WriteFile(secretPath, []byte("data"), 0600))
-	require.NoError(t, os.RemoveAll(secretsDir))
+	// Create a non-empty directory with the secret name so os.Remove fails with ENOTEMPTY
+	secretDir := filepath.Join(secretsDir, "test-secret")
+	require.NoError(t, os.Mkdir(secretDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(secretDir, "nested"), []byte("data"), 0o600))
 
 	err = ks.DeleteSecret("test-secret")
 	require.Error(t, err)

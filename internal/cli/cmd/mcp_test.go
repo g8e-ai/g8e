@@ -1374,14 +1374,20 @@ func TestRunMCPAgentRun_NoArgs(t *testing.T) {
 }
 
 func TestSubprocessMCPProxy_ForwardError(t *testing.T) {
-	t.Run("forward returns error when stdin is nil", func(t *testing.T) {
+	t.Run("forward returns error when stdin write fails", func(t *testing.T) {
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		require.NoError(t, w.Close()) // close write end so writes fail
+		defer r.Close()
+
 		proxy := &subprocessMCPProxy{
 			command: "echo",
 			args:    []string{"test"},
+			stdin:   w,
 			logger:  slog.New(slog.NewTextHandler(os.Stderr, nil)),
 		}
 
-		_, err := proxy.forward(JSONRPCRequest{
+		_, err = proxy.forward(JSONRPCRequest{
 			JSONRPC: "2.0",
 			ID:      1,
 			Method:  "tools/list",
