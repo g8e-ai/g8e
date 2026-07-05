@@ -169,7 +169,6 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -187,6 +186,15 @@ func TestGateway_JWTIntegration(t *testing.T) {
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+
+	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        passkey,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      resp,
+		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
+		MCPSvc:         mcpGateway,
+		SuspendedStore: suspendedTxService,
+	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:                cfg,
@@ -318,7 +326,6 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -336,6 +343,15 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+
+	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        passkey,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      resp,
+		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
+		MCPSvc:         mcpGateway,
+		SuspendedStore: suspendedTxService,
+	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:                cfg,
@@ -482,7 +498,6 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	suspendedTxService := setupSuspendedTxService(t, dbDir)
 
@@ -500,6 +515,15 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 
 	mockEnvProc := &mockEnvelopeProcessor{}
 	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+
+	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        passkey,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      resp,
+		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
+		MCPSvc:         mcpGateway,
+		SuspendedStore: suspendedTxService,
+	})
 
 	h, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:                cfg,

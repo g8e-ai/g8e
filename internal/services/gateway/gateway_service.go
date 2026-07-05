@@ -219,7 +219,6 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	if err != nil && !b.testMode {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes)
 
 	// --- Suspended transaction service ---
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -249,8 +248,16 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
 	}
 
-	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
-	passkeyHandler.SetSSEDependencies(db.SSEStore, pubsub)
+	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        passkey,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      res,
+		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
+		MCPSvc:         mcpGateway,
+		SuspendedStore: suspendedTxService,
+		SSEStore:       db.SSEStore,
+		Pubsub:         pubsub,
+	})
 
 	ls := &GatewayModeService{
 		cfg:                cfg,

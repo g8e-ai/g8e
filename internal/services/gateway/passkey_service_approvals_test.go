@@ -453,12 +453,17 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
-
 		sseStore := NewSSEEventService(db.GetDB(), logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		handler.SetSSEDependencies(sseStore, pubsub)
+		handler := NewPasskeyHandler(PasskeyHandlerDeps{
+			Service:       svc,
+			WebSessionSvc: webSessionSvc,
+			Responder:     resp,
+			MaxPayload:    10 * 1024 * 1024,
+			SSEStore:      sseStore,
+			Pubsub:        pubsub,
+		})
 
 		const userID = "u-approval-sse-1"
 		const txHash = "tx-approval-sse-1"
@@ -492,7 +497,12 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+		handler := NewPasskeyHandler(PasskeyHandlerDeps{
+			Service:       svc,
+			WebSessionSvc: webSessionSvc,
+			Responder:     resp,
+			MaxPayload:    10 * 1024 * 1024,
+		})
 
 		const userID = "u-approval-no-sse-1"
 		const txHash = "tx-approval-no-sse-1"
@@ -514,12 +524,17 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
-
 		sseStore := NewSSEEventService(db.GetDB(), logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		handler.SetSSEDependencies(sseStore, pubsub)
+		handler := NewPasskeyHandler(PasskeyHandlerDeps{
+			Service:       svc,
+			WebSessionSvc: webSessionSvc,
+			Responder:     resp,
+			MaxPayload:    10 * 1024 * 1024,
+			SSEStore:      sseStore,
+			Pubsub:        pubsub,
+		})
 
 		handler.emitApprovalCompletedSSE("", "tx-empty-user")
 
@@ -537,12 +552,9 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 	resp := response.NewWriter(logger)
 	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
-
 	sseStore := NewSSEEventService(db.GetDB(), logger)
 	pubsub := NewGatewayWebSocketHandler(logger)
 	t.Cleanup(func() { pubsub.Close() })
-	handler.SetSSEDependencies(sseStore, pubsub)
 
 	const approverUserID = "u-approver-sse-test"
 	const txHash = "tx-empty-suspended-userid"
@@ -558,7 +570,16 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 		found:   true,
 		receipt: &operatorv1.ActionReceipt{TransactionHash: txHash, Status: operatorv1.ExecutionStatus_EXECUTION_STATUS_COMPLETED},
 	}
-	handler.SetApprovalDependencies(mockMCP, nil)
+
+	handler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        svc,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      resp,
+		MaxPayload:     10 * 1024 * 1024,
+		MCPSvc:         mockMCP,
+		SSEStore:       sseStore,
+		Pubsub:         pubsub,
+	})
 
 	body := `{"id":"cred-1","rawId":"cred-1","clientDataJSON":"{}","authenticatorData":"{}","signature":"sig"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/"+txHash+"/verify", strings.NewReader(body))

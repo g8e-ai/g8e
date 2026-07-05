@@ -238,30 +238,32 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
 	require.NotNil(t, mcpGateway)
 
-	cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
-		Config:             cfg,
-		Logger:             testutil.NewTestLogger(),
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		FieldReader:        govDeps.FieldReader,
-		SignerStore:        govDeps.SignerStore,
-		TribunalStore:      govDeps.TribunalStore,
-		L3Notary:           RejectingL3Notary{},
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
-		MCPGateway:         mcpGateway,
+	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
+		CommandServiceConfig: pubsub.CommandServiceConfig{
+			Config:             cfg,
+			Logger:             testutil.NewTestLogger(),
+			Execution:          execSvc,
+			FileEdit:           fileSvc,
+			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
+			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
+			ReplayStore:        govDeps.ReplayStore,
+			StateRootProvider:  govDeps.StateRootProvider,
+			TransactionAudit:   govDeps.TransactionAudit,
+			SignerStore:        govDeps.SignerStore,
+			TribunalStore:      govDeps.TribunalStore,
+			L3Notary:           RejectingL3Notary{},
+			ActuatorSigningKey: ActuatorPriv,
+			ActuatorKeyID:      ActuatorKeyID,
+		},
+		MCPGateway:  mcpGateway,
+		FieldReader: govDeps.FieldReader,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
 
 	// The MCP gateway's runtime governance dependencies are wired by
-	// NewOperatorPubSubService via initializeGovernance (mcpGateway was passed in
-	// through CommandServiceConfig.MCPGateway above), so no extra wiring is needed.
+	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
+	// GatewayCommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
 	// Auto-wire a Tribunal for postures that require L2 signatures (consensus, notary).
 	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.

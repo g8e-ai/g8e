@@ -222,32 +222,34 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		logger.Warn("Gateway AuditStore not available - ActionReceipts will not be stored in audit store")
 	}
 
-	psConfig := pubsub.CommandServiceConfig{
-		Config:             gatewayCfg,
-		Logger:             logger,
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       loopbackClient,
-		ResultsService:     nil, // Results handled via direct loopback publish if needed
-		ExecutionVault:     nil, // Not used in gateway mode
-		AuditStore:         auditStore,
-		Ledger:             nil, // P1: Ledger in gateway mode
-		HistoryHandler:     nil, // P1: History in gateway mode
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		FieldReader:        govDeps.FieldReader,
-		SignerStore:        govDeps.SignerStore,
-		AppPolicyStore:     govDeps.AppPolicyStore,
-		TribunalStore:      govDeps.TribunalStore,
-		L3Notary:           govDeps.L3Notary,
-		ActuatorSigningKey: actuatorPriv,
-		ActuatorKeyID:      actuatorKeyID,
-		MCPGateway:         mcpSvc,
+	psConfig := pubsub.GatewayCommandServiceConfig{
+		CommandServiceConfig: pubsub.CommandServiceConfig{
+			Config:             gatewayCfg,
+			Logger:             logger,
+			Execution:          execSvc,
+			FileEdit:           fileSvc,
+			PubSubClient:       loopbackClient,
+			ResultsService:     nil, // Results handled via direct loopback publish if needed
+			ExecutionVault:     nil, // Not used in gateway mode
+			AuditStore:         auditStore,
+			Ledger:             nil, // P1: Ledger in gateway mode
+			HistoryHandler:     nil, // P1: History in gateway mode
+			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+			ReplayStore:        govDeps.ReplayStore,
+			StateRootProvider:  govDeps.StateRootProvider,
+			TransactionAudit:   govDeps.TransactionAudit,
+			SignerStore:        govDeps.SignerStore,
+			AppPolicyStore:     govDeps.AppPolicyStore,
+			TribunalStore:      govDeps.TribunalStore,
+			L3Notary:           govDeps.L3Notary,
+			ActuatorSigningKey: actuatorPriv,
+			ActuatorKeyID:      actuatorKeyID,
+		},
+		MCPGateway:  mcpSvc,
+		FieldReader: govDeps.FieldReader,
 	}
 
-	cmdSvc, err := pubsub.NewOperatorPubSubService(psConfig)
+	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(psConfig)
 	if err != nil {
 		return fmt.Errorf("gateway: initialize command service: %w", err)
 	}
@@ -258,9 +260,9 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	svc.SetEnvelopeProcessor(cmdSvc)
 
 	// The MCP gateway's runtime governance dependencies (gateway processor,
-	// signing identity, audit logger, etc.) are wired by NewOperatorPubSubService
-	// via initializeGovernance, which received mcpSvc through psConfig.MCPGateway.
-	// No additional gateway wiring is needed here.
+	// signing identity, audit logger, etc.) are wired by
+	// NewGatewayOperatorPubSubService, which received mcpSvc through
+	// psConfig.MCPGateway. No additional gateway wiring is needed here.
 
 	// Bootstrap Tribunal service for L2-requiring postures (Phase 5.2):
 	// Construct the TribunalService in-process and wire it both as the mTLS

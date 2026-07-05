@@ -89,7 +89,10 @@ type OperatorPubSubService struct {
 	mcpGateway *mcp.GatewayService
 }
 
-// CommandServiceConfig holds all dependencies for OperatorPubSubService.
+// CommandServiceConfig holds shared dependencies for OperatorPubSubService in
+// both outbound and gateway modes. Gateway-only fields (MCPGateway,
+// FieldReader) are in GatewayCommandServiceConfig to enforce mode bifurcation
+// at the type level.
 type CommandServiceConfig struct {
 	Config            *config.Config
 	Logger            *slog.Logger
@@ -109,17 +112,23 @@ type CommandServiceConfig struct {
 	SignerStore       governance.SignerStore
 	AppPolicyStore    governance.AppPolicyStore
 	TribunalStore     governance.TribunalStore
-	// FieldReader backs the MCP gateway's read_field operation. Distinct from
-	// TransactionAudit so the read capability is not smuggled through the
-	// audit-store interface (which only exposes DocSet).
-	FieldReader mcp.FieldReader
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
 	ActuatorKeyID      string
+}
 
-	// MCP gateway for protocol translation egress
-	MCPGateway *mcp.GatewayService
+// GatewayCommandServiceConfig embeds CommandServiceConfig and adds
+// gateway-only fields that are not applicable in outbound mode.
+//
+// MCPGateway is the egress dispatcher for protocol translation.
+// FieldReader backs the MCP gateway's read_field operation. Distinct from
+// TransactionAudit so the read capability is not smuggled through the
+// audit-store interface (which only exposes DocSet).
+type GatewayCommandServiceConfig struct {
+	CommandServiceConfig
+	MCPGateway  *mcp.GatewayService
+	FieldReader mcp.FieldReader
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
@@ -175,8 +184,6 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 	rs.history.SetScrubbingService(c.Scrubbing)
 	rs.history.auditStore = c.AuditStore
 
-	rs.mcpGateway = c.MCPGateway
-
 	rs.buildHandlers()
 
 	rs.signerStore = c.SignerStore
@@ -206,6 +213,39 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 			"operator_id", c.Config.OperatorID,
 			"operator_session_id", c.Config.OperatorSessionId)
 	}
+	return rs, nil
+}
+
+// NewGatewayOperatorPubSubService creates the dispatcher for gateway mode,
+// wiring gateway-only dependencies (MCPGateway, FieldReader) after base
+// construction. Use NewOperatorPubSubService for outbound mode.
+func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPubSubService, error) {
+	rs, err := NewOperatorPubSubService(c.CommandServiceConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	rs.mcpGateway = c.MCPGateway
+
+	// Wire the MCP gateway's runtime governance dependencies. This is the single
+	// owner of runtime-phase wiring; config-phase fields (A2A downstream and the
+	// public base URL) are owned by the gateway's own construction in
+	// GatewayModeService.initHandlersAndServers and must not be re-set here.
+	// MCPGateway is used as the egress dispatcher for protocol translation.
+	if rs.mcpGateway != nil {
+		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Gateway.MCPDownstreamURL)
+
+		if c.AuditStore != nil {
+			rs.mcpGateway.SetAuditLogger(&pubsubAuditLogger{store: c.AuditStore, logger: c.Logger})
+		}
+
+		if c.FieldReader != nil {
+			rs.mcpGateway.SetDBService(c.FieldReader)
+		}
+
+		rs.mcpGateway.SetSessionValidator(rs)
+	}
+
 	return rs, nil
 }
 
@@ -248,28 +288,6 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 		posture,
 		nil, // Clock defaults to RealClock
 	)
-
-	// Wire the MCP gateway's runtime governance dependencies. This is the single
-	// owner of runtime-phase wiring; config-phase fields (A2A downstream and the
-	// public base URL) are owned by the gateway's own construction in
-	// GatewayModeService.initHandlersAndServers and must not be re-set here.
-	// MCPGateway is used as the egress dispatcher for protocol translation.
-	if rs.mcpGateway != nil {
-		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Gateway.MCPDownstreamURL)
-
-		// Set audit logger for field read operations
-		if c.AuditStore != nil {
-			rs.mcpGateway.SetAuditLogger(&pubsubAuditLogger{store: c.AuditStore, logger: c.Logger})
-		}
-
-		// Set DB service for read_field operations
-		if c.FieldReader != nil {
-			rs.mcpGateway.SetDBService(c.FieldReader)
-		}
-
-		// Set session validator for L3 authorization
-		rs.mcpGateway.SetSessionValidator(rs)
-	}
 
 	var signerStoreType, l4wardenType string
 	if rs.signerStore != nil {

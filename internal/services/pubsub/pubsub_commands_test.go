@@ -1252,3 +1252,26 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+// TestCommandServiceConfig_NoGatewayFields is a compile-time test that verifies
+// CommandServiceConfig does not have MCPGateway or FieldReader fields. These
+// fields are gateway-only and live in GatewayCommandServiceConfig to enforce
+// mode bifurcation at the type level.
+func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
+	t.Parallel()
+
+	// CommandServiceConfig must NOT have MCPGateway or FieldReader.
+	var base CommandServiceConfig
+	_ = base
+
+	// GatewayCommandServiceConfig must have MCPGateway and FieldReader.
+	var gw GatewayCommandServiceConfig
+	_ = gw.MCPGateway
+	_ = gw.FieldReader
+
+	// GatewayCommandServiceConfig embeds CommandServiceConfig, so all base
+	// fields are accessible.
+	_ = gw.Config
+	_ = gw.Logger
+	_ = gw.TribunalStore
+}

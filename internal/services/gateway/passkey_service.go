@@ -310,32 +310,30 @@ type PasskeyHandler struct {
 	pubsub         *GatewayWebSocketHandler
 }
 
-// NewPasskeyHandler creates a new PasskeyHandler wrapping the given PasskeyService
-// with HTTP-specific dependencies.
-func NewPasskeyHandler(svc *PasskeyService, webSessionSvc *WebSessionService, responder *response.Writer, maxPayload int64) *PasskeyHandler {
+// PasskeyHandlerDeps groups all dependencies for NewPasskeyHandler.
+type PasskeyHandlerDeps struct {
+	Service        *PasskeyService
+	WebSessionSvc  *WebSessionService
+	Responder      *response.Writer
+	MaxPayload     int64
+	MCPSvc         MCPServiceProvider
+	SuspendedStore storage.SuspendedTransactionStore
+	SSEStore       *SSEEventService
+	Pubsub         *GatewayWebSocketHandler
+}
+
+// NewPasskeyHandler creates a new PasskeyHandler with all dependencies wired.
+func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 	return &PasskeyHandler{
-		PasskeyService: svc,
-		webSessionSvc:  webSessionSvc,
-		responder:      responder,
-		maxPayload:     maxPayload,
+		PasskeyService: deps.Service,
+		webSessionSvc:  deps.WebSessionSvc,
+		responder:      deps.Responder,
+		maxPayload:     deps.MaxPayload,
+		mcpSvc:         deps.MCPSvc,
+		suspendedStore: deps.SuspendedStore,
+		sseStore:       deps.SSEStore,
+		pubsub:         deps.Pubsub,
 	}
-}
-
-// SetApprovalDependencies injects the MCP service provider and suspended transaction
-// store needed by the approval handlers. This is called after both the PasskeyHandler
-// and MCP GatewayService are constructed, since the MCP gateway is created later
-// in the startup sequence.
-func (h *PasskeyHandler) SetApprovalDependencies(mcpSvc MCPServiceProvider, suspendedStore storage.SuspendedTransactionStore) {
-	h.mcpSvc = mcpSvc
-	h.suspendedStore = suspendedStore
-}
-
-// SetSSEDependencies injects the SSE event store and pub/sub broker needed by
-// the passkey registration handler to emit real-time notifications to CLI clients.
-// Called after both the PasskeyHandler and gateway services are constructed.
-func (h *PasskeyHandler) SetSSEDependencies(sseStore *SSEEventService, pubsub *GatewayWebSocketHandler) {
-	h.sseStore = sseStore
-	h.pubsub = pubsub
 }
 
 // ChallengeData stores a pending challenge for registration or authentication.

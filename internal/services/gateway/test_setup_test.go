@@ -115,7 +115,6 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -127,6 +126,15 @@ func setupTestInfrastructure(t *testing.T, resetKeystoreStorage bool) *TestInfra
 	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { suspendedTxService.Close() })
+
+	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        passkey,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      resp,
+		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
+		SuspendedStore: suspendedTxService,
+		Pubsub:         pubsub,
+	})
 
 	return &TestInfrastructure{
 		Cfg:                cfg,

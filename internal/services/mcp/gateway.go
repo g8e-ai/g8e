@@ -33,6 +33,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -95,26 +96,24 @@ type StateRootProvider interface {
 type GatewayService struct {
 	logger            *slog.Logger
 	responder         *response.Writer
-	envProc           governance.EnvelopeProcessor
-	stateRootProvider StateRootProvider
-	signingKey        ed25519.PrivateKey
-	keyID             string
-	downstreamURL     string
-	a2aDownstreamURL  string
-	publicBaseURL     string
 	suspendedStore    storage.SuspendedTransactionStore
 	fieldPathRegistry *FieldPathRegistry
-	dbService         FieldReader
-	sessionValidator  SessionValidator
-	auditLogger       AuditLogger
 	auditStore        *storage.SQLAuditStore
 	nativeToolHandler *NativeToolHandler
 	scrubbingService  *scrubbing.ScrubbingService
 	posture           string // Gateway posture: doctrine, consensus, or notary
+	a2aDownstreamURL  string // construction-phase (immutable after NewGatewayService)
+	publicBaseURL     string // construction-phase (immutable after NewGatewayService)
+	maxPayloadBytes   int64
 
-	// tribunalDeliberator calls the Tribunal service for L2 votes under consensus and notary postures.
-	// nil when not configured (doctrine posture or no Tribunal URL).
-	tribunalDeliberator TribunalDeliberator
+	// runtimeDeps bundles all runtime-phase dependencies into a single atomic
+	// assignment. nil until SetRuntimeDeps is called; runtime methods must call
+	// runtimeReady() or getRuntimeDeps() before accessing these fields.
+	runtimeDeps atomic.Pointer[RuntimeDependencies]
+
+	// tribunalDeliberator is late-bound (set after tribunal bootstrap).
+	// Stores a TribunalDeliberator interface value via atomic.Value.
+	tribunalDeliberator atomic.Value
 
 	// Circuit breaker state
 	mu               sync.RWMutex
@@ -123,8 +122,6 @@ type GatewayService struct {
 	circuitOpen      bool
 	cooldownDuration time.Duration
 	maxFailures      int
-
-	maxPayloadBytes int64
 }
 
 // FieldReader provides read access to individual document fields, backing the
@@ -144,7 +141,8 @@ type AuditLogger interface {
 	LogFieldRead(operatorSessionID, collection, documentID, fieldPath string, value FieldValue) error
 }
 
-// Dependencies groups all dependencies for NewGatewayService to reduce constructor bloat.
+// Dependencies groups all construction-phase dependencies for NewGatewayService.
+// These fields are immutable after construction.
 type Dependencies struct {
 	Logger           *slog.Logger
 	Responder        *response.Writer
@@ -152,6 +150,22 @@ type Dependencies struct {
 	ScrubbingService *scrubbing.ScrubbingService
 	MaxPayloadBytes  int64
 	Posture          string // Gateway posture: doctrine, consensus, or notary
+	A2ADownstreamURL string // A2A downstream server URL (construction-phase)
+	PublicBaseURL    string // Public base URL for approval links (construction-phase)
+}
+
+// RuntimeDependencies bundles all runtime-phase dependencies that are set once
+// before the first request, via SetRuntimeDeps. This replaces the individual
+// SetDependencies/SetDBService/SetSessionValidator/SetAuditLogger setters.
+type RuntimeDependencies struct {
+	EnvProc           governance.EnvelopeProcessor
+	StateRootProvider StateRootProvider
+	SigningKey        ed25519.PrivateKey
+	KeyID             string
+	DownstreamURL     string
+	DBService         FieldReader
+	SessionValidator  SessionValidator
+	AuditLogger       AuditLogger
 }
 
 func NewGatewayService(deps Dependencies) (*GatewayService, error) {
@@ -184,6 +198,8 @@ func NewGatewayService(deps Dependencies) (*GatewayService, error) {
 		nativeToolHandler: nativeToolHandler,
 		scrubbingService:  deps.ScrubbingService,
 		posture:           deps.Posture,
+		a2aDownstreamURL:  deps.A2ADownstreamURL,
+		publicBaseURL:     deps.PublicBaseURL,
 		maxFailures:       5,
 		cooldownDuration:  1 * time.Minute,
 		maxPayloadBytes:   deps.MaxPayloadBytes,
@@ -257,40 +273,37 @@ func (g *GatewayService) RunMaintenance(ctx context.Context) {
 	}
 }
 
-func (g *GatewayService) SetDependencies(p governance.EnvelopeProcessor, srp StateRootProvider, key ed25519.PrivateKey, keyID string, downstreamURL string) {
-	g.envProc = p
-	g.stateRootProvider = srp
-	g.signingKey = key
-	g.keyID = keyID
-	g.downstreamURL = downstreamURL
+// SetRuntimeDeps atomically sets all runtime-phase dependencies. This replaces
+// the individual SetDependencies/SetDBService/SetSessionValidator/SetAuditLogger
+// setters. Must be called once before the first request is processed.
+func (g *GatewayService) SetRuntimeDeps(deps RuntimeDependencies) {
+	g.runtimeDeps.Store(&deps)
 }
 
-func (g *GatewayService) SetA2ADependencies(downstreamURL string) {
-	g.a2aDownstreamURL = downstreamURL
+// runtimeReady returns true if runtime dependencies have been wired.
+func (g *GatewayService) runtimeReady() bool {
+	return g.runtimeDeps.Load() != nil
 }
 
-func (g *GatewayService) SetPublicBaseURL(baseURL string) {
-	g.publicBaseURL = baseURL
+// getRuntimeDeps returns the runtime dependencies or nil if not yet wired.
+func (g *GatewayService) getRuntimeDeps() *RuntimeDependencies {
+	return g.runtimeDeps.Load()
 }
 
 // SetTribunalDeliberator sets the Tribunal deliberation client for L2 consensus votes.
 // This is wired under consensus and notary postures when a Tribunal is configured.
+// Thread-safe via atomic.Value.
 func (g *GatewayService) SetTribunalDeliberator(td TribunalDeliberator) {
-	g.tribunalDeliberator = td
+	g.tribunalDeliberator.Store(td)
 }
 
-func (g *GatewayService) SetDBService(dbService FieldReader) {
-	g.dbService = dbService
-}
-
-// SetSessionValidator sets the L3 session validator for field read operations
-func (g *GatewayService) SetSessionValidator(validator SessionValidator) {
-	g.sessionValidator = validator
-}
-
-// SetAuditLogger sets the audit logger for field read operations
-func (g *GatewayService) SetAuditLogger(logger AuditLogger) {
-	g.auditLogger = logger
+// getTribunalDeliberator returns the Tribunal deliberator or nil if not configured.
+func (g *GatewayService) getTribunalDeliberator() TribunalDeliberator {
+	v := g.tribunalDeliberator.Load()
+	if v == nil {
+		return nil
+	}
+	return v.(TribunalDeliberator)
 }
 
 // isNativeTool checks if a tool name is a native tool compiled into the Operator.
