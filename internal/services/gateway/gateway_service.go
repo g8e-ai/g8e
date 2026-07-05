@@ -515,7 +515,7 @@ func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 // SetTribunal sets the Tribunal service for L2 consensus deliberation.
 // This is called by the boot sequence after the TribunalService is constructed.
 // The Tribunal is registered on the mTLS mux and the HTTP deliberator is wired
-// into the MCP gateway for consensus posture.
+// into the MCP gateway for consensus and notary postures.
 func (ls *GatewayModeService) SetTribunal(ts *tribunal.TribunalService) {
 	ls.tribunal = ts
 	if ls.handler != nil {

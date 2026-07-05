@@ -274,7 +274,7 @@ func (g *GatewayService) SetPublicBaseURL(baseURL string) {
 }
 
 // SetTribunalDeliberator sets the Tribunal deliberation client for L2 consensus votes.
-// This is wired only under consensus posture when a Tribunal URL is configured.
+// This is wired under consensus and notary postures when a Tribunal is configured.
 func (g *GatewayService) SetTribunalDeliberator(td TribunalDeliberator) {
 	g.tribunalDeliberator = td
 }

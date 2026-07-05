@@ -14,7 +14,7 @@ The posture is set at startup via `--posture <doctrine|consensus|notary>` and ca
 
 A third enforcement point exists at startup:
 
-3. **Gateway startup** (`internal/cli/serve/gateway.go`): validates consensus posture prerequisites before any services start.
+3. **Gateway startup** (`internal/cli/serve/gateway.go`): validates consensus and notary posture prerequisites before any services start.
 
 ### GovernanceEnvelope Protobuf Schema
 
@@ -76,7 +76,7 @@ The canonical transaction container is defined in `protocol/proto/g8e/common/v1/
   - **Signature verification**: Each vote's `consensus_signature` (Ed25519 over `<transaction_hash>|<decision>`) is verified against the trusted public key from the `SignerStore`. Invalid signatures are excluded from quorum count (`l4_warden.go:611-623`).
   - **Quorum check**: The number of affirmative (decision = true) votes from valid, distinct members must be >= `policy.Quorum`. If not → `ErrTxL2QuorumNotMet` (`l4_warden.go:630-636`).
 
-**Startup validation**: The gateway performs additional validation at startup for consensus posture (`internal/cli/serve/gateway.go`):
+**Startup validation**: The gateway performs additional validation at startup for consensus and notary postures (`internal/cli/serve/gateway.go`):
 - `tribunalID` must be non-empty → `ErrConfigTribunalIDRequired` (`internal/config/config.go:292-293`).
 - The `TribunalPolicy` must exist in the database and be enabled.
 - **Quorum must be >= 1** → `ErrConfigTribunalQuorumLow` (`internal/config/config.go:295-296`). Quorum=1 is valid for single-member ensembles (e.g., demo deployments with a single-key ensemble).
@@ -119,6 +119,10 @@ The canonical transaction container is defined in `protocol/proto/g8e/common/v1/
 
 Non-mutation actions (e.g., `FS_READ`, `FS_LIST`, `FETCH_LOGS`, `HEARTBEAT`) do not require L3 proof even under notary posture. This is enforced by the `isMutation(actionType)` check that gates all L3 fail-closed paths (`l4_warden.go:647, 655, 670`).
 
+**Startup validation**: Same as consensus posture — notary requires L2 signatures, so the gateway validates `tribunalID`, `TribunalPolicy` existence, and quorum at startup, and bootstraps the Tribunal service in-process (see consensus startup validation above).
+
+**Tribunal bootstrap**: Same as consensus posture — `BootstrapTribunal` constructs the `TribunalService` and wires it as both the mTLS HTTP handler and the local deliberator via `SetTribunalDeliberator` (`internal/cli/serve/gateway.go`). The in-process `LocalDeliberator` signs L2 votes with the gateway's actuator key for single-member tribunals.
+
 **Default for outbound mode**: Notary is the default posture for outbound (operator) mode (`internal/config/config.go:534`). This ensures that operators running in outbound mode require full L1/L2/L3 enforcement by default, since the L3Notary is nil and mutations will fail-closed with `ErrTxL3NotaryNotConfigured` unless an L3 notary is explicitly configured.
 
 ---
@@ -146,9 +150,9 @@ The posture is checked at the following code locations. Each check is a fail-clo
 | L3 notary configured (mutations only) | `l4_warden.go:654-659` | Audited | Audited | **Enforced** |
 | L3 proof valid (mutations only) | `l4_warden.go:670-673` | Audited | Audited | **Enforced** |
 | L2/L3 status in receipt | `l5_actuator.go:109-127` | Recorded | Recorded | Recorded |
-| Startup: tribunal ID required | `config.go:292-293` | - | **Enforced** | - |
-| Startup: quorum >= 1 | `config.go:295-296` | - | **Enforced** | - |
-| Startup: tribunal policy exists + enabled | `internal/cli/serve/gateway.go` | - | **Enforced** | - |
+| Startup: tribunal ID required | `config.go:292-293` | - | **Enforced** | **Enforced** |
+| Startup: quorum >= 1 | `config.go:295-296` | - | **Enforced** | **Enforced** |
+| Startup: tribunal policy exists + enabled | `internal/cli/serve/gateway.go` | - | **Enforced** | **Enforced** |
 | Invalid posture name → panic | `posture.go:75-81` | **Enforced** | **Enforced** | **Enforced** |
 
 **"Enforced"** = fail-closed gate; transaction is rejected if the check fails.
@@ -539,7 +543,7 @@ The `Deliberate` method:
 
 ### Tribunal Bootstrap at Gateway Startup
 
-When the gateway starts in consensus posture, `BootstrapTribunal` (`internal/cli/serve/gateway.go:465-492`) is called to construct and wire the Tribunal service. Under doctrine or notary posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
+When the gateway starts in consensus or notary posture, `BootstrapTribunal` (`internal/cli/serve/gateway.go:465-492`) is called to construct and wire the Tribunal service. Under doctrine posture, the Tribunal is not constructed in-process; L2 votes must be obtained from an external Tribunal service when required.
 
 1. **Load policy**: Retrieves the `TribunalPolicy` from the database via `TribunalStore.GetTribunal(tribunalID)`. If the policy is missing, returns `ErrTxL2TribunalNotConfigured`.
 2. **Construct key provider**: Creates a `FileKeyProvider` for the configured secrets directory, then wraps it with the actuator key fallback logic (see [Bootstrap Key Resolution](#bootstrap-key-resolution)).
