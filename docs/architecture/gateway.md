@@ -466,22 +466,20 @@ The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the g
 - Accepts JSON-RPC 2.0 requests over stdin/stdout
 - Proxies requests to the gateway HTTPS endpoint with mTLS
 - Identity is carried in the delegated mTLS certificate's URI SANs (no session headers needed)
-- Detects L3 approval responses and polls for completion
+- Detects L3 approval responses and subscribes to SSE for completion
 - Auto-opens browser for L3 approval URLs
-- Implements retry logic with configurable timeout (5 minutes default)
+- Re-sends the original request once the approval.completed SSE event arrives
 
-### L3 Approval Polling
+### L3 Approval SSE Notification
 
 When the gateway returns an L3 approval response, the stdio proxy:
 1. Extracts the approval URL from the response (structured field or text content)
 2. Opens the browser automatically using `internal/cli/platform/browser.go`
-3. Polls the gateway every 10 seconds for up to 30 iterations (total timeout: 300 seconds / 5 minutes)
-4. Returns the final result once approval is complete
+3. Subscribes to the gateway's SSE stream (`GET /api/v1/sse/stream`) scoped to the user
+4. Waits for the `approval.completed` SSE event with a matching transaction hash
+5. Re-sends the original request and returns the result
 
-The polling logic is implemented in `proxySessionToGatewayWithRetry` with constants:
-- `l3ApprovalMaxIterations`: 30
-- `l3ApprovalPollInterval`: 10 seconds
-- Total timeout: 30 x 10 seconds = 300 seconds (5 minutes)
+CLI credentials (mTLS) are required for L3 approval flows. The SSE wait is implemented in `auth.WaitForApprovalSSE` (`internal/cli/auth/approval_sse.go`) with a 3-minute timeout (the gateway's approval request TTL is 2 minutes).
 
 ### Browser Utility
 

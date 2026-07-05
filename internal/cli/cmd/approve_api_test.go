@@ -129,7 +129,8 @@ func sseApproveServer(t *testing.T, userID, txHash string) *httptest.Server {
 
 // sseNoEventServer returns an httptest.Server that accepts SSE connections
 // but never sends any events, causing the client to block until context cancel.
-func sseNoEventServer() *httptest.Server {
+func sseNoEventServer(t *testing.T) *httptest.Server {
+	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		<-r.Context().Done()
@@ -173,7 +174,7 @@ func TestApproveCmd_SSE_HappyPath(t *testing.T) {
 func TestApproveCmd_SSE_Timeout(t *testing.T) {
 	cfg, _ := setupApproveSSETestEnv(t)
 
-	srv := sseNoEventServer()
+	srv := sseNoEventServer(t)
 	t.Cleanup(srv.Close)
 	withEndpointOverride(t, srv.URL)
 
@@ -327,7 +328,7 @@ func TestApproveCmd_NoCredentials_Error(t *testing.T) {
 
 	err := cmd.RunE(cmd, []string{"txhash123"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "load credentials")
+	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 }
 
 func generateApproveTestCertDER(t *testing.T, priv ed25519.PrivateKey) []byte {

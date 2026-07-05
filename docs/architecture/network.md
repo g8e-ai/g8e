@@ -184,7 +184,7 @@ The gateway provides real-time event streaming from app workloads to browser and
 ### Agent Integration
 
 The platform provides zero-config ingress for agentic CLI coding tools through:
-- **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval polling and browser opening.
+- **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval SSE notifications and browser opening.
 
 ---
 

@@ -9,7 +9,7 @@
 ```
 Claude Code (g8e registered via `claude mcp add g8e -- g8e mcp stdio`)
     ↓ MCP stdio
-g8e mcp stdio  (mTLS-bound CLI session; auto-opens approval page; polls)
+g8e mcp stdio  (mTLS-bound CLI session; auto-opens approval page; subscribes to SSE)
     ↓ mTLS → gateway /mcp
 g8e Gateway, notary posture
     L1 compiled doctrine → L2 in-process Tribunal → L3 suspend + WebAuthn → L4 warden → L5 actuator
@@ -208,7 +208,7 @@ Instead of waiting for the browser to auto-open, you can drive approval from the
 g8e auth approve <tx_hash>
 ```
 
-This opens the same browser page and polls status. Good to show once as *"the operator can also drive this from the terminal."*
+This opens the same browser page and subscribes to the SSE stream for `approval.completed`. Good to show once as *"the operator can also drive this from the terminal."*
 
 ---
 
@@ -217,9 +217,9 @@ This opens the same browser page and polls status. Good to show once as *"the op
 | Fact | Value | Impact |
 |------|-------|--------|
 | Approval TTL | **2 minutes** | Don't linger narrating while a suspension is pending — it expires and the agent must re-issue |
-| Poll interval | **10 seconds** | Up to ~10s beat between tapping passkey and Claude proceeding — use this gap to show the signed receipt |
+| SSE notification | **Near-instant** | The `approval.completed` event fires as soon as the passkey ceremony completes — Claude proceeds immediately |
 | Every `tools/call` is a mutation | **Yes** | Even a read-only `drone_cmd.py status` requires a passkey tap in notary posture. Keep to 2–3 tool calls |
-| Max poll attempts | **30** (5 min total) | If you don't approve within 2 min the TTL expires; if you approve but the poll window closes, Claude won't get the result |
+| CLI credentials | **Required** | mTLS credentials are needed for SSE subscription; without them the L3 approval flow returns an error |
 
 ---
 

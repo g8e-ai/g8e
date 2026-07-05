@@ -15,6 +15,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -614,9 +615,90 @@ func TestProxyToGateway(t *testing.T) {
 }
 
 func TestProxyToGatewayWithRetry(t *testing.T) {
-	t.Run("polling fallback constants are defined", func(t *testing.T) {
-		assert.Equal(t, 30, l3ApprovalMaxIterations)
-		assert.Equal(t, 10*time.Second, l3ApprovalPollInterval)
+	t.Run("SSE credentials missing returns ErrNotAuthenticated", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			resp := JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      float64(1),
+				Result: map[string]interface{}{
+					"approval_url": "https://g8e.local:8443/api/v1/approve/tx-missing-creds",
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": "Execution paused. Please authorize.",
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		conn := &gatewayConn{
+			client:     &http.Client{Timeout: 5 * time.Second},
+			gatewayURL: server.URL,
+		}
+
+		req := JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+
+		_, err := proxySessionToGatewayWithRetryContext(context.Background(), conn, req, nil)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
+	})
+
+	t.Run("SSE timeout returns error without polling", func(t *testing.T) {
+		gatewayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			resp := JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      float64(1),
+				Result: map[string]interface{}{
+					"approval_url": "https://g8e.local:8443/api/v1/approve/tx-timeout",
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": "Execution paused. Please authorize.",
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer gatewayServer.Close()
+
+		sseServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			<-r.Context().Done()
+		}))
+		defer sseServer.Close()
+
+		conn := &gatewayConn{
+			client:     &http.Client{Timeout: 5 * time.Second},
+			gatewayURL: gatewayServer.URL,
+			sseClient:  &http.Client{Timeout: 5 * time.Second},
+			sseBaseURL: sseServer.URL,
+			userID:     "user-timeout-test",
+		}
+
+		req := JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+
+		_, err := proxySessionToGatewayWithRetryContext(ctx, conn, req, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "timed out")
 	})
 
 	t.Run("extractTxHashFromApprovalURL extracts hash from full URL", func(t *testing.T) {
