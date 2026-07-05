@@ -41,8 +41,18 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 			if err != nil {
 				return fmt.Errorf("root: get endpoint flag: %w", err)
 			}
+			port, err := cmd.Flags().GetInt("port")
+			if err != nil {
+				return fmt.Errorf("root: get port flag: %w", err)
+			}
 			if endpoint != "" {
-				config.SetEndpointOverride(endpoint)
+				if port > 0 {
+					config.SetEndpointOverrideWithPort(endpoint, port)
+				} else {
+					config.SetEndpointOverride(endpoint)
+				}
+			} else if port > 0 {
+				config.SetEndpointOverrideWithPort("localhost", port)
 			}
 			return nil
 		},
@@ -55,6 +65,7 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 	rootCmd.SetContext(context.WithValue(ctx, versionInfoKey{}, vi))
 
 	rootCmd.PersistentFlags().StringP("endpoint", "e", "", "Gateway endpoint (host or host:port) for remote enrollment")
+	rootCmd.PersistentFlags().IntP("port", "p", 0, "Gateway HTTPS port (overrides default 8443; use with --endpoint)")
 
 	rootCmd.AddCommand(
 		gatewayCmd(),
