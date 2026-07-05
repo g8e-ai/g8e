@@ -614,9 +614,49 @@ func TestProxyToGateway(t *testing.T) {
 }
 
 func TestProxyToGatewayWithRetry(t *testing.T) {
-	t.Run("proxyToGatewayWithRetry constants are defined", func(t *testing.T) {
+	t.Run("polling fallback constants are defined", func(t *testing.T) {
 		assert.Equal(t, 30, l3ApprovalMaxIterations)
 		assert.Equal(t, 10*time.Second, l3ApprovalPollInterval)
+	})
+
+	t.Run("extractTxHashFromApprovalURL extracts hash from full URL", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			input string
+			want  string
+		}{
+			{
+				name:  "standard approval URL",
+				input: "https://g8e.local:8443/api/v1/approve/abc123",
+				want:  "abc123",
+			},
+			{
+				name:  "URL with query params",
+				input: "https://g8e.local:8443/api/v1/approve/txhash456?foo=bar",
+				want:  "txhash456",
+			},
+			{
+				name:  "URL with fragment",
+				input: "https://g8e.local:8443/api/v1/approve/hash789#section",
+				want:  "hash789",
+			},
+			{
+				name:  "empty URL",
+				input: "",
+				want:  "",
+			},
+			{
+				name:  "IP-based URL",
+				input: "https://10.0.0.5:8443/api/v1/approve/deadbeef",
+				want:  "deadbeef",
+			},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				got := extractTxHashFromApprovalURL(tt.input)
+				assert.Equal(t, tt.want, got)
+			})
+		}
 	})
 }
 

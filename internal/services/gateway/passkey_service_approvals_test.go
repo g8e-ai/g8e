@@ -29,6 +29,8 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/internal/response"
+	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestPasskeyService_HandleApprovalAction(t *testing.T) {
@@ -422,6 +424,91 @@ func TestPasskeyService_HandleApprovalPage(t *testing.T) {
 
 		assert.Equal(t, http.StatusFound, rr.Code)
 		assert.Equal(t, "/console/#approve="+txHash, rr.Header().Get("Location"))
+	})
+}
+
+func TestEmitApprovalCompletedSSE(t *testing.T) {
+	t.Run("appends event and publishes", func(t *testing.T) {
+		t.Parallel()
+		db := newTestDB(t)
+		logger := testutil.NewTestLogger()
+		webSessionSvc := NewWebSessionService(db, logger)
+		resp := response.NewWriter(logger)
+		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		require.NoError(t, err)
+		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+
+		sseStore := NewSSEEventService(db.GetDB(), logger)
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+		handler.SetSSEDependencies(sseStore, pubsub)
+
+		const userID = "u-approval-sse-1"
+		const txHash = "tx-approval-sse-1"
+
+		handler.emitApprovalCompletedSSE(userID, txHash)
+
+		route := SSERoute{UserID: userID}
+		events, err := sseStore.SSEEventsListSince(route, 0, 10)
+		require.NoError(t, err)
+		require.Len(t, events, 1)
+		assert.Equal(t, "approval.completed", events[0].EventType)
+		assert.Contains(t, events[0].Payload, txHash)
+		assert.Contains(t, events[0].Payload, userID)
+
+		var payload internalSSEPushPayload
+		require.NoError(t, json.Unmarshal([]byte(events[0].Payload), &payload))
+		assert.Equal(t, userID, payload.UserID)
+
+		var inner models.ApprovalCompletedEvent
+		require.NoError(t, json.Unmarshal(payload.Event, &inner))
+		assert.Equal(t, "approval.completed", inner.Type)
+		assert.Equal(t, userID, inner.UserID)
+		assert.Equal(t, txHash, inner.TxHash)
+	})
+
+	t.Run("no-ops when SSE dependencies not set", func(t *testing.T) {
+		t.Parallel()
+		db := newTestDB(t)
+		logger := testutil.NewTestLogger()
+		webSessionSvc := NewWebSessionService(db, logger)
+		resp := response.NewWriter(logger)
+		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		require.NoError(t, err)
+		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+
+		const userID = "u-approval-no-sse-1"
+		const txHash = "tx-approval-no-sse-1"
+
+		handler.emitApprovalCompletedSSE(userID, txHash)
+
+		sseStore := NewSSEEventService(db.GetDB(), logger)
+		route := SSERoute{UserID: userID}
+		events, err := sseStore.SSEEventsListSince(route, 0, 10)
+		require.NoError(t, err)
+		assert.Empty(t, events)
+	})
+
+	t.Run("no-ops when userID is empty", func(t *testing.T) {
+		t.Parallel()
+		db := newTestDB(t)
+		logger := testutil.NewTestLogger()
+		webSessionSvc := NewWebSessionService(db, logger)
+		resp := response.NewWriter(logger)
+		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
+		require.NoError(t, err)
+		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+
+		sseStore := NewSSEEventService(db.GetDB(), logger)
+		pubsub := NewGatewayWebSocketHandler(logger)
+		t.Cleanup(func() { pubsub.Close() })
+		handler.SetSSEDependencies(sseStore, pubsub)
+
+		handler.emitApprovalCompletedSSE("", "tx-empty-user")
+
+		events, err := sseStore.SSEEventsListSince(SSERoute{UserID: ""}, 0, 10)
+		require.Error(t, err)
+		assert.Empty(t, events)
 	})
 }
 

@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,11 +57,6 @@ const (
 	envG8EAppID      = "G8E_APP_ID"
 	envG8EAppCert    = "G8E_APP_CERT"
 	envG8EAppKey     = "G8E_APP_KEY"
-)
-
-var (
-	l3ApprovalMaxIterations = 30
-	l3ApprovalPollInterval  = 10 * time.Second
 )
 
 // nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
@@ -274,6 +270,13 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 type gatewayConn struct {
 	client     *http.Client
 	gatewayURL string
+
+	// SSE fields for L3 approval notifications. Populated when CLI credentials
+	// are available so the stdio proxy can subscribe to approval.completed events
+	// instead of polling.
+	sseBaseURL string
+	userID     string
+	sseClient  *http.Client
 }
 
 // buildGatewayConn constructs a gatewayConn. It reads the delegated credential
@@ -366,6 +369,22 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 		"gateway_url", conn.gatewayURL,
 	)
 
+	// Populate SSE fields for L3 approval notifications. The SSE client uses
+	// the CLI cert (not the delegated/app cert) because the gateway's SSE auth
+	// middleware validates CLI session ownership. The gateway URL is stripped
+	// of the /mcp suffix to get the base URL for SSE endpoints.
+	if creds, err := auth.LoadCredentials(cfg); err == nil && creds != nil && creds.UserID != "" {
+		if sseClient, err := auth.BuildMTLSClient(cfg, 0); err == nil {
+			conn.sseClient = sseClient
+			conn.userID = creds.UserID
+			// Use OperatorPublicURL (g8e.local) for SSE to ensure TLS ServerName
+			// matches the gateway cert SAN. Deriving from gatewayURL may produce
+			// an IP-based URL that fails TLS verification.
+			conn.sseBaseURL = strings.TrimSuffix(cfg.OperatorPublicURL(), "/")
+			logger.Info("SSE approval notifications enabled", "user_id", creds.UserID)
+		}
+	}
+
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 
@@ -452,7 +471,11 @@ func proxySessionToGateway(session *gatewayConn, req JSONRPCRequest) (JSONRPCRes
 	return resp, nil
 }
 
-// proxySessionToGatewayWithRetryContext performs L3 approval polling with context support.
+// proxySessionToGatewayWithRetryContext handles L3 approval responses by opening
+// the browser for WebAuthn authorization and waiting for the approval.completed
+// SSE event from the gateway. Once received, it re-sends the original request
+// and returns the result. SSE credentials are required — there is no polling
+// fallback.
 func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gatewayConn, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
 	resp, err := proxySessionToGateway(session, req)
 	if err != nil {
@@ -475,34 +498,44 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gateway
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 	}
 
-	ticker := time.NewTicker(l3ApprovalPollInterval)
-	defer ticker.Stop()
+	if session.sseClient == nil || session.sseBaseURL == "" || session.userID == "" {
+		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
+	}
 
-	for i := 0; i < l3ApprovalMaxIterations; i++ {
-		select {
-		case <-ctx.Done():
-			if logger != nil {
-				logger.Warn("L3 approval polling cancelled by context")
-			}
-			return resp, ctx.Err()
-		case <-ticker.C:
-			retryResp, err := proxySessionToGateway(session, req)
-			if err != nil {
-				continue
-			}
-			if !isL3ApprovalResponse(retryResp) {
-				if logger != nil {
-					logger.Info("L3 approval completed, proceeding with execution")
-				}
-				return retryResp, nil
-			}
+	txHash := extractTxHashFromApprovalURL(approvalURL)
+	if err := auth.WaitForApprovalSSE(ctx, session.sseClient, session.sseBaseURL, session.userID, txHash); err != nil {
+		if logger != nil {
+			logger.Warn("L3 approval SSE wait ended", "error", err)
 		}
+		return resp, err
 	}
 
-	if logger != nil {
-		logger.Warn("L3 approval timeout, returning original response")
+	retryResp, err := proxySessionToGateway(session, req)
+	if err != nil {
+		return resp, err
 	}
-	return resp, nil
+	if logger != nil {
+		logger.Info("L3 approval completed, proceeding with execution")
+	}
+	return retryResp, nil
+}
+
+// extractTxHashFromApprovalURL extracts the transaction hash from an approval
+// URL path (e.g., "https://g8e.local:8443/api/v1/approve/abc123" -> "abc123").
+func extractTxHashFromApprovalURL(approvalURL string) string {
+	if approvalURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(approvalURL)
+	if err != nil {
+		return ""
+	}
+	path := strings.TrimPrefix(parsed.Path, constants.APIPaths.ApprovePagePrefix)
+	// Remove any trailing query or fragment
+	if idx := strings.IndexAny(path, "?#"); idx >= 0 {
+		path = path[:idx]
+	}
+	return path
 }
 
 // ─── createMCPClient: kept for tests and external callers ───────────────────
