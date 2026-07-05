@@ -84,66 +84,130 @@ type GatewayModeService struct {
 	ready   bool
 }
 
-// NewGatewayModeService creates a new gateway mode service.
-func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayModeService, error) {
-	db, err := OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock, nil)
-	if err != nil {
-		return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
+// gatewayServiceBuilder constructs a GatewayModeService from configuration,
+// with optional pre-built components for test environments.
+type gatewayServiceBuilder struct {
+	cfg    *config.Config
+	logger *slog.Logger
+
+	// Pre-built components (test only). When nil, build() constructs them.
+	preBuiltDB     *CanonicalDBService
+	preBuiltPubsub *GatewayWebSocketHandler
+
+	// testMode skips production-only initialization (persona seeding,
+	// certificate identity resolution, JWKS, strict error checking on
+	// SecretManager and passkey service).
+	testMode bool
+}
+
+// newGatewayServiceBuilder creates a builder for production use.
+func newGatewayServiceBuilder(cfg *config.Config, logger *slog.Logger) *gatewayServiceBuilder {
+	return &gatewayServiceBuilder{cfg: cfg, logger: logger}
+}
+
+// withPreBuiltDB sets a pre-built CanonicalDBService (test only).
+func (b *gatewayServiceBuilder) withPreBuiltDB(db *CanonicalDBService) *gatewayServiceBuilder {
+	b.preBuiltDB = db
+	return b
+}
+
+// withPreBuiltPubsub sets a pre-built GatewayWebSocketHandler (test only).
+func (b *gatewayServiceBuilder) withPreBuiltPubsub(pubsub *GatewayWebSocketHandler) *gatewayServiceBuilder {
+	b.preBuiltPubsub = pubsub
+	return b
+}
+
+// withTestMode enables test mode, which skips production-only initialization.
+func (b *gatewayServiceBuilder) withTestMode() *gatewayServiceBuilder {
+	b.testMode = true
+	return b
+}
+
+// build assembles the GatewayModeService from the builder's configuration.
+func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
+	cfg := b.cfg
+	logger := b.logger
+
+	// --- DB and pubsub ---
+	db := b.preBuiltDB
+	if db == nil {
+		var err error
+		db, err = OpenCanonicalDBService(cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, cfg.Gateway.VaultDir, logger, false, cfg.Gateway.VaultKeyPath, cfg.Gateway.VaultRequireUnlock, nil)
+		if err != nil {
+			return nil, fmt.Errorf("gateway: failed to initialize database: %w", err)
+		}
 	}
 
-	pubsub := NewGatewayWebSocketHandler(logger)
+	pubsub := b.preBuiltPubsub
+	if pubsub == nil {
+		pubsub = NewGatewayWebSocketHandler(logger)
+	}
+
+	// --- Secret manager ---
 	sm, err := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
-	if err != nil {
+	if err != nil && !b.testMode {
 		return nil, fmt.Errorf("gateway: initialize secret manager: %w", err)
 	}
+
+	// --- PKI ---
 	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
+
+	// --- Core services ---
 	userSvc := NewUserService(db, logger)
 	res := response.NewWriter(logger)
 
 	var jwksProvider *JWKSProvider
-	if cfg.Gateway.JWKSURL != "" {
+	if !b.testMode && cfg.Gateway.JWKSURL != "" {
 		jwksProvider = NewJWKSProvider(cfg.Gateway.JWKSURL)
 	}
 
 	personaSvc := NewPersonaService(db, logger)
-	// Initialize default personas
-	for _, persona := range DefaultPersonaDefinitions() {
-		existing, err := personaSvc.GetByID(persona.ID)
-		if err != nil {
-			return nil, fmt.Errorf("gateway: failed to check existing persona %s: %w", persona.ID, err)
-		}
-		if existing == nil {
-			if err := personaSvc.CreatePersona(&persona); err != nil {
-				return nil, fmt.Errorf("gateway: failed to create persona %s: %w", persona.ID, err)
+	if !b.testMode {
+		for _, persona := range DefaultPersonaDefinitions() {
+			existing, err := personaSvc.GetByID(persona.ID)
+			if err != nil {
+				return nil, fmt.Errorf("gateway: failed to check existing persona %s: %w", persona.ID, err)
+			}
+			if existing == nil {
+				if err := personaSvc.CreatePersona(&persona); err != nil {
+					return nil, fmt.Errorf("gateway: failed to create persona %s: %w", persona.ID, err)
+				}
 			}
 		}
 	}
 
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, cfg.Gateway.JWTRoleClaim, cfg.Gateway.JWTIssuer, cfg.Gateway.JWTAudience)
-	// Wire up auth service to user service for cache invalidation
+	jwtRoleClaim := cfg.Gateway.JWTRoleClaim
+	jwtIssuer := cfg.Gateway.JWTIssuer
+	jwtAudience := cfg.Gateway.JWTAudience
+	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, jwksProvider, jwtRoleClaim, jwtIssuer, jwtAudience)
 	userSvc.SetAuthService(auth)
+
 	cliSessionSvc := NewCLISessionService(db, logger)
 	operatorSessionSvc := NewOperatorSessionService(db, logger)
 	webSessionSvc := NewWebSessionService(db, logger)
 
-	// Detect network identity for certificate generation based on mode
-	extraIPs, extraDNSNames, err := resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
-	if err != nil {
-		return nil, err
-	}
-	if len(extraDNSNames) > 0 {
-		if err := pki.InitializePKIWithNames(extraIPs, extraDNSNames); err != nil {
-			return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
+	// --- Certificate identity and PKI initialization ---
+	var extraIPs []net.IP
+	if !b.testMode {
+		var extraDNSNames []string
+		extraIPs, extraDNSNames, err = resolveGatewayCertificateIdentity(cfg.Gateway.CertMode, cfg.Gateway.NetworkIdentityFile, network.NewDetector(logger), logger)
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		if err := pki.InitializePKI(extraIPs); err != nil {
-			return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
+		if len(extraDNSNames) > 0 {
+			if err := pki.InitializePKIWithNames(extraIPs, extraDNSNames); err != nil {
+				return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
+			}
+		} else {
+			if err := pki.InitializePKI(extraIPs); err != nil {
+				return nil, fmt.Errorf("gateway: failed to initialize PKI hierarchy: %w", err)
+			}
 		}
 	}
 
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 
-	// Initialize passkey service for L3 brokerage
+	// --- Passkey ---
 	passkeyCfg := &PasskeyConfig{
 		RpID:      cfg.Gateway.PasskeyRpID,
 		RpName:    cfg.Gateway.PasskeyRpName,
@@ -152,12 +216,12 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		HTTPSPort: cfg.Gateway.HTTPSPort,
 	}
 	passkey, err := NewPasskeyService(db, logger, passkeyCfg)
-	if err != nil {
+	if err != nil && !b.testMode {
 		return nil, fmt.Errorf("gateway: failed to initialize passkey service: %w", err)
 	}
 	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes)
 
-	// Initialize suspended transaction service for gateway mode
+	// --- Suspended transaction service ---
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
 		DBPath:               paths.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
 		MaxDBSizeMB:          256,
@@ -169,7 +233,7 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 		return nil, fmt.Errorf("gateway: failed to initialize suspended transaction service: %w", err)
 	}
 
-	// Initialize ScrubbingService for data scrubbing (enabled by default)
+	// --- Scrubbing and MCP gateway ---
 	scrubbingConfig := scrubbing.DefaultConfig()
 	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, logger, nil)
 
@@ -213,6 +277,11 @@ func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayMod
 	}
 
 	return ls, nil
+}
+
+// NewGatewayModeService creates a new gateway mode service.
+func NewGatewayModeService(cfg *config.Config, logger *slog.Logger) (*GatewayModeService, error) {
+	return newGatewayServiceBuilder(cfg, logger).build()
 }
 
 type networkIdentityDetector interface {
@@ -303,90 +372,14 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-// newGatewayModeServiceFromComponents assembles a GatewayModeService from pre-built components.
+// newGatewayModeServiceForTest assembles a GatewayModeService from pre-built components.
 // Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayModeServiceFromComponents(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
-	sm, _ := NewSecretManager(db.db, cfg.Gateway.SecretsDir, logger)
-	pki := newPKIAuthority(cfg.Gateway.DataDir, cfg.Gateway.PKIDir, db, sm, logger)
-	userSvc := NewUserService(db, logger)
-	personaSvc := NewPersonaService(db, logger)
-	res := response.NewWriter(logger)
-	auth := NewAuthService(db, pki, logger, userSvc, personaSvc, res, cfg.Gateway.SecretsDir, nil, "", "", "")
-	// Wire up auth service to user service for cache invalidation
-	userSvc.SetAuthService(auth)
-	cliSessionSvc := NewCLISessionService(db, logger)
-	operatorSessionSvc := NewOperatorSessionService(db, logger)
-	webSessionSvc := NewWebSessionService(db, logger)
-	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
-
-	// Initialize passkey service for L3 brokerage (test configuration)
-	passkeyCfg := &PasskeyConfig{
-		RpID:      cfg.Gateway.PasskeyRpID,
-		RpName:    cfg.Gateway.PasskeyRpName,
-		RpOrigins: cfg.Gateway.PasskeyRpOrigins,
-		HTTPPort:  cfg.Gateway.HTTPPort,
-		HTTPSPort: cfg.Gateway.HTTPSPort,
-	}
-	// Passkey service initialization is optional; ignore errors for test configuration
-	passkey, _ := NewPasskeyService(db, logger, passkeyCfg) //nolint:errcheck
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, res, cfg.Gateway.MaxPayloadBytes)
-
-	// Initialize suspended transaction service for gateway mode (test configuration)
-	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               paths.GetSuspendedTransactionsDBPath(cfg.Gateway.DataDir),
-		MaxDBSizeMB:          256,
-		RetentionDays:        7,
-		PruneIntervalMinutes: 30,
-	}
-	suspendedTxService, err := storage.NewSuspendedTransactionService(suspendedTxConfig, logger)
-	if err != nil {
-		return nil, fmt.Errorf("gateway: failed to initialize suspended transaction service: %w", err)
-	}
-
-	// Initialize ScrubbingService for data scrubbing (enabled by default)
-	scrubbingConfig := scrubbing.DefaultConfig()
-	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, logger, nil)
-
-	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
-		Logger:           logger,
-		Responder:        res,
-		SuspendedStore:   suspendedTxService,
-		ScrubbingService: scrubbingService,
-		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
-		Posture:          string(cfg.Gateway.Posture),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
-	}
-
-	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
-	passkeyHandler.SetSSEDependencies(db.SSEStore, pubsub)
-
-	ls := &GatewayModeService{
-		cfg:                cfg,
-		logger:             logger,
-		db:                 db,
-		pubsub:             pubsub,
-		auth:               auth,
-		pki:                pki,
-		reg:                reg,
-		passkey:            passkeyHandler,
-		userSvc:            userSvc,
-		cliSessionSvc:      cliSessionSvc,
-		operatorSessionSvc: operatorSessionSvc,
-		webSessionSvc:      webSessionSvc,
-		suspendedTxService: suspendedTxService,
-		suspendedTxCloser:  suspendedTxService,
-		extraIPs:           nil, // Test configuration does not use extra IPs
-		mcpGateway:         mcpGateway,
-		responder:          res,
-	}
-
-	if err := ls.initHandlersAndServers(); err != nil {
-		return nil, fmt.Errorf("gateway: failed to initialize handlers and servers: %w", err)
-	}
-
-	return ls, nil
+func newGatewayModeServiceForTest(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
+	return newGatewayServiceBuilder(cfg, logger).
+		withPreBuiltDB(db).
+		withPreBuiltPubsub(pubsub).
+		withTestMode().
+		build()
 }
 
 func (ls *GatewayModeService) initHandlersAndServers() error {

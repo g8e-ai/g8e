@@ -174,9 +174,9 @@ func OpenCanonicalDBService(dataDir string, secretsDir string, vaultDir string, 
 
 	// Initialize extracted services with the same db connection
 	svc.DocStore = NewDocumentStoreService(db, logger)
-	svc.AppPolicyStore = NewAppPolicyStoreService(db, logger)
-	svc.SignerStore = NewSignerStoreService(db, logger)
-	svc.TribunalStore = NewTribunalStoreService(db, logger, svc.SignerStore)
+	svc.AppPolicyStore = NewAppPolicyStoreService(db, logger, svc.DocStore)
+	svc.SignerStore = NewSignerStoreService(db, logger, svc.DocStore)
+	svc.TribunalStore = NewTribunalStoreService(db, logger, svc.DocStore, svc.SignerStore)
 	svc.StateRootSvc = NewStateRootService(db, logger)
 	svc.ReplayStore = NewReplayStoreService(db, logger)
 	svc.KVStore = NewKVStoreService(db, logger)

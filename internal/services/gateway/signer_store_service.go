@@ -35,11 +35,12 @@ type SignerStoreService struct {
 }
 
 // NewSignerStoreService creates a new signer store service.
-func NewSignerStoreService(db *sqliteutil.DB, logger *slog.Logger) *SignerStoreService {
+// docSvc is the shared DocumentStoreService instance from CanonicalDBService.
+func NewSignerStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *DocumentStoreService) *SignerStoreService {
 	return &SignerStoreService{
 		db:     db,
 		logger: logger,
-		docSvc: NewDocumentStoreService(db, logger),
+		docSvc: docSvc,
 	}
 }
 
