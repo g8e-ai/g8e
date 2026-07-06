@@ -4,8 +4,8 @@ title: Glossary
 
 # g8e Glossary
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 Core terminology for the g8e protocol, g8e Gateway, g8e Operator, and ecosystem integration (MCP, A2A). Terms are organized alphabetically.
 
@@ -127,7 +127,7 @@ The third layer of g8e governance (Authorization), focusing on human oversight. 
 - **Gateway Notary** (`gatewayNotary`): The unified notary for gateway mode. Layer 1 requires passkey (WebAuthn) authorization for all callers; proofs without a `credential_id` are rejected with `ErrPasskeyProofRequired`. Layer 2 performs CLI mTLS session verification (user match, session validity, certificate fingerprint match) when the proof includes an `mtls_cert_fingerprint` (CLI callers). Browser-only proofs skip Layer 2. Implemented by `NewGatewayL3Notary` in `internal/services/governance/l3_notary.go`.
 - **Outbound Notary** (`outboundNotary`): The notary for outbound mode. Performs suspended transaction lookup and Ed25519 signature verification over the transaction hash. The signature is verified against the `ApprovalPublicKey` stored on the suspended transaction. Implemented by `NewOutboundL3Notary`.
 - **CLI Notary** (`cliNotary`): The notary for gateway CLI mode without a passkey verifier. Performs CLI session verification followed by suspended transaction and Ed25519 signature verification. Implemented by `NewCLIL3Notary`.
-The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and polls the gateway's mTLS status endpoint (`/api/v1/approvals/status/{tx_hash}`) until the transaction is approved or times out. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
+The CLI approval flow opens a browser to the console SPA for WebAuthn ceremony and subscribes to the gateway's SSE stream for the `approval.completed` event, then verifies the approval status via the mTLS endpoint (`/api/v1/approvals/status/{tx_hash}`). CLI credentials (mTLS) are required for L3 approval flows. The L4 Warden verifies L3 proofs before allowing execution to proceed. L3 requirements are posture-dependent via the GovernancePosture interface (doctrine, consensus, notary).
 
 ---
 

@@ -2,12 +2,36 @@
 
 Guidelines for any AI agent creating or updating g8e documentation. The codebase is the source of truth; documentation describes what the system does, not how.
 
+## Human Readability First
+
+Documentation must be useful for humans to understand how to authenticate, authorize, and operate the system. Implementation details should be minimized or excluded from user-facing documentation.
+
+**For user-facing guides (e.g., architecture docs, operator guides):**
+- Focus on "how to" rather than "how it works"
+- Exclude code file paths, line numbers, and function names
+- Exclude implementation details, data structures, and field definitions
+- Exclude API endpoint tables with implementation specifics
+- Exclude protocol constants and error constant tables
+- Exclude detailed algorithm descriptions
+- Exclude KV key schemes and storage implementation details
+- Provide practical flows (first-time setup, daily usage, approval flows)
+- Summarize security properties at a high level
+- Use clear explanations of authentication and authorization methods
+
+**For developer-facing docs (e.g., API references, protocol specs):**
+- Code references are appropriate when describing implementation
+- Include file paths and function names for developer context
+- Document data structures and field definitions
+- Include protocol constants and error handling
+
+**General principle:** If a document is in `docs/architecture/` or `docs/guides/`, it should be human-readable and practical. If it's in `protocol/docs/` or `docs/devs/`, implementation details are acceptable.
+
 ## Always
 
 - Use present tense for existing behaviors.
 - Use exact cryptography, distributed systems, and network security terminology.
 - Name specific components and interfaces at the architecture level.
-- Use repository-relative paths for codebase references: `internal/services/governance/l1_doctrine.go`.
+- Use repository-relative paths for codebase references **only in developer-facing docs**: `internal/services/governance/l1_doctrine.go`.
 - Use relative paths for documentation links: `[Gateway](./gateway.md)`, `[Architecture](../architecture/gateway.md)`.
 - Use short inline backticks for configuration keys, CLI flags, or file names.
 - Use headers, bullet lists, and numbered steps for scannable structure.

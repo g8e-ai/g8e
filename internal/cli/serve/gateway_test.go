@@ -553,7 +553,7 @@ func TestGatewayConfig_NotaryPostureScenario(t *testing.T) {
 	}
 
 	assert.Equal(t, config.PostureNotary, cfg.Posture)
-	assert.Equal(t, "", cfg.TribunalID, "notary posture does not require tribunal by default")
+	assert.Equal(t, "", cfg.TribunalID, "notary posture requires a tribunal at startup validation, but the struct default is empty until configured")
 
 	opts := gatewayConfigToOptions(cfg)
 	assert.Equal(t, config.PostureNotary, opts.Posture)
@@ -1146,14 +1146,14 @@ func TestBootstrapTribunalPolicy_NilServicePanics(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Panics(t, func() {
-		_ = bootstrapTribunalPolicy(nil, configPath, logger)
+		_ = bootstrapTribunalPolicy(nil, configPath, "/secrets", logger)
 	}, "bootstrapTribunalPolicy with nil service should panic on GetDB()")
 }
 
 func TestBootstrapTribunalPolicy_MissingFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	err := bootstrapTribunalPolicy(nil, "/nonexistent/path/tribunal.json", logger)
+	err := bootstrapTribunalPolicy(nil, "/nonexistent/path/tribunal.json", "/secrets", logger)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "read config")
 }
@@ -1166,7 +1166,7 @@ func TestBootstrapTribunalPolicy_MalformedJSON(t *testing.T) {
 	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
 	require.NoError(t, err)
 
-	err = bootstrapTribunalPolicy(nil, configPath, logger)
+	err = bootstrapTribunalPolicy(nil, configPath, "/secrets", logger)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "parse config")
 }
@@ -1199,7 +1199,7 @@ func TestBootstrapTribunalPolicy_InvalidConfig(t *testing.T) {
 			err := os.WriteFile(configPath, []byte(tt.config), 0600)
 			require.NoError(t, err)
 
-			err = bootstrapTribunalPolicy(nil, configPath, logger)
+			err = bootstrapTribunalPolicy(nil, configPath, "/secrets", logger)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
 		})

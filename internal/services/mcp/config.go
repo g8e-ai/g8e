@@ -23,7 +23,7 @@ import (
 
 // Config represents the top-level MCP client configuration structure.
 // This is the single source of truth for the MCP config schema used by:
-// - CLI commands (gw mcp-config)
+// - CLI commands (mcp agent show)
 // - Tests (test/mcp_stdio_test.go)
 // - Example templates (protocol/examples/mcp_server/g8e_gateway_mcp_config.json)
 type Config struct {

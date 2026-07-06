@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/g8e-ai/g8e/internal/cli/auth"
@@ -177,7 +178,11 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 	}
 
 	if regResp.HubTrustBundle != "" {
-		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
+		trustPath := cfg.TrustBundlePath()
+		if err := os.MkdirAll(filepath.Dir(trustPath), 0755); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		}
+		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -197,6 +202,10 @@ func performEnroll(cmd *cobra.Command, cfg *config.Config, useTPM bool) error {
 	cmd.Printf("User ID: %s\n", regResp.UserID)
 	cmd.Printf("CLI Session ID: %s\n", regResp.CLISessionID)
 
+	cmd.Println("\nRegistering passkey via browser...")
+	if err := auth.RegisterPasskeyViaBrowser(cfg, creds.UserID, creds.CLISessionID); err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrPasskeyRegistrationFailed, err)
+	}
 	return nil
 }
 
@@ -204,6 +213,7 @@ func logoutCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Clear local Operator session and credentials",
+		Long:  `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {

@@ -31,8 +31,11 @@ import (
 // has been constructed and before BYO clients submit transactions to
 // /api/v1/governance/envelopes. Calling with nil disables the endpoint.
 func (ls *GatewayModeService) SetEnvelopeProcessor(p governance.EnvelopeProcessor) {
-	ls.handler.envProc = p
-	// Dependencies are now set via SetDependencies in runGatewayMode or similar
+	if p == nil {
+		ls.handler.envProc.Store(nil)
+		return
+	}
+	ls.handler.envProc.Store(&p)
 }
 
 // verifyEnvelopeIdentityBinding enforces transport-to-envelope identity binding
@@ -138,7 +141,8 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 		h.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
 		return
 	}
-	if h.envProc == nil {
+	p := h.envProc.Load()
+	if p == nil {
 		h.responder.Error(w, http.StatusServiceUnavailable, constants.ErrEnvelopeProcessorNotInit.Error())
 		return
 	}
@@ -165,7 +169,7 @@ func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Re
 		}
 	}
 
-	receipt, procErr := h.envProc.ProcessEnvelope(r.Context(), body)
+	receipt, procErr := (*p).ProcessEnvelope(r.Context(), body)
 	if procErr != nil {
 		status := classifyEnvelopeError(procErr)
 		h.responder.Error(w, status, procErr.Error())

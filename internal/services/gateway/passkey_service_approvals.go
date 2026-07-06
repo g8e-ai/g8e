@@ -136,12 +136,59 @@ func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	sseUserID := userID
+	if sseUserID == "" {
+		sseUserID = suspendedTx.UserID
+	}
+	h.emitApprovalCompletedSSE(sseUserID, txHash)
+
 	h.responder.JSON(w, http.StatusOK, receipt)
 }
 
+// emitApprovalCompletedSSE publishes an approval.completed SSE event scoped to
+// the original submitting user so any waiting CLI client (stdio proxy or
+// approve command) receives real-time notification without polling.
+func (h *PasskeyHandler) emitApprovalCompletedSSE(userID, txHash string) {
+	if h.sseStore == nil || h.pubsub == nil || userID == "" {
+		return
+	}
+
+	eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
+		Type:   "approval.completed",
+		UserID: userID,
+		TxHash: txHash,
+	})
+	if err != nil {
+		h.logger.Error("approval: failed to marshal SSE event", "error", err)
+		return
+	}
+
+	envelope := internalSSEPushPayload{
+		UserID: userID,
+		Event:  eventPayload,
+	}
+	envelopeJSON, err := json.Marshal(envelope)
+	if err != nil {
+		h.logger.Error("approval: failed to marshal SSE envelope", "error", err)
+		return
+	}
+
+	if err := h.sseStore.SSEEventsAppend(
+		SSERoute{UserID: userID},
+		"approval.completed",
+		string(envelopeJSON),
+		"g8eg",
+	); err != nil {
+		h.logger.Error("approval: failed to append SSE event", "error", err)
+		return
+	}
+
+	h.pubsub.Publish("sse:user:"+userID, envelopeJSON)
+}
+
 // handleCLIApprovalStatus is an mTLS-authenticated endpoint that returns the current
-// status of a suspended transaction. The CLI polls this endpoint after opening the
-// browser approval page to detect when the user has completed the WebAuthn ceremony.
+// status of a suspended transaction. Used by CLI clients for post-SSE verification
+// of approval state.
 func (h *PasskeyHandler) handleCLIApprovalStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")

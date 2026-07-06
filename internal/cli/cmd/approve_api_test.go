@@ -15,9 +15,11 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -31,6 +33,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -86,23 +89,68 @@ func setupApproveAPITestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
 	return cfg, priv
 }
 
-// overrideApprovePollingForTest sets fast polling intervals for tests that
-// exercise the approve command's polling loop, preventing 5-minute hangs.
-func overrideApprovePollingForTest(t *testing.T) {
+// setupApproveSSETestEnv extends setupApproveAPITestEnv by writing a valid CA
+// cert to the trust bundle path so auth.BuildMTLSClient can succeed.
+func setupApproveSSETestEnv(t *testing.T) (*config.Config, ed25519.PrivateKey) {
 	t.Helper()
-	origInterval := approvePollInterval
-	origMaxIter := approveMaxIterations
-	approvePollInterval = 1 * time.Millisecond
-	approveMaxIterations = 10
-	t.Cleanup(func() {
-		approvePollInterval = origInterval
-		approveMaxIterations = origMaxIter
-	})
+	cfg, priv := setupApproveAPITestEnv(t)
+
+	certPEM, err := os.ReadFile(cfg.CLICertFile())
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(cfg.TrustBundlePath(), certPEM, 0o600))
+
+	return cfg, priv
 }
 
-func TestApproveCmd_APIInjection_HappyPath(t *testing.T) {
-	cfg, _ := setupApproveAPITestEnv(t)
-	overrideApprovePollingForTest(t)
+// sseApproveServer returns an httptest.Server that serves a single
+// approval.completed SSE event with the given userID and txHash.
+func sseApproveServer(t *testing.T, userID, txHash string) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
+			Type:   "approval.completed",
+			UserID: userID,
+			TxHash: txHash,
+		})
+		require.NoError(t, err)
+		envelope := struct {
+			UserID string          `json:"user_id"`
+			Event  json.RawMessage `json:"event"`
+		}{
+			UserID: userID,
+			Event:  eventPayload,
+		}
+		envelopeJSON, err := json.Marshal(envelope)
+		require.NoError(t, err)
+		fmt.Fprintf(w, "event: approval.completed\ndata: %s\n\n", string(envelopeJSON))
+	}))
+}
+
+// sseNoEventServer returns an httptest.Server that accepts SSE connections
+// but never sends any events, causing the client to block until context cancel.
+func sseNoEventServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		<-r.Context().Done()
+	}))
+}
+
+// withEndpointOverride sets the config endpoint override to the given URL and
+// resets it on cleanup.
+func withEndpointOverride(t *testing.T, url string) {
+	t.Helper()
+	config.SetEndpointOverride(url)
+	t.Cleanup(func() { config.SetEndpointOverride("") })
+}
+
+func TestApproveCmd_SSE_HappyPath(t *testing.T) {
+	cfg, _ := setupApproveSSETestEnv(t)
+
+	srv := sseApproveServer(t, "user-test", "txhash123")
+	t.Cleanup(srv.Close)
+	withEndpointOverride(t, srv.URL)
 
 	mockClient := &mockAPIClient{
 		getResp: []byte(`{"status":"approved","result_summary":"success"}`),
@@ -123,9 +171,40 @@ func TestApproveCmd_APIInjection_HappyPath(t *testing.T) {
 	assert.Contains(t, buf.String(), "txhash123")
 }
 
-func TestApproveCmd_GetError(t *testing.T) {
-	cfg, _ := setupApproveAPITestEnv(t)
-	overrideApprovePollingForTest(t)
+func TestApproveCmd_SSE_Timeout(t *testing.T) {
+	cfg, _ := setupApproveSSETestEnv(t)
+
+	srv := sseNoEventServer(t)
+	t.Cleanup(srv.Close)
+	withEndpointOverride(t, srv.URL)
+
+	mockClient := &mockAPIClient{
+		getResp: []byte(`{"status":"approved"}`),
+	}
+
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
+
+	cmd := approveCmdWithConfig(loader, factory)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	cmd.SetContext(ctx)
+
+	err := cmd.RunE(cmd, []string{"txhash123"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "timed out")
+}
+
+func TestApproveCmd_SSE_Success_GetError(t *testing.T) {
+	cfg, _ := setupApproveSSETestEnv(t)
+
+	srv := sseApproveServer(t, "user-test", "txhash123")
+	t.Cleanup(srv.Close)
+	withEndpointOverride(t, srv.URL)
 
 	mockClient := &mockAPIClient{
 		getErr: errors.New("network failure"),
@@ -141,12 +220,15 @@ func TestApproveCmd_GetError(t *testing.T) {
 
 	err := cmd.RunE(cmd, []string{"txhash123"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
+	assert.Contains(t, err.Error(), "verify status")
 }
 
-func TestApproveCmd_InvalidGetJSONResponse(t *testing.T) {
-	cfg, _ := setupApproveAPITestEnv(t)
-	overrideApprovePollingForTest(t)
+func TestApproveCmd_SSE_Success_InvalidJSONStatus(t *testing.T) {
+	cfg, _ := setupApproveSSETestEnv(t)
+
+	srv := sseApproveServer(t, "user-test", "txhash123")
+	t.Cleanup(srv.Close)
+	withEndpointOverride(t, srv.URL)
 
 	mockClient := &mockAPIClient{
 		getResp: []byte(`not json {{{`),
@@ -162,7 +244,7 @@ func TestApproveCmd_InvalidGetJSONResponse(t *testing.T) {
 
 	err := cmd.RunE(cmd, []string{"txhash123"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
+	assert.Contains(t, err.Error(), "parse status response")
 }
 
 func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
@@ -183,9 +265,12 @@ func TestApproveCmd_APIInjection_ClientFactoryError(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 }
 
-func TestApproveCmd_EmptyStatusInResponse(t *testing.T) {
-	cfg, _ := setupApproveAPITestEnv(t)
-	overrideApprovePollingForTest(t)
+func TestApproveCmd_SSE_Success_EmptyStatus(t *testing.T) {
+	cfg, _ := setupApproveSSETestEnv(t)
+
+	srv := sseApproveServer(t, "user-test", "txhash456")
+	t.Cleanup(srv.Close)
+	withEndpointOverride(t, srv.URL)
 
 	mockClient := &mockAPIClient{
 		getResp: []byte(`{}`),
@@ -201,23 +286,20 @@ func TestApproveCmd_EmptyStatusInResponse(t *testing.T) {
 
 	err := cmd.RunE(cmd, []string{"txhash456"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
+	assert.Contains(t, err.Error(), "unexpected status")
 	assert.Contains(t, buf.String(), "txhash456")
 }
 
-// httptest.Server-based test: verifies the full approve flow works against a real HTTP server
-// using the real api.Client (via NewClientWithURL with the test server URL).
-func TestApproveCmd_HTTPTestServer(t *testing.T) {
-	cfg, _ := setupApproveAPITestEnv(t)
-	overrideApprovePollingForTest(t)
+func TestApproveCmd_SSE_Success_StatusNotApproved(t *testing.T) {
+	cfg, _ := setupApproveSSETestEnv(t)
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"status":"approved","result_summary":"execution completed"}`)
-	}))
+	srv := sseApproveServer(t, "user-test", "txhash789")
 	t.Cleanup(srv.Close)
+	withEndpointOverride(t, srv.URL)
 
-	mockClient := &httptestApproveClient{serverURL: srv.URL}
+	mockClient := &mockAPIClient{
+		getResp: []byte(`{"status":"pending"}`),
+	}
 
 	loader := func(string) (*config.Config, error) { return cfg, nil }
 	factory := func(*config.Config) (apiClient, error) { return mockClient, nil }
@@ -228,37 +310,25 @@ func TestApproveCmd_HTTPTestServer(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, []string{"txhash789"})
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "approved successfully")
-	assert.Contains(t, buf.String(), "txhash789")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected status")
 }
 
-// httptestApproveClient implements apiClient by forwarding Get calls to the httptest.Server.
-type httptestApproveClient struct {
-	serverURL string
-}
+func TestApproveCmd_NoCredentials_Error(t *testing.T) {
+	cfg, _ := setupApproveAPITestEnv(t)
+	require.NoError(t, os.Remove(cfg.CredentialsFile()))
 
-func (c *httptestApproveClient) Get(path string) ([]byte, error) {
-	resp, err := http.Get(c.serverURL + path)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
-	return buf.Bytes(), nil
-}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	factory := func(*config.Config) (apiClient, error) { return &mockAPIClient{}, nil }
 
-func (c *httptestApproveClient) Post(path string, body interface{}) ([]byte, error) {
-	return nil, nil
-}
+	cmd := approveCmdWithConfig(loader, factory)
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
 
-func (c *httptestApproveClient) Put(path string, body interface{}) ([]byte, error) {
-	return nil, nil
-}
-
-func (c *httptestApproveClient) Delete(path string) ([]byte, error) {
-	return nil, nil
+	err := cmd.RunE(cmd, []string{"txhash123"})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 }
 
 func generateApproveTestCertDER(t *testing.T, priv ed25519.PrivateKey) []byte {

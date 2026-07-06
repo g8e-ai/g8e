@@ -306,17 +306,20 @@ func (vs *G8eoService) Start(ctx context.Context) error {
 		Ledger:             vs.ledger,
 		HistoryHandler:     vs.historyHandler,
 		Scrubbing:          scrubbingService,
-		ReplayStore:        vs.replayStore,
-		StateRootProvider:  stateRootProvider,
-		TransactionAudit:   transactionAudit,
-		SignerStore:        signerStore,
-		AppPolicyStore:     vs.gatewayDB.AppPolicyStore,
 		ActuatorSigningKey: actuatorPriv,
 		ActuatorKeyID:      actuatorKeyID,
-		L3Notary:           cliL3Notary,
 	}
 
-	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig)
+	govDeps := pubsub.GovernanceDeps{
+		ReplayStore:       vs.replayStore,
+		StateRootProvider: stateRootProvider,
+		TransactionAudit:  transactionAudit,
+		SignerStore:       signerStore,
+		AppPolicyStore:    vs.gatewayDB.AppPolicyStore,
+		L3Notary:          cliL3Notary,
+	}
+
+	vs.pubSubCommands, err = pubsub.NewOperatorPubSubService(psConfig, govDeps)
 	if err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPubSubActuator, err)
 	}

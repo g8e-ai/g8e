@@ -56,7 +56,7 @@ func TestNewGatewayModeService(t *testing.T) {
 		cfg.Gateway.SecretsDir = t.TempDir()
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
 		assert.NotNil(t, ls)
 		assert.NotNil(t, ls.server)
@@ -83,7 +83,7 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	t.Run("Initial state", func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	})
 }
 
-func TestNewGatewayModeServiceFromComponents(t *testing.T) {
+func TestNewGatewayModeServiceForTest(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
@@ -145,7 +145,7 @@ func TestNewGatewayModeServiceFromComponents(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 	assert.NotNil(t, ls)
 	assert.Equal(t, db, ls.db)
@@ -173,7 +173,7 @@ func TestGatewayModeService_Getters(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	t.Run("GetDB returns non-nil", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
 
 		assert.True(t, ls.IsGovernanceReady())
@@ -261,7 +261,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
 
 		assert.True(t, ls.IsGovernanceReady())
@@ -288,7 +288,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
 
 		assert.False(t, ls.IsGovernanceReady())
@@ -315,7 +315,7 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 		cfg.Gateway.DataDir = dbDir
 		cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-		ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+		ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 		require.NoError(t, err)
 
 		// Add a trusted signer
@@ -354,7 +354,7 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	deps := ls.GetGovernanceDeps()
@@ -391,7 +391,7 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 	cfg.Gateway.HTTPPort = 0
 	cfg.Gateway.HTTPSPort = 0
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -456,7 +456,7 @@ func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	// Stop when not running should return nil
@@ -493,7 +493,7 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	t.Run("Valid heartbeat updates operator document", func(t *testing.T) {
@@ -572,7 +572,7 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	// Test the renewal function - it may fail if PKI is not fully initialized,
@@ -603,7 +603,7 @@ func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
 	cfg.Gateway.DataDir = dbDir
 	cfg.Gateway.HTTPPort = constants.Ports.OperatorHttp
 
-	ls, err := newGatewayModeServiceFromComponents(cfg, logger, db, pubsub)
+	ls, err := newGatewayModeServiceForTest(cfg, logger, db, pubsub)
 	require.NoError(t, err)
 
 	// Test with an already-cancelled context - should return promptly

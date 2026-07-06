@@ -18,6 +18,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -27,34 +28,35 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 )
 
 func TestProxySessionToGatewayWithRetry(t *testing.T) {
-	t.Run("retry logic eventually succeeds after L3 approval", func(t *testing.T) {
+	t.Run("SSE success retries and returns result", func(t *testing.T) {
 		attempts := 0
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gatewayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			attempts++
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 
 			var resp JSONRPCResponse
 			if attempts == 1 {
-				// Return L3 approval required on first attempt
 				resp = JSONRPCResponse{
 					JSONRPC: "2.0",
 					ID:      float64(1),
 					Result: map[string]interface{}{
-						"approval_url": "https://g8e.local/approve/123",
+						"approval_url": "https://g8e.local:8443/api/v1/approve/tx-sse-success",
 						"content": []interface{}{
 							map[string]interface{}{
 								"type": "text",
-								"text": "Execution paused. Please visit https://g8e.local/approve/123 to authorize",
+								"text": "Execution paused. Please authorize.",
 							},
 						},
 					},
 				}
 			} else {
-				// Success on second attempt
 				resp = JSONRPCResponse{
 					JSONRPC: "2.0",
 					ID:      float64(1),
@@ -63,11 +65,35 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 			}
 			_ = json.NewEncoder(w).Encode(resp)
 		}))
-		defer server.Close()
+		defer gatewayServer.Close()
+
+		sseServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
+				Type:   "approval.completed",
+				UserID: "user-sse-success",
+				TxHash: "tx-sse-success",
+			})
+			require.NoError(t, err)
+			envelope := struct {
+				UserID string          `json:"user_id"`
+				Event  json.RawMessage `json:"event"`
+			}{
+				UserID: "user-sse-success",
+				Event:  eventPayload,
+			}
+			envelopeJSON, err := json.Marshal(envelope)
+			require.NoError(t, err)
+			fmt.Fprintf(w, "event: approval.completed\ndata: %s\n\n", string(envelopeJSON))
+		}))
+		defer sseServer.Close()
 
 		conn := &gatewayConn{
 			client:     &http.Client{Timeout: 5 * time.Second},
-			gatewayURL: server.URL,
+			gatewayURL: gatewayServer.URL,
+			sseClient:  &http.Client{Timeout: 5 * time.Second},
+			sseBaseURL: sseServer.URL,
+			userID:     "user-sse-success",
 		}
 
 		req := JSONRPCRequest{
@@ -76,20 +102,15 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 			Method:  "tools/call",
 		}
 
-		// Mock the polling interval for faster tests
-		originalInterval := l3ApprovalPollInterval
-		l3ApprovalPollInterval = 1 * time.Millisecond
-		defer func() { l3ApprovalPollInterval = originalInterval }()
-
 		resp, err := proxySessionToGatewayWithRetryContext(context.Background(), conn, req, nil)
 		require.NoError(t, err)
 		assert.Equal(t, 2, attempts)
 		assert.Equal(t, "success", resp.Result.(map[string]interface{})["status"])
 	})
 
-	t.Run("retry logic returns original response on timeout", func(t *testing.T) {
+	t.Run("SSE timeout returns error without polling retries", func(t *testing.T) {
 		attempts := 0
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gatewayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			attempts++
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
@@ -98,22 +119,31 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 				JSONRPC: "2.0",
 				ID:      float64(1),
 				Result: map[string]interface{}{
-					"approval_url": "https://g8e.local/approve/123",
+					"approval_url": "https://g8e.local:8443/api/v1/approve/tx-sse-timeout",
 					"content": []interface{}{
 						map[string]interface{}{
 							"type": "text",
-							"text": "Execution paused. Please visit https://g8e.local/approve/123 to authorize",
+							"text": "Execution paused. Please authorize.",
 						},
 					},
 				},
 			}
 			_ = json.NewEncoder(w).Encode(resp)
 		}))
-		defer server.Close()
+		defer gatewayServer.Close()
+
+		sseServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			<-r.Context().Done()
+		}))
+		defer sseServer.Close()
 
 		conn := &gatewayConn{
 			client:     &http.Client{Timeout: 5 * time.Second},
-			gatewayURL: server.URL,
+			gatewayURL: gatewayServer.URL,
+			sseClient:  &http.Client{Timeout: 5 * time.Second},
+			sseBaseURL: sseServer.URL,
+			userID:     "user-sse-timeout",
 		}
 
 		req := JSONRPCRequest{
@@ -122,21 +152,51 @@ func TestProxySessionToGatewayWithRetry(t *testing.T) {
 			Method:  "tools/call",
 		}
 
-		// Mock the iterations and interval for faster tests
-		originalInterval := l3ApprovalPollInterval
-		originalMaxIterations := l3ApprovalMaxIterations
-		l3ApprovalPollInterval = 1 * time.Millisecond
-		l3ApprovalMaxIterations = 2
-		defer func() {
-			l3ApprovalPollInterval = originalInterval
-			l3ApprovalMaxIterations = originalMaxIterations
-		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
 
-		resp, err := proxySessionToGatewayWithRetryContext(context.Background(), conn, req, nil)
-		require.NoError(t, err)
-		assert.True(t, isL3ApprovalResponse(resp))
-		// 1 initial + 2 retries = 3
-		assert.Equal(t, 3, attempts)
+		_, err := proxySessionToGatewayWithRetryContext(ctx, conn, req, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "timed out")
+		// Only the initial proxy attempt — no polling retries
+		assert.Equal(t, 1, attempts)
+	})
+
+	t.Run("SSE credentials missing returns ErrNotAuthenticated", func(t *testing.T) {
+		gatewayServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			resp := JSONRPCResponse{
+				JSONRPC: "2.0",
+				ID:      float64(1),
+				Result: map[string]interface{}{
+					"approval_url": "https://g8e.local:8443/api/v1/approve/tx-no-creds",
+					"content": []interface{}{
+						map[string]interface{}{
+							"type": "text",
+							"text": "Execution paused. Please authorize.",
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer gatewayServer.Close()
+
+		conn := &gatewayConn{
+			client:     &http.Client{Timeout: 5 * time.Second},
+			gatewayURL: gatewayServer.URL,
+		}
+
+		req := JSONRPCRequest{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "tools/call",
+		}
+
+		_, err := proxySessionToGatewayWithRetryContext(context.Background(), conn, req, nil)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotAuthenticated)
 	})
 }
 

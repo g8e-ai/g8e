@@ -5,15 +5,15 @@ parent: Guides
 
 # Building a g8e-Compliant Agentic System
 
-**Last Updated:** 2026-07-03  
-**Version:** v1.3.6
+**Last Updated:** 2026-07-06  
+**Version:** v1.3.7
 
 This guide documents the architecture, persona system, prompt design, memory model, and
 consensus cascade of a g8e-compliant agentic ensemble. It is the canonical reference for
 anyone building an AI reasoning layer on top of the g8e protocol surface.
 
-g8e itself ships a protocol-level Tribunal (`internal/services/tribunal/`) that performs
-deterministic L2 consensus voting with Ed25519 signatures. That service is the
+g8e itself ships a protocol-level Tribunal that performs deterministic L2 consensus
+voting with Ed25519 signatures. That service is the
 **cryptographic backbone**: it does not reason. The design documented here is the
 **reasoning layer** that sits above it: a multi-persona, multi-stage agentic system that
 articulates intent, translates it through a Byzantine ensemble, classifies risk, and
@@ -565,9 +565,9 @@ The system does not use the LLM as a bulk transport channel:
 - **Output budget**: `max_tokens` and provider-specific output limits bound visible model
   output.
 - **Operator payloads**: The Operator rejects command and pubsub payloads above the protocol
-  ceiling of 5 MB, enforced by `MaxPayloadSize` in `internal/services/pubsub/protocol_helpers.go`.
-- **Operator output**: Scrubbed before publishing results. The scrubbing service in
-  `internal/services/scrubbing/` classifies output by size and applies structured boundaries.
+  ceiling of 5 MB.
+- **Operator output**: Scrubbed before publishing results. The scrubbing service classifies
+  output by size and applies structured boundaries.
 - **Filesystem access**: Typed operations, not unconstrained shell dumps. Scoped reads with
   line windows and `max_lines`. Large files are rejected, not streamed into the model.
 - **Search access**: Recursive grep and listing return structured results with counts and
@@ -620,9 +620,9 @@ The agentic system maps to g8e's protocol surface as follows:
 
 ### g8e's Built-in Tribunal vs. Agentic Tribunal
 
-g8e ships a **protocol-level Tribunal** in `internal/services/tribunal/` that performs
-deterministic L2 consensus voting with Ed25519 signatures and doctrine-based safety
-evaluation. This is the cryptographic backbone; it signs and verifies but does not reason.
+g8e ships a **protocol-level Tribunal** that performs deterministic L2 consensus voting
+with Ed25519 signatures and doctrine-based safety evaluation. This is the cryptographic
+backbone; it signs and verifies but does not reason.
 
 The **agentic Tribunal** documented in this guide is the reasoning layer above it: it
 generates commands through LLM-based ensemble consensus, classifies risk, and produces the
@@ -634,13 +634,12 @@ When a signed envelope reaches the Gateway, it passes through a five-layer inter
 sequence before any tool dispatch occurs. Each layer is independent and fail-closed.
 
 - **L1 Doctrine**: Hard gates, code pattern matching, and MITRE-based threat analysis. The
-  `L1Doctrine` validator in `internal/services/governance/l1_doctrine.go` checks protobuf
-  field options for forbidden patterns and runs regex-based threat detectors against command
-  strings, MCP arguments, A2A payloads, and file edit content.
-- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. The
-  `L4Warden` in `internal/services/governance/l4_warden.go` verifies each `L2Vote` signature
-  against the transaction hash and decision, and enforces quorum policy from the configured
-  `TribunalPolicy`.
+  L1Doctrine validator checks protobuf field options for forbidden patterns and runs
+  regex-based threat detectors against command strings, MCP arguments, A2A payloads, and
+  file edit content.
+- **L2 Consensus**: Multi-agent consensus signature verification using Ed25519. The L4Warden
+  verifies each L2Vote signature against the transaction hash and decision, and enforces
+  quorum policy from the configured TribunalPolicy.
 - **L3 Notary**: Human-in-the-loop authorization via WebAuthn passkey assertion or signed CLI
   proof. Mutations require L3 proof; the Gateway suspends execution and returns an approval
   URL when L3 is missing.
@@ -648,16 +647,16 @@ sequence before any tool dispatch occurs. Each layer is independent and fail-clo
   payload decoding, L1 doctrine), stateful validation (expiry, nonce replay prevention via
   SQLite, state root binding), and posture-aware L2/L3 checks. The Warden returns a
   `VerifiedTransaction` only if all gates pass.
-- **L5 Actuator**: Isolated tool dispatch and signed receipt production. The `L5Actuator` in
-  `internal/services/governance/l5_actuator.go` mints a JIT capability scoped to the
-  transaction, dispatches through the execution handler, signs an `ActionReceipt` with its
-  Ed25519 key, and records it in the audit store. Receipt signing is fail-closed: if the
-  initial receipt cannot be signed or logged, execution does not proceed.
+- **L5 Actuator**: Isolated tool dispatch and signed receipt production. The L5Actuator mints
+  a JIT capability scoped to the transaction, dispatches through the execution handler, signs
+  an ActionReceipt with its Ed25519 key, and records it in the audit store. Receipt signing
+  is fail-closed: if the initial receipt cannot be signed or logged, execution does not
+  proceed.
 
 ### Agent Harness (Test Tool)
 
-g8e also ships an **Agent Harness** in `internal/tools/agent_harness/`, a Go-based test
-tool that exercises the protocol surface with simple `Persona` structs.
+g8e also ships an **Agent Harness**, a Go-based test tool that exercises the protocol
+surface with simple Persona structs.
 It tests MCP, A2A, governance envelopes, tribunal quorum/veto, and notary OOB flows
 against a real Gateway and Operator. The Agent Harness is not a reasoning system; it
 validates protocol mechanics. The agentic system documented here is what you build on top

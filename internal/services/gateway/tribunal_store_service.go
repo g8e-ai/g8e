@@ -35,11 +35,12 @@ type TribunalStoreService struct {
 }
 
 // NewTribunalStoreService creates a new tribunal store service.
-func NewTribunalStoreService(db *sqliteutil.DB, logger *slog.Logger, signerSvc *SignerStoreService) *TribunalStoreService {
+// docSvc is the shared DocumentStoreService instance from CanonicalDBService.
+func NewTribunalStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *DocumentStoreService, signerSvc *SignerStoreService) *TribunalStoreService {
 	return &TribunalStoreService{
 		db:        db,
 		logger:    logger,
-		docSvc:    NewDocumentStoreService(db, logger),
+		docSvc:    docSvc,
 		signerSvc: signerSvc,
 	}
 }

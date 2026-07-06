@@ -96,6 +96,9 @@ func reportAllCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "all",
 		Short: "Export all stores to CSV and run verification",
+		Long: `Export all persistent stores (audit vault, receipts, ledger, secrets) to
+deterministic CSV files and run verification checks. Output files are written
+to the reports directory.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts, err := f.resolveOptions()
 			if err != nil {
@@ -131,6 +134,9 @@ func reportVerifyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "verify",
 		Short: "Run verification checks and write verification_summary.csv",
+		Long: `Run verification checks against the persistent stores and write a
+verification_summary.csv file to the reports directory. Checks include hash
+integrity, receipt signature validation, and ledger consistency.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts, err := f.resolveOptions()
 			if err != nil {

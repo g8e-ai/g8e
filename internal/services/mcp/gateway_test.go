@@ -1510,53 +1510,89 @@ func TestGatewayService_HandleA2ARequest(t *testing.T) {
 	})
 }
 
-func TestGatewayService_DependencySetters(t *testing.T) {
+func TestGatewayService_SetRuntimeDeps(t *testing.T) {
 	t.Parallel()
-	g := newTestGatewayService(t)
 
-	t.Run("SetDependencies", func(t *testing.T) {
+	t.Run("runtimeReady false before SetRuntimeDeps", func(t *testing.T) {
 		t.Parallel()
+		g := &GatewayService{logger: slog.Default()}
+		require.False(t, g.runtimeReady(), "runtimeReady should be false before SetRuntimeDeps")
+	})
+
+	t.Run("runtimeReady true after SetRuntimeDeps", func(t *testing.T) {
+		t.Parallel()
+		g := &GatewayService{logger: slog.Default()}
 		_, privKey, _ := ed25519.GenerateKey(rand.Reader)
-
-		g.SetDependencies(&fakeEnvelopeProcessor{}, &fakeStateRootProvider{root: "test"}, privKey, "key-1", "http://downstream")
-		require.NotNil(t, g.envProc)
-		require.NotNil(t, g.stateRootProvider)
-		require.NotNil(t, g.signingKey)
-		require.Equal(t, "key-1", g.keyID)
-		require.Equal(t, "http://downstream", g.downstreamURL)
+		g.SetRuntimeDeps(RuntimeDependencies{
+			EnvProc:           &fakeEnvelopeProcessor{},
+			StateRootProvider: &fakeStateRootProvider{root: "test"},
+			SigningKey:        privKey,
+			KeyID:             "key-1",
+			DownstreamURL:     "http://downstream",
+		})
+		require.True(t, g.runtimeReady(), "runtimeReady should be true after SetRuntimeDeps")
+		deps := g.getRuntimeDeps()
+		require.NotNil(t, deps)
+		require.NotNil(t, deps.EnvProc)
+		require.NotNil(t, deps.StateRootProvider)
+		require.NotNil(t, deps.SigningKey)
+		require.Equal(t, "key-1", deps.KeyID)
+		require.Equal(t, "http://downstream", deps.DownstreamURL)
 	})
 
-	t.Run("SetA2ADependencies", func(t *testing.T) {
+	t.Run("dispatchMCP returns not-ready error before SetRuntimeDeps", func(t *testing.T) {
 		t.Parallel()
-		g.SetA2ADependencies("http://a2a-downstream")
-		require.Equal(t, "http://a2a-downstream", g.a2aDownstreamURL)
+		g := &GatewayService{
+			logger:          slog.Default(),
+			responder:       response.NewWriter(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"test","arguments":{}}}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+		g.HandleMCP(w, req)
+
+		var resp JSONRPCResponse
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		require.NoError(t, err)
+		require.NotNil(t, resp.Error)
+		require.Contains(t, resp.Error.Message, "not ready")
 	})
 
-	t.Run("SetPublicBaseURL", func(t *testing.T) {
+	t.Run("dispatchMCP allows initialize without runtime deps", func(t *testing.T) {
 		t.Parallel()
-		g.SetPublicBaseURL("https://public.example.com")
-		require.Equal(t, "https://public.example.com", g.publicBaseURL)
+		g := &GatewayService{
+			logger:          slog.Default(),
+			responder:       response.NewWriter(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+		reqBody := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+		g.HandleMCP(w, req)
+
+		require.Equal(t, http.StatusOK, w.Code)
+		var respBody map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+		require.NotNil(t, respBody["result"])
 	})
 
-	t.Run("SetDBService", func(t *testing.T) {
+	t.Run("dispatchMCP allows ping without runtime deps", func(t *testing.T) {
 		t.Parallel()
-		fakeDB := &fakeDBService{}
-		g.SetDBService(fakeDB)
-		require.Equal(t, fakeDB, g.dbService)
-	})
+		g := &GatewayService{
+			logger:          slog.Default(),
+			responder:       response.NewWriter(slog.Default()),
+			maxPayloadBytes: 10 * 1024 * 1024,
+		}
+		reqBody := `{"jsonrpc":"2.0","id":42,"method":"ping"}`
+		req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(reqBody))
+		w := httptest.NewRecorder()
+		g.HandleMCP(w, req)
 
-	t.Run("SetSessionValidator", func(t *testing.T) {
-		t.Parallel()
-		fakeValidator := &fakeSessionValidator{}
-		g.SetSessionValidator(fakeValidator)
-		require.Equal(t, fakeValidator, g.sessionValidator)
-	})
-
-	t.Run("SetAuditLogger", func(t *testing.T) {
-		t.Parallel()
-		fakeLogger := &fakeAuditLogger{}
-		g.SetAuditLogger(fakeLogger)
-		require.Equal(t, fakeLogger, g.auditLogger)
+		require.Equal(t, http.StatusOK, w.Code)
+		var respBody map[string]interface{}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &respBody))
+		require.NotNil(t, respBody["result"])
 	})
 }
 
@@ -1605,7 +1641,12 @@ type testGatewayOption func(*GatewayService)
 // withEnvProc sets a custom envelope processor for the test GatewayService
 func withEnvProc(proc governance.EnvelopeProcessor) testGatewayOption {
 	return func(g *GatewayService) {
-		g.envProc = proc
+		var deps RuntimeDependencies
+		if d := g.getRuntimeDeps(); d != nil {
+			deps = *d
+		}
+		deps.EnvProc = proc
+		g.SetRuntimeDeps(deps)
 	}
 }
 
@@ -1626,7 +1667,12 @@ func withAuditStore(auditStore *storage.SQLAuditStore) testGatewayOption {
 // withDownstreamURL sets a custom downstream URL for the test GatewayService
 func withDownstreamURL(url string) testGatewayOption {
 	return func(g *GatewayService) {
-		g.downstreamURL = url
+		var deps RuntimeDependencies
+		if d := g.getRuntimeDeps(); d != nil {
+			deps = *d
+		}
+		deps.DownstreamURL = url
+		g.SetRuntimeDeps(deps)
 	}
 }
 
@@ -1662,21 +1708,36 @@ func withFieldPathRegistry(registry *FieldPathRegistry) testGatewayOption {
 // withDBService sets a custom database service for the test GatewayService
 func withDBService(db FieldReader) testGatewayOption {
 	return func(g *GatewayService) {
-		g.dbService = db
+		var deps RuntimeDependencies
+		if d := g.getRuntimeDeps(); d != nil {
+			deps = *d
+		}
+		deps.DBService = db
+		g.SetRuntimeDeps(deps)
 	}
 }
 
 // withSessionValidator sets a custom session validator for the test GatewayService
 func withSessionValidator(v SessionValidator) testGatewayOption {
 	return func(g *GatewayService) {
-		g.sessionValidator = v
+		var deps RuntimeDependencies
+		if d := g.getRuntimeDeps(); d != nil {
+			deps = *d
+		}
+		deps.SessionValidator = v
+		g.SetRuntimeDeps(deps)
 	}
 }
 
 // withAuditLogger sets a custom audit logger for the test GatewayService
 func withAuditLogger(audit AuditLogger) testGatewayOption {
 	return func(g *GatewayService) {
-		g.auditLogger = audit
+		var deps RuntimeDependencies
+		if d := g.getRuntimeDeps(); d != nil {
+			deps = *d
+		}
+		deps.AuditLogger = audit
+		g.SetRuntimeDeps(deps)
 	}
 }
 
@@ -1687,23 +1748,27 @@ func newTestGatewayService(t *testing.T, opts ...testGatewayOption) *GatewayServ
 	_, privKey, _ := ed25519.GenerateKey(rand.Reader)
 
 	g := &GatewayService{
-		logger:            slog.Default(),
-		responder:         response.NewWriter(slog.Default()),
-		envProc:           &fakeEnvelopeProcessor{},
-		suspendedStore:    &fakeSuspendedStore{},
-		signingKey:        privKey,
-		keyID:             "test-key",
-		stateRootProvider: &fakeStateRootProvider{root: "test-root"},
-		publicBaseURL:     netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
-		maxFailures:       5,
-		cooldownDuration:  1 * time.Minute,
-		maxPayloadBytes:   10 * 1024 * 1024,
+		logger:           slog.Default(),
+		responder:        response.NewWriter(slog.Default()),
+		suspendedStore:   &fakeSuspendedStore{},
+		publicBaseURL:    netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps),
+		maxFailures:      5,
+		cooldownDuration: 1 * time.Minute,
+		maxPayloadBytes:  10 * 1024 * 1024,
 	}
 	nativeToolHandler, err := NewNativeToolHandler(nil)
 	if err != nil {
 		t.Fatalf("failed to create native tool handler: %v", err)
 	}
 	g.nativeToolHandler = nativeToolHandler
+
+	// Set default runtime dependencies
+	g.SetRuntimeDeps(RuntimeDependencies{
+		EnvProc:           &fakeEnvelopeProcessor{},
+		StateRootProvider: &fakeStateRootProvider{root: "test-root"},
+		SigningKey:        privKey,
+		KeyID:             "test-key",
+	})
 
 	// Apply options
 	for _, opt := range opts {

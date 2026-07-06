@@ -27,7 +27,7 @@ import (
 
 func TestAppPolicyStoreService_GetAppPolicy(t *testing.T) {
 	ts := setupTestInfrastructure(t, true)
-	svc := NewAppPolicyStoreService(ts.DB.db, ts.Logger)
+	svc := NewAppPolicyStoreService(ts.DB.db, ts.Logger, ts.DB.DocStore)
 
 	// Test non-existent policy
 	policy, err := svc.GetAppPolicy("non-existent")

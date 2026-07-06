@@ -172,14 +172,24 @@ type mcpDispatchError struct {
 func (g *GatewayService) dispatchMCP(r *http.Request, req *JSONRPCRequest) (interface{}, *mcpDispatchError) {
 	ctx := r.Context()
 
+	// Methods that do not require runtime dependencies
 	switch req.Method {
 	case "initialize":
 		return g.mcpInitialize(req.Params), nil
 
 	case "ping":
-		// Per spec, a ping result is an empty object.
 		return struct{}{}, nil
 
+	case "resources/templates/list":
+		return resourceTemplatesList{ResourceTemplates: []ResourceTemplate{}}, nil
+	}
+
+	// All remaining methods require runtime dependencies
+	if !g.runtimeReady() {
+		return nil, &mcpDispatchError{code: -32603, message: constants.ErrGatewayNotReady.Error()}
+	}
+
+	switch req.Method {
 	case "tools/list":
 		res, err := g.listToolsResult(ctx)
 		return g.wrapDispatch(res, err)
@@ -191,11 +201,6 @@ func (g *GatewayService) dispatchMCP(r *http.Request, req *JSONRPCRequest) (inte
 	case "resources/list":
 		res, err := g.listResourcesResult(ctx)
 		return g.wrapDispatch(res, err)
-
-	case "resources/templates/list":
-		// We expose no resource templates; return an empty set so clients
-		// that probe capability-gated methods do not surface errors.
-		return resourceTemplatesList{ResourceTemplates: []ResourceTemplate{}}, nil
 
 	case "resources/read":
 		res, err := g.readResource(ctx, req.Params)
@@ -263,7 +268,7 @@ func (g *GatewayService) mcpInitialize(params json.RawMessage) InitializeResult 
 // configured it returns the native tools compiled into the Operator; otherwise
 // it proxies tools/list to the downstream server.
 func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, error) {
-	if g.downstreamURL == "" {
+	if g.getRuntimeDeps().DownstreamURL == "" {
 		var nativeTools []NativeTool
 		if g.nativeToolHandler != nil {
 			nativeTools = g.nativeToolHandler.registry.List()
@@ -287,7 +292,7 @@ func (g *GatewayService) listToolsResult(ctx context.Context) (interface{}, erro
 
 // listResourcesResult returns the resource catalog (empty with no downstream).
 func (g *GatewayService) listResourcesResult(ctx context.Context) (interface{}, error) {
-	if g.downstreamURL == "" {
+	if g.getRuntimeDeps().DownstreamURL == "" {
 		return ResourcesListResult{Resources: []Resource{}}, nil
 	}
 	raw, err := g.proxyListMethod(ctx, "resources/list")
@@ -299,7 +304,7 @@ func (g *GatewayService) listResourcesResult(ctx context.Context) (interface{}, 
 
 // listPromptsResult returns the prompt catalog (empty with no downstream).
 func (g *GatewayService) listPromptsResult(ctx context.Context) (interface{}, error) {
-	if g.downstreamURL == "" {
+	if g.getRuntimeDeps().DownstreamURL == "" {
 		return PromptsListResult{Prompts: []Prompt{}}, nil
 	}
 	raw, err := g.proxyListMethod(ctx, "prompts/list")
@@ -317,7 +322,7 @@ func (g *GatewayService) proxyListMethod(ctx context.Context, method string) (js
 	}
 
 	reqBody := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":%q}`, method)
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.downstreamURL, strings.NewReader(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, g.getRuntimeDeps().DownstreamURL, strings.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("mcp_endpoint: failed to build downstream request: %w", err)
 	}

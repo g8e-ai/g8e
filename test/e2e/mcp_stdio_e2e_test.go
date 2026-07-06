@@ -17,6 +17,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,25 +28,32 @@ import (
 )
 
 /*
-TestMCPGateway_ConfigOutput validates that the gw mcp-config command
+TestMCPGateway_ConfigOutput validates that the "mcp agent show" command
 produces valid HTTP transport configuration for universal gateway access.
 
 This test verifies:
 1. Default output uses HTTP transport (universal endpoint)
 2. HTTP transport includes correct Gateway URL placeholder
 3. TLS configuration is present for mTLS
+
+Note: the old "gw mcp-config" command was replaced by "mcp agent show <agent>"
+(see internal/cli/cmd/mcp.go), which prints multiple named config sections
+(g8e.local mTLS, IP mTLS, stdio) rather than a single top-level JSON document.
 */
 func TestMCPGateway_ConfigOutput(t *testing.T) {
 	t.Run("http mode default", func(t *testing.T) {
 		repoRoot := tests.ResolveRepoRootFromTestDir(t)
-		output, err := tests.RunCLICommand(t, repoRoot, "gw", "mcp-config")
+		output, err := tests.RunCLICommand(t, repoRoot, "mcp", "agent", "show", "cursor")
 		if err != nil {
 			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
 		}
 
+		jsonStart := strings.Index(output, "{")
+		require.GreaterOrEqual(t, jsonStart, 0, "output should contain a JSON config block")
+
 		var config mcp.Config
-		err = json.Unmarshal([]byte(output), &config)
-		require.NoError(t, err, "output should be valid JSON")
+		err = json.NewDecoder(strings.NewReader(output[jsonStart:])).Decode(&config)
+		require.NoError(t, err, "output should contain valid JSON")
 
 		gatewayConfig, ok := config.MCPServers["g8e-gateway"]
 		assert.True(t, ok, "should have g8e-gateway config")
@@ -61,13 +69,13 @@ func TestMCPGateway_ConfigOutput(t *testing.T) {
 }
 
 /*
-TestMCPGateway_CommandExists validates that the g8e gw mcp-config command
+TestMCPGateway_CommandExists validates that the "mcp agent show" command
 is available and produces valid output.
 */
 func TestMCPGateway_CommandExists(t *testing.T) {
-	t.Run("gw mcp-config command exists", func(t *testing.T) {
+	t.Run("mcp agent show command exists", func(t *testing.T) {
 		repoRoot := tests.ResolveRepoRootFromTestDir(t)
-		output, err := tests.RunCLICommand(t, repoRoot, "gw", "mcp-config")
+		output, err := tests.RunCLICommand(t, repoRoot, "mcp", "agent", "show", "cursor")
 		if err != nil {
 			t.Skipf("CLI config not available (run './g8e auth login' first): %v", err)
 		}

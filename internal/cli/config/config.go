@@ -305,6 +305,22 @@ func SetEndpointOverride(endpoint string) {
 	endpointOverride = endpoint
 }
 
+// SetEndpointOverrideWithPort combines a host and port into a host:port endpoint override.
+// If the host already contains a port, it is replaced with the specified port.
+func SetEndpointOverrideWithPort(host string, port int) {
+	if strings.Contains(host, "://") {
+		// Full URL provided — use as-is
+		endpointOverride = host
+		return
+	}
+	if _, _, err := net.SplitHostPort(host); err == nil {
+		// Host already has a port — replace it
+		h, _, _ := net.SplitHostPort(host)
+		host = h
+	}
+	endpointOverride = fmt.Sprintf("%s:%d", host, port)
+}
+
 // OperatorPublicURL returns the HTTPS port for mTLS API and public surface
 func (c *Config) OperatorPublicURL() string {
 	if endpointOverride != "" {

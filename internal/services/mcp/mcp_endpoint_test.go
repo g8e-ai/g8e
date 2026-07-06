@@ -35,8 +35,13 @@ type endpointTestOption func(*GatewayService)
 // withEndpointSigningKey sets custom signing key and keyID for the test GatewayService.
 func withEndpointSigningKey(privKey ed25519.PrivateKey, keyID string) endpointTestOption {
 	return func(g *GatewayService) {
-		g.signingKey = privKey
-		g.keyID = keyID
+		var deps RuntimeDependencies
+		if d := g.getRuntimeDeps(); d != nil {
+			deps = *d
+		}
+		deps.SigningKey = privKey
+		deps.KeyID = keyID
+		g.SetRuntimeDeps(deps)
 	}
 }
 
@@ -49,6 +54,13 @@ func newEndpointTestGatewayService(opts ...endpointTestOption) *GatewayService {
 		responder:       response.NewWriter(logger),
 		maxPayloadBytes: 10 * 1024 * 1024,
 	}
+
+	// Set default runtime dependencies so runtime-gated methods work
+	_, privKey, _ := ed25519.GenerateKey(rand.Reader)
+	g.SetRuntimeDeps(RuntimeDependencies{
+		SigningKey: privKey,
+		KeyID:      "endpoint-test-key",
+	})
 
 	// Apply options
 	for _, opt := range opts {

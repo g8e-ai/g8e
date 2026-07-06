@@ -5,8 +5,8 @@ parent: Guides
 
 # Build g8e-Compatible Applications
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 ---
 
@@ -65,34 +65,15 @@ The envelope `id` must match the deterministic transaction_hash computed from it
 
 ### GovernanceEnvelope Structure
 
-A valid GovernanceEnvelope must include:
+A valid GovernanceEnvelope includes the following categories of fields:
 
-- **id**: Deterministic transaction hash (SHA256 of canonical fields).
-- **timestamp**: Creation timestamp.
-- **expires_at**: Timestamp for expiry enforcement.
-- **source_component**: Component identifier (e.g., COMPONENT_CLIENT).
-- **operator_id**: Target operator identifier.
-- **operator_session_id**: Operator session identifier.
-- **web_session_id**: Web session identifier.
-- **cli_session_id**: CLI session identifier.
-- **event_type**: Typed event identifier (e.g., `g8e.v1.operator.command.requested`).
-- **payload**: Raw protobuf payload bytes.
-- **intent_data**: Structured JSON view of the intent.
-- **action_type**: UAP-compatible action type (e.g., `EXECUTE_BASH`).
-- **target_resource**: UAP-compatible target resource.
-- **state_merkle_root**: Current state root from the Gateway.
-- **nonce**: Unique value for replay defense.
-- **transaction_hash**: Deterministic hash computed from envelope fields.
-- **protocol_version**: UAP-compatible protocol version (e.g., "1.0").
-- **governance**: Governance metadata containing L1, L2, and L3 proofs.
-- **case_id**: Optional case identifier.
-- **investigation_id**: Optional investigation identifier.
-- **task_id**: Optional task identifier.
-- **system_fingerprint**: Optional system fingerprint.
-- **tenant_id**: Optional tenant identifier.
-- **binding_persona**: Optional binding persona.
-- **requestor_user_id**: The human user who authorized the action (delegator).
-- **acting_app_id**: The app/tool acting on behalf of the user (delegate).
+- **Identity and routing**: Transaction hash ID, timestamp, expiry, source component, operator and session identifiers, and event type.
+- **Payload**: The typed protobuf payload bytes and a structured JSON view of the intent.
+- **Action classification**: UAP-compatible action type (e.g., `EXECUTE_BASH`) and target resource.
+- **State binding**: Current state Merkle root from the Gateway and a unique nonce for replay defense.
+- **Governance metadata**: L1, L2, and L3 proofs attached by the verification pipeline.
+- **Delegation**: The requestor user ID (human delegator) and acting app ID (delegate tool).
+- **Optional context**: Case, investigation, and task identifiers, system fingerprint, tenant ID, and binding persona.
 
 ### Typed Payloads
 
@@ -108,7 +89,7 @@ The protocol defines canonical event types for all first-class operations. The f
 - **Audit Operations**: `g8e.v1.operator.audit.command.recorded`, `g8e.v1.operator.audit.ai.recorded`
 - **Shutdown**: `g8e.v1.operator.shutdown.requested`
 
-This list is not exhaustive. Refer to `protocol/constants/events.json` for the complete set of event type constants and `protocol/proto/g8e/operator/v1/operator.proto` for the canonical payload schema definitions.
+This list is not exhaustive. The complete set of event type constants and payload schema definitions are available in the protocol constants and protobuf schemas.
 
 ---
 
@@ -138,7 +119,7 @@ The response includes the `state_merkle_root` field. Alternatively, the `/api/v1
 
 ### Step 3: Construct Typed Payload
 
-Format the mutation intent according to the protocol schema. For example, a shell execute request uses the `CommandRequested` protobuf message defined in `protocol/proto/g8e/operator/v1/operator.proto`:
+Format the mutation intent according to the protocol schema. For example, a shell execute request uses the `CommandRequested` protobuf message:
 
 ```json
 {
@@ -157,7 +138,7 @@ The payload must be serialized as protobuf bytes and base64-encoded in the final
 
 ### Step 4: Generate Transaction Hash
 
-Compute the deterministic transaction hash from the envelope fields using the canonicalization rules defined in `internal/governance/envelope.go`. The hash is computed over:
+Compute the deterministic transaction hash from the envelope's critical fields. The hash is a SHA-256 digest over the following fields, canonicalized in protocol field order:
 
 - action_type
 - target_resource
@@ -169,7 +150,7 @@ Compute the deterministic transaction hash from the envelope fields using the ca
 - requestor_user_id
 - acting_app_id
 
-Refer to the `GenerateMessageID` function in `internal/governance/envelope.go` for the exact canonicalization algorithm.
+The `id` field must be set to this computed hash. L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked.
 
 ### Step 5: Build Envelope
 
@@ -223,7 +204,7 @@ curl -X POST https://localhost:8443/api/v1/governance/envelopes \
   -d @envelope.json
 ```
 
-The Gateway validates the envelope through the five-layer governance pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator) before execution. See `internal/services/governance/l4_warden.go` for the canonical verification sequence.
+The Gateway validates the envelope through the five-layer governance pipeline (L1 Doctrine, L2 Consensus, L3 Notary, L4 Warden, L5 Actuator) before execution.
 
 ### Step 7: Consume Receipt
 
@@ -375,7 +356,7 @@ A reference g8e-compatible agentic ensemble demonstrates a maximal application i
 - Receipt verification and consumption
 - MCP/A2A integration
 
-Refer to `protocol/examples/governance_envelope/` for example envelope construction code and `internal/governance/envelope.go` for the canonical hash implementation.
+Refer to the protocol examples for sample envelope construction code.
 
 ---
 

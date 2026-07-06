@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-02
-Version: v1.3.5
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -90,7 +90,7 @@ cd demos/healthcare
 docker compose up -d
 ```
 
-Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
+Each demo uses its own `compose.yml` file with isolated networks, volumes, and doctrine bind mounts. Demos use a separate `demos/Dockerfile` that copies a pre-built binary into a minimal Debian image without compilation. Run `make build` first to produce the binary. See [demos/README.md](../../demos/README.md) for the full demo environment guide.
 
 ## Configuration
 
@@ -149,8 +149,8 @@ Specify the security posture at startup using the `--posture` flag. Three values
 
 The `Dockerfile` employs a multi-stage build process:
 
-1. **Build Stage**: Utilizes `golang:1.26` to compile the `g8e` binary from `cmd/operator`.
-2. **Runtime Stage**: Utilizes `debian:bookworm` for the execution environment.
+1. **Build Stage**: Uses a pinned Go toolchain image to compile the `g8e` binary from `cmd/operator`.
+2. **Runtime Stage**: Uses a pinned Debian Bookworm image for the execution environment.
 
 The image includes:
 - The `g8e` binary at `/g8e`.

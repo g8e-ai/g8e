@@ -132,7 +132,7 @@ The agent harness impersonates arbitrary AI tools against a **REAL** g8e Gateway
 
 `GatewayFixture` writes each run's data/vault/PKI to a fresh, uniquely-named directory under `<repo>/test-results/` (via `os.MkdirTemp`). This directory is **not** deleted — results accumulate for inspection. `test-results/` is gitignored. `Cleanup` stops the gateway and releases database locks but leaves data on disk.
 
-Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `SetupTribunal`, `WaitForReady`, `SetPublicBaseURL`, `Cleanup`.
+Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `SetupTribunal`, `WaitForReady`, `Cleanup`. `PublicBaseURL` is set via `GatewayFixtureOptions` at construction time.
 
 ### Trust Bundle Troubleshooting
 

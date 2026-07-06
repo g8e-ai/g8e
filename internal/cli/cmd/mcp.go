@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,11 +57,6 @@ const (
 	envG8EAppID      = "G8E_APP_ID"
 	envG8EAppCert    = "G8E_APP_CERT"
 	envG8EAppKey     = "G8E_APP_KEY"
-)
-
-var (
-	l3ApprovalMaxIterations = 30
-	l3ApprovalPollInterval  = 10 * time.Second
 )
 
 // nativeToolsToDisable are Claude/Codex built-in tools that bypass MCP governance.
@@ -274,6 +270,13 @@ func sendSuccess(encoder *json.Encoder, id interface{}, result interface{}) {
 type gatewayConn struct {
 	client     *http.Client
 	gatewayURL string
+
+	// SSE fields for L3 approval notifications. Populated when CLI credentials
+	// are available so the stdio proxy can subscribe to approval.completed events
+	// instead of polling.
+	sseBaseURL string
+	userID     string
+	sseClient  *http.Client
 }
 
 // buildGatewayConn constructs a gatewayConn. It reads the delegated credential
@@ -366,6 +369,22 @@ func runMCPStdioProxy(cmd *cobra.Command, _ []string) error {
 		"gateway_url", conn.gatewayURL,
 	)
 
+	// Populate SSE fields for L3 approval notifications. The SSE client uses
+	// the CLI cert (not the delegated/app cert) because the gateway's SSE auth
+	// middleware validates CLI session ownership. The gateway URL is stripped
+	// of the /mcp suffix to get the base URL for SSE endpoints.
+	if creds, err := auth.LoadCredentials(cfg); err == nil && creds != nil && creds.UserID != "" {
+		if sseClient, err := auth.BuildMTLSClient(cfg, 0); err == nil {
+			conn.sseClient = sseClient
+			conn.userID = creds.UserID
+			// Use OperatorPublicURL (g8e.local) for SSE to ensure TLS ServerName
+			// matches the gateway cert SAN. Deriving from gatewayURL may produce
+			// an IP-based URL that fails TLS verification.
+			conn.sseBaseURL = strings.TrimSuffix(cfg.OperatorPublicURL(), "/")
+			logger.Info("SSE approval notifications enabled", "user_id", creds.UserID)
+		}
+	}
+
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 
@@ -452,7 +471,11 @@ func proxySessionToGateway(session *gatewayConn, req JSONRPCRequest) (JSONRPCRes
 	return resp, nil
 }
 
-// proxySessionToGatewayWithRetryContext performs L3 approval polling with context support.
+// proxySessionToGatewayWithRetryContext handles L3 approval responses by opening
+// the browser for WebAuthn authorization and waiting for the approval.completed
+// SSE event from the gateway. Once received, it re-sends the original request
+// and returns the result. SSE credentials are required — there is no polling
+// fallback.
 func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gatewayConn, req JSONRPCRequest, logger *slog.Logger) (JSONRPCResponse, error) {
 	resp, err := proxySessionToGateway(session, req)
 	if err != nil {
@@ -475,34 +498,44 @@ func proxySessionToGatewayWithRetryContext(ctx context.Context, session *gateway
 		fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 	}
 
-	ticker := time.NewTicker(l3ApprovalPollInterval)
-	defer ticker.Stop()
+	if session.sseClient == nil || session.sseBaseURL == "" || session.userID == "" {
+		return resp, fmt.Errorf("L3 approval: %w", constants.ErrNotAuthenticated)
+	}
 
-	for i := 0; i < l3ApprovalMaxIterations; i++ {
-		select {
-		case <-ctx.Done():
-			if logger != nil {
-				logger.Warn("L3 approval polling cancelled by context")
-			}
-			return resp, ctx.Err()
-		case <-ticker.C:
-			retryResp, err := proxySessionToGateway(session, req)
-			if err != nil {
-				continue
-			}
-			if !isL3ApprovalResponse(retryResp) {
-				if logger != nil {
-					logger.Info("L3 approval completed, proceeding with execution")
-				}
-				return retryResp, nil
-			}
+	txHash := extractTxHashFromApprovalURL(approvalURL)
+	if err := auth.WaitForApprovalSSE(ctx, session.sseClient, session.sseBaseURL, session.userID, txHash); err != nil {
+		if logger != nil {
+			logger.Warn("L3 approval SSE wait ended", "error", err)
 		}
+		return resp, err
 	}
 
-	if logger != nil {
-		logger.Warn("L3 approval timeout, returning original response")
+	retryResp, err := proxySessionToGateway(session, req)
+	if err != nil {
+		return resp, err
 	}
-	return resp, nil
+	if logger != nil {
+		logger.Info("L3 approval completed, proceeding with execution")
+	}
+	return retryResp, nil
+}
+
+// extractTxHashFromApprovalURL extracts the transaction hash from an approval
+// URL path (e.g., "https://g8e.local:8443/api/v1/approve/abc123" -> "abc123").
+func extractTxHashFromApprovalURL(approvalURL string) string {
+	if approvalURL == "" {
+		return ""
+	}
+	parsed, err := url.Parse(approvalURL)
+	if err != nil {
+		return ""
+	}
+	path := strings.TrimPrefix(parsed.Path, constants.APIPaths.ApprovePagePrefix)
+	// Remove any trailing query or fragment
+	if idx := strings.IndexAny(path, "?#"); idx >= 0 {
+		path = path[:idx]
+	}
+	return path
 }
 
 // ─── createMCPClient: kept for tests and external callers ───────────────────
@@ -696,7 +729,17 @@ func agentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agent",
 		Short: "Agent integration commands for popular AI coding tools",
-		Long:  `Configure and integrate g8e with popular AI agent binaries (Claude, Codex, Cursor, Devin, etc.) for seamless MCP tool access.`,
+		Long: `Configure and integrate g8e with popular AI agent binaries (Claude, Codex,
+Cursor, Devin, etc.) for seamless MCP tool access.
+
+Subcommands:
+  list    List all supported agent binaries
+  show    Print MCP client configuration for a specific agent
+  run     Launch an agent or wrap an external MCP server with g8e governance
+
+For tools that don't support the agent wrapper, use 'g8e mcp agent show <agent>'
+to display MCP client configurations (g8e.local mTLS, IP Address mTLS, Stdio
+Transport), then copy the generated JSON to your agent's MCP settings file.`,
 	}
 
 	cmd.AddCommand(
@@ -852,7 +895,39 @@ WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
   g8e mcp agent run --url http://localhost:3000
 
   Intercepts all tools/call requests, screens them through L1 doctrine
-  (MITRE ATT&CK threat detection), and blocks violations before forwarding.`,
+  (MITRE ATT&CK threat detection), and blocks violations before forwarding.
+
+AUDIT TRAIL:
+  When launching an agent, the agent is automatically enrolled as an external app
+  identity (SPIFFE ID: spiffe://g8e.local/app/<agent-name>). All MCP tool calls
+  are recorded in the audit vault with this app identity, enabling per-agent audit
+  trails separate from human operator activity.
+
+  Query audit events for a specific agent:
+    g8e gw data audit list --operator-session-id spiffe://g8e.local/app/claude
+    g8e gw data audit summary --operator-session-id spiffe://g8e.local/app/claude
+
+DELEGATED CREDENTIAL MODEL:
+  g8e uses a delegated credential model for agent identity. When an agent is
+  launched, it receives a short-lived mTLS certificate that carries both
+  identities:
+  - App SPIFFE ID: spiffe://g8e.local/app/<agent-name> (the agent's policy identity)
+  - Requestor User ID: spiffe://g8e.local/user/<id> (the human who launched the agent)
+
+  Both identities are cryptographically bound in the certificate's URI SANs and
+  presented at the TLS handshake. No trusted identity headers are used; the
+  certificate IS the session. Every governed transaction includes both identities
+  in the signed hash, ensuring end-to-end identity correctness and auditability.
+
+L3 APPROVAL FLOW:
+  When a tool requires L3 approval, g8e will:
+  1. Automatically open your browser to the approval URL
+  2. Wait for you to authorize via WebAuthn
+  3. Retry the tool call automatically
+  4. Return the result to the tool
+
+For full L1-L5 governance (L2 consensus, L3 human approval via WebAuthn), start
+the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {

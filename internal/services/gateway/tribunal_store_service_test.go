@@ -29,7 +29,7 @@ import (
 
 func TestTribunalStoreService_AddTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
 
 	// Generate test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -253,7 +253,7 @@ func TestTribunalStoreService_AddTribunal(t *testing.T) {
 
 func TestTribunalStoreService_GetTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -298,7 +298,7 @@ func TestTribunalStoreService_GetTribunal(t *testing.T) {
 
 func TestTribunalStoreService_ListTribunals(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
 
 	// Create test signers
 	pubKey1, _, err := ed25519.GenerateKey(nil)
@@ -366,7 +366,7 @@ func TestTribunalStoreService_ListTribunals(t *testing.T) {
 
 func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
 
 	// Create a test signer
 	pubKey, _, err := ed25519.GenerateKey(nil)
@@ -410,7 +410,7 @@ func TestTribunalStoreService_DeleteTribunal(t *testing.T) {
 
 func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -450,7 +450,7 @@ func TestTribunalStoreService_UpdateDisableTribunal(t *testing.T) {
 
 func TestTribunalStoreService_AddTribunal_AlreadyExists(t *testing.T) {
 	infra := setupTestInfrastructure(t, false)
-	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.SignerStore)
+	tribunalSvc := NewTribunalStoreService(infra.DB.GetDB(), infra.Logger, infra.DB.DocStore, infra.DB.SignerStore)
 
 	pubKey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)

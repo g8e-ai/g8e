@@ -72,10 +72,6 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 	// Create mTLS client with enrolled identity
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 
-	// Set public base URL for approval links
-	publicURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
-	fixture.SetPublicBaseURL(publicURL)
-
 	// MCP routes are available on HTTPS port with mTLS
 	mcpURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
@@ -213,10 +209,6 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 
 	// Create mTLS client with enrolled identity
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
-
-	// Set public base URL for approval links
-	publicURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
-	fixture.SetPublicBaseURL(publicURL)
 
 	// MCP routes are available on HTTPS port with mTLS
 	mcpURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())

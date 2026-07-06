@@ -58,6 +58,9 @@ func auditReceiptsCmdWithConfig(configLoader func(string) (*config.Config, error
 	cmd := &cobra.Command{
 		Use:   "receipts",
 		Short: "List signed receipts from the running Gateway",
+		Long: `List signed transaction receipts from the running Gateway over mTLS. Use
+--session to filter by operator session ID, --tx-id to look up a specific
+transaction hash, and --json to output raw JSON instead of a table.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -172,6 +175,9 @@ func auditExportCmdWithConfig(configLoader func(string) (*config.Config, error),
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export the full receipts bundle for archival",
+		Long: `Export the full signed receipts bundle from the running Gateway over mTLS.
+Use --session to filter by operator session ID and --out to specify the output
+file path (defaults to stdout).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -236,6 +242,9 @@ func auditReportCmdWithConfig(configLoader func(string) (*config.Config, error),
 	cmd := &cobra.Command{
 		Use:   "report",
 		Short: "Generate a compliance report (JSON + Markdown)",
+		Long: `Generate a compliance report from the running Gateway's audit data over mTLS.
+Use --session to filter by operator session ID and --out to specify the output
+directory for the report file.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -313,6 +322,9 @@ func auditEventsCmdWithConfig(configLoader func(string) (*config.Config, error),
 	cmd := &cobra.Command{
 		Use:   "events",
 		Short: "Query raw audit events from the Gateway audit store",
+		Long: `Query raw audit events from the running Gateway over mTLS. Use --session to
+filter by operator session ID, --limit to control the number of results, and
+--json to output raw JSON instead of a table.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -422,6 +434,8 @@ func auditSummaryCmdWithConfig(configLoader func(string) (*config.Config, error)
 	cmd := &cobra.Command{
 		Use:   "summary",
 		Short: "Aggregate audit events and receipts by type",
+		Long: `Show an aggregated summary of audit events grouped by type from the running
+Gateway over mTLS. Use --session to filter by operator session ID.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {

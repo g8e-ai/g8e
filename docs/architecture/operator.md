@@ -4,12 +4,12 @@ title: g8e Operator
 
 # g8e Operator
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 The **g8e Operator** is the host-side, sovereign agent role defined by the g8e Protocol: a daemon that functions as the remote execution target and universal protocol translator under the security guarantees of the platform. An Operator receives transactions, enforces L1/L2/L3 verification, executes through a defensive boundary, and emits signed receipts anchored to a host-local ledger.
 
-The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e Node. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by CLI subcommands (`gw serve` vs `operator run`) with worker bodies in `internal/cli/serve/`:
+The reference implementation of a g8e-compliant Policy Execution Point (PEP) is the g8e Node. It functions as both a **g8e Operator** and a **Model Context Protocol (MCP) Server**. The same Go codebase provides the logic for both the g8e Gateway (PDP) and the g8e Operator (PEP), differentiated by CLI subcommands (`gw serve` vs `operator run`):
 
 - **g8e Gateway (PDP)**: When run in Gateway mode (utilizing `L1Doctrine`, `L2Consensus`, and `L3Notary` as a central authority), it acts as the central Policy Decision Point (PDP) with platform persistence and pub/sub brokering.
 - **g8e Operator (PEP)**: When run as a host agent, it acts as the Policy Execution Point (PEP) and MCP server, enforcing local verification before host mutation.
@@ -31,24 +31,24 @@ The Operator is the only component capable of mutating the host. It executes rem
 When a command targets an Operator, it progresses through a strict, fail-closed pipeline consisting of five distinct layers of verification and execution:
 
 ### L1: Doctrine (Technical Bedrock)
-The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions (`forbidden_patterns`) to block malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense, cannot be bypassed, and is defined in `internal/services/governance/l1_doctrine.go`.
+The **L1Doctrine** layer provides foundational hard gates. It utilizes Protobuf field-option extensions to block malicious strings at the schema level and executes real-time MITRE ATT&CK heuristics to detect threats like reverse shells, privilege escalation, and destructive disk operations. L1 is the first line of defense and cannot be bypassed.
 
 ### L2: Consensus
-The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted `SignerStore`. This ensures that no single upstream agent can unilaterally mutate the host. The consensus verification logic is implemented in `internal/services/governance/l4_warden.go` via the `verifyL2Posture` and `verifyL2Signature` methods.
+The **L2Consensus** layer verifies the intent of the request via a Byzantine Fault Tolerant (BFT) quorum. It validates Ed25519 signatures from independent reasoning agents (the **Tribunal**) against the Operator's locally trusted signer store. This ensures that no single upstream agent can unilaterally mutate the host.
 
 ### L3: Notary (Authorization)
-The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. The notary verification logic is defined in `internal/services/governance/l3_notary.go`.
+The **L3Notary** layer enforces human-in-the-loop authorization. For web-based sessions, it validates FIDO2/WebAuthn (Passkey) proofs. For CLI sessions, it validates mTLS certificate fingerprints and cryptographic signatures over the transaction hash. For operator sessions (outbound mode), it validates mTLS certificate fingerprints and cryptographic signatures without CLI session or certificate revocation checks (passkey auth is not available for operators). Mutations are blocked until a valid L3 proof is presented. Non-mutation actions (as classified by the action type's intrinsic mutation property) do not require L3 proof. L3 approval notifications use Server-Sent Events (SSE) for real-time delivery: the Gateway emits an `approval.completed` event scoped to the submitting user when a passkey approval is verified, and CLI clients subscribe to the SSE stream rather than polling.
 
 ### L4: Warden (Pre-dispatch Gate)
-The **L4Warden** is the final verification gate before execution, defined in `internal/services/governance/l4_warden.go`. It enforces:
+The **L4Warden** is the final verification gate before execution. It enforces:
 1. **Integrity**: Validates that `id == transaction_hash == SHA256(canonical_fields)`. The wire format is canonical JSON (`protojson`), but the signing basis is a deterministic hash of normalized fields.
-2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local `ReplayStore`.
+2. **Freshness**: Enforces `expires_at` and checks for replay attacks via a local replay protection store.
 3. **State Binding**: Validates that the `state_merkle_root` matches the host's current ledger root.
 4. **Quorum**: Confirms that L1, L2, and L3 proofs meet the current **Governance Posture** (`doctrine`, `consensus`, or `notary`).
 
 ### L5: Actuator (Execution Boundary)
-The **L5Actuator** is the singular execution boundary permitted to mutate host state, defined in `internal/services/governance/l5_actuator.go`. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
-1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local `SQLAuditStore`.
+The **L5Actuator** is the singular execution boundary permitted to mutate host state. It dispatches verified payloads to internal handlers (shell, file edit, etc.) and uses a **dual-receipt model** with **JIT capability minting**:
+1. **Pre-execution**: Signs an `ActionReceipt` with status `EXECUTING` and commits it to the local audit vault.
 2. **Rehydration**: Restores sensitive data (PII, credentials) that was scrubbed upstream by the **Sovereign Execution Boundary**, using local tokens.
 3. **JIT Capability Minting**: Mints a scoped, single-action, self-dissolving `Capability` bound to the transaction hash and action type, enforcing zero standing privileges. The capability is injected into the execution context for downstream handlers.
 4. **Execution**: Dispatches to the handler and captures the output.
@@ -116,7 +116,7 @@ The g8e Operator establishes workload identity bound to SPIFFE-style URI SANs, s
 
 ### JWT Authentication Isolation
 The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gateway handles all JWT validation, user provisioning, and role mapping. JIT provisioning is **owner-controlled**:
-- **Owner-Centric Model**: The first human to authenticate becomes the Platform Owner. Starting the Gateway is the owner's act of authorization — no standing invite codes or manual approval steps are required for subsequent CSR enrollment.
+- **Owner-Centric Model**: The first human to authenticate becomes the Platform Owner. Starting the Gateway is the owner's act of authorization -- no standing invite codes or manual approval steps are required for subsequent CSR enrollment.
 - **CSR-Based Enrollment**: For mTLS-based authentication, clients enroll via Certificate Signing Request (CSR) where they generate their own key pair and the Gateway acts as a Certificate Authority (CA) to sign the certificate. No shared secrets, no API keys to leak.
 - **JWT-Based JIT**: When a JWT is presented, the g8e Gateway validates the signature and provisions the user subject to platform owner authorization. The user is bound to the owner's organization.
 - **Strict TTL**: Sessions have a 1-hour TTL by default. Long-lived access requires programmatic renewal or re-authentication.
@@ -126,15 +126,15 @@ The g8e Operator is fully isolated from Identity Providers (IdP). The g8e Gatewa
 
 ### Local-First Audit Architecture (LFAA)
 The host is the authoritative source of truth for all mutations.
-- **SQLAuditStore**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid `operator_session_id` are rejected as defined in `internal/services/storage/audit_store.go`. All sensitive content fields (content_text, command_stdout, command_stderr) are encrypted at rest using the vault subsystem (mandatory since v1.0.10).
+- **Audit Vault**: An append-only SQLite log of every event and signed `ActionReceipt`. It is fail-closed: events missing a valid operator session ID are rejected. All sensitive content fields are encrypted at rest using the vault subsystem (mandatory since v1.0.10).
 - **Scrubbed vs. Raw Logs**: Sensitive data scrubbing separates logs into a **Scrubbed Vault** (safe for AI reading) and a **Raw Vault** (unscrubbed forensic record for human security audits).
-- **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations using native `go-git`. Files are mirrored and can be restored to any prior state using `internal/services/storage/ledger.go`. The ledger also encrypts mirrored files at rest when the vault is unlocked (mandatory since v1.0.10).
+- **Git-Backed Ledger**: Implements a two-phase commit (`state_root_before` / `state_root_after`) for file mutations using native `go-git`. Files are mirrored and can be restored to any prior state. The ledger also encrypts mirrored files at rest when the vault is unlocked (mandatory since v1.0.10).
 
 ---
 
 ## 4. Governance & Safety
 
-- **Sovereign Execution Boundary**: Data sovereignty is enforced at the boundary. Sensitive data is scrubbed before leaving the host and replaced with tokens (`{{UEI_N}}`). These tokens are rehydrated by the `L5Actuator` only at the moment of execution.
+- **Sovereign Execution Boundary**: Data sovereignty is enforced at the boundary. Sensitive data is scrubbed before leaving the host and replaced with tokens. These tokens are rehydrated by the Actuator only at the moment of execution.
 - **Strict Canonical JSON**: While schemas are defined in Protobuf, the wire format for all client-facing surfaces is strictly canonical JSON (`protojson`) for maximum ecosystem compatibility.
 - **Strict Protocol Enforcement**: The Operator enforces the current 5-layer verification protocol. Outdated formats, HMAC fallbacks, and unsigned inputs are rejected.
 
@@ -146,6 +146,7 @@ The reference implementation (`g8eo`) currently supports:
 
 - **Universal Protocol Translation**: Functional MCP and A2A gateway mapping standard tool calls to signed `GovernanceEnvelope` mutations.
 - **Fail-Closed 5-Layer Verification**: L1 (Doctrine), L2 (Consensus), L3 (Notary), L4 (Warden), and L5 (Actuator) gates are fully enforced on every transaction.
+- **SSE-Based L3 Approvals**: L3 notary approvals use Server-Sent Events for real-time notification delivery, replacing polling-based waiting. CLI clients subscribe to the SSE stream and receive `approval.completed` events when passkey verification succeeds.
 - **Outbound-Only mTLS Connectivity**: Dial-out reverse tunnels with zero inbound port requirements. See [Network Architecture](./network.md) for detailed communication patterns and port topology.
 - **Local-First Audit Vault**: Git-backed ledger and fail-closed SQLite audit vault enforcing session existence for all writes. Mandatory encryption at rest for all storage services (since v1.0.10).
 - **Deterministic Hash Binding**: SHA-256 transaction hash integrity enforced across all wire formats.
@@ -158,7 +159,7 @@ The reference implementation (`g8eo`) currently supports:
 
 ## 6. Post-Bootstrap Workflow
 
-After completing platform bootstrap via `./g8e auth enroll`, follow this workflow to begin using the Operator:
+After completing platform bootstrap via `./g8e auth enroll`, follow this workflow to begin using the Operator. Enrollment now automatically registers a passkey via browser after successful CLI session enrollment, streamlining the onboarding flow.
 
 ### 1. Verify Gateway Health
 
@@ -215,15 +216,25 @@ The Operator will:
 
 ### 5. Review Audit Trail
 
-Query the local audit vault to verify governance enforcement:
+Query the audit vault to verify governance enforcement:
 
 ```bash
-./g8e gw data audit list --operator-session-id <session-id>
+# List signed receipts (auto-discovers session from credentials)
+./g8e audit receipts
+
+# Query raw audit events with optional session filter
+./g8e audit events --limit 100
+
+# Generate a compliance report (JSON)
+./g8e audit report
+
+# Aggregate summary by event type and receipt status
+./g8e audit summary
 ```
 
-Each entry includes:
+Each receipt includes:
 - Transaction hash
-- L1/L2/L3 verification status
+- L2/L3 verification status
 - Signed ActionReceipt
 - State root before/after
 - Operator session ID
@@ -244,27 +255,11 @@ See [Native Tool Execution](#native-tool-execution) for the complete tool catalo
 
 ---
 
-## 7. Implementation Reference
+## 7. See Also
 
-| Concern | Authoritative file |
-|---|---|
-| Ingress Verification (`L4Warden`) | `internal/services/governance/l4_warden.go` |
-| Execution Boundary (`L5Actuator`) | `internal/services/governance/l5_actuator.go` |
-| Scrubbing (Data Scrubbing) | `internal/services/scrubbing/boundary.go` |
-| Technical Bedrock (`L1Doctrine`) | `internal/services/governance/l1_doctrine.go` |
-| Consensus (`L2Consensus`) | `internal/services/governance/l4_warden.go` |
-| Notary (`L3Notary`) | `internal/services/governance/l3_notary.go` |
-| Local Audit Vault | `internal/services/storage/audit_store.go` |
-| Native Git Ledger | `internal/services/storage/ledger.go` |
-| Native Tools | `internal/services/mcp/native_tool_registry.go` |
-| JIT Capability | `internal/services/governance/capability.go` |
-| Native Tool Handlers | `internal/services/mcp/native_handlers.go` |
-| Operator Entrypoint | `cmd/operator/main.go` (binary) → CLI tree at `internal/cli/cmd/` + worker bodies at `internal/cli/serve/` |
-| Protocol Definitions | `protocol/proto/g8e/common/v1/common.proto` |
-| Operator Protocol | `protocol/proto/g8e/operator/v1/operator.proto` |
-| Workload Identity | `protocol/workload_identity.go` |
-| Network architecture | `[Network Architecture](./network.md)` |
-| Event Constants | `protocol/constants/events.json` |
-| Port Constants | `protocol/constants/ports.json` |
-
-See also: [g8e Protocol](../../protocol/docs/spec.md), [g8e Gateway](./gateway.md).
+- [g8e Protocol](../../protocol/docs/spec.md) for protocol definitions and wire formats
+- [g8e Gateway](./gateway.md) for PDP architecture and communication patterns
+- [Network Architecture](./network.md) for SPIFFE ID formats, PKI hierarchy, mTLS enforcement, and port topology
+- [Governance](./governance.md) for posture configuration and tribunal setup
+- [Auth Architecture](./auth.md) for enrollment, passkey, and session management details
+- [CLI Guide](../guides/cli.md) for command reference and usage examples

@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.7] - 2026-07-06
+
+### Overview
+
+v1.3.7 is an L3 approval reliability, thread safety, and architectural refactoring release. This version replaces all L3 approval polling with SSE-based real-time notifications, eliminates data races in the gateway's late-bound dependency wiring via atomic pointers, introduces a two-phase dependency model for the MCP gateway service, separates governance dependencies from command service configuration, extends tribunal bootstrap to notary posture, and adds automatic passkey registration during enrollment.
+
+### Added
+
+* **SSE-Based L3 Approval Notifications** — Replaced all polling-based L3 approval waiting with SSE event subscriptions. The gateway emits `approval.completed` SSE events scoped to the submitting user when a passkey approval is verified. CLI clients (`g8e auth approve` and the MCP stdio proxy) subscribe to the SSE stream and wait for the event, then verify via the mTLS status endpoint. Added `WaitForApprovalSSE` in `internal/cli/auth/approval_sse.go` with 3-minute timeout. Added `emitApprovalCompletedSSE` in `passkey_service_approvals.go`. Added `ApprovalCompletedEvent` model in `internal/models/approval.go`.
+* **Automatic Passkey Registration on Enrollment** — `performEnroll` in `auth.go` now calls `RegisterPasskeyViaBrowser` after successful enrollment, streamlining the onboarding flow. Trust bundle directory is created with `os.MkdirAll` before writing.
+* **`--port` Persistent Flag** — Added `-p` / `--port` persistent flag to the root command for specifying the gateway HTTPS port. `SetEndpointOverrideWithPort` in `config.go` combines host and port into the endpoint override.
+* **`ErrTribunalNotConfigured` Sentinel** — Added to `internal/constants/errors.go` for 503 responses when the tribunal service is not yet initialized.
+* **Thread Safety Documentation** — Added "Thread Safety for Late-Bound Dependencies" section to `docs/devs/devs.md` documenting the `atomic.Pointer`/`atomic.Value` pattern for late-bound deps.
+
+### Changed
+
+* **Two-Phase Dependency Model for MCP Gateway** — Split `mcp.GatewayService` dependencies into construction-phase (`Dependencies` struct, immutable after `NewGatewayService`: includes `A2ADownstreamURL` and `PublicBaseURL`) and runtime-phase (`RuntimeDependencies` struct, set once via `SetRuntimeDeps` before first request: `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`). Stored via `atomic.Pointer[RuntimeDependencies]` with `runtimeReady()` gate. Replaced individual `SetDependencies`/`SetDBService`/`SetSessionValidator`/`SetAuditLogger`/`SetA2ADependencies`/`SetPublicBaseURL` setters.
+* **Governance Dependencies Separated from Command Service Config** — Extracted `GovernanceDeps` struct from `CommandServiceConfig` in `pubsub_commands.go`. `NewOperatorPubSubService` now accepts `GovernanceDeps` as a separate parameter. Added `GatewayCommandServiceConfig` embedding `CommandServiceConfig` with gateway-only `GovDeps` and `MCPGateway` fields. Added `NewGatewayOperatorPubSubService` constructor for gateway mode. Outbound mode (`g8eo.go`) updated to pass `GovernanceDeps` separately.
+* **Atomic Pointer for Tribunal in HTTPHandler** — `HTTPHandler.tribunal` changed from `*tribunal.TribunalService` to `atomic.Pointer[tribunal.TribunalService]`. `SetTribunal` now stores atomically without rebuilding the router. Added `handleTribunalDeliberate` as an always-registered handler that checks the atomic pointer at request time, returning 503 if not configured. Eliminates router rebuild race.
+* **Atomic Pointer for EnvelopeProcessor in HTTPHandler** — `HTTPHandler.envProc` changed from `governance.EnvelopeProcessor` to `atomic.Pointer[governance.EnvelopeProcessor]`. `SetEnvelopeProcessor` stores atomically.
+* **Atomic Value for TribunalDeliberator in MCP Gateway** — `mcp.GatewayService.tribunalDeliberator` changed from `TribunalDeliberator` to `atomic.Value`. `SetTribunalDeliberator` stores atomically. Added `getTribunalDeliberator()` helper.
+* **PasskeyHandler Constructor Refactored** — Replaced `NewPasskeyHandler(svc, webSessionSvc, responder, maxPayload)` + post-construction `SetApprovalDependencies`/`SetSSEDependencies` calls with a single `NewPasskeyHandler(PasskeyHandlerDeps)` constructor that wires all dependencies at construction time.
+* **Gateway Service Builder Pattern** — `newGatewayModeServiceFromComponents` replaced with `newGatewayServiceBuilder` pattern in `gateway_service.go`. `NewGatewayModeService` delegates to `builder.build()`. Test constructor renamed to `newGatewayModeServiceForTest`.
+* **Tribunal Bootstrap Extended to Notary Posture** — `RunGateway` in `gateway.go` now bootstraps the Tribunal service for both consensus and notary postures (was consensus-only). `bootstrapTribunalPolicy` now saves seed-derived private keys to `secretsDir` via `tribunal.SaveMemberKey` so the in-process `LocalDeliberator` can sign L2 votes via `FileKeyProvider`.
+* **MCP Stdio Proxy SSE Integration** — `runMCPStdioProxy` in `mcp.go` now loads CLI credentials and builds an mTLS SSE client for L3 approval notifications. `proxySessionToGatewayWithRetryContext` uses `WaitForApprovalSSE` instead of polling. Added `extractTxHashFromApprovalURL` helper. SSE credentials are required — there is no polling fallback.
+* **`g8e auth approve` SSE Flow** — `approve.go` rewritten to use `WaitForApprovalSSE` instead of polling. Loads CLI credentials, builds mTLS client, waits for SSE event, then verifies status. Removed `approvePollInterval` and `approveMaxIterations` variables.
+* **Safe Downstream URL Access** — `mcp.GatewayService` uses `safeDownstreamURL()` helper that reads from runtime deps atomically, replacing direct field access in circuit breaker logging and request handling.
+* **GatewayFixture PublicBaseURL** — `PublicBaseURL` is now set via `GatewayFixtureOptions` at construction time instead of via a `SetPublicBaseURL` method.
+* **Documentation Updates** — Updated `docs/architecture/auth.md`, `docs/architecture/gateway.md`, `docs/architecture/governance.md`, `docs/architecture/network.md`, `docs/guides/cli.md`, `docs/reference/glossary.md`, and `docs/devs/codemap.md` to reflect SSE-based approvals, atomic dependency wiring, notary tribunal bootstrap, and the two-phase dependency model.
+* **Protocol Python Version** — Updated `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` to v1.3.7.
+
+### Removed
+
+* **Polling-Based Approval Code** — Removed `approvePollInterval`, `approveMaxIterations` from `approve.go`. Removed `l3ApprovalPollInterval`, `l3ApprovalMaxIterations` polling loop from `mcp.go`. Removed `SetApprovalDependencies` and `SetSSEDependencies` methods from `PasskeyHandler`.
+* **`newGatewayModeServiceFromComponents`** — Replaced by `newGatewayServiceBuilder` pattern.
+* **Individual MCP Gateway Setters** — Removed `SetDependencies`, `SetA2ADependencies`, `SetPublicBaseURL`, `SetDBService`, `SetSessionValidator`, `SetAuditLogger` from `mcp.GatewayService`, replaced by `SetRuntimeDeps`.
+* **Router Rebuild on Tribunal Set** — `SetTribunal` no longer rebuilds the router; the deliberate route is always registered.
+
+### Fixed
+
+* **Data Race in Tribunal Wiring** — `HTTPHandler.SetTribunal` previously rebuilt the router under the mutex while concurrent requests could access the old router. Now uses `atomic.Pointer` with always-registered route — no rebuild needed.
+* **Data Race in EnvelopeProcessor Wiring** — `HTTPHandler.envProc` was a raw field set after construction. Now uses `atomic.Pointer` for thread-safe access.
+* **Data Race in MCP Gateway Runtime Deps** — Multiple individual setters (`SetDependencies`, `SetDBService`, etc.) on `mcp.GatewayService` were not synchronized. Consolidated into single `SetRuntimeDeps` atomic store.
+* **Trust Bundle Directory Not Created** — `performEnroll` now creates the trust bundle directory with `os.MkdirAll` before writing the trust bundle file.
+
+### Tests
+
+* Added `internal/cli/auth/approval_sse_test.go` (167 lines) — SSE approval wait tests with mock SSE server.
+* Added `internal/cli/cmd/approve_api_test.go` (194 lines) — approval command tests covering SSE flow, credential loading, and status verification.
+* Added `internal/cli/cmd/mcp_integration_test.go` (126 lines) — MCP stdio proxy integration tests with SSE approval handling.
+* Expanded `internal/services/gateway/passkey_service_approvals_test.go` (182 lines added) — approval completed SSE emission tests.
+* Updated `internal/services/mcp/gateway_test.go`, `gateway_integration_test.go`, `mcp_endpoint_test.go` for `SetRuntimeDeps` migration.
+* Updated `internal/services/pubsub/pubsub_commands_test.go` for `GovernanceDeps` separation.
+* Updated `test/fixtures/gateway_fixture.go` for `GatewayFixtureOptions` pattern.
+
+---
+
 ## [1.3.6] - 2026-07-03
 
 ### Overview

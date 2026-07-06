@@ -32,11 +32,12 @@ type AppPolicyStoreService struct {
 }
 
 // NewAppPolicyStoreService creates a new app policy store service.
-func NewAppPolicyStoreService(db *sqliteutil.DB, logger *slog.Logger) *AppPolicyStoreService {
+// docSvc is the shared DocumentStoreService instance from CanonicalDBService.
+func NewAppPolicyStoreService(db *sqliteutil.DB, logger *slog.Logger, docSvc *DocumentStoreService) *AppPolicyStoreService {
 	return &AppPolicyStoreService{
 		db:     db,
 		logger: logger,
-		docSvc: NewDocumentStoreService(db, logger),
+		docSvc: docSvc,
 	}
 }
 

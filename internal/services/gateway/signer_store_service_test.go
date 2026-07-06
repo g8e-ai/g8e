@@ -40,7 +40,7 @@ func setupSignerStore(t *testing.T) *SignerStoreService {
 	_, err = db.Exec(GatewaySchema())
 	require.NoError(t, err)
 
-	return NewSignerStoreService(db, logger)
+	return NewSignerStoreService(db, logger, NewDocumentStoreService(db, logger))
 }
 
 func generateTestPublicKey(t *testing.T) ed25519.PublicKey {

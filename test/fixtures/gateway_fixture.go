@@ -83,6 +83,7 @@ type GatewayFixtureOptions struct {
 	DownstreamURL     string // MCP downstream; creates mock server if empty
 	A2ADownstreamURL  string // A2A downstream; if empty, reuses MCP downstream server
 	AllowTestPortZero bool
+	PublicBaseURL     string // Public base URL for approval links; defaults to localhost:HTTPS_port
 }
 
 // repoTestResultsDir returns <repo>/test-results, computed from this source
@@ -208,6 +209,10 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamURL
 
+	if opts.PublicBaseURL != "" {
+		cfg.Gateway.PublicBaseURL = opts.PublicBaseURL
+	}
+
 	a2aURL := opts.A2ADownstreamURL
 	if a2aURL == "" {
 		a2aURL = downstreamURL
@@ -238,30 +243,34 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	mcpGateway := ls.GetHTTPHandler().GetMCPGateway()
 	require.NotNil(t, mcpGateway)
 
-	cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
-		Config:             cfg,
-		Logger:             testutil.NewTestLogger(),
-		Execution:          execSvc,
-		FileEdit:           fileSvc,
-		PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
-		ReplayStore:        govDeps.ReplayStore,
-		StateRootProvider:  govDeps.StateRootProvider,
-		TransactionAudit:   govDeps.TransactionAudit,
-		FieldReader:        govDeps.FieldReader,
-		SignerStore:        govDeps.SignerStore,
-		TribunalStore:      govDeps.TribunalStore,
-		L3Notary:           RejectingL3Notary{},
-		ActuatorSigningKey: ActuatorPriv,
-		ActuatorKeyID:      ActuatorKeyID,
-		MCPGateway:         mcpGateway,
+	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(pubsub.GatewayCommandServiceConfig{
+		CommandServiceConfig: pubsub.CommandServiceConfig{
+			Config:             cfg,
+			Logger:             testutil.NewTestLogger(),
+			Execution:          execSvc,
+			FileEdit:           fileSvc,
+			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
+			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
+			ActuatorSigningKey: ActuatorPriv,
+			ActuatorKeyID:      ActuatorKeyID,
+		},
+		GovDeps: &pubsub.GovernanceDeps{
+			ReplayStore:       govDeps.ReplayStore,
+			StateRootProvider: govDeps.StateRootProvider,
+			TransactionAudit:  govDeps.TransactionAudit,
+			SignerStore:       govDeps.SignerStore,
+			TribunalStore:     govDeps.TribunalStore,
+			L3Notary:          RejectingL3Notary{},
+			FieldReader:       govDeps.FieldReader,
+		},
+		MCPGateway: mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
 
 	// The MCP gateway's runtime governance dependencies are wired by
-	// NewOperatorPubSubService via initializeGovernance (mcpGateway was passed in
-	// through CommandServiceConfig.MCPGateway above), so no extra wiring is needed.
+	// NewGatewayOperatorPubSubService (mcpGateway was passed in through
+	// GatewayCommandServiceConfig.MCPGateway above), so no extra wiring is needed.
 
 	// Auto-wire a Tribunal for postures that require L2 signatures (consensus, notary).
 	// Without L2 votes, the Warden rejects at L2 before L3 is ever checked.
@@ -340,11 +349,6 @@ func (f *GatewayFixture) WaitForReady(t *testing.T) {
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}, 10*time.Second, 100*time.Millisecond, "HTTP server did not become ready")
-}
-
-// SetPublicBaseURL sets the public base URL for the MCP gateway (used for approval links).
-func (f *GatewayFixture) SetPublicBaseURL(baseURL string) {
-	f.MCPGateway.SetPublicBaseURL(baseURL)
 }
 
 // RejectingL3Notary is a test implementation that always rejects L3 proofs.

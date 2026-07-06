@@ -199,7 +199,7 @@ func TestOperatorScpCmd(t *testing.T) {
 			{"port", "P"},
 			{"identity", "i"},
 			{"recursive", "r"},
-			{"preserve", "p"},
+			{"preserve", ""},
 			{"verbose", "v"},
 			{"compression", "C"},
 			{"prompt", ""},

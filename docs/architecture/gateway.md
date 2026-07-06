@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
@@ -123,7 +123,7 @@ The public HTTPS router registers the following route categories:
 
 **MCP/A2A Routes**: Registered via `registerMCPRoutes` on the public mux. When JWKS is configured, MCP routes are wrapped with `JWTAuthMiddleware`; otherwise they rely on mTLS via the outer `auth.Middleware`. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
 
-**Passkey Console Routes (public, no auth)**: Browser-facing passkey registration and authentication under `/api/v1/auth/passkeys/console/*`. These routes use `passkeyHandlerConfig` with `sourceBrowserBootstrap`, `createWebSession`, and `setCookie` enabled.
+**Passkey Console Routes (public, no auth)**: Browser-facing passkey registration and authentication under `/api/v1/auth/passkeys/console/*`. The registration handler uses `passkeyHandlerConfig` with `sourceBrowserBootstrap`, `enforceFirstCredentialOnly`, `createUserOnBootstrap`, `createWebSession`, and `setCookie` enabled. The authentication handler uses `sourceBrowserBootstrap` with `createWebSession` and `setCookie`.
 
 **JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit-register/challenge` and `/api/v1/auth/passkeys/jit-register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with `JWTAuthMiddleware`.
 
@@ -133,7 +133,7 @@ The public HTTPS router registers the following route categories:
 
 **Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) are classified as `RouteAuthDual`, accepting either mTLS or web session cookie authentication.
 
-**CLI Approval Status**: The `/api/v1/approvals/status/` endpoint is registered as a `RouteAuthMTLS` exact path in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. It requires mTLS authentication and allows CLI clients to poll the status of suspended transactions during the L3 approval flow.
+**CLI Approval Endpoints**: The `/api/v1/approvals/status/` and `/api/v1/approvals/pending` endpoints are registered as `RouteAuthMTLS` exact paths in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. They require mTLS authentication and are used by CLI clients for post-SSE verification of approval state and listing pending suspended transactions.
 
 **OOB Approval UI**: The `/api/v1/approve/{txHash}` page route redirects to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
 
@@ -300,7 +300,7 @@ Every transaction submitted to `POST /api/v1/governance/envelopes` must pass thr
 Defined in `internal/services/governance/l1_doctrine.go`. Enforces forbidden patterns (such as `sudo` or `rm -rf /`), blacklists, and whitelists. It also performs MITRE threat detection on incoming payloads.
 
 ### L2 Consensus (Tribunal Deliberation)
-Defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` posture, the gateway calls the Tribunal's `Deliberate` endpoint (via `LocalDeliberator` for in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the `TribunalStoreService`.
+Defined in `internal/services/tribunal/service.go`. The gateway delegates L2 deliberation to an enrolled Tribunal service rather than self-signing votes. The Tribunal evaluates the transaction and produces `L2Vote` entries (Ed25519 signatures over the transaction hash) from its member agents. Under `consensus` and `notary` postures, the gateway calls the Tribunal's `Deliberate` endpoint (via `LocalDeliberator` for in-process deliberation) and attaches the returned L2 votes to the envelope. The L4 Warden then verifies the quorum of valid signatures against the `TribunalPolicy` stored in the `TribunalStoreService`.
 
 ### L3 Notary (Human Authorization)
 Defined in `internal/services/governance/l3_notary.go` with CLI session verification in `internal/services/gateway/cli_session_verifier.go`. The `gatewayNotary` struct, created by `NewGatewayL3Notary`, enforces human-in-the-loop authorization using a layered model: passkey authorization is required for all proofs, and CLI mTLS session verification is applied as an additional transport-auth layer when `mtls_cert_fingerprint` is present.
@@ -422,6 +422,11 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Input validation | `internal/services/mcp/validation.go` |
 | Database schema | `internal/services/gateway/db/schema.sql` |
 | Native handlers | `internal/services/mcp/native_handlers.go` |
+| Governance envelope handler | `internal/services/gateway/governance_envelope.go` |
+| HTTP middleware (path traversal, rate limit) | `internal/services/gateway/gateway_http_middleware.go` |
+| SSE handlers | `internal/services/gateway/gateway_http_sse.go` |
+| JWKS provider | `internal/services/gateway/jwks.go` |
+| Swagger/OpenAPI spec embed | `internal/services/gateway/docs/docs.go` |
 
 ---
 
@@ -466,22 +471,20 @@ The stdio proxy (`internal/cli/cmd/mcp.go`) bridges stdio MCP transport to the g
 - Accepts JSON-RPC 2.0 requests over stdin/stdout
 - Proxies requests to the gateway HTTPS endpoint with mTLS
 - Identity is carried in the delegated mTLS certificate's URI SANs (no session headers needed)
-- Detects L3 approval responses and polls for completion
+- Detects L3 approval responses and subscribes to SSE for completion
 - Auto-opens browser for L3 approval URLs
-- Implements retry logic with configurable timeout (5 minutes default)
+- Re-sends the original request once the approval.completed SSE event arrives
 
-### L3 Approval Polling
+### L3 Approval SSE Notification
 
 When the gateway returns an L3 approval response, the stdio proxy:
 1. Extracts the approval URL from the response (structured field or text content)
 2. Opens the browser automatically using `internal/cli/platform/browser.go`
-3. Polls the gateway every 10 seconds for up to 30 iterations (total timeout: 300 seconds / 5 minutes)
-4. Returns the final result once approval is complete
+3. Subscribes to the gateway's SSE stream (`GET /api/v1/sse/stream`) scoped to the user
+4. Waits for the `approval.completed` SSE event with a matching transaction hash
+5. Re-sends the original request and returns the result
 
-The polling logic is implemented in `proxySessionToGatewayWithRetry` with constants:
-- `l3ApprovalMaxIterations`: 30
-- `l3ApprovalPollInterval`: 10 seconds
-- Total timeout: 30 x 10 seconds = 300 seconds (5 minutes)
+CLI credentials (mTLS) are required for L3 approval flows. The SSE wait is implemented in `auth.WaitForApprovalSSE` (`internal/cli/auth/approval_sse.go`) with a 3-minute timeout (the gateway's approval request TTL is 2 minutes).
 
 ### Browser Utility
 

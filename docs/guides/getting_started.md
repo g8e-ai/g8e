@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 ---
 
@@ -280,7 +280,7 @@ The CLI displays configurations for `g8e.local` (mTLS), IP Address (mTLS), and S
 
 ## Industry Demos
 
-The `demos/` directory contains Docker Compose environments for seven scenarios: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), **Swarm** (drone swarm with 20 autonomous operators), and **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
+The `demos/` directory contains Docker Compose environments for seven demo environments: **Healthcare** (HIPAA/PHI), **Finance** (trading controls), **Government** (CUI/CMMC), **Secure Data** (governed data migration with two-operator chain-of-custody), **DoW** (Department of War tactical edge with SIGINT, EO/IR, and PNT fusion sensors), **Swarm** (drone swarm with 20 autonomous operators), and **DHS** (persistent sovereign capability with coalition data-plane governance, cross-domain release control, and cryptographically receipted destruction). Each demo is hermetically sealed with its own networks, volumes, and doctrine rules.
 
 ### What the demos use Docker for
 
