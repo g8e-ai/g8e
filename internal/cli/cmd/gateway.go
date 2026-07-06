@@ -187,6 +187,19 @@ func gatewayStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   string(constants.ThinkingActionTypeStart),
 		Short: "Start the g8e Gateway",
+		Long: `Start the g8e Gateway as a background process. The gateway runs in its own
+session (setsid) so Ctrl+C in the terminal does not affect it.
+
+When --cert-mode full is selected, the CLI detects network identity once, writes
+it to a temporary JSON file in the runtime directory, and passes that file to
+the Gateway subprocess. --cert-mode localhost continues to use loopback-only
+identities, including IPv6 localhost when available.
+
+Posture Persistence: The gateway posture is persisted in
+.g8e/pids/operator.posture on startup. When using 'gateway restart', the
+current posture is read from this file and preserved. If the file is missing or
+corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
+'doctrine', 'consensus', and 'notary'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
@@ -423,6 +436,8 @@ func gatewayStopCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop the g8e Gateway",
+		Long:  `Stop the running g8e Gateway process by sending a termination signal to the
+managed process. If the gateway is not running, this command is a no-op.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
@@ -459,6 +474,9 @@ func gatewayStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Check Gateway health and status",
+		Long:  `Check whether the g8e Gateway is running by first attempting an HTTP health
+check against the gateway API, then falling back to a process-manager check.
+Displays the process ID and endpoint URLs when the gateway is running.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
@@ -516,6 +534,10 @@ func gatewayRestartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "restart",
 		Short: "Restart the g8e Gateway",
+		Long:  `Restart the g8e Gateway by stopping the current process and starting a new
+one. The current posture is read from the persisted posture file
+(.g8e/pids/operator.posture) and preserved across the restart. If the file is
+missing, the gateway defaults to 'doctrine' posture.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
@@ -589,6 +611,8 @@ func gatewayLogsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logs",
 		Short: "View Gateway logs",
+		Long:  `View the g8e Gateway log file. Use --follow to continuously tail the log
+output (like tail -f).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
@@ -619,6 +643,8 @@ func gatewaySettingsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
+		Long:  `Fetch and display the current gateway platform settings from the running
+Gateway over mTLS.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {
@@ -648,6 +674,9 @@ func gatewayResetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   string(constants.HistoryEventTypeReset),
 		Short: "Reset Gateway data and secrets (preserves CA)",
+		Long:  `Reset the g8e Gateway by stopping all services, wiping SQLite databases and
+bootstrap secrets, then restarting with a fresh database. Existing TLS/PKI
+certificates and keys are preserved. Use --force to skip the confirmation prompt.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !force {
 				cmd.Println("This command will:")
@@ -708,6 +737,11 @@ func gatewayCleanCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "clean",
 		Short: "Destructively remove all Gateway state",
+		Long:  `Destructively remove all g8e Gateway state: stops all services, completely
+deletes the entire runtime directory including all SQLite databases, bootstrap
+secrets, logs, and TLS/PKI certificates/keys. All trust routes and credentials
+are permanently destroyed. CLI credentials become invalid after this operation.
+Use --force to skip the confirmation prompt.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {

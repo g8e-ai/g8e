@@ -43,7 +43,7 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 - `internal/cli/cmd/` - Cobra command tree
 - `internal/cli/serve/` - Foreground worker bodies
 - `internal/` - Internal Go packages
-- `pkg/` - Public Go packages
+- `internal/pkg/` - Shared internal packages (e.g., SSH utilities)
 - `docs/` - Documentation
 
 **Runtime paths** (`.g8e/`):
@@ -81,7 +81,7 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 - Tier 1 (Unit) tests: mocks and stubs, no external dependencies (no files, network, or DB)
 - Tier 2 (Integration) and Tier 3 (E2E) tests: real database, pub/sub, and LLM calls
 - Keep test infrastructure separated from production code
-- Run tests via `./g8e test` (unit, integration, e2e, coverage, lint, chaos, summary)
+- Run tests via `./g8e test` (unit, integration, e2e, coverage, lint, agent, chaos, summary)
 - Document what the system does, not what it should do
 - Cross-link rather than repeat
 - Present tense, active voice, direct and specific
@@ -100,29 +100,11 @@ Startup sequence: binary check/build â†’ root of trust generation (first boot) â
 - No emojis in documentation
 - No stale docs; docs are code
 
-## Examples
+## Patterns
 
 ### Error Handling
 
-```go
-// GOOD - Use centralized constant
-if user == nil {
-    return constants.ErrUserNotFound
-}
-
-// GOOD - Wrap with context
-if err != nil {
-    return fmt.Errorf("failed to load user: %w", err)
-}
-
-// BAD - Hand-rolled string that should be a constant
-if user == nil {
-    return errors.New("user not found")  // Use constants.ErrUserNotFound instead
-}
-
-// BAD - Package-level error in wrong location
-var ErrCustomError = errors.New("custom error")  // Move to internal/constants/errors.go
-```
+Return centralized error constants from `internal/constants/errors.go` for known failure modes. Wrap errors with context using `fmt.Errorf` and the `%w` verb for dynamic messages or chaining. Never hand-roll error strings with `errors.New` when a centralized constant exists or should exist. Never declare package-level error variables outside `internal/constants/errors.go`.
 
 ### Adding Error Constants
 

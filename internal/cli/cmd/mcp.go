@@ -729,7 +729,17 @@ func agentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agent",
 		Short: "Agent integration commands for popular AI coding tools",
-		Long:  `Configure and integrate g8e with popular AI agent binaries (Claude, Codex, Cursor, Devin, etc.) for seamless MCP tool access.`,
+		Long: `Configure and integrate g8e with popular AI agent binaries (Claude, Codex,
+Cursor, Devin, etc.) for seamless MCP tool access.
+
+Subcommands:
+  list    List all supported agent binaries
+  show    Print MCP client configuration for a specific agent
+  run     Launch an agent or wrap an external MCP server with g8e governance
+
+For tools that don't support the agent wrapper, use 'g8e mcp agent show <agent>'
+to display MCP client configurations (g8e.local mTLS, IP Address mTLS, Stdio
+Transport), then copy the generated JSON to your agent's MCP settings file.`,
 	}
 
 	cmd.AddCommand(
@@ -885,7 +895,39 @@ WRAP AN EXTERNAL MCP SERVER (governance reverse proxy):
   g8e mcp agent run --url http://localhost:3000
 
   Intercepts all tools/call requests, screens them through L1 doctrine
-  (MITRE ATT&CK threat detection), and blocks violations before forwarding.`,
+  (MITRE ATT&CK threat detection), and blocks violations before forwarding.
+
+AUDIT TRAIL:
+  When launching an agent, the agent is automatically enrolled as an external app
+  identity (SPIFFE ID: spiffe://g8e.local/app/<agent-name>). All MCP tool calls
+  are recorded in the audit vault with this app identity, enabling per-agent audit
+  trails separate from human operator activity.
+
+  Query audit events for a specific agent:
+    g8e gw data audit list --operator-session-id spiffe://g8e.local/app/claude
+    g8e gw data audit summary --operator-session-id spiffe://g8e.local/app/claude
+
+DELEGATED CREDENTIAL MODEL:
+  g8e uses a delegated credential model for agent identity. When an agent is
+  launched, it receives a short-lived mTLS certificate that carries both
+  identities:
+  - App SPIFFE ID: spiffe://g8e.local/app/<agent-name> (the agent's policy identity)
+  - Requestor User ID: spiffe://g8e.local/user/<id> (the human who launched the agent)
+
+  Both identities are cryptographically bound in the certificate's URI SANs and
+  presented at the TLS handshake. No trusted identity headers are used; the
+  certificate IS the session. Every governed transaction includes both identities
+  in the signed hash, ensuring end-to-end identity correctness and auditability.
+
+L3 APPROVAL FLOW:
+  When a tool requires L3 approval, g8e will:
+  1. Automatically open your browser to the approval URL
+  2. Wait for you to authorize via WebAuthn
+  3. Retry the tool call automatically
+  4. Return the result to the tool
+
+For full L1-L5 governance (L2 consensus, L3 human approval via WebAuthn), start
+the gateway and use 'g8e mcp stdio'.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		RunE: func(cmd *cobra.Command, args []string) error {

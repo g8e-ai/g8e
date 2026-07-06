@@ -213,6 +213,7 @@ func logoutCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "logout",
 		Short: "Clear local Operator session and credentials",
+		Long:  `Clear the local Operator session by deleting stored credentials from disk. This does not revoke the session on the gateway side — it only removes the local credential files so the CLI can no longer authenticate.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig("")
 			if err != nil {

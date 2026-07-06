@@ -51,6 +51,9 @@ func securityValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate",
 		Short: "Run security validation checks",
+		Long:  `Run security validation checks against the local g8e installation. Verifies
+PKI certificate existence and validity, checks that the HTTPS port is active,
+and confirms that the CA bundle is properly configured for mTLS.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cmd.Println("Running platform security validation...")
 			failed := false

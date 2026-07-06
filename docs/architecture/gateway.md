@@ -4,8 +4,8 @@ title: g8e Gateway
 
 # g8e Gateway
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 The g8e Protocol platform is composed of two logically distinct roles, both implemented by the reference g8e Node:
 
@@ -123,7 +123,7 @@ The public HTTPS router registers the following route categories:
 
 **MCP/A2A Routes**: Registered via `registerMCPRoutes` on the public mux. When JWKS is configured, MCP routes are wrapped with `JWTAuthMiddleware`; otherwise they rely on mTLS via the outer `auth.Middleware`. Registered paths include `/mcp` (unified MCP JSON-RPC endpoint) and `/api/v1/a2a/call` (A2A endpoint).
 
-**Passkey Console Routes (public, no auth)**: Browser-facing passkey registration and authentication under `/api/v1/auth/passkeys/console/*`. These routes use `passkeyHandlerConfig` with `sourceBrowserBootstrap`, `createWebSession`, and `setCookie` enabled.
+**Passkey Console Routes (public, no auth)**: Browser-facing passkey registration and authentication under `/api/v1/auth/passkeys/console/*`. The registration handler uses `passkeyHandlerConfig` with `sourceBrowserBootstrap`, `enforceFirstCredentialOnly`, `createUserOnBootstrap`, `createWebSession`, and `setCookie` enabled. The authentication handler uses `sourceBrowserBootstrap` with `createWebSession` and `setCookie`.
 
 **JIT Passkey Routes (JWT-authenticated)**: When JWKS is configured, `/api/v1/auth/passkeys/jit-register/challenge` and `/api/v1/auth/passkeys/jit-register/verify` allow OIDC/JIT users with zero credentials to register their first passkey. These routes are wrapped with `JWTAuthMiddleware`.
 
@@ -133,7 +133,7 @@ The public HTTPS router registers the following route categories:
 
 **Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) are classified as `RouteAuthDual`, accepting either mTLS or web session cookie authentication.
 
-**CLI Approval Status**: The `/api/v1/approvals/status/` endpoint is registered as a `RouteAuthMTLS` exact path in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. It requires mTLS authentication and is used by CLI clients for post-SSE verification of approval state after receiving the `approval.completed` event.
+**CLI Approval Endpoints**: The `/api/v1/approvals/status/` and `/api/v1/approvals/pending` endpoints are registered as `RouteAuthMTLS` exact paths in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. They require mTLS authentication and are used by CLI clients for post-SSE verification of approval state and listing pending suspended transactions.
 
 **OOB Approval UI**: The `/api/v1/approve/{txHash}` page route redirects to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
 
@@ -422,6 +422,11 @@ This architecture ensures the g8e Operator (g8eo) never requires outbound intern
 | Input validation | `internal/services/mcp/validation.go` |
 | Database schema | `internal/services/gateway/db/schema.sql` |
 | Native handlers | `internal/services/mcp/native_handlers.go` |
+| Governance envelope handler | `internal/services/gateway/governance_envelope.go` |
+| HTTP middleware (path traversal, rate limit) | `internal/services/gateway/gateway_http_middleware.go` |
+| SSE handlers | `internal/services/gateway/gateway_http_sse.go` |
+| JWKS provider | `internal/services/gateway/jwks.go` |
+| Swagger/OpenAPI spec embed | `internal/services/gateway/docs/docs.go` |
 
 ---
 

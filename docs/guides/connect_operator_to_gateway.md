@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 ---
 
@@ -105,8 +105,7 @@ On the remote host, start the operator with the enrolled certificates:
 The operator will:
 - Load the mTLS certificates from the PKI directory
 - Connect to the gateway control plane on port 8443 (HTTPS) and bootstrap on port 8080 (HTTP)
-- Initialize the local in-process pub/sub broker
-- Initialize the SQLite-backed audit vault with Git ledger
+- Start the local audit vault and execution services
 - Execute mutations through the L1-L5 verification pipeline
 
 ---
@@ -367,7 +366,7 @@ The gateway operates as a zero-trust boundary. Clients establish outbound-only m
 
 ### Local-First Audit
 
-All audit entries are written to the local SQLite-backed audit vault with Git ledger before execution. Raw data, forensic context, and execution history never leave the host. Only sovereignty-scrubbed projections cross the wire via the gateway APIs.
+All audit entries are written to the local audit vault before execution. Raw data, forensic context, and execution history never leave the host. Only sovereignty-scrubbed projections cross the wire via the gateway APIs.
 
 ### Fail-Closed Execution
 

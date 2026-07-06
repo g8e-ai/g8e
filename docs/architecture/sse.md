@@ -4,10 +4,10 @@ title: SSE Streaming
 
 # SSE Streaming
 
-Last Updated: 2026-07-03
+Last Updated: 2026-07-06
 Version: v1.3.6
 
-The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption.
+The g8e Gateway includes a built-in Server-Sent Events (SSE) streaming infrastructure that enables real-time event delivery from app workloads to browser and CLI clients. This system allows g8e-compatible agentic ensembles to publish typed events (including audit events) for downstream consumption. The gateway itself also produces SSE events internally for platform workflows such as passkey registration and L3 transaction approval, bypassing the push endpoint and writing directly to the event store and Pub/Sub broker.
 
 ---
 
@@ -36,6 +36,7 @@ flowchart TD
 
     subgraph Gateway ["g8e Gateway"]
         push["POST /api/v1/sse/push"]
+        internal["Internal Producers\n(approval, passkey)"]
         db[("sse_events table")]
         events["GET /api/v1/sse/events"]
         stream["GET /api/v1/sse/stream"]
@@ -49,6 +50,8 @@ flowchart TD
     producer -- "mTLS POST" --> push
     push --> db
     push --> pubsub
+    internal --> db
+    internal --> pubsub
     db --> events
     db --> stream
     pubsub --> stream
@@ -95,6 +98,15 @@ Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be set.
 5. Enforces producer-to-target ownership. The app identity must be associated with the target session or user. Ownership is verified via `protocol.WorkloadIdentity.MatchesApp` against bound Operator sessions.
 6. Publishes the full request body to the Pub/Sub channel for real-time fan-out (channel format: `sse:cli:<id>`, `sse:web:<id>`, or `sse:user:<id>`).
 7. Returns success confirmation with delivered count.
+
+### Internal SSE Producers
+
+The gateway itself produces SSE events directly via `SSEEventsAppend` and `pubsub.Publish`, bypassing the push endpoint. These events use `g8eg` as the `producer_id` for attribution. Two internal event types are produced:
+
+- **`approval.completed`**: Emitted by the passkey approval handler in `internal/services/gateway/passkey_service_approvals.go` when a user completes the WebAuthn approval ceremony. Scoped to `user_id` so any waiting CLI client (stdio proxy or approve command) receives real-time notification without polling.
+- **`passkey.registered`**: Emitted by the passkey registration handler in `internal/services/gateway/passkey_service_http.go` when a new passkey is enrolled. Scoped to `cli_session_id` so the waiting CLI client receives real-time notification.
+
+Both event types use the `internalSSEPushPayload` wire format for compatibility with the SSE stream handler.
 
 ---
 
@@ -191,7 +203,12 @@ The SSE system is generic and supports any event type. Defined audit event types
 - `g8e.v1.platform.sse.connection.error`: SSE connection error.
 - `g8e.v1.platform.sse.keepalive.sent`: SSE heartbeat sent.
 
-See `protocol/constants/events.json` for the complete event type catalog.
+Gateway-produced event types (not in the protocol catalog):
+
+- `approval.completed`: L3 transaction approval completed. Emitted by the passkey approval handler, scoped to `user_id`.
+- `passkey.registered`: Passkey enrollment completed. Emitted by the passkey registration handler, scoped to `cli_session_id`.
+
+See `protocol/constants/events.json` for the complete protocol event type catalog.
 
 ---
 
@@ -224,7 +241,7 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 
 **Constraints**:
 - Exactly one of `web_session_id`, `cli_session_id`, or `user_id` must be non-null (enforced by CHECK constraint).
-- `producer_id` is the SPIFFE ID of the app workload that produced the event.
+- `producer_id` is the SPIFFE ID of the app workload that produced the event, or `g8eg` for gateway-produced events.
 - Events are immutable once written (append-only).
 
 **Important**: SSE event inserts do NOT alter the state root. This is intentional to allow high-frequency event streaming without governance overhead.
@@ -234,11 +251,12 @@ CREATE INDEX IF NOT EXISTS idx_sse_created ON sse_events(created_at);
 ## Security Model
 
 ### Producer Authorization
-- Only app workloads with valid mTLS certificates can push events.
+- Only app workloads with valid mTLS certificates can push events via the `/api/v1/sse/push` endpoint.
 - Certificate must have SPIFFE URI SAN with `/app/` prefix.
-- Gateway identities (`g8eo`, `g8eg`) are explicitly blocked from pushing.
+- Gateway identities (`g8eo`, `g8eg`) are explicitly blocked from pushing via the endpoint.
 - Producer identity is recorded in `producer_id` for attribution.
 - The app identity must be associated with the target session or user. Ownership is verified via `protocol.WorkloadIdentity.MatchesApp` against bound Operator sessions. The event is appended to the database before the ownership check; if ownership verification fails, the handler returns 403 but the row remains persisted.
+- The gateway itself also produces events internally (approval, passkey) by writing directly to the event store and Pub/Sub broker, bypassing the push endpoint. These events use `g8eg` as the `producer_id`.
 
 ### Consumer Authorization
 - SSE consumer endpoints (`/api/v1/sse/events`, `/api/v1/sse/stream`) support dual auth: mTLS with an authenticated Operator session (CLI/operator) OR web session cookie (browser). The `RouteAuthRegistry` classifies these routes as `RouteAuthDual`.
@@ -318,10 +336,21 @@ POST /api/v1/sse/push
 - `internal/services/gateway/sse_event_service.go`: SSE event storage and retrieval service (`SSEEventsAppend`, `SSEEventsListSince`, `SSEEventsListAllSince`, `SSEEventsCleanup`, `SSEEventsWipe`, `SSEEventsCount`).
 - `internal/services/gateway/gateway_pubsub.go`: Pub/Sub integration for real-time fan-out (`RegisterHandler`, `Publish`).
 - `internal/services/gateway/db_controller.go`: Admin endpoints for SSE event management (`handleSSEEvents`).
+- `internal/services/gateway/passkey_service_approvals.go`: Internal SSE producer for `approval.completed` events.
+- `internal/services/gateway/passkey_service_http.go`: Internal SSE producer for `passkey.registered` events.
 - `internal/services/gateway/db/schema.sql`: Database schema for `sse_events` table.
 - `internal/constants/api_paths.go`: API path constants.
-- `protocol/constants/events.json`: Event type catalog.
+- `protocol/constants/events.json`: Protocol event type catalog.
 - `internal/models/gateway.go`: SSE event row models (`SSEEventRow`, `SSEPushResponse`, `SSEEventsResponse`, `SSEEventsCountResponse`, `SSEEventsWipeResponse`).
+- `internal/cli/sse/client.go`: Reusable SSE client for CLI consumers (`Client`, `NewClient`, `Run`, `ConnectOnce`).
+
+### CLI Consumers
+
+The CLI SSE client in `internal/cli/sse/client.go` connects to the gateway SSE stream, parses frames, and dispatches events to a handler. It supports reconnection with 3-second backoff and custom headers for mTLS session identification. Three CLI consumers use this client:
+
+- `internal/cli/auth/approval_sse.go`: Blocks until an `approval.completed` event with a matching transaction hash arrives, with a 3-minute timeout. Used by the `g8e approve` command and the MCP integration L3 approval flow.
+- `internal/cli/auth/passkey_bootstrap.go`: Waits for a `passkey.registered` event during interactive passkey enrollment.
+- `internal/cli/tui/adapter.go`: Subscribes to the SSE stream and translates events into TUI messages for the terminal user interface.
 
 ### State Root Impact
 SSE event inserts are deliberately excluded from state root calculation. The `sse_events` table has no triggers to increment `state_version`, allowing high-frequency event streaming without triggering governance consensus rounds. Events are considered ephemeral telemetry, not governance state.

@@ -55,6 +55,7 @@ func dataUsersCmdWithConfig(configLoader func(string) (*config.Config, error), c
 	cmd := &cobra.Command{
 		Use:   "users",
 		Short: "Manage user accounts",
+		Long:  `List all user accounts registered on the running Gateway, retrieved over mTLS.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -96,6 +97,7 @@ func dataOperatorsCmdWithConfig(configLoader func(string) (*config.Config, error
 	cmd := &cobra.Command{
 		Use:   "operators",
 		Short: "Manage Operator instances",
+		Long:  `List all Operator instances registered on the running Gateway, retrieved over mTLS.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -137,6 +139,7 @@ func dataSettingsCmdWithConfig(configLoader func(string) (*config.Config, error)
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
+		Long:  `Fetch and display the current platform settings from the running Gateway over mTLS.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -186,6 +189,9 @@ func dataStoreCmdWithConfig(configLoader func(string) (*config.Config, error), c
 	cmd := &cobra.Command{
 		Use:   "store",
 		Short: "Manage document storage",
+		Long:  `Query the Gateway document store over mTLS. Use --collection to specify a
+collection name. Omit --document-id to list all documents in the collection,
+or provide --document-id to fetch a specific document.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -238,6 +244,8 @@ func dataAuditCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit",
 		Short: "Query audit vault",
+		Long:  `Query the local audit vault for events and summaries. Subcommands provide
+listing and aggregation of audit events by operator session.`,
 	}
 
 	cmd.AddCommand(
@@ -259,6 +267,9 @@ func dataAuditListCmdWithConfig(configLoader func(string) (*config.Config, error
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List audit events for a session",
+		Long:  `List audit events for a specific operator session by querying the Gateway
+audit store over mTLS. Use --operator-session-id to filter events and --limit
+to control the number of results.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -305,6 +316,9 @@ func dataAuditSummaryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   string(constants.StreamStatusSummary),
 		Short: "Show audit event summary by type",
+		Long:  `Show an aggregated summary of audit events grouped by type, queried directly
+from the local audit vault SQLite database. Use --operator-session-id to filter
+by a specific session.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dbPath := paths.Infra.DbPath
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
