@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
@@ -173,7 +174,7 @@ func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
 func (h *HTTPHandler) handleTribunalDeliberate(w http.ResponseWriter, r *http.Request) {
 	ts := h.tribunal.Load()
 	if ts == nil {
-		h.responder.Error(w, http.StatusServiceUnavailable, "tribunal not configured")
+		h.responder.Error(w, http.StatusServiceUnavailable, constants.ErrTribunalNotConfigured.Error())
 		return
 	}
 	(*ts).HandleDeliberate(w, r)

@@ -112,17 +112,17 @@ type GovernanceDeps struct {
 // (MCPGateway, GovDeps) are in GatewayCommandServiceConfig to enforce mode
 // bifurcation at the type level.
 type CommandServiceConfig struct {
-	Config            *config.Config
-	Logger            *slog.Logger
-	Execution         *execution.ExecutionService
-	FileEdit          *execution.FileEditService
-	PubSubClient      PubSubClient
-	ResultsService    ResultsPublisher
-	ExecutionVault    storage.ExecutionVault
-	AuditStore        *storage.SQLAuditStore
-	Ledger            *storage.GitLedgerService
-	HistoryHandler    *storage.HistoryHandler
-	Scrubbing         *scrubbing.ScrubbingService
+	Config         *config.Config
+	Logger         *slog.Logger
+	Execution      *execution.ExecutionService
+	FileEdit       *execution.FileEditService
+	PubSubClient   PubSubClient
+	ResultsService ResultsPublisher
+	ExecutionVault storage.ExecutionVault
+	AuditStore     *storage.SQLAuditStore
+	Ledger         *storage.GitLedgerService
+	HistoryHandler *storage.HistoryHandler
+	Scrubbing      *scrubbing.ScrubbingService
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey

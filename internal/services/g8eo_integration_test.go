@@ -81,11 +81,11 @@ func TestG8eoService_SubServices_Initialization(t *testing.T) {
 		fileEditSvc := execution.NewFileEditService(cfg, logger)
 
 		cmdSvc, err := pubsub.NewOperatorPubSubService(pubsub.CommandServiceConfig{
-			Config:            cfg,
-			Logger:            logger,
-			Execution:         execSvc,
-			FileEdit:          fileEditSvc,
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       logger,
+			Execution:    execSvc,
+			FileEdit:     fileEditSvc,
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, pubsub.GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),

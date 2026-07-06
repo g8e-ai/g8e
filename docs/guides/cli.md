@@ -238,8 +238,10 @@ Flags:
 ### auth approve
 ```
 Approve a suspended transaction by opening the gateway's browser-based approval page.
-The browser handles the WebAuthn/passkey ceremony; the CLI polls the gateway's mTLS
-status endpoint until the transaction is approved or times out.
+The browser handles the WebAuthn/passkey ceremony; the CLI subscribes to the
+gateway's SSE stream and waits for the approval.completed event, then verifies
+the approval status via the mTLS status endpoint. CLI credentials (mTLS) are
+required for L3 approval flows.
 
 Usage:
   g8e auth approve <transaction_hash> [flags]

@@ -71,9 +71,9 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 	cfg.PKIDir = filepath.Join(tmpDir, "pki")
 	cfg.Gateway.Posture = config.PostureConsensus // Set Consensus posture to enforce L2
 	svc, err := NewOperatorPubSubService(CommandServiceConfig{
-		Config:            cfg,
-		Logger:            testutil.NewTestLogger(),
-		PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+		Config:       cfg,
+		Logger:       testutil.NewTestLogger(),
+		PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 	}, GovernanceDeps{
 		ReplayStore:       &testutil.MockReplayStore{},
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
@@ -169,9 +169,9 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
 		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),

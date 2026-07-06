@@ -133,7 +133,7 @@ The public HTTPS router registers the following route categories:
 
 **Dual-Auth Routes**: SSE stream (`/api/v1/sse/stream`) and SSE events (`/api/v1/sse/events`) are classified as `RouteAuthDual`, accepting either mTLS or web session cookie authentication.
 
-**CLI Approval Status**: The `/api/v1/approvals/status/` endpoint is registered as a `RouteAuthMTLS` exact path in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. It requires mTLS authentication and allows CLI clients to poll the status of suspended transactions during the L3 approval flow.
+**CLI Approval Status**: The `/api/v1/approvals/status/` endpoint is registered as a `RouteAuthMTLS` exact path in the `RouteAuthRegistry`, taking priority over the `/api/v1/approvals` `RouteAuthWebSession` prefix. It requires mTLS authentication and is used by CLI clients for post-SSE verification of approval state after receiving the `approval.completed` event.
 
 **OOB Approval UI**: The `/api/v1/approve/{txHash}` page route redirects to the console SPA with a URL-encoded approval hash fragment (`/console/#approve={url-encoded-txHash}`), enabling auto-trigger of the WebAuthn approval flow upon successful login.
 

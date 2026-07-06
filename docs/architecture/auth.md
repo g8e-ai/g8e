@@ -148,7 +148,7 @@ The passkey HTTP layer is split into two components: `PasskeyService` (domain lo
 - `handleApprovalPage` - redirects to console SPA for browser-based approval
 - `handleListSuspendedTransactions` - lists pending approvals (WebSession-protected, returns all suspended transactions including approved)
 
-Dependencies for approval and SSE handlers are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` and `SetSSEDependencies(sseStore, pubsub)` on `PasskeyHandler` after construction, since the MCP gateway and SSE services are created later in the startup sequence.
+All dependencies for approval and SSE handlers (`mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`) are passed via the `PasskeyHandlerDeps` constructor at construction time. No post-construction setters remain.
 
 **`passkeyHandlerConfig` Type**: Each factory method accepts a typed config struct that encodes the trust posture at route mount time:
 
@@ -162,7 +162,7 @@ Dependencies for approval and SSE handlers are injected via `SetApprovalDependen
 | `setCookie` | Sets the `g8e_session` browser cookie (implies `createWebSession`) |
 | `createUserOnBootstrap` | Auto-creates a user record during first-time browser enrollment; gated by `userStore.HasAnyUsers()` check, only fires when no users exist, preventing unauthorized user creation (`passkey_service_http.go:120-151`) |
 
-This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these. `SetApprovalDependencies(mcpSvc, suspendedStore)` and `SetSSEDependencies(sseStore, pubsub)` are called on `PasskeyHandler` after both the handler and MCP GatewayService are constructed, since the MCP gateway and SSE services are created later in the startup sequence.
+This design ensures the **server decides auth posture, not the client**. The route a request lands on determines whether a session cookie is minted, whether mTLS is required, and whether the first-credential check is enforced. The request body never toggles these. All `PasskeyHandler` dependencies (including `mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`) are wired via the `PasskeyHandlerDeps` constructor — no post-construction setters remain.
 
 #### CLI Status Endpoint (mTLS-Gated)
 

@@ -24,7 +24,7 @@ G8eoService (Outbound/Operator Mode) [MODE-SPECIFIC]
 │   │   ├── governance.StateRootProvider (gateway.StateRootService via CanonicalDBService) [SHARED]
 │   │   ├── governance.SignerStore (governance.FilesystemSignerStore)
 │   │   ├── governance.AppPolicyStore (gateway.AppPolicyStoreService via CanonicalDBService) [SHARED]
-│   │   ├── governance.TribunalStore (nil in outbound mode, gateway.TribunalStoreService in gateway mode)
+│   │   ├── governance.TribunalStore (via GovernanceDeps; nil in outbound mode, gateway.TribunalStoreService in gateway mode)
 │   │   ├── governance.L1Doctrine (created internally by L4Warden when doctrine param is nil)
 │   │   └── governance.L3Notary (governance.outboundNotary implementation)
 │   │       └── storage.SuspendedTransactionService
@@ -114,10 +114,10 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.PasskeyService [SHARED]
 │   ├── gateway.WebSessionService (for session creation on browser flows)
 │   ├── response.Writer (for HTTP responses)
-│   ├── gateway.MCPServiceProvider (set post-construction via SetApprovalDependencies)
-│   ├── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
-│   ├── gateway.SSEEventService (set post-construction via SetSSEDependencies)
-│   └── gateway.GatewayWebSocketHandler (set post-construction via SetSSEDependencies)
+│   ├── gateway.MCPServiceProvider (via PasskeyHandlerDeps constructor)
+│   ├── storage.SuspendedTransactionStore (via PasskeyHandlerDeps constructor)
+│   ├── gateway.SSEEventService (via PasskeyHandlerDeps constructor)
+│   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
 ├── gateway.UserService
 │   └── gateway.CanonicalDBService [SHARED]
 ├── gateway.CLISessionService
@@ -202,8 +202,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ## Structural Observations
 
 ### Mode Bifurcation
-- **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only)
-- **Shared services**: `mcp.GatewayService` (used in both modes for MCP/A2A protocol handling; `MCPGateway` and `FieldReader` are in `GatewayCommandServiceConfig` and only wired in gateway mode via `NewGatewayOperatorPubSubService`; `TribunalStore` remains in base `CommandServiceConfig` but is nil in outbound mode), `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
+- **Mode-specific services**: `G8eoService` (outbound mode only), `GatewayModeService` (gateway mode only), `mcp.GatewayService` (gateway-only; `MCPGateway` is in `GatewayCommandServiceConfig` and wired via `NewGatewayOperatorPubSubService`; not present in outbound mode's `CommandServiceConfig`)
+- **Shared services**: `CanonicalDBService` (used in both modes for state root calculation - full service in gateway mode, state root calculation only in outbound mode)
+- **Governance dependencies**: `FieldReader`, `TribunalStore`, `ReplayStore`, `StateRootProvider`, `TransactionAudit`, `L3Notary`, `SignerStore`, and `AppPolicyStore` are consolidated in `pubsub.GovernanceDeps`, passed as a separate parameter to `NewOperatorPubSubService` and embedded via `GovDeps *GovernanceDeps` in `GatewayCommandServiceConfig`. In outbound mode, `TribunalStore` and `FieldReader` are nil; in gateway mode, all fields are populated via `GetGovernanceDeps()`
 
 ### Data Handling Convergence
 - **`gateway.CanonicalDBService`** is the canonical SQLite root for gateway mode; it now contains only lifecycle code (Open, Close, Wait, GetDB, GetVault, schema/migrations, maintenance loop). All domain logic has been extracted to dedicated service fields. In outbound mode, it is used only for state root calculation and provides the shared vault instance.
@@ -252,9 +253,9 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 ### PasskeyService/PasskeyHandler Domain-HTTP Split
 - **`passkey_service.go`**: `PasskeyService` reduced to domain-only fields (`userStore`, `sessionStore`, `webauthn`, `logger`, `rpID`, `rpName`). `NewPasskeyService` signature simplified to `(db, logger, cfg)`. Retains domain logic: `VerifyL3Proof`, `GenerateRegistrationChallenge`, `VerifyRegistration`, `GenerateAuthenticationChallenge`, `VerifyAuthentication`, `GenerateApprovalChallenge`, `addCredential`, `listCredentials`, `revokeCredential`, `getUser`. `VerifyL3Proof` stays on `PasskeyService` (L3 binding to transaction hash per architectural guardrails).
 - **`passkey_service_http.go`**: All passkey HTTP handlers now live on `*PasskeyHandler` as 4 factory methods (`RegisterChallenge`, `RegisterVerify`, `AuthenticateChallenge`, `AuthenticateVerify`) accepting a typed `passkeyHandlerConfig`, plus 3 direct handlers (`ListCredentials`, `RevokeCredential`, `CLIStatus`). All 7 methods have Swagger annotations (`@Summary`/`@Router`/`@Success`/`@Failure`).
-- **`passkey_service_approvals.go`**: 6 approval functions (`handleApprovalAction` dispatcher, `handleApprovalChallenge`, `handleApprovalVerify`, `handleCLIApprovalStatus`, `handleApprovalPage`, `handleListSuspendedTransactions`) now live on `*PasskeyHandler`. Dependencies are injected via `SetApprovalDependencies(mcpSvc, suspendedStore)` after construction on `PasskeyHandler`.
-- **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`). `NewPasskeyHandler` constructor added. `sseStore` and `pubsub` are injected post-construction via `SetSSEDependencies`.
-- **`gateway_service.go`**: `passkey` field → `*PasskeyHandler`, both constructors updated, `GetGovernanceDeps` passes `ls.passkey.PasskeyService` to `NewGatewayL3Notary`.
+- **`passkey_service_approvals.go`**: 6 approval functions (`handleApprovalAction` dispatcher, `handleApprovalChallenge`, `handleApprovalVerify`, `handleCLIApprovalStatus`, `handleApprovalPage`, `handleListSuspendedTransactions`) now live on `*PasskeyHandler`. All dependencies (`mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`) are passed via the `PasskeyHandlerDeps` constructor — no post-construction setters remain.
+- **`PasskeyHandler`** struct embeds `*PasskeyService` and adds HTTP concerns (`webSessionSvc`, `responder`, `maxPayload`, `mcpSvc`, `suspendedStore`, `sseStore`, `pubsub`). `NewPasskeyHandler(deps PasskeyHandlerDeps)` constructor wires all dependencies at construction time.
+- **`gateway_service.go`**: `passkey` field → `*PasskeyHandler`, both constructors updated, `GetGovernanceDeps` returns `*pubsub.GovernanceDeps` (consolidating all governance dependencies including `L3Notary` which wraps `ls.passkey.PasskeyService` via `NewGatewayL3Notary`).
 - **`gateway_http.go`**: `HTTPHandlerDeps.Passkey` and `HTTPHandler.passkey` → `*PasskeyHandler`. `GetPasskeyService()` renamed to `GetPasskeyHandler()`.
 - **`auth_controller.go`**: `AuthController.passkey` field and `newAuthController` param → `*PasskeyHandler`.
 - **`passkey_service_approvals_test.go`**: Tests all handlers on `*PasskeyHandler` with mocked dependencies.
@@ -354,7 +355,7 @@ The reporting system operates as a self-contained, offline verification utility 
 
 - **`internal/cli/serve/cert.go`**: PKI enrollment and certificate lifecycle: `PerformAutomaticEnrollment` (initial enrollment via CSR + trust bundle fetch, returns `(sessionID, err)` instead of calling `os.Setenv` internally), `RenewOperatorCertificate` (re-enrollment for expiring certs, decomposed into 5 testable units: `checkCertExpiry`, `fetchAndSaveTrustBundle`, `buildMTLSClient`, `submitRenewal`, `saveRenewedCerts`), `RunClientCertRenewalLoop` (periodic renewal check). `CertPaths` struct decouples path configuration from `paths.Infra`. HTTP client uses 15s timeout via `http.Client` + `http.NewRequestWithContext`. Error wrapping standardized with `ErrEmptyTrustBundle`, `ErrCAParseFailed`, `ErrMissingRequiredField`.
 - **`internal/cli/serve/operator.go`**: Operator boot sequence: `RunOperator` orchestrates config loading, trust bundle setup, enrollment, and signal handling. Extracted helpers: `resolveKeyPath`, `resolveCertPath`, `loadClientCertPair`, `buildOperatorLoadOptions`.
-- **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, tribunal bootstrap (policy seeding via `bootstrapTribunalPolicy`, key loading via `BootstrapTribunal` with `FileKeyProvider`), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig` (embedding base `CommandServiceConfig` plus `MCPGateway` and `FieldReader`), `SetEnvelopeProcessor` wiring, `SetTribunal` and `SetTribunalDeliberator` wiring under consensus posture, and graceful shutdown with 30-second timeout. `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
+- **`internal/cli/serve/gateway.go`**: Gateway boot sequence: `RunGateway` orchestrates config loading, `GatewayModeService` construction, in-process execution service initialization, tribunal bootstrap (policy seeding via `bootstrapTribunalPolicy`, key loading via `BootstrapTribunal` with `FileKeyProvider`), in-process `OperatorPubSubService` construction via `NewGatewayOperatorPubSubService` with `GatewayCommandServiceConfig` (embedding base `CommandServiceConfig` plus `MCPGateway` and `GovDeps *GovernanceDeps`), `SetEnvelopeProcessor` wiring, `SetTribunal` and `SetTribunalDeliberator` wiring under consensus posture, and graceful shutdown with 30-second timeout. `ExportActuatorPublicKey` writes the actuator public key to the PKI directory for receipt verification by external harnesses.
 - **`internal/cli/serve/logger.go`**: Logger configuration: `ConfigureLogger` and `ConfigureLoggerWithOutput` produce `slog.Logger` instances with operator-friendly formatting and configurable log levels.
 - **`internal/cli/serve/version.go`**: `VersionInfo` struct holds build-time metadata (version, build ID, build time, platform) set via ldflags.
 - **`internal/cli/cmd/gateway.go`**: Gateway CLI command tree. `gatewayStartCmd` launches the gateway as a background process via `platform.StartProcess`, resolving configuration from CLI flags and environment variables. `gatewayServeCmd` (hidden) is the foreground re-exec target that calls `serve.RunGateway`. `gatewaySettingsCmd`, `gatewayResetCmd`, and `gatewayCleanCmd` manage gateway state over mTLS.
