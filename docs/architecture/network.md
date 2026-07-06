@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -184,7 +184,7 @@ The gateway provides real-time event streaming from app workloads to browser and
 ### Agent Integration
 
 The platform provides zero-config ingress for agentic CLI coding tools through:
-- **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval polling and browser opening.
+- **MCP stdio proxy**: Bridges stdio MCP transport to the gateway mTLS HTTPS endpoint, handling L3 approval SSE notifications and browser opening.
 
 ---
 

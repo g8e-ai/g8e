@@ -840,10 +840,10 @@ func TestDataCommandLongDescription(t *testing.T) {
 		assert.Contains(t, cmd.Long, "Data management")
 	})
 
-	t.Run("users command has no long description (uses default)", func(t *testing.T) {
+	t.Run("users command has long description", func(t *testing.T) {
 		cmd := dataUsersCmd()
-		// Most subcommands don't have long descriptions, that's fine
-		assert.Empty(t, cmd.Long)
+		assert.NotEmpty(t, cmd.Long)
+		assert.Contains(t, cmd.Long, "user accounts")
 	})
 }
 

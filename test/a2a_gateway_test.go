@@ -70,9 +70,6 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 	mtlsURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
 
-	publicURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
-	fixture.SetPublicBaseURL(publicURL)
-
 	// Test A2A Call (Suspends for L3, then Resume)
 	t.Run("a2a call", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -136,9 +133,6 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 	identity := fixtures.EnrollClientIdentity(t, fixture, "a2a-payload-user", "a2a-payload-org", "a2a-payload-fingerprint", "a2a-payload-host")
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 	mtlsURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
-
-	publicURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
-	fixture.SetPublicBaseURL(publicURL)
 
 	t.Run("nested payload structure", func(t *testing.T) {
 		callReq := map[string]interface{}{
@@ -355,9 +349,6 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 	identity := fixtures.EnrollClientIdentity(t, fixture, "a2a-error-user", "a2a-error-org", "a2a-error-fingerprint", "a2a-error-host")
 	mtlsClient := fixtures.CreateMTLSClient(t, fixture, identity)
 	mtlsURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
-
-	publicURL := netutil.LocalhostHTTPSURL(fixture.Service.GetHTTPSPort())
-	fixture.SetPublicBaseURL(publicURL)
 
 	t.Run("api key rejected", func(t *testing.T) {
 		plainClient := fixtures.CreateNoCertClient(t, fixture)

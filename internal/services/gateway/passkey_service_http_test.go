@@ -42,7 +42,12 @@ func newPasskeyServiceHTTPForTest(t *testing.T) (*PasskeyHandler, *WebSessionSer
 	resp := response.NewWriter(logger)
 	svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 	require.NoError(t, err)
-	handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+	handler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:       svc,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    10 * 1024 * 1024,
+	})
 	return handler, webSessionSvc, user
 }
 
@@ -501,12 +506,17 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
-
 		sseStore := NewSSEEventService(db.GetDB(), logger)
 		pubsub := NewGatewayWebSocketHandler(logger)
 		t.Cleanup(func() { pubsub.Close() })
-		handler.SetSSEDependencies(sseStore, pubsub)
+		handler := NewPasskeyHandler(PasskeyHandlerDeps{
+			Service:       svc,
+			WebSessionSvc: webSessionSvc,
+			Responder:     resp,
+			MaxPayload:    10 * 1024 * 1024,
+			SSEStore:      sseStore,
+			Pubsub:        pubsub,
+		})
 
 		const cliSessionID = "cli-sse-test-1"
 		const userID = "u-sse-test-1"
@@ -529,7 +539,12 @@ func TestPasskeyRegisterVerify_SSEEmission(t *testing.T) {
 		resp := response.NewWriter(logger)
 		svc, err := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
 		require.NoError(t, err)
-		handler := NewPasskeyHandler(svc, webSessionSvc, resp, 10*1024*1024)
+		handler := NewPasskeyHandler(PasskeyHandlerDeps{
+			Service:       svc,
+			WebSessionSvc: webSessionSvc,
+			Responder:     resp,
+			MaxPayload:    10 * 1024 * 1024,
+		})
 
 		const cliSessionID = "cli-no-sse-1"
 		const userID = "u-no-sse-1"

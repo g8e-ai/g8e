@@ -77,7 +77,6 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	webSessionSvc := NewWebSessionService(db, logger)
 	reg := NewRegistrationService(db, pki, logger, userSvc, cliSessionSvc, operatorSessionSvc, &cfg.Gateway)
 	passkey, _ := NewPasskeyService(db, logger, &PasskeyConfig{RpID: "localhost", RpName: "g8e"})
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
@@ -104,8 +103,16 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		t.Fatalf("failed to create MCP gateway: %v", err)
 	}
 
+	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        passkey,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      resp,
+		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
+		MCPSvc:         mcpGateway,
+		SuspendedStore: suspendedTxService,
+	})
+
 	authController := newAuthController(cfg, logger, db, auth, passkeyHandler, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, resp, nil)
-	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
 	return authController, cfg
 }
 
@@ -146,8 +153,14 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	})
 	require.NoError(t, err)
 
-	passkeyHandler := NewPasskeyHandler(passkey, webSessionSvc, resp, cfg.Gateway.MaxPayloadBytes)
-	passkeyHandler.SetApprovalDependencies(mcpGateway, suspendedTxService)
+	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
+		Service:        passkey,
+		WebSessionSvc:  webSessionSvc,
+		Responder:      resp,
+		MaxPayload:     cfg.Gateway.MaxPayloadBytes,
+		MCPSvc:         mcpGateway,
+		SuspendedStore: suspendedTxService,
+	})
 	return passkeyHandler, userSvc, suspendedTxService
 }
 

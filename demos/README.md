@@ -14,7 +14,8 @@ demos/
 │   │   ├── gateway.yml
 │   │   └── operator.yml
 │   ├── doctrine/               # CUI/CMMC L1 pattern rules
-│   └── target-data/            # Simulated classified document store
+│   ├── target-data/            # Simulated classified document store
+│   └── README.md               # Gov-specific documentation
 ├── healthcare/                # Healthcare/PHI demo
 │   ├── compose.yml
 │   ├── config/
@@ -28,12 +29,14 @@ demos/
 │   ├── compose.yml
 │   ├── config/
 │   ├── doctrine/               # Trading controls and dual-control triggers
-│   └── target-data/            # Simulated ledger/positions
+│   ├── target-data/            # Simulated ledger/positions
+│   └── README.md               # Finance-specific documentation
 ├── secure-data/                # Governed data migration / two-operator pipeline demo
 │   ├── compose.yml
 │   ├── config/
 │   ├── doctrine/               # Migration-screening L1 rules (bypass, exfil, cross-tenant)
-│   └── target-data/            # Simulated SharePoint migration manifest
+│   ├── target-data/            # Simulated SharePoint migration manifest
+│   └── README.md               # Secure-data-specific documentation
 ├── dow/                        # Department of War tactical edge demo
 │   ├── compose.yml
 │   ├── config/
@@ -146,15 +149,14 @@ g8e demos status <org>
 g8e demos stop <org>
 
 # Clean a demo environment (remove containers, volumes, and networks)
+# Confirmation is skipped by default; use --yes=false to prompt
 g8e demos clean <org>
 
 # Clean all demo environments
 g8e demos clean
 
-# Skip confirmation prompt when cleaning
-g8e demos clean <org> --yes
-
 # Rebuild Docker images and restart a demo environment
+# Uses --no-cache by default; pass --no-cache=false to reuse cache
 g8e demos rebuild <org>
 
 # Reset a demo environment (clean and restart)
@@ -166,28 +168,32 @@ g8e demos run <org> <scenario>
 # Run with verbose step-by-step output
 g8e demos run <org> <scenario> -v
 
-# View audit receipts, events, and summary via g8e audit CLI
-g8e demos audit <org> receipts
-g8e demos audit <org> events
-g8e demos audit <org> summary
+# Run with the tactical governance TUI overlay
+g8e demos run <org> <scenario> --tui
 
-# Tail the observability log stream
-g8e demos audit <org> logs
+# Pre-pull all external images for air-gapped deployment
+g8e demos pull
+```
 
-# View the git ledger log
-g8e demos audit <org> ledger-log
+### Audit Commands
 
-# List files tracked in the git ledger
-g8e demos audit <org> ledger-files
+Audit commands are top-level, not nested under `demos`. They query the running Gateway's audit store:
 
-# Show commit history for a specific ledger file
-g8e demos audit <org> ledger-history <file>
+```bash
+# List signed receipts
+g8e audit receipts
 
-# Show a specific ledger commit
-g8e demos audit <org> ledger-show <hash>
+# Query raw audit events
+g8e audit events
 
-# Open the execution vault database (SQLite)
-g8e demos audit <org> vault
+# Aggregate event and receipt counts by type
+g8e audit summary
+
+# Export the full receipts bundle for archival
+g8e audit export
+
+# Generate a compliance report (JSON)
+g8e audit report
 ```
 
 ### Demo Scenarios
@@ -230,15 +236,9 @@ Each demo environment includes predefined scenarios that demonstrate specific se
 
 ### Demo Output Format
 
-By default, `g8e demos run` produces concise output: each scenario prints its number, name, and PASS/FAIL result. After all scenarios complete, a results table and a **Platform Data Dump** section are printed, showing:
+By default, `g8e demos run` produces concise output: each scenario prints its PASS/FAIL result line. After all scenarios complete, a results table summarizes scenario numbers, names, statuses, and key metrics.
 
-- **Receipts** — Transaction hash, action, resource, status, and execution timestamp (via `GET /api/v1/audit/receipts`)
-- **Audit Events** — Event ID, timestamp, type, exit code, and command (via `GET /api/v1/audit/events`)
-- **Summary** — Event and receipt counts by type (via `GET /api/v1/audit/summary`)
-- **Ledger Files** — File listing from the operator's git ledger
-- **Gateway Logs** — Last 15 log lines from the gateway container
-
-Use `-v` (or `--verbose`) to see full step-by-step command output, scenario descriptions, and `PROVES:` annotations.
+Use `-v` (or `--verbose`) to see full step-by-step command output, scenario descriptions, and `PROVES:` annotations. Use `--tui` to launch the tactical governance TUI overlay with live pipeline and consensus visualization.
 
 Note: The `g8e demos run` command automatically starts the demo environment if it is not already running.
 
@@ -423,8 +423,7 @@ Load the exported images into the local Docker daemon:
 
 ### Step 5: Build and Run (Air-Gapped Machine)
 
-The Dockerfile uses vendored Go modules and does not require network access
-during build:
+The build uses vendored Go modules and does not require network access. The demos Dockerfile copies the pre-built binary into the container without compilation:
 
 ```bash
 make build

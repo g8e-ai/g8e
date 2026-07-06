@@ -761,7 +761,11 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 	}
 
 	if regResp.HubTrustBundle != "" {
-		if err := os.WriteFile(cfg.TrustBundleFile(), []byte(regResp.HubTrustBundle), 0644); err != nil {
+		trustPath := cfg.TrustBundlePath()
+		if err := os.MkdirAll(filepath.Dir(trustPath), 0755); err != nil {
+			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
+		}
+		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), 0644); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}

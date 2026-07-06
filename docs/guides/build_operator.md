@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Operator
 
-Last Updated: 2026-07-03
-Version: v1.3.6
+Last Updated: 2026-07-06
+Version: v1.3.7
 
 ---
 
@@ -38,7 +38,7 @@ An Operator executes tools on a host and connects back to a Gateway. Start an op
 - `operator run --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
 - `operator run --working-dir <path>`, Working directory for command execution.
 - `operator run -c, --cloud`, Cloud operator mode.
-- `operator run -p, --provider <provider>`, Cloud provider (aws, gcp, azure).
+- `operator run --provider <provider>`, Cloud provider (aws, gcp, azure).
 - `operator run -s, --execution-vault`, Enable execution vault (data stays in working directory).
 - `operator run -G, --no-git`, Disable Git integration.
 - `operator run -l, --log <level>`, Log level: info, error, debug.
@@ -71,7 +71,7 @@ make build
 
 This produces the `g8e` binary in the repository root. All dependencies are resolved at build time; the compiled binary is statically linked (`CGO_ENABLED=0`) and has zero runtime dependencies. No Go toolchain, OpenSSL, or other external tools are needed on the target host.
 
-**Self-Contained Deployment**: The compiled g8e binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary via go:embed and is the sole source of truth.
+**Self-Contained Deployment**: The compiled g8e binary is fully self-sovereign and requires no source tree, configuration files, or specific directory structure. It can be copied to any directory and run from there. All paths are resolved relative to the current working directory unless explicitly overridden by flags. Path configuration is embedded directly in the binary and is the sole source of truth.
 
 ### Build Targets
 
@@ -124,7 +124,7 @@ The `operator` subcommand provides tools for managing remote Operator instances:
 - `./g8e operator deploy --hosts <hosts>`, Deploys the binary to remote hosts via SSH and optionally starts it. Requires `./g8e auth enroll` first. Flags: `--hosts` (required), `--port` (`-P`), `--identity` (`-i`), `--background`.
 - `./g8e operator stream [host...] [flags]`, Streams the binary to remote hosts via native Go crypto/ssh and executes it directly on each host. Supports concurrent streaming and advanced SSH configuration. Flags: `--arch` (target architecture: amd64, arm64, 386), `--hosts` (file of hosts, one per line, or `-` for stdin), `--concurrency` (max parallel SSH sessions, default: 50), `--timeout` (per-host dial and inject timeout in seconds, default: 60), `--endpoint` (platform endpoint; if set, starts Operator on each remote host), `--no-git` (disable ledger), `--ssh-config` (path to SSH config file), `--known-hosts` (path to SSH known_hosts file), `--binary-dir` (directory containing arch-specific Operator builds), `--ssh-identity-file` (SSH identity file path), `--ssh-user` (SSH username), `--ssh-passphrase` (passphrase for encrypted SSH private keys), `--preflight` (enable pre-flight SSH connectivity check).
 - `./g8e operator cp <target>`, Copies the binary to a local path.
-- `./g8e operator scp <user@host:path>`, Copies the binary to a remote host. Flags: `--port` (`-P`), `--identity` (`-i`), `--recursive` (`-r`), `--preserve` (`-p`), `--verbose` (`-v`), `--compression` (`-C`), `--prompt`.
+- `./g8e operator scp <user@host:path>`, Copies the binary to a remote host. Flags: `--port` (`-P`), `--identity` (`-i`), `--recursive` (`-r`), `--preserve`, `--verbose` (`-v`), `--compression` (`-C`), `--prompt`.
 
 ---
 
@@ -239,7 +239,7 @@ The GovernanceEnvelope schema is defined in the protocol protobuf files. Your im
 3. **Support the canonical request payload mappings** for all first-class event types.
 4. **Handle L2 votes** from Tribunal deliberation, verifying the quorum of Ed25519 signatures against the TribunalPolicy.
 
-Refer to `protocol/proto/g8e/` for the canonical schema definitions.
+Refer to the protocol schema definitions in the `protocol/proto/` directory for the canonical schema definitions.
 
 ---
 
@@ -276,10 +276,10 @@ The vault is automatically unlocked when starting the Gateway or Operator. To ma
 
 ### Vault Configuration
 
-The vault can be configured via CLI flags or environment variables:
+When starting the Gateway with `gw start` or `gateway serve`, the vault can be configured via CLI flags or environment variables:
 
 - `--vault-dir <dir>`: Directory for vault data (default: `.g8e/vault`)
-- `--vault-key <path>`: Path to vault private key (default: `.g8e/vault/key`)
+- `--vault-key <path>`: Path to vault private key (default: `.g8e/secrets/key`)
 - `--vault-require-unlock`: Require vault to be unlocked at startup (fail if vault cannot be unlocked)
 
 Environment variables:

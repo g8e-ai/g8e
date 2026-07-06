@@ -19,9 +19,11 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/response"
 	"github.com/g8e-ai/g8e/internal/services/gateway/scripts"
@@ -68,7 +70,7 @@ type HTTPHandler struct {
 	userSvc            *UserService
 	responder          *response.Writer
 	mcp                *mcp.GatewayService
-	tribunal           *tribunal.TribunalService
+	tribunal           atomic.Pointer[tribunal.TribunalService]
 	appEnrollment      *AppEnrollmentService
 	isReady            func() bool
 	isGovernanceReady  func() bool
@@ -76,7 +78,7 @@ type HTTPHandler struct {
 	// nil until SetEnvelopeProcessor is called by the boot sequence after
 	// the in-process command service has initialized the verifier and
 	// Actuator. While nil, /api/v1/governance/envelopes returns 503.
-	envProc governance.EnvelopeProcessor
+	envProc atomic.Pointer[governance.EnvelopeProcessor]
 
 	// Controllers for domain-specific endpoints
 	pkiController      *PKIController
@@ -110,7 +112,6 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 		userSvc:            deps.UserSvc,
 		responder:          deps.Responder,
 		mcp:                deps.MCPGateway,
-		tribunal:           deps.Tribunal,
 		appEnrollment:      deps.AppEnrollment,
 		isReady:            deps.IsReady,
 		isGovernanceReady:  deps.IsGovernanceReady,
@@ -133,6 +134,12 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 
+	// Wire tribunal if provided at construction time (may be nil — set
+	// later via SetTribunal during boot).
+	if deps.Tribunal != nil {
+		h.tribunal.Store(deps.Tribunal)
+	}
+
 	// Build router once to avoid per-request overhead
 	h.router = h.buildPublicRouter()
 
@@ -152,12 +159,25 @@ func (h *HTTPHandler) GetMCPGateway() *mcp.GatewayService {
 	return h.mcp
 }
 
-// SetTribunal sets the Tribunal service and rebuilds the router to register
-// the deliberate route on the mTLS mux. Called by the boot sequence after
-// the TribunalService is constructed.
+// SetTribunal sets the Tribunal service for L2 consensus deliberation.
+// Called by the boot sequence after the TribunalService is constructed.
+// Thread-safe via atomic.Pointer — no router rebuild needed because the
+// tribunal deliberate route is always registered and the handler checks
+// the atomic pointer at request time.
 func (h *HTTPHandler) SetTribunal(ts *tribunal.TribunalService) {
-	h.tribunal = ts
-	h.router = h.buildPublicRouter()
+	h.tribunal.Store(ts)
+}
+
+// handleTribunalDeliberate is the always-registered HTTP handler for the
+// tribunal deliberate endpoint. It loads the atomic pointer and delegates
+// to the TribunalService if wired, or returns 503 if not yet configured.
+func (h *HTTPHandler) handleTribunalDeliberate(w http.ResponseWriter, r *http.Request) {
+	ts := h.tribunal.Load()
+	if ts == nil {
+		h.responder.Error(w, http.StatusServiceUnavailable, constants.ErrTribunalNotConfigured.Error())
+		return
+	}
+	(*ts).HandleDeliberate(w, r)
 }
 
 func (h *HTTPHandler) GetPasskeyHandler() *PasskeyHandler {

@@ -47,7 +47,12 @@ func swaggerInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Generate Swagger documentation from code annotations",
-		Long:  `Generate Swagger/OpenAPI documentation by scanning Go code for Swagger annotations. Uses the swag CLI tool to parse annotations and generate docs.`,
+		Long: `Generate Swagger/OpenAPI documentation by scanning Go code for Swagger
+annotations. Uses the swag CLI tool to parse annotations and generate docs.
+
+The generated documentation includes:
+- swagger.json - OpenAPI 2.0 specification in JSON format
+- swagger.yaml - OpenAPI 2.0 specification in YAML format`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Default to cmd/operator and internal/services/gateway directories
 			// cmd/operator has main.go (entry point), internal/services/gateway has the annotations
@@ -112,7 +117,11 @@ func swaggerServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve Swagger UI for API documentation",
-		Long:  `Start a local HTTP server to serve the Swagger UI for viewing and testing the API documentation.`,
+		Long: `Start a local HTTP server to serve the Swagger UI for viewing and testing the
+API documentation.
+
+The Swagger UI is also available directly from the running gateway at:
+https://localhost:8443/swagger/index.html`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Default values
 			if port == 0 {
@@ -161,7 +170,11 @@ func swaggerValidateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "validate",
 		Short: "Validate Swagger/OpenAPI specification",
-		Long:  `Validate the generated Swagger/OpenAPI specification for errors and compliance.`,
+		Long: `Validate the generated Swagger/OpenAPI specification for errors and compliance.
+
+If no validation tool is installed, the command will suggest installing one of:
+- npm install -g @apidevtools/swagger-cli
+- go install github.com/go-swagger/go-swagger/cmd/swagger@latest`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Default to gateway swagger.json
 			if specFile == "" {

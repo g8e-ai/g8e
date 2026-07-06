@@ -18,11 +18,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
+	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -42,11 +42,6 @@ func defaultAPIClientFactory(cfg *config.Config) (apiClient, error) {
 	return api.NewClient(cfg)
 }
 
-var (
-	approvePollInterval  = 3 * time.Second
-	approveMaxIterations = 100 // 5 minutes at 3s intervals
-)
-
 func approveCmd() *cobra.Command {
 	return approveCmdWithConfig(loadConfig, defaultAPIClientFactory)
 }
@@ -56,8 +51,9 @@ func approveCmdWithConfig(configLoader func(string) (*config.Config, error), cli
 		Use:   "approve <transaction_hash>",
 		Short: "Approve a suspended L3 transaction via browser WebAuthn",
 		Long: `Approve a suspended transaction by opening the gateway's browser-based approval page.
-The browser handles the WebAuthn/passkey ceremony; the CLI polls the gateway's mTLS
-status endpoint until the transaction is approved or times out.`,
+The browser handles the WebAuthn/passkey ceremony; the CLI subscribes to the
+gateway's SSE stream and waits for the approval.completed event. CLI credentials
+(mTLS) are required for L3 approval flows.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			txHash := args[0]
@@ -83,54 +79,62 @@ status endpoint until the transaction is approved or times out.`,
 				fmt.Fprintf(os.Stderr, "\n[g8e] Please visit: %s\n", approvalURL)
 			}
 
-			cmd.Printf("\nWaiting for browser approval (polling gateway via mTLS)...\n")
-
-			statusPath := constants.APIPaths.ApprovalsCLIStatus + txHash
-			ticker := time.NewTicker(approvePollInterval)
-			defer ticker.Stop()
-
 			ctx := cmd.Context()
 			if ctx == nil {
 				ctx = context.Background()
 			}
 
-			for i := 0; i < approveMaxIterations; i++ {
-				select {
-				case <-ctx.Done():
-					return fmt.Errorf("approve: cancelled: %w", ctx.Err())
-				case <-ticker.C:
-				}
-
-				resp, err := client.Get(statusPath)
-				if err != nil {
-					continue
-				}
-
-				var status models.ApprovalStatusResponse
-				if err := json.Unmarshal(resp, &status); err != nil {
-					continue
-				}
-
-				switch status.Status {
-				case string(constants.SuspendedTxStatusApproved):
-					cmd.Printf("\n✓ Transaction %s approved successfully\n", txHash)
-					if status.ToolName != "" {
-						cmd.Printf("  Tool: %s\n", status.ToolName)
-					}
-					return nil
-				case string(constants.SuspendedTxStatusExpiredOrNotFound):
-					return fmt.Errorf("approve: transaction %s expired or not found", txHash)
-				case string(constants.SuspendedTxStatusPending):
-					if i%10 == 0 && i > 0 {
-						cmd.Printf("  Still waiting... (%ds elapsed)\n", i*int(approvePollInterval.Seconds()))
-					}
-					continue
-				}
-			}
-
-			return fmt.Errorf("approve: timed out waiting for browser approval after %d seconds", approveMaxIterations*int(approvePollInterval.Seconds()))
+			return waitForApprovalAndVerify(ctx, cmd, cfg, client, txHash)
 		},
 	}
 
 	return cmd
+}
+
+// waitForApprovalAndVerify loads CLI credentials, builds an mTLS SSE client,
+// waits for the approval.completed SSE event, then verifies the approval
+// status via the mTLS status endpoint. CLI credentials are required — there
+// is no polling fallback.
+func waitForApprovalAndVerify(ctx context.Context, cmd *cobra.Command, cfg *config.Config, client apiClient, txHash string) error {
+	creds, err := auth.LoadCredentials(cfg)
+	if err != nil {
+		return fmt.Errorf("approve: load credentials: %w", err)
+	}
+	if creds == nil || creds.UserID == "" {
+		return fmt.Errorf("approve: %w", constants.ErrNotAuthenticated)
+	}
+
+	sseClient, err := auth.BuildMTLSClient(cfg, 0)
+	if err != nil {
+		return fmt.Errorf("approve: build mTLS client: %w", err)
+	}
+
+	cmd.Printf("\nWaiting for browser approval (SSE)...\n")
+	if err := auth.WaitForApprovalSSE(ctx, sseClient, cfg.OperatorPublicURL(), creds.UserID, txHash); err != nil {
+		return fmt.Errorf("approve: %w", err)
+	}
+
+	statusPath := constants.APIPaths.ApprovalsCLIStatus + txHash
+	resp, err := client.Get(statusPath)
+	if err != nil {
+		return fmt.Errorf("approve: verify status: %w", err)
+	}
+
+	var status models.ApprovalStatusResponse
+	if err := json.Unmarshal(resp, &status); err != nil {
+		return fmt.Errorf("approve: parse status response: %w", err)
+	}
+
+	switch status.Status {
+	case string(constants.SuspendedTxStatusApproved):
+		cmd.Printf("\n✓ Transaction %s approved successfully\n", txHash)
+		if status.ToolName != "" {
+			cmd.Printf("  Tool: %s\n", status.ToolName)
+		}
+		return nil
+	case string(constants.SuspendedTxStatusExpiredOrNotFound):
+		return fmt.Errorf("approve: transaction %s expired or not found", txHash)
+	default:
+		return fmt.Errorf("approve: unexpected status %q for transaction %s", status.Status, txHash)
+	}
 }
