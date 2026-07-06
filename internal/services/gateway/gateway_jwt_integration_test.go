@@ -185,7 +185,7 @@ func TestGateway_JWTIntegration(t *testing.T) {
 	}
 
 	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:        passkey,
@@ -342,7 +342,7 @@ func TestGateway_JITPasskeyBootstrapWithURL(t *testing.T) {
 	}
 
 	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:        passkey,
@@ -514,7 +514,7 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 	}
 
 	mockEnvProc := &mockEnvelopeProcessor{}
-	mcpGateway.SetDependencies(mockEnvProc, nil, nil, "", "")
+	mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{EnvProc: mockEnvProc})
 
 	passkeyHandler := NewPasskeyHandler(PasskeyHandlerDeps{
 		Service:        passkey,

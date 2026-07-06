@@ -151,12 +151,12 @@ func TestSetTribunalDeliberator(t *testing.T) {
 	t.Parallel()
 
 	g := &GatewayService{}
-	assert.Nil(t, g.tribunalDeliberator)
+	assert.Nil(t, g.getTribunalDeliberator())
 
 	mock := &mockTribunalDeliberator{}
 	g.SetTribunalDeliberator(mock)
-	assert.NotNil(t, g.tribunalDeliberator)
-	assert.Same(t, mock, g.tribunalDeliberator)
+	assert.NotNil(t, g.getTribunalDeliberator())
+	assert.Same(t, mock, g.getTribunalDeliberator())
 }
 
 type mockTribunalDeliberator struct{}

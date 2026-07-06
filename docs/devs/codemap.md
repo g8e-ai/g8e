@@ -136,18 +136,18 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── gateway.WebSessionService
 │   ├── gateway.RegistrationService
 │   ├── gateway.PasskeyHandler (includes approval handlers via passkey_service_approvals.go)
-│   │   ├── gateway.MCPServiceProvider (set post-construction via SetApprovalDependencies)
-│   │   ├── storage.SuspendedTransactionStore (set post-construction via SetApprovalDependencies)
-│   │   ├── gateway.SSEEventService (set post-construction via SetSSEDependencies)
-│   │   └── gateway.GatewayWebSocketHandler (set post-construction via SetSSEDependencies)
+│   │   ├── gateway.MCPServiceProvider (via PasskeyHandlerDeps constructor)
+│   │   ├── storage.SuspendedTransactionStore (via PasskeyHandlerDeps constructor)
+│   │   ├── gateway.SSEEventService (via PasskeyHandlerDeps constructor)
+│   │   └── gateway.GatewayWebSocketHandler (via PasskeyHandlerDeps constructor)
 │   ├── gateway.UserService
 │   ├── gateway.AppEnrollmentService
 │   │   ├── gateway.CanonicalDBService [SHARED]
 │   │   └── gateway.PKIAuthority
 │   ├── gateway/console (Console SPA embed filesystem)
 │   ├── mcp.GatewayService [SHARED]
-│   ├── tribunal.TribunalService (set post-construction by boot sequence via SetTribunal)
-│   ├── governance.EnvelopeProcessor (set post-construction by boot sequence via SetEnvelopeProcessor)
+│   ├── tribunal.TribunalService (atomic.Pointer, set by boot sequence via SetTribunal — no router rebuild)
+│   ├── governance.EnvelopeProcessor (atomic.Pointer, set by boot sequence via SetEnvelopeProcessor)
 │   ├── gateway.PKIController (PKI enrollment, CSR signing, trust scripts, deploy scripts)
 │   ├── gateway.DBController (audit receipts, audit events, data DB, KV, blobs, governance signers, pub/sub)
 │   ├── gateway.AuthController (bootstrap, CLI enrollment, device enrollment, user management, web session)
@@ -186,15 +186,16 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 │   ├── mcp.FieldPathRegistry
 │   ├── mcp.NativeToolHandler
 │   ├── mcp.FieldReader (gateway.DocumentStoreService) [SHARED]
-│   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in both modes)
-│   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in both modes)
-│   ├── tribunal.TribunalDeliberator (tribunal.LocalDeliberator in gateway mode, nil in outbound)
-│   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService via SetDependencies in both modes)
-│   ├── StateRootProvider (set by in-process OperatorPubSubService via SetDependencies in both modes)
-│   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService via SetDependencies in both modes)
-│   ├── downstreamURL (MCP egress, set by in-process OperatorPubSubService via SetDependencies in both modes)
-│   ├── a2aDownstreamURL (A2A egress, set by GatewayModeService.initHandlersAndServers in gateway mode only)
-│   └── publicBaseURL (set by GatewayModeService.initHandlersAndServers in gateway mode only)
+│   ├── RuntimeDependencies (atomic.Pointer, set once via SetRuntimeDeps before first request):
+│   │   ├── mcp.SessionValidator (set by in-process OperatorPubSubService in both modes)
+│   │   ├── mcp.AuditLogger (pubsubAuditLogger, set by in-process OperatorPubSubService in both modes)
+│   │   ├── governance.EnvelopeProcessor (set by in-process OperatorPubSubService in both modes)
+│   │   ├── StateRootProvider (set by in-process OperatorPubSubService in both modes)
+│   │   ├── Ed25519 signing key/keyID (set by in-process OperatorPubSubService in both modes)
+│   │   └── downstreamURL (MCP egress, set by in-process OperatorPubSubService in both modes)
+│   ├── tribunal.TribunalDeliberator (atomic.Value, tribunal.LocalDeliberator in gateway mode, nil in outbound)
+│   ├── a2aDownstreamURL (construction-phase, immutable after NewGatewayService)
+│   └── publicBaseURL (construction-phase, immutable after NewGatewayService)
 └── response.Writer
 ```
 
@@ -268,7 +269,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - `gateway.GatewayWebSocketHandler` is the in-process pub/sub broker for gateway mode.
 - `gateway.PKIAuthority` manages PKI hierarchy and certificate lifecycle for gateway mode.
 - `network.Detector` detects host IP addresses and DNS names to configure TLS certificate identities dynamically during boot and renewal.
-- `governance_envelope.go` provides the synchronous envelope-processing endpoint at `/api/v1/governance/envelopes`. `SetEnvelopeProcessor` wires the in-process `OperatorPubSubService` into the gateway HTTP surface. `verifyEnvelopeIdentityBinding` enforces transport-to-envelope identity binding by matching mTLS certificate URI SANs against the envelope's internal identity claims.
+- `governance_envelope.go` provides the synchronous envelope-processing endpoint at `/api/v1/governance/envelopes`. `SetEnvelopeProcessor` wires the in-process `OperatorPubSubService` into the gateway HTTP surface via `atomic.Pointer`. `verifyEnvelopeIdentityBinding` enforces transport-to-envelope identity binding by matching mTLS certificate URI SANs against the envelope's internal identity claims. The tribunal deliberate route is always registered in the router; `handleTribunalDeliberate` checks the `atomic.Pointer` at request time and returns 503 if not yet wired, eliminating the need for a router rebuild when `SetTribunal` is called.
 - `gateway_db.go` embeds the SQLite schema from `db/schema.sql` and provides `GatewaySchema()` for database initialization. `gateway_certs.go` defines certificate validity periods and common names for all g8e CAs (root, intermediate, serving, leaf, peer).
 - `gateway_pubsub.go` defines `GatewayWebSocketHandler` for WebSocket-based publish/subscribe channels, including subscriber management and in-process handlers for governance command processing and SSE streaming.
 

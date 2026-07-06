@@ -150,6 +150,26 @@ var ErrCustomError = errors.New("custom error")  // Move to internal/constants/e
 - Production gateway mode wires `DocumentStoreService` as `TransactionAuditStore`
 - Production outbound mode uses `auditStoreTransactionStore` adapter in `g8eo.go`
 
+## Thread Safety for Late-Bound Dependencies
+
+Several services have dependencies that cannot be passed to the constructor because they are created later in the boot sequence (circular or late-resolved dependency graphs). The canonical pattern for these is:
+
+- **`atomic.Pointer[T]`** for pointer-typed late-bound deps (e.g., `HTTPHandler.tribunal`, `HTTPHandler.envProc`, `mcp.GatewayService.runtimeDeps`).
+- **`atomic.Value`** for interface-typed late-bound deps (e.g., `mcp.GatewayService.tribunalDeliberator`).
+
+**Pattern rules:**
+
+1. The field is declared as `atomic.Pointer[T]` or `atomic.Value`, never as a raw pointer.
+2. A `SetXxx` method stores via `.Store()` — it must **not** rebuild routers or mutate other state.
+3. The handler/method reads via `.Load()` and checks for nil. If nil, return a fail-closed error (503 or equivalent).
+4. Routes that depend on late-bound deps are **always registered** in the router. The handler checks the atomic pointer at request time, eliminating the need for a router rebuild when the dependency is wired.
+5. `go test -race` must pass — the atomic access guarantees no data races even if the boot sequence changes.
+
+**Two-phase dependency model for `mcp.GatewayService`:**
+
+- **Construction-phase** (`Dependencies` struct, immutable after `NewGatewayService`): `Logger`, `Responder`, `SuspendedStore`, `ScrubbingService`, `MaxPayloadBytes`, `Posture`, `A2ADownstreamURL`, `PublicBaseURL`.
+- **Runtime-phase** (`RuntimeDependencies` struct, set once via `SetRuntimeDeps` before first request): `EnvProc`, `StateRootProvider`, `SigningKey`, `KeyID`, `DownstreamURL`, `DBService`, `SessionValidator`, `AuditLogger`. Stored via `atomic.Pointer[RuntimeDependencies]` with `runtimeReady()` gate.
+
 ## Constants & Doctrines
 
 Go constants in `internal/constants/` are SSOT. JSON files in `protocol/constants/` are reference documentation and external protocol definitions.

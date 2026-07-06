@@ -235,18 +235,11 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 			Ledger:             nil, // P1: Ledger in gateway mode
 			HistoryHandler:     nil, // P1: History in gateway mode
 			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
-			ReplayStore:        govDeps.ReplayStore,
-			StateRootProvider:  govDeps.StateRootProvider,
-			TransactionAudit:   govDeps.TransactionAudit,
-			SignerStore:        govDeps.SignerStore,
-			AppPolicyStore:     govDeps.AppPolicyStore,
-			TribunalStore:      govDeps.TribunalStore,
-			L3Notary:           govDeps.L3Notary,
 			ActuatorSigningKey: actuatorPriv,
 			ActuatorKeyID:      actuatorKeyID,
 		},
-		MCPGateway:  mcpSvc,
-		FieldReader: govDeps.FieldReader,
+		GovDeps:    govDeps,
+		MCPGateway: mcpSvc,
 	}
 
 	cmdSvc, err := pubsub.NewGatewayOperatorPubSubService(psConfig)

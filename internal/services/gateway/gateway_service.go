@@ -43,6 +43,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/mcp"
 	"github.com/g8e-ai/g8e/internal/services/network"
+	"github.com/g8e-ai/g8e/internal/services/pubsub"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/storage"
 	"github.com/g8e-ai/g8e/internal/services/tribunal"
@@ -236,6 +237,11 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 	scrubbingConfig := scrubbing.DefaultConfig()
 	scrubbingService := scrubbing.NewScrubbingService(scrubbingConfig, logger, nil)
 
+	publicBaseURL := cfg.Gateway.PublicBaseURL
+	if publicBaseURL == "" {
+		publicBaseURL = netutil.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
+	}
+
 	mcpGateway, err := mcp.NewGatewayService(mcp.Dependencies{
 		Logger:           logger,
 		Responder:        res,
@@ -243,6 +249,8 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		ScrubbingService: scrubbingService,
 		MaxPayloadBytes:  cfg.Gateway.MaxPayloadBytes,
 		Posture:          string(cfg.Gateway.Posture),
+		A2ADownstreamURL: cfg.Gateway.A2ADownstreamURL,
+		PublicBaseURL:    publicBaseURL,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("gateway: failed to initialize MCP gateway: %w", err)
@@ -406,12 +414,6 @@ func (ls *GatewayModeService) initHandlersAndServers() error {
 	// Initialize AppEnrollmentService for external app enrollment
 	appEnrollment := NewAppEnrollmentService(db, pki, logger)
 
-	ls.mcpGateway.SetA2ADependencies(cfg.Gateway.A2ADownstreamURL)
-	publicBaseURL := cfg.Gateway.PublicBaseURL
-	if publicBaseURL == "" {
-		publicBaseURL = netutil.LocalhostHTTPSURL(cfg.Gateway.HTTPSPort)
-	}
-	ls.mcpGateway.SetPublicBaseURL(publicBaseURL)
 	handler, err := newHTTPHandler(HTTPHandlerDependencies{
 		Cfg:                cfg,
 		Logger:             logger,
@@ -585,32 +587,15 @@ func (ls *GatewayModeService) IsGovernanceReady() bool {
 	return ready
 }
 
-// GovernanceDeps holds the governance dependencies required for transaction verification.
-// These interfaces are implemented by CanonicalDBService (ReplayStore, StateRootProvider,
-// TransactionAuditStore) and the governance L3Notary.
-type GovernanceDeps struct {
-	ReplayStore       governance.ReplayStore
-	StateRootProvider governance.StateRootProvider
-	TransactionAudit  governance.TransactionAuditStore
-	L3Notary          governance.L3Notary
-	SignerStore       governance.SignerStore
-	AppPolicyStore    governance.AppPolicyStore
-	TribunalStore     governance.TribunalStore
-	// FieldReader backs the MCP gateway's read_field operation. It is the same
-	// document store that satisfies TransactionAudit, but exposed with its
-	// field-read capability rather than only the audit DocSet method.
-	FieldReader mcp.FieldReader
-}
-
 // GetGovernanceDeps returns the governance dependencies for transaction verification.
 // This enables the in-process OperatorPubSubService to perform fail-closed verification.
 // The L3 notary handles both WebAuthn (web sessions) and mTLS (CLI sessions).
-func (ls *GatewayModeService) GetGovernanceDeps() *GovernanceDeps {
+func (ls *GatewayModeService) GetGovernanceDeps() *pubsub.GovernanceDeps {
 	// Create unified L3 notary that handles both CLI (mTLS) and passkey (WebAuthn) proofs
 	cliVerifier := NewCLISessionVerifier(ls.db, ls.pki, ls.logger, ls.userSvc, ls.cliSessionSvc)
 	l3Notary := governance.NewGatewayL3Notary(ls.suspendedTxService, cliVerifier, ls.passkey.PasskeyService, ls.logger)
 
-	return &GovernanceDeps{
+	return &pubsub.GovernanceDeps{
 		ReplayStore:       ls.db.ReplayStore,
 		StateRootProvider: ls.db.StateRootSvc,
 		TransactionAudit:  ls.db.DocStore,

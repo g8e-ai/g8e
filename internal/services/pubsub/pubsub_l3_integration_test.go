@@ -70,15 +70,16 @@ func TestOperatorPubSubService_L3Rejection_FailClosed(t *testing.T) {
 		FileEdit:           fileSvc,
 		PubSubClient:       NewInProcessPubSubClient(nil),
 		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+		ActuatorSigningKey: privKey,
+		ActuatorKeyID:      "test-key",
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+	}, GovernanceDeps{
 		L3Notary:           rejectingL3,
 		ReplayStore:        replayStore,
 		StateRootProvider:  stateRootProvider,
 		TransactionAudit:   &testutil.MockTransactionAudit{},
 		SignerStore:        signerStore,
 		TribunalStore:      testTribunalStore(),
-		ActuatorSigningKey: privKey,
-		ActuatorKeyID:      "test-key",
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -194,15 +195,16 @@ func TestOperatorPubSubService_L3Acceptance_Success(t *testing.T) {
 		FileEdit:           fileSvc,
 		PubSubClient:       NewInProcessPubSubClient(nil),
 		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+		ActuatorSigningKey: privKey,
+		ActuatorKeyID:      "test-key",
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+	}, GovernanceDeps{
 		L3Notary:           acceptingL3,
 		ReplayStore:        replayStore,
 		StateRootProvider:  stateRootProvider,
 		TransactionAudit:   &testutil.MockTransactionAudit{},
 		SignerStore:        signerStore,
 		TribunalStore:      testTribunalStore(),
-		ActuatorSigningKey: privKey,
-		ActuatorKeyID:      "test-key",
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)
@@ -319,15 +321,16 @@ func TestOperatorPubSubService_L3NilNotary_FailClosed(t *testing.T) {
 		FileEdit:           fileSvc,
 		PubSubClient:       NewInProcessPubSubClient(nil),
 		ResultsService:     nil, // ResultsPublisher is optional for L3 verification test
+		ActuatorSigningKey: privKey,
+		ActuatorKeyID:      "test-key",
+		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
+	}, GovernanceDeps{
 		L3Notary:           nil, // Explicitly nil to test fail-closed
 		ReplayStore:        replayStore,
 		StateRootProvider:  stateRootProvider,
 		TransactionAudit:   &testutil.MockTransactionAudit{},
 		SignerStore:        signerStore,
 		TribunalStore:      testTribunalStore(),
-		ActuatorSigningKey: privKey,
-		ActuatorKeyID:      "test-key",
-		Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil),
 	})
 	if err != nil {
 		t.Fatalf("failed to create command service: %v", err)

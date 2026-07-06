@@ -572,13 +572,13 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 	}
 
 	handler := NewPasskeyHandler(PasskeyHandlerDeps{
-		Service:        svc,
-		WebSessionSvc:  webSessionSvc,
-		Responder:      resp,
-		MaxPayload:     10 * 1024 * 1024,
-		MCPSvc:         mockMCP,
-		SSEStore:       sseStore,
-		Pubsub:         pubsub,
+		Service:       svc,
+		WebSessionSvc: webSessionSvc,
+		Responder:     resp,
+		MaxPayload:    10 * 1024 * 1024,
+		MCPSvc:        mockMCP,
+		SSEStore:      sseStore,
+		Pubsub:        pubsub,
 	})
 
 	body := `{"id":"cred-1","rawId":"cred-1","clientDataJSON":"{}","authenticatorData":"{}","signature":"sig"}`

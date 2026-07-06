@@ -50,9 +50,10 @@ func TestNewOperatorPubSubService(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -73,6 +74,7 @@ func TestNewOperatorPubSubService_StartsWithoutTrustedSignersButRejectsL2(t *tes
 		Config:            cfg,
 		Logger:            testutil.NewTestLogger(),
 		PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+	}, GovernanceDeps{
 		ReplayStore:       &testutil.MockReplayStore{},
 		StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 		TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -170,6 +172,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 			Config:            cfg,
 			Logger:            testutil.NewTestLogger(),
 			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -580,9 +583,10 @@ func TestOperatorPubSubService_Start(t *testing.T) {
 		cfg.OperatorID = ""
 		cfg.OperatorSessionId = ""
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -684,9 +688,10 @@ func TestOperatorPubSubService_ProcessEnvelope(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1045,9 +1050,10 @@ func TestOperatorPubSubService_SetL4Warden(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1067,9 +1073,10 @@ func TestOperatorPubSubService_handleEvalAnswerRequest(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1099,9 +1106,10 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1133,9 +1141,10 @@ func TestOperatorPubSubService_handleHeartbeatEvent(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1159,9 +1168,10 @@ func TestOperatorPubSubService_SendAutomaticHeartbeat(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1218,9 +1228,10 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1237,9 +1248,10 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
-			Config:            cfg,
-			Logger:            testutil.NewTestLogger(),
-			PubSubClient:      pubsubtest.NewMockOperatorPubSubClient(),
+			Config:       cfg,
+			Logger:       testutil.NewTestLogger(),
+			PubSubClient: pubsubtest.NewMockOperatorPubSubClient(),
+		}, GovernanceDeps{
 			ReplayStore:       &testutil.MockReplayStore{},
 			StateRootProvider: testutil.NewMockStateRootProvider("test-state-root"),
 			TransactionAudit:  &testutil.MockTransactionAudit{},
@@ -1254,24 +1266,35 @@ func TestOperatorPubSubService_ValidateSession(t *testing.T) {
 }
 
 // TestCommandServiceConfig_NoGatewayFields is a compile-time test that verifies
-// CommandServiceConfig does not have MCPGateway or FieldReader fields. These
-// fields are gateway-only and live in GatewayCommandServiceConfig to enforce
-// mode bifurcation at the type level.
+// CommandServiceConfig does not have MCPGateway, FieldReader, or any governance
+// fields. These fields live in GovernanceDeps (shared) and
+// GatewayCommandServiceConfig (gateway-only) to enforce mode bifurcation at
+// the type level.
 func TestCommandServiceConfig_NoGatewayFields(t *testing.T) {
 	t.Parallel()
 
-	// CommandServiceConfig must NOT have MCPGateway or FieldReader.
+	// CommandServiceConfig must NOT have MCPGateway, FieldReader, or governance fields.
 	var base CommandServiceConfig
 	_ = base
 
-	// GatewayCommandServiceConfig must have MCPGateway and FieldReader.
+	// GovernanceDeps must have all governance fields.
+	var gd GovernanceDeps
+	_ = gd.ReplayStore
+	_ = gd.StateRootProvider
+	_ = gd.TransactionAudit
+	_ = gd.L3Notary
+	_ = gd.SignerStore
+	_ = gd.AppPolicyStore
+	_ = gd.TribunalStore
+	_ = gd.FieldReader
+
+	// GatewayCommandServiceConfig must have MCPGateway and GovDeps.
 	var gw GatewayCommandServiceConfig
 	_ = gw.MCPGateway
-	_ = gw.FieldReader
+	_ = gw.GovDeps
 
 	// GatewayCommandServiceConfig embeds CommandServiceConfig, so all base
 	// fields are accessible.
 	_ = gw.Config
 	_ = gw.Logger
-	_ = gw.TribunalStore
 }

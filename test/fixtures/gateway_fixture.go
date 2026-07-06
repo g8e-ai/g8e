@@ -83,6 +83,7 @@ type GatewayFixtureOptions struct {
 	DownstreamURL     string // MCP downstream; creates mock server if empty
 	A2ADownstreamURL  string // A2A downstream; if empty, reuses MCP downstream server
 	AllowTestPortZero bool
+	PublicBaseURL     string // Public base URL for approval links; defaults to localhost:HTTPS_port
 }
 
 // repoTestResultsDir returns <repo>/test-results, computed from this source
@@ -208,6 +209,10 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	require.NoError(t, err)
 	cfg.Gateway.MCPDownstreamURL = downstreamURL
 
+	if opts.PublicBaseURL != "" {
+		cfg.Gateway.PublicBaseURL = opts.PublicBaseURL
+	}
+
 	a2aURL := opts.A2ADownstreamURL
 	if a2aURL == "" {
 		a2aURL = downstreamURL
@@ -246,17 +251,19 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 			FileEdit:           fileSvc,
 			PubSubClient:       pubsub.NewInProcessPubSubClient(ls.GetHTTPHandler().GetGatewayWebSocketHandler()),
 			Scrubbing:          scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), testutil.NewTestLogger(), nil),
-			ReplayStore:        govDeps.ReplayStore,
-			StateRootProvider:  govDeps.StateRootProvider,
-			TransactionAudit:   govDeps.TransactionAudit,
-			SignerStore:        govDeps.SignerStore,
-			TribunalStore:      govDeps.TribunalStore,
-			L3Notary:           RejectingL3Notary{},
 			ActuatorSigningKey: ActuatorPriv,
 			ActuatorKeyID:      ActuatorKeyID,
 		},
-		MCPGateway:  mcpGateway,
-		FieldReader: govDeps.FieldReader,
+		GovDeps: &pubsub.GovernanceDeps{
+			ReplayStore:       govDeps.ReplayStore,
+			StateRootProvider: govDeps.StateRootProvider,
+			TransactionAudit:  govDeps.TransactionAudit,
+			SignerStore:       govDeps.SignerStore,
+			TribunalStore:     govDeps.TribunalStore,
+			L3Notary:          RejectingL3Notary{},
+			FieldReader:       govDeps.FieldReader,
+		},
+		MCPGateway: mcpGateway,
 	})
 	require.NoError(t, err)
 	ls.SetEnvelopeProcessor(cmdSvc)
@@ -342,11 +349,6 @@ func (f *GatewayFixture) WaitForReady(t *testing.T) {
 		defer resp.Body.Close()
 		return resp.StatusCode == http.StatusOK
 	}, 10*time.Second, 100*time.Millisecond, "HTTP server did not become ready")
-}
-
-// SetPublicBaseURL sets the public base URL for the MCP gateway (used for approval links).
-func (f *GatewayFixture) SetPublicBaseURL(baseURL string) {
-	f.MCPGateway.SetPublicBaseURL(baseURL)
 }
 
 // RejectingL3Notary is a test implementation that always rejects L3 proofs.

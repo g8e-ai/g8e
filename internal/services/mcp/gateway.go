@@ -297,6 +297,15 @@ func (g *GatewayService) SetTribunalDeliberator(td TribunalDeliberator) {
 	g.tribunalDeliberator.Store(td)
 }
 
+// safeDownstreamURL returns the downstream URL from runtime deps, or empty string
+// if runtime deps are not yet wired. Safe to call from any context.
+func (g *GatewayService) safeDownstreamURL() string {
+	if deps := g.getRuntimeDeps(); deps != nil {
+		return deps.DownstreamURL
+	}
+	return ""
+}
+
 // getTribunalDeliberator returns the Tribunal deliberator or nil if not configured.
 func (g *GatewayService) getTribunalDeliberator() TribunalDeliberator {
 	v := g.tribunalDeliberator.Load()
@@ -340,7 +349,7 @@ func (g *GatewayService) recordFailure() {
 	if g.failureCount >= g.maxFailures {
 		if !g.circuitOpen {
 			if g.logger != nil {
-				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.downstreamURL, "failures", g.failureCount)
+				g.logger.Warn("MCP downstream circuit breaker OPENED", "url", g.safeDownstreamURL(), "failures", g.failureCount)
 			}
 		}
 		g.circuitOpen = true
@@ -353,7 +362,7 @@ func (g *GatewayService) recordSuccess() {
 
 	if g.circuitOpen {
 		if g.logger != nil {
-			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.downstreamURL)
+			g.logger.Info("MCP downstream circuit breaker CLOSED", "url", g.safeDownstreamURL())
 		}
 	}
 	g.failureCount = 0
@@ -367,7 +376,7 @@ func (g *GatewayService) handleA2ARequest(w http.ResponseWriter, r *http.Request
 	}
 
 	if g.isCircuitOpen() {
-		g.logger.Warn("MCP downstream circuit is open, rejecting request", "method", method, "url", g.downstreamURL)
+		g.logger.Warn("MCP downstream circuit is open, rejecting request", "method", method, "url", g.safeDownstreamURL())
 		g.responder.RPCError(w, nil, -32603, "downstream MCP server is temporarily unavailable (circuit open)")
 		return
 	}
@@ -468,7 +477,7 @@ func (g *GatewayService) callTool(ctx context.Context, r *http.Request, params j
 		return nil, err
 	}
 
-	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) {
 			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
@@ -510,7 +519,8 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 		return nil, constants.ErrGatewayFieldPathRegistryNotInit
 	}
 
-	if g.dbService == nil {
+	deps := g.getRuntimeDeps()
+	if deps.DBService == nil {
 		return nil, constants.ErrGatewayDatabaseServiceNotConfigured
 	}
 
@@ -539,8 +549,8 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 	}
 
 	// L3: Validate Operator session
-	if g.sessionValidator != nil {
-		valid, err := g.sessionValidator.ValidateSession(req.OperatorSessionID)
+	if deps.SessionValidator != nil {
+		valid, err := deps.SessionValidator.ValidateSession(req.OperatorSessionID)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 		}
@@ -550,7 +560,7 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 	}
 
 	// Extract field value from database
-	value, err := g.dbService.GetField(req.Collection, req.DocumentID, req.FieldPath)
+	value, err := deps.DBService.GetField(req.Collection, req.DocumentID, req.FieldPath)
 	if err != nil {
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
@@ -561,8 +571,8 @@ func (g *GatewayService) handleReadField(ctx context.Context, arguments json.Raw
 	}
 
 	// Audit vault logging
-	if g.auditLogger != nil {
-		if err := g.auditLogger.LogFieldRead(req.OperatorSessionID, req.Collection, req.DocumentID, req.FieldPath, value); err != nil {
+	if deps.AuditLogger != nil {
+		if err := deps.AuditLogger.LogFieldRead(req.OperatorSessionID, req.Collection, req.DocumentID, req.FieldPath, value); err != nil {
 			g.logger.Warn("Failed to log field read to audit vault", "error", err, "collection", req.Collection, "field_path", req.FieldPath)
 		}
 	}
@@ -640,7 +650,7 @@ func (g *GatewayService) readResource(ctx context.Context, params json.RawMessag
 		return nil, err
 	}
 
-	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -689,7 +699,7 @@ func (g *GatewayService) getPrompt(ctx context.Context, params json.RawMessage) 
 		return nil, err
 	}
 
-	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -720,9 +730,9 @@ type processGatewayOptions struct {
 
 func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts processGatewayOptions) (hash string, envelopeBytes []byte, err error) {
 	stateRoot := ""
-	if g.stateRootProvider != nil {
+	if deps := g.getRuntimeDeps(); deps != nil && deps.StateRootProvider != nil {
 		var err error
-		stateRoot, err = g.stateRootProvider.GetCurrentStateRoot()
+		stateRoot, err = deps.StateRootProvider.GetCurrentStateRoot()
 		if err != nil {
 			g.logger.Warn("Failed to get current state root", "error", err)
 		}
@@ -785,8 +795,8 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 	// The Tribunal collects signed votes from its members and returns the
 	// envelope with L2 metadata populated. If the deliberator is not configured,
 	// the envelope proceeds without L2 votes and will fail-closed at L4 verification.
-	if (g.posture == "consensus" || g.posture == "notary") && g.tribunalDeliberator != nil {
-		deliberatedBytes, err := g.tribunalDeliberator.Deliberate(ctx, envelopeBytes)
+	if (g.posture == "consensus" || g.posture == "notary") && g.getTribunalDeliberator() != nil {
+		deliberatedBytes, err := g.getTribunalDeliberator().Deliberate(ctx, envelopeBytes)
 		if err != nil {
 			g.logger.Error("Tribunal deliberation failed", "tx_hash", hash, "error", err)
 			return "", nil, fmt.Errorf("gateway: tribunal deliberation: %w", err)
@@ -805,6 +815,10 @@ func (g *GatewayService) processGatewayTransaction(ctx context.Context, opts pro
 // @Success		200	{object}	map[string]interface{}
 // @Router			/api/v1/a2a/call [post]
 func (g *GatewayService) HandleA2aCall(w http.ResponseWriter, r *http.Request) {
+	if !g.runtimeReady() {
+		g.responder.RPCError(w, nil, -32603, constants.ErrGatewayNotReady.Error())
+		return
+	}
 	g.handleA2ARequest(w, r, "a2a/call", func(ctx context.Context, id interface{}, params json.RawMessage) (interface{}, error) {
 		return g.a2aCall(ctx, r, params)
 	})
@@ -846,7 +860,7 @@ func (g *GatewayService) a2aCall(ctx context.Context, r *http.Request, params js
 		return nil, err
 	}
 
-	receipt, err := g.envProc.ProcessEnvelope(ctx, envelopeBytes)
+	receipt, err := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, envelopeBytes)
 	if err != nil {
 		if errors.Is(err, governance.ErrL3ProofMissing) || errors.Is(err, governance.ErrL3ProofInvalid) {
 			userID, _ := r.Context().Value(constants.ContextKeyUserID).(string)
@@ -1004,7 +1018,7 @@ func (g *GatewayService) DeleteSuspendedTransaction(ctx context.Context, txHash 
 // The signed receipt returned by the Gateway is forwarded to the caller so
 // the OOB approval UI can surface the downstream tool result to the user.
 func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID string, proof *commonv1.L3Proof) (*operatorv1.ActionReceipt, error) {
-	if g.envProc == nil {
+	if !g.runtimeReady() {
 		return nil, constants.ErrGatewayNotReady
 	}
 	if proof == nil {
@@ -1044,7 +1058,7 @@ func (g *GatewayService) ResumeWithL3Proof(ctx context.Context, txHash, userID s
 		return nil, fmt.Errorf("gateway: %w", constants.ErrInternal)
 	}
 
-	receipt, procErr := g.envProc.ProcessEnvelope(ctx, resubmitted)
+	receipt, procErr := g.getRuntimeDeps().EnvProc.ProcessEnvelope(ctx, resubmitted)
 	if procErr != nil {
 		// Keep the suspension in place so the user can retry the proof
 		// without re-issuing the upstream MCP call.
@@ -1111,7 +1125,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 		return summary, nil
 	}
 
-	if g.downstreamURL == "" {
+	if g.getRuntimeDeps().DownstreamURL == "" {
 		return "", constants.ErrGatewayNoDownstreamConfigured
 	}
 
@@ -1133,7 +1147,7 @@ func (g *GatewayService) DispatchToDownstream(ctx context.Context, toolName stri
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post(g.downstreamURL, "application/json", strings.NewReader(string(reqBody)))
+	resp, err := client.Post(g.getRuntimeDeps().DownstreamURL, "application/json", strings.NewReader(string(reqBody)))
 	if err != nil {
 		g.recordFailure()
 		return "", fmt.Errorf("gateway: %w", constants.ErrGatewayDownstreamUnavailable)

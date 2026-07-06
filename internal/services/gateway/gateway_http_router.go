@@ -108,10 +108,11 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AdminTribunals, h.adminController.handleTribunals)
 	mux.Handle(constants.APIPaths.AdminTribunalsByID, http.HandlerFunc(h.adminController.handleDeleteTribunal))
 
-	// Tribunal deliberate endpoint (mTLS-guarded, enrolled principal)
-	if h.tribunal != nil {
-		mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.tribunal.HandleDeliberate)
-	}
+	// Tribunal deliberate endpoint (mTLS-guarded, enrolled principal).
+	// Always registered — the handler checks the atomic pointer and returns
+	// 503 if tribunal is not yet wired, eliminating the need for a router
+	// rebuild when SetTribunal is called later in the boot sequence.
+	mux.HandleFunc(constants.APIPaths.TribunalDeliberate, h.handleTribunalDeliberate)
 
 	// Rate-limited governance envelope
 	govEnvMux := http.NewServeMux()

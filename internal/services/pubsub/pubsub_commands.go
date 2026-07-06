@@ -89,10 +89,28 @@ type OperatorPubSubService struct {
 	mcpGateway *mcp.GatewayService
 }
 
-// CommandServiceConfig holds shared dependencies for OperatorPubSubService in
-// both outbound and gateway modes. Gateway-only fields (MCPGateway,
-// FieldReader) are in GatewayCommandServiceConfig to enforce mode bifurcation
-// at the type level.
+// GovernanceDeps holds the governance dependencies required for transaction
+// verification in both outbound and gateway modes. These interfaces are
+// implemented by CanonicalDBService (ReplayStore, StateRootProvider,
+// TransactionAuditStore) and the governance L3Notary. FieldReader is
+// gateway-only (nil in outbound mode) and backs the MCP gateway's read_field
+// operation.
+type GovernanceDeps struct {
+	ReplayStore       governance.ReplayStore
+	StateRootProvider governance.StateRootProvider
+	TransactionAudit  governance.TransactionAuditStore
+	L3Notary          governance.L3Notary
+	SignerStore       governance.SignerStore
+	AppPolicyStore    governance.AppPolicyStore
+	TribunalStore     governance.TribunalStore
+	FieldReader       mcp.FieldReader
+}
+
+// CommandServiceConfig holds non-governance dependencies for
+// OperatorPubSubService in both outbound and gateway modes. Governance
+// dependencies are passed separately via GovernanceDeps. Gateway-only fields
+// (MCPGateway, GovDeps) are in GatewayCommandServiceConfig to enforce mode
+// bifurcation at the type level.
 type CommandServiceConfig struct {
 	Config            *config.Config
 	Logger            *slog.Logger
@@ -105,13 +123,6 @@ type CommandServiceConfig struct {
 	Ledger            *storage.GitLedgerService
 	HistoryHandler    *storage.HistoryHandler
 	Scrubbing         *scrubbing.ScrubbingService
-	L3Notary          governance.L3Notary
-	ReplayStore       governance.ReplayStore
-	StateRootProvider governance.StateRootProvider
-	TransactionAudit  governance.TransactionAuditStore
-	SignerStore       governance.SignerStore
-	AppPolicyStore    governance.AppPolicyStore
-	TribunalStore     governance.TribunalStore
 
 	// Actuator configuration
 	ActuatorSigningKey ed25519.PrivateKey
@@ -122,17 +133,16 @@ type CommandServiceConfig struct {
 // gateway-only fields that are not applicable in outbound mode.
 //
 // MCPGateway is the egress dispatcher for protocol translation.
-// FieldReader backs the MCP gateway's read_field operation. Distinct from
-// TransactionAudit so the read capability is not smuggled through the
-// audit-store interface (which only exposes DocSet).
+// GovDeps provides the governance dependencies (including FieldReader) that
+// are shared between gateway construction and the pubsub command service.
 type GatewayCommandServiceConfig struct {
 	CommandServiceConfig
-	MCPGateway  *mcp.GatewayService
-	FieldReader mcp.FieldReader
+	GovDeps    *GovernanceDeps
+	MCPGateway *mcp.GatewayService
 }
 
 // NewOperatorPubSubService creates the dispatcher and all first-class sub-services using the provided config.
-func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, error) {
+func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*OperatorPubSubService, error) {
 	client := c.PubSubClient
 	if client == nil {
 		return nil, fmt.Errorf("%w: PubSubClient is required", constants.ErrPubSubEmptyPayload)
@@ -186,7 +196,7 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 
 	rs.buildHandlers()
 
-	rs.signerStore = c.SignerStore
+	rs.signerStore = govDeps.SignerStore
 	if rs.signerStore == nil {
 		// Provide a fallback empty signer store instead of loading from filesystem.
 		// This ensures outbound mode fails closed if no signer store is provided.
@@ -195,17 +205,17 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 	}
 
 	// Validate required governance dependencies (fail-closed: missing deps = fatal error)
-	if c.ReplayStore == nil {
+	if govDeps.ReplayStore == nil {
 		return nil, constants.ErrTxReplayStoreMissing
 	}
-	if c.StateRootProvider == nil {
+	if govDeps.StateRootProvider == nil {
 		return nil, constants.ErrTxStateRootRequired
 	}
 	// L3Notary is optional for outbound mode (platform verifies L3)
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
 	// Initialize governance services after trusted signers are loaded
-	rs.initializeGovernance(c, serviceCtx)
+	rs.initializeGovernance(c, govDeps, serviceCtx)
 
 	c.Logger.Info("g8e connectivity initialized")
 	if c.Config.OperatorID != "" {
@@ -217,10 +227,14 @@ func NewOperatorPubSubService(c CommandServiceConfig) (*OperatorPubSubService, e
 }
 
 // NewGatewayOperatorPubSubService creates the dispatcher for gateway mode,
-// wiring gateway-only dependencies (MCPGateway, FieldReader) after base
+// wiring gateway-only dependencies (MCPGateway, GovDeps) after base
 // construction. Use NewOperatorPubSubService for outbound mode.
 func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPubSubService, error) {
-	rs, err := NewOperatorPubSubService(c.CommandServiceConfig)
+	if c.GovDeps == nil {
+		return nil, fmt.Errorf("%w: GovDeps is required for gateway mode", constants.ErrInternal)
+	}
+
+	rs, err := NewOperatorPubSubService(c.CommandServiceConfig, *c.GovDeps)
 	if err != nil {
 		return nil, err
 	}
@@ -233,31 +247,40 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	// GatewayModeService.initHandlersAndServers and must not be re-set here.
 	// MCPGateway is used as the egress dispatcher for protocol translation.
 	if rs.mcpGateway != nil {
-		rs.mcpGateway.SetDependencies(rs, c.StateRootProvider, c.ActuatorSigningKey, c.ActuatorKeyID, c.Config.Gateway.MCPDownstreamURL)
-
+		var auditLogger mcp.AuditLogger
 		if c.AuditStore != nil {
-			rs.mcpGateway.SetAuditLogger(&pubsubAuditLogger{store: c.AuditStore, logger: c.Logger})
+			auditLogger = &pubsubAuditLogger{store: c.AuditStore, logger: c.Logger}
 		}
 
-		if c.FieldReader != nil {
-			rs.mcpGateway.SetDBService(c.FieldReader)
+		var fieldReader mcp.FieldReader
+		if c.GovDeps.FieldReader != nil {
+			fieldReader = c.GovDeps.FieldReader
 		}
 
-		rs.mcpGateway.SetSessionValidator(rs)
+		rs.mcpGateway.SetRuntimeDeps(mcp.RuntimeDependencies{
+			EnvProc:           rs,
+			StateRootProvider: c.GovDeps.StateRootProvider,
+			SigningKey:        c.ActuatorSigningKey,
+			KeyID:             c.ActuatorKeyID,
+			DownstreamURL:     c.Config.Gateway.MCPDownstreamURL,
+			DBService:         fieldReader,
+			SessionValidator:  rs,
+			AuditLogger:       auditLogger,
+		})
 	}
 
 	return rs, nil
 }
 
-func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, serviceCtx context.Context) {
+func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, govDeps GovernanceDeps, serviceCtx context.Context) {
 	// Initialize L5Actuator with trusted nodes and audit store
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
 		Execution:         c.Execution,
 		SQLAuditStore:     c.AuditStore,
-		ConsoleAuditStore: c.TransactionAudit,
-		StateRootProvider: c.StateRootProvider,
+		ConsoleAuditStore: govDeps.TransactionAudit,
+		StateRootProvider: govDeps.StateRootProvider,
 		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // OperatorPubSubService implements ExecutionHandler
 		Scrubbing:         c.Scrubbing,
@@ -277,12 +300,12 @@ func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, se
 	}
 	rs.l4warden = governance.NewL4Warden(
 		c.Logger,
-		c.ReplayStore,
-		c.StateRootProvider,
+		govDeps.ReplayStore,
+		govDeps.StateRootProvider,
 		rs.signerStore,
-		c.TribunalStore,
-		c.AppPolicyStore,
-		c.L3Notary,
+		govDeps.TribunalStore,
+		govDeps.AppPolicyStore,
+		govDeps.L3Notary,
 		nil, // DoctrineValidator defaults to L1Doctrine
 		knownActionTypes,
 		posture,
