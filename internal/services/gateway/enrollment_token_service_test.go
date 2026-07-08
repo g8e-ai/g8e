@@ -38,7 +38,6 @@ func newTestEnrollmentTokenService(t *testing.T) *EnrollmentTokenService {
 }
 
 func TestEnrollmentToken_GenerateAndValidateRoundTrip(t *testing.T) {
-	t.Parallel()
 	svc := newTestEnrollmentTokenService(t)
 
 	token, err := svc.GenerateToken("user-123", "cli-session-456")
@@ -57,7 +56,6 @@ func TestEnrollmentToken_GenerateAndValidateRoundTrip(t *testing.T) {
 }
 
 func TestEnrollmentToken_ValidateUnknownTokenReturnsInvalid(t *testing.T) {
-	t.Parallel()
 	svc := newTestEnrollmentTokenService(t)
 
 	_, err := svc.ValidateAndConsumeToken("nonexistenttoken1234567890abcdef")
@@ -65,7 +63,6 @@ func TestEnrollmentToken_ValidateUnknownTokenReturnsInvalid(t *testing.T) {
 }
 
 func TestEnrollmentToken_ValidateExpiredTokenReturnsExpired(t *testing.T) {
-	t.Parallel()
 	svc := newTestEnrollmentTokenService(t)
 
 	expiredToken := &models.EnrollmentToken{
@@ -86,7 +83,6 @@ func TestEnrollmentToken_ValidateExpiredTokenReturnsExpired(t *testing.T) {
 }
 
 func TestEnrollmentToken_ConsumedTokenCannotBeReused(t *testing.T) {
-	t.Parallel()
 	svc := newTestEnrollmentTokenService(t)
 
 	token, err := svc.GenerateToken("user-reuse", "cli-reuse")
@@ -101,7 +97,6 @@ func TestEnrollmentToken_ConsumedTokenCannotBeReused(t *testing.T) {
 }
 
 func TestEnrollmentToken_ShortStringDoesNotPanic(t *testing.T) {
-	t.Parallel()
 	svc := newTestEnrollmentTokenService(t)
 
 	_, err := svc.ValidateAndConsumeToken("")
@@ -112,7 +107,6 @@ func TestEnrollmentToken_ShortStringDoesNotPanic(t *testing.T) {
 }
 
 func TestEnrollmentToken_CleanupExpiredTokens(t *testing.T) {
-	t.Parallel()
 	svc := newTestEnrollmentTokenService(t)
 
 	// Insert an expired token via direct DocSet

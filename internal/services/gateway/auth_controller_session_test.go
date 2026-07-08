@@ -31,19 +31,16 @@ import (
 
 func TestHandleUsers(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		testMethodNotAllowed(t, c.handleUsers, http.MethodGet, "/api/v1/users")
 	})
 
 	t.Run("Failure - invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		testInvalidJSON(t, c.handleUsers, http.MethodPost, "/api/v1/users")
 	})
 
 	t.Run("Success - creates user", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{
 			"name": "Test User",
@@ -66,7 +63,6 @@ func TestHandleUsers(t *testing.T) {
 
 func TestHandlePublicAuthLogout(t *testing.T) {
 	t.Run("Success - clears cookie", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 		req.AddCookie(&http.Cookie{Name: constants.WebSessionCookieName, Value: "test-session"})

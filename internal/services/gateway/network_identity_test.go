@@ -31,8 +31,6 @@ import (
 )
 
 func TestResolveGatewayCertificateIdentity(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name         string
 		certMode     string
@@ -102,8 +100,6 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			logger := testutil.NewTestLogger()
 			dir := t.TempDir()
 			identityFile := tt.identityFile

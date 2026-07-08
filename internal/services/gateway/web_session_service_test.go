@@ -29,7 +29,6 @@ import (
 )
 
 func TestWebSessionService_CreateWebSession(t *testing.T) {
-	t.Parallel()
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.WebSessionSvc
 
@@ -68,7 +67,6 @@ func TestWebSessionService_CreateWebSession(t *testing.T) {
 }
 
 func TestWebSessionService_ValidateWebSession(t *testing.T) {
-	t.Parallel()
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.WebSessionSvc
 

@@ -45,7 +45,6 @@ func setupKVStore(t *testing.T) *KVStoreService {
 }
 
 func TestKVStore_SetGet(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	err := s.KVSet("foo", "bar", 0)
@@ -61,7 +60,6 @@ func TestKVStore_SetGet(t *testing.T) {
 }
 
 func TestKVStore_Overwrite(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	err := s.KVSet("foo", "bar", 0)
@@ -76,7 +74,6 @@ func TestKVStore_Overwrite(t *testing.T) {
 }
 
 func TestKVStore_Delete(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	err := s.KVSet("foo", "bar", 0)
@@ -90,7 +87,6 @@ func TestKVStore_Delete(t *testing.T) {
 }
 
 func TestKVStore_DeletePattern(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	require.NoError(t, s.KVSet("user:1", "alice", 0))
@@ -107,7 +103,6 @@ func TestKVStore_DeletePattern(t *testing.T) {
 }
 
 func TestKVStore_Keys(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	require.NoError(t, s.KVSet("user:1", "alice", 0))
@@ -120,7 +115,6 @@ func TestKVStore_Keys(t *testing.T) {
 }
 
 func TestKVStore_Scan(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	for i := 0; i < 10; i++ {
@@ -153,7 +147,6 @@ func TestKVStore_Scan(t *testing.T) {
 }
 
 func TestKVStore_Exists(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	assert.False(t, s.KVExists("foo"))
@@ -162,7 +155,6 @@ func TestKVStore_Exists(t *testing.T) {
 }
 
 func TestKVStore_TTL(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	// No TTL
@@ -179,7 +171,6 @@ func TestKVStore_TTL(t *testing.T) {
 }
 
 func TestKVStore_Expire(t *testing.T) {
-	t.Parallel()
 	s := setupKVStore(t)
 
 	require.NoError(t, s.KVSet("foo", "bar", 0))
