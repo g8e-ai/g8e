@@ -144,13 +144,21 @@ func (s *EnrollmentTokenService) ValidateAndConsumeToken(token string) (*models.
 		return nil, constants.ErrEnrollmentTokenPersistenceFailed
 	}
 
-	s.logger.Info("Enrollment token consumed", "user_id", enrollmentToken.UserID, "cli_session_id_prefix", enrollmentToken.CLISessionID[:8], "token_prefix", tokenPrefix)
+	cliSessionIDPrefix := enrollmentToken.CLISessionID
+	if len(cliSessionIDPrefix) > 8 {
+		cliSessionIDPrefix = cliSessionIDPrefix[:8]
+	}
+	s.logger.Info("Enrollment token consumed", "user_id", enrollmentToken.UserID, "cli_session_id_prefix", cliSessionIDPrefix, "token_prefix", tokenPrefix)
 	return &enrollmentToken, nil
 }
 
 // CleanupExpiredTokens removes tokens that have expired from the database.
 // This should be called periodically to prevent unbounded growth of the
 // enrollment_tokens collection.
+//
+// Note: This relies on lexicographic string comparison of RFC3339 timestamps,
+// which works correctly for UTC values (lexicographic order matches chronological
+// order). This assumes expires_at is always stored as RFC3339Nano UTC.
 func (s *EnrollmentTokenService) CleanupExpiredTokens() error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	filters := []models.DocFilter{

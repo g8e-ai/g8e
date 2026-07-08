@@ -190,6 +190,9 @@ func gatewayStartCmd() *cobra.Command {
 		Long: `Start the g8e Gateway as a background process. The gateway runs in its own
 session (setsid) so Ctrl+C in the terminal does not affect it.
 
+When --follow (-f) is used, the gateway runs in the foreground instead of the
+background. Ctrl+C will stop the gateway directly.
+
 When --cert-mode full is selected, the CLI detects network identity once, writes
 it to a temporary JSON file in the runtime directory, and passes that file to
 the Gateway subprocess. --cert-mode localhost continues to use loopback-only
@@ -204,20 +207,6 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			cfg, err := loadConfig("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
-			}
-
-			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-			}
-
-			running, pid, err := pm.OperatorStatus()
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
-			}
-			if running {
-				cmd.Printf("g8e Gateway is already running (PID: %d)\n", pid)
-				return nil
 			}
 
 			// Resolve configuration from flags and environment variables
@@ -257,12 +246,76 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				cmd.Println()
 			}
 
-			cmd.Println("[g8e] Starting g8e Gateway service...")
 			// Validate posture at CLI edge for clean error messages
 			postureObj, err := governance.ParseGovernancePosture(startCfg.Posture)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidPosture, err)
 			}
+
+			// Foreground mode: run gateway directly in the current process
+			if follow {
+				cmd.Println("[g8e] Starting g8e Gateway in foreground...")
+				cmd.Printf("[g8e] Gateway posture: %s\n", postureObj.Description())
+
+				// Write network identity to file if needed
+				var networkIdentityFile string
+				if len(identityResult.IdentityData) > 0 {
+					pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+					if err != nil {
+						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+					}
+					networkIdentityFile, err = pm.WriteNetworkIdentityFile(identityResult.IdentityData)
+					if err != nil {
+						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+					}
+				}
+
+				// Build gateway config for foreground execution
+				gatewayCfg := serve.GatewayConfig{
+					Posture:             g8econfig.GatewayPosture(startCfg.Posture),
+					HTTPPort:            startCfg.HTTPPort,
+					HTTPSPort:           startCfg.HTTPSPort,
+					DataDir:             startCfg.DataDir,
+					PKIDir:              startCfg.PKIDir,
+					SecretsDir:          startCfg.SecretsDir,
+					VaultDir:            startCfg.VaultDir,
+					VaultKeyPath:        startCfg.VaultKeyPath,
+					VaultRequireUnlock:  startCfg.VaultRequireUnlock,
+					PasskeyRpID:         startCfg.PasskeyRpID,
+					PasskeyRpName:       startCfg.PasskeyRpName,
+					PasskeyRpOrigins:    startCfg.PasskeyRpOrigins,
+					RateLimitRPS:        startCfg.RateLimitRPS,
+					RateLimitBurst:      startCfg.RateLimitBurst,
+					LogLevel:            startCfg.LogLevel,
+					CertIdentityMode:    identityResult.CertMode,
+					NetworkIdentityFile: networkIdentityFile,
+					TribunalID:          startCfg.TribunalID,
+					TribunalURL:         startCfg.TribunalURL,
+					TribunalBootstrap:   startCfg.TribunalBootstrap,
+					MCPDownstreamURL:    startCfg.MCPDownstreamURL,
+					A2ADownstreamURL:    startCfg.A2ADownstreamURL,
+				}
+
+				// Run gateway (this blocks until shutdown)
+				return serve.RunGateway(gatewayCfg, versionInfoFromCmd(cmd))
+			}
+
+			// Background mode: start gateway as a background process
+			pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+			}
+
+			running, pid, err := pm.OperatorStatus()
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrPIDReadFailed, err)
+			}
+			if running {
+				cmd.Printf("g8e Gateway is already running (PID: %d)\n", pid)
+				return nil
+			}
+
+			cmd.Println("[g8e] Starting g8e Gateway service...")
 			cmd.Printf("[g8e] Gateway posture: %s\n", postureObj.Description())
 			if err := pm.StartOperator(platform.OperatorStartOptions{
 				Posture:            startCfg.Posture,
@@ -302,14 +355,6 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			cmd.Println()
 			printNextSteps(cmd, postureObj, externalIP)
 
-			if follow {
-				// The gateway is already in its own session (Setsid), so Ctrl+C here won't affect it
-				logPath := pm.GetLogPath()
-				if err := platform.TailLog(logPath, true); err != nil {
-					return fmt.Errorf("%w: %w", constants.ErrInternal, err)
-				}
-			}
-
 			return nil
 		},
 	}
@@ -335,7 +380,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 	cmd.Flags().StringVar(&tribunalBootstrap, "tribunal-bootstrap", "", "Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (for deterministic demo deployments)")
 	cmd.Flags().StringVar(&mcpDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
 	cmd.Flags().StringVar(&a2aDownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
-	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Follow log output after starting (like tail -f)")
+	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Run gateway in foreground (Ctrl+C stops gateway)")
 
 	return cmd
 }

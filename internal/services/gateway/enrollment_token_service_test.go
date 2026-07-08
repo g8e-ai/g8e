@@ -110,3 +110,40 @@ func TestEnrollmentToken_ShortStringDoesNotPanic(t *testing.T) {
 	_, err = svc.ValidateAndConsumeToken("x")
 	assert.True(t, errors.Is(err, constants.ErrEnrollmentTokenInvalid))
 }
+
+func TestEnrollmentToken_CleanupExpiredTokens(t *testing.T) {
+	t.Parallel()
+	svc := newTestEnrollmentTokenService(t)
+
+	// Insert an expired token via direct DocSet
+	expiredToken := &models.EnrollmentToken{
+		Token:        "expiredtoken1234567890abcdef1234567890ab",
+		UserID:       "user-expired",
+		CLISessionID: "cli-expired",
+		CreatedAt:    time.Now().UTC().Add(-10 * time.Minute),
+		ExpiresAt:    time.Now().UTC().Add(-5 * time.Minute),
+		Consumed:     false,
+	}
+	expiredData, err := json.Marshal(expiredToken)
+	require.NoError(t, err)
+	err = svc.db.DocSet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token, expiredData)
+	require.NoError(t, err)
+
+	// Insert a valid (non-expired) token via GenerateToken
+	validToken, err := svc.GenerateToken("user-valid", "cli-valid")
+	require.NoError(t, err)
+
+	// Call CleanupExpiredTokens
+	err = svc.CleanupExpiredTokens()
+	require.NoError(t, err)
+
+	// Verify the expired token is deleted
+	doc, err := svc.db.DocGet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), expiredToken.Token)
+	require.NoError(t, err)
+	assert.Nil(t, doc, "expired token should be deleted")
+
+	// Verify the valid token remains
+	doc, err = svc.db.DocGet(marshaler.CollectionName(constants.CollectionEnrollmentTokens), validToken.Token)
+	require.NoError(t, err)
+	assert.NotNil(t, doc, "valid token should remain")
+}

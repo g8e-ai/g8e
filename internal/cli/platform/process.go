@@ -146,7 +146,7 @@ func (pm *ProcessManager) networkIdentityArgs(identityData []byte) ([]string, er
 		return nil, nil
 	}
 
-	identityFile, err := pm.writeNetworkIdentityFile(identityData)
+	identityFile, err := pm.WriteNetworkIdentityFile(identityData)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (pm *ProcessManager) networkIdentityArgs(identityData []byte) ([]string, er
 	return []string{"--network-identity-file", identityFile}, nil
 }
 
-func (pm *ProcessManager) writeNetworkIdentityFile(identityData []byte) (string, error) {
+func (pm *ProcessManager) WriteNetworkIdentityFile(identityData []byte) (string, error) {
 	identityFile := filepath.Join(pm.runtimeDir, constants.NetworkIdentityFilename)
 	if err := os.WriteFile(identityFile, identityData, constants.PermFilePrivate); err != nil {
 		return "", fmt.Errorf("%w: %v", constants.ErrPathValidation, err)

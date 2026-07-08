@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop" # Stops script execution on non-terminating erro
 Write-Host "`n[SETUP] Starting g8e Environment Setup and Validation...`n" -ForegroundColor Cyan
 
 # --- SECTION 1: Dependency Validation & Installation ---
-Write-Host "[STEP 1/3] Validating required dependencies (make, go)..." -ForegroundColor Yellow
+Write-Host "[STEP 1/4] Validating required dependencies (make, go)..." -ForegroundColor Yellow
 
 $Missing = @()
 
@@ -61,12 +61,30 @@ if ($Missing.Count -gt 0) {
 }
 
 # --- SECTION 2: Build ---
-Write-Host "`n[STEP 2/3] Building g8e..." -ForegroundColor Yellow
+Write-Host "`n[STEP 2/4] Building g8e..." -ForegroundColor Yellow
 make build
 Write-Host "Build successful." -ForegroundColor Green
 
-# --- SECTION 3: Complete ---
+# --- SECTION 3: Add g8e to PATH ---
+Write-Host "`n[STEP 3/4] Adding g8e to PATH..." -ForegroundColor Yellow
+
+$G8E_DIR = (Resolve-Path "$PSScriptRoot\..").Path
+$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+
+if ($UserPath -split ';' -contains $G8E_DIR) {
+    Write-Host "  g8e directory already in user PATH — skipping." -ForegroundColor Green
+} else {
+    $NewPath = if ($UserPath) { "$UserPath;$G8E_DIR" } else { $G8E_DIR }
+    [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+    Write-Host "  Added $G8E_DIR to user PATH." -ForegroundColor Green
+}
+
+# Also update PATH for the current session
+$env:Path = "$env:Path;$G8E_DIR"
+
+# --- SECTION 4: Complete ---
 Write-Host "`n[SETUP COMPLETE]" -ForegroundColor Green
 Write-Host "---------------------------------------------------------------" -ForegroundColor White
-Write-Host "Binary available at: .\g8e.exe"
-Write-Host "Start the gateway with: .\g8e.exe gw start"
+Write-Host "Binary available at: g8e.exe (in PATH)"
+Write-Host "Start the gateway with: g8e.exe gw start"
+Write-Host "Note: Open a new terminal for PATH changes to take effect." -ForegroundColor Yellow
