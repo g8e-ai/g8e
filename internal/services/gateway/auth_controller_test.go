@@ -194,7 +194,6 @@ func testMissingUserID(t *testing.T, handler http.HandlerFunc, method, url strin
 
 func TestAuthControllerReadBody(t *testing.T) {
 	t.Run("Success - reads valid JSON body", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := `{"test":"data"}`
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(body))
@@ -206,7 +205,6 @@ func TestAuthControllerReadBody(t *testing.T) {
 	})
 
 	t.Run("Success - reads empty body", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/test", strings.NewReader(""))
 		rr := httptest.NewRecorder()
@@ -217,7 +215,6 @@ func TestAuthControllerReadBody(t *testing.T) {
 	})
 
 	t.Run("Failure - body exceeds max payload bytes", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		// Set a small max payload for testing
 		c.cfg.Gateway.MaxPayloadBytes = 100
@@ -233,7 +230,6 @@ func TestAuthControllerReadBody(t *testing.T) {
 
 func TestFileActuatorKeyReader(t *testing.T) {
 	t.Run("Success - reads valid actuator key file", func(t *testing.T) {
-		t.Parallel()
 		// Create a temporary file with valid actuator key data
 		tmpDir := t.TempDir()
 		keyFile := filepath.Join(tmpDir, "actuator_key.json")
@@ -249,7 +245,6 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Failure - file does not exist", func(t *testing.T) {
-		t.Parallel()
 		reader := &fileActuatorKeyReader{path: "/nonexistent/path/actuator_key.json"}
 		_, _, err := reader.ReadActuatorPublicKey()
 
@@ -258,7 +253,6 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Failure - invalid JSON in file", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		keyFile := filepath.Join(tmpDir, "actuator_key.json")
 		require.NoError(t, os.WriteFile(keyFile, []byte("{invalid json"), 0644))
@@ -270,7 +264,6 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Success - missing required fields returns empty values", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		keyFile := filepath.Join(tmpDir, "actuator_key.json")
 		require.NoError(t, os.WriteFile(keyFile, []byte(`{"key_id":"test-id"}`), 0644))

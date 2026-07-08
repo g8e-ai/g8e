@@ -36,7 +36,6 @@ import (
 // is successfully blocked from authenticating with a valid CLI certificate.
 // This test ensures the identity hardening (Plan §4.6) is working correctly.
 func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
@@ -102,7 +101,6 @@ func TestAuthIntegrity_RetiredUserBlocked(t *testing.T) {
 // is allowed to authenticate with a valid CLI certificate.
 // This is a control test to ensure the auth logic works correctly for valid users.
 func TestAuthIntegrity_ActiveUserAllowed(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
@@ -153,7 +151,6 @@ func setupAuthService(t *testing.T) (*AuthService, *CanonicalDBService) {
 // TestAuthIntegrity_AppRateLimitEnforced verifies that app policy rate limits
 // are actually enforced, not just logged as warnings.
 func TestAuthIntegrity_AppRateLimitEnforced(t *testing.T) {
-	t.Parallel()
 	auth, _ := setupAuthService(t)
 
 	// Create an app policy with a very low rate limit (2 RPS)
@@ -197,7 +194,6 @@ func TestAuthIntegrity_AppRateLimitEnforced(t *testing.T) {
 // TestAuthIntegrity_AppRateLimitZeroConfigured verifies that when rate limit
 // is not configured (RPS = 0), no rate limiting is applied.
 func TestAuthIntegrity_AppRateLimitZeroConfigured(t *testing.T) {
-	t.Parallel()
 	auth, _ := setupAuthService(t)
 
 	// Create an app policy with no rate limit (0 RPS)

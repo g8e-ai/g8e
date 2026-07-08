@@ -78,7 +78,6 @@ func TestHandlePublicAuthLogout(t *testing.T) {
 	})
 
 	t.Run("Success - no cookie present", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
 		rr := httptest.NewRecorder()
@@ -91,7 +90,6 @@ func TestHandlePublicAuthLogout(t *testing.T) {
 
 func TestHandleUserMe(t *testing.T) {
 	t.Run("Failure - missing user_id in context", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		rr := httptest.NewRecorder()
@@ -103,7 +101,6 @@ func TestHandleUserMe(t *testing.T) {
 	})
 
 	t.Run("Success - returns user data", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
@@ -123,7 +120,6 @@ func TestHandleUserMe(t *testing.T) {
 	})
 
 	t.Run("Failure - user not found", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "nonexistent-user"))
@@ -138,7 +134,6 @@ func TestHandleUserMe(t *testing.T) {
 
 func TestHandleWebSession(t *testing.T) {
 	t.Run("Failure - missing user_id in context", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/websession", nil)
 		rr := httptest.NewRecorder()
@@ -150,7 +145,6 @@ func TestHandleWebSession(t *testing.T) {
 	})
 
 	t.Run("Success - returns session data with cookie", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
@@ -172,7 +166,6 @@ func TestHandleWebSession(t *testing.T) {
 	})
 
 	t.Run("Success - returns session data without cookie", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateUser()
 		require.NoError(t, err)

@@ -198,7 +198,6 @@ func TestPKIController_HandlePKIHubBundle(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
 				if tc.setup != nil {
@@ -260,7 +259,6 @@ func TestPKIController_HandlePKIFingerprint(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
 				if tc.setup != nil {
@@ -328,7 +326,6 @@ func TestPKIController_HandlePKISignCSR(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
 				if tc.setup != nil {
@@ -397,7 +394,6 @@ func TestPKIController_HandlePKICertificatesRevoke(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
 				if tc.setup != nil {
@@ -445,7 +441,6 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
 				if tc.setup != nil {
@@ -459,7 +454,6 @@ func TestPKIController_HandlePKIRevocationBundle(t *testing.T) {
 
 func TestPKIController_ReadBody(t *testing.T) {
 	t.Run("Success - Reads body within limit", func(t *testing.T) {
-		t.Parallel()
 		c, _, _ := setupTestPKIController(t)
 
 		body := []byte("test body content")
@@ -471,7 +465,6 @@ func TestPKIController_ReadBody(t *testing.T) {
 	})
 
 	t.Run("Failure - Body exceeds max payload", func(t *testing.T) {
-		t.Parallel()
 		c, _, _ := setupTestPKIController(t)
 
 		largeBody := make([]byte, c.cfg.Gateway.MaxPayloadBytes+1)
@@ -483,7 +476,6 @@ func TestPKIController_ReadBody(t *testing.T) {
 }
 
 func TestNewPKIController(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -511,7 +503,6 @@ func TestNewPKIController(t *testing.T) {
 }
 
 func TestPKIController_HandlePKICABundle(t *testing.T) {
-	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/ca-bundle", nil)
@@ -525,7 +516,6 @@ func TestPKIController_HandlePKICABundle(t *testing.T) {
 }
 
 func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - GET returns Windows script", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
@@ -591,7 +581,6 @@ func TestPKIController_HandleTrustScriptWindows(t *testing.T) {
 }
 
 func TestPKIController_HandleTrustScriptLinux(t *testing.T) {
-	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/pki/trust-linux", nil)
@@ -633,7 +622,6 @@ func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			runHTTPTest(t, tc, func(rr *httptest.ResponseRecorder, req *http.Request) {
 				c, _, _ := setupTestPKIController(t)
 				if tc.setup != nil {
@@ -646,7 +634,6 @@ func TestPKIController_HandleTrustScriptWindowsAlias(t *testing.T) {
 }
 
 func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
-	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
 	// Create binaries directory and a test binary
@@ -668,7 +655,6 @@ func TestPKIController_HandleNodeBinaryDownload(t *testing.T) {
 }
 
 func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
-	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/g8e/bin/g8e-linux-amd64", nil)
@@ -680,7 +666,6 @@ func TestPKIController_HandleNodeBinaryDownload_NotFound(t *testing.T) {
 }
 
 func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
-	t.Parallel()
 	c, _, _ := setupTestPKIController(t)
 
 	testCases := []string{
@@ -705,7 +690,6 @@ func TestPKIController_HandleNodeBinaryDownload_InvalidName(t *testing.T) {
 }
 
 func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Failure - POST method not allowed", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
@@ -731,7 +715,6 @@ func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
 }
 
 func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Failure - POST method not allowed", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
@@ -771,7 +754,6 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 }
 
 func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Failure - GET method not allowed", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
@@ -838,7 +820,6 @@ func TestPKIController_HandlePKIAppsEnroll(t *testing.T) {
 }
 
 func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Failure - GET method not allowed", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
@@ -887,7 +868,6 @@ func TestPKIController_HandlePKIDevicesEnroll(t *testing.T) {
 }
 
 func TestPKIController_HandlePKIAppsDelegated(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Failure - GET method not allowed", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
