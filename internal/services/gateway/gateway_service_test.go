@@ -34,7 +34,6 @@ import (
 )
 
 func TestNewGatewayModeService(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -44,7 +43,6 @@ func TestNewGatewayModeService(t *testing.T) {
 	cfg.Gateway.SecretsDir = t.TempDir()
 
 	t.Run("Default configuration with self-signed certs", func(t *testing.T) {
-		t.Parallel()
 		db, err := openTestDB(t, cfg.Gateway.DataDir, cfg.Gateway.SecretsDir, filepath.Join(cfg.Gateway.DataDir, "vault"), logger)
 		require.NoError(t, err)
 		t.Cleanup(func() { db.Close() })
@@ -66,7 +64,6 @@ func TestNewGatewayModeService(t *testing.T) {
 }
 
 func TestGatewayModeService_StateManagement(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -87,23 +84,19 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Initial state", func(t *testing.T) {
-		t.Parallel()
 		assert.False(t, ls.IsRunning())
 		assert.False(t, ls.IsReady())
 	})
 
 	t.Run("IsRunning returns false when not running", func(t *testing.T) {
-		t.Parallel()
 		assert.False(t, ls.IsRunning())
 	})
 
 	t.Run("IsReady returns false when not ready", func(t *testing.T) {
-		t.Parallel()
 		assert.False(t, ls.IsReady())
 	})
 
 	t.Run("State getters are thread-safe", func(t *testing.T) {
-		t.Parallel()
 		// Test that we can call state methods concurrently
 		done := make(chan bool, 10)
 		for i := 0; i < 10; i++ {
@@ -126,7 +119,6 @@ func TestGatewayModeService_StateManagement(t *testing.T) {
 }
 
 func TestNewGatewayModeServiceForTest(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -154,7 +146,6 @@ func TestNewGatewayModeServiceForTest(t *testing.T) {
 }
 
 func TestGatewayModeService_Getters(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -177,44 +168,36 @@ func TestGatewayModeService_Getters(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("GetDB returns non-nil", func(t *testing.T) {
-		t.Parallel()
 		assert.NotNil(t, ls.GetDB())
 		assert.Equal(t, db, ls.GetDB())
 	})
 
 	t.Run("GetSecretManager returns non-nil", func(t *testing.T) {
-		t.Parallel()
 		sm, err := ls.GetSecretManager()
 		require.NoError(t, err)
 		assert.NotNil(t, sm)
 	})
 
 	t.Run("GetPKIAuthority returns non-nil", func(t *testing.T) {
-		t.Parallel()
 		assert.NotNil(t, ls.GetPKIAuthority())
 	})
 
 	t.Run("GetHTTPHandler returns non-nil", func(t *testing.T) {
-		t.Parallel()
 		assert.NotNil(t, ls.GetHTTPHandler())
 	})
 
 	t.Run("GetHTTPPort returns 0 when not started", func(t *testing.T) {
-		t.Parallel()
 		assert.Equal(t, 0, ls.GetHTTPPort())
 	})
 
 	t.Run("GetHTTPSPort returns 0 when not started", func(t *testing.T) {
-		t.Parallel()
 		assert.Equal(t, 0, ls.GetHTTPSPort())
 	})
 }
 
 func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Doctrine posture returns true without signers", func(t *testing.T) {
-		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		cfg.Gateway.Posture = config.PostureDoctrine
 		logger := testutil.NewTestLogger()
@@ -241,7 +224,6 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 	})
 
 	t.Run("Empty posture returns true without signers", func(t *testing.T) {
-		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		cfg.Gateway.Posture = ""
 		logger := testutil.NewTestLogger()
@@ -268,7 +250,6 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 	})
 
 	t.Run("Notary posture returns false without signers", func(t *testing.T) {
-		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		cfg.Gateway.Posture = config.PostureNotary
 		logger := testutil.NewTestLogger()
@@ -295,7 +276,6 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 	})
 
 	t.Run("Notary posture returns true with signers", func(t *testing.T) {
-		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		cfg.Gateway.Posture = config.PostureNotary
 		logger := testutil.NewTestLogger()
@@ -335,7 +315,6 @@ func TestGatewayModeService_IsGovernanceReady(t *testing.T) {
 }
 
 func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -370,7 +349,6 @@ func TestGatewayModeService_GetGovernanceDeps(t *testing.T) {
 }
 
 func TestGatewayModeService_StartStop(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -437,7 +415,6 @@ func TestGatewayModeService_StartStop(t *testing.T) {
 }
 
 func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -465,7 +442,6 @@ func TestGatewayModeService_StopWhenNotRunning(t *testing.T) {
 }
 
 func TestDetectBasicNonLoopbackIPv4Addresses(t *testing.T) {
-	t.Parallel()
 	// This function is host-dependent, so we just verify it doesn't panic
 	// and returns a slice (possibly empty)
 	ips := detectBasicNonLoopbackIPv4Addresses()
@@ -474,7 +450,6 @@ func TestDetectBasicNonLoopbackIPv4Addresses(t *testing.T) {
 }
 
 func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -497,7 +472,6 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("Valid heartbeat updates operator document", func(t *testing.T) {
-		t.Parallel()
 		// Seed an operator document
 		opDoc := map[string]interface{}{
 			"id":     "op-123",
@@ -534,13 +508,11 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 	})
 
 	t.Run("Malformed JSON logs and returns", func(t *testing.T) {
-		t.Parallel()
 		// Should not panic
 		ls.handleHeartbeatPublish("test-channel", []byte("{invalid json"))
 	})
 
 	t.Run("Missing operator_id returns without write", func(t *testing.T) {
-		t.Parallel()
 		envelope := &commonv1.GovernanceEnvelope{
 			IntentData: &structpb.Struct{},
 		}
@@ -553,7 +525,6 @@ func TestGatewayModeService_HandleHeartbeatPublish(t *testing.T) {
 }
 
 func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 
@@ -584,7 +555,6 @@ func TestGatewayModeService_RenewServiceCertWithIdentity(t *testing.T) {
 }
 
 func TestGatewayModeService_RunServiceCertRenewalLoop(t *testing.T) {
-	t.Parallel()
 	cfg := testutil.NewTestConfig(t)
 	logger := testutil.NewTestLogger()
 

@@ -34,7 +34,6 @@ import (
 )
 
 func TestNewRegistrationService(t *testing.T) {
-	t.Parallel()
 
 	db := &CanonicalDBService{}
 	pki := &PKIAuthority{}
@@ -57,7 +56,6 @@ func TestNewRegistrationService(t *testing.T) {
 }
 
 func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
-	t.Parallel()
 
 	// Test that calculateSerialFromPEM correctly extracts serial from a certificate
 	dataDir := t.TempDir()
@@ -95,7 +93,6 @@ func TestPKIPhase2_CalculateSerialFromPEM(t *testing.T) {
 }
 
 func TestSessionWebBindKey(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name      string
@@ -109,7 +106,6 @@ func TestSessionWebBindKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			result := sessionWebBindKey(tt.sessionID)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -117,7 +113,6 @@ func TestSessionWebBindKey(t *testing.T) {
 }
 
 func TestSessionOperatorBindKey(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name      string
@@ -131,7 +126,6 @@ func TestSessionOperatorBindKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			result := sessionOperatorBindKey(tt.sessionID)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -144,7 +138,6 @@ func TestSessionOperatorBindKey(t *testing.T) {
 // Updated: CLI CSR is now optional for operator-only enrollment
 func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 	t.Run("RegisterDeviceCSR accepts enrollment without CLI CSR (operator-only)", func(t *testing.T) {
-		t.Parallel()
 
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
@@ -190,13 +183,11 @@ func TestPKIPhase3_CLI_CSR_Optional(t *testing.T) {
 }
 
 func TestRegistrationService_ListOperatorSlots(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	regSvc := infra.Reg
 
 	t.Run("Empty user_id returns error", func(t *testing.T) {
-		t.Parallel()
 		slots, err := regSvc.ListOperatorSlots("")
 		assert.Error(t, err)
 		assert.Nil(t, slots)
@@ -204,7 +195,6 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	})
 
 	t.Run("Returns empty list for user with no slots", func(t *testing.T) {
-		t.Parallel()
 		slots, err := regSvc.ListOperatorSlots("nonexistent-user")
 		require.NoError(t, err)
 		assert.NotNil(t, slots)
@@ -212,7 +202,6 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 	})
 
 	t.Run("Returns slots filtered by user_id and is_slot", func(t *testing.T) {
-		t.Parallel()
 		// Create a slot for the user
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
@@ -236,34 +225,29 @@ func TestRegistrationService_ListOperatorSlots(t *testing.T) {
 }
 
 func TestRegistrationService_TerminateOperator(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	regSvc := infra.Reg
 
 	t.Run("Missing operator_id returns error", func(t *testing.T) {
-		t.Parallel()
 		err := regSvc.TerminateOperator("", "user-123", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "operator_id is required")
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		t.Parallel()
 		err := regSvc.TerminateOperator("op-123", "", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "user_id is required")
 	})
 
 	t.Run("Non-existent operator returns error", func(t *testing.T) {
-		t.Parallel()
 		err := regSvc.TerminateOperator("nonexistent-op", "user-123", "test")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "operator not found")
 	})
 
 	t.Run("Wrong owner returns error", func(t *testing.T) {
-		t.Parallel()
 		// Create an operator for user-123
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
@@ -275,7 +259,6 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Already terminated operator returns nil", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -289,7 +272,6 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Happy path terminates operator", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -309,13 +291,11 @@ func TestRegistrationService_TerminateOperator(t *testing.T) {
 }
 
 func TestRegistrationService_ToOperatorDoc(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	regSvc := infra.Reg
 
 	t.Run("Valid doc round-trips correctly", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -329,7 +309,6 @@ func TestRegistrationService_ToOperatorDoc(t *testing.T) {
 	})
 
 	t.Run("Malformed doc returns error", func(t *testing.T) {
-		t.Parallel()
 		// Create a document with invalid JSON in a required field
 		malformedDoc := &models.Document{
 			ID: "malformed",
@@ -346,13 +325,11 @@ func TestRegistrationService_ToOperatorDoc(t *testing.T) {
 }
 
 func TestRegistrationService_BindOperators(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	regSvc := infra.Reg
 
 	t.Run("Missing web_session_id returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.BindOperatorsRequest{
 			UserID:      "user-123",
 			OperatorIDs: []string{"op-123"},
@@ -364,7 +341,6 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.BindOperatorsRequest{
 			WebSessionID: "web-123",
 			OperatorIDs:  []string{"op-123"},
@@ -376,7 +352,6 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Empty operator_ids returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.BindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
@@ -389,7 +364,6 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Non-existent operator fails", func(t *testing.T) {
-		t.Parallel()
 		req := models.BindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
@@ -403,7 +377,6 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Wrong owner fails", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -420,7 +393,6 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Operator with no active session fails", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -438,7 +410,6 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Happy path binds operator successfully", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -466,7 +437,6 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 	})
 
 	t.Run("Multiple operators with mixed success", func(t *testing.T) {
-		t.Parallel()
 		slot1, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 		slot2, err := regSvc.createSlot("user-123", "org-123")
@@ -496,13 +466,11 @@ func TestRegistrationService_BindOperators(t *testing.T) {
 }
 
 func TestRegistrationService_UnbindOperators(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	regSvc := infra.Reg
 
 	t.Run("Missing web_session_id returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.UnbindOperatorsRequest{
 			UserID:      "user-123",
 			OperatorIDs: []string{"op-123"},
@@ -514,7 +482,6 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.UnbindOperatorsRequest{
 			WebSessionID: "web-123",
 			OperatorIDs:  []string{"op-123"},
@@ -526,7 +493,6 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Non-existent operator fails", func(t *testing.T) {
-		t.Parallel()
 		req := models.UnbindOperatorsRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
@@ -540,7 +506,6 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Wrong owner fails", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -557,7 +522,6 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Happy path unbinds operator successfully", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -602,7 +566,6 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Multiple operators with mixed success", func(t *testing.T) {
-		t.Parallel()
 		slot1, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 		slot2, err := regSvc.createSlot("user-123", "org-123")
@@ -634,13 +597,11 @@ func TestRegistrationService_UnbindOperators(t *testing.T) {
 }
 
 func TestRegistrationService_SetTargetContext(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	regSvc := infra.Reg
 
 	t.Run("Missing web_session_id returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.SetTargetContextRequest{
 			UserID:     "user-123",
 			OperatorID: "op-123",
@@ -652,7 +613,6 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.SetTargetContextRequest{
 			WebSessionID: "web-123",
 			OperatorID:   "op-123",
@@ -664,7 +624,6 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 	})
 
 	t.Run("Non-existent operator returns error", func(t *testing.T) {
-		t.Parallel()
 		req := models.SetTargetContextRequest{
 			WebSessionID: "web-123",
 			UserID:       "user-123",
@@ -677,7 +636,6 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 	})
 
 	t.Run("Wrong owner returns error", func(t *testing.T) {
-		t.Parallel()
 		slot, err := regSvc.createSlot("user-123", "org-123")
 		require.NoError(t, err)
 
@@ -697,7 +655,6 @@ func TestRegistrationService_SetTargetContext(t *testing.T) {
 }
 
 func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	regSvc := infra.Reg
@@ -729,10 +686,8 @@ func TestRegistrationService_SetTargetContext_HappyPath(t *testing.T) {
 }
 
 func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Missing system_fingerprint returns error", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
@@ -768,7 +723,6 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns error", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
@@ -804,7 +758,6 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Missing CSR returns error", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
@@ -839,7 +792,6 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 	})
 
 	t.Run("Invalid system_fingerprint returns error", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
@@ -876,10 +828,8 @@ func TestRegistrationService_RegisterDeviceCSR(t *testing.T) {
 }
 
 func TestRegistrationService_CompleteRegistration(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Invalid CSR PEM format returns error", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
@@ -917,7 +867,6 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 	})
 
 	t.Run("Wrong CSR block type returns error", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()
@@ -960,7 +909,6 @@ func TestRegistrationService_CompleteRegistration(t *testing.T) {
 	})
 
 	t.Run("Missing CSR returns error", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, constants.PkiDirname)
 		logger := testutil.NewTestLogger()

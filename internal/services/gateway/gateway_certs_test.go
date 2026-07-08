@@ -72,10 +72,8 @@ func (m *mockSecretManager) StoreServicePrivateKey(serviceName string, keyDER []
 }
 
 func TestRandomSerial(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Generates non-zero serial", func(t *testing.T) {
-		t.Parallel()
 		serial, err := randomSerial()
 		require.NoError(t, err)
 		assert.NotNil(t, serial)
@@ -83,7 +81,6 @@ func TestRandomSerial(t *testing.T) {
 	})
 
 	t.Run("Generates unique serials", func(t *testing.T) {
-		t.Parallel()
 		serial1, err := randomSerial()
 		require.NoError(t, err)
 
@@ -94,7 +91,6 @@ func TestRandomSerial(t *testing.T) {
 	})
 
 	t.Run("Serial is within 128-bit range", func(t *testing.T) {
-		t.Parallel()
 		serial, err := randomSerial()
 		require.NoError(t, err)
 
@@ -105,10 +101,8 @@ func TestRandomSerial(t *testing.T) {
 }
 
 func TestWritePEMFile(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Writes DER as PEM with type", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "test.crt")
 
@@ -137,7 +131,6 @@ func TestWritePEMFile(t *testing.T) {
 	})
 
 	t.Run("Writes raw PEM bytes without type", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "bundle.pem")
 
@@ -163,7 +156,6 @@ test data
 	})
 
 	t.Run("Requires parent directories to exist", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "subdir", "nested", "test.crt")
 
@@ -173,7 +165,6 @@ test data
 	})
 
 	t.Run("Overwrites existing file", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "test.crt")
 
@@ -195,7 +186,6 @@ test data
 	})
 
 	t.Run("Returns error on invalid path", func(t *testing.T) {
-		t.Parallel()
 		// Use a path that cannot be created (e.g., inside a file)
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "notadir", "test.crt")
@@ -210,10 +200,8 @@ test data
 }
 
 func TestFileExists(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns true for existing file", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "exists.txt")
 
@@ -225,7 +213,6 @@ func TestFileExists(t *testing.T) {
 	})
 
 	t.Run("Returns false for non-existent file", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		filePath := filepath.Join(tmpDir, "doesnotexist.txt")
 
@@ -234,7 +221,6 @@ func TestFileExists(t *testing.T) {
 	})
 
 	t.Run("Returns true for directory", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 
 		exists := fileExists(tmpDir)
@@ -242,24 +228,20 @@ func TestFileExists(t *testing.T) {
 	})
 
 	t.Run("Returns false for empty path", func(t *testing.T) {
-		t.Parallel()
 		exists := fileExists("")
 		assert.False(t, exists)
 	})
 }
 
 func TestIsExpiringSoon(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns true for empty certificate", func(t *testing.T) {
-		t.Parallel()
 		cert := tls.Certificate{}
 		expiring := isExpiringSoon(cert)
 		assert.True(t, expiring, "empty certificate should be considered expiring")
 	})
 
 	t.Run("Returns true for expired certificate", func(t *testing.T) {
-		t.Parallel()
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
@@ -283,7 +265,6 @@ func TestIsExpiringSoon(t *testing.T) {
 	})
 
 	t.Run("Returns true for certificate expiring in 29 days", func(t *testing.T) {
-		t.Parallel()
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
@@ -307,7 +288,6 @@ func TestIsExpiringSoon(t *testing.T) {
 	})
 
 	t.Run("Returns false for certificate expiring in 31 days", func(t *testing.T) {
-		t.Parallel()
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
@@ -331,7 +311,6 @@ func TestIsExpiringSoon(t *testing.T) {
 	})
 
 	t.Run("Returns false for certificate with long validity", func(t *testing.T) {
-		t.Parallel()
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
@@ -355,7 +334,6 @@ func TestIsExpiringSoon(t *testing.T) {
 	})
 
 	t.Run("Returns true for malformed certificate", func(t *testing.T) {
-		t.Parallel()
 		tlsCert := tls.Certificate{
 			Certificate: [][]byte{[]byte("invalid cert data")},
 		}
@@ -366,10 +344,8 @@ func TestIsExpiringSoon(t *testing.T) {
 }
 
 func TestIsCurveP256(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns true for P-256 public key", func(t *testing.T) {
-		t.Parallel()
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		require.NoError(t, err)
 
@@ -378,7 +354,6 @@ func TestIsCurveP256(t *testing.T) {
 	})
 
 	t.Run("Returns false for P-384 public key", func(t *testing.T) {
-		t.Parallel()
 		key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 		require.NoError(t, err)
 
@@ -387,7 +362,6 @@ func TestIsCurveP256(t *testing.T) {
 	})
 
 	t.Run("Returns false for P-521 public key", func(t *testing.T) {
-		t.Parallel()
 		key, err := ecdsa.GenerateKey(elliptic.P521(), rand.Reader)
 		require.NoError(t, err)
 
@@ -396,7 +370,6 @@ func TestIsCurveP256(t *testing.T) {
 	})
 
 	t.Run("Returns false for non-ECDSA public key", func(t *testing.T) {
-		t.Parallel()
 		// Use a non-ECDSA public key type
 		var nonECKey interface{} = "not an ecdsa key"
 		isP256 := isCurveP256(nonECKey)
@@ -404,17 +377,14 @@ func TestIsCurveP256(t *testing.T) {
 	})
 
 	t.Run("Returns false for nil", func(t *testing.T) {
-		t.Parallel()
 		isP256 := isCurveP256(nil)
 		assert.False(t, isP256)
 	})
 }
 
 func TestLoadCACertificate(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Loads valid PEM certificate", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		certPath := filepath.Join(tmpDir, "ca.crt")
 
@@ -451,7 +421,6 @@ func TestLoadCACertificate(t *testing.T) {
 	})
 
 	t.Run("Returns error for non-existent file", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		certPath := filepath.Join(tmpDir, "doesnotexist.crt")
 
@@ -462,7 +431,6 @@ func TestLoadCACertificate(t *testing.T) {
 	})
 
 	t.Run("Returns error for invalid PEM", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		certPath := filepath.Join(tmpDir, "invalid.crt")
 
@@ -476,7 +444,6 @@ func TestLoadCACertificate(t *testing.T) {
 	})
 
 	t.Run("Returns error for malformed certificate", func(t *testing.T) {
-		t.Parallel()
 		tmpDir := t.TempDir()
 		certPath := filepath.Join(tmpDir, "malformed.crt")
 
@@ -493,10 +460,8 @@ func TestLoadCACertificate(t *testing.T) {
 }
 
 func TestLoadCAPrivateKey(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns error when secret manager is nil", func(t *testing.T) {
-		t.Parallel()
 		pki := &PKIAuthority{
 			secretManager: nil,
 		}
@@ -508,7 +473,6 @@ func TestLoadCAPrivateKey(t *testing.T) {
 	})
 
 	t.Run("Returns error when key not found in keystore", func(t *testing.T) {
-		t.Parallel()
 		mockSM := &mockSecretManager{
 			getKeyFunc: func(caType string) ([]byte, error) {
 				return nil, constants.ErrKeyStoreKeyNotFound
@@ -526,7 +490,6 @@ func TestLoadCAPrivateKey(t *testing.T) {
 	})
 
 	t.Run("Returns error for malformed key DER", func(t *testing.T) {
-		t.Parallel()
 		mockSM := &mockSecretManager{
 			getKeyFunc: func(caType string) ([]byte, error) {
 				return []byte("invalid DER"), nil
@@ -544,11 +507,9 @@ func TestLoadCAPrivateKey(t *testing.T) {
 }
 
 func TestNewPKIAuthority(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	t.Run("Uses default PKI dir when pkiDir is empty", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 
 		pki := newPKIAuthority(dataDir, "", nil, nil, logger)
@@ -557,7 +518,6 @@ func TestNewPKIAuthority(t *testing.T) {
 	})
 
 	t.Run("Uses custom PKI dir when provided", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		customPKIDir := filepath.Join(dataDir, "custom-pki")
 
@@ -566,7 +526,6 @@ func TestNewPKIAuthority(t *testing.T) {
 	})
 
 	t.Run("Initializes all fields", func(t *testing.T) {
-		t.Parallel()
 		dataDir := t.TempDir()
 		pkiDir := filepath.Join(dataDir, "pki")
 
@@ -581,7 +540,6 @@ func TestNewPKIAuthority(t *testing.T) {
 }
 
 func TestPKIAuthority_PathGetters(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	dataDir := t.TempDir()
 	pkiDir := filepath.Join(dataDir, "pki")
@@ -589,34 +547,28 @@ func TestPKIAuthority_PathGetters(t *testing.T) {
 	pki := newPKIAuthority(dataDir, pkiDir, nil, nil, logger)
 
 	t.Run("TrustBundlePath returns correct path", func(t *testing.T) {
-		t.Parallel()
 		expected := filepath.Join(pkiDir, constants.PkiSubdirTrust, constants.PkiFileGatewayBundle)
 		assert.Equal(t, expected, pki.TrustBundlePath())
 	})
 
 	t.Run("RootCAPath returns correct path", func(t *testing.T) {
-		t.Parallel()
 		expected := filepath.Join(pkiDir, constants.PkiSubdirRoot, constants.PkiFileRootCA)
 		assert.Equal(t, expected, pki.RootCAPath())
 	})
 
 	t.Run("BinariesDir returns correct path", func(t *testing.T) {
-		t.Parallel()
 		expected := filepath.Join(pkiDir, constants.PkiSubdirBinaries)
 		assert.Equal(t, expected, pki.BinariesDir())
 	})
 
 	t.Run("PKIDir returns correct path", func(t *testing.T) {
-		t.Parallel()
 		assert.Equal(t, pkiDir, pki.PKIDir())
 	})
 }
 
 func TestPKIAuthority_VerifyCertificate_Unit(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns error for nil certificate", func(t *testing.T) {
-		t.Parallel()
 		pki := &PKIAuthority{}
 		err := pki.VerifyCertificate(nil)
 		assert.Error(t, err)
@@ -625,10 +577,8 @@ func TestPKIAuthority_VerifyCertificate_Unit(t *testing.T) {
 }
 
 func TestPKIAuthority_RevokeCertificate(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns error when database is nil", func(t *testing.T) {
-		t.Parallel()
 		pki := &PKIAuthority{db: nil}
 		err := pki.RevokeCertificate("123", "test reason")
 		assert.Error(t, err)
@@ -637,10 +587,8 @@ func TestPKIAuthority_RevokeCertificate(t *testing.T) {
 }
 
 func TestPKIAuthority_GenerateCRL_Unit(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns error when database is nil", func(t *testing.T) {
-		t.Parallel()
 		pki := &PKIAuthority{db: nil}
 		_, err := pki.GenerateCRL()
 		assert.Error(t, err)
@@ -649,11 +597,9 @@ func TestPKIAuthority_GenerateCRL_Unit(t *testing.T) {
 }
 
 func TestPKIAuthority_TLSConfig_Unit(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
 	t.Run("Returns valid TLS config", func(t *testing.T) {
-		t.Parallel()
 		key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		template := &x509.Certificate{
 			SerialNumber: big.NewInt(1),
@@ -682,10 +628,8 @@ func TestPKIAuthority_TLSConfig_Unit(t *testing.T) {
 }
 
 func TestPKIAuthority_SignCSR_Unit(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns error for gateway-peer when CA not loaded", func(t *testing.T) {
-		t.Parallel()
 		pki := &PKIAuthority{
 			gatewayPeerCert: nil,
 		}
@@ -703,7 +647,6 @@ func TestPKIAuthority_SignCSR_Unit(t *testing.T) {
 	})
 
 	t.Run("Returns error for operator when CA not loaded", func(t *testing.T) {
-		t.Parallel()
 		pki := &PKIAuthority{
 			operatorCert: nil,
 		}
@@ -722,10 +665,8 @@ func TestPKIAuthority_SignCSR_Unit(t *testing.T) {
 }
 
 func TestPKIAuthority_SignDelegatedCSR(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Returns error when operator CA not loaded", func(t *testing.T) {
-		t.Parallel()
 		pki := &PKIAuthority{
 			operatorCert: nil,
 		}

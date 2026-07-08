@@ -35,7 +35,6 @@ import (
 
 func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 	t.Run("Success - returns 201 with token when context has user_id and cli_session_id", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/generate", nil)
@@ -53,7 +52,6 @@ func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 	})
 
 	t.Run("Failure - 401 when context has no user_id or cli_session_id", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/generate", nil)
@@ -65,7 +63,6 @@ func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 	})
 
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/enrollment-token/generate", nil)
@@ -79,7 +76,6 @@ func TestHandleEnrollmentTokenGenerate(t *testing.T) {
 
 func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	t.Run("Success - returns 200 with user_id and cli_session_id for valid token", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		token, err := c.enrollmentTokenSvc.GenerateToken("user-val-1", "cli-val-1")
@@ -99,7 +95,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 410 Gone for expired token", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		token, err := c.enrollmentTokenSvc.GenerateToken("user-exp-1", "cli-exp-1")
@@ -129,7 +124,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 409 Conflict for consumed token", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		token, err := c.enrollmentTokenSvc.GenerateToken("user-con-1", "cli-con-1")
@@ -148,7 +142,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 401 for unknown token", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		body, _ := json.Marshal(map[string]string{"token": "nonexistenttoken1234567890abcdef"})
@@ -161,7 +154,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 400 for empty token field", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		body, _ := json.Marshal(map[string]string{"token": ""})
@@ -174,7 +166,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - 400 for invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/enrollment-token/validate", strings.NewReader("{invalid}"))
@@ -186,7 +177,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/enrollment-token/validate", nil)
@@ -198,7 +188,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 	})
 
 	t.Run("Failure - oversized body rejected by MaxBytesReader", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		c.cfg.Gateway.MaxPayloadBytes = 100
 
@@ -214,7 +203,6 @@ func TestHandleEnrollmentTokenValidate(t *testing.T) {
 
 func TestEnrollmentTokenRouteRegistration(t *testing.T) {
 	t.Run("Generate endpoint is registered on public router behind mTLS", func(t *testing.T) {
-		t.Parallel()
 		h, _ := setupTestHTTPHandler(t)
 		router := h.buildPublicRouter()
 
@@ -228,7 +216,6 @@ func TestEnrollmentTokenRouteRegistration(t *testing.T) {
 	})
 
 	t.Run("Validate endpoint is registered on public router", func(t *testing.T) {
-		t.Parallel()
 		h, _ := setupTestHTTPHandler(t)
 		router := h.buildPublicRouter()
 

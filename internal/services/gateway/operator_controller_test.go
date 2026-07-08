@@ -39,7 +39,6 @@ import (
 )
 
 func TestNewOperatorController(t *testing.T) {
-	t.Parallel()
 
 	cfg := &config.Config{}
 	logger := slog.New(slog.NewTextHandler(nil, nil))
@@ -58,7 +57,6 @@ func TestNewOperatorController(t *testing.T) {
 }
 
 func TestHandleReauth_MalformedJSON(t *testing.T) {
-	t.Parallel()
 
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
@@ -108,13 +106,11 @@ func TestHandleReauth_MalformedJSON(t *testing.T) {
 }
 
 func TestOperatorController_HandleListOperators(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators?user_id=user-123", nil)
 		w := httptest.NewRecorder()
 
@@ -124,7 +120,6 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns 400", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators", nil)
 		w := httptest.NewRecorder()
 
@@ -134,7 +129,6 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 	})
 
 	t.Run("Valid request returns 200 with slots", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators?user_id=user-123", nil)
 		w := httptest.NewRecorder()
 
@@ -150,13 +144,11 @@ func TestOperatorController_HandleListOperators(t *testing.T) {
 }
 
 func TestOperatorController_HandleTerminateOperator(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/terminate", nil)
 		w := httptest.NewRecorder()
 
@@ -166,7 +158,6 @@ func TestOperatorController_HandleTerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Invalid body returns 400", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/terminate", strings.NewReader("{invalid"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -177,7 +168,6 @@ func TestOperatorController_HandleTerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Missing operator_id returns 400", func(t *testing.T) {
-		t.Parallel()
 		reqBody := map[string]string{"user_id": "user-123"}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/terminate", strings.NewReader(string(body)))
@@ -190,7 +180,6 @@ func TestOperatorController_HandleTerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Missing user_id returns 400", func(t *testing.T) {
-		t.Parallel()
 		reqBody := map[string]string{"operator_id": "op-123"}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/terminate", strings.NewReader(string(body)))
@@ -203,7 +192,6 @@ func TestOperatorController_HandleTerminateOperator(t *testing.T) {
 	})
 
 	t.Run("Valid request with non-existent operator returns 400", func(t *testing.T) {
-		t.Parallel()
 		reqBody := models.TerminateOperatorRequest{
 			OperatorID: "op-nonexistent",
 			UserID:     "user-123",
@@ -221,13 +209,11 @@ func TestOperatorController_HandleTerminateOperator(t *testing.T) {
 }
 
 func TestOperatorController_HandleBindOperators(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/bind", nil)
 		w := httptest.NewRecorder()
 
@@ -237,7 +223,6 @@ func TestOperatorController_HandleBindOperators(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON returns 400", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/bind", strings.NewReader("{invalid"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -248,7 +233,6 @@ func TestOperatorController_HandleBindOperators(t *testing.T) {
 	})
 
 	t.Run("user_id mismatch returns 403", func(t *testing.T) {
-		t.Parallel()
 		reqBody := models.BindOperatorsRequest{
 			UserID: "user-456",
 		}
@@ -263,7 +247,6 @@ func TestOperatorController_HandleBindOperators(t *testing.T) {
 	})
 
 	t.Run("Valid request with empty bind returns 200", func(t *testing.T) {
-		t.Parallel()
 		reqBody := models.BindOperatorsRequest{
 			UserID: "user-123",
 		}
@@ -280,13 +263,11 @@ func TestOperatorController_HandleBindOperators(t *testing.T) {
 }
 
 func TestOperatorController_HandleUnbindOperators(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/unbind", nil)
 		w := httptest.NewRecorder()
 
@@ -296,7 +277,6 @@ func TestOperatorController_HandleUnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON returns 400", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/unbind", strings.NewReader("{invalid"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -307,7 +287,6 @@ func TestOperatorController_HandleUnbindOperators(t *testing.T) {
 	})
 
 	t.Run("user_id mismatch returns 403", func(t *testing.T) {
-		t.Parallel()
 		reqBody := models.UnbindOperatorsRequest{
 			UserID: "user-456",
 		}
@@ -322,7 +301,6 @@ func TestOperatorController_HandleUnbindOperators(t *testing.T) {
 	})
 
 	t.Run("Valid request with empty unbind returns 200", func(t *testing.T) {
-		t.Parallel()
 		reqBody := models.UnbindOperatorsRequest{
 			UserID: "user-123",
 		}
@@ -339,13 +317,11 @@ func TestOperatorController_HandleUnbindOperators(t *testing.T) {
 }
 
 func TestOperatorController_HandleSetTargetContext(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/target", nil)
 		w := httptest.NewRecorder()
 
@@ -355,7 +331,6 @@ func TestOperatorController_HandleSetTargetContext(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON returns 400", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/target", strings.NewReader("{invalid"))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -366,7 +341,6 @@ func TestOperatorController_HandleSetTargetContext(t *testing.T) {
 	})
 
 	t.Run("user_id mismatch returns 403", func(t *testing.T) {
-		t.Parallel()
 		reqBody := models.SetTargetContextRequest{
 			UserID: "user-456",
 		}
@@ -381,7 +355,6 @@ func TestOperatorController_HandleSetTargetContext(t *testing.T) {
 	})
 
 	t.Run("Valid request with empty context returns 200 or 400", func(t *testing.T) {
-		t.Parallel()
 		reqBody := models.SetTargetContextRequest{
 			UserID: "user-123",
 		}
@@ -398,13 +371,11 @@ func TestOperatorController_HandleSetTargetContext(t *testing.T) {
 }
 
 func TestOperatorController_HandleReauth(t *testing.T) {
-	t.Parallel()
 
 	infra := setupTestInfrastructure(t, false)
 	controller := newOperatorController(infra.Cfg, infra.Logger, infra.Reg, infra.Auth, infra.Responder)
 
 	t.Run("Wrong method returns 405", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/operators/reauth", nil)
 		w := httptest.NewRecorder()
 
@@ -414,7 +385,6 @@ func TestOperatorController_HandleReauth(t *testing.T) {
 	})
 
 	t.Run("Missing operator session ID returns 401", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/operators/reauth", nil)
 		w := httptest.NewRecorder()
 

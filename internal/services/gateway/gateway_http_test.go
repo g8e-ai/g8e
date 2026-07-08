@@ -46,7 +46,6 @@ import (
 )
 
 func TestIsPrivateIP(t *testing.T) {
-	t.Parallel()
 
 	cases := []struct {
 		ip       string
@@ -88,7 +87,6 @@ func TestIsPrivateIP(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.ip, func(t *testing.T) {
-			t.Parallel()
 			ip := net.ParseIP(tc.ip)
 			require.NotNil(t, ip, "Failed to parse IP: %s", tc.ip)
 			result := isPrivateIP(ip)
@@ -98,7 +96,6 @@ func TestIsPrivateIP(t *testing.T) {
 }
 
 func TestIsSafeHost(t *testing.T) {
-	t.Parallel()
 
 	cfg := &config.Config{
 		Endpoint: "g8e.local",
@@ -136,7 +133,6 @@ func TestIsSafeHost(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.host, func(t *testing.T) {
-			t.Parallel()
 			result := isSafeHost(tc.host, cfg)
 			assert.Equal(t, tc.expected, result)
 		})
@@ -144,7 +140,6 @@ func TestIsSafeHost(t *testing.T) {
 }
 
 func TestCatchAllRedirect(t *testing.T) {
-	t.Parallel()
 
 	h, cfg := setupTestHTTPHandler(t)
 	cfg.Gateway.HTTPSPort = 8443
@@ -276,7 +271,6 @@ func setupTestGatewayService(t *testing.T) (*GatewayModeService, *config.Config)
 }
 
 func TestReadBody(t *testing.T) {
-	t.Parallel()
 	h := setupTestHTTPHandlerLightweight(t)
 	content := []byte("test body content")
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(content))
@@ -287,7 +281,6 @@ func TestReadBody(t *testing.T) {
 }
 
 func TestPathTraversalGuard(t *testing.T) {
-	t.Parallel()
 	h := setupTestHTTPHandlerLightweight(t)
 
 	tests := []struct {
@@ -302,7 +295,6 @@ func TestPathTraversalGuard(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			handler := h.pathTraversalGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
 			}))
@@ -317,7 +309,6 @@ func TestPathTraversalGuard(t *testing.T) {
 }
 
 func TestAuthMiddleware(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	// Seed platform settings
@@ -338,7 +329,6 @@ func TestAuthMiddleware(t *testing.T) {
 	}))
 
 	t.Run("Health bypass", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -347,7 +337,6 @@ func TestAuthMiddleware(t *testing.T) {
 }
 
 func TestAuthWebSocket(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -355,7 +344,6 @@ func TestAuthWebSocket(t *testing.T) {
 	}))
 
 	t.Run("Unauthorized", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/ws/pubsub", nil)
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
@@ -364,7 +352,6 @@ func TestAuthWebSocket(t *testing.T) {
 }
 
 func TestAuthMiddlewareDeep(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	handler := h.auth.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -372,7 +359,6 @@ func TestAuthMiddlewareDeep(t *testing.T) {
 	}))
 
 	t.Run("Uninitialized token - deny unauthenticated access", func(t *testing.T) {
-		t.Parallel()
 		h.db.DocStore.DocDelete("settings", "platform_settings")
 
 		paths := []string{
@@ -400,7 +386,6 @@ func TestHandleHealth(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Returns 503 when platform_settings not found", func(t *testing.T) {
-		t.Parallel()
 		h.db.DocStore.DocDelete("settings", "platform_settings")
 		req := httptest.NewRequest(http.MethodGet, constants.APIPaths.Health, nil)
 		rr := httptest.NewRecorder()
@@ -411,7 +396,6 @@ func TestHandleHealth(t *testing.T) {
 	})
 
 	t.Run("Returns 200 when platform_settings exists", func(t *testing.T) {
-		t.Parallel()
 		settings := models.SettingsDocument{
 			Settings: &models.PlatformSettings{
 				ActuatorKeyID: "test-key-id",
@@ -438,7 +422,6 @@ func TestHandleHealth(t *testing.T) {
 }
 
 func TestHandleHealth_StateRootFailure(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	settings := models.SettingsDocument{
@@ -497,7 +480,6 @@ func TestHandleBootstrapHealth(t *testing.T) {
 }
 
 func TestContainsTraversal(t *testing.T) {
-	t.Parallel()
 	h := &HTTPHandler{}
 	assert.True(t, h.containsTraversal("/a/../b"))
 	assert.True(t, h.containsTraversal("../etc/passwd"))
@@ -505,7 +487,6 @@ func TestContainsTraversal(t *testing.T) {
 }
 
 func TestBlobSegmentValid(t *testing.T) {
-	t.Parallel()
 	assert.True(t, blobSegmentValid("valid-segment"))
 	assert.False(t, blobSegmentValid(""))
 	assert.False(t, blobSegmentValid(".."))
@@ -515,7 +496,6 @@ func TestBlobSegmentValid(t *testing.T) {
 }
 
 func TestIsMutationPubSubChannelAllowed(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name    string
@@ -535,14 +515,12 @@ func TestIsMutationPubSubChannelAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			assert.Equal(t, tt.allowed, isMutationPubSubChannelAllowed(tt.channel))
 		})
 	}
 }
 
 func TestNewHTTPHandler(t *testing.T) {
-	t.Parallel()
 	h, cfg := setupTestHTTPHandler(t)
 
 	assert.NotNil(t, h)
@@ -569,7 +547,6 @@ func TestNewHTTPHandler(t *testing.T) {
 }
 
 func TestBuildPublicRouter(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	router := h.buildPublicRouter()
@@ -664,7 +641,6 @@ func (e *errorReader) Read(p []byte) (n int, err error) {
 // accepted on internal routes when the cli session is owned by the bound
 // Operator session.
 func TestCLICertBoundToOperator(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	const (
@@ -690,7 +666,6 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CLI cert bound to Operator session is accepted", func(t *testing.T) {
-		t.Parallel()
 		bound, err := h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, operatorSessionID,
 		)
@@ -699,7 +674,6 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("CLI cert bound to a different Operator session is rejected", func(t *testing.T) {
-		t.Parallel()
 		bound, err := h.auth.cliCertBoundToOperator(
 			[]*url.URL{cliURI}, cliSessionID, userID, otherOpSessionID,
 		)
@@ -708,7 +682,6 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("operator URI is not accepted via the CLI path", func(t *testing.T) {
-		t.Parallel()
 		bound, err := h.auth.cliCertBoundToOperator(
 			[]*url.URL{opURI}, cliSessionID, userID, operatorSessionID,
 		)
@@ -717,7 +690,6 @@ func TestCLICertBoundToOperator(t *testing.T) {
 	})
 
 	t.Run("expired CLI session is rejected", func(t *testing.T) {
-		t.Parallel()
 		expired := models.CLISession{
 			ID:                "cli-expired",
 			UserID:            userID,
@@ -737,7 +709,6 @@ func TestCLICertBoundToOperator(t *testing.T) {
 }
 
 func TestHTTPHandler_ServeHTTP(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -750,7 +721,6 @@ func TestHTTPHandler_ServeHTTP(t *testing.T) {
 }
 
 func TestHTTPHandler_GetMCPGateway(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	mcpGateway := h.GetMCPGateway()
@@ -758,7 +728,6 @@ func TestHTTPHandler_GetMCPGateway(t *testing.T) {
 }
 
 func TestHTTPHandler_GetPasskeyHandler(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	passkey := h.GetPasskeyHandler()
@@ -766,7 +735,6 @@ func TestHTTPHandler_GetPasskeyHandler(t *testing.T) {
 }
 
 func TestHTTPHandler_GetGatewayWebSocketHandler(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	pubsub := h.GetGatewayWebSocketHandler()
@@ -774,7 +742,6 @@ func TestHTTPHandler_GetGatewayWebSocketHandler(t *testing.T) {
 }
 
 func TestHTTPHandler_handleLandingPage(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -829,11 +796,9 @@ func makeTestOperatorCert(t *testing.T, operatorSessionID string) *x509.Certific
 }
 
 func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Method not allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/push", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
@@ -842,7 +807,6 @@ func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
 	})
 
 	t.Run("Missing mTLS client certificate", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/internal/sse/push", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEPush(rr, req)
@@ -851,7 +815,6 @@ func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
 	})
 
 	t.Run("Empty peer certificates", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/internal/sse/push", nil)
 		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{}}
 		rr := httptest.NewRecorder()
@@ -861,7 +824,6 @@ func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON body", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/internal/sse/push", bytes.NewReader([]byte("invalid json")))
 		req.TLS = &tls.ConnectionState{PeerCertificates: []*x509.Certificate{makeTestAppWorkloadCert(t, "test-app")}}
 		rr := httptest.NewRecorder()
@@ -871,7 +833,6 @@ func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
 	})
 
 	t.Run("Missing event field", func(t *testing.T) {
-		t.Parallel()
 		payload := map[string]string{
 			"web_session_id": "web-1",
 		}
@@ -886,11 +847,9 @@ func TestHTTPHandler_handleInternalSSEPush(t *testing.T) {
 }
 
 func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Method not allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/internal/sse/events", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
@@ -899,7 +858,6 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 	})
 
 	t.Run("Missing auth identity (no context, no mTLS)", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEEvents(rr, req)
@@ -908,7 +866,6 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 	})
 
 	t.Run("mTLS auth - missing routing parameter", func(t *testing.T) {
-		t.Parallel()
 		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
 		req = req.WithContext(ctx)
@@ -919,7 +876,6 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 	})
 
 	t.Run("mTLS auth - multiple routing parameters", func(t *testing.T) {
-		t.Parallel()
 		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?cli_session_id=cli-1&web_session_id=web-1", nil)
 		req = req.WithContext(ctx)
@@ -930,7 +886,6 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 	})
 
 	t.Run("cookie auth - missing routing parameter", func(t *testing.T) {
-		t.Parallel()
 		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events", nil)
@@ -942,7 +897,6 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 	})
 
 	t.Run("cookie auth - web session mismatch", func(t *testing.T) {
-		t.Parallel()
 		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-auth")
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/events?web_session_id=web-session-other", nil)
@@ -955,11 +909,9 @@ func TestHTTPHandler_handleInternalSSEEvents(t *testing.T) {
 }
 
 func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	t.Run("Method not allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/internal/sse/stream", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEStream(rr, req)
@@ -968,7 +920,6 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 	})
 
 	t.Run("Missing auth identity (no context, no mTLS)", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream?cli_session_id=cli-1", nil)
 		rr := httptest.NewRecorder()
 		h.handleInternalSSEStream(rr, req)
@@ -977,7 +928,6 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 	})
 
 	t.Run("mTLS auth - missing routing parameter", func(t *testing.T) {
-		t.Parallel()
 		ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, "op-session-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
 		req = req.WithContext(ctx)
@@ -988,7 +938,6 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 	})
 
 	t.Run("cookie auth - missing routing parameter", func(t *testing.T) {
-		t.Parallel()
 		ctx := context.WithValue(context.Background(), constants.ContextKeyWebSessionID, "web-session-1")
 		ctx = context.WithValue(ctx, constants.ContextKeyUserID, "user-1")
 		req := httptest.NewRequest(http.MethodGet, "/internal/sse/stream", nil)
@@ -1001,7 +950,6 @@ func TestHTTPHandler_handleInternalSSEStream(t *testing.T) {
 }
 
 func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	const (
@@ -1050,10 +998,8 @@ func TestHTTPHandler_handleInternalSSEStream_CLIMTLSAuth(t *testing.T) {
 }
 
 func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Rate limit disabled - passes through", func(t *testing.T) {
-		t.Parallel()
 		infra := setupTestInfrastructure(t, false)
 		infra.Cfg.Gateway.RateLimitRPS = 0 // Disabled
 
@@ -1111,7 +1057,6 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("Rate limit enabled - allows requests within limit", func(t *testing.T) {
-		t.Parallel()
 		infra := setupTestInfrastructure(t, false)
 		infra.Cfg.Gateway.RateLimitRPS = 10
 		infra.Cfg.Gateway.RateLimitBurst = 20
@@ -1170,7 +1115,6 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("Rate limit enabled - different IPs tracked separately", func(t *testing.T) {
-		t.Parallel()
 		infra := setupTestInfrastructure(t, false)
 		infra.Cfg.Gateway.RateLimitRPS = 1
 		infra.Cfg.Gateway.RateLimitBurst = 2
@@ -1234,7 +1178,6 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("Rate limit exceeded - returns 429", func(t *testing.T) {
-		t.Parallel()
 		infra := setupTestInfrastructure(t, false)
 		infra.Cfg.Gateway.RateLimitRPS = 1
 		infra.Cfg.Gateway.RateLimitBurst = 2
@@ -1301,7 +1244,6 @@ func TestHTTPHandler_rateLimitMiddleware(t *testing.T) {
 	})
 
 	t.Run("Stale limiter cleanup", func(t *testing.T) {
-		t.Parallel()
 		infra := setupTestInfrastructure(t, false)
 		infra.Cfg.Gateway.RateLimitRPS = 10
 		infra.Cfg.Gateway.RateLimitBurst = 20

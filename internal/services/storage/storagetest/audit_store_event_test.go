@@ -30,7 +30,6 @@ import (
 )
 
 func TestSQLAuditStore_Event(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -91,7 +90,6 @@ func TestSQLAuditStore_Event(t *testing.T) {
 }
 
 func TestSQLAuditStore_RecordEvent_RejectsUnknownSession(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -140,7 +138,6 @@ func TestSQLAuditStore_RecordEvent_RejectsUnknownSession(t *testing.T) {
 }
 
 func TestSQLAuditStore_RecordEvent_RejectsMissingSession(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -176,7 +173,6 @@ func TestSQLAuditStore_RecordEvent_RejectsMissingSession(t *testing.T) {
 }
 
 func TestSQLAuditStore_RecordEvents_RollsBackUnknownSession(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -229,7 +225,6 @@ func TestSQLAuditStore_RecordEvents_RollsBackUnknownSession(t *testing.T) {
 }
 
 func TestSQLAuditStore_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -280,7 +275,6 @@ func TestSQLAuditStore_RecordEvents_SucceedsWithExistingSessions(t *testing.T) {
 }
 
 func TestSQLAuditStore_OutputTruncation(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -344,7 +338,6 @@ func TestSQLAuditStore_OutputTruncation(t *testing.T) {
 }
 
 func TestSQLAuditStore_StderrTruncation(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -403,7 +396,6 @@ func TestSQLAuditStore_StderrTruncation(t *testing.T) {
 }
 
 func TestSQLAuditStore_EventPagination(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -476,7 +468,6 @@ func TestSQLAuditStore_EventPagination(t *testing.T) {
 }
 
 func TestSQLAuditStore_EventOrdering(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -531,7 +522,6 @@ func TestSQLAuditStore_EventOrdering(t *testing.T) {
 }
 
 func TestSQLAuditStore_NullExitCode(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -580,7 +570,6 @@ func TestSQLAuditStore_NullExitCode(t *testing.T) {
 }
 
 func TestSQLAuditStore_DifferentEventTypes(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -642,7 +631,6 @@ func TestSQLAuditStore_DifferentEventTypes(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetEventsEmptySession(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -677,7 +665,6 @@ func TestSQLAuditStore_GetEventsEmptySession(t *testing.T) {
 }
 
 func TestSQLAuditStore_LongContentFields(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
