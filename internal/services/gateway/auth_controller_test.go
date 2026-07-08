@@ -112,7 +112,8 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 		SuspendedStore: suspendedTxService,
 	})
 
-	authController := newAuthController(cfg, logger, db, auth, passkeyHandler, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, resp, nil)
+	enrollmentTokenSvc := NewEnrollmentTokenService(db, logger)
+	authController := newAuthController(cfg, logger, db, auth, passkeyHandler, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, enrollmentTokenSvc, resp, nil)
 	return authController, cfg
 }
 
