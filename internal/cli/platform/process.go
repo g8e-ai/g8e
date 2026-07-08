@@ -131,7 +131,7 @@ func NewProcessManager(projectRoot string) (*ProcessManager, error) {
 	}, nil
 }
 
-func (pm *ProcessManager) createDirectories() error {
+func (pm *ProcessManager) CreateDirectories() error {
 	dirs := []string{pm.runtimeDir, pm.pkiDir, pm.secretsDir, pm.dataDir, pm.logDir, pm.pidDir}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, constants.PermDirPrivate); err != nil {
@@ -339,7 +339,7 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 }
 
 func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
-	if err := pm.createDirectories(); err != nil {
+	if err := pm.CreateDirectories(); err != nil {
 		return err
 	}
 
@@ -551,7 +551,7 @@ func (pm *ProcessManager) Reset() error {
 		return fmt.Errorf("%w: secrets directory: %v", constants.ErrPathValidation, err)
 	}
 
-	if err := pm.createDirectories(); err != nil {
+	if err := pm.CreateDirectories(); err != nil {
 		return fmt.Errorf("%w: %v", constants.ErrDirCreateFailed, err)
 	}
 

@@ -264,6 +264,9 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 					if err != nil {
 						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 					}
+					if err := pm.CreateDirectories(); err != nil {
+						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
+					}
 					networkIdentityFile, err = pm.WriteNetworkIdentityFile(identityResult.IdentityData)
 					if err != nil {
 						return fmt.Errorf("%w: %w", constants.ErrInternal, err)
