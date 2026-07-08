@@ -73,7 +73,6 @@ type GatewayFixture struct {
 	ActuatorKeyID    string
 	DownstreamURL    string // URL of the downstream MCP/A2A server
 	A2ADownstreamURL string // URL used for A2A (same as DownstreamURL if not overridden)
-	Cleanup          func()
 }
 
 // GatewayFixtureOptions configures the gateway fixture.
@@ -104,8 +103,8 @@ func repoTestResultsDir() string {
 // - Governance dependencies and actuator key setup
 // - MCP gateway dependency wiring
 //
-// The returned fixture includes a Cleanup function that should be called
-// in a defer statement to clean up resources.
+// Cleanup is registered internally via t.Cleanup() — callers do not need to
+// defer anything.
 func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture {
 	t.Helper()
 
@@ -300,8 +299,8 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 	// Wait for the gateway service to be ready
 	require.Eventually(t, func() bool { return ls.IsReady() }, 10*time.Second, 100*time.Millisecond)
 
-	// Create cleanup function
-	cleanup := func() {
+	// Register cleanup via t.Cleanup() — fires when the test completes
+	t.Cleanup(func() {
 		cancel()
 		// Join the Start goroutine before the test ends. A graceful shutdown
 		// surfaces http.ErrServerClosed, which is expected and not an error.
@@ -317,7 +316,7 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		if err := ls.Stop(context.Background()); err != nil {
 			t.Logf("gateway stop error: %v", err)
 		}
-	}
+	})
 
 	return &GatewayFixture{
 		Config:           cfg,
@@ -331,7 +330,6 @@ func NewGatewayFixture(t *testing.T, opts GatewayFixtureOptions) *GatewayFixture
 		ActuatorKeyID:    ActuatorKeyID,
 		DownstreamURL:    downstreamURL,
 		A2ADownstreamURL: a2aURL,
-		Cleanup:          cleanup,
 	}
 }
 

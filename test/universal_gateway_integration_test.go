@@ -56,7 +56,6 @@ func TestUniversalGateway_MCPFlow(t *testing.T) {
 		Posture:           config.PostureNotary,
 		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
 
 	// Enroll a client identity for mTLS authentication
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
@@ -188,7 +187,6 @@ func TestUniversalGateway_A2AFlow(t *testing.T) {
 		Posture:           config.PostureNotary,
 		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -235,7 +233,6 @@ func TestUniversalGateway_MultiProtocolAutoDetection(t *testing.T) {
 		Posture:           config.PostureNotary,
 		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -292,7 +289,6 @@ func TestUniversalGateway_GovernanceEnvelopeVerification(t *testing.T) {
 		Posture:           config.PostureNotary,
 		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -399,7 +395,6 @@ func TestUniversalGateway_OOBSuspensionAndApproval(t *testing.T) {
 		Posture:           config.PostureNotary,
 		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -454,7 +449,6 @@ func TestUniversalGateway_DownstreamIntegration(t *testing.T) {
 		Posture:           config.PostureNotary,
 		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
@@ -516,7 +510,6 @@ func TestUniversalGateway_CanonicalJSONWireFormat(t *testing.T) {
 		Posture:           config.PostureNotary,
 		AllowTestPortZero: true,
 	})
-	defer f.Cleanup()
 
 	identity := fixtures.EnrollClientIdentity(t, f, "test-user", "test-org", "test-fingerprint", "test-host")
 	apiClient := fixtures.CreateMTLSClient(t, f, identity)
