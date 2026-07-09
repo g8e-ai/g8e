@@ -35,7 +35,6 @@ import (
 // ============================================================================
 
 func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -101,7 +100,6 @@ func TestSQLAuditStore_RecordActionReceipt(t *testing.T) {
 }
 
 func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -181,7 +179,6 @@ func TestSQLAuditStore_RecordActionReceipt_Upsert(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -213,7 +210,6 @@ func TestSQLAuditStore_GetActionReceipt_NotFound(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceipts(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -308,7 +304,6 @@ func TestSQLAuditStore_ListActionReceipts(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceipts_AllSessions(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -362,7 +357,6 @@ func TestSQLAuditStore_ListActionReceipts_AllSessions(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceiptsSince(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -423,7 +417,6 @@ func TestSQLAuditStore_ListActionReceiptsSince(t *testing.T) {
 }
 
 func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -455,7 +448,6 @@ func TestSQLAuditStore_ListActionReceiptsSince_Empty(t *testing.T) {
 }
 
 func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -516,7 +508,6 @@ func TestSQLAuditStore_ActionReceipts_AutoSessionCreation(t *testing.T) {
 }
 
 func TestSQLAuditStore_ActionReceipts_MultipleStatuses(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 

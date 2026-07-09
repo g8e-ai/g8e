@@ -593,21 +593,33 @@ function render() {
 (async function() {
   var hashParams = new URLSearchParams(location.hash.slice(1));
   var registerMode = hashParams.get('register');
-  var hashUserId = hashParams.get('user_id');
-  var hashCliSessionId = hashParams.get('cli_session_id');
+  var hashToken = hashParams.get('token');
 
   await loadState();
   render();
 
-  if (registerMode === '1' && hashUserId) {
+  if (registerMode === '1' && hashToken) {
+    history.replaceState(null, '', location.pathname + location.search);
+    var tr = await fetch('/api/v1/auth/enrollment-token/validate', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ token: hashToken })
+    });
+    if (!tr.ok) {
+      var msg = tr.status === 410 ? 'This registration link has expired.'
+              : tr.status === 409 ? 'This registration link has already been used.'
+              : 'Invalid registration link.';
+      showMsg('error', msg);
+      return;
+    }
+    var td = await tr.json();
     var regUidEl = document.getElementById('regUserId');
-    if (regUidEl) regUidEl.value = hashUserId;
+    if (regUidEl) regUidEl.value = td.user_id;
     var regSidEl = document.getElementById('regCliSessionId');
     if (!regSidEl) {
       regSidEl = el('input', {type:'hidden', id:'regCliSessionId'});
       document.body.appendChild(regSidEl);
     }
-    regSidEl.value = hashCliSessionId || 'browser';
+    regSidEl.value = td.cli_session_id;
     registerPasskey();
     return;
   }

@@ -207,7 +207,6 @@ func TestAppEnrollmentService_EnrollApp(t *testing.T) {
 }
 
 func TestIsValidAppName(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name  string
@@ -273,7 +272,6 @@ func TestIsValidAppName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			result := isValidAppName(tt.input)
 			assert.Equal(t, tt.want, result)
 		})

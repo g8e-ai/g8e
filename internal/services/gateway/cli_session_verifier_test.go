@@ -52,7 +52,6 @@ func newTestSuspendedStore(t *testing.T) storage.SuspendedTransactionStore {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -117,7 +116,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			ok, err := notary.VerifyL3Proof(context.Background(), tc.userID, tc.transactionHash, "", tc.proof)
 			require.Error(t, err)
 			require.False(t, ok)
@@ -126,7 +124,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsMissingInputs(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -155,7 +152,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInactiveUser(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -235,7 +231,6 @@ func TestCLIL3Notary_VerifyL3Proof_AcceptsActiveUser(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -315,7 +310,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsInvalidSignature(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -345,7 +339,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsUnknownFingerprint(t *testing.T) {
 }
 
 func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -402,7 +395,6 @@ func TestCLIL3Notary_VerifyL3Proof_RejectsRevokedCertificate(t *testing.T) {
 }
 
 func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	dbDir := t.TempDir()
 	secretsDir := t.TempDir()
@@ -450,7 +442,6 @@ func TestGatewayL3Notary_DelegatesToCLI(t *testing.T) {
 }
 
 func TestGatewayL3Notary_DelegatesToPasskey(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 	passkeyL3, user := newPasskeyServiceForTest(t)
 	notary := governance.NewGatewayL3Notary(nil, nil, passkeyL3, logger)

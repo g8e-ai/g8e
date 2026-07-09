@@ -617,7 +617,6 @@ func TestGateway_JITPasskeyStepUpRequired(t *testing.T) {
 }
 
 func TestGateway_JWTValidation_IssuerAudienceNbf(t *testing.T) {
-	t.Parallel()
 	privKey, idpServer := setupTestIdP(t)
 	defer idpServer.Close()
 

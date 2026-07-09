@@ -88,7 +88,6 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc, _, _ := newPasskeyServiceHTTPForTest(t)
 			handler := svc.RegisterChallenge(cfg)
 
@@ -119,7 +118,6 @@ func TestPasskeyRegisterChallenge(t *testing.T) {
 
 	// Full happy-path: valid user_id via context, challenge returned
 	t.Run("issues challenge for authenticated user", func(t *testing.T) {
-		t.Parallel()
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
 		handler := svc.RegisterChallenge(cfg)
 
@@ -171,7 +169,6 @@ func TestPasskeyAuthenticateChallenge(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc, _, _ := newPasskeyServiceHTTPForTest(t)
 			handler := svc.AuthenticateChallenge(cfg)
 
@@ -195,7 +192,6 @@ func TestPasskeyAuthenticateChallenge(t *testing.T) {
 
 	// User with no credentials → success:false, needs_setup:true
 	t.Run("no credentials returns needs_setup", func(t *testing.T) {
-		t.Parallel()
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
 		handler := svc.AuthenticateChallenge(cfg)
 
@@ -242,7 +238,6 @@ func TestPasskeyListCredentials(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc, _, user := newPasskeyServiceHTTPForTest(t)
 			ctxUserID := tc.ctxUserID
 			if ctxUserID == "REPLACE" {
@@ -265,7 +260,6 @@ func TestPasskeyListCredentials(t *testing.T) {
 	}
 
 	t.Run("ignores query user_id param (IDOR fix)", func(t *testing.T) {
-		t.Parallel()
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys?user_id=other-user", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
@@ -312,7 +306,6 @@ func TestPasskeyRevokeCredential(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc, _, user := newPasskeyServiceHTTPForTest(t)
 			ctxUserID := tc.ctxUserID
 			if ctxUserID == "REPLACE" {
@@ -330,7 +323,6 @@ func TestPasskeyRevokeCredential(t *testing.T) {
 	}
 
 	t.Run("ignores query user_id param (IDOR fix)", func(t *testing.T) {
-		t.Parallel()
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/auth/passkeys/nonexistent?user_id=other-user", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
@@ -368,7 +360,6 @@ func TestPasskeyCLIStatus(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc, _, _ := newPasskeyServiceHTTPForTest(t)
 			req := httptest.NewRequest(tc.method, "/api/v1/auth/passkeys/cli/status", nil)
 			if tc.ctxUserID != "" {
@@ -382,7 +373,6 @@ func TestPasskeyCLIStatus(t *testing.T) {
 	}
 
 	t.Run("returns credential list for authenticated user", func(t *testing.T) {
-		t.Parallel()
 		svc, _, user := newPasskeyServiceHTTPForTest(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/passkeys/cli/status", nil)
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, user.ID))
@@ -411,7 +401,6 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			svc, _, user := newPasskeyServiceHTTPForTest(t)
 			cfg := passkeyHandlerConfig{source: tc.source, enforceFirstCredentialOnly: true}
 			req := httptest.NewRequest(http.MethodPost, "/", nil)
@@ -426,8 +415,6 @@ func TestPasskeyEnforceFirstCred(t *testing.T) {
 }
 
 func TestPasskeyConfigInvariants(t *testing.T) {
-	t.Parallel()
-
 	// Enumerate all production passkey handler configs used in buildPublicRouter.
 	// These must be kept in sync with gateway_http_router.go.
 	type cfgEntry struct {
@@ -443,7 +430,6 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 
 	for _, pc := range productionConfigs {
 		t.Run(pc.name, func(t *testing.T) {
-			t.Parallel()
 			// Invariant 1: setCookie must imply createWebSession
 			if pc.cfg.setCookie {
 				assert.True(t, pc.cfg.createWebSession,
@@ -463,7 +449,6 @@ func TestPasskeyConfigInvariants(t *testing.T) {
 }
 
 func TestPasskeyCookieConsistency(t *testing.T) {
-	t.Parallel()
 	svc, webSessionSvc, user := newPasskeyServiceHTTPForTest(t)
 
 	webSession, err := webSessionSvc.CreateWebSession(user.ID)
@@ -486,7 +471,6 @@ func TestPasskeyCookieConsistency(t *testing.T) {
 }
 
 func TestPasskeyReadBodyRejectsOversized(t *testing.T) {
-	t.Parallel()
 	svc, _, _ := newPasskeyServiceHTTPForTest(t)
 
 	largeBody := bytes.NewReader(bytes.Repeat([]byte("a"), 11*1024*1024))

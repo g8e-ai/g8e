@@ -28,7 +28,6 @@ import (
 )
 
 func TestVerifyPasskeyRegistration_NetworkError(t *testing.T) {
-	t.Parallel()
 
 	tmpDir := t.TempDir()
 	cfg := &config.Config{

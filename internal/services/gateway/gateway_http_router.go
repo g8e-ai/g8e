@@ -62,6 +62,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKIAppsEnroll, h.pkiController.handlePKIAppsEnroll)
 	mux.HandleFunc(constants.APIPaths.PKIDevicesEnroll, h.pkiController.handlePKIDevicesEnroll)
 
+	// Enrollment token validation (public — the token itself is the credential)
+	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenValidate, h.authController.handleEnrollmentTokenValidate)
+
 	// MCP/A2A ingress (rate-limited, JWT when JWKS is configured, else mTLS via main middleware)
 	mcpHandler := h.buildMCPHandler()
 	registerMCPRoutes(mux, mcpHandler)
@@ -146,6 +149,9 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	// Passkey CLI status (require mTLS)
 	mux.HandleFunc(constants.APIPaths.AuthPasskeysCLIStatus, h.passkey.CLIStatus)
 
+	// Enrollment token generation (require mTLS CLI session)
+	mux.HandleFunc(constants.APIPaths.AuthEnrollmentTokenGenerate, h.authController.handleEnrollmentTokenGenerate)
+
 	// OOB Approval UI for suspended MCP/A2A transactions
 	mux.HandleFunc(constants.APIPaths.ApprovePage, h.passkey.handleApprovalPage)
 	mux.HandleFunc(constants.APIPaths.ApprovalsCLIStatus, h.passkey.handleCLIApprovalStatus)
@@ -202,6 +208,7 @@ func (h *HTTPHandler) buildHTTPRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.PKICSRSign, h.pkiController.handlePKICSRSign)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKICABundle, h.pkiController.handlePKICABundle)
 	mux.HandleFunc(constants.APIPaths.WellKnownPKIFingerprint, h.pkiController.handlePKIFingerprint)
+
 	mux.HandleFunc(constants.APIPaths.BootstrapCALinux, h.pkiController.handleTrustScriptLinux)
 	mux.HandleFunc(constants.APIPaths.BootstrapCAMacos, h.pkiController.handleTrustScriptMacos)
 	mux.HandleFunc(constants.APIPaths.BootstrapCAWindows, h.pkiController.handleTrustScriptWindows)

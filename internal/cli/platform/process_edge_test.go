@@ -104,7 +104,7 @@ func TestBuildReExecArgs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.needsDirs {
-				require.NoError(t, pm.createDirectories())
+				require.NoError(t, pm.CreateDirectories())
 			}
 
 			args, err := pm.BuildReExecArgs(tt.opts)

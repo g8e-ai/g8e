@@ -34,7 +34,6 @@ import (
 
 func TestHandleBootstrapWithURL(t *testing.T) {
 	t.Run("Success - Bootstrap with CSR", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		csr := testutil.GenerateTestCSRP256(t, "test-operator")
 		cliCsr := testutil.GenerateTestCSRP256(t, "test-cli")
@@ -66,7 +65,6 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 	})
 
 	t.Run("Success - Rotation for existing bootstrap user", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
@@ -97,7 +95,6 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 	})
 
 	t.Run("Failure - Rotation fails for disabled bootstrap user", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		user, _ := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		c.userSvc.Disable(user.ID, "retired", "actor", "op")
@@ -123,7 +120,6 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 	})
 
 	t.Run("Failure - Rejects bootstrap if ANY other users exist", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		c.userSvc.CreateUser()
 
@@ -144,7 +140,6 @@ func TestHandleBootstrapWithURL(t *testing.T) {
 
 func TestHandleBootstrapStatus(t *testing.T) {
 	t.Run("Initially not bootstrapped", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/auth/bootstrap/status", nil)
 		rr := httptest.NewRecorder()
@@ -158,7 +153,6 @@ func TestHandleBootstrapStatus(t *testing.T) {
 	})
 
 	t.Run("Bootstrapped after creating a user", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		_, err := c.userSvc.CreateUser()
 		require.NoError(t, err)
@@ -177,7 +171,6 @@ func TestHandleBootstrapStatus(t *testing.T) {
 
 func TestHandleCLIEnrollment(t *testing.T) {
 	t.Run("Success - CLI enrollment after bootstrap", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
@@ -210,7 +203,6 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - Rejected when not bootstrapped", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		cliCSR := testutil.GenerateTestCSRP256(t, "test-cli")
@@ -231,7 +223,6 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - Rejected when bootstrap user disabled", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
@@ -255,7 +246,6 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - Missing cli_csr_pem", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
@@ -277,7 +267,6 @@ func TestHandleCLIEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - Method not allowed", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
@@ -295,7 +284,6 @@ func TestHandleCLIEnrollment(t *testing.T) {
 
 func TestHandleDeviceEnrollment(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/device/enroll", nil)
 		rr := httptest.NewRecorder()
@@ -306,7 +294,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/device/enroll", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
@@ -318,7 +305,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - missing csr_pem", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{
 			"system_fingerprint": "fp-123",
@@ -336,7 +322,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - missing system_fingerprint", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{
 			"csr_pem":  testutil.GenerateTestCSRP256(t, "test-device"),
@@ -354,7 +339,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - missing hostname", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		body := map[string]string{
 			"csr_pem":            testutil.GenerateTestCSRP256(t, "test-device"),
@@ -372,7 +356,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - bootstrap user disabled", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
@@ -395,7 +378,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - device enrollment on non-empty system", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		// Create a regular user to make system non-empty
 		c.userSvc.CreateUser()
@@ -417,7 +399,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Failure - missing cli_csr_pem", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		body := map[string]string{
@@ -437,7 +418,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Success - initial bootstrap", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		// Mock actuator key reader
@@ -477,7 +457,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Success - existing bootstrap user", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 		bootstrapUser, err := c.userSvc.CreateBootstrapUserWithOSUser(nil)
 		require.NoError(t, err)
@@ -504,7 +483,6 @@ func TestHandleDeviceEnrollment(t *testing.T) {
 	})
 
 	t.Run("Success - actuator key reader error (graceful degradation)", func(t *testing.T) {
-		t.Parallel()
 		c, _ := setupTestAuthController(t)
 
 		// Mock actuator key reader that returns an error

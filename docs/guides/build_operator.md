@@ -52,7 +52,7 @@ The binary always starts in CLI mode. Use `gw start` or `operator run` subcomman
 
 ### Prerequisites
 
-- **Go 1.26.4+**, required for building the reference operator.
+- **Go 1.26.5+**, required for building the reference operator.
 - **Make**, required to run build targets.
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:

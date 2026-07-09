@@ -38,7 +38,6 @@ import (
 )
 
 func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -51,7 +50,6 @@ func TestAuthService_ValidateOperatorSession_MissingSessionID(t *testing.T) {
 }
 
 func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -64,7 +62,6 @@ func TestAuthService_ValidateOperatorSession_SessionNotFound(t *testing.T) {
 }
 
 func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -91,7 +88,6 @@ func TestAuthService_ValidateOperatorSession_TerminatedStatus(t *testing.T) {
 }
 
 func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -129,7 +125,6 @@ func TestAuthService_ValidateOperatorSession_SessionExpired(t *testing.T) {
 }
 
 func TestAuthService_ValidateOperatorSession_UserInactive(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -191,7 +186,6 @@ func TestAuthError_Is(t *testing.T) {
 }
 
 func TestRouteAuthRegistry_ExactPaths(t *testing.T) {
-	t.Parallel()
 
 	registry := NewRouteAuthRegistry(false)
 
@@ -216,7 +210,6 @@ func TestRouteAuthRegistry_ExactPaths(t *testing.T) {
 }
 
 func TestRouteAuthRegistry_Prefixes(t *testing.T) {
-	t.Parallel()
 
 	registry := NewRouteAuthRegistry(false)
 
@@ -238,7 +231,6 @@ func TestRouteAuthRegistry_Prefixes(t *testing.T) {
 }
 
 func TestRouteAuthRegistry_JWKSEnabled(t *testing.T) {
-	t.Parallel()
 
 	// Registry with JWKS enabled
 	registryWithJWKS := NewRouteAuthRegistry(true)
@@ -280,7 +272,6 @@ func TestRouteAuthRegistry_JWKSEnabled(t *testing.T) {
 }
 
 func TestRouteAuthRegistry_NonPublicPaths(t *testing.T) {
-	t.Parallel()
 
 	registry := NewRouteAuthRegistry(false)
 
@@ -300,7 +291,6 @@ func TestRouteAuthRegistry_NonPublicPaths(t *testing.T) {
 }
 
 func TestRouteAuthRegistry_CanonicalCoverage(t *testing.T) {
-	t.Parallel()
 
 	registry := NewRouteAuthRegistry(false)
 
@@ -316,7 +306,6 @@ func TestRouteAuthRegistry_CanonicalCoverage(t *testing.T) {
 }
 
 func TestRouteAuthRegistry_PasskeyRoutes(t *testing.T) {
-	t.Parallel()
 
 	registry := NewRouteAuthRegistry(false)
 
@@ -349,7 +338,6 @@ func TestRouteAuthRegistry_PasskeyRoutes(t *testing.T) {
 }
 
 func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
-	t.Parallel()
 
 	registry := NewRouteAuthRegistry(false)
 
@@ -359,7 +347,6 @@ func TestRouteAuthRegistry_SSEDualAuth(t *testing.T) {
 }
 
 func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -368,7 +355,6 @@ func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
 	auth := NewAuthService(db, nil, logger, userSvc, personaSvc, res, "", nil, "", "", "")
 
 	t.Run("dual auth falls back to web session when no mTLS cert", func(t *testing.T) {
-		t.Parallel()
 		handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		})
@@ -389,7 +375,6 @@ func TestAuthService_Middleware_DualAuthDispatch(t *testing.T) {
 // an AppPolicy are denied access (deny-by-default enforcement).
 // This is a regression test for Finding 2: MCP/A2A ingress when JWKS omitted.
 func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
-	t.Parallel()
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
@@ -408,7 +393,6 @@ func TestAuthIntegrity_AppPolicyDenyByDefault(t *testing.T) {
 }
 
 func TestAuthService_Middleware_PublicBypass(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -434,7 +418,6 @@ func TestAuthService_Middleware_PublicBypass(t *testing.T) {
 }
 
 func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -471,7 +454,6 @@ func TestAuthService_Middleware_HealthBypassConsolidated(t *testing.T) {
 }
 
 func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -496,7 +478,6 @@ func TestAuthService_Middleware_MTLSRequired(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -521,7 +502,6 @@ func TestAuthService_WebSessionAuth_MissingCookie(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -546,7 +526,6 @@ func TestAuthService_WebSessionAuth_InvalidSession(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -571,7 +550,6 @@ func TestAuthService_WebSessionAuth_EmptyCookieValue(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -608,7 +586,6 @@ func TestAuthService_WebSessionAuth_SessionExpired(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -655,7 +632,6 @@ func TestAuthService_WebSessionAuth_UserInactive(t *testing.T) {
 }
 
 func TestAuthService_WebSessionAuth_Success(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -704,7 +680,6 @@ func TestAuthService_WebSessionAuth_Success(t *testing.T) {
 }
 
 func TestAuthService_HasJWKS(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -722,7 +697,6 @@ func TestAuthService_HasJWKS(t *testing.T) {
 }
 
 func TestAuthService_JWTAuthMiddleware_NotConfigured(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -746,7 +720,6 @@ func TestAuthService_JWTAuthMiddleware_NotConfigured(t *testing.T) {
 }
 
 func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -771,7 +744,6 @@ func TestAuthService_JWTAuthMiddleware_MissingBearer(t *testing.T) {
 }
 
 func TestAuthService_JWTAuthMiddleware_InvalidBearerFormat(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -797,7 +769,6 @@ func TestAuthService_JWTAuthMiddleware_InvalidBearerFormat(t *testing.T) {
 }
 
 func TestAuthService_JWTAuthMiddleware_EmptyToken(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -823,7 +794,6 @@ func TestAuthService_JWTAuthMiddleware_EmptyToken(t *testing.T) {
 }
 
 func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -865,7 +835,6 @@ func TestAuthService_HandleOperatorAuth_Success(t *testing.T) {
 }
 
 func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -879,7 +848,6 @@ func TestAuthService_HandleOperatorAuth_InvalidSession(t *testing.T) {
 }
 
 func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -906,7 +874,6 @@ func TestAuthService_HandleOperatorAuth_TerminatedOperator(t *testing.T) {
 }
 
 func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create an active user
@@ -946,7 +913,6 @@ func TestAuthService_HandleCLIAuth_Success(t *testing.T) {
 }
 
 func TestAuthService_HandleCLIAuth_SessionNotFound(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Test with non-existent CLI session
@@ -956,7 +922,6 @@ func TestAuthService_HandleCLIAuth_SessionNotFound(t *testing.T) {
 }
 
 func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create an expired CLI session
@@ -985,7 +950,6 @@ func TestAuthService_HandleCLIAuth_SessionExpired(t *testing.T) {
 }
 
 func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1008,7 +972,6 @@ func TestAuthService_HandleCLIAuth_UserInactive(t *testing.T) {
 }
 
 func TestAuthService_HandleAppAuth_NoAppPolicy(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1028,7 +991,6 @@ func TestAuthService_HandleAppAuth_NoAppPolicy(t *testing.T) {
 }
 
 func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1045,7 +1007,6 @@ func TestAuthService_HandleAppAuth_PolicyNotFound(t *testing.T) {
 }
 
 func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1074,7 +1035,6 @@ func TestAuthService_EnforceAppPolicy_RateLimit(t *testing.T) {
 }
 
 func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1095,7 +1055,6 @@ func TestAuthService_EnforceAppPolicy_PayloadSize(t *testing.T) {
 }
 
 func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create a CLI session linked to Operator session
@@ -1129,7 +1088,6 @@ func TestAuthService_CliCertBoundToOperator_Success(t *testing.T) {
 }
 
 func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1160,7 +1118,6 @@ func TestAuthService_CliCertBoundToOperator_SessionMismatch(t *testing.T) {
 }
 
 func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1193,7 +1150,6 @@ func TestAuthService_CliCertBoundToOperator_SessionExpired(t *testing.T) {
 // TestAuthService_HandleOperatorAuth_Integration tests the handleOperatorAuth path
 // through the middleware to ensure mTLS URI SAN validation works correctly.
 func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1235,7 +1191,6 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	middleware := auth.Middleware(handler)
 
 	t.Run("operator auth with valid mTLS URI SAN succeeds", func(t *testing.T) {
-		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
 		opURI, err := wid.OperatorSPIFFEURL(organizationID, "op-auth-test", operatorSessionID)
 		require.NoError(t, err)
@@ -1255,7 +1210,6 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 	})
 
 	t.Run("operator auth with mismatched URI SAN is rejected", func(t *testing.T) {
-		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
 		wrongURI, err := wid.OperatorSPIFFEURL("wrong-org", "wrong-op", operatorSessionID)
 		require.NoError(t, err)
@@ -1278,7 +1232,6 @@ func TestAuthService_HandleOperatorAuth_Integration(t *testing.T) {
 // TestAuthService_HandleCLIAuth_Integration tests the CLI auth path
 // through the middleware to ensure CLI session validation works correctly.
 func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1319,7 +1272,6 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	middleware := auth.Middleware(handler)
 
 	t.Run("CLI auth with valid mTLS URI SAN succeeds", func(t *testing.T) {
-		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
 		cliURI, err := wid.CLISPIFFEURL(userID, cliSessionID)
 		require.NoError(t, err)
@@ -1339,7 +1291,6 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 	})
 
 	t.Run("CLI auth with mismatched URI SAN is rejected", func(t *testing.T) {
-		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
 		wrongURI, err := wid.CLISPIFFEURL("wrong-user", "wrong-cli-session")
 		require.NoError(t, err)
@@ -1362,7 +1313,6 @@ func TestAuthService_HandleCLIAuth_Integration(t *testing.T) {
 // TestAuthService_HandleAppAuth_Integration tests the app auth path
 // through the middleware to ensure app policy validation works correctly.
 func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	userSvc := NewUserService(db, logger)
@@ -1393,7 +1343,6 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	middleware := auth.Middleware(handler)
 
 	t.Run("app auth with valid policy and mTLS URI SAN succeeds", func(t *testing.T) {
-		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
 		appURI, err := wid.AppSPIFFEURL(operatorID)
 		require.NoError(t, err)
@@ -1412,7 +1361,6 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	})
 
 	t.Run("app auth without policy is rejected", func(t *testing.T) {
-		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
 		appURI, err := wid.AppSPIFFEURL("no-policy-operator")
 		require.NoError(t, err)
@@ -1431,7 +1379,6 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	})
 
 	t.Run("app auth attempting to access privileged endpoint is rejected", func(t *testing.T) {
-		t.Parallel()
 		wid := protocol.NewWorkloadIdentity()
 		appURI, err := wid.AppSPIFFEURL(operatorID)
 		require.NoError(t, err)
@@ -1450,7 +1397,6 @@ func TestAuthService_HandleAppAuth_Integration(t *testing.T) {
 	})
 
 	t.Run("auth middleware extracts operator session info from headers", func(t *testing.T) {
-		t.Parallel()
 		opID := "op-audit-123"
 		opSessionID := "opsess-audit-456"
 		cliSessionID := "cli-sess-audit-789"

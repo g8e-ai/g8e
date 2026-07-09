@@ -106,7 +106,6 @@ func TestTribunalConsensus_IdempotentEnrollment(t *testing.T) {
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
-	t.Cleanup(f.Cleanup)
 
 	// First enrollment
 	identity1 := fixtures.EnrollClientIdentity(t, f, "idempotent-user", "test-org", "fp-idempotent", "test-host")
@@ -130,7 +129,6 @@ func TestTribunalConsensus_MalformedCSR(t *testing.T) {
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
-	t.Cleanup(f.Cleanup)
 
 	// Enroll a valid identity first to get an mTLS client for the enrollment endpoint
 	identity := fixtures.EnrollClientIdentity(t, f, "csr-test-user", "test-org", "fp-csr-test", "test-host")
@@ -165,7 +163,6 @@ func TestTribunalConsensus_DelegatedAppEnrollment(t *testing.T) {
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
-	t.Cleanup(f.Cleanup)
 
 	// Enroll a client identity to get CLI credentials
 	identity := fixtures.EnrollClientIdentity(t, f, "delegated-user", "test-org", "fp-delegated", "test-host")
@@ -214,7 +211,6 @@ func TestTribunalConsensus_QuorumReached(t *testing.T) {
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
-	t.Cleanup(f.Cleanup)
 
 	// Override the default 1-member tribunal with a 3-member tribunal at quorum 2.
 	// All 3 members hold private keys, so all 3 can vote — quorum is met.
@@ -254,7 +250,6 @@ func TestTribunalConsensus_QuorumNotReached(t *testing.T) {
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
-	t.Cleanup(f.Cleanup)
 
 	// 3 members in policy, quorum 2, but only 1 service member has a private key.
 	// Only 1 vote will be produced — below quorum threshold of 2.
@@ -288,7 +283,6 @@ func TestTribunalConsensus_VetoByMITRE(t *testing.T) {
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
-	t.Cleanup(f.Cleanup)
 
 	// Use a single-member tribunal (quorum 1) so a single false vote blocks.
 	fixtures.SetupTribunal(t, f, "veto-tribunal", 1, 1, 1)
@@ -324,7 +318,6 @@ func TestTribunalConsensus_L1ToL5Walkthrough(t *testing.T) {
 		Posture:           config.PostureConsensus,
 		AllowTestPortZero: true,
 	})
-	t.Cleanup(f.Cleanup)
 
 	// The fixture auto-wires a 1-member tribunal for consensus posture.
 	identity := fixtures.EnrollClientIdentity(t, f, "walkthrough-user", "test-org", "fp-walkthrough", "test-host")

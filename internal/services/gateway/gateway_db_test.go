@@ -51,14 +51,12 @@ func mustDocJSON(t *testing.T, v interface{}) json.RawMessage {
 }
 
 func TestGatewaySchema(t *testing.T) {
-	t.Parallel()
 	schema := GatewaySchema()
 	assert.NotEmpty(t, schema, "GatewaySchema should return non-empty schema")
 	assert.Contains(t, schema, "CREATE TABLE", "Schema should contain CREATE TABLE statements")
 }
 
 func TestCanonicalDBService_GetDB(t *testing.T) {
-	t.Parallel()
 	dataDir := t.TempDir()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -72,7 +70,6 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 }
 
 func TestCanonicalDBService_Wait(t *testing.T) {
-	t.Parallel()
 	dataDir := t.TempDir()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -89,7 +86,6 @@ func TestCanonicalDBService_Wait(t *testing.T) {
 }
 
 func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
-	t.Parallel()
 	dataDir := t.TempDir()
 	secretsDir := t.TempDir()
 	logger := testutil.NewTestLogger()
@@ -134,7 +130,6 @@ func newTestDB(t *testing.T) *CanonicalDBService {
 // ---------------------------------------------------------------------------
 
 func TestDocSetAndGet(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "admin"}))
@@ -151,7 +146,6 @@ func TestDocSetAndGet(t *testing.T) {
 }
 
 func TestDocGetNotFound(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	doc, err := db.DocStore.DocGet("users", "nonexistent")
@@ -160,7 +154,6 @@ func TestDocGetNotFound(t *testing.T) {
 }
 
 func TestDocUpdate(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "role": "user"}))
@@ -173,7 +166,6 @@ func TestDocUpdate(t *testing.T) {
 }
 
 func TestDocUpdateNotFound(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	_, err := db.DocStore.DocUpdate("users", "nonexistent", mustDocJSON(t, map[string]string{"role": "admin"}))
@@ -182,7 +174,6 @@ func TestDocUpdateNotFound(t *testing.T) {
 }
 
 func TestDocUpdateDeleteField(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice", "temp": "remove_me"}))
@@ -195,7 +186,6 @@ func TestDocUpdateDeleteField(t *testing.T) {
 }
 
 func TestDocDelete(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	err := db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"}))
@@ -211,7 +201,6 @@ func TestDocDelete(t *testing.T) {
 }
 
 func TestDocDeleteNotFound(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	deleted, err := db.DocStore.DocDelete("users", "non-existent-id")
@@ -220,7 +209,6 @@ func TestDocDeleteNotFound(t *testing.T) {
 }
 
 func TestDocQuery(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("operators", "op1", mustDocJSON(t, map[string]string{"status": "active", "name": "op-a"})))
@@ -237,7 +225,6 @@ func TestDocQuery(t *testing.T) {
 }
 
 func TestDocQueryWithOrderAndLimit(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("items", "a", mustDocJSON(t, map[string]int{"priority": 3})))
@@ -250,7 +237,6 @@ func TestDocQueryWithOrderAndLimit(t *testing.T) {
 }
 
 func TestDocQueryEmptyCollection(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	results, err := db.DocStore.DocQuery("empty_collection", nil, "", 0)
@@ -259,7 +245,6 @@ func TestDocQueryEmptyCollection(t *testing.T) {
 }
 
 func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("things", "t1", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`5`)})))
@@ -267,7 +252,6 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	require.NoError(t, db.DocStore.DocSet("things", "t3", mustDocJSON(t, map[string]json.RawMessage{"label": json.RawMessage(`"foo"`), "count": json.RawMessage(`20`)})))
 
 	t.Run("string equality", func(t *testing.T) {
-		t.Parallel()
 		results, err := db.DocStore.DocQuery("things", []models.DocFilter{
 			{Field: "label", Op: "==", Value: json.RawMessage(`"foo"`)},
 		}, "", 0)
@@ -276,7 +260,6 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	})
 
 	t.Run("numeric greater-than", func(t *testing.T) {
-		t.Parallel()
 		results, err := db.DocStore.DocQuery("things", []models.DocFilter{
 			{Field: "count", Op: ">", Value: json.RawMessage(`7`)},
 		}, "", 0)
@@ -285,7 +268,6 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 	})
 
 	t.Run("numeric equality", func(t *testing.T) {
-		t.Parallel()
 		results, err := db.DocStore.DocQuery("things", []models.DocFilter{
 			{Field: "count", Op: "==", Value: json.RawMessage(`10`)},
 		}, "", 0)
@@ -299,7 +281,6 @@ func TestDocQueryFilterValueUnmarshaling(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSchemaIdempotent(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	secretsDir := t.TempDir()
 
@@ -327,7 +308,6 @@ func TestSchemaIdempotent(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCreateDataDir(t *testing.T) {
-	t.Parallel()
 	tmpDir := t.TempDir()
 	dir := filepath.Join(tmpDir, "nested", "deep", "data")
 	secretsDir := t.TempDir()
@@ -347,7 +327,6 @@ func TestCreateDataDir(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("users", "u1", mustDocJSON(t, map[string]string{"name": "alice"})))
@@ -375,7 +354,6 @@ func TestDocSet_UpsertReplacesDataAndUpdatesTimestamp(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("things", "t1", mustDocJSON(t, map[string]string{"x": "original"})))
@@ -399,7 +377,6 @@ func TestDocUpdate_PreservesCreatedAt(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestDocQuery_InvalidFilterFieldReturnsError(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
@@ -412,7 +389,6 @@ func TestDocQuery_InvalidFilterFieldReturnsError(t *testing.T) {
 }
 
 func TestDocQuery_InvalidOrderByFieldReturnsError(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
@@ -423,7 +399,6 @@ func TestDocQuery_InvalidOrderByFieldReturnsError(t *testing.T) {
 }
 
 func TestDocQuery_UnknownOpIsSkipped(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.DocStore.DocSet("items", "i1", mustDocJSON(t, map[string]string{"name": "x"})))
@@ -441,7 +416,6 @@ func TestDocQuery_UnknownOpIsSkipped(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSSEEventsCount_EmptyTable(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	count, err := db.SSEStore.SSEEventsCount()
@@ -450,7 +424,6 @@ func TestSSEEventsCount_EmptyTable(t *testing.T) {
 }
 
 func TestSSEEventsAppendAndCount(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"hello"}`, ""))
@@ -463,7 +436,6 @@ func TestSSEEventsAppendAndCount(t *testing.T) {
 }
 
 func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "sess-1"}, "TEXT", `{"chunk":"a"}`, ""))
@@ -479,7 +451,6 @@ func TestSSEEventsWipe_DeletesAllRows(t *testing.T) {
 }
 
 func TestSSEEventsWipe_EmptyTableReturnsZero(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	deleted, err := db.SSEStore.SSEEventsWipe()
@@ -492,7 +463,6 @@ func TestSSEEventsWipe_EmptyTableReturnsZero(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBlobStoreService_RunMaintenance(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	require.NoError(t, db.BlobStore.BlobPut("ns", "keep", []byte("data"), "text/plain", 0))
@@ -515,7 +485,6 @@ func TestBlobStoreService_RunMaintenance(t *testing.T) {
 }
 
 func TestHasTrustedSigners(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Initially no signers
@@ -567,7 +536,6 @@ func TestHasTrustedSigners(t *testing.T) {
 }
 
 func TestHasTrustedSigners_EmptyCollection(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	has, err := db.SignerStore.HasTrustedSigners()
@@ -576,7 +544,6 @@ func TestHasTrustedSigners_EmptyCollection(t *testing.T) {
 }
 
 func TestGetField(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create a document with multiple fields
@@ -608,7 +575,6 @@ func TestGetField(t *testing.T) {
 }
 
 func TestDocDeleteNamespace(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create multiple documents in a namespace
@@ -651,7 +617,6 @@ func TestDocDeleteNamespace(t *testing.T) {
 }
 
 func TestDocDeleteNamespace_Empty(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	deleted, err := db.DocStore.DocDeleteNamespace("empty_namespace")
@@ -660,7 +625,6 @@ func TestDocDeleteNamespace_Empty(t *testing.T) {
 }
 
 func TestDocCreate(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create a new document
@@ -683,7 +647,6 @@ func TestDocCreate(t *testing.T) {
 }
 
 func TestDocCreate_WithSystemFields(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create a document with system fields that should be stripped
@@ -709,7 +672,6 @@ func TestDocCreate_WithSystemFields(t *testing.T) {
 }
 
 func TestFinalizeNonce(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create a nonce in the nonces table with expires_at
@@ -729,7 +691,6 @@ func TestFinalizeNonce(t *testing.T) {
 }
 
 func TestFinalizeNonce_NonExistent(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Finalize non-existent nonce should not error
@@ -738,7 +699,6 @@ func TestFinalizeNonce_NonExistent(t *testing.T) {
 }
 
 func TestReleaseNonce(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create a nonce in the nonces table
@@ -758,7 +718,6 @@ func TestReleaseNonce(t *testing.T) {
 }
 
 func TestReleaseNonce_NonExistent(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Release non-existent nonce should not error
@@ -767,7 +726,6 @@ func TestReleaseNonce_NonExistent(t *testing.T) {
 }
 
 func TestBlobDelete(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Create a blob
@@ -786,7 +744,6 @@ func TestBlobDelete(t *testing.T) {
 }
 
 func TestBlobDelete_NonExistent(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Delete non-existent blob

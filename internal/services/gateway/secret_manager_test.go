@@ -118,7 +118,6 @@ func updatePlatformSetting(t *testing.T, db *sqliteutil.DB, name string, value s
 }
 
 func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -136,7 +135,6 @@ func TestSecretManager_InitAppSettings_CreatesSecretsAndFiles(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -158,7 +156,6 @@ func TestSecretManager_InitAppSettings_CreatesValidActuatorKey(t *testing.T) {
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -173,7 +170,6 @@ func TestSecretManager_GetActuatorKey_RejectsMalformedSeedLength(t *testing.T) {
 }
 
 func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -186,7 +182,6 @@ func TestSecretManager_GetActuatorKey_RejectsMismatchedKeyID(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -204,7 +199,6 @@ func TestSecretManager_InitAppSettings_FailsWhenFileWriteFails(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -222,7 +216,6 @@ func TestSecretManager_InitAppSettings_DetectsDBFileDivergence(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -246,7 +239,6 @@ func TestSecretManager_InitAppSettings_WritesDigestManifest(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -260,7 +252,6 @@ func TestSecretManager_InitAppSettings_ManifestPermissions(t *testing.T) {
 }
 
 func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -278,7 +269,6 @@ func TestSecretManager_InitAppSettings_RejectsUncoordinatedSecretRotation(t *tes
 }
 
 func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSettings(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -291,7 +281,6 @@ func TestSecretManager_InitAppSettings_RejectsPreexistingSecretWithoutAppSetting
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -306,7 +295,6 @@ func TestSecretManager_InitAppSettings_FailsWhenRequiredSecretFileMissing(t *tes
 }
 
 func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -323,7 +311,6 @@ func TestSecretManager_InitAppSettings_RecreatesWhenDigestManifestMissing(t *tes
 }
 
 func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -345,7 +332,6 @@ func TestSecretManager_InitAppSettings_FailsWhenDigestManifestEntryMissing(t *te
 }
 
 func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 
@@ -367,7 +353,6 @@ func TestSecretManager_InitAppSettings_ReturnsErrorOnMalformedPlatformSettings(t
 }
 
 func TestSecretManager_APIKeys(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -386,7 +371,6 @@ func TestSecretManager_APIKeys(t *testing.T) {
 }
 
 func TestSecretManager_OperatorPrivateKey(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -411,7 +395,6 @@ func TestSecretManager_OperatorPrivateKey(t *testing.T) {
 }
 
 func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -425,7 +408,6 @@ func TestSecretManager_OperatorPrivateKey_RejectsInvalidSeed(t *testing.T) {
 }
 
 func TestSecretManager_CLIPrivateKey(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -450,7 +432,6 @@ func TestSecretManager_CLIPrivateKey(t *testing.T) {
 }
 
 func TestSecretManager_SessionToken(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -467,7 +448,6 @@ func TestSecretManager_SessionToken(t *testing.T) {
 }
 
 func TestSecretManager_SessionToken_Expires(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -485,7 +465,6 @@ func TestSecretManager_SessionToken_Expires(t *testing.T) {
 }
 
 func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -499,7 +478,6 @@ func TestSecretManager_SessionToken_InvalidFormat(t *testing.T) {
 }
 
 func TestSecretManager_GetKeystore(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -510,7 +488,6 @@ func TestSecretManager_GetKeystore(t *testing.T) {
 }
 
 func TestSecretManager_GetSessionEncryptionKey(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -526,7 +503,6 @@ func TestSecretManager_GetSessionEncryptionKey(t *testing.T) {
 }
 
 func TestSecretManager_GetSessionEncryptionKey_NotInitialized(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -537,7 +513,6 @@ func TestSecretManager_GetSessionEncryptionKey_NotInitialized(t *testing.T) {
 }
 
 func TestSecretManager_GetAuditorHMACKey(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -553,7 +528,6 @@ func TestSecretManager_GetAuditorHMACKey(t *testing.T) {
 }
 
 func TestSecretManager_GetAuditorHMACKey_NotInitialized(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -564,7 +538,6 @@ func TestSecretManager_GetAuditorHMACKey_NotInitialized(t *testing.T) {
 }
 
 func TestSecretManager_NotaryKey(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -582,7 +555,6 @@ func TestSecretManager_NotaryKey(t *testing.T) {
 }
 
 func TestSecretManager_GetNotaryKey_NotInitialized(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)
@@ -593,7 +565,6 @@ func TestSecretManager_GetNotaryKey_NotInitialized(t *testing.T) {
 }
 
 func TestSecretManager_CleanupStaleAppSettings(t *testing.T) {
-	t.Parallel()
 	db := newSecretManagerTestDB(t)
 	secretsDir := t.TempDir()
 	sm := newTestSecretManager(t, db, secretsDir)

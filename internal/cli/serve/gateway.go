@@ -157,6 +157,13 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	// If posture is consensus or notary, TribunalID must be set and the
 	// TribunalPolicy must exist and be enabled in the database. Fail fast
 	// before starting any services.
+	//
+	// This is a two-phase check:
+	//   Phase 1 (line 160): fail-fast pre-check with quorum=1 before loading
+	//     the policy from the database. Catches missing TribunalID or
+	//     non-L2 posture misconfiguration without a DB round-trip.
+	//   Phase 2 (line 171): validates with the actual quorum from the
+	//     loaded TribunalPolicy. Catches quorum=0 or other DB-level issues.
 	if err := config.ValidateL2PostureStartup(string(cfg.Posture), cfg.TribunalID, 1); err != nil {
 		return fmt.Errorf("gateway: startup validation: %w", err)
 	}

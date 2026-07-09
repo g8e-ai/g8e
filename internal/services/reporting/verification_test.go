@@ -44,7 +44,7 @@ func setupTestAuditStore(t *testing.T) *storage.SQLAuditStore {
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	vaultDir := filepath.Join(tempDir, "vault")
+	vaultDir := filepath.Join(tempDir, constants.VaultDirname)
 	testVault := createTestVault(t, vaultDir, privKey)
 
 	cfg := &storage.AuditStoreConfig{

@@ -39,7 +39,6 @@ import (
 // connections on any transient burst (e.g., large stdout followed by rapid
 // heartbeats).
 func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
-	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	broker := NewGatewayWebSocketHandler(logger)
@@ -84,7 +83,6 @@ func TestPubSubBackPressureDropsOldestAndLogs(t *testing.T) {
 // channels. The prior kill-on-overflow policy synchronously evicted the
 // subscriber from broker maps; drop-oldest must not.
 func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
@@ -105,7 +103,6 @@ func TestPubSubBackPressureKeepsSubscriptions(t *testing.T) {
 }
 
 func TestPubSubSessionHandler_handleAction(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
@@ -173,7 +170,6 @@ func TestPubSubSessionHandler_handleAction(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			tt.preSetup()
 			handler.handleAction(tt.msg)
 			tt.validate(t)
@@ -182,7 +178,6 @@ func TestPubSubSessionHandler_handleAction(t *testing.T) {
 }
 
 func TestPubSubSessionHandler_cleanup(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
@@ -219,7 +214,6 @@ func TestPubSubSessionHandler_cleanup(t *testing.T) {
 // triple-signal (closed bool + close(send) + ws.Close) bookkeeping that
 // was the root cause of a subtle double-close race.
 func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
@@ -253,7 +247,6 @@ func TestPubSubSubscriberShutdownIsIdempotentAndFailsFast(t *testing.T) {
 // TestPubSubHappyPathDoesNotLogDrop ensures the back-pressure warning
 // is not emitted on normal delivery.
 func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
-	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	broker := NewGatewayWebSocketHandler(logger)
@@ -266,7 +259,6 @@ func TestPubSubHappyPathDoesNotLogDrop(t *testing.T) {
 }
 
 func TestNewGatewayWebSocketHandler(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
@@ -277,7 +269,6 @@ func TestNewGatewayWebSocketHandler(t *testing.T) {
 }
 
 func TestRegisterHandler(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
@@ -309,7 +300,6 @@ func TestRegisterHandler(t *testing.T) {
 }
 
 func TestSubscribe(t *testing.T) {
-	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 	broker := NewGatewayWebSocketHandler(logger)
 
@@ -327,7 +317,6 @@ func TestSubscribe(t *testing.T) {
 }
 
 func TestIsDone(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name     string
@@ -353,7 +342,6 @@ func TestIsDone(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
 			sub := tt.setup()
 			assert.Equal(t, tt.expected, sub.isDone())
 		})
@@ -361,7 +349,6 @@ func TestIsDone(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_NoTLS(t *testing.T) {
-	t.Parallel()
 	req := httptest.NewRequest("GET", "/test", nil)
 
 	spiffeID, operatorID := extractMTLSIdentity(req)
@@ -371,7 +358,6 @@ func TestExtractMTLSIdentity_NoTLS(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_NoPeerCertificates(t *testing.T) {
-	t.Parallel()
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.TLS = &tls.ConnectionState{}
 
@@ -382,7 +368,6 @@ func TestExtractMTLSIdentity_NoPeerCertificates(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_NoURISANs(t *testing.T) {
-	t.Parallel()
 	req := httptest.NewRequest("GET", "/test", nil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{}},
@@ -395,7 +380,6 @@ func TestExtractMTLSIdentity_NoURISANs(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_OperatorSPIFFEID(t *testing.T) {
-	t.Parallel()
 	spiffeURL, err := url.Parse("spiffe://g8e.local/operator/org-123/op-456/session-789")
 	require.NoError(t, err)
 
@@ -413,7 +397,6 @@ func TestExtractMTLSIdentity_OperatorSPIFFEID(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_AppSPIFFEID(t *testing.T) {
-	t.Parallel()
 	spiffeURL, err := url.Parse("spiffe://g8e.local/app/op-123")
 	require.NoError(t, err)
 
@@ -431,7 +414,6 @@ func TestExtractMTLSIdentity_AppSPIFFEID(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_UnknownSPIFFEID(t *testing.T) {
-	t.Parallel()
 	spiffeURL, err := url.Parse("spiffe://g8e.local/unknown/type")
 	require.NoError(t, err)
 
@@ -449,7 +431,6 @@ func TestExtractMTLSIdentity_UnknownSPIFFEID(t *testing.T) {
 }
 
 func TestExtractMTLSIdentity_MalformedOperatorSPIFFEID(t *testing.T) {
-	t.Parallel()
 	spiffeURL, err := url.Parse("spiffe://g8e.local/operator/too-short")
 	require.NoError(t, err)
 

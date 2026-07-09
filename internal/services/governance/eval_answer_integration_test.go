@@ -38,7 +38,6 @@ import (
 // TestEvalAnswerVerification tests that EVAL_ANSWER envelopes are accepted by the verifier
 // and can be executed by the Actuator with a signed receipt.
 func TestEvalAnswerVerification(t *testing.T) {
-	t.Parallel()
 	// Generate test key
 	pubKey, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err, "failed to generate signer")

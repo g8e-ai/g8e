@@ -32,7 +32,6 @@ import (
 )
 
 func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
-	t.Parallel()
 	cases := []struct {
 		err      error
 		expected int
@@ -73,7 +72,6 @@ func TestClassifyEnvelopeError_Exhaustive(t *testing.T) {
 }
 
 func TestVerifyEnvelopeIdentityBinding_Exhaustive(t *testing.T) {
-	t.Parallel()
 
 	mustParseURL := func(s string) *url.URL {
 		u, err := url.Parse(s)

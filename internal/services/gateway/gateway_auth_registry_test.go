@@ -22,7 +22,6 @@ import (
 )
 
 func TestPrivilegedRouteRegistry_PrivilegedPaths(t *testing.T) {
-	t.Parallel()
 
 	registry := NewPrivilegedRouteRegistry()
 
@@ -39,7 +38,6 @@ func TestPrivilegedRouteRegistry_PrivilegedPaths(t *testing.T) {
 }
 
 func TestPrivilegedRouteRegistry_NonPrivilegedPaths(t *testing.T) {
-	t.Parallel()
 
 	registry := NewPrivilegedRouteRegistry()
 
@@ -61,7 +59,6 @@ func TestPrivilegedRouteRegistry_NonPrivilegedPaths(t *testing.T) {
 }
 
 func TestPrivilegedRouteRegistry_CanonicalCoverage(t *testing.T) {
-	t.Parallel()
 
 	registry := NewPrivilegedRouteRegistry()
 

@@ -62,11 +62,12 @@ type AuthController struct {
 	webSessionSvc      *WebSessionService
 	cliSessionSvc      *CLISessionService
 	operatorSessionSvc *OperatorSessionService
+	enrollmentTokenSvc *EnrollmentTokenService
 	responder          *response.Writer
 	actuatorKeyReader  actuatorKeyReader
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyHandler, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
+func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyHandler, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, enrollmentTokenSvc *EnrollmentTokenService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
 	return &AuthController{
 		cfg:                cfg,
 		logger:             logger,
@@ -79,6 +80,7 @@ func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBS
 		webSessionSvc:      webSessionSvc,
 		cliSessionSvc:      cliSessionSvc,
 		operatorSessionSvc: operatorSessionSvc,
+		enrollmentTokenSvc: enrollmentTokenSvc,
 		responder:          responder,
 		actuatorKeyReader:  actuatorKeyReader,
 	}

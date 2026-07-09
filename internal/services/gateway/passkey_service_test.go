@@ -70,7 +70,6 @@ func newPasskeyServiceForTest(t *testing.T) (*PasskeyService, *models.User) {
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
-	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 	validProof := &commonv1.L3Proof{
 		CredentialId:      base64.RawURLEncoding.EncodeToString([]byte("credential-id-123456")),
@@ -97,7 +96,6 @@ func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			ok, err := svc.VerifyL3Proof(context.Background(), tc.userID, tc.transactionHash, "", tc.proof)
 			require.Error(t, err)
 			assert.False(t, ok)
@@ -106,7 +104,6 @@ func TestPasskeyServiceVerifyL3ProofRejectsMissingInputs(t *testing.T) {
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsUsersWithoutPasskeys(t *testing.T) {
-	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 
 	ok, err := svc.VerifyL3Proof(context.Background(), user.ID, strings.Repeat("a", 64), "", &commonv1.L3Proof{
@@ -121,7 +118,6 @@ func TestPasskeyServiceVerifyL3ProofRejectsUsersWithoutPasskeys(t *testing.T) {
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) {
-	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 
 	// Add a dummy credential
@@ -140,7 +136,6 @@ func TestPasskeyServiceVerifyL3ProofRejectsUnregisteredCredential(t *testing.T) 
 }
 
 func TestPasskeyServiceVerifyL3ProofRejectsMismatchedChallenge(t *testing.T) {
-	t.Parallel()
 	svc, user := newPasskeyServiceForTest(t)
 
 	// Add a dummy credential (we won't get to signature verification if challenge check fails first)
@@ -168,10 +163,8 @@ func TestPasskeyServiceVerifyL3ProofRejectsMismatchedChallenge(t *testing.T) {
 }
 
 func TestPasskeyService_GenerateRegistrationChallenge(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - generates challenge for user", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		challenge, err := svc.GenerateRegistrationChallenge(user.ID, "test-user")
@@ -181,7 +174,6 @@ func TestPasskeyService_GenerateRegistrationChallenge(t *testing.T) {
 	})
 
 	t.Run("Error - user not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		_, err := svc.GenerateRegistrationChallenge("non-existent-user", "test-user")
@@ -190,10 +182,8 @@ func TestPasskeyService_GenerateRegistrationChallenge(t *testing.T) {
 }
 
 func TestPasskeyService_VerifyRegistration(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Error - user not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		_, err := svc.VerifyRegistration("non-existent-user", []byte("{}"))
@@ -201,7 +191,6 @@ func TestPasskeyService_VerifyRegistration(t *testing.T) {
 	})
 
 	t.Run("Error - session not found", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		_, err := svc.VerifyRegistration(user.ID, []byte("{}"))
@@ -210,10 +199,8 @@ func TestPasskeyService_VerifyRegistration(t *testing.T) {
 }
 
 func TestPasskeyService_GenerateAuthenticationChallenge(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - generates challenge for user with credentials", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add a credential
@@ -227,7 +214,6 @@ func TestPasskeyService_GenerateAuthenticationChallenge(t *testing.T) {
 	})
 
 	t.Run("Error - user not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		_, err := svc.GenerateAuthenticationChallenge("non-existent-user")
@@ -235,7 +221,6 @@ func TestPasskeyService_GenerateAuthenticationChallenge(t *testing.T) {
 	})
 
 	t.Run("Error - user has no passkeys", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		_, err := svc.GenerateAuthenticationChallenge(user.ID)
@@ -244,10 +229,8 @@ func TestPasskeyService_GenerateAuthenticationChallenge(t *testing.T) {
 }
 
 func TestPasskeyService_VerifyAuthentication(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Error - user not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		_, err := svc.VerifyAuthentication("non-existent-user", []byte("{}"))
@@ -255,7 +238,6 @@ func TestPasskeyService_VerifyAuthentication(t *testing.T) {
 	})
 
 	t.Run("Error - session not found", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		_, err := svc.VerifyAuthentication(user.ID, []byte("{}"))
@@ -264,10 +246,8 @@ func TestPasskeyService_VerifyAuthentication(t *testing.T) {
 }
 
 func TestPasskeyService_GenerateApprovalChallenge(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - generates approval challenge", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add a credential
@@ -281,7 +261,6 @@ func TestPasskeyService_GenerateApprovalChallenge(t *testing.T) {
 	})
 
 	t.Run("Error - user not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		_, err := svc.GenerateApprovalChallenge("non-existent-user", "tx-hash")
@@ -290,10 +269,8 @@ func TestPasskeyService_GenerateApprovalChallenge(t *testing.T) {
 }
 
 func TestPasskeyService_ListCredentials(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - lists credentials for user", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add credentials
@@ -309,7 +286,6 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 	})
 
 	t.Run("Success - returns nil for non-existent user", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		creds, err := svc.listCredentials("non-existent-user")
@@ -318,7 +294,6 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 	})
 
 	t.Run("Success - returns empty list for user with no credentials", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		creds, err := svc.listCredentials(user.ID)
@@ -328,10 +303,8 @@ func TestPasskeyService_ListCredentials(t *testing.T) {
 }
 
 func TestPasskeyService_RevokeCredential(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - revokes credential", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		// Add credentials
@@ -354,7 +327,6 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 	})
 
 	t.Run("Success - credential not found", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		found, remaining, err := svc.revokeCredential(user.ID, "non-existent-cred")
@@ -364,7 +336,6 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 	})
 
 	t.Run("Success - returns nil for non-existent user", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		found, remaining, err := svc.revokeCredential("non-existent-user", "cred-id")
@@ -375,10 +346,8 @@ func TestPasskeyService_RevokeCredential(t *testing.T) {
 }
 
 func TestPasskeyService_getUser(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - retrieves user", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		retrieved, err := svc.getUser(user.ID)
@@ -388,7 +357,6 @@ func TestPasskeyService_getUser(t *testing.T) {
 	})
 
 	t.Run("Success - returns nil for non-existent user", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		retrieved, err := svc.getUser("non-existent-user")
@@ -398,10 +366,8 @@ func TestPasskeyService_getUser(t *testing.T) {
 }
 
 func TestPasskeyService_addCredential(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - adds credential", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		err := svc.addCredential(user.ID, testCredential("cred-1"))
@@ -413,7 +379,6 @@ func TestPasskeyService_addCredential(t *testing.T) {
 	})
 
 	t.Run("Error - user not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		err := svc.addCredential("non-existent-user", testCredential("cred-1"))
@@ -422,10 +387,8 @@ func TestPasskeyService_addCredential(t *testing.T) {
 }
 
 func TestPasskeyService_setCredentials(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - sets credentials", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		creds := []models.PasskeyCredential{
@@ -442,7 +405,6 @@ func TestPasskeyService_setCredentials(t *testing.T) {
 	})
 
 	t.Run("Error - user not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		err := svc.setCredentials("non-existent-user", []models.PasskeyCredential{})
@@ -451,10 +413,8 @@ func TestPasskeyService_setCredentials(t *testing.T) {
 }
 
 func TestPasskeyService_updateUser(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - updates user", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		user.Status = "test-status"
@@ -511,7 +471,6 @@ func newPasskeyServiceWithMock(t *testing.T) (*PasskeyService, *models.User) {
 }
 
 func TestPasskeyService_PurgeSessionAfterVerifyRegistration(t *testing.T) {
-	t.Parallel()
 	svc, user := newPasskeyServiceWithMock(t)
 
 	_, err := svc.GenerateRegistrationChallenge(user.ID, "test-user")
@@ -528,7 +487,6 @@ func TestPasskeyService_PurgeSessionAfterVerifyRegistration(t *testing.T) {
 }
 
 func TestPasskeyService_PurgeSessionAfterVerifyAuthentication(t *testing.T) {
-	t.Parallel()
 	svc, user := newPasskeyServiceWithMock(t)
 
 	err := svc.addCredential(user.ID, testCredential("mock-cred-id"))
@@ -548,10 +506,8 @@ func TestPasskeyService_PurgeSessionAfterVerifyAuthentication(t *testing.T) {
 }
 
 func TestPasskeyService_storeWebAuthnSession(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - stores session", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		session := &webauthn.SessionData{
@@ -565,10 +521,8 @@ func TestPasskeyService_storeWebAuthnSession(t *testing.T) {
 }
 
 func TestPasskeyService_getWebAuthnSession(t *testing.T) {
-	t.Parallel()
 
 	t.Run("Success - retrieves session", func(t *testing.T) {
-		t.Parallel()
 		svc, user := newPasskeyServiceForTest(t)
 
 		session := &webauthn.SessionData{
@@ -586,7 +540,6 @@ func TestPasskeyService_getWebAuthnSession(t *testing.T) {
 	})
 
 	t.Run("Error - session not found", func(t *testing.T) {
-		t.Parallel()
 		svc, _ := newPasskeyServiceForTest(t)
 
 		_, err := svc.getWebAuthnSession("non-existent-user")

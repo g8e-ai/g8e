@@ -47,7 +47,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	dbController, db := setupTestDBController(t)
 
 	t.Run("BadRequest - no collection", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleDataDB(rr, req)
@@ -55,7 +54,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("BadRequest - no ID", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/users/", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleDataDB(rr, req)
@@ -141,7 +139,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/data/settings/u1", strings.NewReader("{invalid-json}"))
 		rr := httptest.NewRecorder()
 		dbController.handleDataDB(rr, req)
@@ -150,7 +147,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("PATCH not found", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPatch, "/api/v1/data/settings/nonexistent", bytes.NewReader(mustDocJSON(t, map[string]string{"foo": "bar"})))
 		rr := httptest.NewRecorder()
 		dbController.handleDataDB(rr, req)
@@ -158,7 +154,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("DELETE not found", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/data/users/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleDataDB(rr, req)
@@ -166,7 +161,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/data/users/u1", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleDataDB(rr, req)
@@ -174,7 +168,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Non-bootstrap mutations redirect to governance envelope", func(t *testing.T) {
-		t.Parallel()
 		tests := []struct {
 			method string
 			body   []byte
@@ -194,7 +187,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("Query validation", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/data/items/_query", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
 		dbController.handleDBQuery(rr, req, "items")
@@ -202,7 +194,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events count", func(t *testing.T) {
-		t.Parallel()
 		db.SSEStore.SSEEventsAppend(SSERoute{WebSessionID: "s1"}, "T", "{}", "")
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/_sse_events/count", nil)
 		rr := httptest.NewRecorder()
@@ -211,7 +202,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events wipe", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/data/_sse_events", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleSSEEvents(rr, req, "")
@@ -219,7 +209,6 @@ func TestDBControllerHandleDB(t *testing.T) {
 	})
 
 	t.Run("SSE Events invalid", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/data/_sse_events/invalid", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleSSEEvents(rr, req, "invalid")
@@ -273,7 +262,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1", strings.NewReader("{invalid-json}"))
 		rr := httptest.NewRecorder()
 		dbController.handleKV(rr, req)
@@ -281,7 +269,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("TTL required for expire", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/kv/k1/_expire", strings.NewReader(`{"ttl":0}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKV(rr, req)
@@ -289,7 +276,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Keys", func(t *testing.T) {
-		t.Parallel()
 		db.KVStore.KVSet("key1", "val1", 0)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{"pattern":"key*"}`))
 		rr := httptest.NewRecorder()
@@ -299,7 +285,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Keys Invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_keys", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKVKeys(rr, req)
@@ -307,7 +292,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Scan Invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_scan", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKVScan(rr, req)
@@ -315,7 +299,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Delete Pattern Missing Pattern", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_delete_pattern", strings.NewReader(`{}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKVDeletePattern(rr, req)
@@ -323,7 +306,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("KV Delete Pattern Invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/_delete_pattern", strings.NewReader(`{invalid}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKVDeletePattern(rr, req)
@@ -331,7 +313,6 @@ func TestDBControllerHandleKV(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/kv/k1", strings.NewReader(`{"value":"x"}`))
 		rr := httptest.NewRecorder()
 		dbController.handleKV(rr, req)
@@ -343,7 +324,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("PUT and GET", func(t *testing.T) {
-		t.Parallel()
 		content := []byte("blob-data")
 		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/putget-b1", bytes.NewReader(content))
 		reqPut.Header.Set("Content-Type", "text/plain")
@@ -361,7 +341,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Metadata", func(t *testing.T) {
-		t.Parallel()
 		content := []byte("blob-data")
 		reqPut := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/cache/meta-b2", bytes.NewReader(content))
 		reqPut.Header.Set("Content-Type", "text/plain")
@@ -378,7 +357,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Too Large", func(t *testing.T) {
-		t.Parallel()
 		largeBody := make([]byte, maxBlobBodySize+1)
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/large-test", bytes.NewReader(largeBody))
 		req.Header.Set("Content-Type", "application/octet-stream")
@@ -389,7 +367,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob_meta_not_found", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/blobs/temp/nonexistent/meta", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
@@ -397,7 +374,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("X-Blob-TTL_invalid", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/ttl-invalid", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		req.Header.Set("X-Blob-TTL", "invalid")
@@ -408,7 +384,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("X-Blob-TTL_valid", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/ttl-valid", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		req.Header.Set("X-Blob-TTL", "3600")
@@ -419,7 +394,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob_PUT_empty_body", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/empty-body", bytes.NewReader([]byte{}))
 		req.Header.Set("Content-Type", "text/plain")
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
@@ -429,7 +403,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob_get_not_found", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/blobs/temp/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
@@ -437,7 +410,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Invalid_namespace", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/../ns1/b1", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		rr := httptest.NewRecorder()
@@ -446,7 +418,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Blob_id_invalid", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/ns1/../b1", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		rr := httptest.NewRecorder()
@@ -455,7 +426,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Namespace_delete_deletes_all_blobs_in_namespace", func(t *testing.T) {
-		t.Parallel()
 		// First create some blobs in the namespace
 		content := []byte("blob-data")
 		reqPut1 := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/scratch/del-b1", bytes.NewReader(content))
@@ -486,7 +456,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Missing_Content-Type", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/missing-ct", bytes.NewReader([]byte("data")))
 		req = req.WithContext(context.WithValue(req.Context(), constants.ContextKeyUserID, "user-1"))
 		rr := httptest.NewRecorder()
@@ -495,7 +464,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Governance: Non-allowlisted namespace rejected", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/governed-ns/b1", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		rr := httptest.NewRecorder()
@@ -505,7 +473,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Governance: Allowlisted namespace accepted without identity", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/b1", bytes.NewReader([]byte("data")))
 		req.Header.Set("Content-Type", "text/plain")
 		rr := httptest.NewRecorder()
@@ -516,7 +483,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Governance: Cross-namespace ownership rejected", func(t *testing.T) {
-		t.Parallel()
 		// Set up context with user_id
 		// Use a non-allowlisted namespace
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/governed-ns/b1", bytes.NewReader([]byte("data")))
@@ -529,7 +495,6 @@ func TestDBControllerHandleBlob(t *testing.T) {
 	})
 
 	t.Run("Governance: Delete non-allowlisted namespace rejected", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/blobs/governed-ns", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleBlob(rr, req)
@@ -542,7 +507,6 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("Publish valid", func(t *testing.T) {
-		t.Parallel()
 		pubReq := models.PubSubPublishRequest{
 			Channel: pubsub.ResultsChannel("op-1", "session-1"),
 			Data:    mustDocJSON(t, map[string]string{"foo": "bar"}),
@@ -556,7 +520,6 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/pubsub/publish", nil)
 		rr := httptest.NewRecorder()
 		dbController.handlePubSubPublish(rr, req)
@@ -564,7 +527,6 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/pubsub/publish", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
 		dbController.handlePubSubPublish(rr, req)
@@ -572,7 +534,6 @@ func TestDBControllerHandlePubSubPublish(t *testing.T) {
 	})
 
 	t.Run("Reject mutation channels", func(t *testing.T) {
-		t.Parallel()
 		for _, channel := range []string{pubsub.CmdChannel("op-1", "session-1"), "auditor:op-1:sessions-1"} {
 			pubReq := models.PubSubPublishRequest{
 				Channel: channel,
@@ -807,7 +768,6 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("allowlisted namespace accepted", func(t *testing.T) {
-		t.Parallel()
 		// Test that allowlisted namespaces are accepted
 		allowlistedNamespaces := []string{"temp", "uploads", "cache", "scratch"}
 		for _, ns := range allowlistedNamespaces {
@@ -816,7 +776,6 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 	})
 
 	t.Run("non-allowlisted namespace rejected", func(t *testing.T) {
-		t.Parallel()
 		// Test that non-allowlisted namespaces are rejected
 		nonAllowlistedNamespaces := []string{"private", "secret", "config", "data"}
 		for _, ns := range nonAllowlistedNamespaces {
@@ -825,7 +784,6 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 	})
 
 	t.Run("blob ownership verification - app identity", func(t *testing.T) {
-		t.Parallel()
 		appID := "test-app-123"
 		userID := "user-456"
 
@@ -844,7 +802,6 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 	})
 
 	t.Run("blob ownership verification - user identity", func(t *testing.T) {
-		t.Parallel()
 		userID := "user-789"
 
 		// Create a request with user identity
@@ -861,7 +818,6 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 	})
 
 	t.Run("blob ownership verification - allowlisted namespace", func(t *testing.T) {
-		t.Parallel()
 		userID := "user-999"
 
 		// Create a request with user identity
@@ -877,7 +833,6 @@ func TestDBController_BlobNamespaceAllowlist(t *testing.T) {
 	})
 
 	t.Run("blob ownership verification - no identity rejected", func(t *testing.T) {
-		t.Parallel()
 		// Create a request with no identity
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/blobs/temp/test.txt", nil)
 
@@ -935,7 +890,6 @@ func TestDBControllerHandleDataSettings(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPut, "/api/v1/data/settings", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
 		dbController.handleDataSettings(rr, req)
@@ -947,7 +901,6 @@ func TestDBControllerHandleAuditReceipts(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/receipts", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceipts(rr, req)
@@ -955,7 +908,6 @@ func TestDBControllerHandleAuditReceipts(t *testing.T) {
 	})
 
 	t.Run("GET by tx_id - not found", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?tx_id=nonexistent", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceipts(rr, req)
@@ -963,7 +915,6 @@ func TestDBControllerHandleAuditReceipts(t *testing.T) {
 	})
 
 	t.Run("GET list - success with defaults", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceipts(rr, req)
@@ -972,7 +923,6 @@ func TestDBControllerHandleAuditReceipts(t *testing.T) {
 	})
 
 	t.Run("GET list - with operator_session_id", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?operator_session_id=op-123", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceipts(rr, req)
@@ -980,7 +930,6 @@ func TestDBControllerHandleAuditReceipts(t *testing.T) {
 	})
 
 	t.Run("GET list - with limit and offset", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts?limit=10&offset=5", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceipts(rr, req)
@@ -992,7 +941,6 @@ func TestDBControllerHandleAuditReceiptsExport(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/receipts/export", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceiptsExport(rr, req)
@@ -1000,7 +948,6 @@ func TestDBControllerHandleAuditReceiptsExport(t *testing.T) {
 	})
 
 	t.Run("GET - success with defaults", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceiptsExport(rr, req)
@@ -1009,7 +956,6 @@ func TestDBControllerHandleAuditReceiptsExport(t *testing.T) {
 	})
 
 	t.Run("GET - with since parameter RFC3339", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export?since=2026-01-01T00:00:00Z", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceiptsExport(rr, req)
@@ -1017,7 +963,6 @@ func TestDBControllerHandleAuditReceiptsExport(t *testing.T) {
 	})
 
 	t.Run("GET - with since parameter timestamp", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export?since=1704067200000", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceiptsExport(rr, req)
@@ -1025,7 +970,6 @@ func TestDBControllerHandleAuditReceiptsExport(t *testing.T) {
 	})
 
 	t.Run("GET - with limit", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/receipts/export?limit=50", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReceiptsExport(rr, req)
@@ -1037,7 +981,6 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 	dbController, db := setupTestDBController(t)
 
 	t.Run("GET - success", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
@@ -1046,7 +989,6 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 	})
 
 	t.Run("POST - success", func(t *testing.T) {
-		t.Parallel()
 		signer := models.TrustedSigner{
 			ID:        "test-signer-1",
 			PublicKey: strings.Repeat("a", 64),
@@ -1062,7 +1004,6 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 	})
 
 	t.Run("POST - missing id", func(t *testing.T) {
-		t.Parallel()
 		signer := models.TrustedSigner{
 			PublicKey: strings.Repeat("a", 64),
 		}
@@ -1075,7 +1016,6 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 	})
 
 	t.Run("POST - missing public_key", func(t *testing.T) {
-		t.Parallel()
 		signer := models.TrustedSigner{
 			ID: "test-signer-2",
 		}
@@ -1088,7 +1028,6 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 	})
 
 	t.Run("POST - invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers", strings.NewReader("{invalid}"))
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
@@ -1096,7 +1035,6 @@ func TestDBControllerHandleGovernanceSigners(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSigners(rr, req)
@@ -1108,7 +1046,6 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 	dbController, db := setupTestDBController(t)
 
 	t.Run("GET - not found", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSignerByID(rr, req)
@@ -1116,7 +1053,6 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 	})
 
 	t.Run("GET - success", func(t *testing.T) {
-		t.Parallel()
 		// First create a signer
 		signer := models.TrustedSigner{
 			ID:        "test-signer-get",
@@ -1137,7 +1073,6 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 	})
 
 	t.Run("DELETE - success", func(t *testing.T) {
-		t.Parallel()
 		// First create a signer
 		signer := models.TrustedSigner{
 			ID:        "test-signer-delete",
@@ -1156,7 +1091,6 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 	})
 
 	t.Run("DELETE - not found", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodDelete, "/api/v1/governance/signers/nonexistent", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSignerByID(rr, req)
@@ -1164,7 +1098,6 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 	})
 
 	t.Run("Invalid signer id - empty", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSignerByID(rr, req)
@@ -1172,7 +1105,6 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 	})
 
 	t.Run("Invalid signer id - contains slash", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/governance/signers/invalid/id", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSignerByID(rr, req)
@@ -1180,7 +1112,6 @@ func TestDBControllerHandleGovernanceSignerByID(t *testing.T) {
 	})
 
 	t.Run("Method Not Allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/governance/signers/test-id", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleGovernanceSignerByID(rr, req)
@@ -1192,7 +1123,6 @@ func TestDBControllerHandleAuditEvents(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/events", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditEvents(rr, req)
@@ -1200,7 +1130,6 @@ func TestDBControllerHandleAuditEvents(t *testing.T) {
 	})
 
 	t.Run("Success - empty events", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditEvents(rr, req)
@@ -1213,7 +1142,6 @@ func TestDBControllerHandleAuditEvents(t *testing.T) {
 	})
 
 	t.Run("Success - with operator_session_id", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?operator_session_id=op-session-123", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditEvents(rr, req)
@@ -1225,7 +1153,6 @@ func TestDBControllerHandleAuditEvents(t *testing.T) {
 	})
 
 	t.Run("Success - with limit and offset", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?limit=10&offset=5", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditEvents(rr, req)
@@ -1241,7 +1168,6 @@ func TestDBControllerHandleAuditSummary(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/summary", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditSummary(rr, req)
@@ -1249,7 +1175,6 @@ func TestDBControllerHandleAuditSummary(t *testing.T) {
 	})
 
 	t.Run("Success - empty summary", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/summary", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditSummary(rr, req)
@@ -1264,7 +1189,6 @@ func TestDBControllerHandleAuditSummary(t *testing.T) {
 	})
 
 	t.Run("Success - with operator_session_id", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/summary?operator_session_id=op-session-123", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditSummary(rr, req)
@@ -1282,7 +1206,6 @@ func TestDBControllerHandleAuditReport(t *testing.T) {
 	dbController, _ := setupTestDBController(t)
 
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/audit/report", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReport(rr, req)
@@ -1290,7 +1213,6 @@ func TestDBControllerHandleAuditReport(t *testing.T) {
 	})
 
 	t.Run("Success - empty report", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/report", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReport(rr, req)
@@ -1308,7 +1230,6 @@ func TestDBControllerHandleAuditReport(t *testing.T) {
 	})
 
 	t.Run("Success - with operator_session_id", func(t *testing.T) {
-		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/report?operator_session_id=op-session-123", nil)
 		rr := httptest.NewRecorder()
 		dbController.handleAuditReport(rr, req)

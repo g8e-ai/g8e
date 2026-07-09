@@ -34,7 +34,6 @@ import (
 )
 
 func TestL5ActuatorRecordActionReceiptCalled(t *testing.T) {
-	t.Parallel()
 	actuator, _ := newTestActuator(t)
 
 	// Create a real AuditVault with test database

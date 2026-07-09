@@ -40,10 +40,15 @@ const passkeyEnrollTimeout = 5 * time.Minute
 // a passkey.registered event that the CLI receives in real-time, replacing the
 // legacy polling approach.
 func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) error {
-	consoleURL := fmt.Sprintf("%s/console/#register=1&user_id=%s&cli_session_id=%s",
+	// Generate a one-time enrollment token from the gateway
+	token, err := generateEnrollmentToken(cfg, userID, cliSessionID)
+	if err != nil {
+		return fmt.Errorf("failed to generate enrollment token: %w", err)
+	}
+
+	consoleURL := fmt.Sprintf("%s/console/#register=1&token=%s",
 		cfg.OperatorPublicURL(),
-		url.QueryEscape(userID),
-		url.QueryEscape(cliSessionID))
+		url.QueryEscape(token))
 
 	_ = platform.OpenBrowser(consoleURL)
 
@@ -87,6 +92,46 @@ func RegisterPasskeyViaBrowser(cfg *config.Config, userID, cliSessionID string) 
 		return nil
 	}
 	return m.err
+}
+
+// generateEnrollmentToken calls the gateway's enrollment token generation endpoint
+// to create a one-time token for secure passkey registration.
+func generateEnrollmentToken(cfg *config.Config, userID, cliSessionID string) (string, error) {
+	mtlsClient, err := BuildMTLSClient(cfg, httpTimeout)
+	if err != nil {
+		return "", err
+	}
+
+	tokenURL := fmt.Sprintf("%s%s", cfg.OperatorPublicURL(), constants.APIPaths.AuthEnrollmentTokenGenerate)
+	req, err := http.NewRequest(http.MethodPost, tokenURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+	}
+	req.Header.Set(constants.HeaderCLISessionID, cliSessionID)
+
+	resp, err := mtlsClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("enrollment token generation failed: status %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
+	}
+
+	if result.Token == "" {
+		return "", constants.ErrEnrollmentTokenGenerationFailed
+	}
+
+	return result.Token, nil
 }
 
 // VerifyPasskeyRegistration checks if a user has a passkey registered by

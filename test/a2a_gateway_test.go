@@ -63,7 +63,6 @@ func TestA2AGateway_SkillCallEndToEnd(t *testing.T) {
 		A2ADownstreamURL:  downstreamServer.URL,
 		AllowTestPortZero: true,
 	})
-	defer fixture.Cleanup()
 	fixture.WaitForReady(t)
 
 	identity := fixtures.EnrollClientIdentity(t, fixture, "a2a-user", "a2a-org", "a2a-fingerprint", "a2a-host")
@@ -127,7 +126,6 @@ func TestA2AGateway_PayloadVariations(t *testing.T) {
 		A2ADownstreamURL:  downstreamServer.URL,
 		AllowTestPortZero: true,
 	})
-	defer fixture.Cleanup()
 	fixture.WaitForReady(t)
 
 	identity := fixtures.EnrollClientIdentity(t, fixture, "a2a-payload-user", "a2a-payload-org", "a2a-payload-fingerprint", "a2a-payload-host")
@@ -343,7 +341,6 @@ func TestA2AGateway_ErrorCases(t *testing.T) {
 		A2ADownstreamURL:  downstreamServer.URL,
 		AllowTestPortZero: true,
 	})
-	defer fixture.Cleanup()
 	fixture.WaitForReady(t)
 
 	identity := fixtures.EnrollClientIdentity(t, fixture, "a2a-error-user", "a2a-error-org", "a2a-error-fingerprint", "a2a-error-host")

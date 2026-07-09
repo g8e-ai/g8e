@@ -30,7 +30,6 @@ func newStateRootService(t *testing.T) *StateRootService {
 }
 
 func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
-	t.Parallel()
 	svc := newStateRootService(t)
 
 	// Get initial state root
@@ -45,7 +44,6 @@ func TestStateRootService_GetCurrentStateRoot(t *testing.T) {
 }
 
 func TestStateRootService_InvalidateCache(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
@@ -69,7 +67,6 @@ func TestStateRootService_InvalidateCache(t *testing.T) {
 }
 
 func TestStateRootService_StateChangeDetection(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
@@ -94,7 +91,6 @@ func TestStateRootService_StateChangeDetection(t *testing.T) {
 }
 
 func TestStateRootService_CachingBehavior(t *testing.T) {
-	t.Parallel()
 	svc := newStateRootService(t)
 
 	// First call - calculates and caches
@@ -117,7 +113,6 @@ func TestStateRootService_CachingBehavior(t *testing.T) {
 }
 
 func TestStateRootService_StateVersionMissing(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 
@@ -136,7 +131,6 @@ func TestStateRootService_StateVersionMissing(t *testing.T) {
 // This is a regression test for the bug where cache-key churn in kv_store caused
 // state root mismatches.
 func TestStateRootService_NoCacheLeakOnDocumentWrite(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	svc := NewStateRootService(db.GetDB(), testutil.NewTestLogger())
 

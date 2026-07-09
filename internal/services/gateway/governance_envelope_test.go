@@ -103,7 +103,6 @@ func newGovernanceEnvelopeHandler(t *testing.T, proc governance.EnvelopeProcesso
 }
 
 func TestGovernanceEnvelope_NotConfigured_Returns503(t *testing.T) {
-	t.Parallel()
 	h := newGovernanceEnvelopeHandler(t, nil)
 
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
@@ -115,7 +114,6 @@ func TestGovernanceEnvelope_NotConfigured_Returns503(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_NonPostMethod_Returns405(t *testing.T) {
-	t.Parallel()
 	proc := &fakeEnvelopeProcessor{}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
@@ -129,7 +127,6 @@ func TestGovernanceEnvelope_NonPostMethod_Returns405(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_EmptyBody_Returns400(t *testing.T) {
-	t.Parallel()
 	proc := &fakeEnvelopeProcessor{}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
@@ -143,7 +140,6 @@ func TestGovernanceEnvelope_EmptyBody_Returns400(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
-	t.Parallel()
 	cases := []struct {
 		name string
 		err  error
@@ -166,7 +162,6 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			proc := &fakeEnvelopeProcessor{err: tc.err}
 			h := newGovernanceEnvelopeHandler(t, proc)
 
@@ -187,7 +182,6 @@ func TestGovernanceEnvelope_VerificationErrors_Return403(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_DecodeFailure_Returns400(t *testing.T) {
-	t.Parallel()
 	proc := &fakeEnvelopeProcessor{err: fmt.Errorf("%w: unexpected token", constants.ErrTxInvalidEnvelope)}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
@@ -200,7 +194,6 @@ func TestGovernanceEnvelope_DecodeFailure_Returns400(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_OversizedPayload_Returns400(t *testing.T) {
-	t.Parallel()
 	proc := &fakeEnvelopeProcessor{err: fmt.Errorf("payload exceeds 1048576 byte limit: %w", constants.ErrPayloadExceedsLimit)}
 	h := newGovernanceEnvelopeHandler(t, proc)
 
@@ -213,7 +206,6 @@ func TestGovernanceEnvelope_OversizedPayload_Returns400(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
-	t.Parallel()
 	receipt := &operatorv1.ActionReceipt{
 		TransactionId:    "tx-abc",
 		TransactionHash:  "abc123",
@@ -248,7 +240,6 @@ func TestGovernanceEnvelope_Success_Returns200WithSignedReceipt(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
-	t.Parallel()
 	// A signed FAILED receipt is still cryptographic evidence and must be
 	// returned to the caller with HTTP 200, not surfaced as a server error.
 	receipt := &operatorv1.ActionReceipt{
@@ -273,7 +264,6 @@ func TestGovernanceEnvelope_FailedExecution_StillReturns200(t *testing.T) {
 }
 
 func TestGovernanceEnvelope_NilReceiptNilError_Returns500(t *testing.T) {
-	t.Parallel()
 	// Defensive: a regression in the processor that returns (nil, nil) must
 	// not be silently masked as success.
 	proc := &fakeEnvelopeProcessor{receipt: nil, err: nil}
@@ -288,7 +278,6 @@ func TestGovernanceEnvelope_NilReceiptNilError_Returns500(t *testing.T) {
 }
 
 func TestVerifyEnvelopeIdentityBinding_NoMTLS_ReturnsError(t *testing.T) {
-	t.Parallel()
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	err := verifyEnvelopeIdentityBinding(req, identityEnvelope(t, "op-1", "sess-1"))
 	require.Error(t, err)
@@ -296,7 +285,6 @@ func TestVerifyEnvelopeIdentityBinding_NoMTLS_ReturnsError(t *testing.T) {
 }
 
 func TestVerifyEnvelopeIdentityBinding_NoURISAN_ReturnsError(t *testing.T) {
-	t.Parallel()
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{{}},
@@ -307,7 +295,6 @@ func TestVerifyEnvelopeIdentityBinding_NoURISAN_ReturnsError(t *testing.T) {
 }
 
 func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *testing.T) {
-	t.Parallel()
 	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
 	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
@@ -322,7 +309,6 @@ func TestVerifyEnvelopeIdentityBinding_MatchingOperatorSPIFFEID_ReturnsNil(t *te
 }
 
 func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *testing.T) {
-	t.Parallel()
 	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-2/sess-1")
 	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
@@ -338,7 +324,6 @@ func TestVerifyEnvelopeIdentityBinding_MismatchedOperatorID_ReturnsError(t *test
 }
 
 func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing.T) {
-	t.Parallel()
 	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/app/op-1")
 	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
@@ -353,7 +338,6 @@ func TestVerifyEnvelopeIdentityBinding_MatchingAppSPIFFEID_ReturnsNil(t *testing
 }
 
 func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
-	t.Parallel()
 	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
 	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
@@ -368,7 +352,6 @@ func TestVerifyEnvelopeIdentityBinding_InvalidJSON_ReturnsNil(t *testing.T) {
 }
 
 func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T) {
-	t.Parallel()
 	spiffeURL, parseErr := url.Parse("spiffe://g8e.local/operator/org-1/op-1/sess-1")
 	require.NoError(t, parseErr)
 	req := httptest.NewRequest(http.MethodPost, constants.APIPaths.GovernanceEnvelopes, bytes.NewReader([]byte(`{}`)))
@@ -384,7 +367,6 @@ func TestVerifyEnvelopeIdentityBinding_NoIdentityFields_ReturnsNil(t *testing.T)
 }
 
 func TestGatewayModeService_SetEnvelopeProcessor(t *testing.T) {
-	t.Parallel()
 	ls, _ := setupTestGatewayService(t)
 
 	// Initially envProc should be nil
