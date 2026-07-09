@@ -547,7 +547,7 @@ func TestFileOpsService_HandleFsListRequest(t *testing.T) {
 	})
 }
 
-func TestFileOpsService_LedgerIntegration(t *testing.T) {
+func TestFileOpsService_LedgerTwoPhaseCommitNotCalledDuringFileEdit(t *testing.T) {
 	t.Run("documents ledger integration gap for file write", func(t *testing.T) {
 		t.Parallel()
 

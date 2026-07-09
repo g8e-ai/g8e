@@ -199,7 +199,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 	})
 }
 
-func TestOperatorPubSubService_ReceiptCoverage(t *testing.T) {
+func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 	// §4.2: Receipt-coverage test - drive each action type through ProcessEnvelope
 	// and assert a receipt is written EXECUTING before and terminal status after.
 	// This locks the invariant that every execution path produces a receipt.
@@ -459,6 +459,7 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 
 func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 	t.Run("rejects when Actuator not configured", func(t *testing.T) {
+		t.Parallel()
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(nil)
 		msg := &PubSubCommandMessage{
@@ -472,6 +473,7 @@ func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 	})
 
 	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
+		t.Parallel()
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(&governance.L5Actuator{})
 		f.Svc.Actuator().ConsoleAuditStore = nil

@@ -15,20 +15,18 @@ package pubsub
 
 import (
 	"context"
-	"crypto/ed25519"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/models"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -290,23 +288,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
-		// Create vault
-		_, privKey, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-		tmpDir := t.TempDir()
-		vaultDir := filepath.Join(tmpDir, "vault")
-		require.NoError(t, os.MkdirAll(vaultDir, 0700))
-		vHeader, _, err := vault.NewVaultHeader(privKey)
-		require.NoError(t, err)
-		require.NoError(t, vHeader.Save(vaultDir))
-		testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
-		require.NoError(t, err)
-		require.NoError(t, testVault.Unlock(privKey))
-		defer testVault.Close()
-
-		// Set executionVault directly since there's no setter method
-		mockVault := &mockExecutionVault{}
-		svc.executionVault = mockVault
+		svc.executionVault = &mockExecutionVault{}
 
 		msg := &PubSubCommandMessage{
 			Payload: []byte("invalid protobuf"),
@@ -325,23 +307,7 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		client := pubsubtest.NewMockOperatorPubSubClient()
 		svc := NewHistoryService(cfg, logger, client)
 
-		// Create vault
-		_, privKey, err := ed25519.GenerateKey(nil)
-		require.NoError(t, err)
-		tmpDir := t.TempDir()
-		vaultDir := filepath.Join(tmpDir, "vault")
-		require.NoError(t, os.MkdirAll(vaultDir, 0700))
-		vHeader, _, err := vault.NewVaultHeader(privKey)
-		require.NoError(t, err)
-		require.NoError(t, vHeader.Save(vaultDir))
-		testVault, err := vault.NewVault(&vault.VaultConfig{DataDir: vaultDir, Logger: logger})
-		require.NoError(t, err)
-		require.NoError(t, testVault.Unlock(privKey))
-		defer testVault.Close()
-
-		// Set executionVault directly since there's no setter method
-		mockVault := &mockExecutionVault{}
-		svc.executionVault = mockVault
+		svc.executionVault = &mockExecutionVault{}
 
 		req := &operatorv1.FetchFileDiffRequested{}
 		payload, _ := proto.Marshal(req)
@@ -443,6 +409,16 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		assert.Contains(t, string(published.Data), "/app/main.go")
 		assert.Contains(t, string(published.Data), "/app/util.go")
 		assert.Contains(t, string(published.Data), "session-1")
+
+		var env commonv1.GovernanceEnvelope
+		require.NoError(t, protojson.Unmarshal(published.Data, &env))
+		var diffResult operatorv1.FetchFileDiffResult
+		require.NoError(t, proto.Unmarshal(env.Payload, &diffResult))
+		require.Len(t, diffResult.Diffs, 2)
+		for _, entry := range diffResult.Diffs {
+			assert.Equal(t, "session-1", entry.OperatorSessionId,
+				"each FileDiffEntry must have OperatorSessionId set from the query parameter")
+		}
 	})
 
 	t.Run("filters diffs by file_path when fetching by session", func(t *testing.T) {

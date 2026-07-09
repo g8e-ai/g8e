@@ -177,7 +177,7 @@ func TestCommandService_HandleExecutionRequest(t *testing.T) {
 	})
 }
 
-func TestCommandService_Setters(t *testing.T) {
+func TestCommandService_SetResultsPublisher_SetAuditStore_SetLedgerService(t *testing.T) {
 	t.Run("SetResultsPublisher", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
@@ -339,4 +339,30 @@ func TestCommandService_runStatusTicker(t *testing.T) {
 		count := svc.runStatusTicker(ctx, execReq, msg, "test", startTime, done)
 		assert.GreaterOrEqual(t, count, 0)
 	})
+}
+
+func TestIsValidFileOperation(t *testing.T) {
+	t.Parallel()
+	validOps := []constants.FileOperation{
+		constants.FileOperationCreate,
+		constants.FileOperationDelete,
+		constants.FileOperationInsert,
+		constants.FileOperationPatch,
+		constants.FileOperationRead,
+		constants.FileOperationReplace,
+		constants.FileOperationUpdate,
+		constants.FileOperationWrite,
+	}
+	for _, op := range validOps {
+		if !isValidFileOperation(op) {
+			t.Errorf("expected %s to be valid", op)
+		}
+	}
+
+	if isValidFileOperation("invalid") {
+		t.Error("expected 'invalid' to be invalid")
+	}
+	if isValidFileOperation("") {
+		t.Error("expected empty string to be invalid")
+	}
 }
