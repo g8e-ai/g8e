@@ -15,23 +15,12 @@ package storagetest
 
 import (
 	"os"
-	"os/exec"
 	"testing"
 
 	vault "github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	"github.com/stretchr/testify/require"
 )
-
-// testGitPath returns the system git binary path, skipping the test if git is unavailable.
-func testGitPath(t *testing.T) string {
-	t.Helper()
-	gitPath, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip("git not available - skipping git-dependent test")
-	}
-	return gitPath
-}
 
 // CreateTestVault creates a new unlocked Vault in the given directory using the provided private key.
 // The vault header is initialized and the vault is unlocked. Cleanup closes it via t.Cleanup.

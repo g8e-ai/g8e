@@ -29,7 +29,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -104,24 +103,6 @@ type gatewayServiceBuilder struct {
 // newGatewayServiceBuilder creates a builder for production use.
 func newGatewayServiceBuilder(cfg *config.Config, logger *slog.Logger) *gatewayServiceBuilder {
 	return &gatewayServiceBuilder{cfg: cfg, logger: logger}
-}
-
-// withPreBuiltDB sets a pre-built CanonicalDBService (test only).
-func (b *gatewayServiceBuilder) withPreBuiltDB(db *CanonicalDBService) *gatewayServiceBuilder {
-	b.preBuiltDB = db
-	return b
-}
-
-// withPreBuiltPubsub sets a pre-built GatewayWebSocketHandler (test only).
-func (b *gatewayServiceBuilder) withPreBuiltPubsub(pubsub *GatewayWebSocketHandler) *gatewayServiceBuilder {
-	b.preBuiltPubsub = pubsub
-	return b
-}
-
-// withTestMode enables test mode, which skips production-only initialization.
-func (b *gatewayServiceBuilder) withTestMode() *gatewayServiceBuilder {
-	b.testMode = true
-	return b
 }
 
 // build assembles the GatewayModeService from the builder's configuration.
@@ -387,16 +368,6 @@ func detectBasicNonLoopbackIPv4Addresses() []net.IP {
 	return extraIPs
 }
 
-// newGatewayModeServiceForTest assembles a GatewayModeService from pre-built components.
-// Used in tests where the DB and pub/sub broker are constructed independently.
-func newGatewayModeServiceForTest(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, pubsub *GatewayWebSocketHandler) (*GatewayModeService, error) {
-	return newGatewayServiceBuilder(cfg, logger).
-		withPreBuiltDB(db).
-		withPreBuiltPubsub(pubsub).
-		withTestMode().
-		build()
-}
-
 func (ls *GatewayModeService) initHandlersAndServers() error {
 	cfg := ls.cfg
 	logger := ls.logger
@@ -504,11 +475,6 @@ func (ls *GatewayModeService) GetSecretManager() (*SecretManager, error) {
 	return NewSecretManager(ls.db.db, ls.cfg.Gateway.SecretsDir, ls.logger)
 }
 
-// GetPKIAuthority returns the underlying PKI authority.
-func (ls *GatewayModeService) GetPKIAuthority() *PKIAuthority {
-	return ls.pki
-}
-
 // GetHTTPHandler returns the HTTP handler.
 func (ls *GatewayModeService) GetHTTPHandler() *HTTPHandler {
 	return ls.handler
@@ -523,48 +489,6 @@ func (ls *GatewayModeService) SetTribunal(ts *tribunal.TribunalService) {
 	if ls.handler != nil {
 		ls.handler.SetTribunal(ts)
 	}
-}
-
-// GetHTTPSPort returns the actual bound HTTPS port (useful when AllowTestPortZero is true).
-func (ls *GatewayModeService) GetHTTPSPort() int {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	if !ls.running || ls.publicServer == nil {
-		return 0
-	}
-	_, port, err := net.SplitHostPort(ls.publicServer.Addr)
-	if err != nil {
-		return 0
-	}
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return 0
-	}
-	return p
-}
-
-// GetHTTPPort returns the actual bound HTTP port (useful when AllowTestPortZero is true).
-func (ls *GatewayModeService) GetHTTPPort() int {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	if !ls.running || ls.server == nil {
-		return 0
-	}
-	_, port, err := net.SplitHostPort(ls.server.Addr)
-	if err != nil {
-		return 0
-	}
-	p, err := strconv.Atoi(port)
-	if err != nil {
-		return 0
-	}
-	return p
-}
-
-func (ls *GatewayModeService) IsRunning() bool {
-	ls.mu.Lock()
-	defer ls.mu.Unlock()
-	return ls.running
 }
 
 func (ls *GatewayModeService) IsReady() bool {
