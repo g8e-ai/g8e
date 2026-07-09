@@ -30,6 +30,7 @@ import (
 	"log/slog"
 	"math/big"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -558,6 +559,161 @@ func TestExportActuatorPublicKey(t *testing.T) {
 		if runtime.GOOS != "windows" {
 			assert.True(t, info.Mode().Perm() == 0600)
 		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// checkCertExpiry
+// ---------------------------------------------------------------------------
+
+func TestCheckCertExpiry(t *testing.T) {
+	t.Run("CertExpiringSoon_ReturnsTrue", func(t *testing.T) {
+		certPath := generateTestCert(t, time.Now(), time.Now().Add(1*time.Hour))
+		expiring, err := checkCertExpiry(certPath)
+		require.NoError(t, err)
+		assert.True(t, expiring)
+	})
+
+	t.Run("CertNotExpiring_ReturnsFalse", func(t *testing.T) {
+		certPath := generateTestCert(t, time.Now(), time.Now().Add(365*24*time.Hour))
+		expiring, err := checkCertExpiry(certPath)
+		require.NoError(t, err)
+		assert.False(t, expiring)
+	})
+
+	t.Run("NonExistentFile_ReturnsError", func(t *testing.T) {
+		expiring, err := checkCertExpiry(filepath.Join(t.TempDir(), constants.TestNonExistentCrtFilename))
+		require.Error(t, err)
+		assert.False(t, expiring)
+		assert.True(t, errors.Is(err, constants.ErrCertReadFailed))
+	})
+}
+
+// ---------------------------------------------------------------------------
+// buildMTLSClient
+// ---------------------------------------------------------------------------
+
+func TestBuildMTLSClient(t *testing.T) {
+	t.Run("ValidCAPEM_ReturnsClientWithTLS13", func(t *testing.T) {
+		caPEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
+
+		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		clientTemplate := x509.Certificate{
+			SerialNumber: big.NewInt(10),
+			Subject:      pkix.Name{CommonName: "test-client"},
+			NotBefore:    time.Now().Add(-time.Hour),
+			NotAfter:     time.Now().Add(365 * 24 * time.Hour),
+			KeyUsage:     x509.KeyUsageDigitalSignature,
+		}
+		clientDER, err := x509.CreateCertificate(rand.Reader, &clientTemplate, &clientTemplate, &privKey.PublicKey, privKey)
+		require.NoError(t, err)
+		clientCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: clientDER})
+
+		keyDER, err := x509.MarshalECPrivateKey(privKey)
+		require.NoError(t, err)
+		keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
+
+		cliCert, err := tls.X509KeyPair(clientCertPEM, keyPEM)
+		require.NoError(t, err)
+
+		client, err := buildMTLSClient(caPEM, cliCert)
+		require.NoError(t, err)
+		require.NotNil(t, client)
+
+		transport, ok := client.Transport.(*http.Transport)
+		require.True(t, ok)
+		assert.EqualValues(t, tls.VersionTLS13, transport.TLSClientConfig.MinVersion)
+		assert.Len(t, transport.TLSClientConfig.Certificates, 1)
+		assert.NotNil(t, transport.TLSClientConfig.RootCAs)
+	})
+
+	t.Run("InvalidCAPEM_ReturnsCAParseFailed", func(t *testing.T) {
+		cliCert := tls.Certificate{}
+		client, err := buildMTLSClient([]byte("not a valid PEM"), cliCert)
+		require.Error(t, err)
+		assert.Nil(t, client)
+		assert.True(t, errors.Is(err, constants.ErrCAParseFailed))
+	})
+
+	t.Run("EmptyCAPEM_ReturnsCAParseFailed", func(t *testing.T) {
+		cliCert := tls.Certificate{}
+		client, err := buildMTLSClient([]byte{}, cliCert)
+		require.Error(t, err)
+		assert.Nil(t, client)
+		assert.True(t, errors.Is(err, constants.ErrCAParseFailed))
+	})
+}
+
+// ---------------------------------------------------------------------------
+// saveRenewedCerts
+// ---------------------------------------------------------------------------
+
+func TestSaveRenewedCerts(t *testing.T) {
+	t.Run("Success_WritesKeyAndCertFiles", func(t *testing.T) {
+		dir := t.TempDir()
+		certFile := filepath.Join(dir, constants.TestClientCrtFilename)
+		keyFile := filepath.Join(dir, constants.TestClientKeyFilename)
+
+		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		certContent := "fake-cert-pem-content"
+		keyPEM, err := saveRenewedCerts(certFile, keyFile, certContent, privKey)
+		require.NoError(t, err)
+		assert.NotEmpty(t, keyPEM)
+		assert.Contains(t, string(keyPEM), "EC PRIVATE KEY")
+
+		savedCert, err := os.ReadFile(certFile)
+		require.NoError(t, err)
+		assert.Equal(t, certContent, string(savedCert))
+
+		savedKey, err := os.ReadFile(keyFile)
+		require.NoError(t, err)
+		assert.Contains(t, string(savedKey), "EC PRIVATE KEY")
+	})
+
+	t.Run("CertChainAppendedToCertContent", func(t *testing.T) {
+		dir := t.TempDir()
+		certFile := filepath.Join(dir, constants.TestClientCrtFilename)
+		keyFile := filepath.Join(dir, constants.TestClientKeyFilename)
+
+		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		certContent := "-----BEGIN CERTIFICATE-----\nleaf\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nintermediate\n-----END CERTIFICATE-----"
+		_, err = saveRenewedCerts(certFile, keyFile, certContent, privKey)
+		require.NoError(t, err)
+
+		savedCert, err := os.ReadFile(certFile)
+		require.NoError(t, err)
+		assert.Contains(t, string(savedCert), "leaf")
+		assert.Contains(t, string(savedCert), "intermediate")
+	})
+
+	t.Run("NonExistentKeyDir_ReturnsKeyWriteFailed", func(t *testing.T) {
+		certFile := filepath.Join(t.TempDir(), constants.TestClientCrtFilename)
+		keyFile := filepath.Join(t.TempDir(), constants.TestNestedDirname, constants.TestClientKeyFilename)
+
+		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		_, err = saveRenewedCerts(certFile, keyFile, "cert-content", privKey)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrKeyWriteFailed))
+	})
+
+	t.Run("NonExistentCertDir_ReturnsCertSaveFailed", func(t *testing.T) {
+		keyFile := filepath.Join(t.TempDir(), constants.TestClientKeyFilename)
+		certFile := filepath.Join(t.TempDir(), constants.TestNestedDirname, constants.TestClientCrtFilename)
+
+		privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+
+		_, err = saveRenewedCerts(certFile, keyFile, "cert-content", privKey)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrCertSaveFailed))
 	})
 }
 

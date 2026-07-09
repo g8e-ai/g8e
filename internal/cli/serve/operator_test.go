@@ -14,25 +14,15 @@
 package serve
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/pem"
-	"errors"
-	"math/big"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestServeOperatorOptions_ZeroValue(t *testing.T) {
@@ -56,11 +46,11 @@ func TestServeOperatorOptions_FullAssignment(t *testing.T) {
 	opts := ServeOperatorOptions{
 		LogLevel:          "debug",
 		Endpoint:          "192.168.1.10",
-		TrustBundlePath:   "/etc/g8e/ca.pem",
-		PrivateKey:        "/etc/g8e/operator.key",
-		ClientCert:        "/etc/g8e/operator.crt",
-		WorkingDir:        "/var/lib/g8e",
-		LaunchDir:         "/opt/g8e",
+		TrustBundlePath:   constants.DefaultPKIDir + "/" + constants.PkiFileGatewayBundle,
+		PrivateKey:        constants.DefaultOperatorKeyDesc,
+		ClientCert:        constants.DefaultOperatorCertDesc,
+		WorkingDir:        constants.DefaultDataDir,
+		LaunchDir:         constants.DefaultPKIDir,
 		CloudMode:         true,
 		CloudProvider:     "aws",
 		ExecutionVault:    true,
@@ -70,11 +60,11 @@ func TestServeOperatorOptions_FullAssignment(t *testing.T) {
 
 	assert.Equal(t, "debug", opts.LogLevel)
 	assert.Equal(t, "192.168.1.10", opts.Endpoint)
-	assert.Equal(t, "/etc/g8e/ca.pem", opts.TrustBundlePath)
-	assert.Equal(t, "/etc/g8e/operator.key", opts.PrivateKey)
-	assert.Equal(t, "/etc/g8e/operator.crt", opts.ClientCert)
-	assert.Equal(t, "/var/lib/g8e", opts.WorkingDir)
-	assert.Equal(t, "/opt/g8e", opts.LaunchDir)
+	assert.Equal(t, constants.DefaultPKIDir+"/"+constants.PkiFileGatewayBundle, opts.TrustBundlePath)
+	assert.Equal(t, constants.DefaultOperatorKeyDesc, opts.PrivateKey)
+	assert.Equal(t, constants.DefaultOperatorCertDesc, opts.ClientCert)
+	assert.Equal(t, constants.DefaultDataDir, opts.WorkingDir)
+	assert.Equal(t, constants.DefaultPKIDir, opts.LaunchDir)
 	assert.True(t, opts.CloudMode)
 	assert.Equal(t, "aws", opts.CloudProvider)
 	assert.True(t, opts.ExecutionVault)
@@ -85,21 +75,21 @@ func TestServeOperatorOptions_FullAssignment(t *testing.T) {
 func TestServeOperatorOptions_Equality(t *testing.T) {
 	a := ServeOperatorOptions{
 		LogLevel:       "info",
-		Endpoint:       "localhost",
-		PrivateKey:     "/key.pem",
-		ClientCert:     "/cert.pem",
-		WorkingDir:     "/work",
-		LaunchDir:      "/launch",
+		Endpoint:       constants.DefaultEndpoint,
+		PrivateKey:     constants.DefaultOperatorKeyDesc,
+		ClientCert:     constants.DefaultOperatorCertDesc,
+		WorkingDir:     constants.DefaultDataDir,
+		LaunchDir:      constants.DefaultPKIDir,
 		CloudMode:      false,
 		ExecutionVault: true,
 	}
 	b := ServeOperatorOptions{
 		LogLevel:       "info",
-		Endpoint:       "localhost",
-		PrivateKey:     "/key.pem",
-		ClientCert:     "/cert.pem",
-		WorkingDir:     "/work",
-		LaunchDir:      "/launch",
+		Endpoint:       constants.DefaultEndpoint,
+		PrivateKey:     constants.DefaultOperatorKeyDesc,
+		ClientCert:     constants.DefaultOperatorCertDesc,
+		WorkingDir:     constants.DefaultDataDir,
+		LaunchDir:      constants.DefaultPKIDir,
 		CloudMode:      false,
 		ExecutionVault: true,
 	}
@@ -114,12 +104,12 @@ func TestServeOperatorOptions_PartialAssignment(t *testing.T) {
 	opts := ServeOperatorOptions{
 		LogLevel:   "info",
 		Endpoint:   "10.0.0.1",
-		PrivateKey: "/tmp/key.pem",
+		PrivateKey: constants.DefaultOperatorKeyDesc,
 	}
 
 	assert.Equal(t, "info", opts.LogLevel)
 	assert.Equal(t, "10.0.0.1", opts.Endpoint)
-	assert.Equal(t, "/tmp/key.pem", opts.PrivateKey)
+	assert.Equal(t, constants.DefaultOperatorKeyDesc, opts.PrivateKey)
 	assert.Equal(t, "", opts.ClientCert, "unassigned ClientCert should be zero value")
 	assert.Equal(t, "", opts.WorkingDir, "unassigned WorkingDir should be zero value")
 	assert.Equal(t, "", opts.LaunchDir, "unassigned LaunchDir should be zero value")
@@ -166,14 +156,14 @@ func TestResolveOperatorEndpoint(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"empty string returns default", "", "localhost"},
-		{"whitespace only returns default", "   ", "localhost"},
-		{"tab only returns default", "\t", "localhost"},
-		{"simple hostname", "localhost", "localhost"},
+		{"empty string returns default", "", constants.DefaultEndpoint},
+		{"whitespace only returns default", "   ", constants.DefaultEndpoint},
+		{"tab only returns default", "\t", constants.DefaultEndpoint},
+		{"simple hostname", constants.DefaultEndpoint, constants.DefaultEndpoint},
 		{"ip address", "192.168.1.10", "192.168.1.10"},
 		{"hostname with port", "gateway.local:8080", "gateway.local:8080"},
-		{"leading whitespace trimmed", "  localhost", "localhost"},
-		{"trailing whitespace trimmed", "localhost  ", "localhost"},
+		{"leading whitespace trimmed", "  " + constants.DefaultEndpoint, constants.DefaultEndpoint},
+		{"trailing whitespace trimmed", constants.DefaultEndpoint + "  ", constants.DefaultEndpoint},
 		{"surrounding whitespace trimmed", "  10.0.0.1  ", "10.0.0.1"},
 		{"fqdn", "operator.example.com", "operator.example.com"},
 	}
@@ -186,16 +176,6 @@ func TestResolveOperatorEndpoint(t *testing.T) {
 	}
 }
 
-func TestResolveOperatorEndpoint_DefaultConstant(t *testing.T) {
-	result := resolveOperatorEndpoint("")
-	assert.Equal(t, "localhost", result, "default endpoint should be localhost")
-}
-
-func TestResolveOperatorEndpoint_NoTrimmingForNonWhitespace(t *testing.T) {
-	result := resolveOperatorEndpoint("my-endpoint")
-	assert.Equal(t, "my-endpoint", result)
-}
-
 func TestResolveWorkingDir(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -203,11 +183,11 @@ func TestResolveWorkingDir(t *testing.T) {
 		launchDir  string
 		expected   string
 	}{
-		{"working dir set, launch dir set", "/var/work", "/opt/launch", "/var/work"},
-		{"working dir set, launch dir empty", "/var/work", "", "/var/work"},
-		{"working dir empty, launch dir set", "", "/opt/launch", "/opt/launch"},
+		{"working dir set, launch dir set", constants.DefaultDataDir, constants.DefaultPKIDir, constants.DefaultDataDir},
+		{"working dir set, launch dir empty", constants.DefaultDataDir, "", constants.DefaultDataDir},
+		{"working dir empty, launch dir set", "", constants.DefaultPKIDir, constants.DefaultPKIDir},
 		{"both empty", "", "", ""},
-		{"working dir takes precedence", "/custom", "/default", "/custom"},
+		{"working dir takes precedence", constants.RuntimeDirname, constants.PkiDirname, constants.RuntimeDirname},
 	}
 
 	for _, tt := range tests {
@@ -216,29 +196,6 @@ func TestResolveWorkingDir(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-func TestResolveWorkingDir_WorkingDirPrecedence(t *testing.T) {
-	workingDir := "/explicit/working"
-	launchDir := "/explicit/launch"
-
-	result := resolveWorkingDir(workingDir, launchDir)
-
-	assert.Equal(t, workingDir, result, "WorkingDir should take precedence over LaunchDir")
-	assert.NotEqual(t, launchDir, result, "result should not be the LaunchDir when WorkingDir is set")
-}
-
-func TestResolveWorkingDir_LaunchDirFallback(t *testing.T) {
-	launchDir := "/fallback/launch"
-
-	result := resolveWorkingDir("", launchDir)
-
-	assert.Equal(t, launchDir, result, "should fall back to LaunchDir when WorkingDir is empty")
-}
-
-func TestResolveWorkingDir_BothEmpty(t *testing.T) {
-	result := resolveWorkingDir("", "")
-	assert.Equal(t, "", result)
 }
 
 // ---------------------------------------------------------------------------
@@ -256,16 +213,16 @@ func TestResolveOperatorEndpoint_NewlineTrimmed(t *testing.T) {
 		name  string
 		input string
 	}{
-		{"leading newline", "\nlocalhost"},
-		{"trailing newline", "localhost\n"},
-		{"carriage return", "\rlocalhost\r"},
-		{"mixed newline and tab", "\n\tlocalhost\n\t"},
-		{"CRLF", "\r\nlocalhost\r\n"},
+		{"leading newline", "\n" + constants.DefaultEndpoint},
+		{"trailing newline", constants.DefaultEndpoint + "\n"},
+		{"carriage return", "\r" + constants.DefaultEndpoint + "\r"},
+		{"mixed newline and tab", "\n\t" + constants.DefaultEndpoint + "\n\t"},
+		{"CRLF", "\r\n" + constants.DefaultEndpoint + "\r\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := resolveOperatorEndpoint(tt.input)
-			assert.Equal(t, "localhost", result)
+			assert.Equal(t, constants.DefaultEndpoint, result)
 		})
 	}
 }
@@ -291,80 +248,6 @@ func TestResolveOperatorEndpoint_WhitespaceOnlyWithNewlines(t *testing.T) {
 	result := resolveOperatorEndpoint("\n\r\t  \n\r")
 	assert.Equal(t, constants.DefaultEndpoint, result,
 		"input that is only whitespace (including newlines) should return default")
-}
-
-// ---------------------------------------------------------------------------
-// resolveWorkingDir — additional edge cases
-// ---------------------------------------------------------------------------
-
-func TestResolveWorkingDir_IdenticalPaths(t *testing.T) {
-	path := "/same/path"
-	result := resolveWorkingDir(path, path)
-	assert.Equal(t, path, result)
-}
-
-func TestResolveWorkingDir_RelativePaths(t *testing.T) {
-	tests := []struct {
-		name       string
-		workingDir string
-		launchDir  string
-		expected   string
-	}{
-		{"relative working dir", "./work", "/abs/launch", "./work"},
-		{"relative launch dir fallback", "", "./launch", "./launch"},
-		{"both relative", "./work", "./launch", "./work"},
-		{"dot as working dir", ".", "/abs", "."},
-		{"dotdot as working dir", "..", "/abs", ".."},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := resolveWorkingDir(tt.workingDir, tt.launchDir)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestResolveWorkingDir_PathsWithSpaces(t *testing.T) {
-	result := resolveWorkingDir("/path with spaces/work", "/other/path")
-	assert.Equal(t, "/path with spaces/work", result)
-}
-
-func TestResolveWorkingDir_TrailingSlashes(t *testing.T) {
-	tests := []struct {
-		name       string
-		workingDir string
-		launchDir  string
-		expected   string
-	}{
-		{"working dir with trailing slash", "/work/", "/launch", "/work/"},
-		{"launch dir with trailing slash", "", "/launch/", "/launch/"},
-		{"both with trailing slashes", "/work/", "/launch/", "/work/"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := resolveWorkingDir(tt.workingDir, tt.launchDir)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestResolveWorkingDir_SpecialCharacters(t *testing.T) {
-	tests := []struct {
-		name       string
-		workingDir string
-		launchDir  string
-		expected   string
-	}{
-		{"tilde", "~/.g8e", "/abs", "~/.g8e"},
-		{"env-like", "$HOME/g8e", "/abs", "$HOME/g8e"},
-		{"unicode", "/path/数据", "/abs", "/path/数据"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := resolveWorkingDir(tt.workingDir, tt.launchDir)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -399,33 +282,15 @@ func TestServeOperatorOptions_AllBooleansFalse(t *testing.T) {
 	assert.False(t, opts.NoGit)
 }
 
-func TestServeOperatorOptions_TrustBundlePath(t *testing.T) {
-	tests := []struct {
-		name string
-		path string
-	}{
-		{"absolute path", "/etc/g8e/ca.pem"},
-		{"relative path", "./ca.pem"},
-		{"empty", ""},
-		{"with spaces", "/path with spaces/ca.pem"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			opts := ServeOperatorOptions{TrustBundlePath: tt.path}
-			assert.Equal(t, tt.path, opts.TrustBundlePath)
-		})
-	}
-}
-
 func TestServeOperatorOptions_Equality_DifferInEachField(t *testing.T) {
 	base := ServeOperatorOptions{
 		LogLevel:          "info",
-		Endpoint:          "localhost",
-		TrustBundlePath:   "/ca.pem",
-		PrivateKey:        "/key.pem",
-		ClientCert:        "/cert.pem",
-		WorkingDir:        "/work",
-		LaunchDir:         "/launch",
+		Endpoint:          constants.DefaultEndpoint,
+		TrustBundlePath:   constants.DefaultPKIDir + "/" + constants.PkiFileGatewayBundle,
+		PrivateKey:        constants.DefaultOperatorKeyDesc,
+		ClientCert:        constants.DefaultOperatorCertDesc,
+		WorkingDir:        constants.DefaultDataDir,
+		LaunchDir:         constants.DefaultPKIDir,
 		CloudMode:         true,
 		CloudProvider:     "aws",
 		ExecutionVault:    true,
@@ -465,11 +330,11 @@ func TestServeOperatorOptions_Equality_AllFieldsEqual(t *testing.T) {
 	a := ServeOperatorOptions{
 		LogLevel:          "debug",
 		Endpoint:          "10.0.0.1",
-		TrustBundlePath:   "/ca.pem",
-		PrivateKey:        "/key.pem",
-		ClientCert:        "/cert.pem",
-		WorkingDir:        "/work",
-		LaunchDir:         "/launch",
+		TrustBundlePath:   constants.DefaultPKIDir + "/" + constants.PkiFileGatewayBundle,
+		PrivateKey:        constants.DefaultOperatorKeyDesc,
+		ClientCert:        constants.DefaultOperatorCertDesc,
+		WorkingDir:        constants.DefaultDataDir,
+		LaunchDir:         constants.DefaultPKIDir,
 		CloudMode:         true,
 		CloudProvider:     "aws",
 		ExecutionVault:    true,
@@ -478,219 +343,6 @@ func TestServeOperatorOptions_Equality_AllFieldsEqual(t *testing.T) {
 	}
 	b := a
 	require.True(t, a == b, "structs with all 12 fields identical should be equal")
-}
-
-// ---------------------------------------------------------------------------
-// resolveKeyPath
-// ---------------------------------------------------------------------------
-
-func TestResolveKeyPath_ExplicitPath(t *testing.T) {
-	result := resolveKeyPath("/explicit/key.pem", testLogger())
-	assert.Equal(t, "/explicit/key.pem", result)
-}
-
-func TestResolveKeyPath_DefaultOperatorKey(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("fake key"), 0600))
-
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorKeyPath, result)
-}
-
-func TestResolveKeyPath_FallsBackToClientKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("fake key"), 0600))
-
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, paths.Infra.ClientOperatorKeyPath, result)
-}
-
-func TestResolveKeyPath_NoFilesFound(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, "", result)
-}
-
-func TestResolveKeyPath_OperatorKeyTakesPrecedenceOverClientKey(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("op key"), 0600))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("client key"), 0600))
-
-	result := resolveKeyPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorKeyPath, result,
-		"operator key should take precedence over client key when both exist")
-}
-
-func TestResolveKeyPath_ExplicitOverridesDefaults(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorKeyPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorKeyPath, []byte("op key"), 0600))
-
-	result := resolveKeyPath("/explicit/key.pem", testLogger())
-	assert.Equal(t, "/explicit/key.pem", result,
-		"explicit path should override default file lookup")
-}
-
-// ---------------------------------------------------------------------------
-// resolveCertPath
-// ---------------------------------------------------------------------------
-
-func TestResolveCertPath_ExplicitPath(t *testing.T) {
-	result := resolveCertPath("/explicit/cert.pem", testLogger())
-	assert.Equal(t, "/explicit/cert.pem", result)
-}
-
-func TestResolveCertPath_DefaultOperatorCert(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("fake cert"), 0600))
-
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorCertPath, result)
-}
-
-func TestResolveCertPath_FallsBackToClientCert(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("fake cert"), 0600))
-
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, paths.Infra.ClientOperatorCertPath, result)
-}
-
-func TestResolveCertPath_NoFilesFound(t *testing.T) {
-	require.NoError(t, paths.InitWithBase(t.TempDir()))
-
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, "", result)
-}
-
-func TestResolveCertPath_OperatorCertTakesPrecedenceOverClientCert(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("op cert"), 0600))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("client cert"), 0600))
-
-	result := resolveCertPath("", testLogger())
-	assert.Equal(t, paths.Infra.OperatorCertPath, result,
-		"operator cert should take precedence over client cert when both exist")
-}
-
-func TestResolveCertPath_ExplicitOverridesDefaults(t *testing.T) {
-	tmpDir := t.TempDir()
-	require.NoError(t, paths.InitWithBase(tmpDir))
-	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.OperatorCertPath), 0700))
-	require.NoError(t, os.WriteFile(paths.Infra.OperatorCertPath, []byte("op cert"), 0600))
-
-	result := resolveCertPath("/explicit/cert.pem", testLogger())
-	assert.Equal(t, "/explicit/cert.pem", result,
-		"explicit path should override default file lookup")
-}
-
-// ---------------------------------------------------------------------------
-// loadClientCertPair
-// ---------------------------------------------------------------------------
-
-// generateTestKeyCertPair creates a self-signed cert and matching ECDSA private key
-// in PEM format, writing them to temp files. Returns (certPath, keyPath).
-func generateTestKeyCertPair(t *testing.T) (string, string) {
-	t.Helper()
-	privKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-
-	template := x509.Certificate{
-		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "test-client"},
-		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		BasicConstraintsValid: true,
-	}
-
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privKey.PublicKey, privKey)
-	require.NoError(t, err)
-
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
-	keyDER, err := x509.MarshalECPrivateKey(privKey)
-	require.NoError(t, err)
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
-
-	dir := t.TempDir()
-	certPath := filepath.Join(dir, "client.crt")
-	keyPath := filepath.Join(dir, "client.key")
-	require.NoError(t, os.WriteFile(certPath, certPEM, 0600))
-	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0600))
-	return certPath, keyPath
-}
-
-func TestLoadClientCertPair_Success(t *testing.T) {
-	certPath, keyPath := generateTestKeyCertPair(t)
-
-	cert, certPEM, err := loadClientCertPair(certPath, keyPath)
-	require.NoError(t, err)
-	assert.NotNil(t, cert.Certificate)
-	assert.NotEmpty(t, certPEM)
-	assert.Contains(t, string(certPEM), "BEGIN CERTIFICATE")
-}
-
-func TestLoadClientCertPair_NonExistentCertFile(t *testing.T) {
-	_, keyPath := generateTestKeyCertPair(t)
-
-	_, _, err := loadClientCertPair(filepath.Join(t.TempDir(), "nonexistent.crt"), keyPath)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrReadClientCert))
-}
-
-func TestLoadClientCertPair_NonExistentKeyFile(t *testing.T) {
-	certPath, _ := generateTestKeyCertPair(t)
-
-	_, _, err := loadClientCertPair(certPath, filepath.Join(t.TempDir(), "nonexistent.key"))
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrReadPrivateKey))
-}
-
-func TestLoadClientCertPair_InvalidCertPEM(t *testing.T) {
-	dir := t.TempDir()
-	invalidCert := filepath.Join(dir, "invalid.crt")
-	require.NoError(t, os.WriteFile(invalidCert, []byte("not a PEM file"), 0600))
-
-	_, keyPath := generateTestKeyCertPair(t)
-
-	_, _, err := loadClientCertPair(invalidCert, keyPath)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair))
-}
-
-func TestLoadClientCertPair_InvalidKeyPEM(t *testing.T) {
-	certPath, _ := generateTestKeyCertPair(t)
-
-	dir := t.TempDir()
-	invalidKey := filepath.Join(dir, "invalid.key")
-	require.NoError(t, os.WriteFile(invalidKey, []byte("not a PEM file"), 0600))
-
-	_, _, err := loadClientCertPair(certPath, invalidKey)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair))
-}
-
-func TestLoadClientCertPair_MismatchedKeyCertPair(t *testing.T) {
-	certPath1, _ := generateTestKeyCertPair(t)
-	_, keyPath2 := generateTestKeyCertPair(t)
-
-	_, _, err := loadClientCertPair(certPath1, keyPath2)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair))
 }
 
 // ---------------------------------------------------------------------------
@@ -730,7 +382,7 @@ func TestBuildOperatorLoadOptions_EmptyEndpoint(t *testing.T) {
 
 func TestBuildOperatorLoadOptions_ZeroValues(t *testing.T) {
 	opts := ServeOperatorOptions{}
-	loadOpts := buildOperatorLoadOptions(opts, "localhost", "/launch")
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, constants.DefaultPKIDir)
 
 	assert.False(t, loadOpts.CloudMode)
 	assert.False(t, loadOpts.ExecutionVaultEnabled)
@@ -749,7 +401,7 @@ func TestBuildOperatorLoadOptions_EnvVarsPropagated(t *testing.T) {
 	t.Setenv(string(constants.EnvVar.TZ), "America/Los_Angeles")
 
 	opts := ServeOperatorOptions{}
-	loadOpts := buildOperatorLoadOptions(opts, "localhost", "/work")
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, constants.DefaultDataDir)
 
 	assert.Equal(t, "/bin/zsh", loadOpts.Shell)
 	assert.Equal(t, "en_US.UTF-8", loadOpts.Lang)
@@ -766,13 +418,84 @@ func TestBuildOperatorLoadOptions_PortAlwaysZero(t *testing.T) {
 
 func TestBuildOperatorLoadOptions_PostureAlwaysEmpty(t *testing.T) {
 	opts := ServeOperatorOptions{}
-	loadOpts := buildOperatorLoadOptions(opts, "localhost", "/work")
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, constants.DefaultDataDir)
 	assert.Equal(t, config.GatewayPosture(""), loadOpts.Posture, "Posture should always be empty for operator mode")
 }
 
 func TestBuildOperatorLoadOptions_PKIAndSecretsAlwaysEmpty(t *testing.T) {
 	opts := ServeOperatorOptions{}
-	loadOpts := buildOperatorLoadOptions(opts, "localhost", "/work")
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, constants.DefaultDataDir)
 	assert.Equal(t, "", loadOpts.PKIDir, "PKIDir should always be empty for operator mode")
 	assert.Equal(t, "", loadOpts.SecretsDir, "SecretsDir should always be empty for operator mode")
+}
+
+func TestBuildOperatorLoadOptions_AllFieldsPopulated(t *testing.T) {
+	t.Setenv(string(constants.EnvVar.Shell), "/bin/bash")
+	t.Setenv(string(constants.EnvVar.Lang), "C.UTF-8")
+	t.Setenv(string(constants.EnvVar.Term), "screen")
+	t.Setenv(string(constants.EnvVar.TZ), "UTC")
+
+	opts := ServeOperatorOptions{
+		LogLevel:          "warn",
+		CloudMode:         true,
+		CloudProvider:     "gcp",
+		ExecutionVault:    true,
+		NoGit:             true,
+		HeartbeatInterval: 90 * time.Second,
+	}
+
+	loadOpts := buildOperatorLoadOptions(opts, "operator.internal:8443", "/custom/work")
+
+	assert.Equal(t, "operator.internal:8443", loadOpts.OperatorEndpoint)
+	assert.Equal(t, 0, loadOpts.HTTPPort)
+	assert.Equal(t, 0, loadOpts.HTTPSPort)
+	assert.True(t, loadOpts.CloudMode)
+	assert.Equal(t, "gcp", loadOpts.CloudProvider)
+	assert.True(t, loadOpts.ExecutionVaultEnabled)
+	assert.True(t, loadOpts.NoGit)
+	assert.Equal(t, "warn", loadOpts.LogLevel)
+	assert.Equal(t, "/custom/work", loadOpts.WorkDir)
+	assert.Equal(t, 90*time.Second, loadOpts.HeartbeatInterval)
+	assert.Equal(t, "", loadOpts.PKIDir)
+	assert.Equal(t, "", loadOpts.SecretsDir)
+	assert.Equal(t, config.GatewayPosture(""), loadOpts.Posture)
+	assert.Equal(t, "/bin/bash", loadOpts.Shell)
+	assert.Equal(t, "C.UTF-8", loadOpts.Lang)
+	assert.Equal(t, "screen", loadOpts.Term)
+	assert.Equal(t, "UTC", loadOpts.TZ)
+}
+
+func TestBuildOperatorLoadOptions_HeartbeatIntervalPropagated(t *testing.T) {
+	tests := []struct {
+		name     string
+		duration time.Duration
+	}{
+		{"one second", 1 * time.Second},
+		{"thirty seconds", 30 * time.Second},
+		{"one minute", time.Minute},
+		{"five minutes", 5 * time.Minute},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := ServeOperatorOptions{HeartbeatInterval: tt.duration}
+			loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, "/work")
+			assert.Equal(t, tt.duration, loadOpts.HeartbeatInterval)
+		})
+	}
+}
+
+func TestBuildOperatorLoadOptions_EnvVarsUnset(t *testing.T) {
+	t.Setenv(string(constants.EnvVar.Shell), "")
+	t.Setenv(string(constants.EnvVar.Lang), "")
+	t.Setenv(string(constants.EnvVar.Term), "")
+	t.Setenv(string(constants.EnvVar.TZ), "")
+
+	opts := ServeOperatorOptions{}
+	loadOpts := buildOperatorLoadOptions(opts, constants.DefaultEndpoint, "/work")
+
+	assert.Equal(t, "", loadOpts.Shell)
+	assert.Equal(t, "", loadOpts.Lang)
+	assert.Equal(t, "", loadOpts.Term)
+	assert.Equal(t, "", loadOpts.TZ)
 }

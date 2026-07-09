@@ -238,3 +238,110 @@ func TestLoadClientCertPair_MismatchedKeyCertPair(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair))
 }
+
+func TestLoadClientCertPair_EmptyCertFile(t *testing.T) {
+	dir := t.TempDir()
+	emptyCert := filepath.Join(dir, constants.TestClientCrtFilename)
+	require.NoError(t, os.WriteFile(emptyCert, []byte{}, 0600))
+
+	_, keyPath := generateTestKeyCertPair(t)
+
+	_, _, err := loadClientCertPair(emptyCert, keyPath)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair),
+		"empty cert file should fail at X509KeyPair stage with ErrLoadCertKeyPair")
+}
+
+func TestLoadClientCertPair_EmptyKeyFile(t *testing.T) {
+	certPath, _ := generateTestKeyCertPair(t)
+
+	dir := t.TempDir()
+	emptyKey := filepath.Join(dir, constants.TestClientKeyFilename)
+	require.NoError(t, os.WriteFile(emptyKey, []byte{}, 0600))
+
+	_, _, err := loadClientCertPair(certPath, emptyKey)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrLoadCertKeyPair),
+		"empty key file should fail at X509KeyPair stage with ErrLoadCertKeyPair")
+}
+
+func TestLoadClientCertPair_CertPathIsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	_, keyPath := generateTestKeyCertPair(t)
+
+	_, _, err := loadClientCertPair(dir, keyPath)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrReadClientCert),
+		"cert path pointing to a directory should fail with ErrReadClientCert")
+}
+
+func TestLoadClientCertPair_KeyPathIsDirectory(t *testing.T) {
+	certPath, _ := generateTestKeyCertPair(t)
+	dir := t.TempDir()
+
+	_, _, err := loadClientCertPair(certPath, dir)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrReadPrivateKey),
+		"key path pointing to a directory should fail with ErrReadPrivateKey")
+}
+
+func TestLoadClientCertPair_BothPathsNonExistent(t *testing.T) {
+	dir := t.TempDir()
+	nonExistentCert := filepath.Join(dir, constants.TestNonExistentCrtFilename)
+	nonExistentKey := filepath.Join(dir, constants.TestNonExistentKeyFilename)
+
+	_, _, err := loadClientCertPair(nonExistentCert, nonExistentKey)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrReadClientCert),
+		"cert read error should be returned first when both paths are non-existent")
+}
+
+func TestLoadClientCertPair_CertPEMMatchesFileContent(t *testing.T) {
+	certPath, keyPath := generateTestKeyCertPair(t)
+
+	expectedPEM, err := os.ReadFile(certPath)
+	require.NoError(t, err)
+
+	_, certPEM, err := loadClientCertPair(certPath, keyPath)
+	require.NoError(t, err)
+	assert.Equal(t, expectedPEM, certPEM,
+		"returned certPEM bytes should exactly match the file content on disk")
+}
+
+// ---------------------------------------------------------------------------
+// resolveKeyPath / resolveCertPath — additional edge cases
+// ---------------------------------------------------------------------------
+
+func TestResolveKeyPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	result := resolveKeyPath("   ", testLogger())
+	assert.Equal(t, "   ", result,
+		"whitespace-only explicit path is non-empty so it should be returned as-is")
+}
+
+func TestResolveCertPath_WhitespaceExplicitPathReturnedAsIs(t *testing.T) {
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	result := resolveCertPath("   ", testLogger())
+	assert.Equal(t, "   ", result,
+		"whitespace-only explicit path is non-empty so it should be returned as-is")
+}
+
+func TestResolveKeyPath_OnlyClientKeyExists(t *testing.T) {
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorKeyPath), 0700))
+	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorKeyPath, []byte("client key"), 0600))
+
+	result := resolveKeyPath("", testLogger())
+	assert.Equal(t, paths.Infra.ClientOperatorKeyPath, result)
+}
+
+func TestResolveCertPath_OnlyClientCertExists(t *testing.T) {
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+	require.NoError(t, os.MkdirAll(filepath.Dir(paths.Infra.ClientOperatorCertPath), 0700))
+	require.NoError(t, os.WriteFile(paths.Infra.ClientOperatorCertPath, []byte("client cert"), 0600))
+
+	result := resolveCertPath("", testLogger())
+	assert.Equal(t, paths.Infra.ClientOperatorCertPath, result)
+}

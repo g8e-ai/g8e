@@ -517,3 +517,334 @@ func TestRunClientCertRenewalLoop_RenewalTriggerWithExpiringCert(t *testing.T) {
 	assert.Contains(t, string(savedCert), "BEGIN CERTIFICATE",
 		"cert should have been renewed on startup before context cancellation")
 }
+
+// ---------------------------------------------------------------------------
+// fetchAndSaveTrustBundle (direct tests)
+// ---------------------------------------------------------------------------
+
+func TestFetchAndSaveTrustBundle(t *testing.T) {
+	caPEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
+
+	t.Run("Success_SavesBodyAndReturnsPEM", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(caPEM)
+		}))
+		t.Cleanup(srv.Close)
+
+		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		body, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
+		require.NoError(t, err)
+		assert.Equal(t, caPEM, body)
+
+		saved, err := os.ReadFile(caPath)
+		require.NoError(t, err)
+		assert.Equal(t, caPEM, saved)
+	})
+
+	t.Run("HTTPError_ReturnsHTTPStatusError", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(srv.Close)
+
+		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
+	})
+
+	t.Run("EmptyBody_ReturnsEmptyTrustBundle", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(srv.Close)
+
+		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		_, err := fetchAndSaveTrustBundle(context.Background(), srv.URL, caPath)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrEmptyTrustBundle))
+	})
+
+	t.Run("UnreachableServer_ReturnsFailedToReadTrustBundle", func(t *testing.T) {
+		caPath := filepath.Join(t.TempDir(), constants.TestCABundleFilename)
+		_, err := fetchAndSaveTrustBundle(context.Background(), "http://127.0.0.1:0", caPath)
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrFailedToReadTrustBundle))
+	})
+}
+
+// ---------------------------------------------------------------------------
+// submitRenewal (direct tests)
+// ---------------------------------------------------------------------------
+
+func TestSubmitRenewal(t *testing.T) {
+	caPEM, caKey, caCert := generateTestCAIntegration(t)
+
+	t.Run("Success_ReturnsParsedResponse", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			var req models.DeviceEnrollRequest
+			require.NoError(t, json.Unmarshal(body, &req))
+			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
+			cliCert := signCSRIntegration(t, []byte(req.CLICSR), caCert, caKey, "test-cli", time.Now().Add(365*24*time.Hour))
+			resp := models.OperatorRegistrationResponse{
+				OperatorCert:      string(opCert),
+				OperatorCertChain: string(caPEM),
+				CLICert:           string(cliCert),
+			}
+			respBytes, err := json.Marshal(resp)
+			require.NoError(t, err)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(respBytes)
+		}))
+		t.Cleanup(srv.Close)
+
+		opCSR, _, err := GenerateCSR("test-operator")
+		require.NoError(t, err)
+		cliCSR, _, err := GenerateCSR("test-cli")
+		require.NoError(t, err)
+
+		client := &http.Client{}
+		regResp, err := submitRenewal(context.Background(), client, srv.URL, opCSR, cliCSR, "test-host")
+		require.NoError(t, err)
+		require.NotNil(t, regResp)
+		assert.NotEmpty(t, regResp.OperatorCert)
+		assert.NotEmpty(t, regResp.CLICert)
+	})
+
+	t.Run("HTTPError_ReturnsHTTPStatusError", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("server error"))
+		}))
+		t.Cleanup(srv.Close)
+
+		opCSR, _, err := GenerateCSR("test-operator")
+		require.NoError(t, err)
+		cliCSR, _, err := GenerateCSR("test-cli")
+		require.NoError(t, err)
+
+		client := &http.Client{}
+		_, err = submitRenewal(context.Background(), client, srv.URL, opCSR, cliCSR, "test-host")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
+	})
+
+	t.Run("ErrorFieldInResponse_ReturnsEnrollmentFailed", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(mustMarshal(t, models.OperatorRegistrationResponse{Error: "renewal denied"}))
+		}))
+		t.Cleanup(srv.Close)
+
+		opCSR, _, err := GenerateCSR("test-operator")
+		require.NoError(t, err)
+		cliCSR, _, err := GenerateCSR("test-cli")
+		require.NoError(t, err)
+
+		client := &http.Client{}
+		_, err = submitRenewal(context.Background(), client, srv.URL, opCSR, cliCSR, "test-host")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
+	})
+
+	t.Run("MissingCerts_ReturnsMissingRequiredField", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(mustMarshal(t, models.OperatorRegistrationResponse{
+				OperatorCert: "",
+				CLICert:      "",
+			}))
+		}))
+		t.Cleanup(srv.Close)
+
+		opCSR, _, err := GenerateCSR("test-operator")
+		require.NoError(t, err)
+		cliCSR, _, err := GenerateCSR("test-cli")
+		require.NoError(t, err)
+
+		client := &http.Client{}
+		_, err = submitRenewal(context.Background(), client, srv.URL, opCSR, cliCSR, "test-host")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrMissingRequiredField))
+	})
+
+	t.Run("MalformedJSON_ReturnsResponseParseFailed", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("{not valid json"))
+		}))
+		t.Cleanup(srv.Close)
+
+		opCSR, _, err := GenerateCSR("test-operator")
+		require.NoError(t, err)
+		cliCSR, _, err := GenerateCSR("test-cli")
+		require.NoError(t, err)
+
+		client := &http.Client{}
+		_, err = submitRenewal(context.Background(), client, srv.URL, opCSR, cliCSR, "test-host")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrResponseParseFailed))
+	})
+
+	t.Run("UnreachableServer_ReturnsEnrollmentFailed", func(t *testing.T) {
+		opCSR, _, err := GenerateCSR("test-operator")
+		require.NoError(t, err)
+		cliCSR, _, err := GenerateCSR("test-cli")
+		require.NoError(t, err)
+
+		client := &http.Client{}
+		_, err = submitRenewal(context.Background(), client, "http://127.0.0.1:0", opCSR, cliCSR, "test-host")
+		require.Error(t, err)
+		assert.True(t, errors.Is(err, constants.ErrEnrollmentFailed))
+	})
+}
+
+// ---------------------------------------------------------------------------
+// PerformAutomaticEnrollment (additional edge cases)
+// ---------------------------------------------------------------------------
+
+func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCAIntegration(t)
+	hubBundlePEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.WellKnownPKICABundle:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(caPEM)
+		case constants.APIPathAuthDeviceEnroll:
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			var req models.DeviceEnrollRequest
+			require.NoError(t, json.Unmarshal(body, &req))
+			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
+			resp := models.DeviceEnrollmentResponse{
+				OperatorCert:   string(opCert),
+				OperatorID:     "op-001",
+				OperatorSessionID: "sess-001",
+				HubTrustBundle: string(hubBundlePEM),
+			}
+			respBytes, err := json.Marshal(resp)
+			require.NoError(t, err)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(respBytes)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
+	require.NoError(t, err)
+
+	savedCA, err := os.ReadFile(paths.Infra.CaCertPath)
+	require.NoError(t, err)
+	assert.Equal(t, string(hubBundlePEM), string(savedCA),
+		"CA file should be overwritten with HubTrustBundle when provided")
+}
+
+func TestPerformAutomaticEnrollment_CertChainAppendedToOperatorCert(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, caKey, caCert := generateTestCAIntegration(t)
+	intermediatePEM := generateTestCertPEM(t, time.Now(), time.Now().Add(365*24*time.Hour))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.WellKnownPKICABundle:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(caPEM)
+		case constants.APIPathAuthDeviceEnroll:
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			var req models.DeviceEnrollRequest
+			require.NoError(t, json.Unmarshal(body, &req))
+			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
+			resp := models.DeviceEnrollmentResponse{
+				OperatorCert:      string(opCert),
+				OperatorCertChain: string(intermediatePEM),
+				OperatorID:        "op-001",
+				OperatorSessionID: "sess-001",
+			}
+			respBytes, err := json.Marshal(resp)
+			require.NoError(t, err)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(respBytes)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
+	require.NoError(t, err)
+
+	savedCert, err := os.ReadFile(paths.Infra.OperatorCertPath)
+	require.NoError(t, err)
+	savedStr := string(savedCert)
+	assert.Contains(t, savedStr, "BEGIN CERTIFICATE")
+
+	block, rest := pem.Decode(savedCert)
+	require.NotNil(t, block, "first PEM block (operator cert) should parse")
+	assert.Equal(t, "CERTIFICATE", block.Type)
+
+	chainBlock, _ := pem.Decode(rest)
+	require.NotNil(t, chainBlock, "second PEM block (cert chain) should be present")
+	assert.Equal(t, "CERTIFICATE", chainBlock.Type)
+}
+
+func TestPerformAutomaticEnrollment_MalformedJSONResponse(t *testing.T) {
+	restorePorts(t)
+	require.NoError(t, paths.InitWithBase(t.TempDir()))
+
+	caPEM, _, _ := generateTestCAIntegration(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case constants.WellKnownPKICABundle:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(caPEM)
+		case constants.APIPathAuthDeviceEnroll:
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("{not valid json"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	constants.Ports.OperatorHttp = getServerPort(t, srv)
+
+	_, err := PerformAutomaticEnrollment(context.Background(), "127.0.0.1", CertPaths{
+		PkiTrustDir:       paths.Infra.PkiTrustDir,
+		OperatorKeyPath:   paths.Infra.OperatorKeyPath,
+		OperatorCertPath:  paths.Infra.OperatorCertPath,
+		CaCertPath:        paths.Infra.CaCertPath,
+		TrustedSignersDir: paths.Infra.TrustedSignersDir,
+	}, testLogger())
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrResponseParseFailed))
+}
