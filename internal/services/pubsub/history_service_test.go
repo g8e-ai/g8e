@@ -430,22 +430,22 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 
 		testRecords := []*models.FileDiffRecord{
 			{
-				ID:               "diff-a",
-				TimestampUTC:     time.Now().UTC(),
-				FilePath:         "/app/main.go",
-				Operation:        "create",
-				LedgerHashAfter:  "hash-a",
-				DiffStat:         "1 file changed",
-				DiffSize:         100,
+				ID:              "diff-a",
+				TimestampUTC:    time.Now().UTC(),
+				FilePath:        "/app/main.go",
+				Operation:       "create",
+				LedgerHashAfter: "hash-a",
+				DiffStat:        "1 file changed",
+				DiffSize:        100,
 			},
 			{
-				ID:               "diff-b",
-				TimestampUTC:     time.Now().UTC(),
-				FilePath:         "/app/util.go",
-				Operation:        "modify",
-				LedgerHashAfter:  "hash-b",
-				DiffStat:         "1 file changed",
-				DiffSize:         50,
+				ID:              "diff-b",
+				TimestampUTC:    time.Now().UTC(),
+				FilePath:        "/app/util.go",
+				Operation:       "modify",
+				LedgerHashAfter: "hash-b",
+				DiffStat:        "1 file changed",
+				DiffSize:        50,
 			},
 		}
 		svc.executionVault = &configurableExecutionVault{

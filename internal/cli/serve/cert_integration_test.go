@@ -725,10 +725,10 @@ func TestPerformAutomaticEnrollment_HubTrustBundleOverwritesCAFile(t *testing.T)
 			require.NoError(t, json.Unmarshal(body, &req))
 			opCert := signCSRIntegration(t, []byte(req.CSR), caCert, caKey, "test-operator", time.Now().Add(365*24*time.Hour))
 			resp := models.DeviceEnrollmentResponse{
-				OperatorCert:   string(opCert),
-				OperatorID:     "op-001",
+				OperatorCert:      string(opCert),
+				OperatorID:        "op-001",
 				OperatorSessionID: "sess-001",
-				HubTrustBundle: string(hubBundlePEM),
+				HubTrustBundle:    string(hubBundlePEM),
 			}
 			respBytes, err := json.Marshal(resp)
 			require.NoError(t, err)
