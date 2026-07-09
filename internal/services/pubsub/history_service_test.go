@@ -23,6 +23,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/models"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
+	"github.com/g8e-ai/g8e/internal/services/scrubbing"
 	"github.com/g8e-ai/g8e/internal/services/vault"
 	"github.com/g8e-ai/g8e/internal/testutil"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
@@ -69,6 +70,33 @@ func TestHistoryService_SetAuditStore(t *testing.T) {
 
 		svc.SetAuditStore(nil)
 		assert.Nil(t, svc.auditStore)
+	})
+}
+
+func TestHistoryService_SetScrubbingService(t *testing.T) {
+	t.Run("sets scrubbing service for content redaction", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		scrubbingSvc := scrubbing.NewScrubbingService(scrubbing.DefaultConfig(), logger, nil)
+		svc.SetScrubbingService(scrubbingSvc)
+
+		assert.NotNil(t, svc.scrubbing)
+		assert.Equal(t, scrubbingSvc, svc.scrubbing)
+	})
+
+	t.Run("sets nil scrubbing service", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		svc.SetScrubbingService(nil)
+		assert.Nil(t, svc.scrubbing)
 	})
 }
 
@@ -325,6 +353,166 @@ func TestHistoryService_HandleFetchFileDiffRequest(t *testing.T) {
 		published := client.LastPublished()
 		require.NotNil(t, published)
 		assert.Contains(t, string(published.Data), "either diff_id or operator_session_id is required")
+	})
+
+	t.Run("returns diff by diff_id successfully", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		testRecord := &models.FileDiffRecord{
+			ID:                "diff-123",
+			TimestampUTC:      time.Now().UTC(),
+			FilePath:          "/etc/config.yaml",
+			Operation:         "modify",
+			LedgerHashBefore:  "abc123",
+			LedgerHashAfter:   "def456",
+			DiffStat:          "2 files changed",
+			DiffCompressed:    []byte("@@ -1,3 +1,4 @@"),
+			DiffSize:          42,
+			OperatorSessionID: "session-1",
+		}
+		svc.executionVault = &configurableExecutionVault{
+			getFileDiffResult: testRecord,
+		}
+
+		req := &operatorv1.FetchFileDiffRequested{DiffId: "diff-123"}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			Payload: payload,
+		}
+		svc.HandleFetchFileDiffRequest(context.Background(), msg)
+
+		published := client.LastPublished()
+		require.NotNil(t, published)
+		assert.Contains(t, string(published.Data), "diff-123")
+		assert.Contains(t, string(published.Data), "/etc/config.yaml")
+		assert.Contains(t, string(published.Data), "modify")
+		assert.Contains(t, string(published.Data), "abc123")
+		assert.Contains(t, string(published.Data), "def456")
+		assert.Contains(t, string(published.Data), "2 files changed")
+		assert.Contains(t, string(published.Data), "session-1")
+	})
+
+	t.Run("returns diffs by operator_session_id successfully", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		testRecords := []*models.FileDiffRecord{
+			{
+				ID:               "diff-a",
+				TimestampUTC:     time.Now().UTC(),
+				FilePath:         "/app/main.go",
+				Operation:        "create",
+				LedgerHashBefore: "",
+				LedgerHashAfter:  "hash-a",
+				DiffStat:         "1 file changed",
+				DiffSize:         100,
+			},
+			{
+				ID:               "diff-b",
+				TimestampUTC:     time.Now().UTC(),
+				FilePath:         "/app/util.go",
+				Operation:        "modify",
+				LedgerHashBefore: "hash-b",
+				LedgerHashAfter:  "hash-c",
+				DiffStat:         "1 file changed",
+				DiffSize:         50,
+			},
+		}
+		svc.executionVault = &configurableExecutionVault{
+			getFileDiffsBySession: testRecords,
+		}
+
+		req := &operatorv1.FetchFileDiffRequested{OperatorSessionId: "session-1"}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			Payload: payload,
+		}
+		svc.HandleFetchFileDiffRequest(context.Background(), msg)
+
+		published := client.LastPublished()
+		require.NotNil(t, published)
+		assert.Contains(t, string(published.Data), "diff-a")
+		assert.Contains(t, string(published.Data), "diff-b")
+		assert.Contains(t, string(published.Data), "/app/main.go")
+		assert.Contains(t, string(published.Data), "/app/util.go")
+		assert.Contains(t, string(published.Data), "session-1")
+	})
+
+	t.Run("filters diffs by file_path when fetching by session", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		testRecords := []*models.FileDiffRecord{
+			{
+				ID:               "diff-a",
+				TimestampUTC:     time.Now().UTC(),
+				FilePath:         "/app/main.go",
+				Operation:        "create",
+				LedgerHashAfter:  "hash-a",
+				DiffStat:         "1 file changed",
+				DiffSize:         100,
+			},
+			{
+				ID:               "diff-b",
+				TimestampUTC:     time.Now().UTC(),
+				FilePath:         "/app/util.go",
+				Operation:        "modify",
+				LedgerHashAfter:  "hash-b",
+				DiffStat:         "1 file changed",
+				DiffSize:         50,
+			},
+		}
+		svc.executionVault = &configurableExecutionVault{
+			getFileDiffsBySession: testRecords,
+		}
+
+		req := &operatorv1.FetchFileDiffRequested{
+			OperatorSessionId: "session-1",
+			FilePath:          "/app/main.go",
+		}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			Payload: payload,
+		}
+		svc.HandleFetchFileDiffRequest(context.Background(), msg)
+
+		published := client.LastPublished()
+		require.NotNil(t, published)
+		assert.Contains(t, string(published.Data), "diff-a")
+		assert.Contains(t, string(published.Data), "/app/main.go")
+		assert.NotContains(t, string(published.Data), "diff-b")
+		assert.NotContains(t, string(published.Data), "/app/util.go")
+	})
+
+	t.Run("returns not-found error for missing diff_id", func(t *testing.T) {
+		t.Parallel()
+		cfg := testutil.NewTestConfig(t)
+		logger := testutil.NewTestLogger()
+		client := pubsubtest.NewMockOperatorPubSubClient()
+		svc := NewHistoryService(cfg, logger, client)
+
+		svc.executionVault = &configurableExecutionVault{}
+
+		req := &operatorv1.FetchFileDiffRequested{DiffId: "nonexistent"}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			Payload: payload,
+		}
+		svc.HandleFetchFileDiffRequest(context.Background(), msg)
+
+		published := client.LastPublished()
+		require.NotNil(t, published)
+		assert.Contains(t, string(published.Data), "file diff not found")
 	})
 }
 

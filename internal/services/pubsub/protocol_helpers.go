@@ -202,6 +202,8 @@ func unmarshalPayload(eventType constants.EventType, payload []byte) (proto.Mess
 		m = &operatorv1.McpCallRequested{}
 	case constants.Event.Operator.A2a.CallRequested:
 		m = &operatorv1.A2ACallRequested{}
+	case constants.Event.Operator.Eval.AnswerRequested:
+		m = &operatorv1.EvalAnswerRequested{}
 	default:
 		return nil, fmt.Errorf("unknown event type for unmarshaling: %s", eventType)
 	}

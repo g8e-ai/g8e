@@ -484,6 +484,20 @@ func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
 	})
+
+	t.Run("creates investigation document successfully", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.MockTransactionAudit{}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppInvestigationCreated,
+			ID:        "investigation-1",
+			Payload:   mustMarshalJSON(t, map[string]string{"title": "test investigation"}),
+		}
+		summary, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "investigation created", summary)
+	})
 }
 
 func TestOperatorPubSubService_handleShutdownRequest(t *testing.T) {
@@ -558,6 +572,48 @@ func TestOperatorPubSubService_handleEvalAnswerRequestSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleEvalAnswerRequestSync(context.Background(), msg)
 		require.Error(t, err)
+	})
+
+	t.Run("returns short answer without truncation", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.EvalAnswerRequested{
+			PromptId:  "prompt-1",
+			Benchmark: "test-benchmark",
+			Answer:    "short answer",
+			Model:     "test-model",
+		}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Eval.AnswerRequested,
+			ID:        "msg-1",
+			Payload:   payload,
+		}
+		summary, err := f.Svc.handleEvalAnswerRequestSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "short answer", summary)
+	})
+
+	t.Run("truncates answer exceeding ReceiptSummaryMaxBytes", func(t *testing.T) {
+		t.Parallel()
+		longAnswer := make([]byte, constants.ReceiptSummaryMaxBytes+1000)
+		for i := range longAnswer {
+			longAnswer[i] = 'A'
+		}
+		req := &operatorv1.EvalAnswerRequested{
+			PromptId:  "prompt-1",
+			Benchmark: "test-benchmark",
+			Answer:    string(longAnswer),
+			Model:     "test-model",
+		}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Eval.AnswerRequested,
+			ID:        "msg-1",
+			Payload:   payload,
+		}
+		summary, err := f.Svc.handleEvalAnswerRequestSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Len(t, summary, constants.ReceiptSummaryMaxBytes)
 	})
 }
 
