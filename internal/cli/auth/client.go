@@ -48,16 +48,6 @@ import (
 // httpTimeout is the default timeout for all HTTP clients in the auth package.
 const httpTimeout = 30 * time.Second
 
-type RegistrationRequest struct {
-	SystemFingerprint string `json:"system_fingerprint"`
-	Hostname          string `json:"hostname"`
-	OS                string `json:"os"`
-	Arch              string `json:"arch"`
-	Username          string `json:"username"`
-	CSRPEM            string `json:"csr_pem"`
-	CLICSRPEM         string `json:"cli_csr_pem"`
-}
-
 type RegistrationResponse struct {
 	Success           bool   `json:"success"`
 	OperatorSessionID string `json:"operator_session_id"`
@@ -175,7 +165,7 @@ func FetchRootCAFingerprint(cfg *config.Config, baseURL string) (string, error) 
 	if baseURL != "" {
 		discoveryURL = baseURL
 	}
-	fingerprintURL := fmt.Sprintf("%s/.well-known/g8e/pki/fingerprint", discoveryURL)
+	fingerprintURL := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.WellKnownPKIFingerprint)
 	client := &http.Client{Timeout: httpTimeout}
 	resp, err := client.Get(fingerprintURL)
 	if err != nil {
@@ -183,13 +173,11 @@ func FetchRootCAFingerprint(cfg *config.Config, baseURL string) (string, error) 
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return "", fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
-	var fpResp struct {
-		RootCA string `json:"root_ca"`
-	}
+	var fpResp models.PKIFingerprintResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fpResp); err != nil {
 		return "", fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
@@ -255,13 +243,13 @@ func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerpr
 	if baseURL != "" {
 		discoveryURL = baseURL
 	}
-	url := fmt.Sprintf("%s/api/v1/auth/bootstrap", discoveryURL)
+	url := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.AuthBootstrap)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
 
 	// Use plain HTTP client for bootstrap (no TLS required)
 	client := &http.Client{Timeout: httpTimeout}
@@ -274,6 +262,10 @@ func BootstrapWithURL(cfg *config.Config, operatorCSR, cliCSR string, caFingerpr
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	var regResp RegistrationResponse
@@ -326,13 +318,13 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 	if baseURL != "" {
 		discoveryURL = baseURL
 	}
-	url := fmt.Sprintf("%s/api/v1/auth/cli/enroll", discoveryURL)
+	url := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.AuthCLIEnroll)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
 
 	// Use plain HTTP client for enrollment (no TLS required)
 	client := &http.Client{Timeout: httpTimeout}
@@ -345,6 +337,10 @@ func CLIEnroll(cfg *config.Config, cliCSR string, baseURL string) (*Registration
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
+	}
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("%w: HTTP %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
 	var regResp RegistrationResponse
@@ -375,7 +371,7 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	if baseURL != "" {
 		discoveryURL = baseURL
 	}
-	trustBundleURL := fmt.Sprintf("%s/.well-known/g8e/pki/ca-bundle", discoveryURL)
+	trustBundleURL := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.WellKnownPKICABundle)
 	client := &http.Client{Timeout: httpTimeout}
 	trustBundleResp, err := client.Get(trustBundleURL)
 	if err != nil {
@@ -445,13 +441,13 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 	if baseURL != "" {
 		publicURL = baseURL
 	}
-	url := fmt.Sprintf("%s/api/v1/pki/devices/enroll", publicURL)
+	url := fmt.Sprintf("%s%s", publicURL, constants.APIPaths.PKIDevicesEnroll)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
@@ -484,10 +480,10 @@ func ReEnroll(cfg *config.Config, operatorCSR, cliCSR string, caFingerprint stri
 
 	// Write updated trust bundle only after successful mTLS enrollment
 	trustBundlePath := cfg.TrustBundlePath()
-	if err := os.MkdirAll(filepath.Dir(trustBundlePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(trustBundlePath), constants.PermDirStandard); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
-	if err := os.WriteFile(trustBundlePath, currentTrustBundle, 0644); err != nil {
+	if err := os.WriteFile(trustBundlePath, currentTrustBundle, constants.PermFilePublic); err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 	}
 
@@ -525,7 +521,7 @@ func isCertificateVerificationError(err error) bool {
 }
 
 func SaveCredentials(cfg *config.Config, creds *Credentials) error {
-	if err := os.MkdirAll(cfg.CredentialsDir, 0700); err != nil {
+	if err := os.MkdirAll(cfg.CredentialsDir, constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
@@ -535,7 +531,7 @@ func SaveCredentials(cfg *config.Config, creds *Credentials) error {
 		return fmt.Errorf("%w: %w", constants.ErrInvalidJSONBody, err)
 	}
 
-	if err := os.WriteFile(credsFile, credsData, 0600); err != nil {
+	if err := os.WriteFile(credsFile, credsData, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
 	}
 
@@ -582,7 +578,7 @@ func DeleteCredentials(cfg *config.Config) error {
 }
 
 func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, keyFile string) error {
-	if err := os.MkdirAll(filepath.Dir(certFile), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(certFile), constants.PermDirPrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 	}
 
@@ -596,7 +592,7 @@ func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, k
 		Bytes: keyBytes,
 	})
 
-	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
+	if err := os.WriteFile(keyFile, keyPEM, constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
@@ -605,7 +601,7 @@ func SaveCertAndKey(certPEM, chainPEM string, key *ecdsa.PrivateKey, certFile, k
 		certContent += "\n" + chainPEM
 	}
 
-	if err := os.WriteFile(certFile, []byte(certContent), 0600); err != nil {
+	if err := os.WriteFile(certFile, []byte(certContent), constants.PermFilePrivate); err != nil {
 		return fmt.Errorf("%w: %w", constants.ErrCertSaveFailed, err)
 	}
 
@@ -649,7 +645,7 @@ func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 	if baseURL != "" {
 		discoveryURL = baseURL
 	}
-	url := fmt.Sprintf("%s/api/v1/auth/bootstrap/status", discoveryURL)
+	url := fmt.Sprintf("%s%s", discoveryURL, constants.APIPaths.AuthBootstrapStatus)
 	client := &http.Client{Timeout: httpTimeout}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -662,9 +658,7 @@ func CheckBootstrapStatus(cfg *config.Config, baseURL string) (bool, error) {
 		return false, fmt.Errorf("%w: %w", constants.ErrHTTPResponseReadFailed, err)
 	}
 
-	var statusResp struct {
-		Bootstrapped bool `json:"bootstrapped"`
-	}
+	var statusResp models.BootstrapStatusResponse
 	if err := json.Unmarshal(respBody, &statusResp); err != nil {
 		return false, fmt.Errorf("%w: %w", constants.ErrInvalidJSONResponse, err)
 	}
@@ -762,10 +756,10 @@ func AutoRenewCertificate(cfg *config.Config, certType string, caFingerprint str
 
 	if regResp.HubTrustBundle != "" {
 		trustPath := cfg.TrustBundlePath()
-		if err := os.MkdirAll(filepath.Dir(trustPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(trustPath), constants.PermDirStandard); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), 0644); err != nil {
+		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -812,13 +806,13 @@ func EnrollWithGateway(cfg *config.Config, gatewayEndpoint, operatorCSR, cliCSR 
 	}
 
 	// Use the device enrollment endpoint for initial enrollment (no mTLS required)
-	url := fmt.Sprintf("http://%s/api/v1/auth/device/enroll", gatewayEndpoint)
+	url := fmt.Sprintf("http://%s%s", gatewayEndpoint, constants.APIPaths.AuthDeviceEnroll)
 	httpReq, err := http.NewRequest("POST", url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
 
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
 
 	// For initial enrollment without mTLS, use plain HTTP client
 	client := &http.Client{Timeout: httpTimeout}

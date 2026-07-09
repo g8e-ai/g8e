@@ -59,6 +59,25 @@ type DeviceEnrollRequest struct {
 	Hostname          string `json:"hostname"`
 }
 
+// AppEnrollRequest is the request body for external app enrollment via /api/v1/pki/apps/delegated.
+type AppEnrollRequest struct {
+	CSR            string `json:"csr_pem"`
+	AppName        string `json:"app_name"`
+	AppType        string `json:"app_type"`
+	OrganizationID string `json:"organization_id,omitempty"`
+}
+
+// AppEnrollResponse is the response body for external app enrollment.
+type AppEnrollResponse struct {
+	Success     bool   `json:"success"`
+	AppCert     string `json:"app_cert"`
+	CertChain   string `json:"cert_chain"`
+	TrustBundle string `json:"trust_bundle"`
+	AppID       string `json:"app_id"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
+	Error       string `json:"error,omitempty"`
+}
+
 // PasskeyChallengeRequest is the inbound body for passkey authentication challenge endpoints.
 type PasskeyChallengeRequest struct {
 	UserID string `json:"user_id"`

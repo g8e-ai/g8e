@@ -56,3 +56,8 @@ const (
 	ChannelPrefixResults   = "results"
 	ChannelPrefixHeartbeat = "heartbeat"
 )
+
+// SSE event type strings (used in SSE event framing and consumer dispatch).
+const (
+	SSEEventTypeApprovalCompleted = "approval.completed"
+)

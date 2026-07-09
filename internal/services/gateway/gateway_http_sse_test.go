@@ -1210,18 +1210,18 @@ func TestHandleInternalSSEStream_ClientLabelUserID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// internalSSEPushPayload JSON round-trip
+// SSEPushPayload JSON round-trip
 // ---------------------------------------------------------------------------
 
-func TestInternalSSEPushPayload_JSONRoundTrip(t *testing.T) {
-	original := internalSSEPushPayload{
+func TestSSEPushPayload_JSONRoundTrip(t *testing.T) {
+	original := models.SSEPushPayload{
 		WebSessionID: "web-123",
 		Event:        json.RawMessage(`{"type":"test","data":"hello"}`),
 	}
 	data, err := json.Marshal(original)
 	require.NoError(t, err)
 
-	var decoded internalSSEPushPayload
+	var decoded models.SSEPushPayload
 	require.NoError(t, json.Unmarshal(data, &decoded))
 	assert.Equal(t, original.WebSessionID, decoded.WebSessionID)
 	assert.Equal(t, original.CliSessionID, decoded.CliSessionID)
@@ -1229,14 +1229,14 @@ func TestInternalSSEPushPayload_JSONRoundTrip(t *testing.T) {
 	assert.JSONEq(t, string(original.Event), string(decoded.Event))
 }
 
-func TestInternalSSEPushPayload_EmptyEvent(t *testing.T) {
-	payload := internalSSEPushPayload{
+func TestSSEPushPayload_EmptyEvent(t *testing.T) {
+	payload := models.SSEPushPayload{
 		CliSessionID: "cli-123",
 	}
 	data, err := json.Marshal(payload)
 	require.NoError(t, err)
 
-	var decoded internalSSEPushPayload
+	var decoded models.SSEPushPayload
 	require.NoError(t, json.Unmarshal(data, &decoded))
 	assert.Equal(t, "cli-123", decoded.CliSessionID)
 	// json.RawMessage for a nil field unmarshals to the bytes "null"

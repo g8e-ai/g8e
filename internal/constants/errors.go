@@ -987,6 +987,9 @@ var (
 	ErrTribunalBootstrapDecodeSeed    = errors.New("tribunal bootstrap: decode seed hex")
 	ErrGatewayServiceNil              = errors.New("gateway service is nil")
 
+	// SSE approval errors
+	ErrApprovalSSETimeout = errors.New("L3 approval: timed out waiting for SSE event")
+
 	// Agent harness errors
 	ErrHarnessNoScenarios = errors.New("no scenarios selected")
 
