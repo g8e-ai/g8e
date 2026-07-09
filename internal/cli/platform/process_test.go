@@ -39,12 +39,12 @@ func TestNewProcessManager(t *testing.T) {
 	}
 
 	// ProcessManager should use paths relative to projectRoot
-	expectedRuntimeDir := filepath.Join(tmpDir, ".g8e")
+	expectedRuntimeDir := filepath.Join(tmpDir, constants.RuntimeDirname)
 	if pm.runtimeDir != expectedRuntimeDir {
 		t.Errorf("expected runtimeDir %s, got %s", expectedRuntimeDir, pm.runtimeDir)
 	}
 
-	expectedPKIDir := filepath.Join(tmpDir, ".g8e/pki")
+	expectedPKIDir := filepath.Join(tmpDir, constants.RuntimeDirname, constants.PkiDirname)
 	if pm.pkiDir != expectedPKIDir {
 		t.Errorf("expected pkiDir %s, got %s", expectedPKIDir, pm.pkiDir)
 	}

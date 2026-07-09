@@ -53,7 +53,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	pkiDir := t.TempDir()
 	secretsDir := t.TempDir()
 	ks := newTestKeystore(t, secretsDir, logger)
-	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, "vault"), logger, true, "", false, ks)
+	db, err := OpenCanonicalDBService(dbDir, secretsDir, filepath.Join(dbDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -80,7 +80,7 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 
 	// Initialize suspended transaction service for tests
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -124,7 +124,7 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	logger := testutil.NewTestLogger()
 
 	dbDir := t.TempDir()
-	db, err := openTestDB(t, dbDir, t.TempDir(), filepath.Join(dbDir, "vault"), logger)
+	db, err := openTestDB(t, dbDir, t.TempDir(), filepath.Join(dbDir, constants.VaultDirname), logger)
 	require.NoError(t, err)
 	t.Cleanup(func() { db.Close() })
 
@@ -135,7 +135,7 @@ func setupTestPasskeyService(t *testing.T) (*PasskeyHandler, *UserService, stora
 	require.NoError(t, err)
 
 	suspendedTxConfig := &storage.SuspendedTransactionConfig{
-		DBPath:               filepath.Join(dbDir, "suspended_transactions.db"),
+		DBPath:               filepath.Join(dbDir, constants.SuspendedTxFilename),
 		MaxDBSizeMB:          256,
 		RetentionDays:        7,
 		PruneIntervalMinutes: 30,
@@ -232,7 +232,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	t.Run("Success - reads valid actuator key file", func(t *testing.T) {
 		// Create a temporary file with valid actuator key data
 		tmpDir := t.TempDir()
-		keyFile := filepath.Join(tmpDir, "actuator_key.json")
+		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		keyData := `{"key_id":"test-key-id","public_key":"test-public-key"}`
 		require.NoError(t, os.WriteFile(keyFile, []byte(keyData), 0644))
 
@@ -245,7 +245,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 	})
 
 	t.Run("Failure - file does not exist", func(t *testing.T) {
-		reader := &fileActuatorKeyReader{path: "/nonexistent/path/actuator_key.json"}
+		reader := &fileActuatorKeyReader{path: "/nonexistent/path/" + constants.ActuatorPubJSONFilename}
 		_, _, err := reader.ReadActuatorPublicKey()
 
 		assert.Error(t, err)
@@ -254,7 +254,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 
 	t.Run("Failure - invalid JSON in file", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		keyFile := filepath.Join(tmpDir, "actuator_key.json")
+		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		require.NoError(t, os.WriteFile(keyFile, []byte("{invalid json"), 0644))
 
 		reader := &fileActuatorKeyReader{path: keyFile}
@@ -265,7 +265,7 @@ func TestFileActuatorKeyReader(t *testing.T) {
 
 	t.Run("Success - missing required fields returns empty values", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		keyFile := filepath.Join(tmpDir, "actuator_key.json")
+		keyFile := filepath.Join(tmpDir, constants.ActuatorPubJSONFilename)
 		require.NoError(t, os.WriteFile(keyFile, []byte(`{"key_id":"test-id"}`), 0644))
 
 		reader := &fileActuatorKeyReader{path: keyFile}

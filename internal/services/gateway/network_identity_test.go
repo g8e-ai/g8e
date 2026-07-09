@@ -44,7 +44,7 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 			name:     "loads identity from file",
 			certMode: "full",
 			setupFile: func(t *testing.T, dir string) string {
-				identityFile := filepath.Join(dir, "network-identity.json")
+				identityFile := filepath.Join(dir, constants.NetworkIdentityFilename)
 				identity := network.NetworkIdentity{
 					IPs:       []string{"192.0.2.10", "2001:db8::10"},
 					Hostnames: []string{"gateway.test.internal"},
@@ -88,7 +88,7 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 			name:     "malformed identity file",
 			certMode: "full",
 			setupFile: func(t *testing.T, dir string) string {
-				identityFile := filepath.Join(dir, "network-identity.json")
+				identityFile := filepath.Join(dir, constants.NetworkIdentityFilename)
 				require.NoError(t, os.WriteFile(identityFile, []byte("not-json"), 0600))
 				return identityFile
 			},

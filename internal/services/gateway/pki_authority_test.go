@@ -167,7 +167,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 	t.Run("Valid certificate is accepted", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		cert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
+		cert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 		err := ctx.pki.VerifyCertificate(cert)
 		require.NoError(t, err)
 	})
@@ -175,7 +175,7 @@ func TestPKIAuthority_VerifyCertificate(t *testing.T) {
 	t.Run("Revoked certificate is rejected", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		cert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
+		cert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 		err := ctx.pki.RevokeCertificate(cert.SerialNumber.String(), "test revocation")
 		require.NoError(t, err)
 
@@ -230,8 +230,8 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 
 		intermediates := []string{"hub_ca", "operator_ca"}
 		for _, name := range intermediates {
-			certPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirAuthorities, name+".crt")
-			keyPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirAuthorities, name+".key")
+			certPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirAuthorities, name+constants.FileExtCert)
+			keyPath := filepath.Join(ctx.pkiDir, constants.PkiSubdirAuthorities, name+constants.FileExtKey)
 
 			_, err := os.Stat(certPath)
 			require.NoError(t, err, "%s cert should exist", name)
@@ -296,7 +296,8 @@ func TestPKIAuthority_InitializePKI(t *testing.T) {
 	t.Run("No root-level ca.crt mirror", func(t *testing.T) {
 		ctx := setupTestPKI(t)
 
-		rootCAPath := filepath.Join(ctx.pkiDir, "ca.crt")
+		const rootCAMirrorFilename = "ca.crt"
+		rootCAPath := filepath.Join(ctx.pkiDir, rootCAMirrorFilename)
 		_, err := os.Stat(rootCAPath)
 		assert.True(t, os.IsNotExist(err), "ca.crt must not exist at PKI root")
 	})
@@ -340,7 +341,7 @@ func TestPKIAuthority_ChainValidity(t *testing.T) {
 
 	t.Run("Service certificate chain validity", func(t *testing.T) {
 		hubCertPEM := testutil.ReadHubCA(t, ctx.pkiDir)
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
+		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		hubCert := parsePEMCertificate(t, hubCertPEM)
 
@@ -374,7 +375,7 @@ func TestPKIAuthority_URISAN(t *testing.T) {
 	ctx := setupTestPKI(t)
 
 	t.Run("Service certificate has SPIFFE URI SAN", func(t *testing.T) {
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
+		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		assert.NotEmpty(t, serviceCert.URIs)
 
@@ -415,7 +416,7 @@ func TestPKIAuthority_ValidityPeriods(t *testing.T) {
 	})
 
 	t.Run("Service certificate validity period", func(t *testing.T) {
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
+		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		duration := serviceCert.NotAfter.Sub(serviceCert.NotBefore)
 		expectedDuration := time.Duration(servingCertValidityDays) * 24 * time.Hour
@@ -435,7 +436,7 @@ func TestPKIAuthority_EKU(t *testing.T) {
 	})
 
 	t.Run("Service certificate has correct EKU", func(t *testing.T) {
-		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, "issued", "hub", "operator-gateway.crt"))
+		serviceCert := loadCertificate(t, filepath.Join(ctx.pkiDir, constants.PkiSubdirIssued, constants.PkiSubdirHub, constants.PkiFileGatewayCert))
 
 		assert.Contains(t, serviceCert.ExtKeyUsage, x509.ExtKeyUsageServerAuth)
 		assert.Contains(t, serviceCert.ExtKeyUsage, x509.ExtKeyUsageClientAuth)
