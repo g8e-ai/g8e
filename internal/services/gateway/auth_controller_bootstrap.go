@@ -686,10 +686,10 @@ func (c *AuthController) handleEnrollmentTokenValidate(w http.ResponseWriter, r 
 			tokenPrefix = tokenPrefix[:8]
 		}
 		c.logger.Warn("Enrollment token validation failed", "error", err, "token_prefix", tokenPrefix)
-		switch {
-		case err == constants.ErrEnrollmentTokenExpired:
+		switch err {
+		case constants.ErrEnrollmentTokenExpired:
 			c.responder.Error(w, http.StatusGone, "enrollment token has expired")
-		case err == constants.ErrEnrollmentTokenConsumed:
+		case constants.ErrEnrollmentTokenConsumed:
 			c.responder.Error(w, http.StatusConflict, "enrollment token has already been used")
 		default:
 			c.responder.Error(w, http.StatusUnauthorized, "invalid enrollment token")

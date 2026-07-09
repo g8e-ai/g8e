@@ -28,7 +28,7 @@ the system libc.
 
 At minimum, install the tools for the component you are touching:
 
-- Go 1.26.4 or later for the g8e Operator and protocol work.
+- Go 1.26.5 or later for the g8e Operator and protocol work.
 - Python 3.10 or later for protocol generation and demo scripts.
 
 ## `make` targets fail with missing `curl`
@@ -95,7 +95,7 @@ status command and the log:
 Common causes:
 
 - One of the local ports from `protocol/constants/ports.json` (HTTP 8080, HTTPS 8443) is already in use. The process manager in `internal/cli/platform/process.go` performs a preflight port check and reports conflicting PIDs.
-- The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.4).
+- The Go toolchain is missing or below the version expected by the current Developer Guidelines (Go 1.26.5).
 - Runtime PKI or secrets were created by an older incompatible checkout.
 - Port collision prevention: the gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary. The HTTP surface (8080) serves plain HTTP for bootstrap and PKI discovery only; the HTTPS surface (8443) handles all API, MCP, console, and management routes. See [Network Architecture](../architecture/network.md) for port topology details.
 - Governance posture validation: when starting in `consensus` or `notary` posture, the gateway validates tribunal prerequisites at startup before any services start. If the tribunal ID is empty, the tribunal policy does not exist in the database, or quorum is less than 1, the gateway exits with an error. See [Governance](../architecture/governance.md) for posture startup validation details.

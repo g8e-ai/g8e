@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-08
+Version: v1.3.8
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -29,7 +29,7 @@ docker run -d \
   gw serve --posture doctrine
 ```
 
-The `gw serve` subcommand runs the gateway in foreground mode, blocking until shutdown. It is a hidden subcommand that serves as the re-exec target for `gw start`. For direct `docker run` usage, `gw serve` is suitable because it runs the gateway in the foreground without spawning a subprocess. The root `docker-compose.yml` uses `gw start -f` instead, which starts the gateway as a subprocess and tails the log output. Both approaches keep the container running.
+The `gw serve` subcommand runs the gateway in foreground mode, blocking until shutdown. It is a hidden subcommand that serves as the re-exec target for `gw start`. For direct `docker run` usage, `gw serve` is suitable because it runs the gateway in the foreground without spawning a subprocess. The root `docker-compose.yml` uses `gw start -f` instead, which runs the gateway in the foreground directly (same process, no subprocess). Both approaches keep the container running.
 
 ## Docker Compose Deployment
 
@@ -119,7 +119,7 @@ services:
     command: ["gw", "start", "-f", "--posture", "consensus"]
 ```
 
-The `gw start` and `gw serve` subcommands accept the same `--posture`, `--http-port`, and `--https-port` flags. The `-f` flag (available only on `gw start`) follows log output after starting the gateway as a subprocess. Container ports remain 8080 and 8443; only the host-side mapping changes.
+The `gw start` and `gw serve` subcommands accept the same `--posture`, `--http-port`, and `--https-port` flags. The `-f` flag (available only on `gw start`) runs the gateway in the foreground instead of the background — Ctrl+C stops the gateway directly. Container ports remain 8080 and 8443; only the host-side mapping changes.
 
 ### Data Persistence
 

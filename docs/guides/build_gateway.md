@@ -22,7 +22,7 @@ The reference implementation is the g8e Node running in gateway mode. The same g
 
 ### Prerequisites
 
-- **Go 1.26.4+** - Required for building the reference gateway.
+- **Go 1.26.5+** - Required for building the reference gateway.
 - **Make** - Required to run build targets.
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:

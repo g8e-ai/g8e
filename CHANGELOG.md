@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.8] - 2026-07-08
+
+### Overview
+
+v1.3.8 is a security and usability release. This version replaces raw session identifiers in browser enrollment URLs with one-time enrollment tokens, adds gateway foreground mode for development and debugging, introduces a live swarm demo, improves setup scripts to add g8e to PATH automatically, and hardens the test suite by removing `t.Parallel()` from integration tests and internalizing fixture cleanup.
+
+### Added
+
+* **Enrollment Token Service** — New `EnrollmentTokenService` in `internal/services/gateway/enrollment_token_service.go` generates one-time tokens with a 5-minute TTL for secure passkey enrollment. Tokens are persisted in the `enrollment_tokens` collection, validated and consumed atomically, and cleaned up by a background goroutine every 5 minutes. Added `GenerateToken`, `ValidateAndConsumeToken`, and `CleanupExpiredTokens` methods.
+* **Enrollment Token API Endpoints** — Two new gateway endpoints: `POST /api/v1/auth/enrollment-token/generate` (mTLS CLI session required) and `POST /api/v1/auth/enrollment-token/validate` (public — the token itself is the credential). Generate returns `{ "token": "..." }`; validate returns `{ "user_id": "...", "cli_session_id": "..." }` and marks the token as consumed.
+* **Gateway Foreground Mode (`--follow` / `-f`)** — `g8e gw start -f` runs the gateway in the foreground instead of as a background process. Ctrl+C stops the gateway directly. Foreground mode writes network identity to a temp file and calls `serve.RunGateway` directly in the current process.
+* **Live Swarm Demo** — New demo in `demos/live-swarm/` with `drone_cmd.py` agent script and `tribunal-bootstrap.json` config. Guide at `docs/guides/live-swarm-demo.md`.
+* **PATH Setup in Setup Scripts** — `scripts/linux-setup.sh`, `scripts/macos-setup.sh`, and `scripts/windows-setup.ps1` now detect the shell profile (`.zshrc` / `.bashrc` / `.profile` / PowerShell profile) and add the g8e binary directory to PATH. Scripts now have 4 steps instead of 3.
+* **Enrollment Token Cleanup Loop** — Background goroutine `runEnrollmentTokenCleanup` in `gateway_service.go` runs every 5 minutes to remove expired enrollment tokens and prevent unbounded collection growth.
+* **New Constants and Model** — Added `CollectionEnrollmentTokens` collection name, `ContextKeyCLISessionID` context key, enrollment token error sentinels (`ErrEnrollmentTokenGenerationFailed`, `ErrEnrollmentTokenPersistenceFailed`, `ErrEnrollmentTokenInvalid`, `ErrEnrollmentTokenExpired`, `ErrEnrollmentTokenConsumed`), `EnrollmentToken` model in `internal/models/auth.go`, and enrollment token API path constants.
+
+### Changed
+
+* **Tokenized Passkey Enrollment URL** — `RegisterPasskeyViaBrowser` in `passkey_bootstrap.go` now generates a one-time enrollment token via the mTLS endpoint and opens the browser with `#register=1&token=<token>` instead of exposing raw `user_id` and `cli_session_id` in the URL. Added `generateEnrollmentToken` helper.
+* **Console SPA Token Validation** — Console `index.html` reads the token from the URL hash, POSTs to the public validation endpoint, populates hidden form fields with the returned `user_id` and `cli_session_id`, and immediately clears the token from the URL via `history.replaceState`. Error messages distinguish expired (410), already-used (409), and invalid tokens.
+* **Gateway Start Command Refactored** — `gateway.go` restructured to support foreground mode. Process manager creation and operator status check moved to the background-only code path. Foreground mode writes network identity file and calls `serve.RunGateway` directly.
+* **Process Manager Methods Exported** — `createDirectories` → `CreateDirectories` and `writeNetworkIdentityFile` → `WriteNetworkIdentityFile` exported on `ProcessManager` for use by foreground mode.
+* **AuthController Constructor** — `newAuthController` now accepts `*EnrollmentTokenService` parameter. `HTTPHandler` creates the service in `newHTTPHandler` and passes it through.
+* **CLI Session ID in Request Context** — `gateway_auth.go` now stamps `ContextKeyCLISessionID` in the request context for mTLS CLI sessions, enabling the enrollment token generate endpoint to associate tokens with sessions.
+* **Documentation** — Updated `docs/architecture/auth.md` with enrollment token flow description (steps 1–8, security rationale).
+* **Protocol Python Version** — Updated `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` to v1.3.8.
+
+### Security
+
+* **Enrollment Token Security** — Replaced raw session identifiers (`user_id`, `cli_session_id`) in browser enrollment URLs with one-time, 5-minute-TTL tokens. This prevents exposure of sensitive session identifiers in browser history, referrer headers, and screen-share surfaces. Tokens are consumed on first use and cleaned up after expiration.
+* **Go Toolchain Bump** — Bumped Go from 1.26.4 to 1.26.5 to fix [GO-2026-5856](https://pkg.go.dev/vuln/GO-2026-5856) (Encrypted Client Hello privacy leak in `crypto/tls`). Updated `go.mod`, CI workflows, and documentation.
+
+### Fixed
+
+* **Test Fixture Cleanup** — Removed `Cleanup` field from `GatewayFixture` struct. `NewGatewayFixture` now registers cleanup internally via `t.Cleanup()` before returning. Removed all 13 `defer f.Cleanup()` / `defer fixture.Cleanup()` call sites from integration tests.
+* **t.Parallel() Removal** — Removed `t.Parallel()` from all integration-tagged test files (28 files) to prevent resource contention and flaky tests.
+* **Test Quality** — Replaced hardcoded strings with constants (`constants.VaultDirname`, `constants.SuspendedTxFilename`) in test setup functions.
+
+### Tests
+
+* Added `internal/services/gateway/enrollment_token_service_test.go` (143 lines) — enrollment token generate, validate-and-consume, expiry, and cleanup tests.
+* Added `internal/services/gateway/auth_controller_enrollment_test.go` (230+ lines) — enrollment token generate and validate endpoint tests with mTLS context, error cases, and token consumption verification.
+* Updated `internal/services/gateway/auth_controller_test.go` — added `EnrollmentTokenService` to test setup, replaced hardcoded strings with constants, removed `t.Parallel()`.
+* Removed `t.Parallel()` from 28 integration test files across `internal/services/gateway/`, `internal/services/storage/storagetest/`, `internal/services/execution/`, `internal/services/governance/`, and `internal/cli/auth/`.
+* Removed all `defer f.Cleanup()` / `defer fixture.Cleanup()` call sites from `test/universal_gateway_integration_test.go` (7), `test/mcp_gateway_test.go` (3), `test/a2a_gateway_test.go` (3).
+* Various test cleanups across multiple files.
+
 ## [1.3.7] - 2026-07-06
 
 ### Overview

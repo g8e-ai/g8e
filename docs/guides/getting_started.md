@@ -38,7 +38,7 @@ Everything, including the Go compiler and build dependencies, runs inside the co
 
 | Requirement | Notes |
 |---|---|
-| Go | 1.26.4, required to build from source |
+| Go | 1.26.5, required to build from source |
 | Make | Any recent version, required to run build targets |
 | Git | Any recent version, required to clone the repository |
 | Python | 3.11+, optional, required only for demo environments and protocol library development |
