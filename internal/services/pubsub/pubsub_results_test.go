@@ -49,7 +49,7 @@ func mustUnmarshalGovernanceEnvelope(t *testing.T, data []byte) *commonv1.Govern
 }
 
 func TestNewPubSubResultsService(t *testing.T) {
-	t.Run("creates service", func(t *testing.T) {
+	t.Run("returns non-nil service without error", func(t *testing.T) {
 		t.Parallel()
 		db := pubsubtest.NewMockOperatorPubSubClient()
 		cfg := testutil.NewTestConfig(t)

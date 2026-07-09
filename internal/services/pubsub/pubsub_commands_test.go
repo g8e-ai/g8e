@@ -46,7 +46,7 @@ import (
 )
 
 func TestNewOperatorPubSubService(t *testing.T) {
-	t.Run("creates service successfully", func(t *testing.T) {
+	t.Run("returns non-nil service without error", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{

@@ -93,7 +93,7 @@ func (m *configurableExecutionVault) Close() error {
 func (m *configurableExecutionVault) Wait() {}
 
 func TestNewVaultWriter(t *testing.T) {
-	t.Run("creates service successfully", func(t *testing.T) {
+	t.Run("returns non-nil service with config and logger", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -103,7 +103,7 @@ func TestNewVaultWriter(t *testing.T) {
 		assert.Equal(t, logger, svc.logger)
 	})
 
-	t.Run("creates service with all dependencies", func(t *testing.T) {
+	t.Run("wires execution vault into service", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
