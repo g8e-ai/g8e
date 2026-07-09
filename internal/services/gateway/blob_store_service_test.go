@@ -41,7 +41,6 @@ func setupBlobStoreTest(t *testing.T) (*BlobStoreService, *CanonicalDBService) {
 }
 
 func TestBlobStoreService_BlobPut(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 
@@ -135,7 +134,6 @@ func TestBlobStoreService_BlobPut(t *testing.T) {
 }
 
 func TestBlobStoreService_BlobGet(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 
@@ -201,7 +199,6 @@ func TestBlobStoreService_BlobGet(t *testing.T) {
 }
 
 func TestBlobStoreService_BlobMeta(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 
@@ -262,7 +259,6 @@ func TestBlobStoreService_BlobMeta(t *testing.T) {
 }
 
 func TestBlobStoreService_BlobDelete(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 
@@ -309,7 +305,6 @@ func TestBlobStoreService_BlobDelete(t *testing.T) {
 }
 
 func TestBlobStoreService_BlobDeleteNamespace(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 
@@ -373,7 +368,6 @@ func TestBlobStoreService_BlobDeleteNamespace(t *testing.T) {
 }
 
 func TestBlobStoreService_RunMaintenance_Comprehensive(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 
@@ -443,7 +437,6 @@ func TestBlobStoreService_RunMaintenance_Comprehensive(t *testing.T) {
 }
 
 func TestBlobStoreService_NamespaceIsolation(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 
@@ -470,7 +463,6 @@ func TestBlobStoreService_NamespaceIsolation(t *testing.T) {
 }
 
 func TestBlobStoreService_ConcurrentOperations(t *testing.T) {
-	t.Parallel()
 
 	blobStore, _ := setupBlobStoreTest(t)
 

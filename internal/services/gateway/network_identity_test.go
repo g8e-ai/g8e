@@ -26,13 +26,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/network"
 	"github.com/g8e-ai/g8e/internal/testutil"
 )
 
 func TestResolveGatewayCertificateIdentity(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name         string
 		certMode     string
@@ -46,7 +45,7 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 			name:     "loads identity from file",
 			certMode: "full",
 			setupFile: func(t *testing.T, dir string) string {
-				identityFile := filepath.Join(dir, "network-identity.json")
+				identityFile := filepath.Join(dir, constants.NetworkIdentityFilename)
 				identity := network.NetworkIdentity{
 					IPs:       []string{"192.0.2.10", "2001:db8::10"},
 					Hostnames: []string{"gateway.test.internal"},
@@ -90,7 +89,7 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 			name:     "malformed identity file",
 			certMode: "full",
 			setupFile: func(t *testing.T, dir string) string {
-				identityFile := filepath.Join(dir, "network-identity.json")
+				identityFile := filepath.Join(dir, constants.NetworkIdentityFilename)
 				require.NoError(t, os.WriteFile(identityFile, []byte("not-json"), 0600))
 				return identityFile
 			},
@@ -102,8 +101,6 @@ func TestResolveGatewayCertificateIdentity(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			logger := testutil.NewTestLogger()
 			dir := t.TempDir()
 			identityFile := tt.identityFile

@@ -26,7 +26,6 @@ import (
 )
 
 func TestSQLAuditStore_Session(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -67,7 +66,6 @@ func TestSQLAuditStore_Session(t *testing.T) {
 }
 
 func TestSQLAuditStore_MultipleSessions(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -120,7 +118,6 @@ func TestSQLAuditStore_MultipleSessions(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetSessionNotFound(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -151,7 +148,6 @@ func TestSQLAuditStore_GetSessionNotFound(t *testing.T) {
 }
 
 func TestSQLAuditStore_SessionWithNullFields(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 

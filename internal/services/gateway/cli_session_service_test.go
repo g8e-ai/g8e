@@ -29,7 +29,6 @@ import (
 )
 
 func TestNewCLISessionService(t *testing.T) {
-	t.Parallel()
 	infra := setupTestInfrastructure(t, true)
 
 	svc := NewCLISessionService(infra.DB, infra.Logger)
@@ -40,7 +39,6 @@ func TestNewCLISessionService(t *testing.T) {
 }
 
 func TestCLISessionService_PersistCLISession(t *testing.T) {
-	t.Parallel()
 	infra := setupTestInfrastructure(t, true)
 	svc := infra.CLISessionSvc
 

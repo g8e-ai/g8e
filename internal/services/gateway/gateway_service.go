@@ -632,6 +632,9 @@ func (ls *GatewayModeService) Start(ctx context.Context) error {
 	// Start background service certificate renewal loop
 	go ls.runServiceCertRenewalLoop(ctx)
 
+	// Start background enrollment token cleanup
+	go ls.runEnrollmentTokenCleanup(ctx)
+
 	errChan := make(chan error, 5)
 	readyChan := make(chan struct{}, 5)
 
@@ -776,6 +779,28 @@ func (ls *GatewayModeService) Stop(ctx context.Context) error {
 	ls.running = false
 	ls.logger.Info("Gateway service stopped")
 	return nil
+}
+
+// runEnrollmentTokenCleanup periodically removes expired enrollment tokens
+// to prevent unbounded growth of the enrollment_tokens collection.
+// Runs every 5 minutes, matching the token TTL.
+func (ls *GatewayModeService) runEnrollmentTokenCleanup(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if ls.handler == nil || ls.handler.authController == nil || ls.handler.authController.enrollmentTokenSvc == nil {
+				continue
+			}
+			if err := ls.handler.authController.enrollmentTokenSvc.CleanupExpiredTokens(); err != nil {
+				ls.logger.Warn("Enrollment token cleanup error", "error", err)
+			}
+		}
+	}
 }
 
 // runServiceCertRenewalLoop runs a background goroutine that periodically checks

@@ -1,7 +1,7 @@
 # Authentication & Authorization
 
-Last Updated: 2026-07-07
-Version: v1.3.7
+Last Updated: 2026-07-08
+Version: v1.3.8
 
 This document explains how to authenticate and authorize actions in the g8e platform. The platform is built as a zero-trust execution environment where every action is verified before execution.
 
@@ -37,6 +37,21 @@ There are three enrollment scenarios:
 | **First-time setup** | Gateway never bootstrapped | CLI connects over plain HTTP to discovery port, Gateway bootstraps itself |
 | **New CLI on existing gateway** | Gateway exists, no local credentials | CLI connects over plain HTTP, Gateway enrolls CLI |
 | **Re-enrollment** | Credentials exist, need rotation | CLI uses existing mTLS cert to request new cert |
+
+**Enrollment Token Flow:**
+
+To prevent exposing raw session identifiers in browser history, referrer headers, and screen-share surfaces, the enrollment process uses a one-time enrollment token:
+
+1. CLI generates a one-time enrollment token via the mTLS endpoint `/api/v1/auth/enrollment-token/generate`
+2. CLI opens the browser with `#register=1&token=<token>` (no raw `user_id` or `cli_session_id` in the URL)
+3. The Console SPA reads the token from the URL hash and POSTs it to the public endpoint `/api/v1/auth/enrollment-token/validate`
+4. Gateway validates the token and returns the associated `user_id` and `cli_session_id`
+5. SPA populates the hidden form fields and calls `registerPasskey()`
+6. SPA immediately clears the token from the URL via `history.replaceState`
+7. Token is one-time-use with a 5-minute TTL
+8. Expired tokens are cleaned up periodically by the gateway
+
+This ensures that sensitive session identifiers are never exposed in browser history or referrer headers, while maintaining the security of the enrollment flow.
 
 **Trusting the Gateway Certificate:**
 

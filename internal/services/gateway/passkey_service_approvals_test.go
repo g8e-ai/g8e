@@ -52,7 +52,6 @@ func (m *mockMCPServiceProvider) ResumeWithL3Proof(_ context.Context, _, _ strin
 
 func TestPasskeyService_HandleApprovalAction(t *testing.T) {
 	t.Run("Failure - unauthorized", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/txhash123", nil)
 		rr := httptest.NewRecorder()
@@ -64,7 +63,6 @@ func TestPasskeyService_HandleApprovalAction(t *testing.T) {
 	})
 
 	t.Run("Failure - unknown action returns 400", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -82,7 +80,6 @@ func TestPasskeyService_HandleApprovalAction(t *testing.T) {
 
 func TestPasskeyService_HandleApprovalChallenge(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -93,7 +90,6 @@ func TestPasskeyService_HandleApprovalChallenge(t *testing.T) {
 	})
 
 	t.Run("Failure - transaction not found", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -109,7 +105,6 @@ func TestPasskeyService_HandleApprovalChallenge(t *testing.T) {
 	})
 
 	t.Run("Failure - transaction belongs to another user", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, suspendedStore := setupTestPasskeyService(t)
 		user1, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -139,7 +134,6 @@ func TestPasskeyService_HandleApprovalChallenge(t *testing.T) {
 
 func TestPasskeyService_HandleApprovalVerify(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -150,7 +144,6 @@ func TestPasskeyService_HandleApprovalVerify(t *testing.T) {
 	})
 
 	t.Run("Failure - transaction not found", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -166,7 +159,6 @@ func TestPasskeyService_HandleApprovalVerify(t *testing.T) {
 	})
 
 	t.Run("Failure - invalid JSON", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, suspendedStore := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -193,7 +185,6 @@ func TestPasskeyService_HandleApprovalVerify(t *testing.T) {
 
 func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/approvals/status/txhash123", nil)
 		rr := httptest.NewRecorder()
@@ -204,7 +195,6 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	})
 
 	t.Run("Failure - missing transaction hash", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -219,7 +209,6 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	})
 
 	t.Run("Failure - unauthorized", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/status/txhash123", nil)
 		rr := httptest.NewRecorder()
@@ -230,7 +219,6 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	})
 
 	t.Run("Success - expired or not found", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -248,7 +236,6 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	})
 
 	t.Run("Success - pending", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, suspendedStore := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -277,7 +264,6 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 	})
 
 	t.Run("Failure - transaction belongs to another user", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, suspendedStore := setupTestPasskeyService(t)
 		user1, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -306,13 +292,11 @@ func TestPasskeyService_HandleCLIApprovalStatus(t *testing.T) {
 
 func TestPasskeyService_HandleCLIListSuspended(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		testMethodNotAllowed(t, s.handleCLIListSuspended, http.MethodPost, "/api/v1/approvals/pending")
 	})
 
 	t.Run("Failure - unauthorized", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals/pending", nil)
 		rr := httptest.NewRecorder()
@@ -324,7 +308,6 @@ func TestPasskeyService_HandleCLIListSuspended(t *testing.T) {
 	})
 
 	t.Run("Success - empty list", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -342,7 +325,6 @@ func TestPasskeyService_HandleCLIListSuspended(t *testing.T) {
 	})
 
 	t.Run("Success - returns pending transaction", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, suspendedStore := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -371,7 +353,6 @@ func TestPasskeyService_HandleCLIListSuspended(t *testing.T) {
 	})
 
 	t.Run("Success - filters out approved transactions", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, suspendedStore := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -401,13 +382,11 @@ func TestPasskeyService_HandleCLIListSuspended(t *testing.T) {
 
 func TestPasskeyService_HandleApprovalPage(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		testMethodNotAllowed(t, s.handleApprovalPage, http.MethodPost, "/api/v1/approve/txhash123")
 	})
 
 	t.Run("Failure - missing transaction hash", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approve/", nil)
 		rr := httptest.NewRecorder()
@@ -419,7 +398,6 @@ func TestPasskeyService_HandleApprovalPage(t *testing.T) {
 	})
 
 	t.Run("Success - redirects to console with txHash", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, suspendedStore := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -446,7 +424,6 @@ func TestPasskeyService_HandleApprovalPage(t *testing.T) {
 
 func TestEmitApprovalCompletedSSE(t *testing.T) {
 	t.Run("appends event and publishes", func(t *testing.T) {
-		t.Parallel()
 		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
 		webSessionSvc := NewWebSessionService(db, logger)
@@ -490,7 +467,6 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 	})
 
 	t.Run("no-ops when SSE dependencies not set", func(t *testing.T) {
-		t.Parallel()
 		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
 		webSessionSvc := NewWebSessionService(db, logger)
@@ -517,7 +493,6 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 	})
 
 	t.Run("no-ops when userID is empty", func(t *testing.T) {
-		t.Parallel()
 		db := newTestDB(t)
 		logger := testutil.NewTestLogger()
 		webSessionSvc := NewWebSessionService(db, logger)
@@ -545,7 +520,6 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 }
 
 func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 	logger := testutil.NewTestLogger()
 	webSessionSvc := NewWebSessionService(db, logger)
@@ -609,13 +583,11 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 
 func TestPasskeyService_HandleListSuspendedTransactions(t *testing.T) {
 	t.Run("Failure - method not allowed", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		testMethodNotAllowed(t, s.handleListSuspendedTransactions, http.MethodPost, "/api/v1/approvals")
 	})
 
 	t.Run("Failure - unauthorized", func(t *testing.T) {
-		t.Parallel()
 		s, _, _ := setupTestPasskeyService(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/approvals", nil)
 		rr := httptest.NewRecorder()
@@ -627,7 +599,6 @@ func TestPasskeyService_HandleListSuspendedTransactions(t *testing.T) {
 	})
 
 	t.Run("Success - empty list", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)
@@ -651,7 +622,6 @@ func TestPasskeyService_HandleListSuspendedTransactions(t *testing.T) {
 	})
 
 	t.Run("Success - ignores query user_id (IDOR fix)", func(t *testing.T) {
-		t.Parallel()
 		s, userSvc, _ := setupTestPasskeyService(t)
 		user, err := userSvc.CreateUser()
 		require.NoError(t, err)

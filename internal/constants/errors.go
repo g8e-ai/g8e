@@ -447,6 +447,13 @@ var (
 	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")
 	ErrPasskeyStatusUnauthorized   = errors.New("passkey status endpoint returned unauthorized")
 
+	// Enrollment token errors
+	ErrEnrollmentTokenGenerationFailed  = errors.New("enrollment token generation failed")
+	ErrEnrollmentTokenPersistenceFailed = errors.New("enrollment token persistence failed")
+	ErrEnrollmentTokenInvalid           = errors.New("enrollment token is invalid")
+	ErrEnrollmentTokenExpired           = errors.New("enrollment token has expired")
+	ErrEnrollmentTokenConsumed          = errors.New("enrollment token has already been consumed")
+
 	// Passkey credential validation errors
 	ErrPasskeyCredentialInvalidID          = errors.New("passkey credential ID is empty")
 	ErrPasskeyCredentialIDTooLong          = errors.New("passkey credential ID exceeds 1024 bytes")

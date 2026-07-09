@@ -30,7 +30,6 @@ import (
 )
 
 func TestAuditVaultConfig_Default(t *testing.T) {
-	t.Parallel()
 	// Ensure no environment variable override is set
 	os.Unsetenv("G8E_DATA_DIR")
 
@@ -47,7 +46,6 @@ func TestAuditVaultConfig_Default(t *testing.T) {
 }
 
 func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
-	t.Parallel()
 	gitPath := testGitPath(t)
 
 	// Create temporary directory for test
@@ -92,7 +90,6 @@ func TestSQLAuditStore_BootstrapWithURL(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetDataDir(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -125,7 +122,6 @@ func TestSQLAuditStore_GetDataDir(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -160,7 +156,6 @@ func TestSQLAuditStore_GetLedgerPath(t *testing.T) {
 }
 
 func TestSQLAuditStore_NilServiceMethods(t *testing.T) {
-	t.Parallel()
 	var avs *TestSQLAuditStore
 
 	// These should not panic and return gracefully
@@ -179,7 +174,6 @@ func TestSQLAuditStore_NilServiceMethods(t *testing.T) {
 }
 
 func TestSQLAuditStore_DefaultConfig(t *testing.T) {
-	t.Parallel()
 	// Verify default config uses relative paths (caller resolves them)
 	// g8eo uses CLI flags only, not environment variables for configuration
 	config := DefaultTestSQLAuditStoreConfig()
@@ -191,7 +185,6 @@ func TestSQLAuditStore_DefaultConfig(t *testing.T) {
 }
 
 func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	logger := testutil.NewTestLogger()
 
@@ -229,7 +222,6 @@ func TestSQLAuditStore_GetEncryptionVault(t *testing.T) {
 }
 
 func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 
@@ -262,7 +254,6 @@ func TestSQLAuditStore_CloseIdempotent(t *testing.T) {
 }
 
 func TestSQLAuditStore_WALMode(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 

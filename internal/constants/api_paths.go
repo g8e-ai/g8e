@@ -93,6 +93,8 @@ var APIPaths = struct {
 	AuthPasskeysConsoleAuthenticateVerify    string `json:"auth_passkeys_console_authenticate_verify"`
 	AuthPasskeysConsolePrefix                string `json:"auth_passkeys_console_prefix"`
 	AuthSessionsMe                           string `json:"auth_sessions_me"`
+	AuthEnrollmentTokenGenerate              string `json:"auth_enrollment_token_generate"`
+	AuthEnrollmentTokenValidate              string `json:"auth_enrollment_token_validate"`
 	// Approval routes
 	Approvals          string `json:"approvals"`
 	ApprovalsByID      string `json:"approvals_by_id"`
@@ -213,6 +215,8 @@ var APIPaths = struct {
 	AuthPasskeysConsoleAuthenticateVerify:    "/api/v1/auth/passkeys/console/authenticate/verify",
 	AuthPasskeysConsolePrefix:                "/api/v1/auth/passkeys/console/",
 	AuthSessionsMe:                           "/api/v1/auth/sessions/me",
+	AuthEnrollmentTokenGenerate:              "/api/v1/auth/enrollment-token/generate",
+	AuthEnrollmentTokenValidate:              "/api/v1/auth/enrollment-token/validate",
 	// Approval routes
 	Approvals:          "/api/v1/approvals",
 	ApprovalsByID:      "/api/v1/approvals/",

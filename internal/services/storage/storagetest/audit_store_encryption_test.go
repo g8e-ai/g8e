@@ -36,7 +36,6 @@ import (
 // ============================================================================
 
 func TestSQLAuditStore_WithEncryption(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 
 	// Create and initialize vault for encryption
@@ -96,7 +95,6 @@ func TestSQLAuditStore_WithEncryption(t *testing.T) {
 }
 
 func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 
 	apiKey := []byte("test-api-key-for-locking-test")
@@ -195,7 +193,6 @@ func TestSQLAuditStore_EncryptedDataUnreadableWithoutKey(t *testing.T) {
 }
 
 func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 
 	oldAPIKey := []byte("old-api-key-before-refresh")
@@ -276,7 +273,6 @@ func TestSQLAuditStore_EncryptionWithRekey(t *testing.T) {
 }
 
 func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 
 	// With the new fail-closed behavior, vault is mandatory
@@ -340,7 +336,6 @@ func TestSQLAuditStore_MixedEncryptedUnencrypted(t *testing.T) {
 }
 
 func TestAuditVaultPrune(t *testing.T) {
-	t.Parallel()
 	tempDir := t.TempDir()
 	vaultDir := filepath.Join(tempDir, "vault")
 	logger := testutil.NewTestLogger()

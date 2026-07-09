@@ -30,7 +30,6 @@ import (
 )
 
 func TestStateRootSemantics(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// 1. Initial state root must be deterministic
@@ -116,7 +115,6 @@ func TestStateRootSemantics(t *testing.T) {
 }
 
 func TestStateRootDeterministicOrder(t *testing.T) {
-	t.Parallel()
 	db1 := newTestDB(t)
 	db2 := newTestDB(t)
 
@@ -151,7 +149,6 @@ func TestStateRootDeterministicOrder(t *testing.T) {
 }
 
 func TestStateRootCaching(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Get initial root and version
@@ -242,7 +239,6 @@ func BenchmarkStateRootLargeDataset(b *testing.B) {
 }
 
 func TestStateRoot_ObservedKVDoesNotChurnBoundRoot(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Get initial bound root
@@ -267,7 +263,6 @@ func TestStateRoot_ObservedKVDoesNotChurnBoundRoot(t *testing.T) {
 }
 
 func TestStateRoot_ObservedBlobDoesNotChurnBoundRoot(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Get initial bound root
@@ -292,7 +287,6 @@ func TestStateRoot_ObservedBlobDoesNotChurnBoundRoot(t *testing.T) {
 }
 
 func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Get initial observed root (may be empty hash if no observed state)
@@ -326,7 +320,6 @@ func TestStateRoot_ObservedStateRootIsSeparate(t *testing.T) {
 }
 
 func TestStateRoot_ObservedStateRootCaching(t *testing.T) {
-	t.Parallel()
 	db := newTestDB(t)
 
 	// Get observed root — should cache it

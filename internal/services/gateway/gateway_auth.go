@@ -97,6 +97,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthBootstrap, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthBootstrapStatus, RouteAuthNone)
 	r.addExact(constants.APIPaths.AuthLogout, RouteAuthNone)
+	r.addExact(constants.APIPaths.AuthEnrollmentTokenValidate, RouteAuthNone)
 	r.addPrefix(constants.APIPaths.ApprovePage, RouteAuthNone)
 
 	// Console SPA (public, no auth required)
@@ -120,6 +121,7 @@ func NewRouteAuthRegistry(jwksEnabled bool) *RouteAuthRegistry {
 	r.addExact(constants.APIPaths.AuthPasskeysCLIStatus, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ApprovalsCLIStatus, RouteAuthMTLS)
 	r.addExact(constants.APIPaths.ApprovalsCLIList, RouteAuthMTLS)
+	r.addExact(constants.APIPaths.AuthEnrollmentTokenGenerate, RouteAuthMTLS)
 
 	// JIT passkey routes: RouteAuthNone when JWKS is enabled (JWT middleware handles auth),
 	// RouteAuthMTLS when JWKS is disabled (not accessible without mTLS).
@@ -639,8 +641,9 @@ func (s *AuthService) handleCLIAuth(w http.ResponseWriter, r *http.Request, cliS
 			s.responder.Error(w, http.StatusForbidden, constants.ErrMTLSIdentityMismatch.Error())
 			return true
 		}
-		// Stamp context with user_id and optional operator session info (for MCP proxying)
+		// Stamp context with user_id, cli_session_id, and optional operator session info (for MCP proxying)
 		ctx := context.WithValue(r.Context(), constants.ContextKeyUserID, cliSession.UserID)
+		ctx = context.WithValue(ctx, constants.ContextKeyCLISessionID, cliSessionID)
 		if opID := r.Header.Get(constants.HeaderOperatorID); opID != "" {
 			ctx = context.WithValue(ctx, constants.ContextKeyOperatorID, opID)
 		}

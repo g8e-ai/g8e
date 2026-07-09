@@ -22,13 +22,11 @@ import (
 )
 
 func TestEncodeDecodeCredIDRoundTrip(t *testing.T) {
-	t.Parallel()
 
 	sizes := []int{0, 1, 16, 32, 64, 128, 256, 1023, 1024}
 	for _, size := range sizes {
 		size := size
 		t.Run("size_"+itoa(size), func(t *testing.T) {
-			t.Parallel()
 			original := make([]byte, size)
 			if size > 0 {
 				_, err := rand.Read(original)
@@ -44,7 +42,6 @@ func TestEncodeDecodeCredIDRoundTrip(t *testing.T) {
 }
 
 func TestDecodeCredIDInvalid(t *testing.T) {
-	t.Parallel()
 
 	tests := []struct {
 		name    string
@@ -61,7 +58,6 @@ func TestDecodeCredIDInvalid(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			_, err := decodeCredID(tc.input)
 			if tc.wantErr {
 				assert.Error(t, err)
@@ -73,7 +69,6 @@ func TestDecodeCredIDInvalid(t *testing.T) {
 }
 
 func TestEncodeCredIDMatchesRawURLEncoding(t *testing.T) {
-	t.Parallel()
 
 	input := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0xfe, 0xff}
 	encoded := encodeCredID(input)

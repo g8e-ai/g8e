@@ -63,7 +63,6 @@ func newDocumentStoreService(t *testing.T) *DocumentStoreService {
 }
 
 func TestNewDocumentStoreService(t *testing.T) {
-	t.Parallel()
 	db := newDocumentStoreTestDB(t)
 	logger := testutil.NewTestLogger()
 
@@ -75,7 +74,6 @@ func TestNewDocumentStoreService(t *testing.T) {
 }
 
 func TestDocGet_Success(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Insert a document directly
@@ -99,7 +97,6 @@ func TestDocGet_Success(t *testing.T) {
 }
 
 func TestDocGet_NotFound(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	doc, err := svc.DocGet("users", "nonexistent")
@@ -108,7 +105,6 @@ func TestDocGet_NotFound(t *testing.T) {
 }
 
 func TestDocGet_DatabaseError(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Close the DB to cause errors
@@ -119,7 +115,6 @@ func TestDocGet_DatabaseError(t *testing.T) {
 }
 
 func TestDocCreate_Success(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "bob", "role": "user"})
@@ -134,7 +129,6 @@ func TestDocCreate_Success(t *testing.T) {
 }
 
 func TestDocCreate_AlreadyExists(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "charlie"})
@@ -148,7 +142,6 @@ func TestDocCreate_AlreadyExists(t *testing.T) {
 }
 
 func TestDocCreate_StripsSystemFields(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]json.RawMessage{
@@ -169,7 +162,6 @@ func TestDocCreate_StripsSystemFields(t *testing.T) {
 }
 
 func TestDocCreate_InvalidJSON(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	err := svc.DocCreate("users", "u5", json.RawMessage(`{invalid json`))
@@ -178,7 +170,6 @@ func TestDocCreate_InvalidJSON(t *testing.T) {
 }
 
 func TestDocCreate_NilData(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	err := svc.DocCreate("users", "u6", json.RawMessage(`null`))
@@ -191,7 +182,6 @@ func TestDocCreate_NilData(t *testing.T) {
 }
 
 func TestDocSet_Create(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "eve"})
@@ -204,7 +194,6 @@ func TestDocSet_Create(t *testing.T) {
 }
 
 func TestDocSet_Update(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create initial document
@@ -232,7 +221,6 @@ func TestDocSet_Update(t *testing.T) {
 }
 
 func TestDocSet_StripsSystemFields(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]json.RawMessage{
@@ -253,7 +241,6 @@ func TestDocSet_StripsSystemFields(t *testing.T) {
 }
 
 func TestDocSet_InvalidJSON(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	err := svc.DocSet("users", "u10", json.RawMessage(`{invalid json`))
@@ -262,7 +249,6 @@ func TestDocSet_InvalidJSON(t *testing.T) {
 }
 
 func TestDocSetWithTimestamps_CustomTimestamps(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	customCreatedAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -279,7 +265,6 @@ func TestDocSetWithTimestamps_CustomTimestamps(t *testing.T) {
 }
 
 func TestDocSetWithTimestamps_ZeroTimestamps(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	before := time.Now().UTC()
@@ -295,7 +280,6 @@ func TestDocSetWithTimestamps_ZeroTimestamps(t *testing.T) {
 }
 
 func TestDocUpdate_Success(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create initial document
@@ -323,7 +307,6 @@ func TestDocUpdate_Success(t *testing.T) {
 }
 
 func TestDocUpdate_NotFound(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"role": "admin"})
@@ -333,7 +316,6 @@ func TestDocUpdate_NotFound(t *testing.T) {
 }
 
 func TestDocUpdate_DeleteFieldWithNull(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create document with field to delete
@@ -352,7 +334,6 @@ func TestDocUpdate_DeleteFieldWithNull(t *testing.T) {
 }
 
 func TestDocUpdate_IgnoresSystemFields(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create initial document
@@ -378,7 +359,6 @@ func TestDocUpdate_IgnoresSystemFields(t *testing.T) {
 }
 
 func TestDocUpdate_InvalidJSON(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create document
@@ -393,7 +373,6 @@ func TestDocUpdate_InvalidJSON(t *testing.T) {
 }
 
 func TestDocDelete_Success(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create document
@@ -413,7 +392,6 @@ func TestDocDelete_Success(t *testing.T) {
 }
 
 func TestDocDelete_NotFound(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	deleted, err := svc.DocDelete("users", "nonexistent")
@@ -422,7 +400,6 @@ func TestDocDelete_NotFound(t *testing.T) {
 }
 
 func TestDocDeleteNamespace_Success(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create multiple documents in a namespace
@@ -454,7 +431,6 @@ func TestDocDeleteNamespace_Success(t *testing.T) {
 }
 
 func TestDocDeleteNamespace_EmptyNamespace(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	deleted, err := svc.DocDeleteNamespace("empty_ns")
@@ -463,7 +439,6 @@ func TestDocDeleteNamespace_EmptyNamespace(t *testing.T) {
 }
 
 func TestDocDeleteNamespace_NonExistent(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	deleted, err := svc.DocDeleteNamespace("nonexistent_ns")
@@ -472,7 +447,6 @@ func TestDocDeleteNamespace_NonExistent(t *testing.T) {
 }
 
 func TestGetField_Success(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create document with multiple field types
@@ -511,7 +485,6 @@ func TestGetField_Success(t *testing.T) {
 }
 
 func TestGetField_NotFound(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	_, err := svc.GetField("users", "nonexistent", "name")
@@ -520,7 +493,6 @@ func TestGetField_NotFound(t *testing.T) {
 }
 
 func TestGetField_FieldNotFound(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "peter"})
@@ -536,7 +508,6 @@ func TestGetField_FieldNotFound(t *testing.T) {
 }
 
 func TestGetField_DocumentNotFound(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	_, err := svc.GetField("users", "nonexistent_doc", "name")
@@ -545,7 +516,6 @@ func TestGetField_DocumentNotFound(t *testing.T) {
 }
 
 func TestDocQuery_NoFilters(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create documents
@@ -561,7 +531,6 @@ func TestDocQuery_NoFilters(t *testing.T) {
 }
 
 func TestDocQuery_WithFilter(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create documents with different statuses
@@ -582,7 +551,6 @@ func TestDocQuery_WithFilter(t *testing.T) {
 }
 
 func TestDocQuery_WithLimit(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create documents
@@ -598,7 +566,6 @@ func TestDocQuery_WithLimit(t *testing.T) {
 }
 
 func TestDocQuery_WithOrderBy(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create documents with priority
@@ -618,7 +585,6 @@ func TestDocQuery_WithOrderBy(t *testing.T) {
 }
 
 func TestDocQuery_WithOrderByDesc(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create documents with priority
@@ -638,7 +604,6 @@ func TestDocQuery_WithOrderByDesc(t *testing.T) {
 }
 
 func TestDocQuery_MultipleFilters(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	// Create documents
@@ -661,7 +626,6 @@ func TestDocQuery_MultipleFilters(t *testing.T) {
 }
 
 func TestDocQuery_InvalidFilterField(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
@@ -677,7 +641,6 @@ func TestDocQuery_InvalidFilterField(t *testing.T) {
 }
 
 func TestDocQuery_InvalidOrderByField(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
@@ -689,7 +652,6 @@ func TestDocQuery_InvalidOrderByField(t *testing.T) {
 }
 
 func TestDocQuery_UnknownOperatorSkipped(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data1 := mustDocJSON(t, map[string]string{"name": "a"})
@@ -707,7 +669,6 @@ func TestDocQuery_UnknownOperatorSkipped(t *testing.T) {
 }
 
 func TestDocQuery_NumericComparison(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data1 := mustDocJSON(t, map[string]int{"value": 10})
@@ -718,7 +679,6 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 	require.NoError(t, svc.DocSet("items", "c", data3))
 
 	t.Run("greater than", func(t *testing.T) {
-		t.Parallel()
 		filters := []models.DocFilter{
 			{Field: "value", Op: ">", Value: json.RawMessage(`15`)},
 		}
@@ -728,7 +688,6 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 	})
 
 	t.Run("less than", func(t *testing.T) {
-		t.Parallel()
 		filters := []models.DocFilter{
 			{Field: "value", Op: "<", Value: json.RawMessage(`25`)},
 		}
@@ -738,7 +697,6 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 	})
 
 	t.Run("greater or equal", func(t *testing.T) {
-		t.Parallel()
 		filters := []models.DocFilter{
 			{Field: "value", Op: ">=", Value: json.RawMessage(`20`)},
 		}
@@ -748,7 +706,6 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 	})
 
 	t.Run("less or equal", func(t *testing.T) {
-		t.Parallel()
 		filters := []models.DocFilter{
 			{Field: "value", Op: "<=", Value: json.RawMessage(`20`)},
 		}
@@ -758,7 +715,6 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 	})
 
 	t.Run("not equal", func(t *testing.T) {
-		t.Parallel()
 		filters := []models.DocFilter{
 			{Field: "value", Op: "!=", Value: json.RawMessage(`20`)},
 		}
@@ -769,7 +725,6 @@ func TestDocQuery_NumericComparison(t *testing.T) {
 }
 
 func TestDocQuery_EmptyCollection(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	results, err := svc.DocQuery("empty", nil, "", 0)
@@ -778,7 +733,6 @@ func TestDocQuery_EmptyCollection(t *testing.T) {
 }
 
 func TestDocQuery_EmptyFilterField(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
@@ -794,7 +748,6 @@ func TestDocQuery_EmptyFilterField(t *testing.T) {
 }
 
 func TestDocQuery_EmptyFilterOp(t *testing.T) {
-	t.Parallel()
 	svc := newDocumentStoreService(t)
 
 	data := mustDocJSON(t, map[string]string{"name": "test"})
@@ -810,7 +763,6 @@ func TestDocQuery_EmptyFilterOp(t *testing.T) {
 }
 
 func TestScanDocument_Success(t *testing.T) {
-	t.Parallel()
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 
@@ -824,7 +776,6 @@ func TestScanDocument_Success(t *testing.T) {
 }
 
 func TestScanDocument_InvalidTimestamp(t *testing.T) {
-	t.Parallel()
 
 	_, err := scanDocument("users", "u1", `{"name":"alice"}`, "invalid-timestamp", "2024-01-01T00:00:00Z")
 	require.Error(t, err)
@@ -832,7 +783,6 @@ func TestScanDocument_InvalidTimestamp(t *testing.T) {
 }
 
 func TestScanDocument_InvalidData(t *testing.T) {
-	t.Parallel()
 	now := time.Now().UTC()
 	nowStr := sqliteutil.FormatTimestamp(now)
 

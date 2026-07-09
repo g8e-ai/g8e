@@ -61,7 +61,6 @@ func TestMCPGateway_EndToEnd(t *testing.T) {
 		TestName:          t.Name(),
 		AllowTestPortZero: true,
 	})
-	defer fixture.Cleanup()
 
 	// Wait for gateway to be ready
 	fixture.WaitForReady(t)
@@ -199,7 +198,6 @@ func TestMCPGateway_PayloadVariations(t *testing.T) {
 		TestName:          t.Name(),
 		AllowTestPortZero: true,
 	})
-	defer fixture.Cleanup()
 
 	// Wait for gateway to be ready
 	fixture.WaitForReady(t)
@@ -392,7 +390,6 @@ func TestMCPGateway_ErrorCases(t *testing.T) {
 		TestName:          t.Name(),
 		AllowTestPortZero: true,
 	})
-	defer fixture.Cleanup()
 	fixture.WaitForReady(t)
 
 	identity := fixtures.EnrollClientIdentity(t, fixture, "error-user", "error-org", "error-fingerprint", "error-host")

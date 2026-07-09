@@ -38,7 +38,6 @@ import (
 )
 
 func TestBootstrapFlow(t *testing.T) {
-	t.Parallel()
 	h, _ := setupTestHTTPHandler(t)
 
 	// Generate real CSRs for the test

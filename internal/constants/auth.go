@@ -189,6 +189,8 @@ const (
 	ContextKeyCapability ContextKey = "execution_capability"
 	// ContextKeyWebSessionID stores the web session ID for cookie-authenticated requests.
 	ContextKeyWebSessionID ContextKey = "web_session_id"
+	// ContextKeyCLISessionID stores the CLI session ID for mTLS-authenticated CLI requests.
+	ContextKeyCLISessionID ContextKey = "cli_session_id"
 )
 
 // Session constants
