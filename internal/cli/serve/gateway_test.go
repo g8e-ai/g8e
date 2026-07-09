@@ -17,16 +17,18 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/config"
-	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/config"
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 // ---------------------------------------------------------------------------
@@ -63,11 +65,11 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 		Posture:             config.PostureConsensus,
 		HTTPPort:            8080,
 		HTTPSPort:           8443,
-		DataDir:             "/var/lib/g8e/data",
-		PKIDir:              "/var/lib/g8e/pki",
-		SecretsDir:          "/var/lib/g8e/secrets",
-		VaultDir:            "/var/lib/g8e/vault",
-		VaultKeyPath:        "/var/lib/g8e/vault/key",
+		DataDir:             constants.TestPathVarLibDataDir,
+		PKIDir:              constants.TestPathVarLibPKIDir,
+		SecretsDir:          constants.TestPathVarLibSecretsDir,
+		VaultDir:            constants.TestPathVarLibVaultDir,
+		VaultKeyPath:        constants.TestPathVarLibVaultKey,
 		VaultRequireUnlock:  true,
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
@@ -75,7 +77,7 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 		RateLimitBurst:      10,
 		LogLevel:            "info",
 		CertIdentityMode:    "full",
-		NetworkIdentityFile: "/etc/g8e/network-identity.json",
+		NetworkIdentityFile: constants.TestPathEtcNetworkIdentity,
 		TribunalID:          "trib-001",
 		TribunalURL:         "https://localhost:8443/tribunal/v1/deliberate",
 		MCPDownstreamURL:    "http://downstream:3000/mcp",
@@ -85,11 +87,11 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 	assert.Equal(t, config.PostureConsensus, cfg.Posture)
 	assert.Equal(t, 8080, cfg.HTTPPort)
 	assert.Equal(t, 8443, cfg.HTTPSPort)
-	assert.Equal(t, "/var/lib/g8e/data", cfg.DataDir)
-	assert.Equal(t, "/var/lib/g8e/pki", cfg.PKIDir)
-	assert.Equal(t, "/var/lib/g8e/secrets", cfg.SecretsDir)
-	assert.Equal(t, "/var/lib/g8e/vault", cfg.VaultDir)
-	assert.Equal(t, "/var/lib/g8e/vault/key", cfg.VaultKeyPath)
+	assert.Equal(t, constants.TestPathVarLibDataDir, cfg.DataDir)
+	assert.Equal(t, constants.TestPathVarLibPKIDir, cfg.PKIDir)
+	assert.Equal(t, constants.TestPathVarLibSecretsDir, cfg.SecretsDir)
+	assert.Equal(t, constants.TestPathVarLibVaultDir, cfg.VaultDir)
+	assert.Equal(t, constants.TestPathVarLibVaultKey, cfg.VaultKeyPath)
 	assert.True(t, cfg.VaultRequireUnlock)
 	assert.Equal(t, "localhost", cfg.PasskeyRpID)
 	assert.Equal(t, "g8e", cfg.PasskeyRpName)
@@ -97,7 +99,7 @@ func TestGatewayConfig_FullAssignment(t *testing.T) {
 	assert.Equal(t, 10, cfg.RateLimitBurst)
 	assert.Equal(t, "info", cfg.LogLevel)
 	assert.Equal(t, "full", cfg.CertIdentityMode)
-	assert.Equal(t, "/etc/g8e/network-identity.json", cfg.NetworkIdentityFile)
+	assert.Equal(t, constants.TestPathEtcNetworkIdentity, cfg.NetworkIdentityFile)
 	assert.Equal(t, "trib-001", cfg.TribunalID)
 	assert.Equal(t, "https://localhost:8443/tribunal/v1/deliberate", cfg.TribunalURL)
 	assert.Equal(t, "http://downstream:3000/mcp", cfg.MCPDownstreamURL)
@@ -109,9 +111,9 @@ func TestGatewayConfig_Equality(t *testing.T) {
 		Posture:        config.PostureDoctrine,
 		HTTPPort:       8080,
 		HTTPSPort:      8443,
-		DataDir:        "/data",
-		PKIDir:         "/pki",
-		SecretsDir:     "/secrets",
+		DataDir:        constants.TestPathShortData,
+		PKIDir:         constants.TestPathShortPKI,
+		SecretsDir:     constants.TestPathShortSecrets,
 		LogLevel:       "debug",
 		TribunalID:     "trib-1",
 		RateLimitRPS:   5.0,
@@ -151,11 +153,11 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	cfg.Posture = config.PostureConsensus
 	cfg.HTTPPort = 8080
 	cfg.HTTPSPort = 8443
-	cfg.DataDir = "/data"
-	cfg.PKIDir = "/pki"
-	cfg.SecretsDir = "/secrets"
-	cfg.VaultDir = "/vault"
-	cfg.VaultKeyPath = "/vault/key"
+	cfg.DataDir = constants.TestPathShortData
+	cfg.PKIDir = constants.TestPathShortPKI
+	cfg.SecretsDir = constants.TestPathShortSecrets
+	cfg.VaultDir = constants.TestPathShortVault
+	cfg.VaultKeyPath = constants.TestPathShortVaultKey
 	cfg.VaultRequireUnlock = true
 	cfg.PasskeyRpID = "example.com"
 	cfg.PasskeyRpName = "Example"
@@ -163,7 +165,7 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	cfg.RateLimitBurst = 20
 	cfg.LogLevel = "debug"
 	cfg.CertIdentityMode = "localhost"
-	cfg.NetworkIdentityFile = "/path/to/identity.json"
+	cfg.NetworkIdentityFile = constants.TestPathIdentityFile
 	cfg.TribunalID = "trib-002"
 	cfg.TribunalURL = "https://tribunal.example.com"
 	cfg.MCPDownstreamURL = "http://mcp.example.com"
@@ -172,11 +174,11 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	assert.Equal(t, config.PostureConsensus, cfg.Posture)
 	assert.Equal(t, 8080, cfg.HTTPPort)
 	assert.Equal(t, 8443, cfg.HTTPSPort)
-	assert.Equal(t, "/data", cfg.DataDir)
-	assert.Equal(t, "/pki", cfg.PKIDir)
-	assert.Equal(t, "/secrets", cfg.SecretsDir)
-	assert.Equal(t, "/vault", cfg.VaultDir)
-	assert.Equal(t, "/vault/key", cfg.VaultKeyPath)
+	assert.Equal(t, constants.TestPathShortData, cfg.DataDir)
+	assert.Equal(t, constants.TestPathShortPKI, cfg.PKIDir)
+	assert.Equal(t, constants.TestPathShortSecrets, cfg.SecretsDir)
+	assert.Equal(t, constants.TestPathShortVault, cfg.VaultDir)
+	assert.Equal(t, constants.TestPathShortVaultKey, cfg.VaultKeyPath)
 	assert.True(t, cfg.VaultRequireUnlock)
 	assert.Equal(t, "example.com", cfg.PasskeyRpID)
 	assert.Equal(t, "Example", cfg.PasskeyRpName)
@@ -184,7 +186,7 @@ func TestGatewayConfig_AllFieldsExported(t *testing.T) {
 	assert.Equal(t, 20, cfg.RateLimitBurst)
 	assert.Equal(t, "debug", cfg.LogLevel)
 	assert.Equal(t, "localhost", cfg.CertIdentityMode)
-	assert.Equal(t, "/path/to/identity.json", cfg.NetworkIdentityFile)
+	assert.Equal(t, constants.TestPathIdentityFile, cfg.NetworkIdentityFile)
 	assert.Equal(t, "trib-002", cfg.TribunalID)
 	assert.Equal(t, "https://tribunal.example.com", cfg.TribunalURL)
 	assert.Equal(t, "http://mcp.example.com", cfg.MCPDownstreamURL)
@@ -278,15 +280,15 @@ func TestGatewayConfigToOptions_FullMapping(t *testing.T) {
 		Posture:             config.PostureConsensus,
 		HTTPPort:            8080,
 		HTTPSPort:           8443,
-		DataDir:             "/data",
-		PKIDir:              "/pki",
-		SecretsDir:          "/secrets",
+		DataDir:             constants.TestPathShortData,
+		PKIDir:              constants.TestPathShortPKI,
+		SecretsDir:          constants.TestPathShortSecrets,
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
 		RateLimitRPS:        5.0,
 		RateLimitBurst:      10,
 		CertIdentityMode:    "full",
-		NetworkIdentityFile: "/path/to/identity.json",
+		NetworkIdentityFile: constants.TestPathIdentityFile,
 		TribunalID:          "trib-001",
 		TribunalURL:         "https://localhost:8443/tribunal/v1/deliberate",
 		MCPDownstreamURL:    "http://mcp:3000",
@@ -383,8 +385,8 @@ func TestGatewayConfigToOptions_DownstreamURLs(t *testing.T) {
 
 func TestGatewayConfigToOptions_VaultFieldsNotMapped(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:           "/vault",
-		VaultKeyPath:       "/vault/key",
+		VaultDir:           constants.TestPathShortVault,
+		VaultKeyPath:       constants.TestPathShortVaultKey,
 		VaultRequireUnlock: true,
 	}
 
@@ -403,11 +405,11 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 		Posture:             config.PostureDoctrine,
 		HTTPPort:            8080,
 		HTTPSPort:           8443,
-		DataDir:             "/data",
-		PKIDir:              "/pki",
-		SecretsDir:          "/secrets",
-		VaultDir:            "/vault",
-		VaultKeyPath:        "/vault/key",
+		DataDir:             constants.TestPathShortData,
+		PKIDir:              constants.TestPathShortPKI,
+		SecretsDir:          constants.TestPathShortSecrets,
+		VaultDir:            constants.TestPathShortVault,
+		VaultKeyPath:        constants.TestPathShortVaultKey,
 		VaultRequireUnlock:  true,
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
@@ -415,7 +417,7 @@ func TestGatewayConfig_FieldCount(t *testing.T) {
 		RateLimitBurst:      10,
 		LogLevel:            "info",
 		CertIdentityMode:    "full",
-		NetworkIdentityFile: "/path/identity.json",
+		NetworkIdentityFile: constants.TestPathIdentityFileShort,
 		TribunalID:          "trib-1",
 		TribunalURL:         "https://tribunal.example.com",
 		MCPDownstreamURL:    "http://mcp:3000",
@@ -496,9 +498,9 @@ func TestGatewayConfig_DoctrinePostureScenario(t *testing.T) {
 		Posture:       config.PostureDoctrine,
 		HTTPPort:      8080,
 		HTTPSPort:     8443,
-		DataDir:       "/var/lib/g8e/data",
-		PKIDir:        "/var/lib/g8e/pki",
-		SecretsDir:    "/var/lib/g8e/secrets",
+		DataDir:       constants.TestPathVarLibDataDir,
+		PKIDir:        constants.TestPathVarLibPKIDir,
+		SecretsDir:    constants.TestPathVarLibSecretsDir,
 		PasskeyRpID:   "localhost",
 		PasskeyRpName: "g8e",
 		LogLevel:      "info",
@@ -519,9 +521,9 @@ func TestGatewayConfig_ConsensusPostureScenario(t *testing.T) {
 		Posture:       config.PostureConsensus,
 		HTTPPort:      8080,
 		HTTPSPort:     8443,
-		DataDir:       "/var/lib/g8e/data",
-		PKIDir:        "/var/lib/g8e/pki",
-		SecretsDir:    "/var/lib/g8e/secrets",
+		DataDir:       constants.TestPathVarLibDataDir,
+		PKIDir:        constants.TestPathVarLibPKIDir,
+		SecretsDir:    constants.TestPathVarLibSecretsDir,
 		PasskeyRpID:   "localhost",
 		PasskeyRpName: "g8e",
 		LogLevel:      "info",
@@ -544,9 +546,9 @@ func TestGatewayConfig_NotaryPostureScenario(t *testing.T) {
 		Posture:       config.PostureNotary,
 		HTTPPort:      8080,
 		HTTPSPort:     8443,
-		DataDir:       "/var/lib/g8e/data",
-		PKIDir:        "/var/lib/g8e/pki",
-		SecretsDir:    "/var/lib/g8e/secrets",
+		DataDir:       constants.TestPathVarLibDataDir,
+		PKIDir:        constants.TestPathVarLibPKIDir,
+		SecretsDir:    constants.TestPathVarLibSecretsDir,
 		PasskeyRpID:   "localhost",
 		PasskeyRpName: "g8e",
 		LogLevel:      "info",
@@ -658,13 +660,13 @@ func TestGatewayConfig_NegativeRateLimit(t *testing.T) {
 
 func TestGatewayConfig_VaultConfiguration(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:           "/var/lib/g8e/vault",
-		VaultKeyPath:       "/var/lib/g8e/vault/key",
+		VaultDir:           constants.TestPathVarLibVaultDir,
+		VaultKeyPath:       constants.TestPathVarLibVaultKey,
 		VaultRequireUnlock: true,
 	}
 
-	assert.Equal(t, "/var/lib/g8e/vault", cfg.VaultDir)
-	assert.Equal(t, "/var/lib/g8e/vault/key", cfg.VaultKeyPath)
+	assert.Equal(t, constants.TestPathVarLibVaultDir, cfg.VaultDir)
+	assert.Equal(t, constants.TestPathVarLibVaultKey, cfg.VaultKeyPath)
 	assert.True(t, cfg.VaultRequireUnlock)
 }
 
@@ -675,19 +677,19 @@ func TestGatewayConfig_VaultRequireUnlockDefault(t *testing.T) {
 
 func TestGatewayConfigToOptions_VaultFieldsPreservedInConfigOnly(t *testing.T) {
 	cfg := GatewayConfig{
-		VaultDir:           "/vault",
-		VaultKeyPath:       "/vault/key",
+		VaultDir:           constants.TestPathShortVault,
+		VaultKeyPath:       constants.TestPathShortVaultKey,
 		VaultRequireUnlock: true,
-		DataDir:            "/data",
-		PKIDir:             "/pki",
-		SecretsDir:         "/secrets",
+		DataDir:            constants.TestPathShortData,
+		PKIDir:             constants.TestPathShortPKI,
+		SecretsDir:         constants.TestPathShortSecrets,
 	}
 
 	opts := gatewayConfigToOptions(cfg)
 
-	assert.Equal(t, "/data", opts.DataDir, "DataDir should be mapped")
-	assert.Equal(t, "/pki", opts.PKIDir, "PKIDir should be mapped")
-	assert.Equal(t, "/secrets", opts.SecretsDir, "SecretsDir should be mapped")
+	assert.Equal(t, constants.TestPathShortData, opts.DataDir, "DataDir should be mapped")
+	assert.Equal(t, constants.TestPathShortPKI, opts.PKIDir, "PKIDir should be mapped")
+	assert.Equal(t, constants.TestPathShortSecrets, opts.SecretsDir, "SecretsDir should be mapped")
 }
 
 // ---------------------------------------------------------------------------
@@ -714,10 +716,10 @@ func TestGatewayConfig_CertIdentityModes(t *testing.T) {
 }
 
 func TestGatewayConfig_NetworkIdentityFile(t *testing.T) {
-	cfg := GatewayConfig{NetworkIdentityFile: "/etc/g8e/network-identity.json"}
+	cfg := GatewayConfig{NetworkIdentityFile: constants.TestPathEtcNetworkIdentity}
 	opts := gatewayConfigToOptions(cfg)
 
-	assert.Equal(t, "/etc/g8e/network-identity.json", opts.NetworkIdentityFile)
+	assert.Equal(t, constants.TestPathEtcNetworkIdentity, opts.NetworkIdentityFile)
 }
 
 // ---------------------------------------------------------------------------
@@ -853,18 +855,19 @@ func TestGatewayConfigToOptions_DownstreamWithPosture(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// BootstrapTribunal nil behavior (Tier 1 documentation)
+// BootstrapTribunal nil behavior (Tier 1 — no DB)
 // ---------------------------------------------------------------------------
 
-func TestBootstrapTribunal_NilServicePanics(t *testing.T) {
+func TestBootstrapTribunal_NilServiceReturnsError(t *testing.T) {
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	assert.Panics(t, func() {
-		_, _ = BootstrapTribunal(nil, "trib-001", priv, "key-id", "/secrets", logger)
-	}, "BootstrapTribunal with nil service should panic on GetDB()")
+	_, err = BootstrapTribunal(nil, "trib-001", priv, "key-id", constants.TestPathShortSecrets, logger)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
+		"BootstrapTribunal with nil service should return ErrGatewayServiceNil")
 }
 
 func TestBootstrapTribunal_EmptyTribunalID(t *testing.T) {
@@ -873,9 +876,10 @@ func TestBootstrapTribunal_EmptyTribunalID(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	assert.Panics(t, func() {
-		_, _ = BootstrapTribunal(nil, "", priv, "key-id", "/secrets", logger)
-	}, "BootstrapTribunal with nil service panics regardless of tribunal ID")
+	_, err = BootstrapTribunal(nil, "", priv, "key-id", constants.TestPathShortSecrets, logger)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
+		"BootstrapTribunal with nil service returns error regardless of tribunal ID")
 }
 
 // ---------------------------------------------------------------------------
@@ -887,16 +891,16 @@ func TestGatewayConfigToOptions_RoundTripIntegrity(t *testing.T) {
 		Posture:             config.PostureNotary,
 		HTTPPort:            8080,
 		HTTPSPort:           8443,
-		DataDir:             "/data",
-		PKIDir:              "/pki",
-		SecretsDir:          "/secrets",
+		DataDir:             constants.TestPathShortData,
+		PKIDir:              constants.TestPathShortPKI,
+		SecretsDir:          constants.TestPathShortSecrets,
 		PasskeyRpID:         "localhost",
 		PasskeyRpName:       "g8e",
 		PasskeyRpOrigins:    []string{"http://localhost:8087", "https://localhost:8450"},
 		RateLimitRPS:        10.0,
 		RateLimitBurst:      20,
 		CertIdentityMode:    "full",
-		NetworkIdentityFile: "/path/identity.json",
+		NetworkIdentityFile: constants.TestPathIdentityFileShort,
 		TribunalID:          "trib-1",
 		TribunalURL:         "https://tribunal.example.com",
 		MCPDownstreamURL:    "http://mcp:3000",
@@ -989,7 +993,7 @@ func TestParseTribunalBootstrapConfig_MalformedJSON(t *testing.T) {
 
 	_, err := parseTribunalBootstrapConfig(data)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse config")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapParseConfig))
 }
 
 func TestParseTribunalBootstrapConfig_EmptyTribunalID(t *testing.T) {
@@ -1001,7 +1005,7 @@ func TestParseTribunalBootstrapConfig_EmptyTribunalID(t *testing.T) {
 
 	_, err := parseTribunalBootstrapConfig(data)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
 }
 
 func TestParseTribunalBootstrapConfig_EmptyMemberAppIDs(t *testing.T) {
@@ -1013,7 +1017,7 @@ func TestParseTribunalBootstrapConfig_EmptyMemberAppIDs(t *testing.T) {
 
 	_, err := parseTribunalBootstrapConfig(data)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
 }
 
 func TestParseTribunalBootstrapConfig_QuorumZero(t *testing.T) {
@@ -1025,7 +1029,7 @@ func TestParseTribunalBootstrapConfig_QuorumZero(t *testing.T) {
 
 	_, err := parseTribunalBootstrapConfig(data)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
 }
 
 func TestParseTribunalBootstrapConfig_NegativeQuorum(t *testing.T) {
@@ -1037,7 +1041,7 @@ func TestParseTribunalBootstrapConfig_NegativeQuorum(t *testing.T) {
 
 	_, err := parseTribunalBootstrapConfig(data)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
 }
 
 func TestParseTribunalBootstrapConfig_MultipleMembers(t *testing.T) {
@@ -1098,7 +1102,7 @@ func TestDeriveSeedPublicKey_TrimsWhitespace(t *testing.T) {
 func TestDeriveSeedPublicKey_InvalidHex(t *testing.T) {
 	_, err := deriveSeedPublicKey("not-hex-at-all")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "decode seed hex")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapDecodeSeed))
 }
 
 func TestDeriveSeedPublicKey_WrongLength(t *testing.T) {
@@ -1106,13 +1110,13 @@ func TestDeriveSeedPublicKey_WrongLength(t *testing.T) {
 
 	_, err := deriveSeedPublicKey(shortHex)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid seed length")
+	assert.True(t, errors.Is(err, constants.ErrInvalidSeedLength))
 }
 
 func TestDeriveSeedPublicKey_EmptyString(t *testing.T) {
 	_, err := deriveSeedPublicKey("")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid seed length")
+	assert.True(t, errors.Is(err, constants.ErrInvalidSeedLength))
 }
 
 func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
@@ -1129,14 +1133,14 @@ func TestDeriveSeedPublicKey_MatchesKnownSeed(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// bootstrapTribunalPolicy error-path tests (Tier 1 — no DB)
+// bootstrapTribunalPolicy error-path tests (Tier 2 — file I/O)
 // ---------------------------------------------------------------------------
 
-func TestBootstrapTribunalPolicy_NilServicePanics(t *testing.T) {
+func TestBootstrapTribunalPolicy_NilServiceReturnsError(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "tribunal-bootstrap.json")
+	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{
 		"tribunal_id": "test-tribunal",
 		"member_app_ids": ["auditor-ensemble"],
@@ -1145,30 +1149,31 @@ func TestBootstrapTribunalPolicy_NilServicePanics(t *testing.T) {
 	}`), 0600)
 	require.NoError(t, err)
 
-	assert.Panics(t, func() {
-		_ = bootstrapTribunalPolicy(nil, configPath, "/secrets", logger)
-	}, "bootstrapTribunalPolicy with nil service should panic on GetDB()")
+	err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, constants.ErrGatewayServiceNil),
+		"bootstrapTribunalPolicy with nil service should return ErrGatewayServiceNil")
 }
 
 func TestBootstrapTribunalPolicy_MissingFile(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
-	err := bootstrapTribunalPolicy(nil, "/nonexistent/path/tribunal.json", "/secrets", logger)
+	err := bootstrapTribunalPolicy(nil, constants.TestPathNonexistentTribunal, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "read config")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapReadConfig))
 }
 
 func TestBootstrapTribunalPolicy_MalformedJSON(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 
 	tmpDir := t.TempDir()
-	configPath := filepath.Join(tmpDir, "tribunal-bootstrap.json")
+	configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 	err := os.WriteFile(configPath, []byte(`{not valid json}`), 0600)
 	require.NoError(t, err)
 
-	err = bootstrapTribunalPolicy(nil, configPath, "/secrets", logger)
+	err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parse config")
+	assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapParseConfig))
 }
 
 func TestBootstrapTribunalPolicy_InvalidConfig(t *testing.T) {
@@ -1195,13 +1200,13 @@ func TestBootstrapTribunalPolicy_InvalidConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tmpDir := t.TempDir()
-			configPath := filepath.Join(tmpDir, "tribunal-bootstrap.json")
+			configPath := filepath.Join(tmpDir, constants.TribunalBootstrapConfigFilename)
 			err := os.WriteFile(configPath, []byte(tt.config), 0600)
 			require.NoError(t, err)
 
-			err = bootstrapTribunalPolicy(nil, configPath, "/secrets", logger)
+			err = bootstrapTribunalPolicy(nil, configPath, constants.TestPathShortSecrets, logger)
 			require.Error(t, err)
-			assert.Contains(t, err.Error(), "tribunal_id, member_app_ids, and quorum are required")
+			assert.True(t, errors.Is(err, constants.ErrTribunalBootstrapMissingFields))
 		})
 	}
 }

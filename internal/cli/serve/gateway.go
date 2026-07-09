@@ -362,7 +362,7 @@ type tribunalBootstrapConfig struct {
 func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) {
 	var boot tribunalBootstrapConfig
 	if err := json.Unmarshal(data, &boot); err != nil {
-		return boot, fmt.Errorf("tribunal bootstrap: parse config: %w", err)
+		return boot, fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapParseConfig, err)
 	}
 	if boot.TribunalID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
 		return boot, constants.ErrTribunalBootstrapMissingFields
@@ -376,7 +376,7 @@ func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) 
 func deriveSeedPublicKey(seedHex string) (string, error) {
 	seed, err := hex.DecodeString(strings.TrimSpace(seedHex))
 	if err != nil {
-		return "", fmt.Errorf("tribunal bootstrap: decode seed hex: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapDecodeSeed, err)
 	}
 	if len(seed) != ed25519.SeedSize {
 		return "", fmt.Errorf("tribunal bootstrap: %w: got %d, expected %d", constants.ErrInvalidSeedLength, len(seed), ed25519.SeedSize)
@@ -406,12 +406,16 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
-		return fmt.Errorf("tribunal bootstrap: read config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapReadConfig, err)
 	}
 
 	boot, err := parseTribunalBootstrapConfig(data)
 	if err != nil {
-		return fmt.Errorf("tribunal bootstrap: parse config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapParseConfig, err)
+	}
+
+	if svc == nil {
+		return constants.ErrGatewayServiceNil
 	}
 
 	// Check if tribunal already exists (idempotent)
@@ -486,6 +490,9 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 // multi-member tribunals, member keys are loaded from disk via FileKeyProvider
 // (CS-9), falling back to the actuator key for the matching member.
 func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, secretsDir string, logger *slog.Logger) (*tribunal.TribunalService, error) {
+	if svc == nil {
+		return nil, constants.ErrGatewayServiceNil
+	}
 	policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)

@@ -982,6 +982,10 @@ var (
 	ErrTribunalBootstrapMissingFields = errors.New("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
 	ErrInvalidSeedLength            = errors.New("invalid seed length")
 	ErrTribunalMemberKeyNotFound    = errors.New("no private key for member")
+	ErrTribunalBootstrapParseConfig = errors.New("tribunal bootstrap: parse config")
+	ErrTribunalBootstrapReadConfig  = errors.New("tribunal bootstrap: read config")
+	ErrTribunalBootstrapDecodeSeed  = errors.New("tribunal bootstrap: decode seed hex")
+	ErrGatewayServiceNil           = errors.New("gateway service is nil")
 
 	// Agent harness errors
 	ErrHarnessNoScenarios = errors.New("no scenarios selected")
