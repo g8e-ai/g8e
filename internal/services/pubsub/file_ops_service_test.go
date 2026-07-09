@@ -474,10 +474,6 @@ func TestFileOpsService_HandleFsReadRequest(t *testing.T) {
 	})
 }
 
-// TestFileOpsService_LedgerIntegration documents the critical gap in ledger integration.
-// This test verifies that the ledger two-phase commit methods are NOT currently being called
-// during file edit operations, which means file mutations are NOT being recorded in the
-// git-backed ledger as intended by the architecture.
 func TestFileOpsService_SetAuditStoreForObserved(t *testing.T) {
 	t.Run("sets audit store for observed-state content evidence", func(t *testing.T) {
 		t.Parallel()

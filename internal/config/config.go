@@ -563,7 +563,7 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Read operator session ID from environment variable (in-memory only, never persisted)
 	// This is set by the deploy script after enrollment to track the operator's session
-	cfg.OperatorSessionId = os.Getenv("G8E_OPERATOR_SESSION_ID")
+	cfg.OperatorSessionId = os.Getenv(string(constants.EnvVar.OperatorSessionID))
 
 	return cfg, nil
 }

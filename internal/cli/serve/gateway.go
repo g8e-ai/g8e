@@ -324,15 +324,13 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	defer shutdownCancel()
 
 	var shutdownErr error
-	if cmdSvc != nil {
-		if cmdSvc.Actuator() != nil {
-			logger.Info("Waiting for in-flight transactions to drain...")
-			cmdSvc.Actuator().Wait()
-		}
-		if err := cmdSvc.Stop(); err != nil {
-			logger.Error("Command service stop error", string(constants.ConnectionStateError), err)
-			shutdownErr = fmt.Errorf("gateway: command service stop: %w", err)
-		}
+	if cmdSvc.Actuator() != nil {
+		logger.Info("Waiting for in-flight transactions to drain...")
+		cmdSvc.Actuator().Wait()
+	}
+	if err := cmdSvc.Stop(); err != nil {
+		logger.Error("Command service stop error", string(constants.ConnectionStateError), err)
+		shutdownErr = fmt.Errorf("gateway: command service stop: %w", err)
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {
@@ -381,7 +379,7 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 		return "", fmt.Errorf("tribunal bootstrap: decode seed hex: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return "", fmt.Errorf("tribunal bootstrap: invalid seed length %d, expected %d", len(seed), ed25519.SeedSize)
+		return "", fmt.Errorf("tribunal bootstrap: %w: got %d, expected %d", constants.ErrInvalidSeedLength, len(seed), ed25519.SeedSize)
 	}
 	priv := ed25519.NewKeyFromSeed(seed)
 	pub := priv.Public().(ed25519.PublicKey)
@@ -507,7 +505,7 @@ func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actua
 		if appID == actuatorKeyID {
 			return actuatorPriv, nil
 		}
-		return nil, fmt.Errorf("no private key for member %s (no file key and not the actuator)", appID)
+		return nil, fmt.Errorf("bootstrap tribunal: %w: %s (no file key and not the actuator)", constants.ErrTribunalMemberKeyNotFound, appID)
 	})
 
 	doctrine := govsvc.NewL1Doctrine()

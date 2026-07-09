@@ -99,6 +99,7 @@ var (
 
 	// CLI approval errors
 	ErrKeyReadFailed            = errors.New("failed to read CLI private key")
+	ErrKeyWriteFailed           = errors.New("failed to write CLI private key")
 	ErrKeyParseFailed           = errors.New("failed to parse private key")
 	ErrInvalidKeyType           = errors.New("private key is not Ed25519")
 	ErrCertReadFailed           = errors.New("failed to read CLI certificate")
@@ -979,6 +980,8 @@ var (
 
 	// Tribunal bootstrap errors
 	ErrTribunalBootstrapMissingFields = errors.New("tribunal bootstrap: tribunal_id, member_app_ids, and quorum are required")
+	ErrInvalidSeedLength            = errors.New("invalid seed length")
+	ErrTribunalMemberKeyNotFound    = errors.New("no private key for member")
 
 	// Agent harness errors
 	ErrHarnessNoScenarios = errors.New("no scenarios selected")

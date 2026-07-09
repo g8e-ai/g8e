@@ -123,7 +123,7 @@ func (p *FileKeyProvider) GetMemberKey(appID string) (ed25519.PrivateKey, error)
 	}
 
 	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("tribunal file key provider: invalid seed length for member %s: got %d, expected %d", appID, len(seed), ed25519.SeedSize)
+		return nil, fmt.Errorf("tribunal file key provider: %w for member %s: got %d, expected %d", constants.ErrInvalidSeedLength, appID, len(seed), ed25519.SeedSize)
 	}
 
 	return ed25519.NewKeyFromSeed(seed), nil
