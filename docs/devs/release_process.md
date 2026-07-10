@@ -102,6 +102,62 @@ Create a new release notes file for every release.
 
 The release notes file should mirror the CHANGELOG entry but can be more detailed. Include the version header and date, an Overview, all applicable Keep-a-Changelog sections, and any additional context, examples, or links to relevant documentation. Past release notes are immutable — never edit historical entries.
 
+#### Release Notes Template
+
+Use the same `## [X.Y.Z] - YYYY-MM-DD` header as the CHANGELOG (no `v` prefix in the bracket). Only include the subsections that apply to the release — most releases use 2–4 of these, not all of them.
+
+```markdown
+## [X.Y.Z] - YYYY-MM-DD
+
+### Overview
+
+[Brief summary of the release — 2-5 sentences highlighting major changes, themes, and motivation]
+
+### Breaking Changes
+
+* **Change title** — Description of breaking change and migration path
+
+### Added
+
+* **Feature title** — Description of new feature
+
+### Changed
+
+* **Change title** — Description of modification
+
+### Deprecated
+
+* **Item title** — What is deprecated and the recommended replacement
+
+### Removed
+
+* **Item title** — What was removed and why
+
+### Fixed
+
+* **Bug title** — Description of fix
+
+### Security
+
+* **Security title** — Description of security improvement
+
+### Deferred
+
+* **Item title** — What was considered but deferred, and why
+
+### Tests
+
+* Description of significant test coverage additions or refactors
+```
+
+**Conventions observed across existing release notes:**
+
+- **Bullet format**: `* **Item title** — Description` using an em-dash (`—`) separator between the bold title and description. Sub-bullets use `- ` for nested detail.
+- **Section selection**: Only include sections that have content. Common combinations: small fix releases use just `Overview` + `Fixed`; feature releases use `Added` + `Changed` + `Fixed`; cleanup releases use `Removed` + `Changed` + `Fixed`.
+- **Optional sections**: `Deferred`, `Tests`, and `Documentation` are not part of the Keep-a-Changelog standard but have been used in past release notes when those categories carry significant content. Use them when appropriate.
+- **Detail level**: Release notes can be more verbose than the CHANGELOG entry — include file paths, function names, and links to relevant docs where helpful.
+- **Trailing separator**: Some release notes end with a `---` horizontal rule. This is optional.
+
 ### C. Documentation with Version / Date Headers
 
 Every markdown file below carries a version and/or `Last Updated` header near the top. **Only update headers in docs that were actually reviewed or modified as part of this release.** Do not blanket-bump all headers at release time — a doc whose content hasn't changed should not get a new version stamp.
@@ -211,7 +267,27 @@ The following files read the version dynamically from `VERSION` at build time an
 
 ## Content Accuracy Review
 
-Version bumps are not enough. A release frequently includes code refactors, removed/renamed commands, changed endpoints, or new behavior that makes documentation **factually stale**. Before finishing, review the following against the actual code changes in this release:
+Version bumps are not enough. A release frequently includes code refactors, removed/renamed commands, changed endpoints, or new behavior that makes documentation **factually stale**. Before finishing, review the documentation against the actual code changes in this release.
+
+### When to Update Documentation
+
+**Only update a doc when one of these conditions is true:**
+
+1. **Inaccuracy** — The doc describes something that is no longer true (a renamed command, a removed endpoint, a changed default, a corrected behavior). Fix the inaccurate prose so it matches the code.
+2. **Missing feature** — The release adds a user-visible feature, command, endpoint, or config option that has no documentation at all. Add the missing documentation.
+3. **Stale reference** — The doc references something that was removed or renamed in this release (e.g., a deprecated alias, a deleted route, a renamed constant). Remove or update the reference.
+
+**Do NOT update a doc when:**
+
+- The doc is already accurate — even if the underlying code was refactored internally, if the user-facing behavior and interface are unchanged, the doc is fine as-is.
+- The doc wasn't touched by any code change in this release — leave its version header and content alone.
+- You're tempted to "improve" prose that isn't wrong — cosmetic rewrites are not part of the release process.
+
+> **Principle: Fix what's broken, document what's missing, leave the rest alone.** The goal is accuracy, not thoroughness. A doc that correctly describes the current behavior is done — don't rewrite it just because you read it.
+
+### What to Review
+
+Review the following documentation areas against the actual code changes in this release. For each area, only make edits if you find an inaccuracy or a missing feature per the rules above.
 
 - **Protocol specs** (`protocol/docs/spec.md`, `a2a.md`, `mcp.md`) — If the protocol surface changed (endpoints, JSON-RPC methods, message shapes, auth flows), update the spec prose, not just the date. The Python (`protocol/python/`) and Go (`protocol/proto/`, generated code) bindings must agree with what the spec documents.
 - **Architecture docs** (`docs/architecture/`) — If components, data flows, or security boundaries were refactored, reconcile the prose and diagrams.
@@ -219,7 +295,17 @@ Version bumps are not enough. A release frequently includes code refactors, remo
 - **Glossary / compliance** (`docs/reference/`) — If terminology or control mappings changed, reconcile them.
 - **CHANGELOG / release notes** — Ensure every user-visible change (added, changed, removed, deprecated, fixed, security) is captured.
 
+### How to Find Stale References
+
 > Tip: diff the release range and scan for removed/renamed identifiers, CLI commands, routes, and config keys, then grep the docs for each to find stale references. Anything removed in code (e.g., a deprecated alias or endpoint) should have no lingering documentation telling users to use it.
+
+```bash
+# List all files changed in the release
+git diff --name-only <prev-tag>..HEAD
+
+# Search docs for identifiers that were removed or renamed
+grep -rnE 'oldCommandName|OldEndpointPath|OLD_CONSTANT' docs/ protocol/docs/ --include='*.md'
+```
 
 ---
 
@@ -233,9 +319,9 @@ When preparing a release, work through this checklist in order:
 - [ ] **4. `protocol/python/g8e/__init__.py`** — Set `__version__ = "X.Y.Z"` (must match item 3)
 - [ ] **5. `docs/release_notes/vX.Y.x/vX.Y.Z.md`** — Create new release notes file
 - [ ] **6–28. Documentation headers** — Update version/date headers **only** in docs that were actually reviewed or modified in this release (use `git diff --name-only <prev-tag>..HEAD -- docs/ protocol/docs/` to identify them). Do not blanket-bump all headers. See [Section C](#c-documentation-with-version--date-headers) for the full list of files that carry headers.
-- [ ] **Content review** — Complete the [Content Accuracy Review](#content-accuracy-review)
+- [ ] **Content review** — Complete the [Content Accuracy Review](#content-accuracy-review). Only update docs to fix inaccuracies or document missing features — do not rewrite accurate docs.
 
-**Total: 5 core files to update on every release** (VERSION, CHANGELOG, Python package ×2, release notes), plus version/date header updates **only in docs actually modified** in the release, plus a content review of any docs affected by code changes.
+**Total: 5 core files to update on every release** (VERSION, CHANGELOG, Python package ×2, release notes), plus version/date header updates **only in docs actually modified** in the release, plus a targeted content review fixing inaccuracies and documenting missing features in docs affected by code changes.
 
 ---
 

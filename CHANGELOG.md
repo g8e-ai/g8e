@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.10] - 2026-07-10
+
+### Overview
+
+v1.3.10 is a CORS support, build hardening, and protocol cleanup release. This version adds configurable cross-origin browser access via `--cors-origin` flags with proper SameSite cookie handling, unifies all build targets with `-trimpath` and reproducible build tags, adds a `build-compressed` target with UPX, cleans up committed protocol binaries, and fixes the WebAuthn assertion response model to match the nested JSON format expected by go-webauthn.
+
+### Added
+
+* **CORS Middleware** — New `corsMiddleware` on `HTTPHandler` validates request origins against a configurable allowlist, sets `Vary: Origin` and `Access-Control-Allow-Origin` headers, and handles OPTIONS preflight with proper `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Max-Age` headers. Disallowed origins are silently rejected (no CORS headers set). Origin matching is case-insensitive and trailing-slash tolerant.
+* **`--cors-origin` Flag** — New repeatable gateway flag (`--cors-origin`) configures allowed CORS origins for cross-origin browser access (e.g., `--cors-origin https://lovable.dev`). Plumbed through `GatewayFlags`, `GatewayConfig`, `BuildReExecArgs`, `config.GatewayConfig`, and `config.GatewayOptions`.
+* **`build-compressed` Makefile Target** — New `make build-compressed` target runs `make build` then compresses the binary with UPX (`--best --lzma`). Includes install instructions for common platforms.
+* **CORS HTTP Header Constants** — Added `HeaderAccessControlAllowHeaders`, `HeaderAccessControlAllowMethods`, `HeaderAccessControlMaxAge`, `HeaderConnection`, `HeaderVary`, and `HeaderValueCORSPreflightMaxAge` in `internal/constants/auth.go`.
+* **`ParsedAssertionResponse` Models** — Added `ParsedAssertionResponse` and `ParsedAssertionResponseBody` in `internal/models/webauthn.go` to represent the nested JSON format expected by go-webauthn during assertion verification.
+* **`AuthControllerDeps` Struct** — Extracted `AuthControllerDeps` to group all `AuthController` constructor parameters, including a new `CrossOrigin` field for SameSite cookie mode selection.
+
+### Changed
+
+* **Unified Build Flags** — All Makefile build targets (`build`, `build-all`, `build-darwin`, `build-windows`, `build-docker`, `build-linux-docker`, `build-windows-docker`, `build-darwin-docker`, `build-all-docker`) now use `-trimpath`, `-tags netgo,osusergo`, and `-s -w` strip flags consistently. Eliminated the previous Windows-only special-casing for strip flags.
+* **Cross-Origin Cookie Handling** — `setWebSessionCookie` in `passkey_service_http.go` and `handlePublicAuthLogout` in `auth_controller_session.go` now set `SameSite=None` when cross-origin origins are configured, instead of always using `SameSite=Lax`.
+* **SSE CORS Headers Centralized** — `handleInternalSSEStream` in `gateway_http_sse.go` no longer sets inline `Access-Control-Allow-Origin` / `Access-Control-Allow-Credentials` headers. CORS is now handled uniformly by the CORS middleware on the public router. SSE header constants replaced with `constants.HeaderContentType`, `constants.HeaderCacheControl`, `constants.HeaderConnection`, and `constants.HeaderXAccelBuffering`.
+* **WebAuthn Assertion Verification** — `VerifyL3Proof` in `passkey_service.go` now uses `models.ParsedAssertionResponse` instead of an inline `map[string]interface{}` for the assertion response, matching the nested JSON format expected by go-webauthn.
+* **Dockerfile Base Image** — Switched from pinned digest (`golang@sha256:...`) to `golang:1.26.5` tag for the builder stage, matching the Go version used in CI.
+* **Protocol Makefile** — Simplified Go version detection to use `go` directly instead of probing for `go1.24`.
+* **Protocol Spec Version** — Updated `protocol/docs/spec.md` version to v1.3.10.
+* **Protocol Python Version** — Updated `protocol/python/pyproject.toml` and `protocol/python/g8e/__init__.py` to v1.3.10.
+
+### Removed
+
+* **Go Report Card Badge** — Removed from `README.md` (service was unreliable and provided no actionable feedback).
+* **Committed Protocol Binaries** — Removed `protocol/governance_envelope` (16 MB) and `protocol/workload_identity` (2.7 MB) compiled binaries from the repository. Added to `.gitignore`.
+* **Unused Python Imports** — Removed unused `uuid4` import from `protocol/python/g8e/models/base.py`, unused `typing.Any` from `protocol/python/g8e/models/context.py` and `protocol/python/g8e/models/settings.py`.
+
+### Fixed
+
+* **Protocol Example Constants** — `protocol/python/examples/constants_example.py` now references `STATUS['status']` instead of `STATUS['operator']` to match the actual JSON structure.
+* **Protocol Governance Envelope Example** — Updated `protocol/examples/governance_envelope/main.go` to use `"hash-123"` as the transaction ID and removed deprecated `MtlsCertFingerprint` and `CliSignature` fields from the L3 proof, matching the current protobuf schema.
+* **Python Constants Encoding** — `protocol/python/g8e/constants.py` now opens JSON files with `encoding="utf-8"` explicitly.
+
+### Tests
+
+* Added `internal/services/gateway/gateway_http_cors_test.go` (172 lines) — CORS middleware tests covering allowed/disallowed origins, preflight handling, case-insensitive matching, trailing-slash tolerance, and no-origin requests.
+* Added `TestPasskeyCookieCrossOriginSameSiteNone` in `passkey_service_http_test.go` — verifies `SameSite=None` cookie mode when cross-origin is configured.
+* Updated `gateway_http_sse_test.go` — SSE header tests updated to reflect centralized CORS handling (no inline CORS headers on SSE stream).
+* Updated `auth_controller_test.go` — added `CrossOrigin` field to test setup.
+* Updated `gateway_test.go` — added `AllowedOrigins` field to test setup.
+
 ## [1.3.9] - 2026-07-09
 
 ### Overview

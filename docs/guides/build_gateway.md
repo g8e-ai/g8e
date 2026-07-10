@@ -5,8 +5,8 @@ parent: Guides
 
 # Build a g8e Gateway
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-10
+Version: v1.3.10
 
 ---
 
@@ -138,6 +138,8 @@ To start the gateway, use the CLI gateway command:
 - `--tribunal-bootstrap <path>` - Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup
 - `--mcp-downstream-url <url>` - URL of a downstream MCP server to proxy discovery and execution to (default: none)
 - `--a2a-downstream-url <url>` - URL of a downstream A2A server to proxy execution to (default: none)
+- `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
+- `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
 - `-f, --follow` - Follow log output after starting (like tail -f)
 
 ---
