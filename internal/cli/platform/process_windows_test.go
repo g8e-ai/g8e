@@ -185,71 +185,19 @@ func TestIsProcessRunning_ProcessNotActive(t *testing.T) {
 	assert.False(t, result, "isProcessRunning should return false when exit code is not STILL_ACTIVE")
 }
 
-func TestIsProcessRunning_ProcessActiveButNotG8e(t *testing.T) {
+func TestIsProcessRunning_ProcessActive(t *testing.T) {
 	mockChecker := &mockWindowsProcessChecker{
 		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
 			*exitCode = constants.StillActiveExitCode
 			return nil
 		},
 	}
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			// Return empty output (no g8e.exe process found)
-			return []byte(""), nil
-		},
-	}
 	pm := &ProcessManager{
 		windowsProcessChecker: mockChecker,
-		commandExecutor:       mockExecutor,
 	}
 
 	result := pm.isProcessRunning(1234)
-	assert.False(t, result, "isProcessRunning should return false when process is not g8e.exe")
-	assert.Len(t, mockExecutor.outputCalls, 1, "tasklist command should be executed")
-}
-
-func TestIsProcessRunning_ProcessActiveAndIsG8e(t *testing.T) {
-	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = constants.StillActiveExitCode
-			return nil
-		},
-	}
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			// Return CSV output with g8e.exe process
-			return []byte("\"g8e.exe\",\"1234\",\"Console\",\"1\",\"5,234 K\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		windowsProcessChecker: mockChecker,
-		commandExecutor:       mockExecutor,
-	}
-
-	result := pm.isProcessRunning(1234)
-	assert.True(t, result, "isProcessRunning should return true when process is g8e.exe and active")
-	assert.Len(t, mockExecutor.outputCalls, 1, "tasklist command should be executed")
-}
-
-func TestIsProcessRunning_TasklistFails(t *testing.T) {
-	mockChecker := &mockWindowsProcessChecker{
-		getExitCodeFunc: func(handle uintptr, exitCode *uint32) error {
-			*exitCode = constants.StillActiveExitCode
-			return nil
-		},
-	}
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return nil, errors.New("tasklist failed")
-		},
-	}
-	pm := &ProcessManager{
-		windowsProcessChecker: mockChecker,
-		commandExecutor:       mockExecutor,
-	}
-
-	result := pm.isProcessRunning(1234)
-	assert.False(t, result, "isProcessRunning should return false when tasklist fails")
+	assert.True(t, result, "isProcessRunning should return true when process is active")
 }
 
 func TestIsProcessRunning_HandleClosed(t *testing.T) {
@@ -259,106 +207,13 @@ func TestIsProcessRunning_HandleClosed(t *testing.T) {
 			return nil
 		},
 	}
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte(""), nil
-		},
-	}
 	pm := &ProcessManager{
 		windowsProcessChecker: mockChecker,
-		commandExecutor:       mockExecutor,
 	}
 
 	pm.isProcessRunning(1234)
 	assert.Len(t, mockChecker.closeHandleCalls, 1, "CloseHandle should be called once")
 	assert.Equal(t, uintptr(1), mockChecker.closeHandleCalls[0])
-}
-
-func TestIsG8eProcess_TasklistFails(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return nil, errors.New("command failed")
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.isG8eProcess(1234)
-	assert.False(t, result, "isG8eProcess should return false when tasklist fails")
-}
-
-func TestIsG8eProcess_NoProcessFound(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("INFO: No tasks are running which match the specified criteria."), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.isG8eProcess(1234)
-	assert.False(t, result, "isG8eProcess should return false when no process found")
-}
-
-func TestIsG8eProcess_ProcessFound(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("\"g8e.exe\",\"1234\",\"Console\",\"1\",\"5,234 K\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.isG8eProcess(1234)
-	assert.True(t, result, "isG8eProcess should return true when g8e.exe process found")
-}
-
-func TestIsG8eProcess_MultipleLines(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("\"g8e.exe\",\"1234\",\"Console\",\"1\",\"5,234 K\"\n\"g8e.exe\",\"5678\",\"Console\",\"1\",\"6,234 K\""), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.isG8eProcess(1234)
-	assert.True(t, result, "isG8eProcess should return true when g8e.exe process found in multiple lines")
-}
-
-func TestIsG8eProcess_WhitespaceHandling(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{
-		outputFunc: func(cmd *exec.Cmd) ([]byte, error) {
-			return []byte("  \"g8e.exe\",\"1234\",\"Console\",\"1\",\"5,234 K\"  "), nil
-		},
-	}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	result := pm.isG8eProcess(1234)
-	assert.True(t, result, "isG8eProcess should handle whitespace correctly")
-}
-
-func TestIsG8eProcess_CommandArguments(t *testing.T) {
-	mockExecutor := &mockCommandExecutor{}
-	pm := &ProcessManager{
-		commandExecutor: mockExecutor,
-	}
-
-	pm.isG8eProcess(1234)
-
-	require.Len(t, mockExecutor.commandCalls, 1, "Command should be called once")
-	call := mockExecutor.commandCalls[0]
-	assert.Equal(t, "tasklist", call.name)
-	assert.Contains(t, call.args, "/FI", "PID eq 1234")
-	assert.Contains(t, call.args, "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows))
-	assert.Contains(t, call.args, "/FO", "CSV")
-	assert.Contains(t, call.args, "/NH")
 }
 
 func TestFindProcessOnPort_NetstatFails(t *testing.T) {

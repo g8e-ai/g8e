@@ -97,35 +97,7 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 	}
 
 	// STILL_ACTIVE indicates the process is still running
-	if exitCode != constants.StillActiveExitCode {
-		return false
-	}
-
-	// Verify the process is actually g8e to prevent false positives from PID reuse
-	return pm.isG8eProcess(pid)
-}
-
-// isG8eProcess verifies that the given PID belongs to a g8e.exe process.
-func (pm *ProcessManager) isG8eProcess(pid int) bool {
-	var executor CommandExecutor
-	if pm.commandExecutor != nil {
-		executor = pm.commandExecutor
-	} else {
-		executor = realCommandExecutor{}
-	}
-
-	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows), "/FO", "CSV", "/NH")
-	output, err := executor.Output(cmd)
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "INFO:") {
-			return true
-		}
-	}
-	return false
+	return exitCode == constants.StillActiveExitCode
 }
 
 // findProcessOnPort finds the PID of the process listening on the given port on Windows.
