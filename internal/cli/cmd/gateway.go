@@ -20,6 +20,7 @@ import (
 	"log/slog"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -117,6 +118,25 @@ func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
 	}
 	if f.TribunalBootstrap == "" {
 		f.TribunalBootstrap = os.Getenv(string(constants.EnvVar.TribunalBootstrap))
+	}
+	if f.PublicBaseURL == "" {
+		f.PublicBaseURL = os.Getenv(string(constants.EnvVar.PublicBaseURL))
+	}
+	if f.PasskeyRpID == "" {
+		f.PasskeyRpID = os.Getenv(string(constants.EnvVar.PasskeyRpID))
+	}
+	if f.PasskeyRpName == "" {
+		f.PasskeyRpName = os.Getenv(string(constants.EnvVar.PasskeyRpName))
+	}
+	if len(f.PasskeyRpOrigins) == 0 {
+		if v := os.Getenv(string(constants.EnvVar.PasskeyRpOrigins)); v != "" {
+			f.PasskeyRpOrigins = strings.Split(v, ",")
+		}
+	}
+	if len(f.AllowedOrigins) == 0 {
+		if v := os.Getenv(string(constants.EnvVar.AllowedOrigins)); v != "" {
+			f.AllowedOrigins = strings.Split(v, ",")
+		}
 	}
 	return f
 }

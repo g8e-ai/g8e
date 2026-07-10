@@ -40,16 +40,27 @@ import (
 
 // mockAPIClient implements apiClient for testing.
 type mockAPIClient struct {
-	getResp []byte
-	getErr  error
+	getResp      []byte
+	getErr       error
+	postResp     []byte
+	postErr      error
+	getCalls     []string
+	postCalls    []mockPostCall
+}
+
+type mockPostCall struct {
+	path string
+	body interface{}
 }
 
 func (m *mockAPIClient) Get(path string) ([]byte, error) {
+	m.getCalls = append(m.getCalls, path)
 	return m.getResp, m.getErr
 }
 
 func (m *mockAPIClient) Post(path string, body interface{}) ([]byte, error) {
-	return nil, nil
+	m.postCalls = append(m.postCalls, mockPostCall{path: path, body: body})
+	return m.postResp, m.postErr
 }
 
 func (m *mockAPIClient) Put(path string, body interface{}) ([]byte, error) {
