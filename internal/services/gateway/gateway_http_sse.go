@@ -431,17 +431,10 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	}
 
 	// Set SSE Headers
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-	} else {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-	}
-	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
+	w.Header().Set(constants.HeaderContentType, "text/event-stream")
+	w.Header().Set(constants.HeaderCacheControl, "no-cache")
+	w.Header().Set(constants.HeaderConnection, "keep-alive")
+	w.Header().Set(constants.HeaderXAccelBuffering, "no")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {

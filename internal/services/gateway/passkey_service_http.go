@@ -49,7 +49,7 @@ func (h *PasskeyHandler) readBody(w http.ResponseWriter, r *http.Request) ([]byt
 }
 
 func (h *PasskeyHandler) setWebSessionCookie(w http.ResponseWriter, webSession *models.WebSession) {
-	http.SetCookie(w, &http.Cookie{
+	cookie := &http.Cookie{
 		Name:     constants.WebSessionCookieName,
 		Value:    webSession.ID,
 		Path:     constants.PathRoot,
@@ -57,7 +57,11 @@ func (h *PasskeyHandler) setWebSessionCookie(w http.ResponseWriter, webSession *
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+	if h.crossOrigin {
+		cookie.SameSite = http.SameSiteNoneMode
+	}
+	http.SetCookie(w, cookie)
 }
 
 // enforceFirstCred checks whether a new registration is allowed. Returns (true, code, msg) to signal forbidden.

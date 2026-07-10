@@ -308,6 +308,7 @@ type PasskeyHandler struct {
 	suspendedStore storage.SuspendedTransactionStore
 	sseStore       *SSEEventService
 	pubsub         *GatewayWebSocketHandler
+	crossOrigin    bool
 }
 
 // PasskeyHandlerDeps groups all dependencies for NewPasskeyHandler.
@@ -320,6 +321,7 @@ type PasskeyHandlerDeps struct {
 	SuspendedStore storage.SuspendedTransactionStore
 	SSEStore       *SSEEventService
 	Pubsub         *GatewayWebSocketHandler
+	CrossOrigin    bool
 }
 
 // NewPasskeyHandler creates a new PasskeyHandler with all dependencies wired.
@@ -333,6 +335,7 @@ func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 		suspendedStore: deps.SuspendedStore,
 		sseStore:       deps.SSEStore,
 		pubsub:         deps.Pubsub,
+		crossOrigin:    deps.CrossOrigin,
 	}
 }
 
@@ -652,14 +655,14 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 		Expires:              time.Now().Add(passkeyChallengeTTL),
 	}
 
-	assertionResponse := map[string]interface{}{
-		"id":    proof.CredentialId,
-		"rawId": proof.CredentialId,
-		"type":  "public-key",
-		"response": map[string]string{
-			"clientDataJSON":    proof.ClientDataJson,
-			"authenticatorData": proof.AuthenticatorData,
-			"signature":         proof.Signature,
+	assertionResponse := models.ParsedAssertionResponse{
+		ID:    proof.CredentialId,
+		RawID: proof.CredentialId,
+		Type:  "public-key",
+		Response: models.ParsedAssertionResponseBody{
+			ClientDataJSON:    proof.ClientDataJson,
+			AuthenticatorData: proof.AuthenticatorData,
+			Signature:         proof.Signature,
 		},
 	}
 

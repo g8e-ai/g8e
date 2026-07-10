@@ -16,7 +16,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-GO := $(shell command -v go1.24 2>/dev/null || ([ -x "$$(go env GOPATH)/bin/go1.24" ] && echo "$$(go env GOPATH)/bin/go1.24") || command -v go 2>/dev/null || echo "go")
+GO := go
 
 .PHONY: help
 help:

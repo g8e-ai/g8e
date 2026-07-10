@@ -907,12 +907,10 @@ func TestHandleInternalSSEStream_SSEHeadersSet(t *testing.T) {
 	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
 	assert.Equal(t, "no-cache", rr.Header().Get("Cache-Control"))
 	assert.Equal(t, "keep-alive", rr.Header().Get("Connection"))
-	assert.Equal(t, "https://example.com", rr.Header().Get("Access-Control-Allow-Origin"))
-	assert.Equal(t, "true", rr.Header().Get("Access-Control-Allow-Credentials"))
 	assert.Equal(t, "no", rr.Header().Get("X-Accel-Buffering"))
 }
 
-func TestHandleInternalSSEStream_SSEHeadersWildcardOrigin(t *testing.T) {
+func TestHandleInternalSSEStream_SSEHeadersNoOrigin(t *testing.T) {
 	h, _ := setupTestHTTPHandler(t)
 	opSessID := "opsess-stream-wildcard"
 	userID := "user-stream-wildcard"
@@ -921,7 +919,7 @@ func TestHandleInternalSSEStream_SSEHeadersWildcardOrigin(t *testing.T) {
 
 	ctx := context.WithValue(context.Background(), constants.ContextKeyOperatorSessionID, opSessID)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/sse/stream?cli_session_id="+cliSessionID, nil).WithContext(ctx)
-	// No Origin header → should default to *
+	// No Origin header → SSE headers still set, no CORS headers
 	rr := httptest.NewRecorder()
 
 	streamCtx, cancel := context.WithCancel(ctx)
@@ -937,7 +935,10 @@ func TestHandleInternalSSEStream_SSEHeadersWildcardOrigin(t *testing.T) {
 	cancel()
 	<-done
 
-	assert.Equal(t, "*", rr.Header().Get("Access-Control-Allow-Origin"))
+	assert.Equal(t, "text/event-stream", rr.Header().Get("Content-Type"))
+	assert.Equal(t, "no-cache", rr.Header().Get("Cache-Control"))
+	assert.Equal(t, "keep-alive", rr.Header().Get("Connection"))
+	assert.Empty(t, rr.Header().Get("Access-Control-Allow-Origin"))
 }
 
 func TestHandleInternalSSEStream_LastEventIDOverridesSinceID(t *testing.T) {

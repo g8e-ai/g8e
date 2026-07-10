@@ -310,6 +310,7 @@ func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
 			MCPDownstreamURL:   "https://downstream.example.com/mcp",
 			A2ADownstreamURL:   "https://downstream.example.com/a2a",
 			PublicBaseURL:      "https://demo.g8e.ai",
+			AllowedOrigins:     []string{"https://lovable.dev"},
 		},
 		IdentityData: []byte(`{"hostnames":["localhost"]}`),
 	}
