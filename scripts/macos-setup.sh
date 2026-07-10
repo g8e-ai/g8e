@@ -1,15 +1,19 @@
 #!/bin/bash
 # ----------------------------------------------------------
-# g8e_macos-setup.sh - Setup and validation for macOS environments
-# Single Script for full setup and validation on macOS.
+# g8e macOS Dev Setup Script
+# Bootstraps a developer workspace from fresh clone to working binary.
+# Validates dependencies, installs missing tooling, builds, and adds to PATH.
+# See: docs/architecture/scripts.md and docs/guides/getting_started.md
 # ==========================================================
 
 set -e  # Exit on error
 
-echo -e "\n[SETUP] Starting g8e Environment Setup and Validation...\n"
+G8E_GO_MIN="1.26"
+
+echo -e "\n[SETUP] Starting g8e Dev Environment Setup...\n"
 
 # --- SECTION 1: Dependency Validation & Installation ---
-echo "[STEP 1/4] Validating required dependencies (make, go)..."
+echo "[STEP 1/3] Validating required dependencies (make, go >= $G8E_GO_MIN)..."
 
 MISSING=()
 
@@ -19,14 +23,29 @@ else
     echo "  make: detected"
 fi
 
-if ! command -v go &> /dev/null; then
-    MISSING+=("go")
+if command -v go &> /dev/null; then
+    GO_VERSION=$(go version 2>/dev/null | grep -oE 'go[0-9]+\.[0-9]+' | head -1 | sed 's/go//')
+    if [ -n "$GO_VERSION" ]; then
+        GO_MAJOR=$(echo "$GO_VERSION" | cut -d. -f1)
+        GO_MINOR=$(echo "$GO_VERSION" | cut -d. -f2)
+        MIN_MAJOR=$(echo "$G8E_GO_MIN" | cut -d. -f1)
+        MIN_MINOR=$(echo "$G8E_GO_MIN" | cut -d. -f2)
+        if [ "$GO_MAJOR" -gt "$MIN_MAJOR" ] || { [ "$GO_MAJOR" -eq "$MIN_MAJOR" ] && [ "$GO_MINOR" -ge "$MIN_MINOR" ]; }; then
+            echo "  go: detected (v$GO_VERSION)"
+        else
+            echo "  go: detected (v$GO_VERSION) but v$G8E_GO_MIN+ is required"
+            MISSING+=("go")
+        fi
+    else
+        echo "  go: detected but version unknown"
+        MISSING+=("go")
+    fi
 else
-    echo "  go: detected"
+    MISSING+=("go")
 fi
 
 if [ ${#MISSING[@]} -gt 0 ]; then
-    echo -e "\nThe following dependencies are missing: ${MISSING[*]}"
+    echo -e "\nThe following dependencies are missing or outdated: ${MISSING[*]}"
     echo "They can be installed via: brew install ${MISSING[*]}"
 
     # Check if Homebrew is installed
@@ -49,12 +68,12 @@ if [ ${#MISSING[@]} -gt 0 ]; then
 fi
 
 # --- SECTION 2: Build ---
-echo -e "\n[STEP 2/4] Building g8e..."
+echo -e "\n[STEP 2/3] Building g8e..."
 make build
 echo "Build successful."
 
 # --- SECTION 3: Add g8e to PATH ---
-echo -e "\n[STEP 3/4] Adding g8e to PATH..."
+echo -e "\n[STEP 3/3] Adding g8e to PATH..."
 G8E_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PATH_LINE="export PATH=\"\$PATH:$G8E_DIR\""
 

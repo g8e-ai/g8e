@@ -150,8 +150,8 @@ func TestPayloadFromDomainResult_PreservesTerminalOutputAndSystemInfo(t *testing
 	t.Parallel()
 
 	termOut := &TerminalOutput{
-		Command:         "ls -la",
-		CombinedOutput:  "total 0",
+		Command:        "ls -la",
+		CombinedOutput: "total 0",
 	}
 	sysInfo := &ExecutionSystemInfo{
 		Hostname: "test-host",
@@ -161,9 +161,9 @@ func TestPayloadFromDomainResult_PreservesTerminalOutputAndSystemInfo(t *testing
 	}
 
 	r := &ExecutionResult{
-		ExecutionID:    "exec-5",
-		TerminalOutput: termOut,
-		SystemInfo:     sysInfo,
+		ExecutionID:     "exec-5",
+		TerminalOutput:  termOut,
+		SystemInfo:      sysInfo,
 		EnvironmentInfo: envInfo,
 	}
 

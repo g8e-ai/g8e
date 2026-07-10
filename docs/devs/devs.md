@@ -15,7 +15,7 @@ See [g8e Protocol](../../protocol/docs/spec.md), [Gateway](../architecture/gatew
 
 ## Getting Started
 
-Requires `make` and Go 1.26+ installed. If you don't have them, run the setup script for your platform to install them automatically:
+Requires `make` and Go 1.26+ installed. If you don't have them, run the setup script for your platform to install them automatically (see [scripts.md](../architecture/scripts.md) for details):
 
 - **Linux:** `bash scripts/linux-setup.sh`
 - **macOS:** `bash scripts/macos-setup.sh`

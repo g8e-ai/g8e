@@ -34,7 +34,7 @@ For distributed infrastructure, deploy the operator on remote hosts.
 
 #### 1. Copy/Paste Deploy Scripts (Gateway-Served)
 
-The gateway embeds deploy scripts and serves them over HTTP on port 8080. After starting the gateway on the host machine, run these commands on remote hosts to download and deploy the g8e binary:
+The gateway embeds deploy scripts and serves them over HTTP on port 8080. After starting the gateway on the host machine, run these commands on remote hosts to download and deploy the g8e binary. See [scripts.md](../architecture/scripts.md#remote-deploy-scripts-gateway-served) for full details on the deploy scripts.
 
 **Linux/macOS:**
 

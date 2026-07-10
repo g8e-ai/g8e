@@ -71,10 +71,10 @@ func TestOperatorDocumentGoMarshalJSON_PreservesCloudSubtype(t *testing.T) {
 	t.Parallel()
 
 	doc := OperatorDocumentGo{
-		ID:          "op-3",
-		UserID:      "user-3",
-		Component:   constants.ComponentNameG8EO,
-		Status:      constants.OperatorStatusActive,
+		ID:           "op-3",
+		UserID:       "user-3",
+		Component:    constants.ComponentNameG8EO,
+		Status:       constants.OperatorStatusActive,
 		CloudSubtype: constants.CloudSubtypeAWS,
 	}
 

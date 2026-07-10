@@ -212,6 +212,9 @@ Each org environment is hermetically sealed with no shared state, volumes, or cr
 		demosRebuildCmd(),
 		demosRunCmd(),
 		demosPullCmd(),
+		demosExportCmd(),
+		demosImportCmd(),
+		demosImagesCmd(),
 	)
 
 	return cmd
@@ -265,7 +268,7 @@ func demosPullCmd() *cobra.Command {
 		Short: "Pre-pull all external images for air-gapped deployment",
 		Long: `Pulls all external Docker images listed in demos/images.json.
 This is the first step for air-gapped deployment: run this on a connected machine,
-then use demos/airgap.sh export to create a tar bundle for transfer.`,
+then use 'g8e demos export' to create a tar bundle for transfer.`,
 		RunE: runDemosPull,
 	}
 
@@ -300,7 +303,171 @@ func runDemosPull(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\nAll images pulled successfully.")
-	fmt.Println("Next step: run demos/airgap.sh export to create a transfer bundle.")
+	fmt.Println("Next step: run 'g8e demos export' to create a transfer bundle.")
+	return nil
+}
+
+func demosExportCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "export [output-dir]",
+		Short: "Save all manifest images to tar files for air-gapped transfer",
+		Long: `Saves all Docker images listed in demos/images.json to .tar files.
+Run 'g8e demos pull' first on a connected machine, then export.
+Defaults to demos/images-export/ if no output directory is specified.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: runDemosExport,
+	}
+
+	return cmd
+}
+
+func runDemosExport(cmd *cobra.Command, args []string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	}
+
+	manifestPath := filepath.Join(cwd, constants.DemosDirname, constants.DemosImagesManifestFile)
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading images manifest %s: %w", manifestPath, err)
+	}
+	var entries []imageManifestEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return fmt.Errorf("parsing images manifest: %w", err)
+	}
+
+	outDir := filepath.Join(cwd, constants.DemosDirname, "images-export")
+	if len(args) == 1 {
+		outDir = args[0]
+	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("creating output directory %s: %w", outDir, err)
+	}
+
+	total := len(entries)
+	fmt.Printf("Exporting %d images to %s...\n", total, outDir)
+	for i, e := range entries {
+		ref := fmt.Sprintf("%s@%s", e.Image, e.Digest)
+		filename := strings.NewReplacer("/", "_", ":", "_", "@", "_").Replace(ref) + ".tar"
+		tarPath := filepath.Join(outDir, filename)
+
+		if _, err := os.Stat(tarPath); err == nil {
+			fmt.Printf("[%d/%d] Skipping %s (already exists)\n", i+1, total, ref)
+			continue
+		}
+
+		fmt.Printf("[%d/%d] Saving %s...\n", i+1, total, ref)
+		saveCmd := exec.Command("docker", "save", "-o", tarPath, ref)
+		saveCmd.Stdout = os.Stdout
+		saveCmd.Stderr = os.Stderr
+		if err := saveCmd.Run(); err != nil {
+			return fmt.Errorf("saving %s: %w", ref, err)
+		}
+	}
+
+	fmt.Printf("\nExport complete. %d images saved to %s/\n", total, outDir)
+	fmt.Printf("Transfer this directory to the air-gapped machine and run:\n")
+	fmt.Printf("  g8e demos import %s\n", outDir)
+	return nil
+}
+
+func demosImportCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "import [input-dir]",
+		Short: "Load tar files into local Docker for air-gapped deployment",
+		Long: `Loads all .tar files from the specified directory into the local Docker daemon.
+Defaults to demos/images-export/ if no input directory is specified.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: runDemosImport,
+	}
+
+	return cmd
+}
+
+func runDemosImport(cmd *cobra.Command, args []string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	}
+
+	inDir := filepath.Join(cwd, constants.DemosDirname, "images-export")
+	if len(args) == 1 {
+		inDir = args[0]
+	}
+	if _, err := os.Stat(inDir); err != nil {
+		return fmt.Errorf("%w: directory %s", constants.ErrPathNotFound, inDir)
+	}
+
+	entries, err := os.ReadDir(inDir)
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
+	}
+
+	var tarFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".tar") {
+			tarFiles = append(tarFiles, filepath.Join(inDir, entry.Name()))
+		}
+	}
+
+	if len(tarFiles) == 0 {
+		return fmt.Errorf("%w: no .tar files found in %s", constants.ErrNotFound, inDir)
+	}
+
+	total := len(tarFiles)
+	fmt.Printf("Loading %d images from %s...\n", total, inDir)
+	for i, tf := range tarFiles {
+		fmt.Printf("[%d/%d] Loading %s...\n", i+1, total, filepath.Base(tf))
+		loadCmd := exec.Command("docker", "load", "-i", tf)
+		loadCmd.Stdout = os.Stdout
+		loadCmd.Stderr = os.Stderr
+		if err := loadCmd.Run(); err != nil {
+			return fmt.Errorf("loading %s: %w", filepath.Base(tf), err)
+		}
+	}
+
+	fmt.Printf("\nImport complete. %d images loaded.\n", total)
+	fmt.Println("You can now build and run demos in air-gapped mode:")
+	fmt.Println("  make build")
+	fmt.Println("  g8e demos start <org>")
+	return nil
+}
+
+func demosImagesCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "images",
+		Short: "List all images in the demo manifest",
+		Long:  `Lists all external Docker images from demos/images.json with their pinned digests and associated demos.`,
+		RunE:  runDemosImages,
+	}
+
+	return cmd
+}
+
+func runDemosImages(cmd *cobra.Command, args []string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("%w: %w", constants.ErrPathNotFound, err)
+	}
+
+	manifestPath := filepath.Join(cwd, constants.DemosDirname, constants.DemosImagesManifestFile)
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("reading images manifest %s: %w", manifestPath, err)
+	}
+	var entries []imageManifestEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return fmt.Errorf("parsing images manifest: %w", err)
+	}
+
+	fmt.Printf("Images in manifest (%s):\n\n", manifestPath)
+	for _, e := range entries {
+		demos := strings.Join(e.Demos, ", ")
+		fmt.Printf("  %s@%s\n", e.Image, e.Digest)
+		fmt.Printf("    tag: %s\n", e.Tag)
+		fmt.Printf("    demos: %s\n\n", demos)
+	}
 	return nil
 }
 
@@ -1071,19 +1238,19 @@ func runScenario(org, demoDir, scenario string) error {
 func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error) {
 	switch org {
 	case constants.DemosOrgHealthcare:
-		return runHealthcareScenarioWithResult(demoDir, scenario)
+		return runHealthcareScenario(demoDir, scenario)
 	case constants.DemosOrgGov:
-		return runGovScenarioWithResult(demoDir, scenario)
+		return runGovScenario(demoDir, scenario)
 	case constants.DemosOrgFinance:
-		return runFinanceScenarioWithResult(demoDir, scenario)
+		return runFinanceScenario(demoDir, scenario)
 	case constants.DemosOrgSecureData:
-		return runSecureDataScenarioWithResult(demoDir, scenario)
+		return runSecureDataScenario(demoDir, scenario)
 	case constants.DemosOrgDoW:
-		return runDoWScenarioWithResult(demoDir, scenario)
+		return runDoWScenario(demoDir, scenario)
 	case constants.DemosOrgDHS:
-		return runDHSScenarioWithResult(demoDir, scenario)
+		return runDHSScenario(demoDir, scenario)
 	case constants.DemosOrgSwarm:
-		return runSwarmScenarioWithResult(demoDir, scenario)
+		return runSwarmScenario(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}

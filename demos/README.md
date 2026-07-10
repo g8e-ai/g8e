@@ -402,7 +402,7 @@ This reads `demos/images.json` and pulls each image by its pinned digest.
 Save the pulled images to tar files for transfer:
 
 ```bash
-./demos/airgap.sh export /tmp/g8e-images
+g8e demos export /tmp/g8e-images
 ```
 
 This creates one `.tar` file per image in the specified output directory.
@@ -418,7 +418,7 @@ image directory to the air-gapped machine via your approved transfer mechanism
 Load the exported images into the local Docker daemon:
 
 ```bash
-./demos/airgap.sh import /tmp/g8e-images
+g8e demos import /tmp/g8e-images
 ```
 
 ### Step 5: Build and Run (Air-Gapped Machine)
@@ -444,7 +444,6 @@ This checks that:
 - `demos/images.json` manifest is present
 - No unpinned image references remain in compose files
 - No `pip install` or `import requests` references remain in demo Python files
-- `demos/airgap.sh` is executable
 
 ### Image Manifest
 
@@ -453,7 +452,7 @@ demo environments, along with their pinned sha256 digests and which demos use
 each image. To list all images in the manifest:
 
 ```bash
-./demos/airgap.sh list
+g8e demos images
 ```
 
 ## License

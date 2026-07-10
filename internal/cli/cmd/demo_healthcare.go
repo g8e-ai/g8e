@@ -18,12 +18,7 @@ import (
 	"strings"
 )
 
-func runHealthcareScenario(demoDir, scenario string) error {
-	_, err := runHealthcareScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runHealthcareScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+func runHealthcareScenario(demoDir, scenario string) (scenarioResult, error) {
 	var result scenarioResult
 
 	switch scenario {
