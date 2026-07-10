@@ -95,14 +95,6 @@ func (e *DemoEmitter) Consensus(member constants.TribunalMember, decision, signe
 	e.program.Send(tui.ConsensusMsg{Member: member, Decision: decision, Signed: signed, Quorum: quorum, Total: total, Result: result, Hash: hash})
 }
 
-// Quit sends a quit signal to the TUI.
-func (e *DemoEmitter) Quit() {
-	if e == nil || e.program == nil {
-		return
-	}
-	e.program.Send(tui.QuitMsg{})
-}
-
 // DoctrineRule represents a single doctrine rule from the JSON file
 type DoctrineRule struct {
 	ID          string  `json:"id"`

@@ -693,7 +693,7 @@ func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
 
 	t.Run("Failure - POST method not allowed", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodPost, "/g8e-operator.sh", nil)
+		req := httptest.NewRequest(http.MethodPost, "/g8e-deploy.sh", nil)
 		rr := httptest.NewRecorder()
 		c.handleDeployScriptLinux(rr, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
@@ -701,7 +701,7 @@ func TestPKIController_HandleDeployScriptLinux(t *testing.T) {
 
 	t.Run("Success - GET returns Linux deploy script with GATEWAY_HOST", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodGet, "/g8e-operator.sh", nil)
+		req := httptest.NewRequest(http.MethodGet, "/g8e-deploy.sh", nil)
 		req.Host = "test.example.com"
 		rr := httptest.NewRecorder()
 		c.handleDeployScriptLinux(rr, req)
@@ -718,7 +718,7 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 
 	t.Run("Failure - POST method not allowed", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodPost, "/g8e-operator.ps1", nil)
+		req := httptest.NewRequest(http.MethodPost, "/g8e-deploy.ps1", nil)
 		rr := httptest.NewRecorder()
 		c.handleDeployScriptWindows(rr, req)
 		assert.Equal(t, http.StatusMethodNotAllowed, rr.Code)
@@ -726,7 +726,7 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 
 	t.Run("Success - GET with X-Forwarded-Host uses external host", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodGet, "/g8e-operator.ps1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/g8e-deploy.ps1", nil)
 		req.Header.Set("X-Forwarded-Host", "external.host")
 		rr := httptest.NewRecorder()
 		c.handleDeployScriptWindows(rr, req)
@@ -738,7 +738,7 @@ func TestPKIController_HandleDeployScriptWindows(t *testing.T) {
 
 	t.Run("Success - GET with localhost uses LocalAddrContextKey IP", func(t *testing.T) {
 		c, _, _ := setupTestPKIController(t)
-		req := httptest.NewRequest(http.MethodGet, "/g8e-operator.ps1", nil)
+		req := httptest.NewRequest(http.MethodGet, "/g8e-deploy.ps1", nil)
 		req.Host = "localhost:8080"
 		// Set LocalAddrContextKey to simulate a non-loopback server address
 		localAddr := &net.TCPAddr{IP: net.ParseIP("10.0.0.1"), Port: 8080}

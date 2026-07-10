@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -97,35 +98,7 @@ func (pm *ProcessManager) isProcessRunning(pid int) bool {
 	}
 
 	// STILL_ACTIVE indicates the process is still running
-	if exitCode != constants.StillActiveExitCode {
-		return false
-	}
-
-	// Verify the process is actually g8e to prevent false positives from PID reuse
-	return pm.isG8eProcess(pid)
-}
-
-// isG8eProcess verifies that the given PID belongs to a g8e.exe process.
-func (pm *ProcessManager) isG8eProcess(pid int) bool {
-	var executor CommandExecutor
-	if pm.commandExecutor != nil {
-		executor = pm.commandExecutor
-	} else {
-		executor = realCommandExecutor{}
-	}
-
-	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV", "/NH")
-	output, err := executor.Output(cmd)
-	if err != nil {
-		return false
-	}
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "INFO:") {
-			return true
-		}
-	}
-	return false
+	return exitCode == constants.StillActiveExitCode
 }
 
 // findProcessOnPort finds the PID of the process listening on the given port on Windows.
@@ -175,8 +148,15 @@ func (pm *ProcessManager) findOperatorProcess() int {
 		executor = realCommandExecutor{}
 	}
 
+	// Derive the actual image name from the running executable so that
+	// renamed binaries (e.g. g8e-windows-amd64.exe) are found correctly.
+	imageName := constants.BinaryImageNameWindows
+	if exePath, err := os.Executable(); err == nil {
+		imageName = filepath.Base(exePath)
+	}
+
 	ownPID := os.Getpid()
-	cmd := executor.Command("tasklist", "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV")
+	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", imageName), "/FO", "CSV")
 	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0

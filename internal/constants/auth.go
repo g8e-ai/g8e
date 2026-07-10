@@ -200,3 +200,18 @@ const (
 	// WebSessionCookieName is the name of the browser session cookie used by the unified auth middleware.
 	WebSessionCookieName = "g8e_session"
 )
+
+// App enrollment type constants define the valid app_type values for external app enrollment.
+const (
+	AppTypeMCPClient      = "mcp-client"
+	AppTypeA2AGateway     = "a2a-gateway"
+	AppTypeCustom         = "custom"
+	AppTypeTribunalMember = "tribunal-member"
+)
+
+// Certificate renewal constants
+const (
+	// AppCertMinValidity is the minimum remaining validity an app certificate must
+	// have to be considered valid for reuse without re-enrollment.
+	AppCertMinValidity = 7 * 24 * time.Hour
+)

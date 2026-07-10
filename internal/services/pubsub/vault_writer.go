@@ -85,7 +85,7 @@ func (vw *VaultWriter) WriteExecution(ctx context.Context, p executionWriteParam
 			OperatorID:       vw.config.OperatorID,
 		}
 		if err := vw.executionVault.StoreExecution(ctx, execRecord); err != nil {
-			vw.logger.Warn("vault_writer: failed to store execution in consolidated vault", "error", fmt.Errorf("%w", constants.ErrVaultStoreExecution))
+			vw.logger.Warn("vault_writer: failed to store execution in consolidated vault", "error", fmt.Errorf("%w: %w", constants.ErrVaultStoreExecution, err))
 		} else {
 			vw.logger.Info("Execution stored in consolidated vault (encrypted at rest)",
 				"execution_id", p.id,
@@ -128,7 +128,7 @@ func (vw *VaultWriter) WriteFileDiff(ctx context.Context, p fileDiffWriteParams)
 			OperatorID:        vw.config.OperatorID,
 		}
 		if err := vw.executionVault.StoreFileDiff(ctx, diffRecord); err != nil {
-			vw.logger.Warn("vault_writer: failed to store file diff in consolidated vault", "error", fmt.Errorf("%w", constants.ErrVaultStoreFileDiff))
+			vw.logger.Warn("vault_writer: failed to store file diff in consolidated vault", "error", fmt.Errorf("%w: %w", constants.ErrVaultStoreFileDiff, err))
 		} else {
 			vw.logger.Info("File diff stored in consolidated vault (encrypted at rest)",
 				"diff_id", p.diffID,

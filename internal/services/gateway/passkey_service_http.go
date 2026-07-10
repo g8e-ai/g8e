@@ -278,7 +278,7 @@ func (h *PasskeyHandler) RegisterVerify(cfg passkeyHandlerConfig) http.HandlerFu
 
 // emitPasskeyRegisteredSSE publishes a passkey.registered SSE event scoped to the
 // CLI session so the waiting CLI client receives real-time notification. Uses the
-// internalSSEPushPayload wire format for compatibility with the SSE stream handler.
+// models.SSEPushPayload wire format for compatibility with the SSE stream handler.
 func (h *PasskeyHandler) emitPasskeyRegisteredSSE(userID, cliSessionID string) {
 	if h.sseStore == nil || h.pubsub == nil {
 		return
@@ -294,7 +294,7 @@ func (h *PasskeyHandler) emitPasskeyRegisteredSSE(userID, cliSessionID string) {
 		return
 	}
 
-	envelope := internalSSEPushPayload{
+	envelope := models.SSEPushPayload{
 		CliSessionID: cliSessionID,
 		UserID:       userID,
 		Event:        eventPayload,

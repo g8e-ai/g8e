@@ -426,7 +426,7 @@ If the binary is missing or outdated, rebuild it:
 make build
 ```
 
-The `make build` target compiles `cmd/operator` and copies the resulting
+The `make build` target compiles `cmd/g8e` and copies the resulting
 binary to the repository root as `g8e`. The target handles Windows builds
 natively, producing `g8e.exe` when run on Windows.
 

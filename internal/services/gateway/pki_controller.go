@@ -502,8 +502,9 @@ func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Re
 	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
-	binaryName := constants.BinaryNameLinux
-	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
+	remoteBinaryName := constants.BinaryNameLinux
+	binaryURL := constants.APIPaths.WellKnownBinPrefix + remoteBinaryName
+	localBinaryName := constants.BinaryImageName
 
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
@@ -538,7 +539,7 @@ fi
 echo "[g8e] Node Binary downloaded to ${NODE_BINARY_NAME}"
 echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
 echo "[g8e] You can now run: ./${NODE_BINARY_NAME} -e ${GATEWAY_HOST} auth enroll"
-`, gatewayHost, port, caBundleURL, localCAPath, binaryName, binaryURL)
+`, gatewayHost, port, caBundleURL, localCAPath, localBinaryName, binaryURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -574,8 +575,9 @@ func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Re
 
 	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
-	binaryName := constants.BinaryNameDarwin
-	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
+	remoteBinaryName := constants.BinaryNameDarwin
+	binaryURL := constants.APIPaths.WellKnownBinPrefix + remoteBinaryName
+	localBinaryName := constants.BinaryImageName
 
 	script := fmt.Sprintf(`#!/bin/sh
 set -e
@@ -613,7 +615,7 @@ fi
 echo "[g8e] Node Binary downloaded to ${NODE_BINARY_NAME}"
 echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
 echo "[g8e] You can now run: ./${NODE_BINARY_NAME} -e ${GATEWAY_HOST} auth enroll"
-`, gatewayHost, port, caBundleURL, binaryName, binaryURL)
+`, gatewayHost, port, caBundleURL, localBinaryName, binaryURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -661,8 +663,9 @@ func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.
 	port := c.gatewayHTTPPort()
 	caBundleURL := constants.APIPaths.WellKnownPKICABundle
 	localCAPath := filepath.ToSlash(paths.Infra.CaCertPath)
-	binaryName := constants.BinaryNameWindows
-	binaryURL := constants.APIPaths.WellKnownBinPrefix + binaryName
+	remoteBinaryName := constants.BinaryNameWindows
+	binaryURL := constants.APIPaths.WellKnownBinPrefix + remoteBinaryName
+	localBinaryName := constants.BinaryImageNameWindows
 
 	script := fmt.Sprintf(`$ErrorActionPreference = "Continue"
 
@@ -710,7 +713,7 @@ Write-Host "[g8e] Node Binary downloaded to ${NodeBinaryName}"
 
 Write-Host "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
 Write-Host "[g8e] You can now run: .\\${NodeBinaryName} -e ${GatewayHost} auth enroll"
-`, gatewayHost, port, caBundleURL, localCAPath, binaryName, binaryURL)
+`, gatewayHost, port, caBundleURL, localCAPath, localBinaryName, binaryURL)
 
 	w.Header().Set(constants.HeaderContentType, constants.HeaderValuePowerShell)
 	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
@@ -793,7 +796,7 @@ func (c *PKIController) handleNodeBinaryDownload(w http.ResponseWriter, r *http.
 // @Tags			deploy
 // @Produce		text/plain
 // @Success		200	{string}	string
-// @Router			/g8e-operator.sh [get]
+// @Router			/g8e-deploy.sh [get]
 func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -825,7 +828,7 @@ func (c *PKIController) handleDeployScriptLinux(w http.ResponseWriter, r *http.R
 // @Tags			deploy
 // @Produce		text/plain
 // @Success		200	{string}	string
-// @Router			/g8e-operator.ps1 [get]
+// @Router			/g8e-deploy.ps1 [get]
 func (c *PKIController) handleDeployScriptWindows(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())

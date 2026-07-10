@@ -87,7 +87,7 @@ HTTP route paths for the Gateway REST API, defined as a struct `APIPaths` with J
 - Tribunal: `TribunalDeliberate` (`/tribunal/v1/deliberate`)
 - Well-known: `WellKnownPKICABundle`, `WellKnownPKIFingerprint`, `WellKnownBinPrefix`, `WellKnownPKIPrefix`, `WellKnownTrustWindows`
 - Bootstrap scripts: `BootstrapCALinux` (`/bootstrap-ca`), `BootstrapCAMacos` (`/bootstrap-ca-macos`), `BootstrapCAWindows` (`/bootstrap-ca.ps1`)
-- Deploy scripts: `DeployScriptLinux` (`/g8e-operator.sh`), `DeployScriptWindows` (`/g8e-operator.ps1`)
+- Deploy scripts: `DeployScriptLinux` (`/g8e-deploy.sh`), `DeployScriptWindows` (`/g8e-deploy.ps1`)
 - Health: `Health` (`/api/v1/health`)
 - State: `State` (`/api/v1/state`)
 - Landing: `Landing` (`/`)

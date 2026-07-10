@@ -117,15 +117,6 @@ func (a *Adapter) Run(ctx context.Context) {
 	}
 }
 
-// NotifyConnected sends a ConnConnected message to the program. Called by
-// the SSE client wrapper when the first event is received.
-func (a *Adapter) NotifyConnected() {
-	if a.program == nil {
-		return
-	}
-	a.program.Send(ConnStatusMsg{Status: ConnConnected})
-}
-
 // translateSSEEvent maps an SSE event_type + data payload to a tea.Msg.
 // The SSE event types are free-form strings; this function maps known
 // patterns to the appropriate TUI message types.

@@ -451,17 +451,17 @@ func TestEmitApprovalCompletedSSE(t *testing.T) {
 		events, err := sseStore.SSEEventsListSince(route, 0, 10)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
-		assert.Equal(t, "approval.completed", events[0].EventType)
+		assert.Equal(t, constants.SSEEventTypeApprovalCompleted, events[0].EventType)
 		assert.Contains(t, events[0].Payload, txHash)
 		assert.Contains(t, events[0].Payload, userID)
 
-		var payload internalSSEPushPayload
+		var payload models.SSEPushPayload
 		require.NoError(t, json.Unmarshal([]byte(events[0].Payload), &payload))
 		assert.Equal(t, userID, payload.UserID)
 
 		var inner models.ApprovalCompletedEvent
 		require.NoError(t, json.Unmarshal(payload.Event, &inner))
-		assert.Equal(t, "approval.completed", inner.Type)
+		assert.Equal(t, constants.SSEEventTypeApprovalCompleted, inner.Type)
 		assert.Equal(t, userID, inner.UserID)
 		assert.Equal(t, txHash, inner.TxHash)
 	})
@@ -568,15 +568,15 @@ func TestHandleApprovalVerify_SSE_EmittedToApproverWhenSuspendedTxUserIDEmpty(t 
 	events, err := sseStore.SSEEventsListSince(route, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, events, 1)
-	assert.Equal(t, "approval.completed", events[0].EventType)
+	assert.Equal(t, constants.SSEEventTypeApprovalCompleted, events[0].EventType)
 
-	var payload internalSSEPushPayload
+	var payload models.SSEPushPayload
 	require.NoError(t, json.Unmarshal([]byte(events[0].Payload), &payload))
 	assert.Equal(t, approverUserID, payload.UserID)
 
 	var inner models.ApprovalCompletedEvent
 	require.NoError(t, json.Unmarshal(payload.Event, &inner))
-	assert.Equal(t, "approval.completed", inner.Type)
+	assert.Equal(t, constants.SSEEventTypeApprovalCompleted, inner.Type)
 	assert.Equal(t, approverUserID, inner.UserID)
 	assert.Equal(t, txHash, inner.TxHash)
 }

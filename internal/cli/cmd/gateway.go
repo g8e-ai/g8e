@@ -40,17 +40,19 @@ func getBinaryName() string {
 	return constants.LocalBinaryName
 }
 
-// startConfig holds resolved configuration for starting the gateway.
-type startConfig struct {
-	VaultDir           string
-	VaultKeyPath       string
-	VaultRequireUnlock bool
+// GatewayFlags holds all gateway CLI flag values shared by gatewayStartCmd
+// and gatewayServeCmd. It is populated by addGatewayFlags and converted to
+// serve.GatewayConfig via gatewayFlagsToServeConfig.
+type GatewayFlags struct {
 	Posture            string
 	HTTPPort           int
 	HTTPSPort          int
 	DataDir            string
 	PKIDir             string
 	SecretsDir         string
+	VaultDir           string
+	VaultKeyPath       string
+	VaultRequireUnlock bool
 	PasskeyRpID        string
 	PasskeyRpName      string
 	PasskeyRpOrigins   []string
@@ -58,38 +60,93 @@ type startConfig struct {
 	RateLimitBurst     int
 	LogLevel           string
 	CertIdentityMode   string
-	IdentityData       []byte
 	TribunalID         string
 	TribunalURL        string
 	TribunalBootstrap  string
 	MCPDownstreamURL   string
 	A2ADownstreamURL   string
+	PublicBaseURL      string
 }
 
-// resolveStartConfig resolves environment variable overrides and defaults for gateway start.
-func resolveStartConfig(cfg startConfig) startConfig {
-	// Environment variables override CLI flags
-	if cfg.VaultDir == "" {
-		cfg.VaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
-	}
-	if cfg.VaultKeyPath == "" {
-		cfg.VaultKeyPath = os.Getenv(string(constants.EnvVar.VaultKey))
-	}
-	if !cfg.VaultRequireUnlock {
-		cfg.VaultRequireUnlock = os.Getenv(string(constants.EnvVar.VaultRequireUnlock)) == "true"
-	}
+// addGatewayFlags registers all shared gateway flags on the given cobra command,
+// binding them to the provided GatewayFlags struct.
+func addGatewayFlags(cmd *cobra.Command, f *GatewayFlags) {
+	cmd.Flags().StringVar(&f.Posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
+	cmd.Flags().IntVar(&f.HTTPPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
+	cmd.Flags().IntVar(&f.HTTPSPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
+	cmd.Flags().StringVar(&f.DataDir, "data-dir", "", fmt.Sprintf("Data directory for SQLite database (default: %s in working directory)", constants.DefaultDataDir))
+	cmd.Flags().StringVar(&f.PKIDir, "pki-dir", "", fmt.Sprintf("Directory for TLS certificates (default: %s)", constants.DefaultPKIDir))
+	cmd.Flags().StringVar(&f.SecretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
+	cmd.Flags().StringVar(&f.VaultDir, "vault-dir", "", fmt.Sprintf("Directory for vault data (default: %s)", constants.DefaultVaultDirDesc))
+	cmd.Flags().StringVar(&f.VaultKeyPath, "vault-key", "", fmt.Sprintf("Path to vault private key (default: %s)", constants.DefaultVaultKeyDesc))
+	cmd.Flags().BoolVar(&f.VaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
+	cmd.Flags().StringVar(&f.PasskeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
+	cmd.Flags().StringVar(&f.PasskeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
+	cmd.Flags().StringArrayVar(&f.PasskeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
+	cmd.Flags().Float64Var(&f.RateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
+	cmd.Flags().IntVar(&f.RateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
+	cmd.Flags().StringVar(&f.LogLevel, "log", "info", "Log level: info, error, debug")
+	cmd.Flags().StringVar(&f.CertIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
+	cmd.Flags().StringVar(&f.TribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
+	cmd.Flags().StringVar(&f.TribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
+	cmd.Flags().StringVar(&f.TribunalBootstrap, "tribunal-bootstrap", "", "Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (for deterministic demo deployments)")
+	cmd.Flags().StringVar(&f.MCPDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
+	cmd.Flags().StringVar(&f.A2ADownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
+	cmd.Flags().StringVar(&f.PublicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
+}
 
-	if cfg.TribunalID == "" {
-		cfg.TribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
+// resolveGatewayFlags applies environment variable overrides for vault and
+// tribunal settings when the corresponding CLI flags are not set.
+func resolveGatewayFlags(f GatewayFlags) GatewayFlags {
+	if f.VaultDir == "" {
+		f.VaultDir = os.Getenv(string(constants.EnvVar.VaultDir))
 	}
-	if cfg.TribunalURL == "" {
-		cfg.TribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
+	if f.VaultKeyPath == "" {
+		f.VaultKeyPath = os.Getenv(string(constants.EnvVar.VaultKey))
 	}
-	if cfg.TribunalBootstrap == "" {
-		cfg.TribunalBootstrap = os.Getenv(string(constants.EnvVar.TribunalBootstrap))
+	if !f.VaultRequireUnlock {
+		f.VaultRequireUnlock = os.Getenv(string(constants.EnvVar.VaultRequireUnlock)) == "true"
 	}
+	if f.TribunalID == "" {
+		f.TribunalID = os.Getenv(string(constants.EnvVar.TribunalID))
+	}
+	if f.TribunalURL == "" {
+		f.TribunalURL = os.Getenv(string(constants.EnvVar.TribunalURL))
+	}
+	if f.TribunalBootstrap == "" {
+		f.TribunalBootstrap = os.Getenv(string(constants.EnvVar.TribunalBootstrap))
+	}
+	return f
+}
 
-	return cfg
+// gatewayFlagsToServeConfig converts GatewayFlags into serve.GatewayConfig.
+// This is the single conversion point between CLI flags and the foreground
+// gateway config struct.
+func gatewayFlagsToServeConfig(f GatewayFlags) serve.GatewayConfig {
+	return serve.GatewayConfig{
+		Posture:            g8econfig.GatewayPosture(f.Posture),
+		HTTPPort:           f.HTTPPort,
+		HTTPSPort:          f.HTTPSPort,
+		DataDir:            f.DataDir,
+		PKIDir:             f.PKIDir,
+		SecretsDir:         f.SecretsDir,
+		VaultDir:           f.VaultDir,
+		VaultKeyPath:       f.VaultKeyPath,
+		VaultRequireUnlock: f.VaultRequireUnlock,
+		PasskeyRpID:        f.PasskeyRpID,
+		PasskeyRpName:      f.PasskeyRpName,
+		PasskeyRpOrigins:   f.PasskeyRpOrigins,
+		RateLimitRPS:       f.RateLimitRPS,
+		RateLimitBurst:     f.RateLimitBurst,
+		LogLevel:           f.LogLevel,
+		CertIdentityMode:   f.CertIdentityMode,
+		TribunalID:         f.TribunalID,
+		TribunalURL:        f.TribunalURL,
+		TribunalBootstrap:  f.TribunalBootstrap,
+		MCPDownstreamURL:   f.MCPDownstreamURL,
+		A2ADownstreamURL:   f.A2ADownstreamURL,
+		PublicBaseURL:      f.PublicBaseURL,
+	}
 }
 
 // detectIdentityResult holds the result of network identity detection.
@@ -161,27 +218,7 @@ func gatewayCmd() *cobra.Command {
 }
 
 func gatewayStartCmd() *cobra.Command {
-	var posture string
-	var httpPort int
-	var httpsPort int
-	var dataDir string
-	var pkiDir string
-	var secretsDir string
-	var vaultDir string
-	var vaultKeyPath string
-	var vaultRequireUnlock bool
-	var passkeyRpID string
-	var passkeyRpName string
-	var passkeyRpOrigins []string
-	var rateLimitRPS float64
-	var rateLimitBurst int
-	var logLevel string
-	var certIdentityMode string
-	var tribunalID string
-	var tribunalURL string
-	var tribunalBootstrap string
-	var mcpDownstreamURL string
-	var a2aDownstreamURL string
+	var flags GatewayFlags
 	var follow bool
 
 	cmd := &cobra.Command{
@@ -209,34 +246,11 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			// Resolve configuration from flags and environment variables
-			startCfg := resolveStartConfig(startConfig{
-				VaultDir:           vaultDir,
-				VaultKeyPath:       vaultKeyPath,
-				VaultRequireUnlock: vaultRequireUnlock,
-				Posture:            posture,
-				HTTPPort:           httpPort,
-				HTTPSPort:          httpsPort,
-				DataDir:            dataDir,
-				PKIDir:             pkiDir,
-				SecretsDir:         secretsDir,
-				PasskeyRpID:        passkeyRpID,
-				PasskeyRpName:      passkeyRpName,
-				PasskeyRpOrigins:   passkeyRpOrigins,
-				RateLimitRPS:       rateLimitRPS,
-				RateLimitBurst:     rateLimitBurst,
-				LogLevel:           logLevel,
-				CertIdentityMode:   certIdentityMode,
-				TribunalID:         tribunalID,
-				TribunalURL:        tribunalURL,
-				TribunalBootstrap:  tribunalBootstrap,
-				MCPDownstreamURL:   mcpDownstreamURL,
-				A2ADownstreamURL:   a2aDownstreamURL,
-			})
+			resolved := resolveGatewayFlags(flags)
 
 			// Detect and display network identity before prompting
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-			identityResult := detectIdentity(context.Background(), logger, startCfg.CertIdentityMode)
+			identityResult := detectIdentity(context.Background(), logger, resolved.CertIdentityMode)
 
 			if identityResult.ShouldFallback {
 				cmd.Printf("Warning: Failed to detect network identity\n")
@@ -247,7 +261,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			}
 
 			// Validate posture at CLI edge for clean error messages
-			postureObj, err := governance.ParseGovernancePosture(startCfg.Posture)
+			postureObj, err := governance.ParseGovernancePosture(resolved.Posture)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidPosture, err)
 			}
@@ -274,30 +288,9 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				}
 
 				// Build gateway config for foreground execution
-				gatewayCfg := serve.GatewayConfig{
-					Posture:             g8econfig.GatewayPosture(startCfg.Posture),
-					HTTPPort:            startCfg.HTTPPort,
-					HTTPSPort:           startCfg.HTTPSPort,
-					DataDir:             startCfg.DataDir,
-					PKIDir:              startCfg.PKIDir,
-					SecretsDir:          startCfg.SecretsDir,
-					VaultDir:            startCfg.VaultDir,
-					VaultKeyPath:        startCfg.VaultKeyPath,
-					VaultRequireUnlock:  startCfg.VaultRequireUnlock,
-					PasskeyRpID:         startCfg.PasskeyRpID,
-					PasskeyRpName:       startCfg.PasskeyRpName,
-					PasskeyRpOrigins:    startCfg.PasskeyRpOrigins,
-					RateLimitRPS:        startCfg.RateLimitRPS,
-					RateLimitBurst:      startCfg.RateLimitBurst,
-					LogLevel:            startCfg.LogLevel,
-					CertIdentityMode:    identityResult.CertMode,
-					NetworkIdentityFile: networkIdentityFile,
-					TribunalID:          startCfg.TribunalID,
-					TribunalURL:         startCfg.TribunalURL,
-					TribunalBootstrap:   startCfg.TribunalBootstrap,
-					MCPDownstreamURL:    startCfg.MCPDownstreamURL,
-					A2ADownstreamURL:    startCfg.A2ADownstreamURL,
-				}
+				gatewayCfg := gatewayFlagsToServeConfig(resolved)
+				gatewayCfg.CertIdentityMode = identityResult.CertMode
+				gatewayCfg.NetworkIdentityFile = networkIdentityFile
 
 				// Run gateway (this blocks until shutdown)
 				return serve.RunGateway(gatewayCfg, versionInfoFromCmd(cmd))
@@ -320,31 +313,14 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 
 			cmd.Println("[g8e] Starting g8e Gateway service...")
 			cmd.Printf("[g8e] Gateway posture: %s\n", postureObj.Description())
+
+			gatewayCfg := gatewayFlagsToServeConfig(resolved)
+			gatewayCfg.CertIdentityMode = identityResult.CertMode
 			if err := pm.StartOperator(platform.OperatorStartOptions{
-				Posture:            startCfg.Posture,
-				HTTPPort:           startCfg.HTTPPort,
-				HTTPSPort:          startCfg.HTTPSPort,
-				DataDir:            startCfg.DataDir,
-				PKIDir:             startCfg.PKIDir,
-				SecretsDir:         startCfg.SecretsDir,
-				VaultDir:           startCfg.VaultDir,
-				VaultKeyPath:       startCfg.VaultKeyPath,
-				VaultRequireUnlock: startCfg.VaultRequireUnlock,
-				PasskeyRpID:        startCfg.PasskeyRpID,
-				PasskeyRpName:      startCfg.PasskeyRpName,
-				PasskeyRpOrigins:   startCfg.PasskeyRpOrigins,
-				RateLimitRPS:       startCfg.RateLimitRPS,
-				RateLimitBurst:     startCfg.RateLimitBurst,
-				LogLevel:           startCfg.LogLevel,
-				CertIdentityMode:   identityResult.CertMode,
-				IdentityData:       identityResult.IdentityData,
-				TribunalID:         startCfg.TribunalID,
-				TribunalURL:        startCfg.TribunalURL,
-				TribunalBootstrap:  startCfg.TribunalBootstrap,
-				MCPDownstreamURL:   startCfg.MCPDownstreamURL,
-				A2ADownstreamURL:   startCfg.A2ADownstreamURL,
+				GatewayConfig: gatewayCfg,
+				IdentityData:  identityResult.IdentityData,
 			}); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+				return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
 			}
 
 			_, pid, err = pm.OperatorStatus()
@@ -362,55 +338,15 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 		},
 	}
 
-	cmd.Flags().StringVar(&posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
-	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
-	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
-	cmd.Flags().StringVar(&dataDir, "data-dir", "", fmt.Sprintf("Data directory for SQLite database (default: %s in working directory)", constants.DefaultDataDir))
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", fmt.Sprintf("Directory for TLS certificates (default: %s)", constants.DefaultPKIDir))
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", fmt.Sprintf("Directory for vault data (default: %s)", constants.DefaultVaultDirDesc))
-	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", fmt.Sprintf("Path to vault private key (default: %s)", constants.DefaultVaultKeyDesc))
-	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
-	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
-	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
-	cmd.Flags().StringArrayVar(&passkeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
-	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
-	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
-	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
-	cmd.Flags().StringVar(&certIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
-	cmd.Flags().StringVar(&tribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
-	cmd.Flags().StringVar(&tribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
-	cmd.Flags().StringVar(&tribunalBootstrap, "tribunal-bootstrap", "", "Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (for deterministic demo deployments)")
-	cmd.Flags().StringVar(&mcpDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
-	cmd.Flags().StringVar(&a2aDownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
+	addGatewayFlags(cmd, &flags)
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Run gateway in foreground (Ctrl+C stops gateway)")
 
 	return cmd
 }
 
 func gatewayServeCmd() *cobra.Command {
-	var posture string
-	var httpPort int
-	var httpsPort int
-	var dataDir string
-	var pkiDir string
-	var secretsDir string
-	var vaultDir string
-	var vaultKeyPath string
-	var vaultRequireUnlock bool
-	var passkeyRpID string
-	var passkeyRpName string
-	var passkeyRpOrigins []string
-	var rateLimitRPS float64
-	var rateLimitBurst int
-	var logLevel string
-	var certIdentityMode string
+	var flags GatewayFlags
 	var networkIdentityFile string
-	var tribunalID string
-	var tribunalURL string
-	var tribunalBootstrap string
-	var mcpDownstreamURL string
-	var a2aDownstreamURL string
 
 	cmd := &cobra.Command{
 		Use:    "serve",
@@ -419,63 +355,21 @@ func gatewayServeCmd() *cobra.Command {
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Validate posture
-			if _, err := governance.ParseGovernancePosture(posture); err != nil {
+			if _, err := governance.ParseGovernancePosture(flags.Posture); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInvalidPosture, err)
 			}
 
 			// Build gateway config
-			cfg := serve.GatewayConfig{
-				Posture:             g8econfig.GatewayPosture(posture),
-				HTTPPort:            httpPort,
-				HTTPSPort:           httpsPort,
-				DataDir:             dataDir,
-				PKIDir:              pkiDir,
-				SecretsDir:          secretsDir,
-				VaultDir:            vaultDir,
-				VaultKeyPath:        vaultKeyPath,
-				VaultRequireUnlock:  vaultRequireUnlock,
-				PasskeyRpID:         passkeyRpID,
-				PasskeyRpName:       passkeyRpName,
-				PasskeyRpOrigins:    passkeyRpOrigins,
-				RateLimitRPS:        rateLimitRPS,
-				RateLimitBurst:      rateLimitBurst,
-				LogLevel:            logLevel,
-				CertIdentityMode:    certIdentityMode,
-				NetworkIdentityFile: networkIdentityFile,
-				TribunalID:          tribunalID,
-				TribunalURL:         tribunalURL,
-				TribunalBootstrap:   tribunalBootstrap,
-				MCPDownstreamURL:    mcpDownstreamURL,
-				A2ADownstreamURL:    a2aDownstreamURL,
-			}
+			cfg := gatewayFlagsToServeConfig(flags)
+			cfg.NetworkIdentityFile = networkIdentityFile
 
 			// Run gateway (this blocks until shutdown)
 			return serve.RunGateway(cfg, versionInfoFromCmd(cmd))
 		},
 	}
 
-	cmd.Flags().StringVar(&posture, "posture", "doctrine", "Gateway posture: doctrine (L1 enforced, L2/L3 audited), consensus (L1/L2 enforced, L3 audited), notary (L1/L2/L3 strictly enforced)")
-	cmd.Flags().IntVar(&httpPort, "http-port", 0, "HTTP port for bootstrap and MCP (default: from constants.Ports.OperatorHttp)")
-	cmd.Flags().IntVar(&httpsPort, "https-port", 0, "HTTPS port for mTLS API (default: from constants.Ports.OperatorHttps)")
-	cmd.Flags().StringVar(&dataDir, "data-dir", "", fmt.Sprintf("Data directory for SQLite database (default: %s in working directory)", constants.DefaultDataDir))
-	cmd.Flags().StringVar(&pkiDir, "pki-dir", "", fmt.Sprintf("Directory for TLS certificates (default: %s)", constants.DefaultPKIDir))
-	cmd.Flags().StringVar(&secretsDir, "secrets-dir", "", fmt.Sprintf("Directory for platform secrets (default: %s)", constants.DefaultSecretsDir))
-	cmd.Flags().StringVar(&vaultDir, "vault-dir", "", fmt.Sprintf("Directory for vault data (default: %s)", constants.DefaultVaultDirDesc))
-	cmd.Flags().StringVar(&vaultKeyPath, "vault-key", "", fmt.Sprintf("Path to vault private key (default: %s)", constants.DefaultVaultKeyDesc))
-	cmd.Flags().BoolVar(&vaultRequireUnlock, "vault-require-unlock", false, "Require vault to be unlocked at startup (fail if vault cannot be unlocked)")
-	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "RP ID for passkey operations (default: localhost)")
-	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "RP Name for passkey operations (default: g8e)")
-	cmd.Flags().StringArrayVar(&passkeyRpOrigins, "passkey-rp-origin", nil, "Additional RP origin for passkey operations (repeatable, e.g. http://localhost:8087)")
-	cmd.Flags().Float64Var(&rateLimitRPS, "rate-limit-rps", 0, "Gateway requests per second limit (set to 0 to disable)")
-	cmd.Flags().IntVar(&rateLimitBurst, "rate-limit-burst", 0, "Gateway rate limit burst size")
-	cmd.Flags().StringVar(&logLevel, "log", "info", "Log level: info, error, debug")
-	cmd.Flags().StringVar(&certIdentityMode, "cert-mode", "", "Certificate mode: full (all hostnames/IPs), localhost (only localhost)")
+	addGatewayFlags(cmd, &flags)
 	cmd.Flags().StringVar(&networkIdentityFile, "network-identity-file", "", "Path to network identity JSON file (for cert mode)")
-	cmd.Flags().StringVar(&tribunalID, "tribunal-id", "", "ID of the TribunalPolicy for L2 consensus (required for --consensus)")
-	cmd.Flags().StringVar(&tribunalURL, "tribunal-url", "", "URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)")
-	cmd.Flags().StringVar(&tribunalBootstrap, "tribunal-bootstrap", "", "Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (for deterministic demo deployments)")
-	cmd.Flags().StringVar(&mcpDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
-	cmd.Flags().StringVar(&a2aDownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
 
 	return cmd
 }
@@ -621,22 +515,10 @@ missing, the gateway defaults to 'doctrine' posture.`,
 				cmd.Printf("[g8e] Restarting with current posture: %s\n", currentPosture)
 			}
 			if err := pm.StartOperator(platform.OperatorStartOptions{
-				Posture:            currentPosture,
-				HTTPPort:           cfg.OperatorHTTPSPort(),
-				HTTPSPort:          constants.Ports.OperatorHttps,
-				DataDir:            "",
-				PKIDir:             "",
-				SecretsDir:         "",
-				VaultDir:           "",
-				VaultKeyPath:       "",
-				VaultRequireUnlock: false,
-				PasskeyRpID:        "",
-				PasskeyRpName:      "",
-				RateLimitRPS:       0,
-				RateLimitBurst:     0,
-				LogLevel:           "info",
-				CertIdentityMode:   "",
-				IdentityData:       nil,
+				GatewayConfig: serve.GatewayConfig{
+					Posture:  g8econfig.GatewayPosture(currentPosture),
+					LogLevel: "info",
+				},
 			}); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}

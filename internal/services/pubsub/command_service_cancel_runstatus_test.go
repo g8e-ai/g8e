@@ -13,32 +13,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestIsValidFileOperation(t *testing.T) {
-	t.Parallel()
-	validOps := []constants.FileOperation{
-		constants.FileOperationCreate,
-		constants.FileOperationDelete,
-		constants.FileOperationInsert,
-		constants.FileOperationPatch,
-		constants.FileOperationRead,
-		constants.FileOperationReplace,
-		constants.FileOperationUpdate,
-		constants.FileOperationWrite,
-	}
-	for _, op := range validOps {
-		if !isValidFileOperation(op) {
-			t.Errorf("expected %s to be valid", op)
-		}
-	}
-
-	if isValidFileOperation("invalid") {
-		t.Error("expected 'invalid' to be invalid")
-	}
-	if isValidFileOperation("") {
-		t.Error("expected empty string to be invalid")
-	}
-}
-
 func TestHandleCancelRequest_ValidPayload_CancelSuccess(t *testing.T) {
 	t.Parallel()
 	cfg := testutil.NewTestConfig(t)

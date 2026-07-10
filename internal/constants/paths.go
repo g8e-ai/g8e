@@ -277,6 +277,18 @@ const (
 	LocalBinaryNameWindows = "./g8e.exe"
 )
 
+// Binary image names for process detection (no path prefix).
+const (
+	BinaryImageName        = "g8e"
+	BinaryImageNameWindows = "g8e.exe"
+)
+
+// Deploy script filenames served by the gateway.
+const (
+	DeployScriptFilenameLinux   = "g8e-deploy.sh"
+	DeployScriptFilenameWindows = "g8e-deploy.ps1"
+)
+
 // Component filenames for gateway, operator, and shared services.
 const (
 	SwaggerFilename          = "swagger.json"
@@ -387,6 +399,45 @@ const (
 	TestSecretManagerDBFilename = "secret_manager_test.db"
 	TestCertFilename            = "test-cert.pem"
 	TestKeyFilename             = "test-key.pem"
+
+	// Cert test filenames for internal/cli/serve/cert_test.go
+	TestCertCrtFilename         = "test.crt"
+	TestNonExistentCrtFilename  = "nonexistent.crt"
+	TestInvalidPEMFilename      = "invalid.pem"
+	TestCorruptCrtFilename      = "corrupt.crt"
+	TestCABundleFilename        = "ca-bundle.pem"
+	TestDoesNotExistPEMFilename = "does-not-exist.pem"
+	TestExplicitPEMFilename     = "explicit.pem"
+	TestECPrivateKeyFilename    = "key.pem"
+	TestClientCrtFilename       = "client.crt"
+	TestClientKeyFilename       = "client.key"
+	TestNonExistentKeyFilename  = "nonexistent.key"
+	TestInvalidCrtFilename      = "invalid.crt"
+	TestInvalidKeyFilename      = "invalid.key"
+	TestPkiDirname              = "pki"
+	TestNestedDirname           = "nested"
+	TestDeepDirname             = "deep"
+
+	// Test path constants for gateway config and tribunal bootstrap tests
+	TestPathVarLibDataDir       = "/var/lib/g8e/data"
+	TestPathVarLibPKIDir        = "/var/lib/g8e/pki"
+	TestPathVarLibSecretsDir    = "/var/lib/g8e/secrets"
+	TestPathVarLibVaultDir      = "/var/lib/g8e/vault"
+	TestPathVarLibVaultKey      = "/var/lib/g8e/vault/key"
+	TestPathEtcNetworkIdentity  = "/etc/g8e/network-identity.json"
+	TestPathShortData           = "/data"
+	TestPathShortPKI            = "/pki"
+	TestPathShortSecrets        = "/secrets"
+	TestPathShortVault          = "/vault"
+	TestPathShortVaultKey       = "/vault/key"
+	TestPathIdentityFile        = "/path/to/identity.json"
+	TestPathIdentityFileShort   = "/path/identity.json"
+	TestPathNonexistentTribunal = "/nonexistent/path/tribunal.json"
+)
+
+// Tribunal bootstrap config filename for declarative tribunal seeding.
+const (
+	TribunalBootstrapConfigFilename = "tribunal-bootstrap.json"
 )
 
 // Operational limits for filesystem, grep, and execution operations.

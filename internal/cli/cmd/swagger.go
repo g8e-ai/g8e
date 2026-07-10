@@ -54,10 +54,10 @@ The generated documentation includes:
 - swagger.json - OpenAPI 2.0 specification in JSON format
 - swagger.yaml - OpenAPI 2.0 specification in YAML format`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Default to cmd/operator and internal/services/gateway directories
-			// cmd/operator has main.go (entry point), internal/services/gateway has the annotations
+			// Default to cmd/g8e and internal/services/gateway directories
+			// cmd/g8e has main.go (entry point), internal/services/gateway has the annotations
 			if searchDir == "" {
-				searchDir = "cmd/operator,internal/services/gateway"
+				searchDir = "cmd/g8e,internal/services/gateway"
 			}
 			if outputDir == "" {
 				outputDir = "internal/services/gateway/docs"
@@ -104,7 +104,7 @@ The generated documentation includes:
 		},
 	}
 
-	cmd.Flags().StringVar(&searchDir, "dir", "", "Directory to search for Swagger annotations (default: cmd/operator,internal/services/gateway)")
+	cmd.Flags().StringVar(&searchDir, "dir", "", "Directory to search for Swagger annotations (default: cmd/g8e,internal/services/gateway)")
 	cmd.Flags().StringVar(&outputDir, "output", "", "Output directory for generated docs (default: internal/services/gateway/docs)")
 
 	return cmd

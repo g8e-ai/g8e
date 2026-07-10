@@ -18,30 +18,40 @@ package auth
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func TestGenerateWindowsCSR(t *testing.T) {
-	csr, privKey, err := GenerateWindowsCSR("test-g8e-windows", false)
-	if err != nil {
-		t.Fatalf("GenerateWindowsCSR failed: %v", err)
+	tests := []struct {
+		name       string
+		commonName string
+		useTPM     bool
+	}{
+		{name: "software-backed", commonName: "test-g8e-windows", useTPM: false},
+		{name: "tpm-requested-fallback", commonName: "test-g8e-windows-tpm", useTPM: true},
 	}
-	if csr == "" {
-		t.Fatal("CSR is empty")
-	}
-	if privKey == nil {
-		t.Fatal("Private key is nil")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			csr, privKey, err := GenerateWindowsCSR(tt.commonName, tt.useTPM)
+			require.NoError(t, err)
+			assert.NotEmpty(t, csr)
+			assert.NotNil(t, privKey)
+			assert.Contains(t, csr, "CERTIFICATE REQUEST")
+		})
 	}
 }
 
-func TestGenerateWindowsCSRWithTPM(t *testing.T) {
-	csr, privKey, err := GenerateWindowsCSR("test-g8e-windows-tpm", true)
-	if err != nil {
-		t.Fatalf("GenerateWindowsCSR with TPM failed: %v", err)
-	}
-	if csr == "" {
-		t.Fatal("CSR is empty")
-	}
-	if privKey == nil {
-		t.Fatal("Private key is nil")
-	}
+func TestTrustRootCAInWindowsStore_InvalidPEM(t *testing.T) {
+	err := TrustRootCAInWindowsStore("not a valid PEM")
+	assert.ErrorIs(t, err, constants.ErrPEMDecodeFailed)
+}
+
+func TestTrustRootCAInWindowsStore_EmptyInput(t *testing.T) {
+	err := TrustRootCAInWindowsStore("")
+	assert.ErrorIs(t, err, constants.ErrPEMDecodeFailed)
 }

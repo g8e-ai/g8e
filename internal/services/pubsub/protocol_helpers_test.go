@@ -450,6 +450,15 @@ func TestUnmarshalPayload(t *testing.T) {
 		assert.IsType(t, &operatorv1.A2ACallRequested{}, msg)
 	})
 
+	t.Run("unmarshals EvalAnswerRequested", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.EvalAnswerRequested{PromptId: "test", Answer: "answer"}
+		payload, _ := proto.Marshal(req)
+		msg, err := unmarshalPayload(constants.Event.Operator.Eval.AnswerRequested, payload)
+		require.NoError(t, err)
+		assert.IsType(t, &operatorv1.EvalAnswerRequested{}, msg)
+	})
+
 	t.Run("rejects unknown event type", func(t *testing.T) {
 		t.Parallel()
 		req := &operatorv1.CommandRequested{Command: "ls -la"}

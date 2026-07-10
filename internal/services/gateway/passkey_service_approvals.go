@@ -154,7 +154,7 @@ func (h *PasskeyHandler) emitApprovalCompletedSSE(userID, txHash string) {
 	}
 
 	eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
-		Type:   "approval.completed",
+		Type:   constants.SSEEventTypeApprovalCompleted,
 		UserID: userID,
 		TxHash: txHash,
 	})
@@ -163,7 +163,7 @@ func (h *PasskeyHandler) emitApprovalCompletedSSE(userID, txHash string) {
 		return
 	}
 
-	envelope := internalSSEPushPayload{
+	envelope := models.SSEPushPayload{
 		UserID: userID,
 		Event:  eventPayload,
 	}
@@ -175,7 +175,7 @@ func (h *PasskeyHandler) emitApprovalCompletedSSE(userID, txHash string) {
 
 	if err := h.sseStore.SSEEventsAppend(
 		SSERoute{UserID: userID},
-		"approval.completed",
+		constants.SSEEventTypeApprovalCompleted,
 		string(envelopeJSON),
 		"g8eg",
 	); err != nil {

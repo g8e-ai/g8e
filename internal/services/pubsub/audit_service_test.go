@@ -25,7 +25,7 @@ import (
 )
 
 func TestNewAuditService(t *testing.T) {
-	t.Run("creates service successfully", func(t *testing.T) {
+	t.Run("returns non-nil service with logger", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()

@@ -198,15 +198,19 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 			fmt.Fprintf(os.Stderr, "  Ensure the Gateway is running and accessible at %s\n", opts.Endpoint)
 			os.Exit(constants.ExitConfigError)
 		}
-		os.Setenv("G8E_OPERATOR_SESSION_ID", sessionID)
+		os.Setenv(string(constants.EnvVar.OperatorSessionID), sessionID)
 
 		privateKey = paths.Infra.OperatorKeyPath
 		clientCert = paths.Infra.OperatorCertPath
 
-		if pemData, err := os.ReadFile(paths.Infra.CaCertPath); err == nil {
-			trustStore.SetCA(pemData)
-			logger.Info("Trust bundle reloaded after enrollment", "path", paths.Infra.CaCertPath)
+		pemData, err := os.ReadFile(paths.Infra.CaCertPath)
+		if err != nil {
+			logger.Error("Failed to reload trust bundle after enrollment", "path", paths.Infra.CaCertPath, string(constants.ConnectionStateError), err)
+			fmt.Fprintf(os.Stderr, "%s: %v\n", constants.ErrFailedToReadTrustBundle, err)
+			os.Exit(constants.ExitConfigError)
 		}
+		trustStore.SetCA(pemData)
+		logger.Info("Trust bundle reloaded after enrollment", "path", paths.Infra.CaCertPath)
 
 		logger.Info("Automatic enrollment completed, using enrolled certificates")
 	}
@@ -286,13 +290,11 @@ func RunOperator(opts ServeOperatorOptions, vi VersionInfo) {
 		}
 	}()
 
-	if clientCert != "" && privateKey != "" {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			RunClientCertRenewalLoop(ctx, cfg, clientCert, privateKey, logger, clientIdentity)
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		RunClientCertRenewalLoop(ctx, cfg, clientCert, privateKey, logger, clientIdentity)
+	}()
 
 	select {
 	case err := <-serviceErr:

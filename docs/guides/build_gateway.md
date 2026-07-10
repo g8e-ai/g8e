@@ -87,7 +87,7 @@ GOOS=windows GOARCH=amd64 make build
 On Windows, use `make build` with Go and Make installed, or invoke `go build` directly:
 
 ```powershell
-go build -o g8e.exe ./cmd/operator
+go build -o g8e.exe ./cmd/g8e
 ```
 
 For cross-compilation from Linux/macOS to Windows:

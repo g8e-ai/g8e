@@ -505,7 +505,7 @@ func TestEnrollAgentApp_GatewayUnreachable(t *testing.T) {
 	_, _, _, err := EnrollAgentApp(cfg, agentName)
 
 	require.Error(t, err)
-	assert.True(t, errors.Is(err, constants.ErrHTTPStatusError))
+	assert.True(t, errors.Is(err, constants.ErrHTTPRequestExecuteFailed))
 }
 
 // TestEnrollAgentApp_NoCLICredentials tests error handling when CLI credentials are missing.

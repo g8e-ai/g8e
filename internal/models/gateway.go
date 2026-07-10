@@ -177,6 +177,17 @@ type BlobDeleteResponse struct {
 	Deleted int64 `json:"deleted"`
 }
 
+// SSEPushPayload is the wire envelope for SSE push events. Producers set
+// exactly one of WebSessionID, CLISessionID, or UserID as the routing key;
+// Event carries the typed event JSON. This is the shared typed model for the
+// wire shape produced by the gateway and consumed by CLI clients.
+type SSEPushPayload struct {
+	WebSessionID string          `json:"web_session_id"`
+	CliSessionID string          `json:"cli_session_id"`
+	UserID       string          `json:"user_id"`
+	Event        json.RawMessage `json:"event"`
+}
+
 // SSEEventRow is a single row from the sse_events table. Exactly one of the
 // three routing id fields will be populated per row.
 type SSEEventRow struct {

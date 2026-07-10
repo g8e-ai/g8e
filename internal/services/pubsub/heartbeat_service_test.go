@@ -82,7 +82,7 @@ func (m *mockResultsPublisher) PublishHeartbeat(ctx context.Context, heartbeat p
 }
 
 func TestNewHeartbeatService(t *testing.T) {
-	t.Run("creates service successfully", func(t *testing.T) {
+	t.Run("returns non-nil service with config and logger", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -94,7 +94,7 @@ func TestNewHeartbeatService(t *testing.T) {
 }
 
 func TestHeartbeatService_SetResultsPublisher(t *testing.T) {
-	t.Run("sets results publisher", func(t *testing.T) {
+	t.Run("accepts nil publisher without panic", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -106,7 +106,7 @@ func TestHeartbeatService_SetResultsPublisher(t *testing.T) {
 }
 
 func TestHeartbeatService_SetContext(t *testing.T) {
-	t.Run("sets context", func(t *testing.T) {
+	t.Run("accepts context without panic", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()

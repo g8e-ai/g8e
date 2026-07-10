@@ -63,8 +63,8 @@ func printNextSteps(cmd *cobra.Command, posture governance.GovernancePosture, ex
 	cmd.Printf("       Deploy:        %s operator deploy --hosts <host1,host2>\n", bin)
 	cmd.Printf("       Stream:        %s operator stream --hosts <host1,host2>\n", bin)
 	cmd.Printf("       PKI enroll:    %s gw security pki enroll -e %s\n", bin, externalIP)
-	cmd.Printf("       Remote script: curl -fsSL http://%s:%d/g8e-operator.sh | bash  (Linux/macOS)\n", externalIP, httpPort)
-	cmd.Printf("                      irm http://%s:%d/g8e-operator.ps1 | iex          (Windows)\n", externalIP, httpPort)
+	cmd.Printf("       Remote script: curl -fsSL http://%s:%d/%s | bash  (Linux/macOS)\n", externalIP, httpPort, constants.DeployScriptFilenameLinux)
+	cmd.Printf("                      irm http://%s:%d/%s | iex          (Windows)\n", externalIP, httpPort, constants.DeployScriptFilenameWindows)
 	cmd.Println()
 	stepNum++
 

@@ -109,21 +109,18 @@ func sseApproveServer(t *testing.T, userID, txHash string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
-			Type:   "approval.completed",
+			Type:   constants.SSEEventTypeApprovalCompleted,
 			UserID: userID,
 			TxHash: txHash,
 		})
 		require.NoError(t, err)
-		envelope := struct {
-			UserID string          `json:"user_id"`
-			Event  json.RawMessage `json:"event"`
-		}{
+		envelope := models.SSEPushPayload{
 			UserID: userID,
 			Event:  eventPayload,
 		}
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
-		fmt.Fprintf(w, "event: approval.completed\ndata: %s\n\n", string(envelopeJSON))
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
 	}))
 }
 

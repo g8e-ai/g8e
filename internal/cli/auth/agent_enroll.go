@@ -14,8 +14,8 @@
 package auth
 
 import (
+	"bytes"
 	"crypto/ecdsa"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -24,11 +24,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
+	"github.com/g8e-ai/g8e/protocol"
 )
 
 // EnrollCLI performs idempotent first-time CLI session enrollment. It bootstraps
@@ -82,10 +83,10 @@ func EnrollCLI(cfg *config.Config, useTPM bool) error {
 	}
 	if regResp.HubTrustBundle != "" {
 		trustPath := cfg.TrustBundlePath()
-		if err := os.MkdirAll(filepath.Dir(trustPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(trustPath), constants.PermDirStandard); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrDirCreateFailed, err)
 		}
-		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), 0644); err != nil {
+		if err := os.WriteFile(trustPath, []byte(regResp.HubTrustBundle), constants.PermFilePublic); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrTrustSaveFailed, err)
 		}
 	}
@@ -113,32 +114,19 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrCSRGenerationFailed, err)
 	}
 
-	req := struct {
-		CSR     string `json:"csr_pem"`
-		AppName string `json:"app_name"`
-		AppType string `json:"app_type"`
-	}{
+	req := models.AppEnrollRequest{
 		CSR:     csr,
 		AppName: agentName,
-		AppType: "mcp-client",
+		AppType: constants.AppTypeMCPClient,
 	}
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrRequestMarshalFailed, err)
 	}
 
-	cliCert, err := tls.LoadX509KeyPair(cfg.CLICertFile(), cfg.CLIKeyFile())
+	httpClient, err := BuildMTLSClient(cfg, httpTimeout)
 	if err != nil {
-		return "", "", "", fmt.Errorf("%w: %w", constants.ErrFailedToLoadClientCertificate, err)
-	}
-
-	caBundleBytes, err := os.ReadFile(cfg.TrustBundlePath())
-	if err != nil {
-		return "", "", "", fmt.Errorf("%w: %w", constants.ErrFailedToReadTrustBundle, err)
-	}
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caBundleBytes) {
-		return "", "", "", constants.ErrCAParseFailed
+		return "", "", "", err
 	}
 
 	creds, err := LoadCredentials(cfg)
@@ -149,27 +137,16 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", constants.ErrNotAuthenticated
 	}
 
-	httpClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				Certificates: []tls.Certificate{cliCert},
-				RootCAs:      caPool,
-				MinVersion:   tls.VersionTLS13,
-			},
-		},
-		Timeout: httpTimeout,
-	}
-
-	enrollURL := cfg.OperatorHTTPURL() + constants.APIPaths.PKIAppsDelegated
-	httpReq, err := http.NewRequest("POST", enrollURL, strings.NewReader(string(reqBody)))
+	enrollURL := fmt.Sprintf("%s%s", cfg.OperatorHTTPURL(), constants.APIPaths.PKIAppsDelegated)
+	httpReq, err := http.NewRequest(http.MethodPost, enrollURL, bytes.NewReader(reqBody))
 	if err != nil {
-		return "", "", "", fmt.Errorf("%w: %w", constants.ErrHTTPStatusError, err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestCreateFailed, err)
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set(constants.HeaderContentType, constants.HeaderValueApplicationJSON)
 	httpReq.Header.Set(constants.HeaderCLISessionID, creds.CLISessionID)
 	resp, err := httpClient.Do(httpReq)
 	if err != nil {
-		return "", "", "", fmt.Errorf("%w: %w", constants.ErrHTTPStatusError, err)
+		return "", "", "", fmt.Errorf("%w: %w", constants.ErrHTTPRequestExecuteFailed, err)
 	}
 	defer resp.Body.Close()
 
@@ -177,14 +154,7 @@ func EnrollAgentApp(cfg *config.Config, agentName string) (appID, certFile, keyF
 		return "", "", "", fmt.Errorf("%w: status %d", constants.ErrHTTPStatusError, resp.StatusCode)
 	}
 
-	var enrollResp struct {
-		Success     bool   `json:"success"`
-		AppCert     string `json:"app_cert"`
-		CertChain   string `json:"cert_chain"`
-		TrustBundle string `json:"trust_bundle"`
-		AppID       string `json:"app_id"`
-		Error       string `json:"error,omitempty"`
-	}
+	var enrollResp models.AppEnrollResponse
 	if err := json.NewDecoder(resp.Body).Decode(&enrollResp); err != nil {
 		return "", "", "", fmt.Errorf("%w: %w", constants.ErrResponseParseFailed, err)
 	}
@@ -213,10 +183,10 @@ func checkExistingAppCert(certFile, agentName string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	if time.Until(cert.NotAfter) < 7*24*time.Hour {
+	if time.Until(cert.NotAfter) < constants.AppCertMinValidity {
 		return "", false
 	}
-	expectedSPIFFE := fmt.Sprintf("spiffe://g8e.local/app/%s", agentName)
+	expectedSPIFFE := protocol.NewWorkloadIdentity().AppSPIFFEID(agentName)
 	for _, uri := range cert.URIs {
 		if uri.String() == expectedSPIFFE {
 			return expectedSPIFFE, true

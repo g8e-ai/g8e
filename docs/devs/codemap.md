@@ -283,7 +283,7 @@ GatewayModeService (Gateway/Platform Mode) [MODE-SPECIFIC]
 - **`gateway_http_sse.go`**: SSE event bridge with three endpoints. `POST /api/v1/sse/push` for event production, `GET /api/v1/sse/events` for polling, `GET /api/v1/sse/stream` for SSE streaming. Events are routed by `web_session_id`, `cli_session_id`, or `user_id`.
 - **`gateway_http_health.go`**: Health check endpoint (`/health`) returns platform settings and state root status. Landing page handler redirects `/` to `/console/`. Bootstrap health check on the HTTP port returns a simplified health response.
 - **`gateway/docs/`**: Embedded OpenAPI/Swagger specifications (`docs.go` embeds `swagger.json` and `swagger.yaml`) served at `/swagger/` with Swagger UI.
-- **`gateway/scripts/`**: Thread-safe deploy script templates (`g8e-operator.sh`, `g8e-operator.ps1`) with Go bindings in `templates.go`, initialized via `sync.Once`.
+- **`gateway/scripts/`**: Thread-safe deploy script templates (`g8e-deploy.sh`, `g8e-deploy.ps1`) with Go bindings in `templates.go`, initialized via `sync.Once`.
 - **`gateway/console/`**: Embedded Console SPA (`console.go` exposes `Handler()` serving the static filesystem from `static/`).
 
 ### HTTP Controller Decomposition

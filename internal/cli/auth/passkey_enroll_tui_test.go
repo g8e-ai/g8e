@@ -14,7 +14,7 @@
 package auth
 
 import (
-	"errors"
+	"fmt"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -52,7 +52,7 @@ func TestEnrollModelUpdate(t *testing.T) {
 	})
 
 	t.Run("enrollErrMsg sets err and quits", func(t *testing.T) {
-		testErr := errors.New("timeout")
+		testErr := fmt.Errorf("timeout")
 		m := newEnrollModel("http://localhost")
 		next, cmd := m.Update(enrollErrMsg{err: testErr})
 		assert.Equal(t, testErr, next.(enrollModel).err)
@@ -105,7 +105,7 @@ func TestEnrollModelView(t *testing.T) {
 
 	t.Run("error view shows error message", func(t *testing.T) {
 		m := newEnrollModel("http://localhost")
-		m.err = errors.New("connection failed")
+		m.err = fmt.Errorf("connection failed")
 		view := m.View()
 		assert.Contains(t, view, "Enrollment failed")
 		assert.Contains(t, view, "connection failed")

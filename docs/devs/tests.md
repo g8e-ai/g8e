@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-06-28
+Last Updated: 2026-07-09
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -25,6 +25,8 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Use the canonical trust bundle path** — `.g8e/pki/trust/g8eg-ca-bundle.pem`. Contains root CA, hub intermediate, Operator intermediate, and gateway peer CA.
 - **Use the shared tribunal factory** — `tribunal.NewTribunalFromPolicy` is used by both production `BootstrapTribunal` and test `SetupTribunal` to avoid duplication.
 - **Keep `storagetest.TestSQLAuditStore` in test code only** — Production code uses `storage.SQLAuditStore` from `audit_store.go`.
+- **Use descriptive test names** — Test function names must describe the specific behavior being verified, not generic categories. Good: `TestHandleFsReadRequest_ScrubbingRedactsSecrets`, `TestHandleEvalAnswerRequestSync_TruncatesAnswerExceedingMaxBytes`. Bad: `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`. Subtest names (`t.Run`) must describe the specific scenario, not just "success" or "error".
+- **Use descriptive test filenames** — Test filenames must describe their scope, not generic categories. Good: `file_ops_scrubbing_test.go`, `vault_writer_error_paths_test.go`. Bad: `edge_test.go`, `misc_test.go`, `coverage_test.go`. Do not use "coverage", "gap", or "edge" in test filenames — name the file after the behavior or component it tests.
 
 ---
 
@@ -38,6 +40,8 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 - **Never use legacy trust bundle paths** — Tests fail closed if the canonical bundle is missing or malformed. Do not use `.g8e/g8e-gw-ca-bundle.pem` or `.g8e/pki/ca-bundle.pem`.
 - **Never mutate local PKI state in tests** — If trust bundle issues persist, restart the gateway and re-authenticate manually.
 - **Never use hand-trolled error strings** — Use typed constants instead of hardcoded strings for error reason strings, status codes, and rejection reasons.
+- **Never use generic test names** — No `TestCoverage`, `TestEdgeCases`, `TestGap`, `TestMisc`, or any name that does not describe the specific behavior under test. The name must tell the reader what is being verified.
+- **Never use generic test filenames** — No `edge_test.go`, `misc_test.go`, `coverage_test.go`, or any filename that does not describe its scope. Do not use "coverage", "gap", or "edge" in test filenames.
 
 ---
 

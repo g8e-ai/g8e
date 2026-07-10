@@ -77,8 +77,8 @@
   "bootstrap_ca_linux": "/bootstrap-ca",
   "bootstrap_ca_macos": "/bootstrap-ca-macos",
   "bootstrap_ca_windows": "/bootstrap-ca.ps1",
-  "deploy_script_linux": "/g8e-operator.sh",
-  "deploy_script_windows": "/g8e-operator.ps1",
+  "deploy_script_linux": "/g8e-deploy.sh",
+  "deploy_script_windows": "/g8e-deploy.ps1",
   "health": "/api/v1/health",
   "state": "/api/v1/state",
   "landing": "/"

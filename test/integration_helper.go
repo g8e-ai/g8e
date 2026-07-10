@@ -87,7 +87,7 @@ func RunCLICommand(t *testing.T, repoRoot string, args ...string) (string, error
 	g8ePath := filepath.Join(repoRoot, "g8e")
 	if _, err := os.Stat(g8ePath); os.IsNotExist(err) {
 		// Build the binary if it doesn't exist
-		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/operator")
+		buildCmd := exec.Command("go", "build", "-o", g8ePath, "./cmd/g8e")
 		buildCmd.Dir = repoRoot
 		if output, err := buildCmd.CombinedOutput(); err != nil {
 			require.NoError(t, err, "failed to build g8e binary: %s", string(output))

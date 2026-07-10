@@ -66,6 +66,7 @@ type GatewayConfig struct {
 	TribunalBootstrap   string
 	MCPDownstreamURL    string
 	A2ADownstreamURL    string
+	PublicBaseURL       string
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -127,6 +128,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		NetworkIdentityFile: cfg.NetworkIdentityFile,
 		MCPDownstreamURL:    cfg.MCPDownstreamURL, // empty by default — no downstream proxy
 		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
+		PublicBaseURL:       cfg.PublicBaseURL,
 		TribunalID:          cfg.TribunalID,
 		TribunalURL:         cfg.TribunalURL,
 		AllowTestPortZero:   false,
@@ -324,15 +326,13 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 	defer shutdownCancel()
 
 	var shutdownErr error
-	if cmdSvc != nil {
-		if cmdSvc.Actuator() != nil {
-			logger.Info("Waiting for in-flight transactions to drain...")
-			cmdSvc.Actuator().Wait()
-		}
-		if err := cmdSvc.Stop(); err != nil {
-			logger.Error("Command service stop error", string(constants.ConnectionStateError), err)
-			shutdownErr = fmt.Errorf("gateway: command service stop: %w", err)
-		}
+	if cmdSvc.Actuator() != nil {
+		logger.Info("Waiting for in-flight transactions to drain...")
+		cmdSvc.Actuator().Wait()
+	}
+	if err := cmdSvc.Stop(); err != nil {
+		logger.Error("Command service stop error", string(constants.ConnectionStateError), err)
+		shutdownErr = fmt.Errorf("gateway: command service stop: %w", err)
 	}
 
 	if err := svc.Stop(shutdownCtx); err != nil {
@@ -364,7 +364,7 @@ type tribunalBootstrapConfig struct {
 func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) {
 	var boot tribunalBootstrapConfig
 	if err := json.Unmarshal(data, &boot); err != nil {
-		return boot, fmt.Errorf("tribunal bootstrap: parse config: %w", err)
+		return boot, fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapParseConfig, err)
 	}
 	if boot.TribunalID == "" || len(boot.MemberAppIDs) == 0 || boot.Quorum < 1 {
 		return boot, constants.ErrTribunalBootstrapMissingFields
@@ -378,10 +378,10 @@ func parseTribunalBootstrapConfig(data []byte) (tribunalBootstrapConfig, error) 
 func deriveSeedPublicKey(seedHex string) (string, error) {
 	seed, err := hex.DecodeString(strings.TrimSpace(seedHex))
 	if err != nil {
-		return "", fmt.Errorf("tribunal bootstrap: decode seed hex: %w", err)
+		return "", fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapDecodeSeed, err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return "", fmt.Errorf("tribunal bootstrap: invalid seed length %d, expected %d", len(seed), ed25519.SeedSize)
+		return "", fmt.Errorf("tribunal bootstrap: %w: got %d, expected %d", constants.ErrInvalidSeedLength, len(seed), ed25519.SeedSize)
 	}
 	priv := ed25519.NewKeyFromSeed(seed)
 	pub := priv.Public().(ed25519.PublicKey)
@@ -408,12 +408,16 @@ func deriveSeedPublicKey(seedHex string) (string, error) {
 func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath string, secretsDir string, logger *slog.Logger) error {
 	data, err := os.ReadFile(bootstrapPath)
 	if err != nil {
-		return fmt.Errorf("tribunal bootstrap: read config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapReadConfig, err)
 	}
 
 	boot, err := parseTribunalBootstrapConfig(data)
 	if err != nil {
-		return fmt.Errorf("tribunal bootstrap: parse config: %w", err)
+		return fmt.Errorf("%w: %w", constants.ErrTribunalBootstrapParseConfig, err)
+	}
+
+	if svc == nil {
+		return constants.ErrGatewayServiceNil
 	}
 
 	// Check if tribunal already exists (idempotent)
@@ -488,6 +492,9 @@ func bootstrapTribunalPolicy(svc *gateway.GatewayModeService, bootstrapPath stri
 // multi-member tribunals, member keys are loaded from disk via FileKeyProvider
 // (CS-9), falling back to the actuator key for the matching member.
 func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actuatorPriv ed25519.PrivateKey, actuatorKeyID string, secretsDir string, logger *slog.Logger) (*tribunal.TribunalService, error) {
+	if svc == nil {
+		return nil, constants.ErrGatewayServiceNil
+	}
 	policy, err := svc.GetDB().TribunalStore.GetTribunal(tribunalID)
 	if err != nil {
 		return nil, fmt.Errorf("bootstrap tribunal: load policy: %w", err)
@@ -507,7 +514,7 @@ func BootstrapTribunal(svc *gateway.GatewayModeService, tribunalID string, actua
 		if appID == actuatorKeyID {
 			return actuatorPriv, nil
 		}
-		return nil, fmt.Errorf("no private key for member %s (no file key and not the actuator)", appID)
+		return nil, fmt.Errorf("bootstrap tribunal: %w: %s (no file key and not the actuator)", constants.ErrTribunalMemberKeyNotFound, appID)
 	})
 
 	doctrine := govsvc.NewL1Doctrine()

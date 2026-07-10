@@ -149,7 +149,7 @@ Specify the security posture at startup using the `--posture` flag. Three values
 
 The `Dockerfile` employs a multi-stage build process:
 
-1. **Build Stage**: Uses a pinned Go toolchain image to compile the `g8e` binary from `cmd/operator`.
+1. **Build Stage**: Uses a pinned Go toolchain image to compile the `g8e` binary from `cmd/g8e`.
 2. **Runtime Stage**: Uses a pinned Debian Bookworm image for the execution environment.
 
 The image includes:

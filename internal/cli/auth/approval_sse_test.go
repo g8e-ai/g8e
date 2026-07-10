@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
@@ -39,21 +40,18 @@ func sseApprovalServer(t *testing.T, userID, txHash string, delay time.Duration)
 			time.Sleep(delay)
 		}
 		eventPayload, err := json.Marshal(models.ApprovalCompletedEvent{
-			Type:   "approval.completed",
+			Type:   constants.SSEEventTypeApprovalCompleted,
 			UserID: userID,
 			TxHash: txHash,
 		})
 		require.NoError(t, err)
-		envelope := struct {
-			UserID string          `json:"user_id"`
-			Event  json.RawMessage `json:"event"`
-		}{
+		envelope := models.SSEPushPayload{
 			UserID: userID,
 			Event:  eventPayload,
 		}
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
-		fmt.Fprintf(w, "event: approval.completed\ndata: %s\n\n", string(envelopeJSON))
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
 	}))
 }
 
@@ -84,7 +82,7 @@ func TestWaitForApprovalSSE_WrongTxHashFiltered(t *testing.T) {
 
 	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, userID, expectedTxHash)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
+	assert.ErrorIs(t, err, constants.ErrApprovalSSETimeout)
 }
 
 func TestWaitForApprovalSSE_EnvelopeUnmarshaling(t *testing.T) {
@@ -94,22 +92,19 @@ func TestWaitForApprovalSSE_EnvelopeUnmarshaling(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		inner := models.ApprovalCompletedEvent{
-			Type:   "approval.completed",
+			Type:   constants.SSEEventTypeApprovalCompleted,
 			UserID: userID,
 			TxHash: txHash,
 		}
 		innerJSON, err := json.Marshal(inner)
 		require.NoError(t, err)
-		envelope := struct {
-			UserID string          `json:"user_id"`
-			Event  json.RawMessage `json:"event"`
-		}{
+		envelope := models.SSEPushPayload{
 			UserID: userID,
 			Event:  innerJSON,
 		}
 		envelopeJSON, err := json.Marshal(envelope)
 		require.NoError(t, err)
-		fmt.Fprintf(w, "event: approval.completed\ndata: %s\n\n", string(envelopeJSON))
+		fmt.Fprintf(w, "event: %s\ndata: %s\n\n", constants.SSEEventTypeApprovalCompleted, string(envelopeJSON))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -132,7 +127,7 @@ func TestWaitForApprovalSSE_TimeoutNoEvents(t *testing.T) {
 
 	err := WaitForApprovalSSE(ctx, srv.Client(), srv.URL, "user-timeout", "tx-timeout")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "timed out")
+	assert.ErrorIs(t, err, constants.ErrApprovalSSETimeout)
 }
 
 func TestWaitForApprovalSSE_ContextCancellation(t *testing.T) {

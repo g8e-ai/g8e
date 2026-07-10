@@ -71,7 +71,7 @@ func NewEnsembleFromSeed(keyID string, n int, seedHex string) (*Ensemble, error)
 		return nil, fmt.Errorf("ensemble from seed: decode hex: %w", err)
 	}
 	if len(seed) != ed25519.SeedSize {
-		return nil, fmt.Errorf("ensemble from seed: invalid seed length %d, expected %d", len(seed), ed25519.SeedSize)
+		return nil, fmt.Errorf("ensemble from seed: %w: got %d, expected %d", constants.ErrInvalidSeedLength, len(seed), ed25519.SeedSize)
 	}
 	priv := ed25519.NewKeyFromSeed(seed)
 	pub := priv.Public().(ed25519.PublicKey)

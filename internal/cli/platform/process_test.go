@@ -261,8 +261,6 @@ func TestIsProcessRunning(t *testing.T) {
 	}
 
 	// Test with current process (should be running)
-	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
-	// So we skip this check on Windows
 	if runtime.GOOS != "windows" {
 		currentPID := os.Getpid()
 		if !pm.isProcessRunning(currentPID) {
@@ -298,8 +296,6 @@ func TestOperatorStatus(t *testing.T) {
 	}
 
 	// Test with PID file for non-existent process
-	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
-	// So the PID file will be deleted and 0 will be returned
 	if err := pm.writePID(constants.OperatorPIDFilename, 999999); err != nil {
 		t.Fatalf("writePID failed: %v", err)
 	}
@@ -317,8 +313,6 @@ func TestOperatorStatus(t *testing.T) {
 	}
 
 	// Test with PID file for current process
-	// On Windows, isG8eProcess checks if the process is g8e.exe, which the test binary is not
-	// So we skip this check on Windows
 	if runtime.GOOS != "windows" {
 		if err := pm.writePID(constants.OperatorPIDFilename, os.Getpid()); err != nil {
 			t.Fatalf("writePID failed: %v", err)

@@ -123,8 +123,12 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, certPaths
 
 	// Remove any stale certs so enrollment always issues fresh ones tied to
 	// the current gateway PKI (e.g. after gateway restart/regen).
-	_ = os.Remove(certPaths.OperatorKeyPath)
-	_ = os.Remove(certPaths.OperatorCertPath)
+	if err := os.Remove(certPaths.OperatorKeyPath); err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("enrollment: remove stale operator key: %w", err)
+	}
+	if err := os.Remove(certPaths.OperatorCertPath); err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("enrollment: remove stale operator cert: %w", err)
+	}
 
 	// Fetch trust bundle from Gateway HTTP endpoint
 	trustURL := fmt.Sprintf("http://%s:%d%s", gatewayIP, constants.Ports.OperatorHttp, constants.WellKnownPKICABundle)
@@ -225,7 +229,7 @@ func PerformAutomaticEnrollment(ctx context.Context, gatewayIP string, certPaths
 	})
 	logger.Info("Saving operator private key", "path", certPaths.OperatorKeyPath)
 	if err := os.WriteFile(certPaths.OperatorKeyPath, keyPEM, 0600); err != nil {
-		return "", fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
+		return "", fmt.Errorf("%w: %w", constants.ErrKeyWriteFailed, err)
 	}
 	logger.Info("Operator private key saved successfully")
 
@@ -395,7 +399,7 @@ func saveRenewedCerts(certFile, keyFile string, certContent string, opKey *ecdsa
 	})
 
 	if err := os.WriteFile(keyFile, keyPEM, 0600); err != nil {
-		return nil, fmt.Errorf("%w: %w", constants.ErrKeyReadFailed, err)
+		return nil, fmt.Errorf("%w: %w", constants.ErrKeyWriteFailed, err)
 	}
 
 	if err := os.WriteFile(certFile, []byte(certContent), 0600); err != nil {

@@ -1,7 +1,7 @@
 # g8e Auto-Detect Deploy Script for Windows
 # Detects architecture automatically and deploys the appropriate g8e binary.
 # This script is embedded in the g8e gateway binary and served at:
-#   http://<gateway-ip>:8080/g8e-operator.ps1
+#   http://<gateway-ip>:8080/g8e-deploy.ps1
 # Run on remote hosts to download and deploy the g8e binary.
 
 $ErrorActionPreference = "Stop"

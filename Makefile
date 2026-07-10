@@ -26,7 +26,7 @@ VERSION := $(shell cat VERSION | tr -d '\n')
 BUILD_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 BIN_DIR := bin
-MAIN_PKG := ./cmd/operator
+MAIN_PKG := ./cmd/g8e
 LDFLAGS := -X main.version=$(VERSION) -X main.buildID=$(BUILD_ID) -X main.buildTime=$(BUILD_TIME)
 HOST_OS := $(shell go env GOOS)
 HOST_ARCH := $(shell go env GOARCH)
@@ -61,7 +61,7 @@ COVERAGE_THRESHOLD := 70
 EXCLUDE_PKGS := \
 	mocks \
 	/test/ \
-	/cmd/operator \
+	/cmd/g8e \
 	/internal/protocol/proto \
 	/internal/interfaces \
 	/internal/constants \
@@ -359,7 +359,7 @@ build-docker:
 	@gofmt -w .
 	@mkdir -p $(BIN_DIR)
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
-	@docker run --rm -e GOOS=linux -e GOARCH=amd64 -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-linux-amd64"
+	@docker run --rm -e GOOS=linux -e GOARCH=amd64 -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-linux-amd64"
 	@sha256sum $(BIN_DIR)/g8e-linux-amd64 > $(BIN_DIR)/g8e-linux-amd64.sha256
 	@echo "Docker build complete. Binary: $(BIN_DIR)/g8e-linux-amd64"
 
@@ -371,7 +371,7 @@ build-linux-docker:
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(LINUX_ARCHS); do \
 		echo "Building linux/$$arch in Docker..."; \
-		docker run --rm -e GOOS=linux -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-linux-$$arch"; \
+		docker run --rm -e GOOS=linux -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-linux-$$arch"; \
 		sha256sum $(BIN_DIR)/g8e-linux-$$arch > $(BIN_DIR)/g8e-linux-$$arch.sha256; \
 	done
 	@echo "Linux Docker build complete. Binaries: $(BIN_DIR)/g8e-linux-*"
@@ -384,7 +384,7 @@ build-windows-docker:
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(WINDOWS_ARCHS); do \
 		echo "Building windows/$$arch in Docker..."; \
-		docker run --rm -e GOOS=windows -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-windows-$$arch.exe"; \
+		docker run --rm -e GOOS=windows -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-windows-$$arch.exe"; \
 		sha256sum $(BIN_DIR)/g8e-windows-$$arch.exe > $(BIN_DIR)/g8e-windows-$$arch.exe.sha256; \
 	done
 	@echo "Windows Docker build complete. Binaries: $(BIN_DIR)/g8e-windows-*.exe"
@@ -397,7 +397,7 @@ build-darwin-docker:
 	@DOCKER_BUILDKIT=1 docker build --target builder -t g8e-builder:$(VERSION) .
 	@for arch in $(DARWIN_ARCHS); do \
 		echo "Building darwin/$$arch in Docker..."; \
-		docker run --rm -e GOOS=darwin -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/g8e-darwin-$$arch"; \
+		docker run --rm -e GOOS=darwin -e GOARCH=$$arch -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/g8e-darwin-$$arch"; \
 		sha256sum $(BIN_DIR)/g8e-darwin-$$arch > $(BIN_DIR)/g8e-darwin-$$arch.sha256; \
 	done
 	@echo "Darwin Docker build complete. Binaries: $(BIN_DIR)/g8e-darwin-*"
@@ -416,7 +416,7 @@ build-all-docker:
 			NODE_BINARY=$$NODE_BINARY.exe; \
 		fi; \
 		echo "Building $$platform in Docker..."; \
-		docker run --rm -e GOOS=$$GOOS -e GOARCH=$$GOARCH -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/operator && cp /build/g8e /out/$$NODE_BINARY"; \
+		docker run --rm -e GOOS=$$GOOS -e GOARCH=$$GOARCH -v $(PWD)/$(BIN_DIR):/out g8e-builder:$(VERSION) sh -c "CGO_ENABLED=0 GOOS=\$$GOOS GOARCH=\$$GOARCH go build -ldflags \"-s -w -X main.version=\$$(cat VERSION) -X main.buildID=\$$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=\$$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=\$${GOOS}_\$$GOARCH\" -o /build/g8e ./cmd/g8e && cp /build/g8e /out/$$NODE_BINARY"; \
 		sha256sum $(BIN_DIR)/$$NODE_BINARY > $(BIN_DIR)/$$NODE_BINARY.sha256; \
 	done
 	@echo "All-platform Docker build complete. Binaries: $(BIN_DIR)/g8e-*"
@@ -518,11 +518,11 @@ swagger-generate:
 	@echo "Generating Swagger/OpenAPI documentation..."
 	@if command -v swag &> /dev/null || [ -f "$$(go env GOPATH)/bin/swag" ]; then \
 		SWAG_CMD=$$(command -v swag 2>/dev/null || echo "$$(go env GOPATH)/bin/swag"); \
-		$$SWAG_CMD init --dir cmd/operator,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependency; \
+		$$SWAG_CMD init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependency; \
 	else \
 		echo "swag not found, installing via go install..."; \
 		go install github.com/swaggo/swag/cmd/swag@latest; \
-		$$(go env GOPATH)/bin/swag init --dir cmd/operator,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependency; \
+		$$(go env GOPATH)/bin/swag init --dir cmd/g8e,internal/services/gateway,internal/models,internal/constants --output internal/services/gateway/docs --outputTypes json,yaml --parseInternal --parseDependency; \
 	fi
 	@echo "Swagger documentation generated successfully."
 
