@@ -28,6 +28,14 @@ type enrollErrMsg struct {
 
 type enrollTickMsg struct{}
 
+const enrollTickInterval = 200 * time.Millisecond
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(enrollTickInterval, func(time.Time) tea.Msg {
+		return enrollTickMsg{}
+	})
+}
+
 // enrollModel is a minimal bubbletea model for the passkey enrollment waiting UX.
 // It displays a spinner, the console URL, and exits when a passkey.registered
 // event is received or the user cancels.
@@ -43,18 +51,14 @@ func newEnrollModel(consoleURL string) enrollModel {
 }
 
 func (m enrollModel) Init() tea.Cmd {
-	return tea.Tick(200*time.Millisecond, func(time.Time) tea.Msg {
-		return enrollTickMsg{}
-	})
+	return tickCmd()
 }
 
 func (m enrollModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case enrollTickMsg:
 		m.tick++
-		return m, tea.Tick(200*time.Millisecond, func(time.Time) tea.Msg {
-			return enrollTickMsg{}
-		})
+		return m, tickCmd()
 	case passkeyRegisteredMsg:
 		m.done = true
 		return m, tea.Quit
@@ -62,7 +66,8 @@ func (m enrollModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		return m, tea.Quit
 	case tea.KeyMsg:
-		if msg.String() == "q" || msg.String() == "ctrl+c" {
+		key := msg.String()
+		if key == "q" || key == "ctrl+c" {
 			return m, tea.Quit
 		}
 	}

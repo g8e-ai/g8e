@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -26,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 )
@@ -55,30 +57,11 @@ type WindowsProcessChecker interface {
 }
 
 // OperatorStartOptions holds configuration for starting the operator process.
-// This replaces the 17 positional parameters previously used by StartOperator.
+// It embeds serve.GatewayConfig so that all gateway fields are shared in a
+// single struct definition, eliminating the previous triple-duplication.
 type OperatorStartOptions struct {
-	Posture            string
-	HTTPPort           int
-	HTTPSPort          int
-	DataDir            string
-	PKIDir             string
-	SecretsDir         string
-	VaultDir           string
-	VaultKeyPath       string
-	VaultRequireUnlock bool
-	PasskeyRpID        string
-	PasskeyRpName      string
-	PasskeyRpOrigins   []string
-	RateLimitRPS       float64
-	RateLimitBurst     int
-	LogLevel           string
-	CertIdentityMode   string
-	IdentityData       []byte
-	TribunalID         string
-	TribunalURL        string
-	TribunalBootstrap  string
-	MCPDownstreamURL   string
-	A2ADownstreamURL   string
+	serve.GatewayConfig
+	IdentityData []byte
 }
 
 type ProcessManager struct {
@@ -275,7 +258,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, error) {
 	args := []string{
 		"gateway", "serve",
-		"--posture", opts.Posture,
+		"--posture", string(opts.Posture),
 		"--data-dir", opts.DataDir,
 		"--pki-dir", opts.PKIDir,
 		"--secrets-dir", opts.SecretsDir,
@@ -311,6 +294,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	}
 	if opts.A2ADownstreamURL != "" {
 		args = append(args, "--a2a-downstream-url", opts.A2ADownstreamURL)
+	}
+	if opts.PublicBaseURL != "" {
+		args = append(args, "--public-base-url", opts.PublicBaseURL)
 	}
 
 	if opts.PasskeyRpID != "" {
@@ -449,7 +435,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return fmt.Errorf("%w: %v", constants.ErrPIDWriteFailed, err)
 	}
 
-	if err := pm.writePosture(opts.Posture); err != nil {
+	if err := pm.writePosture(string(opts.Posture)); err != nil {
 		_ = cmd.Process.Kill()
 		_ = pm.deletePID(constants.OperatorPIDFilename)
 		if closeErr := logHandle.Close(); closeErr != nil {
@@ -462,13 +448,25 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 
-	time.Sleep(2 * time.Second)
-	if !pm.isProcessRunning(cmd.Process.Pid) {
-		_ = pm.deletePID(constants.OperatorPIDFilename)
-		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, pm.logFile)
+	healthURL := fmt.Sprintf("http://%s:%d%s", constants.LocalhostIP, availableHTTPPort, constants.APIPaths.Health)
+	client := &http.Client{Timeout: HealthCheckInterval}
+	for i := 0; i < MaxHealthChecks; i++ {
+		if !pm.isProcessRunning(cmd.Process.Pid) {
+			_ = pm.deletePID(constants.OperatorPIDFilename)
+			return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, pm.logFile)
+		}
+		resp, err := client.Get(healthURL)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		time.Sleep(HealthCheckInterval)
 	}
 
-	return nil
+	_ = pm.deletePID(constants.OperatorPIDFilename)
+	return fmt.Errorf("%w: gateway did not become healthy, check %s", constants.ErrProcessStartFailed, pm.logFile)
 }
 
 func (pm *ProcessManager) StopOperator() error {

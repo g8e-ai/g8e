@@ -230,7 +230,7 @@ Sessions are cryptographically bound to their authentication mechanism.
 
 | Concern | File |
 |---|---|
-| Gateway entry | `cmd/operator/main.go` |
+| Gateway entry | `cmd/g8e/main.go` |
 | Gateway service | `internal/services/gateway/gateway_service.go` |
 | HTTP routing | `internal/services/gateway/gateway_http_router.go` |
 | A2A REST handler | `internal/services/mcp/gateway.go` (`HandleA2aCall`) |

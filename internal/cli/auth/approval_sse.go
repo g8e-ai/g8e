@@ -56,14 +56,11 @@ func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, u
 
 	go func() {
 		sseClient.Run(waitCtx, func(eventType, data string) {
-			if eventType != "approval.completed" {
+			if eventType != constants.SSEEventTypeApprovalCompleted {
 				return
 			}
 
-			var envelope struct {
-				UserID string          `json:"user_id"`
-				Event  json.RawMessage `json:"event"`
-			}
+			var envelope models.SSEPushPayload
 			if err := json.Unmarshal([]byte(data), &envelope); err != nil {
 				return
 			}
@@ -85,6 +82,6 @@ func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, u
 	case <-approved:
 		return nil
 	case <-waitCtx.Done():
-		return fmt.Errorf("L3 approval: timed out waiting for SSE event")
+		return constants.ErrApprovalSSETimeout
 	}
 }

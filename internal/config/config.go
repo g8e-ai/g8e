@@ -227,6 +227,7 @@ type GatewayOptions struct {
 	PasskeyRpOrigins []string
 	MCPDownstreamURL string
 	A2ADownstreamURL string
+	PublicBaseURL    string
 	JWKSURL          string
 	JWTRoleClaim     string
 	JWTIssuer        string
@@ -431,6 +432,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			PasskeyRpOrigins:   opts.PasskeyRpOrigins,
 			MCPDownstreamURL:   mcpDownstreamURL,
 			A2ADownstreamURL:   a2aDownstreamURL,
+			PublicBaseURL:      opts.PublicBaseURL,
 			JWKSURL:            jwksURL,
 			JWTRoleClaim:       jwtRoleClaim,
 			JWTIssuer:          jwtIssuer,
@@ -563,7 +565,7 @@ func Load(opts LoadOptions) (*Config, error) {
 
 	// Read operator session ID from environment variable (in-memory only, never persisted)
 	// This is set by the deploy script after enrollment to track the operator's session
-	cfg.OperatorSessionId = os.Getenv("G8E_OPERATOR_SESSION_ID")
+	cfg.OperatorSessionId = os.Getenv(string(constants.EnvVar.OperatorSessionID))
 
 	return cfg, nil
 }

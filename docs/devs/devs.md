@@ -39,7 +39,7 @@ Startup sequence: binary check/build → root of trust generation (first boot) �
 
 **Source paths** (git root):
 - `protocol/` - Protobuf schemas and JSON constants (SSOT)
-- `cmd/operator/` - Binary entrypoint
+- `cmd/g8e/` - Binary entrypoint
 - `internal/cli/cmd/` - Cobra command tree
 - `internal/cli/serve/` - Foreground worker bodies
 - `internal/` - Internal Go packages
@@ -185,7 +185,7 @@ MCP tools compiled into the g8e binary that execute within the Operator's execut
 | Constants (JSON SSOT) | `protocol/constants/` |
 | Go registry files | `internal/constants/` |
 | Governance layers | `internal/services/governance/` |
-| CLI entry points | `cmd/operator/` → `internal/cli/cmd/` |
+| CLI entry points | `cmd/g8e/` → `internal/cli/cmd/` |
 | Architecture docs | `docs/architecture/` |
 
 ## Contributing

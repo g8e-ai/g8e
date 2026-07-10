@@ -847,7 +847,7 @@ paths:
       summary: Console SPA
       tags:
       - public
-  /g8e-operator.ps1:
+  /g8e-deploy.ps1:
     get:
       description: Returns the Windows operator deployment script
       produces:
@@ -860,7 +860,7 @@ paths:
       summary: Deploy script Windows
       tags:
       - deploy
-  /g8e-operator.sh:
+  /g8e-deploy.sh:
     get:
       description: Returns the Linux operator deployment script
       produces:

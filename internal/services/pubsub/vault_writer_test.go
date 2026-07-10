@@ -15,6 +15,7 @@ package pubsub
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -55,8 +56,44 @@ func (m *mockExecutionVault) Close() error {
 
 func (m *mockExecutionVault) Wait() {}
 
+// configurableExecutionVault is a mock where each method's return values can be set.
+type configurableExecutionVault struct {
+	storeExecutionErr     error
+	storeFileDiffErr      error
+	getFileDiffResult     *models.FileDiffRecord
+	getFileDiffErr        error
+	getFileDiffsBySession []*models.FileDiffRecord
+	getFileDiffsBySessErr error
+}
+
+func (m *configurableExecutionVault) StoreExecution(ctx context.Context, record *models.ExecutionRecord) error {
+	return m.storeExecutionErr
+}
+
+func (m *configurableExecutionVault) GetExecution(ctx context.Context, executionID string) (*models.ExecutionRecord, error) {
+	return nil, nil
+}
+
+func (m *configurableExecutionVault) StoreFileDiff(ctx context.Context, record *models.FileDiffRecord) error {
+	return m.storeFileDiffErr
+}
+
+func (m *configurableExecutionVault) GetFileDiff(ctx context.Context, diffID string) (*models.FileDiffRecord, error) {
+	return m.getFileDiffResult, m.getFileDiffErr
+}
+
+func (m *configurableExecutionVault) GetFileDiffsBySession(ctx context.Context, operatorSessionID string, limit int) ([]*models.FileDiffRecord, error) {
+	return m.getFileDiffsBySession, m.getFileDiffsBySessErr
+}
+
+func (m *configurableExecutionVault) Close() error {
+	return nil
+}
+
+func (m *configurableExecutionVault) Wait() {}
+
 func TestNewVaultWriter(t *testing.T) {
-	t.Run("creates service successfully", func(t *testing.T) {
+	t.Run("returns non-nil service with config and logger", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -66,7 +103,7 @@ func TestNewVaultWriter(t *testing.T) {
 		assert.Equal(t, logger, svc.logger)
 	})
 
-	t.Run("creates service with all dependencies", func(t *testing.T) {
+	t.Run("wires execution vault into service", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		logger := testutil.NewTestLogger()
@@ -170,6 +207,47 @@ func TestVaultWriter_WriteFileDiff(t *testing.T) {
 		svc.WriteFileDiff(context.Background(), params)
 		// Should attempt to write
 	})
+}
+
+func TestVaultWriter_WriteExecution_VaultError(t *testing.T) {
+	t.Parallel()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	failingVault := &configurableExecutionVault{
+		storeExecutionErr: fmt.Errorf("disk full"),
+	}
+	svc := NewVaultWriter(cfg, logger, failingVault)
+
+	params := executionWriteParams{
+		id:         "exec-err",
+		command:    "ls",
+		exitCode:   0,
+		durationMs: 10,
+		stdout:     "out",
+		vaultMode:  constants.VaultModeRaw,
+	}
+
+	svc.WriteExecution(context.Background(), params)
+}
+
+func TestVaultWriter_WriteFileDiff_VaultError(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	cfg := testutil.NewTestConfig(t)
+	logger := testutil.NewTestLogger()
+	failingVault := &configurableExecutionVault{
+		storeFileDiffErr: fmt.Errorf("disk full"),
+	}
+	svc := NewVaultWriter(cfg, logger, failingVault)
+
+	params := fileDiffWriteParams{
+		diffID:      "diff-err",
+		filePath:    filepath.Join(tmpDir, "test.txt"),
+		operation:   "write",
+		diffContent: "diff",
+	}
+
+	svc.WriteFileDiff(context.Background(), params)
 }
 
 func TestVaultWriter_StoreFileDiffFromLedger(t *testing.T) {

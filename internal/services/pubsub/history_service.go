@@ -275,14 +275,15 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 				continue
 			}
 			diffs = append(diffs, &operatorv1.FileDiffEntry{
-				Id:               record.ID,
-				Timestamp:        sqliteutil.FormatTimestamp(record.TimestampUTC),
-				FilePath:         record.FilePath,
-				Operation:        record.Operation,
-				LedgerHashBefore: record.LedgerHashBefore,
-				LedgerHashAfter:  record.LedgerHashAfter,
-				DiffStat:         record.DiffStat,
-				DiffSize:         int32(record.DiffSize), //nolint:gosec // bounded by file size
+				Id:                record.ID,
+				Timestamp:         sqliteutil.FormatTimestamp(record.TimestampUTC),
+				FilePath:          record.FilePath,
+				Operation:         record.Operation,
+				LedgerHashBefore:  record.LedgerHashBefore,
+				LedgerHashAfter:   record.LedgerHashAfter,
+				DiffStat:          record.DiffStat,
+				DiffSize:          int32(record.DiffSize), //nolint:gosec // bounded by file size
+				OperatorSessionId: operatorSessionID,
 			})
 		}
 

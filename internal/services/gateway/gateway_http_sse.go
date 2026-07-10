@@ -45,17 +45,6 @@ import (
 	"github.com/g8e-ai/g8e/protocol"
 )
 
-// internalSSEPushPayload mirrors the wire shape produced by g8e-compatible agentic ensembles
-// (SessionEventWire | BackgroundEventWire). Producers MUST set exactly one of
-// web_session_id (web UI session), cli_session_id (CLI / BYO session), or
-// user_id (background fan-out across every session a user owns).
-type internalSSEPushPayload struct {
-	WebSessionID string          `json:"web_session_id"`
-	CliSessionID string          `json:"cli_session_id"`
-	UserID       string          `json:"user_id"`
-	Event        json.RawMessage `json:"event"`
-}
-
 func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -94,7 +83,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var p internalSSEPushPayload
+	var p models.SSEPushPayload
 	if err := json.Unmarshal(body, &p); err != nil {
 		h.responder.Error(w, http.StatusBadRequest, "invalid JSON body")
 		return
@@ -247,7 +236,7 @@ func (h *HTTPHandler) handleInternalSSEPush(w http.ResponseWriter, r *http.Reque
 	}
 
 	if channel != "" {
-		// We publish the full body which is the internalSSEPushPayload JSON.
+		// We publish the full body which is the models.SSEPushPayload JSON.
 		// The streamer will wrap this in SSE format.
 		h.pubsub.Publish(channel, body)
 	}
@@ -498,7 +487,7 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 			fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 		case raw := <-eventCh:
-			var p internalSSEPushPayload
+			var p models.SSEPushPayload
 			if err := json.Unmarshal(raw, &p); err == nil {
 				var inner struct {
 					Type string `json:"type"`

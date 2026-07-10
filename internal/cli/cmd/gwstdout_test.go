@@ -55,8 +55,8 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	assert.Contains(t, out, bin+" operator deploy --hosts <host1,host2>")
 	assert.Contains(t, out, bin+" operator stream --hosts <host1,host2>")
 	assert.Contains(t, out, bin+" gw security pki enroll -e 192.168.1.100")
-	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/g8e-operator.sh | bash")
-	assert.Contains(t, out, "irm http://192.168.1.100:8080/g8e-operator.ps1 | iex")
+	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/"+constants.DeployScriptFilenameLinux+" | bash")
+	assert.Contains(t, out, "irm http://192.168.1.100:8080/"+constants.DeployScriptFilenameWindows+" | iex")
 
 	// Step 5: AI agents (numbered 5 for doctrine)
 	assert.Contains(t, out, "5. Connect AI agents:")
@@ -176,8 +176,8 @@ func TestPrintNextSteps_ExternalIPInterpolation(t *testing.T) {
 			// The IP should appear in bootstrap-ca URL, PKI enroll, and remote script URLs
 			assert.Contains(t, out, "http://"+ip+":8080/bootstrap-ca")
 			assert.Contains(t, out, "pki enroll -e "+ip)
-			assert.Contains(t, out, "http://"+ip+":8080/g8e-operator.sh")
-			assert.Contains(t, out, "http://"+ip+":8080/g8e-operator.ps1")
+			assert.Contains(t, out, "http://"+ip+":8080/"+constants.DeployScriptFilenameLinux)
+			assert.Contains(t, out, "http://"+ip+":8080/"+constants.DeployScriptFilenameWindows)
 		})
 	}
 }
@@ -192,7 +192,7 @@ func TestPrintNextSteps_PortInterpolation(t *testing.T) {
 
 	// HTTP port should appear in bootstrap and operator script URLs
 	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/bootstrap-ca")
-	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/g8e-operator.sh")
+	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/"+constants.DeployScriptFilenameLinux)
 
 	// HTTPS port should appear in the console URL
 	assert.Contains(t, out, netutil.LocalhostHTTPSURL(httpsPort)+"/console/")

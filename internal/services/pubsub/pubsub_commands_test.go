@@ -46,7 +46,7 @@ import (
 )
 
 func TestNewOperatorPubSubService(t *testing.T) {
-	t.Run("creates service successfully", func(t *testing.T) {
+	t.Run("returns non-nil service without error", func(t *testing.T) {
 		t.Parallel()
 		cfg := testutil.NewTestConfig(t)
 		svc, err := NewOperatorPubSubService(CommandServiceConfig{
@@ -199,7 +199,7 @@ func TestOperatorPubSubService_handleGovernanceEnvelope(t *testing.T) {
 	})
 }
 
-func TestOperatorPubSubService_ReceiptCoverage(t *testing.T) {
+func TestOperatorPubSubService_AllActionTypesProduceReceipts(t *testing.T) {
 	// §4.2: Receipt-coverage test - drive each action type through ProcessEnvelope
 	// and assert a receipt is written EXECUTING before and terminal status after.
 	// This locks the invariant that every execution path produces a receipt.
@@ -459,6 +459,7 @@ func TestOperatorPubSubService_handleA2aCallRequestSync(t *testing.T) {
 
 func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 	t.Run("rejects when Actuator not configured", func(t *testing.T) {
+		t.Parallel()
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(nil)
 		msg := &PubSubCommandMessage{
@@ -472,6 +473,7 @@ func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 	})
 
 	t.Run("rejects when ConsoleAuditStore not configured", func(t *testing.T) {
+		t.Parallel()
 		f := newPubsubFixture(t)
 		f.Svc.SetActuator(&governance.L5Actuator{})
 		f.Svc.Actuator().ConsoleAuditStore = nil
@@ -483,6 +485,20 @@ func TestOperatorPubSubService_handleAppInvestigationCreatedSync(t *testing.T) {
 		_, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "actuator or ConsoleAuditStore not configured")
+	})
+
+	t.Run("creates investigation document successfully", func(t *testing.T) {
+		t.Parallel()
+		f := newPubsubFixture(t)
+		f.Svc.Actuator().ConsoleAuditStore = &testutil.MockTransactionAudit{}
+		msg := &PubSubCommandMessage{
+			EventType: constants.EventAppInvestigationCreated,
+			ID:        "investigation-1",
+			Payload:   mustMarshalJSON(t, map[string]string{"title": "test investigation"}),
+		}
+		summary, err := f.Svc.handleAppInvestigationCreatedSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "investigation created", summary)
 	})
 }
 
@@ -558,6 +574,48 @@ func TestOperatorPubSubService_handleEvalAnswerRequestSync(t *testing.T) {
 		}
 		_, err := f.Svc.handleEvalAnswerRequestSync(context.Background(), msg)
 		require.Error(t, err)
+	})
+
+	t.Run("returns short answer without truncation", func(t *testing.T) {
+		t.Parallel()
+		req := &operatorv1.EvalAnswerRequested{
+			PromptId:  "prompt-1",
+			Benchmark: "test-benchmark",
+			Answer:    "short answer",
+			Model:     "test-model",
+		}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Eval.AnswerRequested,
+			ID:        "msg-1",
+			Payload:   payload,
+		}
+		summary, err := f.Svc.handleEvalAnswerRequestSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Equal(t, "short answer", summary)
+	})
+
+	t.Run("truncates answer exceeding ReceiptSummaryMaxBytes", func(t *testing.T) {
+		t.Parallel()
+		longAnswer := make([]byte, constants.ReceiptSummaryMaxBytes+1000)
+		for i := range longAnswer {
+			longAnswer[i] = 'A'
+		}
+		req := &operatorv1.EvalAnswerRequested{
+			PromptId:  "prompt-1",
+			Benchmark: "test-benchmark",
+			Answer:    string(longAnswer),
+			Model:     "test-model",
+		}
+		payload, _ := proto.Marshal(req)
+		msg := &PubSubCommandMessage{
+			EventType: constants.Event.Operator.Eval.AnswerRequested,
+			ID:        "msg-1",
+			Payload:   payload,
+		}
+		summary, err := f.Svc.handleEvalAnswerRequestSync(context.Background(), msg)
+		require.NoError(t, err)
+		assert.Len(t, summary, constants.ReceiptSummaryMaxBytes)
 	})
 }
 

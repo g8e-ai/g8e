@@ -24,10 +24,10 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-//go:embed g8e-operator.sh
+//go:embed g8e-deploy.sh
 var deployScriptLinux string
 
-//go:embed g8e-operator.ps1
+//go:embed g8e-deploy.ps1
 var deployScriptWindows string
 
 // TemplateData holds the data for script template rendering.

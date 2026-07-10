@@ -31,25 +31,14 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
+// envCertPath passes the certificate file path to PowerShell scripts via an
+// environment variable, avoiding command injection from string interpolation.
+const envCertPath = "G8E_CERT_PATH"
+
 // GenerateWindowsCSR generates a CSR with an ECDSA P-256 key on Windows.
 // If useTPM is true, the caller requests TPM-backed key generation; TPM support
 // is not yet implemented and a software-backed key is used in its place.
 func GenerateWindowsCSR(commonName string, useTPM bool) (string, *ecdsa.PrivateKey, error) {
-	if useTPM {
-		return generateTPMBackedCSR(commonName)
-	}
-	return generateSoftwareBackedCSR(commonName)
-}
-
-// generateSoftwareBackedCSR generates a CSR with a software-backed ECDSA P-256 key.
-func generateSoftwareBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
-	return generateECDSACSR(commonName)
-}
-
-// generateTPMBackedCSR generates a CSR with a software-backed ECDSA P-256 key.
-// TPM-backed key generation via Windows Hello for Business (CNG KSP) is not yet
-// implemented; this function delegates to the same software-backed path.
-func generateTPMBackedCSR(commonName string) (string, *ecdsa.PrivateKey, error) {
 	return generateECDSACSR(commonName)
 }
 
@@ -103,10 +92,10 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 		return fmt.Errorf("%w: %w", constants.ErrWindowsCertWriteFailed, err)
 	}
 
-	// Use PowerShell with .NET X509Store to import the certificate
-	// This is more reliable than the Cert: drive which may not be available
-	psScript := fmt.Sprintf(`
-		$certPath = "%s"
+	// Use PowerShell with .NET X509Store to import the certificate.
+	// The cert path is passed via environment variable to prevent command injection.
+	psScript := `
+		$certPath = $env:G8E_CERT_PATH
 		$store = New-Object System.Security.Cryptography.X509Certificates.X509Store("My", "CurrentUser")
 		$store.Open("ReadWrite")
 		
@@ -122,9 +111,10 @@ func ImportCertificateToWindowsStore(certPEM string) error {
 		$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($certPath)
 		$store.Add($cert)
 		$store.Close()
-	`, certFile)
+	`
 
-	psCmd := exec.Command("powershell", "-Command", psScript)
+	psCmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
+	psCmd.Env = append(os.Environ(), envCertPath+"="+certFile)
 	output, err := psCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %w, output: %s", constants.ErrWindowsPowerShellImport, err, string(output))
@@ -153,10 +143,10 @@ func TrustRootCAInWindowsStore(caBundlePEM string) error {
 		return fmt.Errorf("%w: %w", constants.ErrWindowsCertWriteFailed, err)
 	}
 
-	// Use PowerShell to import to Trusted Root store
-	// Requires Administrator privileges if not already trusted
-	psScript := fmt.Sprintf(`
-		$certPath = "%s"
+	// Use PowerShell to import to Trusted Root store.
+	// The CA path is passed via environment variable to prevent command injection.
+	psScript := `
+		$certPath = $env:G8E_CERT_PATH
 		$store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
 		try {
 			$store.Open("ReadWrite")
@@ -177,9 +167,10 @@ func TrustRootCAInWindowsStore(caBundlePEM string) error {
 			Write-Host "Root CA already trusted"
 		}
 		$store.Close()
-	`, caFile)
+	`
 
-	psCmd := exec.Command("powershell", "-Command", psScript)
+	psCmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
+	psCmd.Env = append(os.Environ(), envCertPath+"="+caFile)
 	output, err := psCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %w, output: %s", constants.ErrWindowsPowerShellTrust, err, string(output))

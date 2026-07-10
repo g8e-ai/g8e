@@ -39,6 +39,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/auth"
 	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
+	"github.com/g8e-ai/g8e/internal/cli/serve"
+	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 	"github.com/g8e-ai/g8e/internal/pathutil"
@@ -1054,22 +1056,11 @@ func startGatewayIfNeeded() error {
 	} else {
 		fmt.Fprintf(os.Stderr, "[g8e] Starting gateway...\n")
 		if err := pm.StartOperator(platform.OperatorStartOptions{
-			Posture:            "doctrine",
-			HTTPPort:           0,
-			HTTPSPort:          0,
-			DataDir:            "",
-			PKIDir:             "",
-			SecretsDir:         "",
-			VaultDir:           "",
-			VaultKeyPath:       "",
-			VaultRequireUnlock: false,
-			PasskeyRpID:        "",
-			PasskeyRpName:      "",
-			RateLimitRPS:       0,
-			RateLimitBurst:     0,
-			LogLevel:           "info",
-			CertIdentityMode:   "localhost",
-			IdentityData:       nil,
+			GatewayConfig: serve.GatewayConfig{
+				Posture:          g8econfig.GatewayPosture("doctrine"),
+				LogLevel:         "info",
+				CertIdentityMode: "localhost",
+			},
 		}); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 		}
