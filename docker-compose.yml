@@ -28,7 +28,9 @@ services:
       dockerfile: Dockerfile
     container_name: ${G8E_PREFIX:-g8e}-gateway
     networks:
-      - g8e-net
+      g8e-net:
+        aliases:
+          - g8e.local
     volumes:
       - g8e-gateway-data:/root/.g8e
     ports:
@@ -63,9 +65,7 @@ services:
     depends_on:
       g8e-gateway:
         condition: service_healthy
-    # Connect to gateway via g8e.local (matches certificate SANs)
-    extra_hosts:
-      - "g8e.local:host-gateway"
+    # g8e.local resolves to the gateway container via the g8e-net network alias
     command: ["operator", "run", "-e", "g8e.local"]
     restart: "no"
     deploy:
