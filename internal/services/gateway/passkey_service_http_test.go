@@ -470,6 +470,24 @@ func TestPasskeyCookieConsistency(t *testing.T) {
 	assert.Equal(t, webSession.ExpiresAtUnixMs/1000, cookie.Expires.Unix())
 }
 
+func TestPasskeyCookieCrossOriginSameSiteNone(t *testing.T) {
+	svc, webSessionSvc, user := newPasskeyServiceHTTPForTest(t)
+	svc.crossOrigin = true
+
+	webSession, err := webSessionSvc.CreateWebSession(user.ID)
+	require.NoError(t, err)
+
+	rr := httptest.NewRecorder()
+	svc.setWebSessionCookie(rr, webSession)
+
+	cookies := rr.Result().Cookies()
+	require.Len(t, cookies, 1)
+	cookie := cookies[0]
+
+	assert.True(t, cookie.Secure)
+	assert.Equal(t, http.SameSiteNoneMode, cookie.SameSite)
+}
+
 func TestPasskeyReadBodyRejectsOversized(t *testing.T) {
 	svc, _, _ := newPasskeyServiceHTTPForTest(t)
 

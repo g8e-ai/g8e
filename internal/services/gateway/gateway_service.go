@@ -265,6 +265,7 @@ func (b *gatewayServiceBuilder) build() (*GatewayModeService, error) {
 		SuspendedStore: suspendedTxService,
 		SSEStore:       db.SSEStore,
 		Pubsub:         pubsub,
+		CrossOrigin:    len(cfg.Gateway.AllowedOrigins) > 0,
 	})
 
 	ls := &GatewayModeService{

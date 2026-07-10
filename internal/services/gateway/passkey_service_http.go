@@ -49,6 +49,10 @@ func (h *PasskeyHandler) readBody(w http.ResponseWriter, r *http.Request) ([]byt
 }
 
 func (h *PasskeyHandler) setWebSessionCookie(w http.ResponseWriter, webSession *models.WebSession) {
+	sameSite := http.SameSiteLaxMode
+	if h.crossOrigin {
+		sameSite = http.SameSiteNoneMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     constants.WebSessionCookieName,
 		Value:    webSession.ID,
@@ -56,7 +60,7 @@ func (h *PasskeyHandler) setWebSessionCookie(w http.ResponseWriter, webSession *
 		Expires:  time.Unix(webSession.ExpiresAtUnixMs/1000, 0),
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: sameSite,
 	})
 }
 

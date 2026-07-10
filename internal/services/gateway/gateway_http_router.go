@@ -165,7 +165,7 @@ func (h *HTTPHandler) buildPublicRouter() http.Handler {
 	mux.HandleFunc(constants.APIPaths.AuthPasskeys, h.passkey.ListCredentials)
 	mux.Handle(constants.APIPaths.AuthPasskeysByID, http.HandlerFunc(h.passkey.RevokeCredential))
 
-	return h.pathTraversalGuard(h.auth.Middleware(mux))
+	return h.corsMiddleware(h.pathTraversalGuard(h.auth.Middleware(mux)))
 }
 
 // buildMCPHandler creates the rate-limited, auth-wrapped handler for all MCP/A2A ingress routes.

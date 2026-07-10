@@ -308,6 +308,7 @@ type PasskeyHandler struct {
 	suspendedStore storage.SuspendedTransactionStore
 	sseStore       *SSEEventService
 	pubsub         *GatewayWebSocketHandler
+	crossOrigin    bool
 }
 
 // PasskeyHandlerDeps groups all dependencies for NewPasskeyHandler.
@@ -320,6 +321,7 @@ type PasskeyHandlerDeps struct {
 	SuspendedStore storage.SuspendedTransactionStore
 	SSEStore       *SSEEventService
 	Pubsub         *GatewayWebSocketHandler
+	CrossOrigin    bool
 }
 
 // NewPasskeyHandler creates a new PasskeyHandler with all dependencies wired.
@@ -333,6 +335,7 @@ func NewPasskeyHandler(deps PasskeyHandlerDeps) *PasskeyHandler {
 		suspendedStore: deps.SuspendedStore,
 		sseStore:       deps.SSEStore,
 		pubsub:         deps.Pubsub,
+		crossOrigin:    deps.CrossOrigin,
 	}
 }
 

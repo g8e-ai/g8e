@@ -435,11 +435,26 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	origin := r.Header.Get("Origin")
+	allowed := h.cfg.Gateway.AllowedOrigins
 	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		if len(allowed) > 0 {
+			matched := false
+			for _, a := range allowed {
+				if strings.EqualFold(strings.TrimRight(a, "/"), strings.TrimRight(origin, "/")) {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				w.Header().Set(constants.HeaderAccessControlAllowOrigin, origin)
+				w.Header().Set(constants.HeaderAccessControlAllowCredentials, "true")
+			}
+		} else {
+			w.Header().Set(constants.HeaderAccessControlAllowOrigin, origin)
+			w.Header().Set(constants.HeaderAccessControlAllowCredentials, "true")
+		}
 	} else {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set(constants.HeaderAccessControlAllowOrigin, "*")
 	}
 	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
 
