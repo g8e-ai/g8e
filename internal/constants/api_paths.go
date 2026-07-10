@@ -245,8 +245,8 @@ var APIPaths = struct {
 	BootstrapCAMacos:   "/bootstrap-ca-macos",
 	BootstrapCAWindows: "/bootstrap-ca.ps1",
 	// Deploy scripts
-	DeployScriptLinux:   "/g8e-operator.sh",
-	DeployScriptWindows: "/g8e-operator.ps1",
+	DeployScriptLinux:   "/" + DeployScriptFilenameLinux,
+	DeployScriptWindows: "/" + DeployScriptFilenameWindows,
 	// Health
 	Health: "/api/v1/health",
 	// State

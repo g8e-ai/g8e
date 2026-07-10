@@ -277,6 +277,18 @@ const (
 	LocalBinaryNameWindows = "./g8e.exe"
 )
 
+// Binary image names for process detection (no path prefix).
+const (
+	BinaryImageName        = "g8e"
+	BinaryImageNameWindows = "g8e.exe"
+)
+
+// Deploy script filenames served by the gateway.
+const (
+	DeployScriptFilenameLinux   = "g8e-deploy.sh"
+	DeployScriptFilenameWindows = "g8e-deploy.ps1"
+)
+
 // Component filenames for gateway, operator, and shared services.
 const (
 	SwaggerFilename          = "swagger.json"

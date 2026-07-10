@@ -294,7 +294,7 @@ v1.3.3 is a demos infrastructure and passkey configuration release. This version
 * **PKI Trust/Deploy Scripts Use Configured Port** — `PKIController` now uses `gatewayHTTPPort()` helper instead of hardcoded `constants.Ports.OperatorHttp` in all trust and deploy script handlers (Linux, macOS, Windows).
 * **DHS Demo Harness URLs** — Changed DHS demo harness URLs from IP-based (`10.62.0.10:8443`) to hostname-based (`g8e.local:8443`). Removed `--insecure` flag from DHS harness run command.
 * **Agent Harness Default Public URL** — Changed `Default()` in `agent_harness/config/config.go` to use `LocalhostHTTPURL` for `PublicBaseURL` instead of HTTPS, matching the HTTP bootstrap port.
-* **Windows Script Commands** — Changed Windows deploy script from `Invoke-WebRequest` to `Invoke-RestMethod` in `g8e-operator.ps1`. Updated documentation to use `irm` instead of `iwr -UseBasicParsing` for trust scripts.
+* **Windows Script Commands** — Changed Windows deploy script from `Invoke-WebRequest` to `Invoke-RestMethod` in `g8e-deploy.ps1`. Updated documentation to use `irm` instead of `iwr -UseBasicParsing` for trust scripts.
 * **Swagger Command Port** — `swagger.go` now uses `constants.Ports.OperatorHttps` instead of hardcoded `8443`.
 * **Demos Start Command Cleanup** — Removed debug `fmt.Printf` for compose path. Added Windows-specific binary copy instructions.
 

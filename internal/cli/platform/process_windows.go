@@ -114,7 +114,7 @@ func (pm *ProcessManager) isG8eProcess(pid int) bool {
 		executor = realCommandExecutor{}
 	}
 
-	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV", "/NH")
+	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("PID eq %d", pid), "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows), "/FO", "CSV", "/NH")
 	output, err := executor.Output(cmd)
 	if err != nil {
 		return false
@@ -176,7 +176,7 @@ func (pm *ProcessManager) findOperatorProcess() int {
 	}
 
 	ownPID := os.Getpid()
-	cmd := executor.Command("tasklist", "/FI", "IMAGENAME eq g8e.exe", "/FO", "CSV")
+	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows), "/FO", "CSV")
 	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0

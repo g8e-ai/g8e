@@ -39,13 +39,13 @@ The gateway embeds deploy scripts and serves them over HTTP on port 8080. After 
 **Linux/macOS:**
 
 ```bash
-curl -fsSL http://<gateway-ip>:8080/g8e-operator.sh | bash
+curl -fsSL http://<gateway-ip>:8080/g8e-deploy.sh | bash
 ```
 
 **Windows:**
 
 ```powershell
-irm http://<gateway-ip>:8080/g8e-operator.ps1 | iex
+irm http://<gateway-ip>:8080/g8e-deploy.ps1 | iex
 ```
 
 #### 2. Operator Remote Management CLI Commands

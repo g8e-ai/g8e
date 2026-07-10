@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -447,13 +448,25 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return fmt.Errorf("%w: %v", constants.ErrPathValidation, err)
 	}
 
-	time.Sleep(2 * time.Second)
-	if !pm.isProcessRunning(cmd.Process.Pid) {
-		_ = pm.deletePID(constants.OperatorPIDFilename)
-		return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, pm.logFile)
+	healthURL := fmt.Sprintf("http://%s:%d%s", constants.LocalhostIP, availableHTTPPort, constants.APIPaths.Health)
+	client := &http.Client{Timeout: HealthCheckInterval}
+	for i := 0; i < MaxHealthChecks; i++ {
+		if !pm.isProcessRunning(cmd.Process.Pid) {
+			_ = pm.deletePID(constants.OperatorPIDFilename)
+			return fmt.Errorf("%w: check %s", constants.ErrProcessStartFailed, pm.logFile)
+		}
+		resp, err := client.Get(healthURL)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return nil
+			}
+		}
+		time.Sleep(HealthCheckInterval)
 	}
 
-	return nil
+	_ = pm.deletePID(constants.OperatorPIDFilename)
+	return fmt.Errorf("%w: gateway did not become healthy, check %s", constants.ErrProcessStartFailed, pm.logFile)
 }
 
 func (pm *ProcessManager) StopOperator() error {

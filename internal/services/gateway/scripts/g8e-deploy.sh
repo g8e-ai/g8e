@@ -2,7 +2,7 @@
 # g8e Auto-Detect Deploy Script
 # Detects OS and architecture automatically and deploys the appropriate g8e binary.
 # This script is embedded in the g8e gateway binary and served at:
-#   http://<gateway-ip>:8080/g8e-operator.sh
+#   http://<gateway-ip>:8080/g8e-deploy.sh
 # Run on remote hosts to download and deploy the g8e binary.
 
 set -e
@@ -34,7 +34,7 @@ case "$OS" in
   *)
     echo -e "${RED}Unsupported OS: $OS${NC}"
     echo "This deploy script supports Linux and macOS. For Windows, use PowerShell:"
-    echo "iwr http://${GATEWAY_HOST}:${GATEWAY_PORT}/g8e-operator.ps1 | iex"
+    echo "iwr http://${GATEWAY_HOST}:${GATEWAY_PORT}/g8e-deploy.ps1 | iex"
     exit 1
     ;;
 esac

@@ -356,7 +356,7 @@ func TestIsG8eProcess_CommandArguments(t *testing.T) {
 	call := mockExecutor.commandCalls[0]
 	assert.Equal(t, "tasklist", call.name)
 	assert.Contains(t, call.args, "/FI", "PID eq 1234")
-	assert.Contains(t, call.args, "/FI", "IMAGENAME eq g8e.exe")
+	assert.Contains(t, call.args, "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows))
 	assert.Contains(t, call.args, "/FO", "CSV")
 	assert.Contains(t, call.args, "/NH")
 }
@@ -587,7 +587,7 @@ func TestFindOperatorProcess_CommandArguments(t *testing.T) {
 	require.Len(t, mockExecutor.commandCalls, 1, "Command should be called once")
 	call := mockExecutor.commandCalls[0]
 	assert.Equal(t, "tasklist", call.name)
-	assert.Contains(t, call.args, "/FI", "IMAGENAME eq g8e.exe")
+	assert.Contains(t, call.args, "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows))
 	assert.Contains(t, call.args, "/FO", "CSV")
 }
 
