@@ -70,19 +70,19 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	}
 
 	// Clear cookie
-	sameSite := http.SameSiteLaxMode
-	if c.crossOrigin {
-		sameSite = http.SameSiteNoneMode
-	}
-	http.SetCookie(w, &http.Cookie{
+	clearCookie := &http.Cookie{
 		Name:     constants.WebSessionCookieName,
 		Value:    "",
 		Path:     constants.PathRoot,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: sameSite,
-	})
+		SameSite: http.SameSiteLaxMode,
+	}
+	if c.crossOrigin {
+		clearCookie.SameSite = http.SameSiteNoneMode
+	}
+	http.SetCookie(w, clearCookie)
 
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
