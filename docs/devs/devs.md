@@ -124,7 +124,7 @@ Return centralized error constants from `internal/constants/errors.go` for known
 
 - mTLS by default; test runner handles certificate injection
 - Contract tests enforce alignment between components and `protocol/`
-- Coverage threshold: 70%
+- Coverage threshold: 75%
 
 **Test infrastructure separation:**
 - `internal/services/storage/storagetest/` - Test-only audit storage (`TestSQLAuditStore` with Git ledger, no-op `DocSet`)
