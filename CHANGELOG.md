@@ -5,6 +5,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.9] - 2026-07-09
+
+### Overview
+
+v1.3.9 is a code quality, test coverage, and reliability release. This version renames the main entry point from `cmd/operator` to `cmd/g8e`, renames deploy scripts from `g8e-operator.*` to `g8e-deploy.*`, adds a `--public-base-url` flag for reverse-proxy and Cloudflare Tunnel deployments, replaces fixed-sleep process startup with health-check polling, improves Windows process detection for renamed binaries, extracts shared models and error sentinels, and significantly expands test coverage across gateway HTTP, serve, and pubsub subsystems.
+
+### Added
+
+* **`--public-base-url` Flag** — New gateway flag (`--public-base-url`) sets the public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`). Plumbed through `GatewayFlags`, `GatewayConfig`, `BuildReExecArgs`, and the gateway service config.
+* **Health-Check-Based Process Startup** — `StartOperator` in `process.go` now polls the gateway's `/api/v1/health` endpoint instead of sleeping for a fixed 2 seconds. Uses configurable `HealthCheckInterval` and `MaxHealthChecks` constants, returning an error if the gateway fails to become healthy.
+* **App Enrollment Models** — Added `AppEnrollRequest` and `AppEnrollResponse` models in `internal/models/auth.go` for external app enrollment via `/api/v1/pki/apps/delegated`. Added app type constants (`AppTypeMCPClient`, `AppTypeA2AGateway`, `AppTypeCustom`, `AppTypeTribunalMember`) and `AppCertMinValidity` in `internal/constants/auth.go`.
+* **`SSEPushPayload` Shared Model** — Extracted `internalSSEPushPayload` from `gateway_http_sse.go` to `models.SSEPushPayload` in `internal/models/gateway.go` as the canonical wire envelope for SSE push events, shared between gateway and CLI consumers.
+* **`SSEEventTypeApprovalCompleted` Constant** — Extracted `"approval.completed"` string to `internal/constants/channels.go` for consistent use in SSE event framing.
+* **`OperatorSessionID` Env Var Constant** — Added `EnvVar.OperatorSessionID` in `internal/constants/env_vars.go` replacing hardcoded `"G8E_OPERATOR_SESSION_ID"` string.
+* **Binary Image Name Constants** — Added `BinaryImageName` (`g8e`) and `BinaryImageNameWindows` (`g8e.exe`) in `internal/constants/paths.go` for process detection.
+* **Deploy Script Filename Constants** — Added `DeployScriptFilenameLinux` (`g8e-deploy.sh`) and `DeployScriptFilenameWindows` (`g8e-deploy.ps1`) in `internal/constants/paths.go`. `APIPaths.DeployScriptLinux` and `DeployScriptWindows` now derive from these constants.
+* **`TribunalBootstrapConfigFilename` Constant** — Added in `internal/constants/paths.go` for declarative tribunal seeding.
+* **Error Sentinels** — Added `ErrKeyWriteFailed`, `ErrInvalidSeedLength`, `ErrTribunalMemberKeyNotFound`, `ErrTribunalBootstrapParseConfig`, `ErrTribunalBootstrapReadConfig`, `ErrTribunalBootstrapDecodeSeed`, `ErrGatewayServiceNil`, and `ErrApprovalSSETimeout` in `internal/constants/errors.go`.
+* **Test Path Constants** — Added numerous test-specific path and filename constants in `internal/constants/paths.go` to eliminate hardcoded strings in test files.
+
+### Changed
+
+* **Main Entry Point Rename** — `cmd/operator/main.go` renamed to `cmd/g8e/main.go`. Updated all references in `Makefile`, `Dockerfile`, `swagger.go`, `swagger-generate` target, `version.go` comment, `protocol/docs/a2a.md`, and `docs/devs/codemap.md`.
+* **Deploy Script Rename** — Deploy scripts renamed from `g8e-operator.sh` / `g8e-operator.ps1` to `g8e-deploy.sh` / `g8e-deploy.ps1`. Updated `internal/constants/api_paths.go`, `protocol/constants/api_paths.json`, `protocol/docs/constants.md`, PKI controller Swagger annotations, and script template files.
+* **Gateway Command Refactored** — `internal/cli/cmd/gateway.go` restructured: extracted `GatewayFlags` struct, `resolveGatewayFlags`, and `gatewayFlagsToServeConfig` to eliminate triple-duplication of config fields between CLI flags, `startConfig`, and `serve.GatewayConfig`. `OperatorStartOptions` in `process.go` now embeds `serve.GatewayConfig` instead of duplicating 22 fields.
+* **Auth Client Hardened** — `internal/cli/auth/client.go` now uses `constants.APIPaths` constants instead of hardcoded URL strings. HTTP status checks added to `BootstrapWithURL` and `CLIEnroll` (were missing). Hardcoded `0755` replaced with `constants.PermDirStandard`. `RegistrationRequest` removed (superseded by `models.DeviceEnrollRequest`). `PKIFingerprintResponse` model used instead of inline struct.
+* **Tribunal Bootstrap Errors** — `internal/cli/serve/gateway.go` tribunal bootstrap functions now use named sentinel errors from `constants` instead of `fmt.Errorf` with string literals. Nil service checks added to `bootstrapTribunalPolicy` and `BootstrapTribunal`.
+* **Vault Writer Error Wrapping** — `vault_writer.go` now wraps the underlying error alongside the sentinel error (`fmt.Errorf("%w: %w", sentinel, err)`) instead of discarding the root cause.
+* **History Service** — `FileDiffEntry` in `history_service.go` now populates `OperatorSessionId` field (was zero value).
+* **Operator Serve Hardening** — Trust bundle reload after enrollment in `operator.go` now checks errors and exits on failure (was silently ignoring read errors). Cert renewal loop is now always started (was conditional on `clientCert != "" && privateKey != ""`, which could skip renewal after enrollment). `OperatorSessionID` env var uses `constants.EnvVar.OperatorSessionID`.
+* **Cert Enrollment Error Handling** — Stale cert removal in `cert.go` now checks errors and returns on failure (was silently ignoring all errors with `_ = os.Remove`). Key write errors now use `ErrKeyWriteFailed` instead of `ErrKeyReadFailed`.
+* **Windows Process Detection** — `findOperatorProcess` in `process_windows.go` now derives the image name from `os.Executable()` instead of hardcoding `g8e.exe`, correctly finding renamed binaries (e.g., `g8e-windows-amd64.exe`).
+* **Protocol Constants** — `protocol/constants/env_vars.json` `OperatorSessionID` now has `_go_const` reference to `EnvVar.OperatorSessionID`.
+
+### Removed
+
+* **`cmd/operator/main_test.go`** — Deleted. Vault lifecycle tests were duplicated by tests in `internal/services/vault/` and the `cmd/operator` directory no longer exists.
+* **`isG8eProcess` (Windows)** — Removed PID-reuse verification via `tasklist` in `process_windows.go`. The check was causing false negatives when `tasklist` output parsing failed; `isProcessRunning` now relies solely on `GetExitCodeProcess` returning `STILL_ACTIVE`.
+* **`NotifyConnected` (TUI Adapter)** — Removed unused method from `internal/cli/tui/adapter.go`.
+* **`Quit` (DemoEmitter)** — Removed unused method from `internal/cli/cmd/demos.go`.
+* **`RegistrationRequest` (Auth Client)** — Removed in favor of `models.DeviceEnrollRequest`.
+
+### Fixed
+
+* **Cloudflare Tunnel Host Validation** — Gateway host validation now respects `--public-base-url` for approval links and host checking behind reverse proxies and Cloudflare Tunnels.
+* **Incorrect Error Sentinel for Key Writes** — `cert.go` was using `ErrKeyReadFailed` for file write errors; now uses `ErrKeyWriteFailed`.
+* **Missing HTTP Status Checks** — `BootstrapWithURL` and `CLIEnroll` in `client.go` were not checking HTTP response status codes; now return `ErrHTTPStatusError` on non-2xx responses.
+* **Silently Ignored Errors** — Stale cert removal in `cert.go` and trust bundle reload in `operator.go` were silently ignoring errors; now properly checked and propagated.
+* **Gateway Shutdown** — `RunGateway` shutdown path in `gateway.go` simplified: `cmdSvc.Actuator().Wait()` and `cmdSvc.Stop()` are now called unconditionally (were nested inside nil checks that could skip draining).
+
+### Tests
+
+* Added `internal/cli/serve/cert_integration_test.go` (850 lines) — integration tests for cert enrollment and renewal.
+* Added `internal/cli/serve/operator_integration_test.go` (347 lines) — integration tests for operator serve path.
+* Added `internal/cli/serve/tribunal_bootstrap_test.go` (475 lines) — tribunal bootstrap config parsing and key derivation tests.
+* Added `internal/services/gateway/cli_cert_test.go` (278 lines) — CLI cert enrollment and validation tests.
+* Added `internal/services/gateway/gateway_http_health_test.go` (329 lines) — health endpoint tests.
+* Added `internal/services/gateway/gateway_http_middleware_test.go` (615 lines) — middleware tests.
+* Added `internal/services/gateway/gateway_http_router_test.go` (302 lines) — router construction and routing tests.
+* Added `internal/services/gateway/gateway_http_sse_test.go` (1244 lines) — SSE push/stream endpoint tests.
+* Added `internal/services/gateway/operator_session_service_test.go` (386 lines) — operator session service tests.
+* Added `internal/services/pubsub/channels_test.go` (97 lines) — pubsub channel routing tests.
+* Renamed and expanded `file_ops_edge_test.go` → `file_ops_basic_test.go` (77 lines).
+* Expanded `history_service_test.go` (+242 lines), `vault_writer_test.go` (+82 lines), `pubsub_commands_test.go`, `protocol_helpers_test.go`.
+* Refactored `cert_test.go` and `operator_test.go` to use constants and helpers, reducing duplication.
+* 100 files changed, 6744 insertions, 2466 deletions across the release.
+
 ## [1.3.8] - 2026-07-08
 
 ### Overview
