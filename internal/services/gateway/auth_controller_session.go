@@ -70,7 +70,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	}
 
 	// Clear cookie
-	http.SetCookie(w, &http.Cookie{
+	clearCookie := &http.Cookie{
 		Name:     constants.WebSessionCookieName,
 		Value:    "",
 		Path:     constants.PathRoot,
@@ -78,7 +78,11 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
-	})
+	}
+	if c.crossOrigin {
+		clearCookie.SameSite = http.SameSiteNoneMode
+	}
+	http.SetCookie(w, clearCookie)
 
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }

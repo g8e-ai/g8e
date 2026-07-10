@@ -298,6 +298,9 @@ func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, 
 	if opts.PublicBaseURL != "" {
 		args = append(args, "--public-base-url", opts.PublicBaseURL)
 	}
+	for _, origin := range opts.AllowedOrigins {
+		args = append(args, "--cors-origin", origin)
+	}
 
 	if opts.PasskeyRpID != "" {
 		args = append(args, "--passkey-rp-id", opts.PasskeyRpID)

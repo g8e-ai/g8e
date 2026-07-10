@@ -124,6 +124,9 @@ type GatewayConfig struct {
 	TribunalID  string // ID of the TribunalPolicy to use for L2 deliberation (required for --consensus)
 	TribunalURL string // URL of the Tribunal service for L2 deliberation (e.g. https://localhost:8443/tribunal/v1/deliberate)
 
+	// CORS allowed origins for cross-origin browser access (e.g. https://lovable.dev)
+	AllowedOrigins []string
+
 	// Distributed lock retry configuration
 	LockMaxRetries int           // Maximum retry attempts for distributed lock acquisition (default: 30)
 	LockRetryDelay time.Duration // Base delay for lock retry backoff (default: 50ms)
@@ -241,6 +244,8 @@ type GatewayOptions struct {
 
 	TribunalID  string
 	TribunalURL string
+
+	AllowedOrigins []string
 
 	// AllowTestPortZero should be true only when called from Go tests; when false,
 	// port 0 is rejected to prevent dynamic port assignment in production.
@@ -457,6 +462,8 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			// Tribunal configuration
 			TribunalID:  opts.TribunalID,
 			TribunalURL: opts.TribunalURL,
+
+			AllowedOrigins: opts.AllowedOrigins,
 
 			// Distributed lock retry defaults
 			LockMaxRetries: 30,                    // 30 retry attempts

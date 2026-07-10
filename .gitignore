@@ -96,6 +96,8 @@ reports/*
 /g8e
 /buf
 /operator
+protocol/governance_envelope
+protocol/workload_identity
 
 # --- Build-time artifacts ---
 # Temporary build directory for docs embedding

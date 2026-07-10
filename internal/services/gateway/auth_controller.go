@@ -49,6 +49,26 @@ func (r *fileActuatorKeyReader) ReadActuatorPublicKey() (keyID, publicKey string
 	return ap.KeyID, ap.PublicKey, nil
 }
 
+// AuthControllerDeps groups all dependencies for AuthController to reduce
+// constructor bloat.
+type AuthControllerDeps struct {
+	Cfg                *config.Config
+	Logger             *slog.Logger
+	DB                 *CanonicalDBService
+	Auth               *AuthService
+	Passkey            *PasskeyHandler
+	UserSvc            *UserService
+	Reg                *RegistrationService
+	PKI                *PKIAuthority
+	WebSessionSvc      *WebSessionService
+	CLISessionSvc      *CLISessionService
+	OperatorSessionSvc *OperatorSessionService
+	EnrollmentTokenSvc *EnrollmentTokenService
+	Responder          *response.Writer
+	ActuatorKeyReader  actuatorKeyReader
+	CrossOrigin        bool
+}
+
 // AuthController handles authentication, passkey, and approval endpoints.
 type AuthController struct {
 	cfg                *config.Config
@@ -65,24 +85,26 @@ type AuthController struct {
 	enrollmentTokenSvc *EnrollmentTokenService
 	responder          *response.Writer
 	actuatorKeyReader  actuatorKeyReader
+	crossOrigin        bool
 }
 
-func newAuthController(cfg *config.Config, logger *slog.Logger, db *CanonicalDBService, auth *AuthService, passkey *PasskeyHandler, userSvc *UserService, reg *RegistrationService, pki *PKIAuthority, webSessionSvc *WebSessionService, cliSessionSvc *CLISessionService, operatorSessionSvc *OperatorSessionService, enrollmentTokenSvc *EnrollmentTokenService, responder *response.Writer, actuatorKeyReader actuatorKeyReader) *AuthController {
+func newAuthController(deps AuthControllerDeps) *AuthController {
 	return &AuthController{
-		cfg:                cfg,
-		logger:             logger,
-		db:                 db,
-		auth:               auth,
-		passkey:            passkey,
-		userSvc:            userSvc,
-		reg:                reg,
-		pki:                pki,
-		webSessionSvc:      webSessionSvc,
-		cliSessionSvc:      cliSessionSvc,
-		operatorSessionSvc: operatorSessionSvc,
-		enrollmentTokenSvc: enrollmentTokenSvc,
-		responder:          responder,
-		actuatorKeyReader:  actuatorKeyReader,
+		cfg:                deps.Cfg,
+		logger:             deps.Logger,
+		db:                 deps.DB,
+		auth:               deps.Auth,
+		passkey:            deps.Passkey,
+		userSvc:            deps.UserSvc,
+		reg:                deps.Reg,
+		pki:                deps.PKI,
+		webSessionSvc:      deps.WebSessionSvc,
+		cliSessionSvc:      deps.CLISessionSvc,
+		operatorSessionSvc: deps.OperatorSessionSvc,
+		enrollmentTokenSvc: deps.EnrollmentTokenSvc,
+		responder:          deps.Responder,
+		actuatorKeyReader:  deps.ActuatorKeyReader,
+		crossOrigin:        deps.CrossOrigin,
 	}
 }
 

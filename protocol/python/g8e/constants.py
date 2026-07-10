@@ -49,7 +49,7 @@ def _load_protocol_json(filename: str) -> dict[str, Any]:
         logger.warning("Protocol JSON %s not found at %s", filename, path)
         return {}
 
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 # Exported constants

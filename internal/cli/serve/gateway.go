@@ -67,6 +67,7 @@ type GatewayConfig struct {
 	MCPDownstreamURL    string
 	A2ADownstreamURL    string
 	PublicBaseURL       string
+	AllowedOrigins      []string
 }
 
 // RunGateway starts the Operator in gateway mode - the platform's central
@@ -129,6 +130,7 @@ func RunGateway(cfg GatewayConfig, vi VersionInfo) error {
 		MCPDownstreamURL:    cfg.MCPDownstreamURL, // empty by default — no downstream proxy
 		A2ADownstreamURL:    cfg.A2ADownstreamURL, // empty by default — no downstream proxy
 		PublicBaseURL:       cfg.PublicBaseURL,
+		AllowedOrigins:      cfg.AllowedOrigins,
 		TribunalID:          cfg.TribunalID,
 		TribunalURL:         cfg.TribunalURL,
 		AllowTestPortZero:   false,

@@ -35,3 +35,21 @@ type WebAuthnAssertionResponse struct {
 	Signature         string `json:"signature"`
 	UserHandle        string `json:"userHandle,omitempty"`
 }
+
+// ParsedAssertionResponse is the nested JSON format that go-webauthn expects
+// when verifying an assertion. The response fields are nested under "response"
+// rather than flat.
+type ParsedAssertionResponse struct {
+	ID       string                      `json:"id"`
+	RawID    string                      `json:"rawId"`
+	Type     string                      `json:"type"`
+	Response ParsedAssertionResponseBody `json:"response"`
+}
+
+// ParsedAssertionResponseBody is the nested response object within
+// ParsedAssertionResponse.
+type ParsedAssertionResponseBody struct {
+	ClientDataJSON    string `json:"clientDataJSON"`
+	AuthenticatorData string `json:"authenticatorData"`
+	Signature         string `json:"signature"`
+}

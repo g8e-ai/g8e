@@ -40,7 +40,7 @@ def main():
 
     # Access status constants
     print("Status Constants:")
-    print(f"  Operator Status Keys: {list(STATUS.get('operator', {}).keys())[:5]}")
+    print(f"  Status Categories: {list(STATUS.get('status', {}).keys())[:5]}")
     print()
 
     # Access collection constants
