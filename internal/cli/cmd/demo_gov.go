@@ -17,12 +17,7 @@ import (
 	"fmt"
 )
 
-func runGovScenario(demoDir, scenario string) error {
-	_, err := runGovScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runGovScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+func runGovScenario(demoDir, scenario string) (scenarioResult, error) {
 	switch scenario {
 	case "1":
 		return runTwoLayerScenario(demoDir, twoLayerScenarioConfig{

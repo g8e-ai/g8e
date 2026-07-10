@@ -22,9 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func getProjectRoot() string {
@@ -234,15 +236,10 @@ func TestScenarioCounts(t *testing.T) {
 func TestPrintDemoEndpoints(t *testing.T) {
 	t.Run("prints healthcare endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("healthcare")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "healthcare")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -257,15 +254,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints gov endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("gov")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "gov")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -278,15 +270,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints finance endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("finance")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "finance")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -299,15 +286,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints secure-data endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("secure-data")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "secure-data")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -320,15 +302,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints dow endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("dow")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "dow")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -340,15 +317,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints dhs endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("dhs")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "dhs")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -360,15 +332,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints swarm endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("swarm")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "swarm")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -380,15 +347,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints default message for unknown org", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("unknown-org")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "unknown-org")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -398,56 +360,57 @@ func TestPrintDemoEndpoints(t *testing.T) {
 }
 
 func TestRunScenario(t *testing.T) {
-	t.Run("returns error for unknown org", func(t *testing.T) {
+	t.Run("returns ErrNotFound wrapped error for unknown org", func(t *testing.T) {
 		err := runScenario("unknown-org", "/tmp", "1")
 		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
 	})
 
-	t.Run("returns error for invalid healthcare scenario", func(t *testing.T) {
-		err := runHealthcareScenario("/tmp", "99")
+	t.Run("returns error with valid range for invalid healthcare scenario number", func(t *testing.T) {
+		_, err := runHealthcareScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for healthcare")
 		assert.Contains(t, err.Error(), "valid: 1-4")
 	})
 
-	t.Run("returns error for invalid gov scenario", func(t *testing.T) {
-		err := runGovScenario("/tmp", "99")
+	t.Run("returns error with valid range for invalid gov scenario number", func(t *testing.T) {
+		_, err := runGovScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for gov")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
-	t.Run("returns error for invalid finance scenario", func(t *testing.T) {
-		err := runFinanceScenario("/tmp", "99")
+	t.Run("returns error with valid range for invalid finance scenario number", func(t *testing.T) {
+		_, err := runFinanceScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for finance")
 		assert.Contains(t, err.Error(), "valid: 1")
 	})
 
-	t.Run("returns error for invalid secure-data scenario", func(t *testing.T) {
-		err := runSecureDataScenario("/tmp", "99")
+	t.Run("returns error with valid range for invalid secure-data scenario number", func(t *testing.T) {
+		_, err := runSecureDataScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for secure-data")
 		assert.Contains(t, err.Error(), "valid: 1-3")
 	})
 
-	t.Run("returns error for invalid dow scenario", func(t *testing.T) {
-		err := runDoWScenario("/tmp", "99")
+	t.Run("returns error with valid range for invalid dow scenario number", func(t *testing.T) {
+		_, err := runDoWScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dow")
 		assert.Contains(t, err.Error(), "valid: 1-3")
 	})
 
-	t.Run("returns error for invalid dhs scenario", func(t *testing.T) {
-		err := runDHSScenario("/tmp", "99")
+	t.Run("returns error with valid range for invalid dhs scenario number", func(t *testing.T) {
+		_, err := runDHSScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for dhs")
 		assert.Contains(t, err.Error(), "valid: 1-5")
 	})
 
-	t.Run("returns error for invalid swarm scenario", func(t *testing.T) {
-		err := runSwarmScenario("/tmp", "99")
+	t.Run("returns error with valid range for invalid swarm scenario number", func(t *testing.T) {
+		_, err := runSwarmScenario("/tmp", "99")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid scenario number for swarm")
 		assert.Contains(t, err.Error(), "valid: 1-3")
@@ -478,12 +441,17 @@ func TestRunScenario(t *testing.T) {
 	t.Run("dhs scenario functions exist", func(t *testing.T) {
 		assert.NotNil(t, runDHSScenario)
 	})
+
+	t.Run("swarm scenario functions exist", func(t *testing.T) {
+		assert.NotNil(t, runSwarmScenario)
+	})
 }
 
 func TestRunAllScenarios(t *testing.T) {
-	t.Run("returns error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios("unknown-org", "/tmp")
+	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
+		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp")
 		require.Error(t, err)
+		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")
 	})
 
@@ -521,6 +489,12 @@ func TestRunAllScenarios(t *testing.T) {
 		count, ok := scenarioCounts["swarm"]
 		assert.True(t, ok)
 		assert.Equal(t, 3, count)
+	})
+
+	t.Run("dhs has 5 scenarios", func(t *testing.T) {
+		count, ok := scenarioCounts["dhs"]
+		assert.True(t, ok)
+		assert.Equal(t, 5, count)
 	})
 }
 
@@ -891,6 +865,80 @@ func TestDemosPullCmd(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, string(data), `"image":"alpine"`)
 		assert.Contains(t, string(data), `"digest":"sha256:abc123"`)
+	})
+}
+
+func TestDemosExportCmd(t *testing.T) {
+	t.Run("export subcommand is registered on demos command", func(t *testing.T) {
+		root := demosCmd()
+		var found bool
+		for _, c := range root.Commands() {
+			if c.Use == "export [output-dir]" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "demos command should have an 'export' subcommand")
+	})
+
+	t.Run("export command has correct metadata", func(t *testing.T) {
+		cmd := demosExportCmd()
+		assert.Equal(t, "export [output-dir]", cmd.Use)
+		assert.Contains(t, cmd.Short, "tar files")
+		assert.Contains(t, cmd.Long, "images.json")
+		assert.NotNil(t, cmd.RunE)
+	})
+
+	t.Run("export command accepts at most one argument", func(t *testing.T) {
+		cmd := demosExportCmd()
+		assert.NotNil(t, cmd.Args)
+	})
+}
+
+func TestDemosImportCmd(t *testing.T) {
+	t.Run("import subcommand is registered on demos command", func(t *testing.T) {
+		root := demosCmd()
+		var found bool
+		for _, c := range root.Commands() {
+			if c.Use == "import [input-dir]" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "demos command should have an 'import' subcommand")
+	})
+
+	t.Run("import command has correct metadata", func(t *testing.T) {
+		cmd := demosImportCmd()
+		assert.Equal(t, "import [input-dir]", cmd.Use)
+		assert.Contains(t, cmd.Short, "air-gapped")
+		assert.NotNil(t, cmd.RunE)
+	})
+
+	t.Run("import command accepts at most one argument", func(t *testing.T) {
+		cmd := demosImportCmd()
+		assert.NotNil(t, cmd.Args)
+	})
+}
+
+func TestDemosImagesCmd(t *testing.T) {
+	t.Run("images subcommand is registered on demos command", func(t *testing.T) {
+		root := demosCmd()
+		var found bool
+		for _, c := range root.Commands() {
+			if c.Use == "images" {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "demos command should have an 'images' subcommand")
+	})
+
+	t.Run("images command has correct metadata", func(t *testing.T) {
+		cmd := demosImagesCmd()
+		assert.Equal(t, "images", cmd.Use)
+		assert.Contains(t, cmd.Short, "manifest")
+		assert.NotNil(t, cmd.RunE)
 	})
 }
 

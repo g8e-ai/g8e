@@ -5,8 +5,8 @@ parent: Guides
 
 # Getting Started
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-10
+Version: v1.3.11
 
 ---
 
@@ -43,7 +43,7 @@ Everything, including the Go compiler and build dependencies, runs inside the co
 | Git | Any recent version, required to clone the repository |
 | Python | 3.11+, optional, required only for demo environments and protocol library development |
 
-> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically:
+> **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically (see [scripts.md](../architecture/scripts.md) for details):
 > - **Linux:** `bash scripts/linux-setup.sh`
 > - **macOS:** `bash scripts/macos-setup.sh`
 > - **Windows:** `pwsh scripts/windows-setup.ps1`

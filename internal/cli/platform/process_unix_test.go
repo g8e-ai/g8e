@@ -18,6 +18,7 @@ package platform
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"syscall"
 	"testing"
@@ -329,13 +330,14 @@ func TestFindOperatorProcessWithExecutor(t *testing.T) {
 	})
 
 	t.Run("passes correct arguments to command", func(t *testing.T) {
+		expectedPattern := fmt.Sprintf("g8e gateway serve.*--data-dir %s", pm.dataDir)
 		executor := &mockCommandExecutor{
 			commandFunc: func(name string, args ...string) *exec.Cmd {
 				if name != "pgrep" {
 					t.Errorf("expected command 'pgrep', got '%s'", name)
 				}
-				if len(args) != 2 || args[0] != "-f" || args[1] != "g8e gateway serve" {
-					t.Errorf("expected args ['-f', 'g8e gateway serve'], got %v", args)
+				if len(args) != 2 || args[0] != "-f" || args[1] != expectedPattern {
+					t.Errorf("expected args ['-f', '%s'], got %v", expectedPattern, args)
 				}
 				return exec.Command(name, args...)
 			},

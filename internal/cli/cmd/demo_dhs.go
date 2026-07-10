@@ -27,11 +27,6 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
-func runDHSScenario(demoDir, scenario string) error {
-	_, err := runDHSScenarioWithResult(demoDir, scenario)
-	return err
-}
-
 // defaultDHSHarnessConfig returns the config matching the DHS compose topology.
 func defaultDHSHarnessConfig() harnessConfig {
 	cfg := defaultHarnessConfig("agent-coalition")
@@ -68,7 +63,7 @@ func ensureDHSPosture(demoDir, posture string) error {
 	return fmt.Errorf("gateway did not become healthy in %s posture after 90s", posture)
 }
 
-func runDHSScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+func runDHSScenario(demoDir, scenario string) (scenarioResult, error) {
 	hcfg := defaultDHSHarnessConfig()
 	var result scenarioResult
 	var hasErrors bool

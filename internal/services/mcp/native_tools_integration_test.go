@@ -726,6 +726,10 @@ func setupMTLSClient(t *testing.T, operatorURL string) (*http.Client, string, er
 	certPath := filepath.Join(pkiDir, "client", "client.pem")
 	keyPath := filepath.Join(pkiDir, "client", "client-key.pem")
 
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		t.Skipf("Client certificate not found at %s. Run './g8e login' to enable integration tests.", certPath)
+	}
+
 	cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to load client certificate: %w. Run './g8e login'", err)
