@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/cli/platform"
+	"github.com/g8e-ai/g8e/internal/cli/serve"
+	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -57,7 +59,7 @@ func TestResolveStartConfig(t *testing.T) {
 			})
 		}
 
-		cfg := resolveStartConfig(startConfig{
+		cfg := resolveGatewayFlags(GatewayFlags{
 			Posture:            "doctrine",
 			HTTPPort:           8080,
 			HTTPSPort:          8443,
@@ -105,7 +107,7 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(startConfig{
+		cfg := resolveGatewayFlags(GatewayFlags{
 			Posture:            "doctrine",
 			HTTPPort:           8080,
 			HTTPSPort:          8443,
@@ -139,7 +141,7 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(startConfig{
+		cfg := resolveGatewayFlags(GatewayFlags{
 			Posture:            "doctrine",
 			HTTPPort:           8080,
 			HTTPSPort:          8443,
@@ -173,7 +175,7 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(startConfig{
+		cfg := resolveGatewayFlags(GatewayFlags{
 			Posture:            "doctrine",
 			HTTPPort:           8080,
 			HTTPSPort:          8443,
@@ -207,7 +209,7 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(startConfig{
+		cfg := resolveGatewayFlags(GatewayFlags{
 			Posture:            "doctrine",
 			HTTPPort:           8080,
 			HTTPSPort:          8443,
@@ -241,7 +243,7 @@ func TestResolveStartConfig(t *testing.T) {
 			}
 		})
 
-		cfg := resolveStartConfig(startConfig{
+		cfg := resolveGatewayFlags(GatewayFlags{
 			Posture:            "doctrine",
 			HTTPPort:           8080,
 			HTTPSPort:          8443,
@@ -285,28 +287,31 @@ func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".g8e"), 0o700))
 
 	opts := platform.OperatorStartOptions{
-		Posture:            "doctrine",
-		HTTPPort:           8080,
-		HTTPSPort:          8443,
-		DataDir:            "/data",
-		PKIDir:             "/pki",
-		SecretsDir:         "/secrets",
-		VaultDir:           "/vault",
-		VaultKeyPath:       "/vault/key",
-		VaultRequireUnlock: true,
-		PasskeyRpID:        "localhost",
-		PasskeyRpName:      "g8e",
-		PasskeyRpOrigins:   []string{"http://localhost:8087", "https://localhost:8450"},
-		RateLimitRPS:       100.0,
-		RateLimitBurst:     50,
-		LogLevel:           "info",
-		CertIdentityMode:   "full",
-		TribunalID:         "trib-1",
-		TribunalURL:        "https://localhost:8443/tribunal/v1/deliberate",
-		TribunalBootstrap:  "/etc/g8e/tribunal-bootstrap.json",
-		MCPDownstreamURL:   "https://downstream.example.com/mcp",
-		A2ADownstreamURL:   "https://downstream.example.com/a2a",
-		IdentityData:       []byte(`{"hostnames":["localhost"]}`),
+		GatewayConfig: serve.GatewayConfig{
+			Posture:           g8econfig.GatewayPosture("doctrine"),
+			HTTPPort:          8080,
+			HTTPSPort:         8443,
+			DataDir:           "/data",
+			PKIDir:            "/pki",
+			SecretsDir:        "/secrets",
+			VaultDir:          "/vault",
+			VaultKeyPath:      "/vault/key",
+			VaultRequireUnlock: true,
+			PasskeyRpID:       "localhost",
+			PasskeyRpName:     "g8e",
+			PasskeyRpOrigins:  []string{"http://localhost:8087", "https://localhost:8450"},
+			RateLimitRPS:      100.0,
+			RateLimitBurst:    50,
+			LogLevel:          "info",
+			CertIdentityMode:  "full",
+			TribunalID:        "trib-1",
+			TribunalURL:       "https://localhost:8443/tribunal/v1/deliberate",
+			TribunalBootstrap: "/etc/g8e/tribunal-bootstrap.json",
+			MCPDownstreamURL:  "https://downstream.example.com/mcp",
+			A2ADownstreamURL:  "https://downstream.example.com/a2a",
+			PublicBaseURL:     "https://demo.g8e.ai",
+		},
+		IdentityData: []byte(`{"hostnames":["localhost"]}`),
 	}
 
 	args, err := pm.BuildReExecArgs(opts)

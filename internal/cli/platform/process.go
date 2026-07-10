@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/paths"
 )
@@ -55,31 +56,11 @@ type WindowsProcessChecker interface {
 }
 
 // OperatorStartOptions holds configuration for starting the operator process.
-// This replaces the 17 positional parameters previously used by StartOperator.
+// It embeds serve.GatewayConfig so that all gateway fields are shared in a
+// single struct definition, eliminating the previous triple-duplication.
 type OperatorStartOptions struct {
-	Posture            string
-	HTTPPort           int
-	HTTPSPort          int
-	DataDir            string
-	PKIDir             string
-	SecretsDir         string
-	VaultDir           string
-	VaultKeyPath       string
-	VaultRequireUnlock bool
-	PasskeyRpID        string
-	PasskeyRpName      string
-	PasskeyRpOrigins   []string
-	RateLimitRPS       float64
-	RateLimitBurst     int
-	LogLevel           string
-	CertIdentityMode   string
-	IdentityData       []byte
-	TribunalID         string
-	TribunalURL        string
-	TribunalBootstrap  string
-	MCPDownstreamURL   string
-	A2ADownstreamURL   string
-	PublicBaseURL      string
+	serve.GatewayConfig
+	IdentityData []byte
 }
 
 type ProcessManager struct {
@@ -276,7 +257,7 @@ func (pm *ProcessManager) getOperatorBinary() (string, error) {
 func (pm *ProcessManager) BuildReExecArgs(opts OperatorStartOptions) ([]string, error) {
 	args := []string{
 		"gateway", "serve",
-		"--posture", opts.Posture,
+		"--posture", string(opts.Posture),
 		"--data-dir", opts.DataDir,
 		"--pki-dir", opts.PKIDir,
 		"--secrets-dir", opts.SecretsDir,
@@ -453,7 +434,7 @@ func (pm *ProcessManager) StartOperator(opts OperatorStartOptions) error {
 		return fmt.Errorf("%w: %v", constants.ErrPIDWriteFailed, err)
 	}
 
-	if err := pm.writePosture(opts.Posture); err != nil {
+	if err := pm.writePosture(string(opts.Posture)); err != nil {
 		_ = cmd.Process.Kill()
 		_ = pm.deletePID(constants.OperatorPIDFilename)
 		if closeErr := logHandle.Close(); closeErr != nil {

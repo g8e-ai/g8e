@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/g8e-ai/g8e/internal/cli/serve"
+	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,13 +25,15 @@ func TestBuildReExecArgs(t *testing.T) {
 		{
 			name: "minimal",
 			opts: OperatorStartOptions{
-				Posture:    "consensus",
-				HTTPPort:   8080,
-				HTTPSPort:  8443,
-				DataDir:    "/data",
-				PKIDir:     "/pki",
-				SecretsDir: "/secrets",
-				LogLevel:   "info",
+				GatewayConfig: serve.GatewayConfig{
+					Posture:    g8econfig.GatewayPosture("consensus"),
+					HTTPPort:   8080,
+					HTTPSPort:  8443,
+					DataDir:    "/data",
+					PKIDir:     "/pki",
+					SecretsDir: "/secrets",
+					LogLevel:   "info",
+				},
 			},
 			wantSubstrs: []string{
 				"--posture consensus",
@@ -44,28 +48,30 @@ func TestBuildReExecArgs(t *testing.T) {
 		{
 			name: "all options",
 			opts: OperatorStartOptions{
-				Posture:            "notary",
-				HTTPPort:           9000,
-				HTTPSPort:          9443,
-				DataDir:            "/data",
-				PKIDir:             "/pki",
-				SecretsDir:         "/secrets",
-				VaultDir:           "/vault",
-				VaultKeyPath:       "/vault/key",
-				VaultRequireUnlock: true,
-				CertIdentityMode:   "spiffe",
-				TribunalID:         "trib-1",
-				TribunalURL:        "https://trib:8443",
-				TribunalBootstrap:  "bootstrap-data",
-				MCPDownstreamURL:   "http://mcp:8080",
-				A2ADownstreamURL:   "http://a2a:8081",
-				PublicBaseURL:      "https://demo.g8e.ai",
-				PasskeyRpID:        "localhost",
-				PasskeyRpName:      "G8E",
-				PasskeyRpOrigins:   []string{"http://localhost:8080", "http://127.0.0.1:8080"},
-				RateLimitRPS:       100.5,
-				RateLimitBurst:     200,
-				LogLevel:           "debug",
+				GatewayConfig: serve.GatewayConfig{
+					Posture:            g8econfig.GatewayPosture("notary"),
+					HTTPPort:           9000,
+					HTTPSPort:          9443,
+					DataDir:            "/data",
+					PKIDir:             "/pki",
+					SecretsDir:         "/secrets",
+					VaultDir:           "/vault",
+					VaultKeyPath:       "/vault/key",
+					VaultRequireUnlock: true,
+					CertIdentityMode:   "spiffe",
+					TribunalID:         "trib-1",
+					TribunalURL:        "https://trib:8443",
+					TribunalBootstrap:  "bootstrap-data",
+					MCPDownstreamURL:   "http://mcp:8080",
+					A2ADownstreamURL:   "http://a2a:8081",
+					PublicBaseURL:      "https://demo.g8e.ai",
+					PasskeyRpID:        "localhost",
+					PasskeyRpName:      "G8E",
+					PasskeyRpOrigins:   []string{"http://localhost:8080", "http://127.0.0.1:8080"},
+					RateLimitRPS:       100.5,
+					RateLimitBurst:     200,
+					LogLevel:           "debug",
+				},
 			},
 			wantSubstrs: []string{
 				"--vault-dir /vault",
@@ -89,13 +95,15 @@ func TestBuildReExecArgs(t *testing.T) {
 		{
 			name: "with identity data",
 			opts: OperatorStartOptions{
-				Posture:      "consensus",
-				HTTPPort:     8080,
-				HTTPSPort:    8443,
-				DataDir:      "/data",
-				PKIDir:       "/pki",
-				SecretsDir:   "/secrets",
-				LogLevel:     "info",
+				GatewayConfig: serve.GatewayConfig{
+					Posture:    g8econfig.GatewayPosture("consensus"),
+					HTTPPort:   8080,
+					HTTPSPort:  8443,
+					DataDir:    "/data",
+					PKIDir:     "/pki",
+					SecretsDir: "/secrets",
+					LogLevel:   "info",
+				},
 				IdentityData: []byte(`{"hostname":"test"}`),
 			},
 			needsDirs:   true,
