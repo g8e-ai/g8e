@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -147,8 +148,15 @@ func (pm *ProcessManager) findOperatorProcess() int {
 		executor = realCommandExecutor{}
 	}
 
+	// Derive the actual image name from the running executable so that
+	// renamed binaries (e.g. g8e-windows-amd64.exe) are found correctly.
+	imageName := constants.BinaryImageNameWindows
+	if exePath, err := os.Executable(); err == nil {
+		imageName = filepath.Base(exePath)
+	}
+
 	ownPID := os.Getpid()
-	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows), "/FO", "CSV")
+	cmd := executor.Command("tasklist", "/FI", fmt.Sprintf("IMAGENAME eq %s", imageName), "/FO", "CSV")
 	output, err := executor.Output(cmd)
 	if err != nil {
 		return 0

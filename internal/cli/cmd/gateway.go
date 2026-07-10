@@ -320,7 +320,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				GatewayConfig: gatewayCfg,
 				IdentityData:  identityResult.IdentityData,
 			}); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
+				return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
 			}
 
 			_, pid, err = pm.OperatorStatus()

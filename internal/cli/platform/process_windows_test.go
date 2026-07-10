@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -439,10 +440,17 @@ func TestFindOperatorProcess_CommandArguments(t *testing.T) {
 
 	pm.findOperatorProcess()
 
+	// The image name is derived from os.Executable() at runtime, falling
+	// back to the constant only if that fails.
+	expectedImage := constants.BinaryImageNameWindows
+	if exePath, err := os.Executable(); err == nil {
+		expectedImage = filepath.Base(exePath)
+	}
+
 	require.Len(t, mockExecutor.commandCalls, 1, "Command should be called once")
 	call := mockExecutor.commandCalls[0]
 	assert.Equal(t, "tasklist", call.name)
-	assert.Contains(t, call.args, "/FI", fmt.Sprintf("IMAGENAME eq %s", constants.BinaryImageNameWindows))
+	assert.Contains(t, call.args, "/FI", fmt.Sprintf("IMAGENAME eq %s", expectedImage))
 	assert.Contains(t, call.args, "/FO", "CSV")
 }
 
