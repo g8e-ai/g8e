@@ -138,6 +138,12 @@ The agent harness impersonates arbitrary AI tools against a **REAL** g8e Gateway
 
 Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `SetupTribunal`, `WaitForReady`, `Cleanup`. `PublicBaseURL` is set via `GatewayFixtureOptions` at construction time.
 
+### Docker E2E Fixture (Tier 3)
+
+`TestMain` in `test/e2e/main_test.go` spins up a single Docker Compose stack (gateway + operator) once for all E2E tests, then tears it down after `m.Run()`. The shared fixture is stored in the package-level `sharedFixture` variable. Tests that require Docker check for nil and skip if unavailable; tests that do not require Docker (e.g. MCP config output) run regardless.
+
+The Dockerfile uses a BuildKit cache mount (`--mount=type=cache,target=/root/.cache/go-build`) to preserve the Go build cache across Docker image rebuilds. The harness sets `DOCKER_BUILDKIT=1` to enable this. First run after code changes rebuilds from scratch (~100s); subsequent runs with warm cache complete in ~25s.
+
 ### Trust Bundle Troubleshooting
 
 If integration tests fail with `x509: certificate signed by unknown authority`:
