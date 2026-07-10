@@ -292,7 +292,7 @@ For comprehensive testing including all unit and integration tests, use:
 make test
 ```
 
-For CI-quality testing with coverage enforcement (70% threshold):
+For CI-quality testing with coverage enforcement (75% threshold):
 
 ```bash
 make ci

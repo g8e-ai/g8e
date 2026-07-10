@@ -5,8 +5,8 @@ parent: Guides
 
 # Air-Gap Architecture
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-10
+Version: v1.3.11
 
 The g8e platform operates in environments without internet connectivity. The platform supports air-gapped deployments with zero runtime external network dependencies, using the g8e Gateway, the g8e Operator, and fully vendored Go dependencies (`vendor/` and `protocol/vendor/`). The platform supports both binary deployment and containerized deployment via Docker.
 
@@ -98,9 +98,9 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 4. **Pre-Pull Docker Images (Containerized Deployments)**: For air-gapped Docker deployments, pre-pull all external images on the connected host:
    ```bash
    g8e demos pull
-   ./demos/airgap.sh export /tmp/g8e-images
+   g8e demos export /tmp/g8e-images
    ```
-   This pulls all images pinned by sha256 digest in `demos/images.json` and saves them as `.tar` files. Transfer the export directory to the air-gapped machine and load them with `./demos/airgap.sh import /tmp/g8e-images`.
+   This pulls all images pinned by sha256 digest in `demos/images.json` and saves them as `.tar` files. Transfer the export directory to the air-gapped machine and load them with `g8e demos import /tmp/g8e-images`.
 
 ### 2. Implementation on the Air-Gapped Target Host
 
@@ -118,7 +118,7 @@ Implementing an air-gapped deployment requires a connected staging host to resol
    ```bash
    make test-airgap
    ```
-   This checks that `vendor/` and `protocol/vendor/` exist, the vendored build compiles, `demos/images.json` is present, no unpinned image references remain in compose files, no `pip install` or `import requests` references remain in demo Python files, and `demos/airgap.sh` is executable.
+   This checks that `vendor/` and `protocol/vendor/` exist, the vendored build compiles, `demos/images.json` is present, no unpinned image references remain in compose files, and no `pip install` or `import requests` references remain in demo Python files.
 
 ---
 
@@ -136,5 +136,6 @@ Implementing an air-gapped deployment requires a connected staging host to resol
 
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Remote management commands (cp, scp, stream, deploy) for operators inside the air-gapped environment.
 - **[Docker Gateway](docker_gateway.md)**: Containerized deployment details for gateway and operator services.
-- **[Demos README](../demos/README.md)**: Step-by-step air-gapped Docker image export/import workflow using `demos/airgap.sh` and `demos/images.json`.
+- **[Demos README](../demos/README.md)**: Step-by-step air-gapped Docker image export/import workflow using `g8e demos export/import` and `demos/images.json`.
+- **[Scripts README](../architecture/scripts.md)**: Central reference for all g8e deployment and bootstrap scripts.
 

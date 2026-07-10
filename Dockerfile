@@ -39,7 +39,8 @@ COPY . .
 
 # Build the binary
 # Use build flags from Makefile for consistency
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -mod=vendor \
     -ldflags "-s -w -X main.version=$(cat VERSION) -X main.buildID=$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown') -X main.buildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ') -X main.platform=linux_amd64" \
     -o /build/g8e \

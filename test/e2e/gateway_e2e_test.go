@@ -26,7 +26,10 @@ import (
 
 // TestDockerGateway_Health tests the Docker-based gateway health endpoints.
 func TestDockerGateway_Health(t *testing.T) {
-	f := NewDockerE2EFixture(t, "docker-compose.yml")
+	if sharedFixture == nil {
+		t.Skip("Docker E2E fixture not available")
+	}
+	f := sharedFixture
 
 	t.Run("gateway HTTP health", func(t *testing.T) {
 		health := f.GetHealth(t)

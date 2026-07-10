@@ -25,6 +25,11 @@ var EnvVar = struct {
 	VaultKey           EnvVarKey
 	VaultRequireUnlock EnvVarKey
 	OperatorSessionID  EnvVarKey
+	PasskeyRpID        EnvVarKey
+	PasskeyRpName      EnvVarKey
+	PasskeyRpOrigins   EnvVarKey
+	PublicBaseURL      EnvVarKey
+	AllowedOrigins     EnvVarKey
 	Shell              EnvVarKey
 	Lang               EnvVarKey
 	Term               EnvVarKey
@@ -37,6 +42,11 @@ var EnvVar = struct {
 	VaultKey:           EnvVarKey("G8E_VAULT_KEY"),
 	VaultRequireUnlock: EnvVarKey("G8E_VAULT_REQUIRE_UNLOCK"),
 	OperatorSessionID:  EnvVarKey("G8E_OPERATOR_SESSION_ID"),
+	PasskeyRpID:        EnvVarKey("G8E_PASSKEY_RP_ID"),
+	PasskeyRpName:      EnvVarKey("G8E_PASSKEY_RP_NAME"),
+	PasskeyRpOrigins:   EnvVarKey("G8E_PASSKEY_RP_ORIGINS"),
+	PublicBaseURL:      EnvVarKey("G8E_PUBLIC_BASE_URL"),
+	AllowedOrigins:     EnvVarKey("G8E_ALLOWED_ORIGINS"),
 	Shell:              EnvVarKey("SHELL"),
 	Lang:               EnvVarKey("LANG"),
 	Term:               EnvVarKey("TERM"),

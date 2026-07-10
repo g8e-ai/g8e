@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/g8e-ai/g8e/internal/cli/api"
 	"github.com/g8e-ai/g8e/internal/cli/auth"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	"github.com/g8e-ai/g8e/internal/cli/stream"
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -53,17 +53,21 @@ func operatorCmd() *cobra.Command {
 }
 
 func operatorListCmd() *cobra.Command {
+	return operatorListCmdWithConfig(loadConfig, defaultAPIClientFactory)
+}
+
+func operatorListCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all Operator instances",
 		Long:  `List all Operator instances currently connected to the Gateway.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return err
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return err
 			}

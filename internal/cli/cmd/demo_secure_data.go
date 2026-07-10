@@ -20,12 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-func runSecureDataScenario(demoDir, scenario string) error {
-	_, err := runSecureDataScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runSecureDataScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+func runSecureDataScenario(demoDir, scenario string) (scenarioResult, error) {
 	var result scenarioResult
 	var hasErrors bool
 

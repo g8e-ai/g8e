@@ -20,12 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-func runDoWScenario(demoDir, scenario string) error {
-	_, err := runDoWScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runDoWScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+func runDoWScenario(demoDir, scenario string) (scenarioResult, error) {
 	var result scenarioResult
 	var hasErrors bool
 

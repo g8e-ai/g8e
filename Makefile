@@ -53,7 +53,7 @@ TEST_TIMEOUT := 180s
 TEST_SHORT_TIMEOUT := 180s
 TEST_RACE := $(if $(filter windows,$(HOST_OS)),,-race)
 TEST_COUNT := -count=1
-COVERAGE_THRESHOLD := 70
+COVERAGE_THRESHOLD := 75
 
 # =============================================================================
 # COVERAGE EXCLUSIONS — single source of truth
@@ -476,8 +476,6 @@ test-airgap:
 	@! grep -rn 'image:.*:latest\|image:.*:alpine\|image:.*:slim\|image:.*:bookworm' demos/*/compose.yml || { echo "ERROR: found unpinned image references in compose files"; exit 1; }
 	@echo "  5. Verifying no pip install or requests imports remain in demos..."
 	@! grep -rn 'pip install\|import requests' demos/ --include='*.py' || { echo "ERROR: found pip install or requests import in demo Python files"; exit 1; }
-	@echo "  6. Verifying airgap.sh is executable..."
-	@test -x demos/airgap.sh || { echo "ERROR: demos/airgap.sh is not executable"; exit 1; }
 	@echo "Air-gap verification PASSED."
 
 # Coverage tests

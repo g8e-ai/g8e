@@ -27,7 +27,10 @@ import (
 // checks only. No mTLS connections from the test process, no cert extraction
 // from Docker volumes.
 func TestDockerGateway_Auth(t *testing.T) {
-	f := NewDockerE2EFixture(t, "docker-compose.yml")
+	if sharedFixture == nil {
+		t.Skip("Docker E2E fixture not available")
+	}
+	f := sharedFixture
 
 	t.Run("mTLS handshake over network", func(t *testing.T) {
 		// The operator establishes mTLS with the gateway over the Docker bridge

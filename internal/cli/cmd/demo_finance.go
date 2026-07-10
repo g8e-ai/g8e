@@ -17,12 +17,7 @@ import (
 	"fmt"
 )
 
-func runFinanceScenario(demoDir, scenario string) error {
-	_, err := runFinanceScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runFinanceScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+func runFinanceScenario(demoDir, scenario string) (scenarioResult, error) {
 	switch scenario {
 	case "1":
 		return runTwoLayerScenario(demoDir, twoLayerScenarioConfig{

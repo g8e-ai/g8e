@@ -20,12 +20,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
-func runSwarmScenario(demoDir, scenario string) error {
-	_, err := runSwarmScenarioWithResult(demoDir, scenario)
-	return err
-}
-
-func runSwarmScenarioWithResult(demoDir, scenario string) (scenarioResult, error) {
+func runSwarmScenario(demoDir, scenario string) (scenarioResult, error) {
 	var result scenarioResult
 	var hasErrors bool
 

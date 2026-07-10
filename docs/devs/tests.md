@@ -4,7 +4,7 @@ title: Tests
 
 # Testing g8e
 
-Last Updated: 2026-07-09
+Last Updated: 2026-07-10
 
 g8e tests run directly on the host using real infrastructure. If it does not work in tests, it will not work in production.
 
@@ -61,7 +61,7 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 ./g8e test unit        # Tier 1 — no external dependencies
 ./g8e test integration # Tier 2 — on-disk SQLite, local PKI
 ./g8e test e2e         # Tier 3 — requires running gateway
-./g8e test coverage    # Coverage report (70% threshold enforced)
+./g8e test coverage    # Coverage report (75% threshold enforced)
 ./g8e test lint        # golangci-lint + quality checks
 ./g8e agent-harness list    # List agent harness scenarios
 ./g8e agent-harness run     # Run scenarios against real Gateway/Operator
@@ -137,6 +137,12 @@ The agent harness impersonates arbitrary AI tools against a **REAL** g8e Gateway
 `GatewayFixture` writes each run's data/vault/PKI to a fresh, uniquely-named directory under `<repo>/test-results/` (via `os.MkdirTemp`). This directory is **not** deleted — results accumulate for inspection. `test-results/` is gitignored. `Cleanup` stops the gateway and releases database locks but leaves data on disk.
 
 Key fixture methods: `NewGatewayFixture`, `EnrollClientIdentity`, `CreateMTLSClient`, `CreateCLIMTLSClient`, `SetupTribunal`, `WaitForReady`, `Cleanup`. `PublicBaseURL` is set via `GatewayFixtureOptions` at construction time.
+
+### Docker E2E Fixture (Tier 3)
+
+`TestMain` in `test/e2e/main_test.go` spins up a single Docker Compose stack (gateway + operator) once for all E2E tests, then tears it down after `m.Run()`. The shared fixture is stored in the package-level `sharedFixture` variable. Tests that require Docker check for nil and skip if unavailable; tests that do not require Docker (e.g. MCP config output) run regardless.
+
+The Dockerfile uses a BuildKit cache mount (`--mount=type=cache,target=/root/.cache/go-build`) to preserve the Go build cache across Docker image rebuilds. The harness sets `DOCKER_BUILDKIT=1` to enable this. First run after code changes rebuilds from scratch (~100s); subsequent runs with warm cache complete in ~25s.
 
 ### Trust Bundle Troubleshooting
 
