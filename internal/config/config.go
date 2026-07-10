@@ -227,6 +227,7 @@ type GatewayOptions struct {
 	PasskeyRpOrigins []string
 	MCPDownstreamURL string
 	A2ADownstreamURL string
+	PublicBaseURL    string
 	JWKSURL          string
 	JWTRoleClaim     string
 	JWTIssuer        string
@@ -431,6 +432,7 @@ func LoadGateway(opts GatewayOptions) (*Config, error) {
 			PasskeyRpOrigins:   opts.PasskeyRpOrigins,
 			MCPDownstreamURL:   mcpDownstreamURL,
 			A2ADownstreamURL:   a2aDownstreamURL,
+			PublicBaseURL:      opts.PublicBaseURL,
 			JWKSURL:            jwksURL,
 			JWTRoleClaim:       jwtRoleClaim,
 			JWTIssuer:          jwtIssuer,

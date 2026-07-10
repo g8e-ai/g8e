@@ -14,10 +14,20 @@
 package testutil
 
 import (
+	"context"
+	"crypto/tls"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/proto"
+
+	"github.com/g8e-ai/g8e/internal/certs"
+	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/httpclient"
+	pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
 )
 
 // WaitForMessage waits for a message on a channel with timeout
@@ -57,3 +67,135 @@ func CreateTestChannel(t *testing.T, prefix string) string {
 	return fmt.Sprintf("%s:test:%s:%d", prefix, t.Name(), time.Now().UnixNano())
 }
 
+// TestPubSubAvailable checks if the client pub/sub gateway is reachable.
+// Fatally fails the test when client is unavailable - all callers are integration
+// tests that require a live stack.
+// baseURL is optional; if empty, uses GetTestOperatorDirectURL().
+func TestPubSubAvailable(t *testing.T, baseURL string) {
+	t.Helper()
+	if baseURL == "" {
+		baseURL = GetTestOperatorDirectURL()
+	}
+	wsURL := baseURL + "/ws/pubsub"
+	trustStore := GetTestTrustStore()
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	stdTLS, err := tlsConfig.GetTLSConfig()
+	if err != nil {
+		t.Fatalf("testutil: TLS config build failed: %v", err)
+	}
+	dialer := httpclient.WebSocketDialerWithTLS(stdTLS)
+	ws, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		t.Logf("testutil: pub/sub not available at %s: %v", baseURL, err)
+		t.Skip("skipping integration test; pub/sub stack not available")
+	}
+	ws.Close()
+}
+
+// SubscribeToChannel subscribes to a Operator pub/sub channel and returns a channel for receiving raw bytes from the Data field.
+// baseURL is the WebSocket URL to connect to (e.g., wss://localhost:port).
+// The subscription runs until the test ends (via t.Cleanup).
+func SubscribeToChannel(t *testing.T, baseURL string, channel string) <-chan []byte {
+	t.Helper()
+
+	wsURL := baseURL + "/ws/pubsub"
+
+	trustStore := GetTestTrustStore()
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	stdTLS, err := tlsConfig.GetTLSConfig()
+	if err != nil {
+		t.Fatalf("testutil: TLS config build failed: %v", err)
+	}
+	dialer := httpclient.WebSocketDialerWithTLS(stdTLS)
+	ws, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		t.Fatalf("testutil: pub/sub connection failed at %s: %v", wsURL, err)
+	}
+
+	subMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionSubscribe, Channel: channel}
+	subBytes, err := proto.Marshal(subMsg)
+	if err != nil {
+		ws.Close()
+		t.Fatalf("testutil: subscribe message marshal failed: %v", err)
+	}
+
+	if err := ws.WriteMessage(websocket.BinaryMessage, subBytes); err != nil {
+		ws.Close()
+		t.Fatalf("testutil: channel %s subscribe failed: %v", channel, err)
+	}
+
+	out := make(chan []byte, 64)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(func() {
+		cancel()
+		ws.Close()
+	})
+
+	go func() {
+		defer close(out)
+		for {
+			_, raw, err := ws.ReadMessage()
+			if err != nil {
+				return
+			}
+			var event pubsubv1.PubSubEvent
+			if err := proto.Unmarshal(raw, &event); err != nil {
+				continue
+			}
+			if event.Type != constants.PubSubEventMessage && event.Type != constants.PubSubEventPMessage {
+				continue
+			}
+			select {
+			case out <- event.Data:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return out
+}
+
+// PublishTestMessage publishes a message to a pub/sub channel via the client WebSocket gateway.
+// baseURL is the WebSocket URL to connect to (e.g., wss://localhost:port).
+func PublishTestMessage(t *testing.T, baseURL string, channel string, message string) {
+	t.Helper()
+
+	wsURL := baseURL + "/ws/pubsub"
+
+	trustStore := GetTestTrustStore()
+	clientIdentity := certs.NewClientIdentity(tls.Certificate{})
+	tlsConfig := certs.NewTLSConfig(trustStore, clientIdentity)
+	stdTLS, err := tlsConfig.GetTLSConfig()
+	if err != nil {
+		t.Fatalf("testutil: TLS config build failed: %v", err)
+	}
+	dialer := httpclient.WebSocketDialerWithTLS(stdTLS)
+	ws, resp, err := dialer.Dial(wsURL, nil)
+	if err != nil {
+		if resp != nil {
+			resp.Body.Close()
+		}
+		t.Fatalf("testutil: pub/sub connection failed for channel %s: %v", channel, err)
+	}
+	defer ws.Close()
+
+	pubMsg := &pubsubv1.PubSubMessage{Action: constants.PubSubActionPublish, Channel: channel, Data: []byte(message)}
+	pubBytes, err := proto.Marshal(pubMsg)
+	if err != nil {
+		t.Fatalf("testutil: publish message marshal failed: %v", err)
+	}
+
+	if err := ws.WriteMessage(websocket.BinaryMessage, pubBytes); err != nil {
+		t.Fatalf("testutil: channel %s publish failed: %v", channel, err)
+	}
+}

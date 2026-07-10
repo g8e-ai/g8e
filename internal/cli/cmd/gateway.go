@@ -64,6 +64,7 @@ type startConfig struct {
 	TribunalBootstrap  string
 	MCPDownstreamURL   string
 	A2ADownstreamURL   string
+	PublicBaseURL      string
 }
 
 // resolveStartConfig resolves environment variable overrides and defaults for gateway start.
@@ -182,6 +183,7 @@ func gatewayStartCmd() *cobra.Command {
 	var tribunalBootstrap string
 	var mcpDownstreamURL string
 	var a2aDownstreamURL string
+	var publicBaseURL string
 	var follow bool
 
 	cmd := &cobra.Command{
@@ -232,6 +234,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				TribunalBootstrap:  tribunalBootstrap,
 				MCPDownstreamURL:   mcpDownstreamURL,
 				A2ADownstreamURL:   a2aDownstreamURL,
+				PublicBaseURL:      publicBaseURL,
 			})
 
 			// Detect and display network identity before prompting
@@ -297,6 +300,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 					TribunalBootstrap:   startCfg.TribunalBootstrap,
 					MCPDownstreamURL:    startCfg.MCPDownstreamURL,
 					A2ADownstreamURL:    startCfg.A2ADownstreamURL,
+					PublicBaseURL:       startCfg.PublicBaseURL,
 				}
 
 				// Run gateway (this blocks until shutdown)
@@ -343,6 +347,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 				TribunalBootstrap:  startCfg.TribunalBootstrap,
 				MCPDownstreamURL:   startCfg.MCPDownstreamURL,
 				A2ADownstreamURL:   startCfg.A2ADownstreamURL,
+				PublicBaseURL:      startCfg.PublicBaseURL,
 			}); err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 			}
@@ -383,6 +388,7 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 	cmd.Flags().StringVar(&tribunalBootstrap, "tribunal-bootstrap", "", "Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (for deterministic demo deployments)")
 	cmd.Flags().StringVar(&mcpDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
 	cmd.Flags().StringVar(&a2aDownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
+	cmd.Flags().StringVar(&publicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Run gateway in foreground (Ctrl+C stops gateway)")
 
 	return cmd
@@ -411,6 +417,7 @@ func gatewayServeCmd() *cobra.Command {
 	var tribunalBootstrap string
 	var mcpDownstreamURL string
 	var a2aDownstreamURL string
+	var publicBaseURL string
 
 	cmd := &cobra.Command{
 		Use:    "serve",
@@ -447,6 +454,7 @@ func gatewayServeCmd() *cobra.Command {
 				TribunalBootstrap:   tribunalBootstrap,
 				MCPDownstreamURL:    mcpDownstreamURL,
 				A2ADownstreamURL:    a2aDownstreamURL,
+				PublicBaseURL:       publicBaseURL,
 			}
 
 			// Run gateway (this blocks until shutdown)
@@ -476,6 +484,7 @@ func gatewayServeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&tribunalBootstrap, "tribunal-bootstrap", "", "Path to a JSON file that seeds a TribunalPolicy and trusted signers at startup (for deterministic demo deployments)")
 	cmd.Flags().StringVar(&mcpDownstreamURL, "mcp-downstream-url", "", "URL of a downstream MCP server to proxy discovery and execution to (default: none)")
 	cmd.Flags().StringVar(&a2aDownstreamURL, "a2a-downstream-url", "", "URL of a downstream A2A server to proxy execution to (default: none)")
+	cmd.Flags().StringVar(&publicBaseURL, "public-base-url", "", "Public base URL for approval links and host validation (e.g., https://demo.g8e.ai)")
 
 	return cmd
 }

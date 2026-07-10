@@ -29,7 +29,9 @@ import (
 	"io"
 	"log/slog"
 	"math/big"
+	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -103,6 +105,23 @@ func generateTestCertPEM(t *testing.T, notBefore, notAfter time.Time) []byte {
 		Type:  "CERTIFICATE",
 		Bytes: derBytes,
 	})
+}
+
+// restorePorts snapshots constants.Ports and restores it after the test.
+func restorePorts(t *testing.T) {
+	t.Helper()
+	snapshot := constants.Ports
+	t.Cleanup(func() {
+		constants.Ports = snapshot
+	})
+}
+
+// getServerPort extracts the TCP port from an httptest.Server listener.
+func getServerPort(t *testing.T, srv *httptest.Server) int {
+	t.Helper()
+	addr, ok := srv.Listener.Addr().(*net.TCPAddr)
+	require.True(t, ok, "expected *net.TCPAddr from httptest listener")
+	return addr.Port
 }
 
 // ---------------------------------------------------------------------------
