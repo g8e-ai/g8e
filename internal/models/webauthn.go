@@ -40,9 +40,9 @@ type WebAuthnAssertionResponse struct {
 // when verifying an assertion. The response fields are nested under "response"
 // rather than flat.
 type ParsedAssertionResponse struct {
-	ID       string                    `json:"id"`
-	RawID    string                    `json:"rawId"`
-	Type     string                    `json:"type"`
+	ID       string                      `json:"id"`
+	RawID    string                      `json:"rawId"`
+	Type     string                      `json:"type"`
 	Response ParsedAssertionResponseBody `json:"response"`
 }
 
