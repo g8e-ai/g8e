@@ -14,6 +14,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/cli/api"
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/cli/platform"
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
@@ -271,6 +273,13 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 
 			resolved := resolveGatewayFlags(flags)
 
+			// Validate posture at CLI edge for clean error messages (before
+			// network detection to fail fast on invalid input)
+			postureObj, err := governance.ParseGovernancePosture(resolved.Posture)
+			if err != nil {
+				return fmt.Errorf("%w: %w", constants.ErrInvalidPosture, err)
+			}
+
 			// Detect and display network identity before prompting
 			logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 			identityResult := detectIdentity(context.Background(), logger, resolved.CertIdentityMode)
@@ -281,12 +290,6 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			} else {
 				cmd.Println(identityResult.Identity.FormatForDisplay())
 				cmd.Println()
-			}
-
-			// Validate posture at CLI edge for clean error messages
-			postureObj, err := governance.ParseGovernancePosture(resolved.Posture)
-			if err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInvalidPosture, err)
 			}
 
 			// Foreground mode: run gateway directly in the current process
@@ -593,18 +596,22 @@ output (like tail -f).`,
 }
 
 func gatewaySettingsCmd() *cobra.Command {
+	return gatewaySettingsCmdWithConfig(loadConfig, defaultAPIClientFactory)
+}
+
+func gatewaySettingsCmdWithConfig(configLoader func(string) (*config.Config, error), clientFactory apiClientFactory) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "settings",
 		Short: "Manage Gateway settings",
 		Long: `Fetch and display the current gateway platform settings from the running
 Gateway over mTLS.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig("")
+			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gateway: load config: %w", err)
 			}
 
-			client, err := api.NewClient(cfg)
+			client, err := clientFactory(cfg)
 			if err != nil {
 				return fmt.Errorf("%w: %w", constants.ErrInternal, err)
 			}
@@ -638,8 +645,9 @@ certificates and keys are preserved. Use --force to skip the confirmation prompt
 				cmd.Println("  3. Preserve your existing TLS/PKI certificates and keys")
 				cmd.Println("  4. Restart the services with a fresh database")
 				cmd.Print("\nContinue? [y/N]: ")
-				var response string
-				_, _ = fmt.Scanln(&response)
+				reader := bufio.NewReader(cmd.InOrStdin())
+				response, _ := reader.ReadString('\n')
+				response = strings.TrimSpace(response)
 				if response != "y" && response != "Y" {
 					cmd.Println("Aborted")
 					return nil
@@ -711,8 +719,9 @@ Use --force to skip the confirmation prompt.`,
 				cmd.Println("IMPORTANT: Your CLI credentials will become invalid after this operation.")
 				cmd.Println("You will need to run './g8e auth enroll' again after restarting the gateway.")
 				cmd.Print("\nContinue? [y/N]: ")
-				var response string
-				_, _ = fmt.Scanln(&response)
+				reader := bufio.NewReader(cmd.InOrStdin())
+				response, _ := reader.ReadString('\n')
+				response = strings.TrimSpace(response)
 				if response != "y" && response != "Y" {
 					cmd.Println("Aborted")
 					return nil

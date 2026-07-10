@@ -24,6 +24,8 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 )
 
+var osExit = os.Exit
+
 type versionInfoKey struct{}
 
 func NewRootCmd(version string, vi serve.VersionInfo) *cobra.Command {
@@ -104,6 +106,6 @@ func ExecuteWithVersionInfo(version, buildID, buildTime, platform string) {
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		osExit(1)
 	}
 }

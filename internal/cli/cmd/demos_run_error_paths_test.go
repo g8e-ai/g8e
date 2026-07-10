@@ -65,17 +65,11 @@ func TestRunDemosList_WithValidDemosDir(t *testing.T) {
 	binDir := filepath.Join(demosDir, constants.DemosBinDirname)
 	require.NoError(t, os.MkdirAll(binDir, 0o755))
 
-	originalStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd := demosListCmd()
-	err := cmd.RunE(cmd, nil)
-
-	w.Close()
-	os.Stdout = originalStdout
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	cmd := demosListCmd()
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+	err := cmd.RunE(cmd, nil)
 
 	require.NoError(t, err)
 
@@ -217,18 +211,12 @@ func TestRunDemosImages_ValidManifestListsImages(t *testing.T) {
 	manifest := `[{"image":"alpine","tag":"latest","digest":"sha256:abc","demos":["gov","dhs"]}]`
 	require.NoError(t, os.WriteFile(filepath.Join(demosDir, constants.DemosImagesManifestFile), []byte(manifest), 0o644))
 
-	originalStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
 	cmd := demosImagesCmd()
-	err := cmd.RunE(cmd, nil)
-
-	w.Close()
-	os.Stdout = originalStdout
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
 
+	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 
 	output := buf.String()

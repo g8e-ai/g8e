@@ -25,7 +25,7 @@ After the script completes, open a new terminal or source your profile and verif
 
 ### What Each Script Does
 
-1. **Validates dependencies**: Checks for `make` and `go`, and verifies the Go version meets the minimum required by `go.mod` (currently 1.26.5).
+1. **Validates dependencies**: Checks for `make` and `go`, and verifies the Go version meets the minimum required version (currently 1.26).
 2. **Installs missing tooling**: Prompts interactively and installs via the platform-appropriate package manager (`apt-get`, `dnf`, `pacman`, `zypper`, `brew`, `winget`, or `choco`).
 3. **Builds the binary**: Runs `make build` to produce the `g8e` binary.
 4. **Adds to PATH**: Adds the repository root to the shell profile or Windows user PATH so `g8e` is available in new terminal sessions.
@@ -33,7 +33,7 @@ After the script completes, open a new terminal or source your profile and verif
 ### Requirements
 
 - **Git**: to clone the repository (not checked by the scripts).
-- **Go 1.26.5+**: validated by the scripts; installed if missing.
+- **Go 1.26+**: validated by the scripts; installed if missing.
 - **Make**: validated by the scripts; installed if missing.
 - **Homebrew**: required on macOS for automatic dependency installation.
 - **winget or Chocolatey**: required on Windows for automatic dependency installation.

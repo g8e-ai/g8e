@@ -241,12 +241,12 @@ func runDemosList(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: %w", constants.ErrDirectoryRead, err)
 	}
 
-	fmt.Println("Available demo environments:")
+	cmd.Println("Available demo environments:")
 	for _, entry := range entries {
 		if entry.IsDir() && entry.Name() != constants.DemosBinDirname {
 			composePath := filepath.Join(demosDir, entry.Name(), constants.DemosComposeFile)
 			if _, err := os.Stat(composePath); err == nil {
-				fmt.Printf("  - %s\n", entry.Name())
+				cmd.Printf("  - %s\n", entry.Name())
 			}
 		}
 	}
@@ -290,10 +290,10 @@ func runDemosPull(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing images manifest: %w", err)
 	}
 
-	fmt.Printf("Pulling %d images from demos/images.json...\n", len(entries))
+	cmd.Printf("Pulling %d images from demos/images.json...\n", len(entries))
 	for i, e := range entries {
 		ref := fmt.Sprintf("%s@%s", e.Image, e.Digest)
-		fmt.Printf("[%d/%d] Pulling %s\n", i+1, len(entries), ref)
+		cmd.Printf("[%d/%d] Pulling %s\n", i+1, len(entries), ref)
 		pullCmd := exec.Command("docker", "pull", ref)
 		pullCmd.Stdout = os.Stdout
 		pullCmd.Stderr = os.Stderr
@@ -302,8 +302,8 @@ func runDemosPull(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println("\nAll images pulled successfully.")
-	fmt.Println("Next step: run 'g8e demos export' to create a transfer bundle.")
+	cmd.Println("\nAll images pulled successfully.")
+	cmd.Println("Next step: run 'g8e demos export' to create a transfer bundle.")
 	return nil
 }
 
@@ -346,18 +346,18 @@ func runDemosExport(cmd *cobra.Command, args []string) error {
 	}
 
 	total := len(entries)
-	fmt.Printf("Exporting %d images to %s...\n", total, outDir)
+	cmd.Printf("Exporting %d images to %s...\n", total, outDir)
 	for i, e := range entries {
 		ref := fmt.Sprintf("%s@%s", e.Image, e.Digest)
 		filename := strings.NewReplacer("/", "_", ":", "_", "@", "_").Replace(ref) + ".tar"
 		tarPath := filepath.Join(outDir, filename)
 
 		if _, err := os.Stat(tarPath); err == nil {
-			fmt.Printf("[%d/%d] Skipping %s (already exists)\n", i+1, total, ref)
+			cmd.Printf("[%d/%d] Skipping %s (already exists)\n", i+1, total, ref)
 			continue
 		}
 
-		fmt.Printf("[%d/%d] Saving %s...\n", i+1, total, ref)
+		cmd.Printf("[%d/%d] Saving %s...\n", i+1, total, ref)
 		saveCmd := exec.Command("docker", "save", "-o", tarPath, ref)
 		saveCmd.Stdout = os.Stdout
 		saveCmd.Stderr = os.Stderr
@@ -366,9 +366,9 @@ func runDemosExport(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\nExport complete. %d images saved to %s/\n", total, outDir)
-	fmt.Printf("Transfer this directory to the air-gapped machine and run:\n")
-	fmt.Printf("  g8e demos import %s\n", outDir)
+	cmd.Printf("\nExport complete. %d images saved to %s/\n", total, outDir)
+	cmd.Printf("Transfer this directory to the air-gapped machine and run:\n")
+	cmd.Printf("  g8e demos import %s\n", outDir)
 	return nil
 }
 
@@ -416,9 +416,9 @@ func runDemosImport(cmd *cobra.Command, args []string) error {
 	}
 
 	total := len(tarFiles)
-	fmt.Printf("Loading %d images from %s...\n", total, inDir)
+	cmd.Printf("Loading %d images from %s...\n", total, inDir)
 	for i, tf := range tarFiles {
-		fmt.Printf("[%d/%d] Loading %s...\n", i+1, total, filepath.Base(tf))
+		cmd.Printf("[%d/%d] Loading %s...\n", i+1, total, filepath.Base(tf))
 		loadCmd := exec.Command("docker", "load", "-i", tf)
 		loadCmd.Stdout = os.Stdout
 		loadCmd.Stderr = os.Stderr
@@ -427,10 +427,10 @@ func runDemosImport(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("\nImport complete. %d images loaded.\n", total)
-	fmt.Println("You can now build and run demos in air-gapped mode:")
-	fmt.Println("  make build")
-	fmt.Println("  g8e demos start <org>")
+	cmd.Printf("\nImport complete. %d images loaded.\n", total)
+	cmd.Println("You can now build and run demos in air-gapped mode:")
+	cmd.Println("  make build")
+	cmd.Println("  g8e demos start <org>")
 	return nil
 }
 
@@ -461,12 +461,12 @@ func runDemosImages(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parsing images manifest: %w", err)
 	}
 
-	fmt.Printf("Images in manifest (%s):\n\n", manifestPath)
+	cmd.Printf("Images in manifest (%s):\n\n", manifestPath)
 	for _, e := range entries {
 		demos := strings.Join(e.Demos, ", ")
-		fmt.Printf("  %s@%s\n", e.Image, e.Digest)
-		fmt.Printf("    tag: %s\n", e.Tag)
-		fmt.Printf("    demos: %s\n\n", demos)
+		cmd.Printf("  %s@%s\n", e.Image, e.Digest)
+		cmd.Printf("    tag: %s\n", e.Tag)
+		cmd.Printf("    demos: %s\n\n", demos)
 	}
 	return nil
 }
@@ -508,11 +508,11 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("%w: %w", constants.ErrStatFailed, err)
 		}
-		fmt.Printf("Warning: g8e binary not found at %s\n", binPath)
+		cmd.Printf("Warning: g8e binary not found at %s\n", binPath)
 		if runtime.GOOS == "windows" {
-			fmt.Printf("Run 'make build' from the repository root, then copy the binary:\n  copy g8e.exe %s\\%s\\g8e.exe\n", constants.DemosDirname, constants.DemosBinDirname)
+			cmd.Printf("Run 'make build' from the repository root, then copy the binary:\n  copy g8e.exe %s\\%s\\g8e.exe\n", constants.DemosDirname, constants.DemosBinDirname)
 		} else {
-			fmt.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
+			cmd.Printf("Run 'make build && cp g8e %s/%s/%s' from the repository root to build it.\n", constants.DemosDirname, constants.DemosBinDirname, constants.DemosBinaryName)
 		}
 	}
 
@@ -522,7 +522,7 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 	}
 
 	// Start the demo environment
-	fmt.Printf("Starting demo environment: %s\n", org)
+	cmd.Printf("Starting demo environment: %s\n", org)
 	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "up", "-d")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
@@ -532,64 +532,64 @@ func runDemosStart(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
-	fmt.Printf("\nDemo environment '%s' started successfully.\n", org)
-	fmt.Printf("Run 'g8e demos status %s' to check service status.\n", org)
-	fmt.Printf("Run 'g8e demos stop %s' to stop the environment.\n", org)
+	cmd.Printf("\nDemo environment '%s' started successfully.\n", org)
+	cmd.Printf("Run 'g8e demos status %s' to check service status.\n", org)
+	cmd.Printf("Run 'g8e demos stop %s' to stop the environment.\n", org)
 
 	// Print endpoint information
-	printDemoEndpoints(org)
+	printDemoEndpoints(cmd, org)
 
 	return nil
 }
 
-func printDemoEndpoints(org string) {
-	fmt.Println("\nAvailable endpoints:")
+func printDemoEndpoints(cmd *cobra.Command, org string) {
+	cmd.Println("\nAvailable endpoints:")
 	switch org {
 	case constants.DemosOrgHealthcare:
-		fmt.Println("  Gateway HTTP:  http://localhost:8081")
-		fmt.Println("  Gateway HTTPS: https://localhost:8444")
-		fmt.Println("  Console:       https://localhost:8444/console/")
-		fmt.Println("  RabbitMQ UI:   http://localhost:15673")
-		fmt.Println("  PostgreSQL:    localhost:5433")
-		fmt.Println("  Metabase:      http://localhost:3001")
+		cmd.Println("  Gateway HTTP:  http://localhost:8081")
+		cmd.Println("  Gateway HTTPS: https://localhost:8444")
+		cmd.Println("  Console:       https://localhost:8444/console/")
+		cmd.Println("  RabbitMQ UI:   http://localhost:15673")
+		cmd.Println("  PostgreSQL:    localhost:5433")
+		cmd.Println("  Metabase:      http://localhost:3001")
 	case constants.DemosOrgGov:
-		fmt.Println("  Gateway HTTP:  http://localhost:8080")
-		fmt.Println("  Gateway HTTPS: https://localhost:8443")
-		fmt.Println("  Console:       https://localhost:8443/console/")
-		fmt.Println("  Demo UI:       http://localhost:3000")
+		cmd.Println("  Gateway HTTP:  http://localhost:8080")
+		cmd.Println("  Gateway HTTPS: https://localhost:8443")
+		cmd.Println("  Console:       https://localhost:8443/console/")
+		cmd.Println("  Demo UI:       http://localhost:3000")
 	case constants.DemosOrgFinance:
-		fmt.Println("  Gateway HTTP:  http://localhost:8082")
-		fmt.Println("  Gateway HTTPS: https://localhost:8445")
-		fmt.Println("  Console:       https://localhost:8445/console/")
-		fmt.Println("  Demo UI:       http://localhost:3002")
+		cmd.Println("  Gateway HTTP:  http://localhost:8082")
+		cmd.Println("  Gateway HTTPS: https://localhost:8445")
+		cmd.Println("  Console:       https://localhost:8445/console/")
+		cmd.Println("  Demo UI:       http://localhost:3002")
 	case constants.DemosOrgSecureData:
-		fmt.Println("  Gateway HTTP:  http://localhost:8083")
-		fmt.Println("  Gateway HTTPS: https://localhost:8446")
-		fmt.Println("  Console:       https://localhost:8446/console/")
-		fmt.Println("  Demo UI:       http://localhost:3003")
+		cmd.Println("  Gateway HTTP:  http://localhost:8083")
+		cmd.Println("  Gateway HTTPS: https://localhost:8446")
+		cmd.Println("  Console:       https://localhost:8446/console/")
+		cmd.Println("  Demo UI:       http://localhost:3003")
 	case constants.DemosOrgDoW:
-		fmt.Println("  Gateway HTTP:  http://localhost:8086")
-		fmt.Println("  Gateway HTTPS: https://localhost:8449")
-		fmt.Println("  Console:       https://localhost:8449/console/")
+		cmd.Println("  Gateway HTTP:  http://localhost:8086")
+		cmd.Println("  Gateway HTTPS: https://localhost:8449")
+		cmd.Println("  Console:       https://localhost:8449/console/")
 	case constants.DemosOrgDHS:
-		fmt.Println("  Gateway HTTP:  http://localhost:8087")
-		fmt.Println("  Gateway HTTPS: https://localhost:8450")
-		fmt.Println("  Console:       https://localhost:8450/console/")
+		cmd.Println("  Gateway HTTP:  http://localhost:8087")
+		cmd.Println("  Gateway HTTPS: https://localhost:8450")
+		cmd.Println("  Console:       https://localhost:8450/console/")
 	case constants.DemosOrgSwarm:
-		fmt.Println("  Gateway HTTP:  http://localhost:8085")
-		fmt.Println("  Gateway HTTPS: https://localhost:8448")
-		fmt.Println("  Console:       https://localhost:8448/console/")
+		cmd.Println("  Gateway HTTP:  http://localhost:8085")
+		cmd.Println("  Gateway HTTPS: https://localhost:8448")
+		cmd.Println("  Console:       https://localhost:8448/console/")
 	default:
-		fmt.Printf("  No endpoint information available for '%s'\n", org)
+		cmd.Printf("  No endpoint information available for '%s'\n", org)
 	}
 
 	if port := demoHTTPPort(org); port != "" {
-		fmt.Println()
-		fmt.Println("  Enroll a passkey for human approval:")
-		fmt.Printf("    g8e auth enroll -e localhost:%s\n", port)
-		fmt.Println()
-		fmt.Println("  This enrolls your CLI session and registers a WebAuthn passkey")
-		fmt.Println("  in your browser. The passkey is required for all governed operations.")
+		cmd.Println()
+		cmd.Println("  Enroll a passkey for human approval:")
+		cmd.Printf("    g8e auth enroll -e localhost:%s\n", port)
+		cmd.Println()
+		cmd.Println("  This enrolls your CLI session and registers a WebAuthn passkey")
+		cmd.Println("  in your browser. The passkey is required for all governed operations.")
 	}
 }
 
@@ -650,7 +650,7 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 	}
 
 	// Stop the demo environment
-	fmt.Printf("Stopping demo environment: %s\n", org)
+	cmd.Printf("Stopping demo environment: %s\n", org)
 	dockerComposeCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down")
 	dockerComposeCmd.Dir = demoDir
 	dockerComposeCmd.Stdout = os.Stdout
@@ -660,7 +660,7 @@ func runDemosStop(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 	}
 
-	fmt.Printf("\nDemo environment '%s' stopped successfully.\n", org)
+	cmd.Printf("\nDemo environment '%s' stopped successfully.\n", org)
 
 	return nil
 }
@@ -965,7 +965,7 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 		return err
 	}
 
-	fmt.Printf("Stopping demo environment: %s\n", org)
+	cmd.Printf("Stopping demo environment: %s\n", org)
 	stopCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "down")
 	stopCmd.Dir = demoDir
 	stopCmd.Stdout = os.Stdout
@@ -974,7 +974,7 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStopFailed, err)
 	}
 
-	fmt.Printf("\nRebuilding images for: %s\n", org)
+	cmd.Printf("\nRebuilding images for: %s\n", org)
 	buildArgs := []string{"compose", "-f", toDockerPath(composePath), "build"}
 	if noCache {
 		buildArgs = append(buildArgs, "--no-cache")
@@ -987,7 +987,7 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
-	fmt.Printf("\nStarting demo environment: %s\n", org)
+	cmd.Printf("\nStarting demo environment: %s\n", org)
 	upCmd := exec.Command("docker", "compose", "-f", toDockerPath(composePath), "up", "-d")
 	upCmd.Dir = demoDir
 	upCmd.Stdout = os.Stdout
@@ -996,8 +996,8 @@ func runDemosRebuild(cmd *cobra.Command, args []string, noCache bool) error {
 		return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 	}
 
-	fmt.Printf("\nDemo environment '%s' rebuilt and started successfully.\n", org)
-	printDemoEndpoints(org)
+	cmd.Printf("\nDemo environment '%s' rebuilt and started successfully.\n", org)
+	printDemoEndpoints(cmd, org)
 
 	return nil
 }
@@ -1112,21 +1112,21 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 
 	// Check if demo is running, start if not
 	if !isDemoRunning(demoDir, composePath) {
-		fmt.Printf("Demo environment '%s' is not running. Starting it now...\n", org)
+		cmd.Printf("Demo environment '%s' is not running. Starting it now...\n", org)
 		if err := runDemosStart(cmd, args); err != nil {
 			return fmt.Errorf("%w: %w", constants.ErrProcessStartFailed, err)
 		}
 	}
 
 	if useTUI {
-		return runDemosWithTUI(org, demoDir, args)
+		return runDemosWithTUI(cmd, org, demoDir, args)
 	}
 
 	if len(args) >= 2 {
 		return runScenario(org, demoDir, args[1]) //nolint:gosec // length checked above
 	}
 
-	return runAllScenarios(org, demoDir)
+	return runAllScenarios(cmd, org, demoDir)
 }
 
 // runDemosWithTUI launches the bubbletea TUI, sets the package-level
@@ -1134,7 +1134,7 @@ func runDemosRun(cmd *cobra.Command, args []string, useTUI bool) error {
 // in a goroutine, and then waits for the user to quit the TUI. After the TUI
 // exits, it waits up to 5 seconds for the scenario goroutine to finish so
 // errors are not silently lost.
-func runDemosWithTUI(org, demoDir string, args []string) error {
+func runDemosWithTUI(cmd *cobra.Command, org, demoDir string, args []string) error {
 	m := tui.NewModel(tui.Options{
 		Version:  "tactical",
 		NodeName: "tactical-edge-01",
@@ -1150,7 +1150,7 @@ func runDemosWithTUI(org, demoDir string, args []string) error {
 		if len(args) >= 2 {
 			scenarioErrCh <- runScenario(org, demoDir, args[1])
 		} else {
-			scenarioErrCh <- runAllScenarios(org, demoDir)
+			scenarioErrCh <- runAllScenarios(cmd, org, demoDir)
 		}
 	}()
 
@@ -1176,13 +1176,13 @@ func isDemoRunning(demoDir, composePath string) bool {
 	return len(strings.TrimSpace(string(output))) > 0
 }
 
-func runAllScenarios(org, demoDir string) error {
+func runAllScenarios(cmd *cobra.Command, org, demoDir string) error {
 	count, ok := scenarioCounts[org]
 	if !ok {
 		return fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
 
-	fmt.Printf("\n%s\n  Running all %s demo scenarios\n%s\n",
+	cmd.Printf("\n%s\n  Running all %s demo scenarios\n%s\n",
 		strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 
 	results := make([]scenarioResult, 0, count)
@@ -1196,7 +1196,7 @@ func runAllScenarios(org, demoDir string) error {
 		results = append(results, result)
 	}
 
-	printResultsTable(org, results)
+	printResultsTable(cmd, org, results)
 
 	hasFail, hasSkip := false, false
 	for _, r := range results {
@@ -1210,13 +1210,13 @@ func runAllScenarios(org, demoDir string) error {
 
 	switch {
 	case hasFail:
-		fmt.Printf("\n%s\n  One or more %s scenarios FAILED.\n%s\n",
+		cmd.Printf("\n%s\n  One or more %s scenarios FAILED.\n%s\n",
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 	case hasSkip:
-		fmt.Printf("\n%s\n  All active %s scenarios passed (some skipped — see table).\n%s\n",
+		cmd.Printf("\n%s\n  All active %s scenarios passed (some skipped — see table).\n%s\n",
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 	default:
-		fmt.Printf("\n%s\n  All %s scenarios passed.\n%s\n",
+		cmd.Printf("\n%s\n  All %s scenarios passed.\n%s\n",
 			strings.Repeat("═", 60), org, strings.Repeat("═", 60))
 	}
 
@@ -1267,22 +1267,22 @@ func titleCase(s string) string {
 	return strings.Join(words, " ")
 }
 
-func printResultsTable(org string, results []scenarioResult) {
-	fmt.Printf("\n%s\n  %s Scenario Results Summary\n%s\n",
+func printResultsTable(cmd *cobra.Command, org string, results []scenarioResult) {
+	cmd.Printf("\n%s\n  %s Scenario Results Summary\n%s\n",
 		strings.Repeat("═", 60), titleCase(org), strings.Repeat("═", 60))
-	fmt.Println()
+	cmd.Println()
 
 	// Print header
-	fmt.Printf("%-10s\t%-50s\t%-12s\t%s\n",
+	cmd.Printf("%-10s\t%-50s\t%-12s\t%s\n",
 		"Scenario", "Name", "Status", "Key Metrics")
-	fmt.Println(strings.Repeat("─", 120))
+	cmd.Println(strings.Repeat("─", 120))
 
 	// Print rows
 	for _, r := range results {
-		fmt.Printf("%-10s\t%-50s\t%-12s\t%s\n",
+		cmd.Printf("%-10s\t%-50s\t%-12s\t%s\n",
 			r.number, r.name, r.status, r.metrics)
 	}
-	fmt.Println()
+	cmd.Println()
 }
 
 // demoStep prints a labeled command and runs it, streaming output inline.

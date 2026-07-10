@@ -40,12 +40,12 @@ import (
 
 // mockAPIClient implements apiClient for testing.
 type mockAPIClient struct {
-	getResp      []byte
-	getErr       error
-	postResp     []byte
-	postErr      error
-	getCalls     []string
-	postCalls    []mockPostCall
+	getResp   []byte
+	getErr    error
+	postResp  []byte
+	postErr   error
+	getCalls  []string
+	postCalls []mockPostCall
 }
 
 type mockPostCall struct {

@@ -22,9 +22,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/g8e-ai/g8e/internal/constants"
 )
 
 func getProjectRoot() string {
@@ -234,15 +236,10 @@ func TestScenarioCounts(t *testing.T) {
 func TestPrintDemoEndpoints(t *testing.T) {
 	t.Run("prints healthcare endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("healthcare")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "healthcare")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -257,15 +254,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints gov endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("gov")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "gov")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -278,15 +270,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints finance endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("finance")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "finance")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -299,15 +286,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints secure-data endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("secure-data")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "secure-data")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -320,15 +302,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints dow endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("dow")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "dow")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -340,15 +317,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints dhs endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("dhs")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "dhs")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -360,15 +332,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints swarm endpoints", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("swarm")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "swarm")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -380,15 +347,10 @@ func TestPrintDemoEndpoints(t *testing.T) {
 
 	t.Run("prints default message for unknown org", func(t *testing.T) {
 		var buf bytes.Buffer
-		originalStdout := os.Stdout
-		r, w, _ := os.Pipe()
-		os.Stdout = w
+		cmd := &cobra.Command{}
+		cmd.SetOut(&buf)
 
-		printDemoEndpoints("unknown-org")
-
-		w.Close()
-		os.Stdout = originalStdout
-		buf.ReadFrom(r)
+		printDemoEndpoints(cmd, "unknown-org")
 
 		output := buf.String()
 		assert.Contains(t, output, "Available endpoints:")
@@ -487,7 +449,7 @@ func TestRunScenario(t *testing.T) {
 
 func TestRunAllScenarios(t *testing.T) {
 	t.Run("returns ErrNotFound wrapped error for org without scenarios", func(t *testing.T) {
-		err := runAllScenarios("unknown-org", "/tmp")
+		err := runAllScenarios(&cobra.Command{}, "unknown-org", "/tmp")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, constants.ErrNotFound)
 		assert.Contains(t, err.Error(), "no scenarios defined for demo environment 'unknown-org'")

@@ -527,17 +527,10 @@ func TestPrintResultsTable_OutputContainsAllRows(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	t.Cleanup(func() {
-		os.Stdout = oldStdout
-		r.Close()
-	})
+	cmd := &cobra.Command{}
+	cmd.SetOut(&buf)
 
-	printResultsTable("healthcare", results)
-	w.Close()
-	buf.ReadFrom(r)
+	printResultsTable(cmd, "healthcare", results)
 	output := buf.String()
 	assert.Contains(t, output, "Healthcare")
 	assert.Contains(t, output, "First Scenario")
@@ -553,7 +546,8 @@ func TestRunScenarioWithResult_UnknownOrgReturnsNotFound(t *testing.T) {
 }
 
 func TestRunAllScenarios_UnknownOrgReturnsNotFound(t *testing.T) {
-	err := runAllScenarios("unknown-org", "/tmp")
+	cmd := &cobra.Command{}
+	err := runAllScenarios(cmd, "unknown-org", "/tmp")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, constants.ErrNotFound))
 }
