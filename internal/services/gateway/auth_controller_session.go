@@ -71,7 +71,7 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 
 	// Clear cookie
 	sameSite := http.SameSiteLaxMode
-	if len(c.cfg.Gateway.AllowedOrigins) > 0 {
+	if c.crossOrigin {
 		sameSite = http.SameSiteNoneMode
 	}
 	http.SetCookie(w, &http.Cookie{

@@ -42,17 +42,22 @@ func (h *HTTPHandler) corsMiddleware(next http.Handler) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" && allowedSet[strings.ToLower(strings.TrimRight(origin, "/"))] {
+		originAllowed := origin != "" && allowedSet[strings.ToLower(strings.TrimRight(origin, "/"))]
+
+		// Vary: Origin must always be set when the middleware is active so
+		// caches do not serve a matching-origin response to a non-matching origin.
+		w.Header().Add(constants.HeaderVary, "Origin")
+
+		if originAllowed {
 			w.Header().Set(constants.HeaderAccessControlAllowOrigin, origin)
 			w.Header().Set(constants.HeaderAccessControlAllowCredentials, "true")
-			w.Header().Add("Vary", "Origin")
 		}
 
-		// Handle OPTIONS preflight
-		if r.Method == http.MethodOptions {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-G8E-Web-Session-ID, X-G8E-CLI-Session-ID, X-G8E-Operator-Session-ID, X-G8E-User-ID, X-G8E-Operator-ID, X-G8E-Request-ID, X-Requested-With")
-			w.Header().Set("Access-Control-Max-Age", "3600")
+		// Handle OPTIONS preflight only for allowed origins
+		if r.Method == http.MethodOptions && originAllowed {
+			w.Header().Set(constants.HeaderAccessControlAllowMethods, "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set(constants.HeaderAccessControlAllowHeaders, "Content-Type, Authorization, X-G8E-Web-Session-ID, X-G8E-CLI-Session-ID, X-G8E-Operator-Session-ID, X-G8E-User-ID, X-G8E-Operator-ID, X-G8E-Request-ID, X-Requested-With")
+			w.Header().Set(constants.HeaderAccessControlMaxAge, constants.HeaderValueCORSPreflightMaxAge)
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}

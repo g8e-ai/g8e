@@ -131,7 +131,23 @@ func newHTTPHandler(deps HTTPHandlerDependencies) (*HTTPHandler, error) {
 	// Initialize actuator key reader for device enrollment
 	actuatorKeyReader := &fileActuatorKeyReader{path: paths.Infra.ActuatorPubJSONPath}
 	enrollmentTokenSvc := NewEnrollmentTokenService(deps.DB, deps.Logger)
-	h.authController = newAuthController(deps.Cfg, deps.Logger, deps.DB, deps.Auth, deps.Passkey, deps.UserSvc, deps.Reg, deps.PKI, deps.WebSessionSvc, deps.CLISessionSvc, deps.OperatorSessionSvc, enrollmentTokenSvc, deps.Responder, actuatorKeyReader)
+	h.authController = newAuthController(AuthControllerDeps{
+		Cfg:                deps.Cfg,
+		Logger:             deps.Logger,
+		DB:                 deps.DB,
+		Auth:               deps.Auth,
+		Passkey:            deps.Passkey,
+		UserSvc:            deps.UserSvc,
+		Reg:                deps.Reg,
+		PKI:                deps.PKI,
+		WebSessionSvc:      deps.WebSessionSvc,
+		CLISessionSvc:      deps.CLISessionSvc,
+		OperatorSessionSvc: deps.OperatorSessionSvc,
+		EnrollmentTokenSvc: enrollmentTokenSvc,
+		Responder:          deps.Responder,
+		ActuatorKeyReader:  actuatorKeyReader,
+		CrossOrigin:        len(deps.Cfg.Gateway.AllowedOrigins) > 0,
+	})
 	h.adminController = newAdminController(deps.Cfg, deps.Logger, deps.DB, deps.UserSvc, deps.Responder)
 	h.operatorController = newOperatorController(deps.Cfg, deps.Logger, deps.Reg, deps.Auth, deps.Responder)
 

@@ -62,7 +62,10 @@ const (
 	HeaderAccept                        = "Accept"
 	HeaderAcceptLanguage                = "Accept-Language"
 	HeaderAccessControlAllowCredentials = "Access-Control-Allow-Credentials"
+	HeaderAccessControlAllowHeaders     = "Access-Control-Allow-Headers"
+	HeaderAccessControlAllowMethods     = "Access-Control-Allow-Methods"
 	HeaderAccessControlAllowOrigin      = "Access-Control-Allow-Origin"
+	HeaderAccessControlMaxAge           = "Access-Control-Max-Age"
 	HeaderAccessControlRequestHeaders   = "Access-Control-Request-Headers"
 	HeaderAccessControlRequestMethod    = "Access-Control-Request-Method"
 	HeaderAuthorization                 = "Authorization"
@@ -70,6 +73,7 @@ const (
 	HeaderCLISessionID                  = "X-G8E-CLI-Session-ID"
 	HeaderCacheControl                  = "Cache-Control"
 	HeaderCaseID                        = "X-G8E-Case-ID"
+	HeaderConnection                   = "Connection"
 	HeaderContentDisposition            = "Content-Disposition"
 	HeaderContentLanguage               = "Content-Language"
 	HeaderContentLength                 = "Content-Length"
@@ -90,6 +94,7 @@ const (
 	HeaderTaskID                        = "X-G8E-Task-ID"
 	HeaderUserAgent                     = "User-Agent"
 	HeaderUserID                        = "X-G8E-User-ID"
+	HeaderVary                          = "Vary"
 	HeaderWebSessionID                  = "X-G8E-Web-Session-ID"
 	HeaderXAccelBuffering               = "X-Accel-Buffering"
 	HeaderXContentTypeOptions           = "X-Content-Type-Options"
@@ -134,6 +139,7 @@ const (
 	HeaderValueCRL             = "application/pkix-crl"
 	HeaderValueShell           = "application/x-sh"
 	HeaderValuePowerShell      = "application/x-powershell"
+	HeaderValueCORSPreflightMaxAge = "3600"
 )
 
 // ContextKey is a custom type for context keys to avoid collisions with other packages.

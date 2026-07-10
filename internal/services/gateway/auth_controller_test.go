@@ -114,7 +114,23 @@ func setupTestAuthController(t *testing.T) (*AuthController, *config.Config) {
 	})
 
 	enrollmentTokenSvc := NewEnrollmentTokenService(db, logger)
-	authController := newAuthController(cfg, logger, db, auth, passkeyHandler, userSvc, reg, pki, webSessionSvc, cliSessionSvc, operatorSessionSvc, enrollmentTokenSvc, resp, nil)
+	authController := newAuthController(AuthControllerDeps{
+		Cfg:                cfg,
+		Logger:             logger,
+		DB:                 db,
+		Auth:               auth,
+		Passkey:            passkeyHandler,
+		UserSvc:            userSvc,
+		Reg:                reg,
+		PKI:                pki,
+		WebSessionSvc:      webSessionSvc,
+		CLISessionSvc:      cliSessionSvc,
+		OperatorSessionSvc: operatorSessionSvc,
+		EnrollmentTokenSvc: enrollmentTokenSvc,
+		Responder:          resp,
+		ActuatorKeyReader:  nil,
+		CrossOrigin:        false,
+	})
 	return authController, cfg
 }
 

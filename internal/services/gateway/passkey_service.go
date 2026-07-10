@@ -655,14 +655,14 @@ func (s *PasskeyService) VerifyL3Proof(ctx context.Context, userID, transactionH
 		Expires:              time.Now().Add(passkeyChallengeTTL),
 	}
 
-	assertionResponse := map[string]interface{}{
-		"id":    proof.CredentialId,
-		"rawId": proof.CredentialId,
-		"type":  "public-key",
-		"response": map[string]string{
-			"clientDataJSON":    proof.ClientDataJson,
-			"authenticatorData": proof.AuthenticatorData,
-			"signature":         proof.Signature,
+	assertionResponse := models.ParsedAssertionResponse{
+		ID:    proof.CredentialId,
+		RawID: proof.CredentialId,
+		Type:  "public-key",
+		Response: models.ParsedAssertionResponseBody{
+			ClientDataJSON:    proof.ClientDataJson,
+			AuthenticatorData: proof.AuthenticatorData,
+			Signature:         proof.Signature,
 		},
 	}
 

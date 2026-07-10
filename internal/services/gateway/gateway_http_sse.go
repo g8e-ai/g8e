@@ -431,32 +431,10 @@ func (h *HTTPHandler) handleInternalSSEStream(w http.ResponseWriter, r *http.Req
 	}
 
 	// Set SSE Headers
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	origin := r.Header.Get("Origin")
-	allowed := h.cfg.Gateway.AllowedOrigins
-	if origin != "" {
-		if len(allowed) > 0 {
-			matched := false
-			for _, a := range allowed {
-				if strings.EqualFold(strings.TrimRight(a, "/"), strings.TrimRight(origin, "/")) {
-					matched = true
-					break
-				}
-			}
-			if matched {
-				w.Header().Set(constants.HeaderAccessControlAllowOrigin, origin)
-				w.Header().Set(constants.HeaderAccessControlAllowCredentials, "true")
-			}
-		} else {
-			w.Header().Set(constants.HeaderAccessControlAllowOrigin, origin)
-			w.Header().Set(constants.HeaderAccessControlAllowCredentials, "true")
-		}
-	} else {
-		w.Header().Set(constants.HeaderAccessControlAllowOrigin, "*")
-	}
-	w.Header().Set("X-Accel-Buffering", "no") // For Nginx
+	w.Header().Set(constants.HeaderContentType, "text/event-stream")
+	w.Header().Set(constants.HeaderCacheControl, "no-cache")
+	w.Header().Set(constants.HeaderConnection, "keep-alive")
+	w.Header().Set(constants.HeaderXAccelBuffering, "no")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
