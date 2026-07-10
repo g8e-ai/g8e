@@ -31,7 +31,7 @@ import (
 func main() {
 	// Create a governance envelope for a command execution
 	envelope := &commonv1.GovernanceEnvelope{
-		Id:                "txn-abc-123",
+		Id:                "hash-123",
 		Timestamp:         timestamppb.Now(),
 		ExpiresAt:         timestamppb.New(time.Now().Add(5 * time.Minute)),
 		SourceComponent:   commonv1.Component_COMPONENT_CLIENT,
@@ -78,12 +78,10 @@ func main() {
 			},
 			L3: &commonv1.L3Metadata{
 				Proof: &commonv1.L3Proof{
-					ClientDataJson:      `{"challenge":"abc"}`,
-					AuthenticatorData:   "auth-data",
-					Signature:           "sig-xyz",
-					CredentialId:        "cred-123",
-					MtlsCertFingerprint: "fp-456",
-					CliSignature:        "cli-sig",
+					ClientDataJson:    `{"challenge":"abc"}`,
+					AuthenticatorData: "auth-data",
+					Signature:         "sig-xyz",
+					CredentialId:      "cred-123",
 				},
 			},
 		},
