@@ -1,5 +1,8 @@
 # g8e Scripts
 
+Last Updated: 2026-07-10
+Version: v1.3.11
+
 g8e provides platform-specific bootstrap scripts for local development and gateway-served deploy scripts for remote operator installation. The `g8e demos` CLI also supports air-gapped image export and import for demo environments.
 
 ## Overview

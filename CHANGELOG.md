@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
+| 1.3.11 | 2026-07-10 | Test coverage, CLI testability, and Docker E2E reliability. Raises coverage threshold to 75%, adds dependency injection across CLI commands, shared Docker E2E fixture via TestMain, BuildKit cache mounts, g8e.local network alias, env var resolution for gateway flags, and removes demos/airgap.sh in favor of Go CLI commands. | [v1.3.11](docs/release_notes/v1.3.x/v1.3.11.md) |
 | 1.3.10 | 2026-07-10 | CORS support, build hardening, and protocol cleanup. Adds configurable cross-origin browser access, unified build flags, UPX compression target, and WebAuthn assertion response fix. | [v1.3.10](docs/release_notes/v1.3.x/v1.3.10.md) |
 | 1.3.9 | 2026-07-09 | Code quality, test coverage, and reliability. Renames entry point to `cmd/g8e`, adds `--public-base-url` flag, health-check-based process startup, and significantly expands test coverage. | [v1.3.9](docs/release_notes/v1.3.x/v1.3.9.md) |
 | 1.3.8 | 2026-07-08 | Security and usability. One-time enrollment tokens, gateway foreground mode, live swarm demo, PATH setup in setup scripts, and test suite hardening. | [v1.3.8](docs/release_notes/v1.3.x/v1.3.8.md) |

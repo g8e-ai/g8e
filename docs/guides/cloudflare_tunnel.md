@@ -6,7 +6,7 @@ parent: Guides
 # Cloudflare Tunnel Integration
 
 Last Updated: 2026-07-10
-Version: v1.3.10
+Version: v1.3.11
 
 ---
 
