@@ -145,15 +145,12 @@ func TestGetSupportedAgents_ReturnsAllExpectedAgents(t *testing.T) {
 }
 
 func TestWriteAgentConfig_CursorWritesConfigFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	t.Cleanup(func() { os.Setenv("HOME", originalHome) })
+	t.Setenv("HOME", t.TempDir())
 
 	configPath, cleanup, err := WriteAgentConfig("cursor", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 	assert.FileExists(t, configPath)
 
@@ -165,57 +162,45 @@ func TestWriteAgentConfig_CursorWritesConfigFile(t *testing.T) {
 }
 
 func TestWriteAgentConfig_DevinWritesConfigFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	t.Cleanup(func() { os.Setenv("HOME", originalHome) })
+	t.Setenv("HOME", t.TempDir())
 
 	configPath, cleanup, err := WriteAgentConfig("devin", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 	assert.FileExists(t, configPath)
 }
 
 func TestWriteAgentConfig_GooseWritesConfigFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	t.Cleanup(func() { os.Setenv("HOME", originalHome) })
+	t.Setenv("HOME", t.TempDir())
 
 	configPath, cleanup, err := WriteAgentConfig("goose", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 	assert.FileExists(t, configPath)
 }
 
 func TestWriteAgentConfig_VSCodeWritesConfigFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	t.Cleanup(func() { os.Setenv("HOME", originalHome) })
+	t.Setenv("HOME", t.TempDir())
 
 	configPath, cleanup, err := WriteAgentConfig("vscode", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 	assert.FileExists(t, configPath)
 }
 
 func TestWriteAgentConfig_ContinueWritesConfigFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	t.Cleanup(func() { os.Setenv("HOME", originalHome) })
+	t.Setenv("HOME", t.TempDir())
 
 	configPath, cleanup, err := WriteAgentConfig("continue", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 	assert.FileExists(t, configPath)
 }
@@ -226,7 +211,7 @@ func TestWriteAgentConfig_AiderWritesYamlInCwd(t *testing.T) {
 	configPath, cleanup, err := WriteAgentConfig("aider", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 	assert.FileExists(t, filepath.Join(tmpDir, configPath))
 }
@@ -245,7 +230,7 @@ func TestWriteAgentConfig_OllamaWritesTempFile(t *testing.T) {
 	configPath, cleanup, err := WriteAgentConfig("ollama", "/fake/g8e")
 	require.NoError(t, err)
 	require.NotNil(t, cleanup)
-	defer cleanup()
+	t.Cleanup(cleanup)
 	assert.FileExists(t, configPath)
 }
 
@@ -253,20 +238,17 @@ func TestWriteAgentConfig_GenericWritesTempFile(t *testing.T) {
 	configPath, cleanup, err := WriteAgentConfig("generic", "/fake/g8e")
 	require.NoError(t, err)
 	require.NotNil(t, cleanup)
-	defer cleanup()
+	t.Cleanup(cleanup)
 	assert.FileExists(t, configPath)
 }
 
 func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	t.Cleanup(func() { os.Setenv("HOME", originalHome) })
+	t.Setenv("HOME", t.TempDir())
 
 	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 	assert.FileExists(t, configPath)
 
@@ -278,9 +260,7 @@ func TestWriteAgentConfig_GeminiWritesSettingsFile(t *testing.T) {
 
 func TestWriteAgentConfig_GeminiMergesExistingSettings(t *testing.T) {
 	tmpHome := t.TempDir()
-	originalHome := os.Getenv("HOME")
-	os.Setenv("HOME", tmpHome)
-	t.Cleanup(func() { os.Setenv("HOME", originalHome) })
+	t.Setenv("HOME", tmpHome)
 
 	geminiDir := filepath.Join(tmpHome, ".gemini")
 	require.NoError(t, os.MkdirAll(geminiDir, 0o755))
@@ -290,7 +270,7 @@ func TestWriteAgentConfig_GeminiMergesExistingSettings(t *testing.T) {
 	configPath, cleanup, err := WriteAgentConfig("gemini", "/fake/g8e")
 	require.NoError(t, err)
 	if cleanup != nil {
-		defer cleanup()
+		t.Cleanup(cleanup)
 	}
 
 	data, err := os.ReadFile(configPath)

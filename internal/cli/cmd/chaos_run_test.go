@@ -51,10 +51,10 @@ func TestRunChaos_ZeroCountConfigConstruction(t *testing.T) {
 	originalCount := chaosCount
 	t.Cleanup(func() { chaosCount = originalCount })
 
-	chaosCount = 0
-
 	cmd := chaosCmd()
 	require.NotNil(t, cmd)
+
+	chaosCount = 0
 
 	cfg := chaos.Config{
 		Count:   chaosCount,

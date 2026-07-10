@@ -288,7 +288,7 @@ func TestTUI_RealConfigNoGateway(t *testing.T) {
 
 		deps := tuiDeps{
 			configLoader:         func(string) (*config.Config, error) { return cfg, nil },
-			checkOperatorRunning: auth.CheckOperatorRunning,
+			checkOperatorRunning: func(*config.Config) error { return constants.ErrGatewayNotReachable },
 			loadCredentials:      auth.LoadCredentials,
 			buildMTLSClient:      auth.BuildMTLSClient,
 			tuiRun:               func(context.Context, tui.Options) error { return nil },

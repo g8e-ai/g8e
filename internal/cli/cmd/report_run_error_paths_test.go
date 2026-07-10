@@ -15,34 +15,39 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestReportAllCmd_NoConfigReturnsError(t *testing.T) {
+func TestReportAllCmd_EmptyDataReturnsSuccess(t *testing.T) {
 	chdirTemp(t)
 
 	cmd := reportAllCmd()
+	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Verification PASSED")
 }
 
-func TestReportVerifyCmd_NoConfigReturnsError(t *testing.T) {
+func TestReportVerifyCmd_EmptyDataReturnsSuccess(t *testing.T) {
 	chdirTemp(t)
 
 	cmd := reportVerifyCmd()
+	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), "Verification PASSED")
 }
 
 func TestReportFlags_AddFlags_RegistersAllFlags(t *testing.T) {

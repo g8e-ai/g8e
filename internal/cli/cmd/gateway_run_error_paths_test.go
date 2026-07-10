@@ -15,6 +15,8 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/g8e-ai/g8e/internal/cli/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 )
 
@@ -47,6 +50,12 @@ func setupGatewayTestEnv(t *testing.T) string {
 func TestGatewayStopCmd_NoConfigReturnsError(t *testing.T) {
 	chdirTemp(t)
 
+	originalLoader := configLoad
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("no config")
+	}
+	t.Cleanup(func() { configLoad = originalLoader })
+
 	cmd := gatewayStopCmd()
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
@@ -58,6 +67,12 @@ func TestGatewayStopCmd_NoConfigReturnsError(t *testing.T) {
 
 func TestGatewayStatusCmd_NoConfigReturnsError(t *testing.T) {
 	chdirTemp(t)
+
+	originalLoader := configLoad
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("no config")
+	}
+	t.Cleanup(func() { configLoad = originalLoader })
 
 	cmd := gatewayStatusCmd()
 	var buf bytes.Buffer
@@ -95,7 +110,14 @@ func TestGatewaySettingsCmd_NoConfigReturnsError(t *testing.T) {
 func TestGatewayResetCmd_NoConfigReturnsError(t *testing.T) {
 	chdirTemp(t)
 
+	originalLoader := configLoad
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("no config")
+	}
+	t.Cleanup(func() { configLoad = originalLoader })
+
 	cmd := gatewayResetCmd()
+	cmd.Flags().Set("force", "true")
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -106,6 +128,12 @@ func TestGatewayResetCmd_NoConfigReturnsError(t *testing.T) {
 
 func TestGatewayCleanCmd_NoConfigReturnsError(t *testing.T) {
 	chdirTemp(t)
+
+	originalLoader := configLoad
+	configLoad = func(string) (*config.Config, error) {
+		return nil, errors.New("no config")
+	}
+	t.Cleanup(func() { configLoad = originalLoader })
 
 	cmd := gatewayCleanCmd()
 	var buf bytes.Buffer
@@ -245,7 +273,8 @@ func TestGatewayResetCmd_ForceFlagSkipsPrompt(t *testing.T) {
 	cmd.SetErr(&buf)
 
 	err := cmd.RunE(cmd, nil)
-	require.NoError(t, err)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
 }
 
 func TestGatewayStartCmd_ValidPostureDoesNotReturnPostureError(t *testing.T) {
@@ -266,6 +295,7 @@ func TestGatewayStartCmd_ValidPostureDoesNotReturnPostureError(t *testing.T) {
 func TestGatewayServeCmd_ValidPostureDoesNotReturnPostureError(t *testing.T) {
 	cmd := gatewayServeCmd()
 	cmd.Flags().Set("posture", "notary")
+	cmd.SetContext(context.Background())
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)

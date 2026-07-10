@@ -91,7 +91,7 @@ func TestPerformEnroll_WithLocalCredsGatewayDownReturnsError(t *testing.T) {
 	cfg := setupDataTestConfig(t, tmpDir)
 
 	require.NoError(t, os.WriteFile(cfg.CredentialsFile(), []byte(`{"user_id":"u1","cli_session_id":"s1"}`), 0o600))
-	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("fake-cert"), 0o600))
+	require.NoError(t, os.WriteFile(cfg.CLICertFile(), []byte("-----BEGIN CERTIFICATE-----\nMIIBdummy==\n-----END CERTIFICATE-----\n"), 0o600))
 
 	cmd := enrollCmdWithConfig(func(string) (*config.Config, error) {
 		return cfg, nil
