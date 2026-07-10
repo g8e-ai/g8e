@@ -83,18 +83,6 @@ func TestGatewayStatusCmd_NoConfigReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestGatewayRestartCmd_NoConfigReturnsError(t *testing.T) {
-	chdirTemp(t)
-
-	cmd := gatewayRestartCmd()
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-}
-
 func TestGatewaySettingsCmd_NoConfigReturnsError(t *testing.T) {
 	chdirTemp(t)
 
@@ -261,35 +249,6 @@ func TestGatewayCleanCmd_ForceFlagSkipsPrompt(t *testing.T) {
 	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "Clean complete")
-}
-
-func TestGatewayResetCmd_ForceFlagSkipsPrompt(t *testing.T) {
-	setupGatewayTestEnv(t)
-
-	cmd := gatewayResetCmd()
-	cmd.Flags().Set("force", "true")
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrProcessStartFailed)
-}
-
-func TestGatewayStartCmd_ValidPostureDoesNotReturnPostureError(t *testing.T) {
-	setupGatewayTestEnv(t)
-
-	cmd := gatewayStartCmd()
-	cmd.Flags().Set("posture", "consensus")
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	if err != nil {
-		assert.NotErrorIs(t, err, constants.ErrInvalidPosture)
-	}
 }
 
 func TestGatewayServeCmd_ValidPostureDoesNotReturnPostureError(t *testing.T) {

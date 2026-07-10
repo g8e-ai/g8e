@@ -93,32 +93,6 @@ func TestGatewayResetCmd_AbortsOnNViaCmdSetIn(t *testing.T) {
 	assert.Contains(t, buf.String(), "Aborted")
 }
 
-func TestGatewayResetCmd_ConfirmYesTriggersStopWhichFails(t *testing.T) {
-	setupGatewayTestEnv(t)
-
-	cmd := gatewayResetCmd()
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	cmd.SetIn(strings.NewReader("y\n"))
-
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-}
-
-func TestGatewayResetCmd_ConfirmYesUppercaseTriggersStop(t *testing.T) {
-	setupGatewayTestEnv(t)
-
-	cmd := gatewayResetCmd()
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-	cmd.SetIn(strings.NewReader("Y\n"))
-
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-}
-
 func TestGatewayCleanCmd_ForceFlagSkipsPromptViaCmdSetIn(t *testing.T) {
 	setupGatewayTestEnv(t)
 

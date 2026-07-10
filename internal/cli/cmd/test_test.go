@@ -81,7 +81,7 @@ func TestTestCoverageCmd(t *testing.T) {
 		cmd := testCoverageCmd()
 		assert.Equal(t, "coverage", cmd.Use)
 		assert.Contains(t, cmd.Short, "coverage")
-		assert.Contains(t, cmd.Long, "70%")
+		assert.Contains(t, cmd.Long, "75%")
 		assert.NotNil(t, cmd.RunE)
 	})
 

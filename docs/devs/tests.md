@@ -61,7 +61,7 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 ./g8e test unit        # Tier 1 — no external dependencies
 ./g8e test integration # Tier 2 — on-disk SQLite, local PKI
 ./g8e test e2e         # Tier 3 — requires running gateway
-./g8e test coverage    # Coverage report (70% threshold enforced)
+./g8e test coverage    # Coverage report (75% threshold enforced)
 ./g8e test lint        # golangci-lint + quality checks
 ./g8e agent-harness list    # List agent harness scenarios
 ./g8e agent-harness run     # Run scenarios against real Gateway/Operator
