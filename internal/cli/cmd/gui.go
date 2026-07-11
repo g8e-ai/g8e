@@ -16,17 +16,17 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/g8e-ai/g8e/internal/cli/config"
-	"github.com/g8e-ai/g8e/internal/cli/platform"
-	"github.com/g8e-ai/g8e/internal/cli/serve"
-	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/netutil"
 )
@@ -46,10 +46,10 @@ func guiCmd() *cobra.Command {
 		Short: "Enroll external frontend applications with the g8e Gateway",
 		Long: `Manage GUI/frontend application enrollment with the g8e Gateway.
 
-Enrollment registers a frontend application's origin with the gateway's CORS
-allowed origins and passkey relying party (RP) origins, then restarts the
-gateway so the new configuration takes effect. After enrollment, the frontend
-can authenticate via WebAuthn passkeys and receive SSE events from the gateway.
+Enrollment registers a frontend application's origin in the local enrollment
+file and verifies that the running gateway was started with the correct
+--cors-origin and --passkey-rp-origin flags for that origin. The gateway is
+NOT restarted — it must be started with the right flags beforehand.
 
 This enables any external application (Lovable, custom React app, etc.) to
 connect securely to the g8e platform.`,
@@ -66,15 +66,14 @@ connect securely to the g8e platform.`,
 }
 
 func guiEnrollCmd() *cobra.Command {
-	return guiEnrollCmdWithDeps(loadConfig, restartGateway)
+	return guiEnrollCmdWithDeps(loadConfig, checkGatewayCORS)
 }
 
-func guiEnrollCmdWithDeps(configLoader func(string) (*config.Config, error), restarter func(*config.Config, []string, []string) error) *cobra.Command {
+func guiEnrollCmdWithDeps(configLoader func(string) (*config.Config, error), corsChecker func(cfg *config.Config, origin string) error) *cobra.Command {
 	var origin string
 	var passkeyRpID string
 	var passkeyRpName string
 	var publicBaseURL string
-	var noRestart bool
 
 	cmd := &cobra.Command{
 		Use:   "enroll",
@@ -83,13 +82,12 @@ func guiEnrollCmdWithDeps(configLoader func(string) (*config.Config, error), res
 
 This command:
 1. Validates the origin URL
-2. Persists the origin to the enrollment file (.g8e/gui_enrollments.json)
-3. Restarts the gateway with the origin added to CORS allowed origins and passkey RP origins
+2. Checks that the running gateway has the origin in its CORS allowed origins
+3. Persists the origin to the enrollment file (.g8e/gui_enrollments.json)
 4. Outputs a configuration snippet for the frontend developer
 
-The gateway must be running before enrollment. Use --no-restart to skip the
-gateway restart (you will need to restart manually for the new origin to take
-effect).`,
+The gateway must already be running with --cors-origin and --passkey-rp-origin
+flags set for this origin. This command does NOT restart the gateway.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if origin == "" {
 				return fmt.Errorf("%w: --origin is required", constants.ErrMissingRequiredField)
@@ -102,6 +100,10 @@ effect).`,
 			cfg, err := configLoader("")
 			if err != nil {
 				return fmt.Errorf("gui: load config: %w", err)
+			}
+
+			if err := corsChecker(cfg, origin); err != nil {
+				return err
 			}
 
 			enrollmentPath := guiEnrollmentFilePath(cfg)
@@ -127,19 +129,6 @@ effect).`,
 			cmd.Printf("Enrolled origin: %s\n", origin)
 			cmd.Printf("Saved to: %s\n", enrollmentPath)
 
-			if !noRestart {
-				cmd.Println("\nRestarting gateway to apply CORS and passkey RP origins...")
-				if err := restarter(cfg, enrollment.Origins, []string{origin}); err != nil {
-					cmd.Printf("Warning: gateway restart failed: %v\n", err)
-					cmd.Println("The origin has been saved. Restart the gateway manually to apply changes.")
-				} else {
-					cmd.Println("Gateway restarted successfully.")
-				}
-			} else {
-				cmd.Println("\n--no-restart specified. Restart the gateway manually to apply changes:")
-				cmd.Printf("  g8e gw restart\n")
-			}
-
 			cmd.Println()
 			printEnrollConfig(cmd, origin, passkeyRpID, passkeyRpName, publicBaseURL)
 
@@ -151,7 +140,6 @@ effect).`,
 	cmd.Flags().StringVar(&passkeyRpID, "passkey-rp-id", "", "Passkey RP ID (defaults to gateway's hostname from origin)")
 	cmd.Flags().StringVar(&passkeyRpName, "passkey-rp-name", "", "Passkey RP display name (default: g8e)")
 	cmd.Flags().StringVar(&publicBaseURL, "public-base-url", "", "Public base URL for the gateway (e.g., https://console.g8e.ai)")
-	cmd.Flags().BoolVar(&noRestart, "no-restart", false, "Skip gateway restart (save enrollment only)")
 
 	return cmd
 }
@@ -223,23 +211,20 @@ Use --json for machine-readable output suitable for scripting.`,
 }
 
 func guiRemoveCmd() *cobra.Command {
-	return guiRemoveCmdWithDeps(loadConfig, restartGateway)
+	return guiRemoveCmdWithDeps(loadConfig)
 }
 
-func guiRemoveCmdWithDeps(configLoader func(string) (*config.Config, error), restarter func(*config.Config, []string, []string) error) *cobra.Command {
+func guiRemoveCmdWithDeps(configLoader func(string) (*config.Config, error)) *cobra.Command {
 	var origin string
-	var noRestart bool
 
 	cmd := &cobra.Command{
 		Use:   "remove",
 		Short: "Remove an enrolled frontend application origin",
-		Long: `Remove a frontend application origin from the enrollment file and
-restart the gateway so the origin is no longer accepted for CORS or
-passkey RP.
+		Long: `Remove a frontend application origin from the enrollment file.
 
-The gateway must be running. Use --no-restart to skip the gateway
-restart (you will need to restart manually for the removal to take
-effect).`,
+This command does NOT restart the gateway. The origin will remain in the
+gateway's CORS and passkey RP configuration until the gateway is restarted
+without the corresponding --cors-origin and --passkey-rp-origin flags.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if origin == "" {
 				return fmt.Errorf("%w: --origin is required", constants.ErrMissingRequiredField)
@@ -281,26 +266,14 @@ effect).`,
 
 			cmd.Printf("Removed origin: %s\n", origin)
 			cmd.Printf("Saved to: %s\n", enrollmentPath)
-
-			if !noRestart {
-				cmd.Println("\nRestarting gateway to update CORS and passkey RP origins...")
-				if err := restarter(cfg, enrollment.Origins, enrollment.Origins); err != nil {
-					cmd.Printf("Warning: gateway restart failed: %v\n", err)
-					cmd.Println("The origin has been removed from the enrollment file. Restart the gateway manually to apply changes.")
-				} else {
-					cmd.Println("Gateway restarted successfully.")
-				}
-			} else {
-				cmd.Println("\n--no-restart specified. Restart the gateway manually to apply changes:")
-				cmd.Printf("  g8e gw restart\n")
-			}
+			cmd.Println("\nThe gateway's CORS and passkey RP configuration is unchanged.")
+			cmd.Println("Restart the gateway without the origin's flags to stop accepting it:")
 
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&origin, "origin", "", "Frontend application origin URL to remove")
-	cmd.Flags().BoolVar(&noRestart, "no-restart", false, "Skip gateway restart (save enrollment only)")
 
 	return cmd
 }
@@ -512,44 +485,46 @@ func saveGUIEnrollment(path string, enrollment *GUIEnrollment) error {
 	return os.WriteFile(path, data, constants.PermFilePrivate)
 }
 
-// restartGateway stops and restarts the gateway with the given CORS origins
-// and passkey RP origins added to the existing configuration.
-func restartGateway(cfg *config.Config, corsOrigins, passkeyRpOrigins []string) error {
-	pm, err := platform.NewProcessManager(cfg.ProjectRoot)
+// checkGatewayCORS verifies that the running gateway was started with the
+// given origin in its CORS allowed origins. It sends an OPTIONS preflight
+// request to the gateway's HTTP health endpoint and checks that the gateway
+// responds with the appropriate Access-Control-Allow-Origin header.
+//
+// If the gateway is not running or does not have the origin configured, it
+// returns a helpful error telling the user to restart the gateway with the
+// correct flags.
+func checkGatewayCORS(cfg *config.Config, origin string) error {
+	httpURL := netutil.LocalhostHTTPURL(constants.Ports.OperatorHttp)
+
+	client := &http.Client{Timeout: 5 * time.Second}
+
+	req, err := http.NewRequest(http.MethodOptions, httpURL+constants.APIPaths.Health, nil)
 	if err != nil {
-		return fmt.Errorf("create process manager: %w", err)
+		return fmt.Errorf("gui: create CORS preflight request: %w", err)
 	}
+	req.Header.Set("Origin", origin)
+	req.Header.Set("Access-Control-Request-Method", "GET")
+	req.Header.Set("Access-Control-Request-Headers", "Content-Type")
 
-	running, _, err := pm.OperatorStatus()
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("check gateway status: %w", err)
+		return fmt.Errorf("gui: gateway not reachable at %s — is it running?\n  Start the gateway with:\n    g8e gateway start --cors-origin %s --passkey-rp-origin %s",
+			httpURL, origin, origin)
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+
+	allowOrigin := resp.Header.Get(constants.HeaderAccessControlAllowOrigin)
+	if allowOrigin == "" {
+		return fmt.Errorf("gui: gateway is running but does not have origin %s in its CORS allowed origins.\n  Restart the gateway with:\n    g8e gateway start --cors-origin %s --passkey-rp-origin %s",
+			origin, origin, origin)
 	}
 
-	if running {
-		if err := pm.StopOperator(); err != nil {
-			return fmt.Errorf("stop gateway: %w", err)
-		}
-	}
-
-	posture, err := pm.ReadPosture()
-	if err != nil {
-		return fmt.Errorf("read posture: %w", err)
-	}
-	if posture == "" {
-		posture = "doctrine"
-	}
-
-	gatewayCfg := serve.GatewayConfig{
-		Posture:          g8econfig.GatewayPosture(posture),
-		LogLevel:         "info",
-		AllowedOrigins:   corsOrigins,
-		PasskeyRpOrigins: passkeyRpOrigins,
-	}
-
-	if err := pm.StartOperator(platform.OperatorStartOptions{
-		GatewayConfig: gatewayCfg,
-	}); err != nil {
-		return fmt.Errorf("start gateway: %w", err)
+	normalizedAllow := strings.ToLower(strings.TrimRight(allowOrigin, "/"))
+	normalizedOrigin := strings.ToLower(strings.TrimRight(origin, "/"))
+	if normalizedAllow != normalizedOrigin {
+		return fmt.Errorf("gui: gateway returned Access-Control-Allow-Origin %q, expected %q.\n  Restart the gateway with:\n    g8e gateway start --cors-origin %s --passkey-rp-origin %s",
+			allowOrigin, origin, origin, origin)
 	}
 
 	return nil

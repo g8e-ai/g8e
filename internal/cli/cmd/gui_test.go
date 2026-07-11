@@ -16,6 +16,7 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -126,10 +127,10 @@ func TestGuiEnrollCmdWithDeps_CreatesEnrollment(t *testing.T) {
 		RuntimeDir:  runtimeDir,
 	}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
+	corsChecker := func(*config.Config, string) error { return nil }
 
-	cmd := guiEnrollCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--origin", "https://my-app.lovable.app", "--no-restart"})
+	cmd := guiEnrollCmdWithDeps(loader, corsChecker)
+	cmd.SetArgs([]string{"--origin", "https://my-app.lovable.app"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -157,10 +158,10 @@ func TestGuiEnrollCmdWithDeps_DuplicateOriginIsIdempotent(t *testing.T) {
 		RuntimeDir:  runtimeDir,
 	}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
+	corsChecker := func(*config.Config, string) error { return nil }
 
-	cmd := guiEnrollCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--origin", "https://my-app.lovable.app", "--no-restart"})
+	cmd := guiEnrollCmdWithDeps(loader, corsChecker)
+	cmd.SetArgs([]string{"--origin", "https://my-app.lovable.app"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -176,10 +177,10 @@ func TestGuiEnrollCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
+	corsChecker := func(*config.Config, string) error { return nil }
 
-	cmd := guiEnrollCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--no-restart"})
+	cmd := guiEnrollCmdWithDeps(loader, corsChecker)
+	cmd.SetArgs([]string{})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -193,10 +194,10 @@ func TestGuiEnrollCmdWithDeps_InvalidOriginReturnsError(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
+	corsChecker := func(*config.Config, string) error { return nil }
 
-	cmd := guiEnrollCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--origin", "ftp://bad-origin", "--no-restart"})
+	cmd := guiEnrollCmdWithDeps(loader, corsChecker)
+	cmd.SetArgs([]string{"--origin", "ftp://bad-origin"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -210,10 +211,10 @@ func TestGuiEnrollCmdWithDeps_ConfigLoadError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
 		return nil, errors.New("config load error")
 	}
-	restarter := func(*config.Config, []string, []string) error { return nil }
+	corsChecker := func(*config.Config, string) error { return nil }
 
-	cmd := guiEnrollCmdWithDeps(failLoader, restarter)
-	cmd.SetArgs([]string{"--origin", "https://example.com", "--no-restart"})
+	cmd := guiEnrollCmdWithDeps(failLoader, corsChecker)
+	cmd.SetArgs([]string{"--origin", "https://example.com"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -335,10 +336,9 @@ func TestGuiRemoveCmdWithDeps_RemovesEnrolledOrigin(t *testing.T) {
 
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
 
-	cmd := guiRemoveCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--origin", "https://app1.lovable.app", "--no-restart"})
+	cmd := guiRemoveCmdWithDeps(loader)
+	cmd.SetArgs([]string{"--origin", "https://app1.lovable.app"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -363,10 +363,9 @@ func TestGuiRemoveCmdWithDeps_RemovesLastOrigin(t *testing.T) {
 
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
 
-	cmd := guiRemoveCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--origin", "https://app1.lovable.app", "--no-restart"})
+	cmd := guiRemoveCmdWithDeps(loader)
+	cmd.SetArgs([]string{"--origin", "https://app1.lovable.app"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -390,10 +389,9 @@ func TestGuiRemoveCmdWithDeps_NotEnrolledReturnsNotFound(t *testing.T) {
 
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
 
-	cmd := guiRemoveCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--origin", "http://localhost:9999", "--no-restart"})
+	cmd := guiRemoveCmdWithDeps(loader)
+	cmd.SetArgs([]string{"--origin", "http://localhost:9999"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -407,10 +405,9 @@ func TestGuiRemoveCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
 
-	cmd := guiRemoveCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--no-restart"})
+	cmd := guiRemoveCmdWithDeps(loader)
+	cmd.SetArgs([]string{})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -424,10 +421,9 @@ func TestGuiRemoveCmdWithDeps_InvalidOriginReturnsError(t *testing.T) {
 	tmpDir := t.TempDir()
 	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
 	loader := func(string) (*config.Config, error) { return cfg, nil }
-	restarter := func(*config.Config, []string, []string) error { return nil }
 
-	cmd := guiRemoveCmdWithDeps(loader, restarter)
-	cmd.SetArgs([]string{"--origin", "ftp://bad-origin", "--no-restart"})
+	cmd := guiRemoveCmdWithDeps(loader)
+	cmd.SetArgs([]string{"--origin", "ftp://bad-origin"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -441,10 +437,9 @@ func TestGuiRemoveCmdWithDeps_ConfigLoadError(t *testing.T) {
 	failLoader := func(string) (*config.Config, error) {
 		return nil, errors.New("config load error")
 	}
-	restarter := func(*config.Config, []string, []string) error { return nil }
 
-	cmd := guiRemoveCmdWithDeps(failLoader, restarter)
-	cmd.SetArgs([]string{"--origin", "https://example.com", "--no-restart"})
+	cmd := guiRemoveCmdWithDeps(failLoader)
+	cmd.SetArgs([]string{"--origin", "https://example.com"})
 	var buf bytes.Buffer
 	cmd.SetOut(&buf)
 	cmd.SetErr(&buf)
@@ -496,6 +491,33 @@ func TestGuiShowCmdWithDeps_JSONOutputEmpty(t *testing.T) {
 	output := buf.String()
 	assert.Contains(t, output, `"origins"`)
 	assert.Contains(t, output, "[]")
+}
+
+func TestGuiEnrollCmdWithDeps_CORSCheckFailsHard(t *testing.T) {
+	tmpDir := t.TempDir()
+	runtimeDir := filepath.Join(tmpDir, ".g8e")
+	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
+
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	corsChecker := func(*config.Config, string) error {
+		return fmt.Errorf("gui: gateway is running but does not have origin in its CORS allowed origins")
+	}
+
+	cmd := guiEnrollCmdWithDeps(loader, corsChecker)
+	cmd.SetArgs([]string{"--origin", "https://my-app.lovable.app"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "CORS allowed origins")
+
+	enrollmentPath := filepath.Join(runtimeDir, GUIEnrollmentFile)
+	loaded, err := loadGUIEnrollment(enrollmentPath)
+	require.NoError(t, err)
+	assert.Empty(t, loaded.Origins, "origin should not be saved when CORS check fails")
 }
 
 func TestGuiShowCmdHasListAlias(t *testing.T) {
