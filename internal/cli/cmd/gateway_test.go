@@ -278,12 +278,12 @@ func TestDetectIdentity(t *testing.T) {
 	})
 }
 
-func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
+func TestReExecArgsMatchStartCmdFlags(t *testing.T) {
 	tmpDir := t.TempDir()
 	pm, err := platform.NewProcessManager(tmpDir)
 	require.NoError(t, err)
 
-	// Ensure runtime dir exists so networkIdentityArgs can write the identity file
+	// Ensure runtime dir exists so BuildReExecArgs can write the identity file
 	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".g8e"), 0o700))
 
 	opts := platform.OperatorStartOptions{
@@ -312,13 +312,12 @@ func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
 			PublicBaseURL:      "https://demo.g8e.ai",
 			AllowedOrigins:     []string{"https://lovable.dev"},
 		},
-		IdentityData: []byte(`{"hostnames":["localhost"]}`),
 	}
 
 	args, err := pm.BuildReExecArgs(opts)
 	require.NoError(t, err)
 
-	// Extract flag names from the re-exec args (skip positional args "gateway" and "serve")
+	// Extract flag names from the re-exec args (skip positional args "gw", "start", and "--follow")
 	emittedFlags := make(map[string]bool)
 	for i := 0; i < len(args); i++ {
 		if strings.HasPrefix(args[i], "--") {
@@ -332,21 +331,21 @@ func TestReExecArgsMatchServeCmdFlags(t *testing.T) {
 		}
 	}
 
-	// Get all flags defined on gatewayServeCmd()
-	serveCmd := gatewayServeCmd()
-	cobraFlags := serveCmd.Flags()
+	// Get all flags defined on gatewayStartCmd()
+	startCmd := gatewayStartCmd()
+	cobraFlags := startCmd.Flags()
 
 	// Assert every emitted flag exists on the cobra command
 	for flagName := range emittedFlags {
 		if cobraFlags.Lookup(flagName) == nil {
-			t.Errorf("re-exec emits --%s but gatewayServeCmd() has no such flag", flagName)
+			t.Errorf("re-exec emits --%s but gatewayStartCmd() has no such flag", flagName)
 		}
 	}
 
 	// Assert every cobra flag is emitted when all options are populated
 	cobraFlags.VisitAll(func(f *pflag.Flag) {
 		if !emittedFlags[f.Name] {
-			t.Errorf("gatewayServeCmd() defines --%s but BuildReExecArgs does not emit it", f.Name)
+			t.Errorf("gatewayStartCmd() defines --%s but BuildReExecArgs does not emit it", f.Name)
 		}
 	})
 }

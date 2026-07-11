@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 )
 
 // demoVerbose controls demo output verbosity. When false (default), step-by-step
@@ -211,6 +212,7 @@ Each org environment is hermetically sealed with no shared state, volumes, or cr
 		demosResetCmd(),
 		demosRebuildCmd(),
 		demosRunCmd(),
+		demosScenariosCmd(),
 		demosPullCmd(),
 		demosExportCmd(),
 		demosImportCmd(),
@@ -228,6 +230,26 @@ func demosListCmd() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func demosScenariosCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "scenarios",
+		Short: "List all demo scenarios (agent harness)",
+		Long: `List all agent harness scenarios in run order, grouped by governance posture.
+Each scenario shows its name, required posture, agent persona, and description.`,
+		RunE: runDemosScenarios,
+	}
+
+	return cmd
+}
+
+func runDemosScenarios(cmd *cobra.Command, args []string) error {
+	cmd.Println("scenarios (in run order):")
+	for _, s := range scenarios.Registry() {
+		cmd.Printf("  %-18s %-9s %-18s %s\n", s.Name, s.RequiresPosture, s.Persona.ID, s.Title)
+	}
+	return nil
 }
 
 func runDemosList(cmd *cobra.Command, args []string) error {

@@ -59,7 +59,7 @@ func TestAgentHarnessListCmd(t *testing.T) {
 	t.Run("agent list command has correct use", func(t *testing.T) {
 		cmd := agentHarnessListCmd()
 		assert.Equal(t, "list", cmd.Use)
-		assert.Contains(t, cmd.Short, "List available scenarios")
+		assert.Contains(t, cmd.Short, "agents")
 	})
 }
 

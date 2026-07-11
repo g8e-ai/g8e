@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -186,18 +185,6 @@ func TestGatewayStartCmd_InvalidPostureReturnsError(t *testing.T) {
 	assert.ErrorIs(t, err, constants.ErrInvalidPosture)
 }
 
-func TestGatewayServeCmd_InvalidPostureReturnsError(t *testing.T) {
-	cmd := gatewayServeCmd()
-	cmd.Flags().Set("posture", "invalid")
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, constants.ErrInvalidPosture)
-}
-
 func TestGatewayStopCmd_NotRunningReturnsNil(t *testing.T) {
 	setupGatewayTestEnv(t)
 
@@ -249,20 +236,6 @@ func TestGatewayCleanCmd_ForceFlagSkipsPrompt(t *testing.T) {
 	err := cmd.RunE(cmd, nil)
 	require.NoError(t, err)
 	assert.Contains(t, buf.String(), "Clean complete")
-}
-
-func TestGatewayServeCmd_ValidPostureDoesNotReturnPostureError(t *testing.T) {
-	cmd := gatewayServeCmd()
-	cmd.Flags().Set("posture", "notary")
-	cmd.SetContext(context.Background())
-	var buf bytes.Buffer
-	cmd.SetOut(&buf)
-	cmd.SetErr(&buf)
-
-	err := cmd.RunE(cmd, nil)
-	if err != nil {
-		assert.NotErrorIs(t, err, constants.ErrInvalidPosture)
-	}
 }
 
 func TestGatewayCleanCmd_AbortedOutputContainsNoDestructiveAction(t *testing.T) {

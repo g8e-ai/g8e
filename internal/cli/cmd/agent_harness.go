@@ -69,11 +69,11 @@ signing), then audits every result against the Operator's signed receipts.`,
 func agentHarnessListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
-		Short: "List available scenarios",
+		Short: "List available agents (personas)",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Println("scenarios (in run order):")
-			for _, s := range scenarios.Registry() {
-				cmd.Printf("  %-18s %-9s %-18s %s\n", s.Name, s.RequiresPosture, s.Persona.ID, s.Title)
+			cmd.Println("agents (personas):")
+			for _, p := range scenarios.Personas() {
+				cmd.Printf("  %-22s %s\n", p.ID, p.UserAgent)
 			}
 		},
 	}

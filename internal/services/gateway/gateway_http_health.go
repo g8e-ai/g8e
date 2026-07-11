@@ -15,6 +15,7 @@ package gateway
 
 import (
 	"net/http"
+	"os"
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/marshaler"
@@ -72,6 +73,7 @@ func (h *HTTPHandler) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Status:          constants.GatewayModeStatusOK,
 		Mode:            constants.GatewayModeGateway,
 		Version:         h.cfg.Version,
+		PID:             os.Getpid(),
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 		StateMerkleRoot: root,
 	})
@@ -94,6 +96,7 @@ func (h *HTTPHandler) handleBootstrapHealth(w http.ResponseWriter, r *http.Reque
 		Status:          constants.GatewayModeStatusOK,
 		Mode:            constants.GatewayModeGateway,
 		Version:         h.cfg.Version,
+		PID:             os.Getpid(),
 		GovernanceReady: h.isGovernanceReady != nil && h.isGovernanceReady(),
 	})
 }

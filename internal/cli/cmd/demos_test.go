@@ -64,6 +64,7 @@ func TestDemos(t *testing.T) {
 			"reset",
 			"rebuild",
 			"run",
+			"scenarios",
 		}
 
 		for _, subcmd := range expectedSubcommands {

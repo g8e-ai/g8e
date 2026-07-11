@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/serve"
 	g8econfig "github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
+	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/netutil"
 	"github.com/g8e-ai/g8e/internal/services/governance"
 	"github.com/g8e-ai/g8e/internal/services/network"
@@ -43,9 +44,9 @@ func getBinaryName() string {
 	return constants.LocalBinaryName
 }
 
-// GatewayFlags holds all gateway CLI flag values shared by gatewayStartCmd
-// and gatewayServeCmd. It is populated by addGatewayFlags and converted to
-// serve.GatewayConfig via gatewayFlagsToServeConfig.
+// GatewayFlags holds all gateway CLI flag values shared by gatewayStartCmd.
+// It is populated by addGatewayFlags and converted to serve.GatewayConfig
+// via gatewayFlagsToServeConfig.
 type GatewayFlags struct {
 	Posture            string
 	HTTPPort           int
@@ -227,7 +228,6 @@ func gatewayCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		gatewayStartCmd(),
-		gatewayServeCmd(),
 		gatewayStopCmd(),
 		gatewayStatusCmd(),
 		gatewayRestartCmd(),
@@ -344,7 +344,6 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 			gatewayCfg.CertIdentityMode = identityResult.CertMode
 			if err := pm.StartOperator(platform.OperatorStartOptions{
 				GatewayConfig: gatewayCfg,
-				IdentityData:  identityResult.IdentityData,
 			}); err != nil {
 				return fmt.Errorf("%w: %v", constants.ErrProcessStartFailed, err)
 			}
@@ -366,36 +365,6 @@ corrupted, the gateway defaults to 'doctrine' posture. Valid posture values are
 
 	addGatewayFlags(cmd, &flags)
 	cmd.Flags().BoolVarP(&follow, "follow", "f", false, "Run gateway in foreground (Ctrl+C stops gateway)")
-
-	return cmd
-}
-
-func gatewayServeCmd() *cobra.Command {
-	var flags GatewayFlags
-	var networkIdentityFile string
-
-	cmd := &cobra.Command{
-		Use:    "serve",
-		Short:  "Run the g8e Gateway in foreground (worker mode)",
-		Long:   `Run the g8e Gateway in foreground as a worker. This is the re-exec target for 'gw start' and can also be run directly for debugging or Docker environments.`,
-		Hidden: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Validate posture
-			if _, err := governance.ParseGovernancePosture(flags.Posture); err != nil {
-				return fmt.Errorf("%w: %w", constants.ErrInvalidPosture, err)
-			}
-
-			// Build gateway config
-			cfg := gatewayFlagsToServeConfig(flags)
-			cfg.NetworkIdentityFile = networkIdentityFile
-
-			// Run gateway (this blocks until shutdown)
-			return serve.RunGateway(cfg, versionInfoFromCmd(cmd))
-		},
-	}
-
-	addGatewayFlags(cmd, &flags)
-	cmd.Flags().StringVar(&networkIdentityFile, "network-identity-file", "", "Path to network identity JSON file (for cert mode)")
 
 	return cmd
 }
@@ -457,9 +426,15 @@ Displays the process ID and endpoint URLs when the gateway is running.`,
 			// Try HTTP check first (works for Docker/foreground/background modes)
 			client, err := api.NewClient(cfg)
 			if err == nil {
-				_, err = client.Get("/api/v1/health")
+				respBody, err := client.Get("/api/v1/health")
 				if err == nil {
-					cmd.Println("State: RUNNING (HTTP check)")
+					var health models.HealthResponse
+					_ = json.Unmarshal(respBody, &health)
+					if health.PID > 0 {
+						cmd.Printf("State: RUNNING (PID: %d)\n", health.PID)
+					} else {
+						cmd.Println("State: RUNNING (HTTP check)")
+					}
 					cmd.Printf("\nEndpoints:\n")
 					cmd.Printf("  Operator Bootstrap: https://%s:%d\n", network.GetExternalInterfaceIP(), constants.Ports.OperatorHttps)
 					cmd.Printf("  Public API:         %s (Public browser/BYO bootstrap)\n", netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps))

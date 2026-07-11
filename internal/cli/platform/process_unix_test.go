@@ -330,7 +330,7 @@ func TestFindOperatorProcessWithExecutor(t *testing.T) {
 	})
 
 	t.Run("passes correct arguments to command", func(t *testing.T) {
-		expectedPattern := fmt.Sprintf("g8e gateway serve.*--data-dir %s", pm.dataDir)
+		expectedPattern := fmt.Sprintf("g8e gw start.*--data-dir %s", pm.dataDir)
 		executor := &mockCommandExecutor{
 			commandFunc: func(name string, args ...string) *exec.Cmd {
 				if name != "pgrep" {
