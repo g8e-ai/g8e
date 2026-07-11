@@ -76,7 +76,7 @@ The g8e Console uses WebAuthn passkeys for browser authentication. Passkeys prov
 1. Navigate to the Console at `https://<gateway-ip>:8443/console/`
 2. Register a passkey during first-time setup
 3. Use your passkey to authenticate on subsequent visits
-4. The Console issues a session cookie (`web_session`) for authenticated sessions
+4. The Console issues a session cookie (`g8e_web_session_cookie`) for authenticated sessions
 
 **Passkey Management:**
 

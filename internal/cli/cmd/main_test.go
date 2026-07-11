@@ -178,6 +178,7 @@ func TestSubcommandRegistration(t *testing.T) {
 		assert.NotNil(t, demosCmd(), "demosCmd should not be nil")
 		assert.NotNil(t, auditCmd(), "auditCmd should not be nil")
 		assert.NotNil(t, swaggerCmd(), "swaggerCmd should not be nil")
+		assert.NotNil(t, guiCmd(), "guiCmd should not be nil")
 	})
 
 	t.Run("all subcommands have valid cobra.Command structure", func(t *testing.T) {
@@ -191,6 +192,7 @@ func TestSubcommandRegistration(t *testing.T) {
 			demosCmd(),
 			auditCmd(),
 			swaggerCmd(),
+			guiCmd(),
 		}
 
 		for _, cmd := range commands {
@@ -253,6 +255,7 @@ func TestRootCommandConsistency(t *testing.T) {
 			demosCmd(),
 			auditCmd(),
 			swaggerCmd(),
+			guiCmd(),
 		}
 
 		for _, cmd := range commands {

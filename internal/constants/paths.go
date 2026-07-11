@@ -248,6 +248,7 @@ const (
 	DemosOrgDoW                 = "dow"
 	DemosOrgDHS                 = "dhs"
 	DemosOrgSwarm               = "swarm"
+	DemosOrgFrontend            = "frontend"
 )
 
 // Container paths for Docker exec commands in demo environments.

@@ -41,6 +41,8 @@ definitions:
         type: boolean
       mode:
         $ref: '#/definitions/constants.GatewayMode'
+      pid:
+        type: integer
       state_merkle_root:
         type: string
       status:

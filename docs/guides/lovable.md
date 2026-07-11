@@ -160,7 +160,7 @@ const API_BASE_URL = 'https://console.g8e.ai';
 
 #### Fetch Requirements
 
-**Every** `fetch` call to the API MUST include `credentials: 'include'`. This is non-negotiable — the g8e gateway uses a `web_session` cookie (HttpOnly, Secure, SameSite=None) for browser authentication. Without `credentials: 'include'`, the cookie is not sent cross-origin and all authenticated requests will return 401.
+**Every** `fetch` call to the API MUST include `credentials: 'include'`. This is non-negotiable — the g8e gateway uses a `g8e_web_session_cookie` (HttpOnly, Secure, SameSite=None) for browser authentication. Without `credentials: 'include'`, the cookie is not sent cross-origin and all authenticated requests will return 401.
 
 #### WebAuthn Library
 
@@ -718,7 +718,7 @@ After the Lovable AI agent generates the app, verify:
 - [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with 200/204 status before actual POST requests.
 - [ ] **Passkey registration**: Click "Enroll Passkey" and confirm the browser's WebAuthn dialog appears with RP ID `console.g8e.ai`.
 - [ ] **Passkey authentication**: Click "Sign In with Passkey" and confirm the WebAuthn dialog appears and login succeeds.
-- [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `web_session` with `SameSite=None` and `Secure` attributes.
+- [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `g8e_web_session_cookie` with `SameSite=None` and `Secure` attributes.
 - [ ] **Authenticated API calls**: Confirm `GET /api/v1/users/me` returns user data (not 401) after login.
 - [ ] **SSE stream**: Click "Connect" on the audit stream card and confirm live events appear.
 - [ ] **Approvals**: If a suspended transaction exists, confirm the "Approve" button triggers WebAuthn and the transaction is approved.

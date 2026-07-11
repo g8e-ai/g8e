@@ -622,6 +622,11 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 		cmd.Println("  Gateway HTTP:  http://localhost:8085")
 		cmd.Println("  Gateway HTTPS: https://localhost:8448")
 		cmd.Println("  Console:       https://localhost:8448/console/")
+	case constants.DemosOrgFrontend:
+		cmd.Println("  Gateway HTTP:  http://localhost:8083")
+		cmd.Println("  Gateway HTTPS: https://localhost:8446")
+		cmd.Println("  Console:       https://localhost:8446/console/")
+		cmd.Println("  Frontend App:  http://localhost:3003")
 	default:
 		cmd.Printf("  No endpoint information available for '%s'\n", org)
 	}
@@ -654,6 +659,8 @@ func demoHTTPPort(org string) string {
 		return "8087"
 	case constants.DemosOrgSwarm:
 		return "8085"
+	case constants.DemosOrgFrontend:
+		return "8083"
 	default:
 		return ""
 	}
@@ -1079,6 +1086,7 @@ var scenarioCounts = map[string]int{
 	constants.DemosOrgDoW:        3,
 	constants.DemosOrgDHS:        5,
 	constants.DemosOrgSwarm:      3,
+	constants.DemosOrgFrontend:   1,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -1116,7 +1124,9 @@ Available scenarios:
   swarm: 1-3
     1 - Authorized Recon Mission (Governed Drone Deployment)
     2 - Weapons Safety Doctrine Block
-    3 - Navigation Boundary Violation Block`,
+    3 - Navigation Boundary Violation Block
+  frontend: 1
+    1 - Third-Party Frontend Enrollment`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDemosRun(cmd, args, useTUI)
@@ -1294,6 +1304,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runDHSScenario(demoDir, scenario)
 	case constants.DemosOrgSwarm:
 		return runSwarmScenario(demoDir, scenario)
+	case constants.DemosOrgFrontend:
+		return runFrontendScenario(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
