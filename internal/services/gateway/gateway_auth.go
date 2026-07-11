@@ -42,7 +42,7 @@ const (
 	// Requires a verified client certificate with valid operator/CLI/app identity.
 	RouteAuthMTLS
 	// RouteAuthWebSession: web session cookie only (users/me, auth/sessions/me, passkeys management, approvals browser).
-	// Validates the g8e_session cookie and stamps context with user_id + web_session_id.
+	// Validates the web_session cookie and stamps context with user_id + web_session_id.
 	RouteAuthWebSession
 	// RouteAuthDual: mTLS OR web session cookie (SSE stream, SSE events).
 	// Tries mTLS first (stronger auth); falls back to cookie if no cert present.

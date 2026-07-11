@@ -101,7 +101,7 @@ curl -s https://console.g8e.ai/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","mode":"gateway","version":"...","governance_ready":true,"state_merkle_root":"..."}
+{"status":"ok","mode":"gateway","version":"...","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
 ```
 
 > For full setup instructions — running `cloudflared` as a systemd service, optional Cloudflare Access policies, and troubleshooting — see the [Cloudflare Tunnel Integration guide](./cloudflare_tunnel.md).
@@ -160,7 +160,7 @@ const API_BASE_URL = 'https://console.g8e.ai';
 
 #### Fetch Requirements
 
-**Every** `fetch` call to the API MUST include `credentials: 'include'`. This is non-negotiable — the g8e gateway uses a `g8e_web_session` cookie (HttpOnly, Secure, SameSite=None) for browser authentication. Without `credentials: 'include'`, the cookie is not sent cross-origin and all authenticated requests will return 401.
+**Every** `fetch` call to the API MUST include `credentials: 'include'`. This is non-negotiable — the g8e gateway uses a `web_session` cookie (HttpOnly, Secure, SameSite=None) for browser authentication. Without `credentials: 'include'`, the cookie is not sent cross-origin and all authenticated requests will return 401.
 
 #### WebAuthn Library
 
@@ -211,8 +211,8 @@ All paths are relative to `API_BASE_URL`. All authenticated routes require `cred
 |--------|------|-------------|
 | `GET` | `/api/v1/users/me` | Get current authenticated user |
 | `GET` | `/api/v1/auth/sessions/me` | Get current web session info |
-| `GET` | `/api/v1/auth/passkeys?user_id={id}` | List user's passkey credentials |
-| `DELETE` | `/api/v1/auth/passkeys/{credentialId}?user_id={id}` | Revoke a passkey |
+| `GET` | `/api/v1/auth/passkeys` | List user's passkey credentials (user derived from session) |
+| `DELETE` | `/api/v1/auth/passkeys/{credentialId}` | Revoke a passkey (user derived from session) |
 | `GET` | `/api/v1/approvals` | List pending suspended transactions |
 | `GET` | `/api/v1/approvals/{txHash}/challenge` | Get WebAuthn approval challenge |
 | `POST` | `/api/v1/approvals/{txHash}/verify` | Verify approval assertion |
@@ -244,12 +244,12 @@ interface UserMeResponse {
 
 // Passkey
 interface PasskeyCredential {
-  id: number[]; // byte array — convert to base64url for display
-  public_key: number[];
+  id: string; // base64-encoded byte array — convert to base64url for display
+  public_key: string; // base64-encoded COSE key
   attestation_type: string;
   transport?: string[];
   authenticator: {
-    aaguid: number[];
+    aaguid: string; // base64-encoded byte array
     sign_count: number;
     clone_warning: boolean;
   };
@@ -606,7 +606,7 @@ function useAuditStream(webSessionId: string | null) {
   const connect = useCallback(() => {
     if (!webSessionId || eventSourceRef.current) return;
     const params = new URLSearchParams({ web_session_id: webSessionId });
-    const es = new EventSource(`${API_BASE_URL}/api/v1/sse/stream?${params}`);
+    const es = new EventSource(`${API_BASE_URL}/api/v1/sse/stream?${params}`, { withCredentials: true });
     eventSourceRef.current = es;
 
     es.onopen = () => setConnected(true);
@@ -718,7 +718,7 @@ After the Lovable AI agent generates the app, verify:
 - [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with 200/204 status before actual POST requests.
 - [ ] **Passkey registration**: Click "Enroll Passkey" and confirm the browser's WebAuthn dialog appears with RP ID `console.g8e.ai`.
 - [ ] **Passkey authentication**: Click "Sign In with Passkey" and confirm the WebAuthn dialog appears and login succeeds.
-- [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `g8e_web_session` with `SameSite=None` and `Secure` attributes.
+- [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `web_session` with `SameSite=None` and `Secure` attributes.
 - [ ] **Authenticated API calls**: Confirm `GET /api/v1/users/me` returns user data (not 401) after login.
 - [ ] **SSE stream**: Click "Connect" on the audit stream card and confirm live events appear.
 - [ ] **Approvals**: If a suspended transaction exists, confirm the "Approve" button triggers WebAuthn and the transaction is approved.

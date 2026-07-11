@@ -112,7 +112,7 @@ Both event types use the `internalSSEPushPayload` wire format for compatibility 
 
 ### GET /api/v1/sse/events
 
-**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used; otherwise, the `g8e_session` cookie is validated.
+**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used; otherwise, the `web_session` cookie is validated.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session
@@ -151,7 +151,7 @@ Unset routing fields are omitted from the JSON response (the `SSEEventRow` model
 
 ### GET /api/v1/sse/stream
 
-**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used (stronger auth takes precedence); otherwise, the `g8e_session` cookie is validated. Both auth paths stamp the request context with identity values that the SSE handlers use for authorization. Operator mTLS stamps `ContextKeyOperatorSessionID`; CLI mTLS stamps `ContextKeyUserID` without `ContextKeyOperatorSessionID`; cookie auth stamps `ContextKeyWebSessionID` + `ContextKeyUserID`.
+**Authentication**: Dual auth — mTLS with Operator session (CLI/operator) OR web session cookie (browser). The unified auth middleware classifies this route as `RouteAuthDual`: if a client certificate is present, mTLS auth is used (stronger auth takes precedence); otherwise, the `web_session` cookie is validated. Both auth paths stamp the request context with identity values that the SSE handlers use for authorization. Operator mTLS stamps `ContextKeyOperatorSessionID`; CLI mTLS stamps `ContextKeyUserID` without `ContextKeyOperatorSessionID`; cookie auth stamps `ContextKeyWebSessionID` + `ContextKeyUserID`.
 
 **Query Parameters**:
 - `web_session_id`: Filter by web session

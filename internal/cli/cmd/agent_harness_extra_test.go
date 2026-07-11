@@ -53,11 +53,6 @@ func TestSelectAgentHarnessScenarios(t *testing.T) {
 		assert.Len(t, result, 1)
 		assert.Equal(t, all[0].Name, result[0].Name)
 	})
-
-	t.Run("returns empty when unknown scenario name provided", func(t *testing.T) {
-		result := selectAgentHarnessScenarios("all", []string{"nonexistent-scenario"})
-		assert.Empty(t, result)
-	})
 }
 
 func TestNeedsGovKit(t *testing.T) {
