@@ -152,8 +152,8 @@ docker stats dow-gateway dow-operator dow-agent-sigint dow-agent-eoir dow-agent-
 ### Run sensor agents manually
 
 ```bash
-# agent-sigint is a real g8e binary — run the cross-cue harness scenario
-docker compose run --rm agent-sigint agent-harness run \
+# agent-sigint is a real g8e binary — run the cross-cue scenario
+docker compose run --rm agent-sigint demos scenarios run \
   --mtls-url https://g8e.local:8443 \
   --public-url http://g8e.local:8080 \
   --cert /root/.g8e/pki/operator.crt \
@@ -177,7 +177,7 @@ g8e demos run dow 1
 **Proves**: The `agent-sigint` container (a real g8e binary) shares the operator's enrolled mTLS credentials via a read-only volume mount, constructs a `GovernanceEnvelope` wrapping a `run_shell_command` tool call to `slew` the camera, and submits it to the `g8e-gateway`. The Gateway enforces L1 doctrine and L2 BFT consensus (quorum 2/3). The `g8e-operator` verifies the proofs and executes the `slew` script via the L5 Actuator, which sends an HTTP POST to the mock gimbal controller on `net_secure`. The gimbal records the slew — **zero** ground station intervention.
 
 **Key components**:
-- **`agent-sigint`**: Real g8e binary running `agent-harness run dow-cross-cue` with the operator's mTLS credentials (shared via `operator_state` volume mount at `/root/.g8e:ro`).
+- **`agent-sigint`**: Real g8e binary running `demos scenarios run dow-cross-cue` with the operator's mTLS credentials (shared via `operator_state` volume mount at `/root/.g8e:ro`).
 - **`gimbal`**: Mock external (Python HTTP server on `net_secure`) that records camera slew commands.
 - **`slew.sh`**: Demo artifact mounted at `/usr/local/bin/slew` in the operator container; wraps the HTTP call to the gimbal, working around `DangerousPatterns` blocking `curl`/`wget` in `run_shell_command`.
 

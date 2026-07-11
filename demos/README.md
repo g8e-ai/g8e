@@ -99,7 +99,7 @@ The `healthcare` demo adds PA workflow services on net_secure (pa-submission-ser
 
 The `dow` demo deploys three sensor agent containers (SIGINT, EO/IR, PNT fusion) on net_internal, a simulated ground station on net_perimeter, an EW adversary on net_untrusted, and a mock gimbal controller on net_secure, with SWaP resource limits on all g8e containers. The `agent-sigint` container is a real g8e binary that submits genuine GovernanceEnvelopes. `agent-eoir` and `agent-pnt-fusion` use `dow_simulator.py` for display-only narration.
 
-The `dhs` demo deploys a real `agent-coalition` container (running `agent-harness` scenarios) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s. The display connectors are Alpine echo loops for narrative only.
+The `dhs` demo deploys a real `agent-coalition` container (running `demos scenarios run`) on net_internal, a real `datasvc` Python HTTP actuator on net_secure, display-only source connectors on net_internal and net_untrusted, and a partner fusion-COP plus a severable coalition datalink on net_perimeter, modeling NIPR/SIPR/Mission-Partner/partner-nation sovereignty boundaries. The `agent-coalition` container is a real g8e binary that submits genuine `GovernanceEnvelope`s. The display connectors are Alpine echo loops for narrative only.
 
 ## Org Differentiation
 
@@ -299,7 +299,7 @@ The following must hold in every org environment:
 2. No named volume is shared between services. Each service owns its own volume.
 3. No PKI material is pre-distributed via filesystem. Identity propagates through enrollment over mTLS.
 4. Doctrine is a bind mount, not baked into an image. Org behavior is data, not code.
-5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All `agent-runtime` containers use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based agent-harness invocation.
+5. The `demos/Dockerfile` is the only build artifact shared across org directories. Each compose file references `build: context: ..` to copy the pre-built binary from `demos/bin/g8e` into the container. No compilation happens inside the container. All `agent-runtime` containers use the same image with `entrypoint: ["sh", "-c", "sleep infinity"]` for exec-based scenarios run invocation.
 
 ## Port Mappings
 

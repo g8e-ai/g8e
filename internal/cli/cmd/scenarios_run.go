@@ -279,10 +279,3 @@ func printAgentHarnessSummary(w io.Writer, results []scenarios.Result) {
 	}
 	fmt.Fprintf(w, "\n%d/%d scenarios ok\n", ok, len(results))
 }
-
-func trunc(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
-}

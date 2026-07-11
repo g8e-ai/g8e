@@ -177,25 +177,3 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 		harnessVerbose = false
 	})
 }
-
-func TestTrunc(t *testing.T) {
-	t.Run("trunc returns string when shorter than limit", func(t *testing.T) {
-		result := trunc("short", 10)
-		assert.Equal(t, "short", result)
-	})
-
-	t.Run("trunc returns string when equal to limit", func(t *testing.T) {
-		result := trunc("exactlen", 8)
-		assert.Equal(t, "exactlen", result)
-	})
-
-	t.Run("trunc truncates string when longer than limit", func(t *testing.T) {
-		result := trunc("verylongstring", 5)
-		assert.Equal(t, "veryl", result)
-	})
-
-	t.Run("trunc handles empty string", func(t *testing.T) {
-		result := trunc("", 5)
-		assert.Empty(t, result)
-	})
-}

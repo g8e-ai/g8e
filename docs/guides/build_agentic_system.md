@@ -653,12 +653,12 @@ sequence before any tool dispatch occurs. Each layer is independent and fail-clo
   is fail-closed: if the initial receipt cannot be signed or logged, execution does not
   proceed.
 
-### Agent Harness (Test Tool)
+### Demo Scenarios (Test Tool)
 
-g8e also ships an **Agent Harness**, a Go-based test tool that exercises the protocol
+g8e also ships **demo scenarios** (`g8e demos scenarios run`), a Go-based test tool that exercises the protocol
 surface with simple Persona structs.
 It tests MCP, A2A, governance envelopes, tribunal quorum/veto, and notary OOB flows
-against a real Gateway and Operator. The Agent Harness is not a reasoning system; it
+against a real Gateway and Operator. The demo scenarios tool is not a reasoning system; it
 validates protocol mechanics. The agentic system documented here is what you build on top
 of the protocol to add intelligence.
 

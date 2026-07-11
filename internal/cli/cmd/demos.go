@@ -236,7 +236,7 @@ func demosScenariosCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scenarios",
 		Short: "List and run demo scenarios against a real Gateway/Operator",
-		Long: `List and run agent harness scenarios against a REAL g8e Gateway + Operator,
+		Long: `List and run demo scenarios against a REAL g8e Gateway + Operator,
 exercising the full protocol surface (MCP, A2A, A2A protobuf, and official
 governance envelopes with mock consensus + principal signing).
 
@@ -257,7 +257,7 @@ func demosScenariosListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all demo scenarios",
-		Long: `List all agent harness scenarios in run order, grouped by governance posture.
+		Long: `List all demo scenarios in run order, grouped by governance posture.
 Each scenario shows its name, required posture, agent persona, and description.`,
 		RunE: runDemosScenarios,
 	}
@@ -1390,7 +1390,7 @@ type twoLayerScenarioConfig struct {
 }
 
 // harnessConfig holds the parameters for building a docker compose exec/run
-// command for an agent-harness scenario. Centralising these in a struct
+// command for a demos scenarios run. Centralising these in a struct
 // avoids positional-argument drift as flags are added across demos.
 type harnessConfig struct {
 	Container     string
@@ -1423,7 +1423,7 @@ func defaultHarnessConfig(container string) harnessConfig {
 	}
 }
 
-// harnessRun builds the docker compose command for an agent-harness scenario.
+// harnessRun builds the docker compose command for a demos scenarios run.
 // Uses exec by default (long-running sleep-infinity container with a fixed IP).
 // When cfg.UseRun is true, uses `docker compose run --rm` instead.
 func harnessRun(scenario string, cfg harnessConfig) []string {

@@ -191,7 +191,7 @@ func runDoWScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 5: Run BFT veto via agent-harness (spoofed GNSS) ───────")
+		demoPrintln("  ── Step 5: Run BFT veto via scenarios run (spoofed GNSS) ───────")
 		hcfg := defaultHarnessConfig("agent-sigint")
 		hcfg.UseRun = true
 		if err := demoStep(demoDir, "dow-bft-veto via agent",

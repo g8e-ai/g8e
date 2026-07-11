@@ -252,8 +252,9 @@ func TestHarnessRun_ExecMode(t *testing.T) {
 	assert.Equal(t, "-T", args[3])
 	assert.Equal(t, "agent-runtime", args[4])
 	assert.Equal(t, "/g8e", args[5])
-	assert.Equal(t, "agent", args[6])
-	assert.Equal(t, "run", args[7])
+	assert.Equal(t, "demos", args[6])
+	assert.Equal(t, "scenarios", args[7])
+	assert.Equal(t, "run", args[8])
 	assert.Contains(t, args, "--mtls-url")
 	assert.Contains(t, args, "https://g8e.local:8443")
 	assert.Contains(t, args, "--public-url")
@@ -283,8 +284,9 @@ func TestHarnessRun_RunMode(t *testing.T) {
 	assert.Equal(t, "-T", args[4])
 	assert.Equal(t, "--no-deps", args[5])
 	assert.Equal(t, "agent-runtime", args[6])
-	assert.Equal(t, "agent", args[7])
-	assert.Equal(t, "run", args[8])
+	assert.Equal(t, "demos", args[7])
+	assert.Equal(t, "scenarios", args[8])
+	assert.Equal(t, "run", args[9])
 }
 
 func TestHarnessRun_WithConsensusSeedAndTribunalID(t *testing.T) {

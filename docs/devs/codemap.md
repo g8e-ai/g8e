@@ -312,13 +312,12 @@ The `g8e` binary (`internal/cli/cmd/main.go`) registers the following subcommand
 - **`mcp`**: MCP protocol operations. Subcommands: `stdio` (run g8e as an MCP server over stdio), `agent` (agent integration commands for AI coding tools). `agent` subcommands: `list` (list supported agent binaries), `show` (print MCP client configuration for a specific agent), `run` (launch an agent with g8e MCP configuration).
 - **`operator`**: Manage Operator instances. Subcommands: `list`, `run`, `cp`, `scp`, `deploy`, `stream`.
 - **`vault`**: Encryption vault management. Subcommands: `init`, `unlock`, `rekey`, `status`, `reset`, `export`, `import`.
-- **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `coverage`, `lint`, `agent`, `chaos`, `summary`.
-- **`demos`**: Demo scenario management. Subcommands: `list`, `start`, `stop`, `status`, `clean`, `rebuild`, `reset`, `run`, `pull`.
+- **`test`**: Run test suites. Subcommands: `unit`, `integration`, `e2e`, `coverage`, `lint`, `chaos`, `summary`.
+- **`demos`**: Demo scenario management. Subcommands: `list`, `start`, `stop`, `status`, `clean`, `rebuild`, `reset`, `run`, `pull`, `scenarios` (with `list` and `run` subcommands).
 - **`audit`**: Run audit reports for compliance. Subcommands: `receipts`, `export`, `report`, `events`, `summary`.
 - **`report`**: Generate CSV evidence reports. Subcommands: `all`, `verify`.
 - **`swagger`**: Manage Swagger/OpenAPI documentation. Subcommands: `init`, `serve`, `validate`.
 - **`tui`**: Launch the Tactical Governance Console (TUI). Requires a running gateway, enrolled CLI credentials, and mTLS client configuration.
-- **`agent`** (alias `agent-harness`): Universal agent harness for a real g8e Gateway/Operator. Subcommands: `list` (list available scenarios), `run` (run scenarios against a real Gateway/Operator), `audit` (audit signed receipts from the Operator). Also registered as a `test` subcommand.
 
 ## MCP Native Tools
 
@@ -459,7 +458,7 @@ The following packages are test-only and are not part of the production dependen
 **`demos/secure-data/`** - Secure data handling demo
 
 **CLI Demo Scenario Files** (`internal/cli/cmd/`):
-- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull). Contains `harnessConfig` struct, `defaultHarnessConfig`, `harnessRun` helper for building docker compose exec/run commands for agent-harness scenarios, and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, secure-data: 3, dow: 3, dhs: 5, swarm: 3), `printDemoEndpoints` (prints available endpoints per org).
+- `demos.go` - Demo CLI command tree (list, start, stop, status, clean, rebuild, reset, run, pull, scenarios). Contains `harnessConfig` struct, `defaultHarnessConfig`, `harnessRun` helper for building docker compose exec/run commands for demo scenarios, and `runTwoLayerScenario` reusable orchestrator. `demoVerbose` flag (set by `-v`/`--verbose`), `demoStep` suppresses output when non-verbose, `demoPrintln`/`demoPrintf` (verbose-aware print helpers), `scenarioCounts` map (healthcare: 4, gov: 1, finance: 1, secure-data: 3, dow: 3, dhs: 5, swarm: 3), `printDemoEndpoints` (prints available endpoints per org).
 - `demo_gov.go` - Gov demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_finance.go` - Finance demo scenario (uses `runTwoLayerScenario` with `harnessRun`)
 - `demo_healthcare.go` - Healthcare demo scenarios (4 scenarios, each calls `harnessRun`)
@@ -467,4 +466,5 @@ The following packages are test-only and are not part of the production dependen
 - `demo_dow.go` - DoW demo scenarios (3 scenarios, each calls `harnessRun`)
 - `demo_dhs.go` - DHS demo scenarios (5 scenarios, each calls `dhsHarnessRun` → `harnessRun`). Contains `dhsHarnessConfig`, `dhsHarnessRun`, `dhsScenarioStep`, `extractFirstTxHash`, `ensureDHSPosture` helpers.
 - `demo_swarm.go` - Swarm demo scenarios (3 scenarios, each calls `harnessRun`): authorized recon mission, weapons safety doctrine block, navigation boundary violation block.
+- `scenarios_run.go` - `demos scenarios run` subcommand and `runAgentHarness` execution logic. Contains flag definitions, `applyAgentHarnessFlags`, `selectAgentHarnessScenarios`, `needsGovKit`, `setupGovKit`, `printAgentHarnessSummary`.
 - `demos_test.go` - Tests for demo CLI commands, `scenarioCounts`, `printDemoEndpoints`, `harnessRun`/`defaultHarnessConfig` unit tests, `defaultHarnessConfig`/`harnessRun` unit tests, and source-file assertions (`TestDemoScenarioFilesCallHarnessRun`, `TestNoGatewayBypassInDemoFiles`, `TestNoSqliteBackdoorInScenarioFiles`, `TestNoCopyPasteInScenarioFiles`). Also tests `TestDemoPrintln`, `TestDemosPullCmd`, `TestCheckDockerAvailable`, `TestToDockerPath`, `TestDefaultHarnessConfig`, `TestHarnessRun`.

@@ -63,9 +63,8 @@ g8e tests run directly on the host using real infrastructure. If it does not wor
 ./g8e test e2e         # Tier 3 — requires running gateway
 ./g8e test coverage    # Coverage report (75% threshold enforced)
 ./g8e test lint        # golangci-lint + quality checks
-./g8e agent-harness list    # List agent harness scenarios
-./g8e agent-harness run     # Run scenarios against real Gateway/Operator
-./g8e agent-harness audit   # Audit signed receipts from Operator
+./g8e demos scenarios list    # List demo scenarios
+./g8e demos scenarios run     # Run scenarios against real Gateway/Operator
 ./g8e test chaos       # Generate governance events (70% Good, 20% Injection, 10% MitM)
 ./g8e test summary     # View chaos test summary from test vault
 ```
@@ -105,9 +104,9 @@ make test-docker
 ./g8e auth enroll
 ```
 
-### Agent Harness
+### Demo Scenarios
 
-The agent harness impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity — the Gateway and Operator are real infrastructure.
+The demo scenarios tool (`g8e demos scenarios run`) impersonates arbitrary AI tools against a **REAL** g8e Gateway and Operator. The only fiction is the client identity — the Gateway and Operator are real infrastructure.
 
 **16 scenarios total**: 5 MCP + 3 A2A + 6 governance + 2 DoW.
 

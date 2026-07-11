@@ -32,7 +32,7 @@ func TestTestCmd(t *testing.T) {
 		cmd := testCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"unit", "integration", "e2e", "coverage", "lint", "agent", "chaos", "summary"}
+		expectedSubcommands := []string{"unit", "integration", "e2e", "coverage", "lint", "chaos", "summary"}
 		for _, subcmd := range expectedSubcommands {
 			found := false
 			for _, c := range cmd.Commands() {

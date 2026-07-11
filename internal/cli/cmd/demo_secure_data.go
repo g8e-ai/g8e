@@ -83,7 +83,7 @@ func runSecureDataScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 4: Run governed migration via agent-harness (mTLS) ──────")
+		demoPrintln("  ── Step 4: Run governed migration via scenarios run (mTLS) ──────")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		if err := demoStep(demoDir, "secure-data-migration via agent",
 			false,
@@ -151,7 +151,7 @@ func runSecureDataScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 3: Run bypass attempt via agent-harness (mTLS) ──────────")
+		demoPrintln("  ── Step 3: Run bypass attempt via scenarios run (mTLS) ──────────")
 		hcfg := defaultHarnessConfig("agent-runtime")
 		if err := demoStep(demoDir, "secure-data-bypass-attempt via agent",
 			false,
@@ -212,7 +212,7 @@ func runSecureDataScenario(demoDir, scenario string) (scenarioResult, error) {
 			hasErrors = true
 		}
 
-		demoPrintln("  ── Step 3: Run cross-tenant leak attempt via agent-harness (mTLS)")
+		demoPrintln("  ── Step 3: Run cross-tenant leak attempt via scenarios run (mTLS)")
 		demoPrintln("    Target: rogue-tenant.sharepoint.com")
 		demoPrintln()
 		hcfg := defaultHarnessConfig("agent-runtime")
