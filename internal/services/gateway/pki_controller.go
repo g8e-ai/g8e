@@ -476,12 +476,12 @@ func (c *PKIController) handlePKIAppsDelegated(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// @Summary		Bootstrap CA Linux script
-// @Description	Returns the Linux CA trust bootstrap script
+// @Summary		Web cert trust script (Linux/macOS)
+// @Description	Returns a combined Linux/macOS CA trust script for remote workstations
 // @Tags			bootstrap
 // @Produce		text/plain
 // @Success		200	{string}	string
-// @Router			/bootstrap-ca [get]
+// @Router			/web-cert.sh [get]
 func (c *PKIController) handleTrustScriptLinux(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -522,15 +522,19 @@ fi
 
 echo "[g8e] CA bundle installed to ${LOCAL_CA_PATH}"
 
-echo "[g8e] Installing CA bundle to system trust store..."
+OS_NAME=$(uname -s)
+echo "[g8e] Installing CA bundle to system trust store (${OS_NAME})..."
 echo "[g8e] Sudo password may be required to trust the certificate."
-if command -v update-ca-certificates >/dev/null 2>&1; then
+
+if [ "${OS_NAME}" = "Darwin" ]; then
+    sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${LOCAL_CA_PATH}"
+elif command -v update-ca-certificates >/dev/null 2>&1; then
     sudo cp "${LOCAL_CA_PATH}" /usr/local/share/ca-certificates/g8e-ca-bundle.crt
     sudo update-ca-certificates
 elif command -v trust >/dev/null 2>&1; then
     sudo trust anchor "${LOCAL_CA_PATH}"
 else
-    echo "[g8e] WARNING: Could not detect system trust store tool (update-ca-certificates or trust)."
+    echo "[g8e] WARNING: Could not detect system trust store tool."
     echo "[g8e] The CA bundle is at ${LOCAL_CA_PATH} — install it manually if needed."
 fi
 echo "[g8e] CA bundle trusted system-wide."
@@ -546,71 +550,12 @@ echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effe
 	_, _ = w.Write([]byte(script))
 }
 
-// @Summary		Bootstrap CA macOS script
-// @Description	Returns the macOS CA trust bootstrap script
+// @Summary		Web cert trust script (Windows)
+// @Description	Returns the Windows CA trust script for remote workstations
 // @Tags			bootstrap
 // @Produce		text/plain
 // @Success		200	{string}	string
-// @Router			/bootstrap-ca-macos [get]
-func (c *PKIController) handleTrustScriptMacos(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
-		return
-	}
-
-	// Extract the gateway host from the request
-	gatewayHost := r.Header.Get("X-Forwarded-Host")
-	if gatewayHost == "" {
-		gatewayHost = r.Host
-	}
-
-	// Remove port if present
-	if h, _, err := net.SplitHostPort(gatewayHost); err == nil {
-		gatewayHost = h
-	}
-
-	port := c.gatewayHTTPPort()
-	caBundleURL := constants.APIPaths.WellKnownPKICABundle
-
-	script := fmt.Sprintf(`#!/bin/sh
-set -e
-
-GATEWAY_HOST="%s"
-GATEWAY_PORT="%s"
-CA_BUNDLE_URL="http://${GATEWAY_HOST}:${GATEWAY_PORT}%s"
-TEMP_CA_PATH="/tmp/g8e-ca.crt"
-
-echo "[g8e] Fetching platform CA bundle from ${CA_BUNDLE_URL}..."
-curl -fsSL "${CA_BUNDLE_URL}" -o "${TEMP_CA_PATH}"
-
-if [ ! -f "${TEMP_CA_PATH}" ]; then
-    echo "[g8e] ERROR: Failed to download CA bundle"
-    exit 1
-fi
-
-echo "[g8e] Installing CA bundle to macOS Keychain..."
-echo "[g8e] Sudo password may be required to trust the certificate."
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "${TEMP_CA_PATH}"
-
-echo "[g8e] CA bundle installed and trusted."
-echo "[g8e] IMPORTANT: Please restart all open browsers for changes to take effect."
-`, gatewayHost, port, caBundleURL)
-
-	w.Header().Set(constants.HeaderContentType, constants.HeaderValueShell)
-	w.Header().Set(constants.HeaderXContentTypeOptions, constants.HeaderValueNoSniff)
-	w.Header().Set(constants.HeaderXFrameOptions, constants.HeaderValueDeny)
-	w.WriteHeader(http.StatusOK)
-	// #nosec G705 - Script is generated from controlled format strings with validated parameters,
-	// and response is marked as shell content (not HTML), so XSS is not applicable.
-	_, _ = w.Write([]byte(script))
-}
-
-// @Summary		Bootstrap CA Windows script
-// @Description	Returns the Windows CA trust bootstrap script
-// @Tags			bootstrap
-// @Produce		text/plain
-// @Success		200	{string}	string
-// @Router			/bootstrap-ca.ps1 [get]
+// @Router			/web-cert.ps1 [get]
 func (c *PKIController) handleTrustScriptWindows(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -680,8 +625,8 @@ Write-Host "[g8e] IMPORTANT: Please restart all open browsers for changes to tak
 	_, _ = w.Write([]byte(script))
 }
 
-// @Summary		Bootstrap CA Windows script (alias)
-// @Description	Returns the Windows CA trust bootstrap script (alias endpoint)
+// @Summary		Web cert trust script (Windows alias)
+// @Description	Returns the Windows CA trust script (alias endpoint)
 // @Tags			bootstrap
 // @Produce		text/plain
 // @Success		200	{string}	string

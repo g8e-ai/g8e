@@ -14,20 +14,21 @@ Version: v1.3.11
 
 [Lovable](https://lovable.dev) is an AI-powered frontend development platform that generates React + TypeScript + TailwindCSS applications from natural-language prompts. This guide provides detailed instructions for building a g8e Governance Console UI with Lovable, connecting it to a g8e Gateway backend via Cloudflare Tunnels.
 
-The guide is structured as a prompt you can paste directly into your Lovable AI agent. It covers API integration, WebAuthn passkey authentication, cross-origin cookie handling, SSE live audit streaming, and the full component architecture.
+The guide is structured as a prompt you can paste directly into your Lovable AI agent. It covers API integration, WebAuthn passkey authentication, cross-origin cookie handling, SSE live audit streaming, and the full component architecture. The prompt describes **what is required** for the integration to work. Let Lovable generate the implementation code.
 
 ### Steps at a Glance
 
 1. **[Configure the Cloudflare Tunnel](#cloudflare-tunnel)** — Expose the local g8e Gateway to the internet via `console.g8e.ai`
 2. **[Configure the Gateway](#gateway-side-configuration)** — Set CORS origins, passkey RP ID/name/origins, and public base URL
-3. **[Review the API Reference](#api-reference)** — Understand the public and authenticated endpoints the Lovable app will call
-4. **[Define TypeScript Types](#typescript-types)** — Mirror the g8e gateway's data models in the frontend
-5. **[Build Pages and Components](#pages-and-components)** — AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
-6. **[Implement WebAuthn Flows](#webauthn-implementation)** — Registration, authentication, and approval using `navigator.credentials`
-7. **[Implement SSE Audit Stream](#sse-live-audit-stream)** — Live event streaming with auto-reconnect and polling fallback
-8. **[Apply UI/UX Guidelines](#uiux-guidelines)** — Dark theme, monospace hashes, toast notifications, responsive layout
-9. **[Handle Errors](#error-handling)** — 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
-10. **[Verify the Integration](#verification-checklist)** — CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
+3. **[Enroll the Frontend](#frontend-enrollment)** — Run `g8e gui enroll` to validate CORS and generate a TypeScript config snippet
+4. **[Review the API Reference](#api-reference)** — Understand the public and authenticated endpoints (or auto-discover via `/swagger/doc.json`)
+5. **[Define TypeScript Types](#typescript-types)** — Mirror the g8e gateway's data models in the frontend
+6. **[Build Pages and Components](#pages-and-components)** — AuthContext, Login, Dashboard, ApprovalFlow, URL hash handling
+7. **[Define WebAuthn Flow Requirements](#webauthn-flow-requirements)** — Registration, authentication, and approval ceremonies
+8. **[Define SSE Requirements](#sse-live-audit-stream)** — Live event streaming with auto-reconnect and polling fallback
+9. **[Apply UI/UX Guidelines](#uiux-guidelines)** — Dark theme, monospace hashes, toast notifications, responsive layout
+10. **[Handle Errors](#error-handling)** — 401 redirects, `needs_setup`, enrollment token errors, WebAuthn availability
+11. **[Verify the Integration](#verification-checklist)** — CORS headers, preflight, passkey flows, cookie attributes, SSE, approvals
 
 ### Architecture
 
@@ -116,14 +117,14 @@ Expected response:
 
 ## 2. Gateway-Side Configuration
 
-The gateway must be started with CORS and passkey RP settings that match your Lovable app's origin:
+The gateway must be started with CORS and passkey RP settings that match your Lovable app's origin. The passkey RP ID **must** match the domain where WebAuthn ceremonies are performed — that's the Lovable app's origin, not the gateway's domain. The browser's WebAuthn API enforces that the RP ID is a registrable domain suffix of the current page's origin.
 
 ```bash
 ./g8e gw start \
   --public-base-url https://console.g8e.ai \
-  --passkey-rp-id console.g8e.ai \
+  --passkey-rp-id lovable.app \
   --passkey-rp-name "g8e Console" \
-  --passkey-rp-origin https://console.g8e.ai \
+  --passkey-rp-origin https://your-app.lovable.app \
   --cors-origin https://your-app.lovable.app \
   --cors-origin https://your-custom-domain.com
 ```
@@ -132,19 +133,62 @@ Or via environment variables:
 
 ```bash
 export G8E_PUBLIC_BASE_URL=https://console.g8e.ai
-export G8E_PASSKEY_RP_ID=console.g8e.ai
+export G8E_PASSKEY_RP_ID=lovable.app
 export G8E_PASSKEY_RP_NAME="g8e Console"
-export G8E_PASSKEY_RP_ORIGINS=https://console.g8e.ai
+export G8E_PASSKEY_RP_ORIGINS=https://your-app.lovable.app
 export G8E_ALLOWED_ORIGINS=https://your-app.lovable.app,https://your-custom-domain.com
 ```
+
+Key flags:
+
+- `--passkey-rp-id` — The WebAuthn Relying Party ID. Use the Lovable app's registrable domain (`lovable.app`) so passkeys work across Lovable subdomains. The browser rejects WebAuthn ceremonies if the RP ID doesn't match the current page's origin.
+- `--passkey-rp-origin` — The origin where WebAuthn ceremonies are performed (the Lovable app URL). The gateway adds this to its allowed RP origins list.
+- `--cors-origin` — The Lovable app origin. Allows cross-origin requests with credentials. Repeat for each origin (preview URLs, production URLs, custom domains).
+- `--public-base-url` — The public URL of the gateway (the tunnel hostname). Used for approval redirect links and host validation.
 
 > **Important:** Add every origin your Lovable app may use (preview URLs, production URLs, custom domains). The gateway reflects exact-match origins in CORS headers and sets `SameSite=None` on session cookies when `AllowedOrigins` is non-empty.
 
 ---
 
+## 3. Frontend Enrollment
+
+The `g8e gui` command family provides a complete frontend enrollment workflow that validates CORS configuration and generates a copy-pasteable TypeScript config snippet for the Lovable developer.
+
+### Enroll the Lovable App Origin
+
+```bash
+g8e gui enroll --origin https://your-app.lovable.app --public-base-url https://console.g8e.ai
+```
+
+This command:
+
+1. Validates the origin URL
+2. Sends a CORS preflight to the running gateway to verify the origin is allowed
+3. Verifies the gateway is reachable at the `--public-base-url` (if provided)
+4. Persists the origin to the local enrollment file (`.g8e/gui_enrollments.json`)
+5. Outputs a TypeScript configuration snippet with `API_BASE_URL`, `PASSKEY_RP_ID`, `apiFetch()` helper, `connectSSE()` helper, and key endpoint paths
+
+Copy the outputted snippet into the Lovable project as the starting point for API integration.
+
+### Other `g8e gui` Subcommands
+
+- **`g8e gui show`** (alias: `list`) — Lists all enrolled origins and regenerates config snippets. Supports `--json` for scripting.
+- **`g8e gui verify --origin <url>`** — Checks enrollment status and prints a verification checklist (CORS headers, passkey registration, session cookie, SSE stream, authenticated API calls).
+- **`g8e gui remove --origin <url>`** — Removes an origin from the enrollment file.
+
+---
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- BEGIN LOVABLE AI AGENT PROMPT                                    -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
 ## Lovable AI Agent Prompt
 
-Paste the following sections into your Lovable AI agent as the build instructions.
+> **Paste everything below this line into your Lovable AI agent.**
+> **Stop at the "Verification Checklist" section.**
+>
+> The content below describes **what is required** for the integration to work.
+> Let Lovable generate the implementation code. Do not attempt to paste code from this document; paste the requirements and let Lovable build the app.
 
 ### Project Overview
 
@@ -188,9 +232,11 @@ Use a dark theme with these CSS custom properties as design tokens:
 
 ---
 
-## 3. API Reference
+## 4. API Reference
 
 All paths are relative to `API_BASE_URL`. All authenticated routes require `credentials: 'include'`.
+
+> **Tip:** The gateway serves a full OpenAPI/Swagger specification at `/swagger/doc.json` (and browsable UI at `/swagger/`). Lovable's AI can ingest this spec to auto-discover the API surface and generate correct integration code. Point the Lovable agent to `https://console.g8e.ai/swagger/doc.json` for the complete endpoint catalog.
 
 ### Public Routes (no auth required)
 
@@ -221,7 +267,7 @@ All paths are relative to `API_BASE_URL`. All authenticated routes require `cred
 
 ---
 
-## 4. TypeScript Types
+## 5. TypeScript Types
 
 ```typescript
 // User
@@ -335,9 +381,9 @@ interface SSEEventsResponse {
 
 ---
 
-## 5. Pages and Components
+## 6. Pages and Components
 
-### 5.1 Auth Context (`src/contexts/AuthContext.tsx`)
+### 6.1 Auth Context (`src/contexts/AuthContext.tsx`)
 
 Manage global auth state:
 
@@ -353,7 +399,7 @@ On mount:
 2. Call `GET /api/v1/users/me` (with `credentials: 'include'`) to check if already logged in
 3. If logged in, call `GET /api/v1/auth/sessions/me` to get the web session ID (needed for SSE)
 
-### 5.2 Login Page (`src/pages/Login.tsx`)
+### 6.2 Login Page (`src/pages/Login.tsx`)
 
 Two modes based on `bootstrapped` state:
 
@@ -368,7 +414,7 @@ Two modes based on `bootstrapped` state:
 - Button: "Sign In with Passkey" → calls `authenticatePasskey()`
 - Secondary button: "Register New Passkey" → reveals registration form
 
-### 5.3 Dashboard (`src/pages/Dashboard.tsx`)
+### 6.3 Dashboard (`src/pages/Dashboard.tsx`)
 
 After authentication, show:
 
@@ -407,7 +453,7 @@ After authentication, show:
 - Display user ID (monospace)
 - "Sign Out" button
 
-### 5.4 Approval Flow (`src/components/ApprovalFlow.tsx`)
+### 6.4 Approval Flow (`src/components/ApprovalFlow.tsx`)
 
 When user clicks "Approve" on a transaction:
 
@@ -419,7 +465,7 @@ When user clicks "Approve" on a transaction:
 6. Show success or error message
 7. Refresh the approvals list
 
-### 5.5 URL Hash Handling
+### 6.5 URL Hash Handling
 
 On app load, check `window.location.hash` for:
 
@@ -428,233 +474,100 @@ On app load, check `window.location.hash` for:
 
 After processing, clean the URL with `history.replaceState`.
 
----
+#### L3 Approval Redirect
 
-## 6. WebAuthn Implementation
+When a destructive mutation is suspended by the gateway's governance gauntlet, the gateway returns an approval URL like `{publicBaseURL}/approve/{txHash}`. This URL redirects to the gateway's embedded console at `/console/#approve={txHash}`.
 
-### 6.1 Base64url Helpers
+For the Lovable app, you have two options:
 
-```typescript
-function base64urlToBuffer(base64url: string): ArrayBuffer {
-  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
-  const binary = atob(padded);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes.buffer;
-}
+1. **Handle approvals inline** (recommended): The Lovable app implements the approval flow directly (see [Approval Flow](#64-approval-flow-srccomponentsapprovalflowtsx)). When a mutation is suspended, the API response includes the transaction hash. The Lovable app can auto-trigger the approval flow using the `#approve={txHash}` URL hash pattern.
 
-function bufferToBase64url(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}
-```
-
-### 6.2 Registration Flow
-
-```typescript
-async function registerPasskey(userId: string, displayName: string): Promise<boolean> {
-  // 1. Get challenge from gateway
-  const challengeRes = await fetch(`${API_BASE_URL}/api/v1/auth/passkeys/console/register/challenge`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      user_id: userId,
-      user_name: displayName || userId,
-      cli_session_id: 'browser',
-    }),
-  });
-  const challengeData = await challengeRes.json();
-  if (!challengeData.success) throw new Error(challengeData.error || 'Challenge failed');
-
-  // 2. Decode options for browser WebAuthn API
-  const pk = challengeData.options.publicKey;
-  pk.challenge = base64urlToBuffer(pk.challenge);
-  pk.user.id = base64urlToBuffer(pk.user.id);
-  if (pk.excludeCredentials) {
-    pk.excludeCredentials.forEach((c: any) => { c.id = base64urlToBuffer(c.id); });
-  }
-
-  // 3. Browser creates credential (triggers platform authenticator prompt)
-  const credential = await navigator.credentials.create({ publicKey: pk });
-
-  // 4. Encode response and send to gateway for verification
-  const verifyRes = await fetch(`${API_BASE_URL}/api/v1/auth/passkeys/console/register/verify`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      user_id: challengeData.user_id || userId,
-      cli_session_id: 'browser',
-      attestation_response: {
-        id: (credential as any).id,
-        rawId: bufferToBase64url((credential as any).rawId),
-        clientDataJSON: bufferToBase64url((credential as any).response.clientDataJSON),
-        attestationObject: bufferToBase64url((credential as any).response.attestationObject),
-        transports: (credential as any).response.getTransports ? (credential as any).response.getTransports() : [],
-      },
-    }),
-  });
-  const verifyData = await verifyRes.json();
-  return verifyData.success;
-}
-```
-
-### 6.3 Authentication Flow
-
-```typescript
-async function authenticatePasskey(userId: string): Promise<boolean> {
-  // 1. Get challenge
-  const challengeRes = await fetch(`${API_BASE_URL}/api/v1/auth/passkeys/console/authenticate/challenge`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ user_id: userId }),
-  });
-  const challengeData = await challengeRes.json();
-  if (!challengeData.success) {
-    if (challengeData.needs_setup) throw new Error('NO_PASSKEY_REGISTERED');
-    throw new Error(challengeData.error || 'Challenge failed');
-  }
-
-  // 2. Decode options
-  const pk = challengeData.options.publicKey;
-  pk.challenge = base64urlToBuffer(pk.challenge);
-  if (pk.allowCredentials) {
-    pk.allowCredentials.forEach((c: any) => { c.id = base64urlToBuffer(c.id); });
-  }
-
-  // 3. Browser authenticator
-  const assertion = await navigator.credentials.get({ publicKey: pk });
-
-  // 4. Verify
-  const verifyRes = await fetch(`${API_BASE_URL}/api/v1/auth/passkeys/console/authenticate/verify`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      user_id: userId,
-      assertion_response: {
-        id: (assertion as any).id,
-        rawId: bufferToBase64url((assertion as any).rawId),
-        clientDataJSON: bufferToBase64url((assertion as any).response.clientDataJSON),
-        authenticatorData: bufferToBase64url((assertion as any).response.authenticatorData),
-        signature: bufferToBase64url((assertion as any).response.signature),
-        userHandle: (assertion as any).response.userHandle
-          ? bufferToBase64url((assertion as any).response.userHandle) : null,
-      },
-    }),
-  });
-  const verifyData = await verifyRes.json();
-  return verifyData.success;
-}
-```
-
-### 6.4 Approval Flow
-
-```typescript
-async function approveTransaction(txHash: string): Promise<boolean> {
-  // 1. Get approval challenge
-  const challengeRes = await fetch(`${API_BASE_URL}/api/v1/approvals/${txHash}/challenge`, {
-    credentials: 'include',
-  });
-  if (!challengeRes.ok) throw new Error('Failed to get approval challenge');
-  const challengeData = await challengeRes.json();
-
-  // 2. Decode
-  const pk = challengeData.publicKey;
-  pk.challenge = base64urlToBuffer(pk.challenge);
-  if (pk.allowCredentials) {
-    pk.allowCredentials.forEach((c: any) => { c.id = base64urlToBuffer(c.id); });
-  }
-
-  // 3. Browser authenticator
-  const assertion = await navigator.credentials.get({ publicKey: pk });
-
-  // 4. Verify
-  const verifyRes = await fetch(`${API_BASE_URL}/api/v1/approvals/${txHash}/verify`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      id: (assertion as any).id,
-      rawId: bufferToBase64url((assertion as any).rawId),
-      clientDataJSON: bufferToBase64url((assertion as any).response.clientDataJSON),
-      authenticatorData: bufferToBase64url((assertion as any).response.authenticatorData),
-      signature: bufferToBase64url((assertion as any).response.signature),
-      userHandle: (assertion as any).response.userHandle
-        ? bufferToBase64url((assertion as any).response.userHandle) : null,
-    }),
-  });
-  return verifyRes.ok;
-}
-```
+2. **Redirect to the gateway console**: If the Lovable app does not implement the approval flow, redirect the user's browser to `{API_BASE_URL}/approve/{txHash}`. The gateway console at `/console/` handles the WebAuthn approval ceremony. Note: this requires the passkey RP ID to match the gateway's domain. If the RP ID is set to the Lovable app's domain (recommended), the console redirect will not be able to perform WebAuthn. Use option 1 instead.
 
 ---
 
-## 7. SSE Live Audit Stream
+## 7. WebAuthn Flow Requirements
 
-```typescript
-function useAuditStream(webSessionId: string | null) {
-  const [events, setEvents] = useState<SSEEventRow[]>([]);
-  const [connected, setConnected] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
+The app must implement three WebAuthn ceremonies using the browser's `navigator.credentials` API. The `@simplewebauthn/browser` library is recommended as it handles base64url conversions automatically.
 
-  const connect = useCallback(() => {
-    if (!webSessionId || eventSourceRef.current) return;
-    const params = new URLSearchParams({ web_session_id: webSessionId });
-    const es = new EventSource(`${API_BASE_URL}/api/v1/sse/stream?${params}`, { withCredentials: true });
-    eventSourceRef.current = es;
+### 7.1 Base64url Encoding
 
-    es.onopen = () => setConnected(true);
-    es.onerror = () => {
-      setConnected(false);
-      es.close();
-      eventSourceRef.current = null;
-      // Auto-reconnect after 3s
-      setTimeout(() => connect(), 3000);
-    };
-    es.onmessage = (ev) => {
-      try {
-        const parsed = JSON.parse(ev.data);
-        const innerEvent = parsed.event ? JSON.parse(parsed.event) : parsed;
-        const entry: SSEEventRow = {
-          id: parsed.id || parseInt(ev.lastEventId) || 0,
-          event_type: innerEvent.type || 'event',
-          payload: ev.data,
-          created_at: innerEvent.timestamp || new Date().toISOString(),
-        } as any;
-        setEvents(prev => [...prev.slice(-499), entry]);
-      } catch {
-        setEvents(prev => [...prev.slice(-499), {
-          id: 0, event_type: 'event', payload: ev.data, created_at: new Date().toISOString(),
-        } as SSEEventRow]);
-      }
-    };
-  }, [webSessionId]);
+The gateway sends and receives WebAuthn challenge data as base64url strings. The browser's WebAuthn API requires ArrayBuffers. The app must convert between base64url strings and ArrayBuffers for:
 
-  const disconnect = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    setConnected(false);
-  }, []);
+- Challenge fields
+- User ID fields (registration only)
+- Credential ID fields (`excludeCredentials`, `allowCredentials`)
+- Assertion response fields (`rawId`, `clientDataJSON`, `authenticatorData`, `signature`, `userHandle`, `attestationObject`)
 
-  const clear = useCallback(() => setEvents([]), []);
+If using `@simplewebauthn/browser`, these conversions are handled automatically.
 
-  return { events, connected, connect, disconnect, clear };
-}
-```
+### 7.2 Registration Flow (First-Time Setup)
 
-> **Note:** The SSE `EventSource` API does not support custom headers or `credentials: 'include'` in all browsers. However, `EventSource` sends cookies by default for same-origin requests. For cross-origin, the g8e CORS middleware handles it. If `EventSource` doesn't send cookies cross-origin in your testing, fall back to polling `GET /api/v1/sse/events?web_session_id={id}&since_id={lastId}` every 2 seconds as an alternative.
+1. POST to `/api/v1/auth/passkeys/console/register/challenge` with JSON body `{ user_id, user_name, cli_session_id: "browser" }`. If no passkeys exist on the gateway, omit `user_id` to auto-create a user.
+2. Decode the returned `options.publicKey` challenge and user ID from base64url to ArrayBuffers.
+3. Call `navigator.credentials.create({ publicKey: decodedOptions })` to trigger the browser's passkey enrollment prompt.
+4. Encode the credential response fields (`id`, `rawId`, `clientDataJSON`, `attestationObject`, `transports`) as base64url.
+5. POST to `/api/v1/auth/passkeys/console/register/verify` with JSON body `{ user_id, cli_session_id: "browser", attestation_response: { ...encodedFields } }`.
+6. On success, the gateway sets a `g8e_web_session_cookie` session cookie. The app transitions to the dashboard.
+
+### 7.3 Authentication Flow (Returning User)
+
+1. POST to `/api/v1/auth/passkeys/console/authenticate/challenge` with JSON body `{ user_id }`.
+2. If the response has `success: false` and `needs_setup: true`, no passkey is registered. Show the registration form instead.
+3. Decode the returned `options.publicKey` challenge and `allowCredentials` from base64url to ArrayBuffers.
+4. Call `navigator.credentials.get({ publicKey: decodedOptions })` to trigger the browser's passkey authentication prompt.
+5. Encode the assertion response fields (`id`, `rawId`, `clientDataJSON`, `authenticatorData`, `signature`, `userHandle`) as base64url.
+6. POST to `/api/v1/auth/passkeys/console/authenticate/verify` with JSON body `{ user_id, assertion_response: { ...encodedFields } }`.
+7. On success, the gateway sets a `g8e_web_session_cookie` session cookie. The app transitions to the dashboard.
+
+### 7.4 Approval Flow (Suspended Transaction)
+
+1. GET `/api/v1/approvals/{txHash}/challenge` (with `credentials: 'include'`). Returns WebAuthn `PublicKeyCredentialRequestOptions`.
+2. Decode the challenge and `allowCredentials` from base64url to ArrayBuffers.
+3. Call `navigator.credentials.get({ publicKey: decodedOptions })` to trigger the browser's passkey prompt.
+4. Encode the assertion response fields (`id`, `rawId`, `clientDataJSON`, `authenticatorData`, `signature`, `userHandle`) as base64url.
+5. POST to `/api/v1/approvals/{txHash}/verify` with the encoded assertion response as the JSON body.
+6. On success, the transaction resumes execution. Refresh the approvals list.
+7. On failure (403), show the error message. The transaction remains suspended.
 
 ---
 
-## 8. UI/UX Guidelines
+## 8. SSE Live Audit Stream
+
+The app must provide a live audit event stream with the following requirements:
+
+### Connection
+
+- Connect to `GET /api/v1/sse/stream?web_session_id={id}` using `EventSource` with `withCredentials: true`.
+- The `web_session_id` comes from `GET /api/v1/auth/sessions/me` after login.
+- Show connection status: green (connected), yellow (connecting), red (disconnected).
+- Provide manual connect and disconnect buttons.
+
+### Event Handling
+
+- Parse incoming SSE messages as JSON. Each message may contain a nested `event` field that itself is JSON.
+- Extract: event type, timestamp, event ID, and raw payload.
+- Display events in a scrollable log with color-coded type badges (blue for events, red for errors, yellow for warnings, green for info/success).
+- Show event ID, timestamp, and expandable JSON payload per entry.
+- Cap the in-memory event list at 500 entries (drop oldest).
+- Provide a filter input (case-insensitive filter by event type).
+- Provide auto-scroll checkbox, clear button, and event count display.
+
+### Reconnection
+
+- Auto-reconnect 3 seconds after disconnection.
+
+### Polling Fallback
+
+If `EventSource` does not send cookies cross-origin, fall back to polling `GET /api/v1/sse/events?web_session_id={id}&since_id={lastId}` every 2 seconds.
+
+### WebSocket Note
+
+The gateway also exposes a WebSocket pub/sub endpoint at `/ws/v1/pubsub`, but it requires mTLS authentication and is not available to browser clients. Use SSE for all browser-based real-time telemetry.
+
+---
+
+## 9. UI/UX Guidelines
 
 - **Dark theme** using the CSS variables above
 - **Monospace font** for all hashes, credential IDs, and technical identifiers
@@ -669,13 +582,36 @@ function useAuditStream(webSessionId: string | null) {
 
 ---
 
-## 9. Error Handling
+## 10. Error Handling
 
 - **401 responses**: Clear user state and redirect to login
 - **`needs_setup: true`** on authenticate challenge: Show registration form automatically
 - **Enrollment token validation**: Handle 410 (expired) and 409 (already used) with specific error messages
 - **WebAuthn API not available**: Show a browser compatibility warning
 - **Network errors**: Show a retry-able error state
+
+---
+
+## JWT Identity Provider Integration (Optional)
+
+If you use an external identity provider (IdP) such as Clerk, Auth0, or Supabase for JWT-based authentication, configure the gateway to validate JWTs from the IdP's JWKS endpoint:
+
+```bash
+./g8e gw start \
+  --jwks-url https://your-idp.example.com/.well-known/jwks.json \
+  --jwt-role-claim roles \
+  --jwt-issuer https://your-idp.example.com \
+  --jwt-audience g8e-gateway
+```
+
+When JWKS is configured, the gateway automatically accepts JWT bearer tokens for MCP and A2A endpoints instead of requiring mTLS. The gateway maps JWT role claims to g8e personas (admin, operator, observer, agent) via the role-to-persona mapping configuration. JIT (just-in-time) provisioning creates a g8e user record on first successful JWT authentication.
+
+| IdP | JWKS URL | Role Claim | Notes |
+|---|---|---|---|
+| Clerk | `https://<domain>.clerk.accounts.dev/.well-known/jwks.json` | `roles` | Custom claim setup required in Clerk dashboard |
+| Auth0 | `https://<domain>.auth0.com/.well-known/jwks.json` | `permissions` or custom namespace | Use `--jwt-role-claim permissions` or `--jwt-role-claim https://g8e.ai/roles` |
+| Supabase | `https://<project>.supabase.co/auth/v1/.well-known/jwks.json` | `user_metadata.roles` | Requires custom JWT claims via Supabase Edge Function |
+
 
 ---
 
@@ -708,15 +644,19 @@ src/
   main.tsx
 ```
 
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- END LOVABLE AI AGENT PROMPT                                      -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+
 ---
 
-## 10. Verification Checklist
+## 11. Verification Checklist
 
 After the Lovable AI agent generates the app, verify:
 
 - [ ] **CORS headers**: Open browser DevTools > Network tab. Make any API call and confirm `Access-Control-Allow-Origin` reflects your Lovable app's origin and `Access-Control-Allow-Credentials: true` is present.
 - [ ] **Preflight OPTIONS**: Confirm OPTIONS requests succeed with 200/204 status before actual POST requests.
-- [ ] **Passkey registration**: Click "Enroll Passkey" and confirm the browser's WebAuthn dialog appears with RP ID `console.g8e.ai`.
+- [ ] **Passkey registration**: Click "Enroll Passkey" and confirm the browser's WebAuthn dialog appears with RP ID `lovable.app` (or your configured `--passkey-rp-id`).
 - [ ] **Passkey authentication**: Click "Sign In with Passkey" and confirm the WebAuthn dialog appears and login succeeds.
 - [ ] **Session cookie**: After login, check DevTools > Application > Cookies for `g8e_web_session_cookie` with `SameSite=None` and `Secure` attributes.
 - [ ] **Authenticated API calls**: Confirm `GET /api/v1/users/me` returns user data (not 401) after login.
@@ -724,6 +664,7 @@ After the Lovable AI agent generates the app, verify:
 - [ ] **Approvals**: If a suspended transaction exists, confirm the "Approve" button triggers WebAuthn and the transaction is approved.
 - [ ] **Logout**: Click "Sign Out" and confirm redirect to login page and cookie cleared.
 - [ ] **URL hash handling**: Navigate to `#approve={txHash}` and confirm auto-approval flow triggers.
+- [ ] **`g8e gui verify`**: Run `g8e gui verify --origin https://your-app.lovable.app` and confirm all checklist items pass.
 
 ---
 

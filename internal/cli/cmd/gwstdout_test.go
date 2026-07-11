@@ -33,45 +33,35 @@ func TestPrintNextSteps_DoctrinePosture(t *testing.T) {
 	out := buf.String()
 	bin := getBinaryName()
 
-	// Step 1: CA bootstrap URLs with external IP and HTTP port
+	// Step 1: Web cert trust URLs with external IP and HTTP port
 	assert.Contains(t, out, "Next Steps:")
 	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
-	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/bootstrap-ca | sh")
-	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/bootstrap-ca-macos | sh")
-	assert.Contains(t, out, "irm http://192.168.1.100:8080/bootstrap-ca.ps1 | iex")
+	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/web-cert.sh | sh")
+	assert.Contains(t, out, "irm http://192.168.1.100:8080/web-cert.ps1 | iex")
 
 	// Step 2: Enroll
 	assert.Contains(t, out, "2. Enroll CLI credentials:")
 	assert.Contains(t, out, bin+" auth enroll")
 
-	// Step 3: Doctrine-specific text
-	assert.Contains(t, out, "3. Governance posture: doctrine (L1 enforced, L2/L3 audited)")
-	assert.Contains(t, out, "No additional setup required.")
-	assert.Contains(t, out, "L2 consensus and L3 notary")
-	assert.Contains(t, out, "results are recorded for audit but do not block execution.")
-
-	// Step 4: Remote operators (numbered 4 for doctrine)
-	assert.Contains(t, out, "4. Connect remote operators (choose one):")
+	// Step 3: Connect remote operators with Local/Remote Host labels
+	assert.Contains(t, out, "3. Connect remote operators:")
+	assert.Contains(t, out, "Local Host:")
 	assert.Contains(t, out, bin+" operator deploy --hosts <host1,host2>")
 	assert.Contains(t, out, bin+" operator stream --hosts <host1,host2>")
+	assert.Contains(t, out, "Remote Host:")
 	assert.Contains(t, out, bin+" gw security pki enroll -e 192.168.1.100")
-	assert.Contains(t, out, "curl -fsSL http://192.168.1.100:8080/"+constants.DeployScriptFilenameLinux+" | bash")
-	assert.Contains(t, out, "irm http://192.168.1.100:8080/"+constants.DeployScriptFilenameWindows+" | iex")
-
-	// Step 5: AI agents (numbered 5 for doctrine)
-	assert.Contains(t, out, "5. Connect AI agents:")
-	assert.Contains(t, out, bin+" mcp agent show <agent>")
-	assert.Contains(t, out, bin+" mcp agent list")
-	assert.Contains(t, out, bin+" mcp stdio")
+	assert.Contains(t, out, bin+" operator start")
 
 	// Console UI
 	assert.Contains(t, out, "Console UI:")
 	assert.Contains(t, out, netutil.LocalhostHTTPSURL(constants.Ports.OperatorHttps)+"/console/")
 
-	// Manage & Monitor
-	assert.Contains(t, out, "Manage & Monitor:")
-	assert.Contains(t, out, bin+" gw status | logs -f | restart | settings | reset | clean")
-	assert.Contains(t, out, bin+" gw data operators | users | audit list --operator-session-id <session-id>")
+	// Removed sections
+	assert.NotContains(t, out, "Connect AI agents")
+	assert.NotContains(t, out, "Manage & Monitor")
+	assert.NotContains(t, out, "Governance posture:")
+	assert.NotContains(t, out, constants.DeployScriptFilenameLinux)
+	assert.NotContains(t, out, constants.DeployScriptFilenameWindows)
 }
 
 func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
@@ -82,26 +72,19 @@ func TestPrintNextSteps_ConsensusPosture(t *testing.T) {
 	printNextSteps(cmd, posture, externalIP)
 
 	out := buf.String()
-	bin := getBinaryName()
 
-	// Step 3: Consensus-specific text
-	assert.Contains(t, out, "3. Configure L2 Tribunal for consensus:")
-	assert.Contains(t, out, "L2 multi-agent quorum is enforced.")
-	assert.Contains(t, out, "Mutations without a valid")
-	assert.Contains(t, out, "Tribunal quorum will be rejected.")
-	assert.Contains(t, out, "Bootstrap:  "+bin+" gw start --posture consensus \\")
-	assert.Contains(t, out, "--tribunal-id <id> --tribunal-url <url>")
-	assert.Contains(t, out, "Seed file:  --tribunal-bootstrap <policy.json>")
-	assert.Contains(t, out, "L3 notary is audited only -- no human approval required.")
-
-	// Step 4: Remote operators (numbered 4 for consensus)
-	assert.Contains(t, out, "4. Connect remote operators (choose one):")
-
-	// Step 5: AI agents
-	assert.Contains(t, out, "5. Connect AI agents:")
+	// All postures now produce the same output (no posture-specific steps)
+	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
+	assert.Contains(t, out, "2. Enroll CLI credentials:")
+	assert.Contains(t, out, "3. Connect remote operators:")
 
 	// External IP interpolated correctly
-	assert.Contains(t, out, "http://10.0.0.50:8080/bootstrap-ca")
+	assert.Contains(t, out, "http://10.0.0.50:8080/web-cert.sh")
+
+	// No posture-specific text
+	assert.NotContains(t, out, "Configure L2 Tribunal")
+	assert.NotContains(t, out, "Connect AI agents")
+	assert.NotContains(t, out, "Manage & Monitor")
 }
 
 func TestPrintNextSteps_NotaryPosture(t *testing.T) {
@@ -112,28 +95,25 @@ func TestPrintNextSteps_NotaryPosture(t *testing.T) {
 	printNextSteps(cmd, posture, externalIP)
 
 	out := buf.String()
-	bin := getBinaryName()
 
-	// Step 3: Notary-specific text
-	assert.Contains(t, out, "3. Configure L2 Tribunal + L3 Notary:")
-	assert.Contains(t, out, "L2 quorum AND L3 human approval are both enforced.")
-	assert.Contains(t, out, "All mutations require a WebAuthn/passkey ceremony.")
-	assert.Contains(t, out, "Bootstrap:  "+bin+" gw start --posture notary \\")
-	assert.Contains(t, out, "Passkey:    "+bin+" auth enroll  (registers WebAuthn credential)")
-
-	// Step 4: Remote operators (numbered 4 for notary)
-	assert.Contains(t, out, "4. Connect remote operators (choose one):")
-
-	// Step 5: AI agents
-	assert.Contains(t, out, "5. Connect AI agents:")
+	// All postures now produce the same output (no posture-specific steps)
+	assert.Contains(t, out, "1. Trust the gateway CA for HTTPS")
+	assert.Contains(t, out, "2. Enroll CLI credentials:")
+	assert.Contains(t, out, "3. Connect remote operators:")
 
 	// External IP interpolated correctly
-	assert.Contains(t, out, "http://172.16.0.1:8080/bootstrap-ca")
+	assert.Contains(t, out, "http://172.16.0.1:8080/web-cert.sh")
+
+	// No posture-specific text
+	assert.NotContains(t, out, "Configure L2 Tribunal")
+	assert.NotContains(t, out, "WebAuthn/passkey ceremony")
+	assert.NotContains(t, out, "Connect AI agents")
+	assert.NotContains(t, out, "Manage & Monitor")
 }
 
 func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 	// All three postures produce the same step numbering:
-	// 1=CA, 2=Enroll, 3=Posture-specific, 4=Remote operators, 5=AI agents
+	// 1=Web cert, 2=Enroll, 3=Remote operators
 	postures := []struct {
 		name    string
 		posture governance.GovernancePosture
@@ -149,12 +129,10 @@ func TestPrintNextSteps_StepNumberingPerPosture(t *testing.T) {
 			printNextSteps(cmd, p.posture, "127.0.0.1")
 			out := buf.String()
 
-			// Verify step numbering is sequential: 1, 2, 3, 4, 5
+			// Verify step numbering is sequential: 1, 2, 3
 			assert.Contains(t, out, "  1. Trust the gateway CA")
 			assert.Contains(t, out, "  2. Enroll CLI credentials:")
-			assert.Contains(t, out, "  3. ")
-			assert.Contains(t, out, "  4. Connect remote operators")
-			assert.Contains(t, out, "  5. Connect AI agents:")
+			assert.Contains(t, out, "  3. Connect remote operators:")
 		})
 	}
 }
@@ -173,11 +151,10 @@ func TestPrintNextSteps_ExternalIPInterpolation(t *testing.T) {
 			printNextSteps(cmd, &governance.DoctrinePosture{}, ip)
 			out := buf.String()
 
-			// The IP should appear in bootstrap-ca URL, PKI enroll, and remote script URLs
-			assert.Contains(t, out, "http://"+ip+":8080/bootstrap-ca")
+			// The IP should appear in web-cert URL and PKI enroll
+			assert.Contains(t, out, "http://"+ip+":8080/web-cert.sh")
+			assert.Contains(t, out, "http://"+ip+":8080/web-cert.ps1")
 			assert.Contains(t, out, "pki enroll -e "+ip)
-			assert.Contains(t, out, "http://"+ip+":8080/"+constants.DeployScriptFilenameLinux)
-			assert.Contains(t, out, "http://"+ip+":8080/"+constants.DeployScriptFilenameWindows)
 		})
 	}
 }
@@ -190,9 +167,9 @@ func TestPrintNextSteps_PortInterpolation(t *testing.T) {
 	httpPort := constants.Ports.OperatorHttp
 	httpsPort := constants.Ports.OperatorHttps
 
-	// HTTP port should appear in bootstrap and operator script URLs
-	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/bootstrap-ca")
-	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/"+constants.DeployScriptFilenameLinux)
+	// HTTP port should appear in web-cert URLs
+	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/web-cert.sh")
+	assert.Contains(t, out, "localhost:"+itoa(httpPort)+"/web-cert.ps1")
 
 	// HTTPS port should appear in the console URL
 	assert.Contains(t, out, netutil.LocalhostHTTPSURL(httpsPort)+"/console/")
@@ -208,11 +185,8 @@ func TestPrintNextSteps_BinaryNameInterpolation(t *testing.T) {
 	assert.Contains(t, out, bin+" auth enroll")
 	assert.Contains(t, out, bin+" operator deploy")
 	assert.Contains(t, out, bin+" operator stream")
-	assert.Contains(t, out, bin+" mcp agent show")
-	assert.Contains(t, out, bin+" mcp agent list")
-	assert.Contains(t, out, bin+" mcp stdio")
-	assert.Contains(t, out, bin+" gw status")
-	assert.Contains(t, out, bin+" gw data operators")
+	assert.Contains(t, out, bin+" gw security pki enroll")
+	assert.Contains(t, out, bin+" operator start")
 }
 
 func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
@@ -230,9 +204,7 @@ func TestPrintNextSteps_AllPosturesContainCommonSections(t *testing.T) {
 		"Trust the gateway CA",
 		"Enroll CLI credentials",
 		"Connect remote operators",
-		"Connect AI agents",
 		"Console UI:",
-		"Manage & Monitor:",
 	}
 
 	for _, p := range postures {
@@ -301,10 +273,9 @@ func TestPrintNextSteps_LineCountReasonable(t *testing.T) {
 	out := buf.String()
 
 	lineCount := strings.Count(out, "\n")
-	// The function prints a substantial number of lines across all sections.
-	// Doctrine produces the fewest lines; consensus and notary produce more.
+	// The function prints 3 steps plus console UI.
 	// A reasonable lower bound ensures no section was silently skipped.
-	assert.Greater(t, lineCount, 20, "expected substantial output, got %d lines", lineCount)
+	assert.Greater(t, lineCount, 10, "expected substantial output, got %d lines", lineCount)
 }
 
 // itoa is a helper to avoid importing strconv just for int-to-string.

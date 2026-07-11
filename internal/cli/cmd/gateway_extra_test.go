@@ -34,7 +34,7 @@ func TestGatewayCmdStructure(t *testing.T) {
 		cmd := gatewayCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"start", "stop", "status", "restart", "logs", "settings", "reset", "clean", "data", "security"}
+		expectedSubcommands := []string{"start", "stop", "status", "restart", "logs", "settings", "reset", "clean", "data", "security", "tunnel"}
 		for _, subcmd := range expectedSubcommands {
 			found := false
 			for _, c := range cmd.Commands() {
