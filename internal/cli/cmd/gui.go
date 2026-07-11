@@ -512,7 +512,9 @@ func checkGatewayCORS(cfg *config.Config, origin string) error {
 			httpURL, origin, origin)
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		return fmt.Errorf("gui: failed to read response body: %w", err)
+	}
 
 	allowOrigin := resp.Header.Get(constants.HeaderAccessControlAllowOrigin)
 	if allowOrigin == "" {
