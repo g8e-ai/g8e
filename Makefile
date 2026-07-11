@@ -16,6 +16,7 @@
 
 SHELL := /bin/bash
 export PATH := $(HOME)/go/bin:$(PATH)
+export GOTOOLCHAIN := local
 TMPDIR ?= /tmp
 .DEFAULT_GOAL := help
 
