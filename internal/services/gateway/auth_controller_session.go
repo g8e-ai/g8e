@@ -22,6 +22,16 @@ import (
 	"github.com/g8e-ai/g8e/internal/models"
 )
 
+// @Summary		Create user
+// @Description	Creates a new user with a generated ID. Zero-PII: users are created with only
+// @Description	a generated ID and passkey credentials.
+// @Tags			users
+// @Accept			json
+// @Produce		json
+// @Success		201		{object}	models.UserCreateResponse
+// @Failure		405		{string}	string	"Method Not Allowed"
+// @Failure		409		{string}	string	"Conflict — user creation failed"
+// @Router			/api/v1/users [post]
 func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		c.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())
@@ -60,6 +70,12 @@ func (c *AuthController) handleUsers(w http.ResponseWriter, r *http.Request) {
 // Browser Auth Handlers (Public Router)
 // =============================================================================
 
+// @Summary		Logout
+// @Description	Clears the web session cookie and deletes the session from the database.
+// @Tags			auth
+// @Produce		json
+// @Success		200	{object}	models.StatusResponse
+// @Router			/api/v1/auth/logout [post]
 func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(constants.WebSessionCookieName)
 	if err == nil {
@@ -87,6 +103,15 @@ func (c *AuthController) handlePublicAuthLogout(w http.ResponseWriter, r *http.R
 	c.responder.JSON(w, http.StatusOK, models.StatusResponse{Status: constants.GatewayModeStatusOK})
 }
 
+// @Summary		Get current user
+// @Description	Returns the authenticated user's profile. Identity comes from the auth context
+// @Description	(mTLS or web session cookie).
+// @Tags			users
+// @Produce		json
+// @Success		200	{object}	models.UserMeResponse
+// @Failure		401	{string}	string	"Unauthorized"
+// @Failure		404	{string}	string	"User not found"
+// @Router			/api/v1/users/me [get]
 func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {
@@ -110,6 +135,13 @@ func (c *AuthController) handleUserMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// @Summary		Get current web session
+// @Description	Returns the authenticated user's ID and web session ID from the session cookie.
+// @Tags			auth
+// @Produce		json
+// @Success		200	{object}	models.WebSessionResponse
+// @Failure		401	{string}	string	"Unauthorized"
+// @Router			/api/v1/auth/sessions/me [get]
 func (c *AuthController) handleWebSession(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(constants.ContextKeyUserID).(string)
 	if !ok {

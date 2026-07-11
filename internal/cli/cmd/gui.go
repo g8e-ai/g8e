@@ -83,8 +83,9 @@ func guiEnrollCmdWithDeps(configLoader func(string) (*config.Config, error), cor
 This command:
 1. Validates the origin URL
 2. Checks that the running gateway has the origin in its CORS allowed origins
-3. Persists the origin to the enrollment file (.g8e/gui_enrollments.json)
-4. Outputs a configuration snippet for the frontend developer
+3. If --public-base-url is provided, verifies the gateway is reachable at that URL
+4. Persists the origin to the enrollment file (.g8e/gui_enrollments.json)
+5. Outputs a configuration snippet for the frontend developer
 
 The gateway must already be running with --cors-origin and --passkey-rp-origin
 flags set for this origin. This command does NOT restart the gateway.`,
@@ -104,6 +105,13 @@ flags set for this origin. This command does NOT restart the gateway.`,
 
 			if err := corsChecker(cfg, origin); err != nil {
 				return err
+			}
+
+			if publicBaseURL != "" {
+				if err := checkPublicBaseURL(publicBaseURL); err != nil {
+					cmd.Printf("Warning: --public-base-url consistency check failed: %v\n", err)
+					cmd.Println("The config snippet will use the provided URL, but verify the tunnel is running.")
+				}
 			}
 
 			enrollmentPath := guiEnrollmentFilePath(cfg)
@@ -429,6 +437,10 @@ func printEnrollConfig(cmd *cobra.Command, origin, rpID, rpName, publicBaseURL s
 	cmd.Println("//   GET  /api/v1/approvals                        - List pending approvals")
 	cmd.Println("```")
 	cmd.Println()
+	cmd.Println("L3 Approval Redirect:")
+	cmd.Println("// When a mutation is suspended, redirect to the gateway console for passkey approval:")
+	cmd.Printf("// window.location.href = `${API_BASE_URL}/approve/${txHash}`;\n")
+	cmd.Println()
 	cmd.Println("Gateway CLI flags for this origin:")
 	cmd.Printf("  --cors-origin %s --passkey-rp-origin %s\n", origin, origin)
 }
@@ -527,6 +539,45 @@ func checkGatewayCORS(cfg *config.Config, origin string) error {
 	if normalizedAllow != normalizedOrigin {
 		return fmt.Errorf("gui: gateway returned Access-Control-Allow-Origin %q, expected %q.\n  Restart the gateway with:\n    g8e gateway start --cors-origin %s --passkey-rp-origin %s",
 			allowOrigin, origin, origin, origin)
+	}
+
+	return nil
+}
+
+// checkPublicBaseURL verifies that the gateway is reachable at the given public
+// base URL by hitting its health endpoint. This validates that the tunnel or
+// reverse proxy is correctly forwarding traffic to the gateway.
+func checkPublicBaseURL(publicBaseURL string) error {
+	u, err := url.Parse(publicBaseURL)
+	if err != nil {
+		return fmt.Errorf("invalid public base URL: %w", err)
+	}
+	if u.Scheme != "https" && u.Scheme != "http" {
+		return fmt.Errorf("public base URL must use http or https scheme, got %s", u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("public base URL must have a host")
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	healthURL := strings.TrimRight(publicBaseURL, "/") + constants.APIPaths.Health
+
+	req, err := http.NewRequest(http.MethodGet, healthURL, nil)
+	if err != nil {
+		return fmt.Errorf("create health check request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("gateway not reachable at %s: %w", publicBaseURL, err)
+	}
+	defer resp.Body.Close()
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("gateway health check at %s returned status %d", healthURL, resp.StatusCode)
 	}
 
 	return nil

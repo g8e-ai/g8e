@@ -7,6 +7,14 @@ definitions:
     x-enum-varnames:
     - GatewayModeGateway
     - GatewayModeStatusOK
+  constants.UserStatus:
+    enum:
+    - active
+    - disabled
+    type: string
+    x-enum-varnames:
+    - UserStatusActive
+    - UserStatusDisabled
   gateway.AppEnrollResponse:
     properties:
       app_cert:
@@ -48,6 +56,19 @@ definitions:
       status:
         $ref: '#/definitions/constants.GatewayMode'
       version:
+        type: string
+    type: object
+  models.LocalOSUser:
+    properties:
+      domain:
+        type: string
+      gid:
+        type: string
+      sid:
+        type: string
+      uid:
+        type: string
+      username:
         type: string
     type: object
   models.PKICSRSignResponse:
@@ -144,6 +165,52 @@ definitions:
       web_session_id:
         type: string
     type: object
+  models.SSEEventRow:
+    properties:
+      cli_session_id:
+        type: string
+      created_at:
+        type: string
+      event_type:
+        type: string
+      id:
+        type: integer
+      payload:
+        type: string
+      user_id:
+        type: string
+      web_session_id:
+        type: string
+    type: object
+  models.SSEEventsResponse:
+    properties:
+      count:
+        type: integer
+      events:
+        items:
+          $ref: '#/definitions/models.SSEEventRow'
+        type: array
+    type: object
+  models.SSEPushPayload:
+    properties:
+      cli_session_id:
+        type: string
+      event:
+        items:
+          type: integer
+        type: array
+      user_id:
+        type: string
+      web_session_id:
+        type: string
+    type: object
+  models.SSEPushResponse:
+    properties:
+      delivered:
+        type: integer
+      success:
+        type: boolean
+    type: object
   models.StateResponse:
     properties:
       state_merkle_root:
@@ -154,11 +221,97 @@ definitions:
       status:
         $ref: '#/definitions/constants.GatewayMode'
     type: object
+  models.SuspendedTransactionsResponse:
+    properties:
+      transactions:
+        items:
+          $ref: '#/definitions/models.SuspendedTxResponse'
+        type: array
+    type: object
+  models.SuspendedTxResponse:
+    properties:
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      operator_id:
+        type: string
+      tool_name:
+        type: string
+      transaction_hash:
+        type: string
+      user_id:
+        type: string
+    type: object
+  models.User:
+    properties:
+      id:
+        type: string
+      is_bootstrap:
+        type: boolean
+      local_os_user:
+        $ref: '#/definitions/models.LocalOSUser'
+      organization_id:
+        type: string
+      passkey_credentials:
+        items:
+          $ref: '#/definitions/models.PasskeyCredential'
+        type: array
+      provider:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      status:
+        $ref: '#/definitions/constants.UserStatus'
+      webauthn_user_id:
+        description: GUID for WebAuthn v4 compliance (Windows Hello)
+        type: string
+    type: object
+  models.UserCreateResponse:
+    properties:
+      success:
+        type: boolean
+      user_id:
+        type: string
+    type: object
+  models.UserMeResponse:
+    properties:
+      success:
+        type: boolean
+      user:
+        $ref: '#/definitions/models.User'
+    type: object
+  models.WebAuthnAssertionResponse:
+    properties:
+      authenticatorData:
+        type: string
+      clientDataJSON:
+        type: string
+      id:
+        type: string
+      rawId:
+        type: string
+      signature:
+        type: string
+      userHandle:
+        type: string
+    type: object
   models.WebSessionInfo:
     properties:
       expires_at_unix_ms:
         type: integer
       id:
+        type: string
+    type: object
+  models.WebSessionResponse:
+    properties:
+      success:
+        type: boolean
+      user_id:
+        type: string
+      web_session_id:
         type: string
     type: object
   protocol.AttestationFormat:
@@ -580,6 +733,107 @@ paths:
       summary: Bootstrap CA Windows script (alias)
       tags:
       - bootstrap
+  /api/v1/approvals:
+    get:
+      description: Lists suspended transactions pending L3 passkey approval for the
+        authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SuspendedTransactionsResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      summary: List pending approvals
+      tags:
+      - approvals
+  /api/v1/approvals/{txHash}/challenge:
+    get:
+      description: Generates a WebAuthn assertion challenge for approving a suspended
+        transaction.
+      parameters:
+      - description: Transaction hash
+        in: path
+        name: txHash
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: WebAuthn assertion options
+          schema:
+            items:
+              type: integer
+            type: array
+        "403":
+          description: Forbidden — belongs to another user
+          schema:
+            type: string
+        "404":
+          description: Transaction not found or expired
+          schema:
+            type: string
+      summary: Get approval challenge
+      tags:
+      - approvals
+  /api/v1/approvals/{txHash}/verify:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Verifies a WebAuthn assertion response to approve a suspended transaction. On success,
+        the transaction resumes execution with the L3 proof attached and an SSE event is emitted.
+      parameters:
+      - description: Transaction hash
+        in: path
+        name: txHash
+        required: true
+        type: string
+      - description: WebAuthn assertion response
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.WebAuthnAssertionResponse'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ActionReceipt
+          schema:
+            items:
+              type: integer
+            type: array
+        "403":
+          description: Forbidden — verification failed
+          schema:
+            type: string
+        "404":
+          description: Transaction not found or expired
+          schema:
+            type: string
+      summary: Verify approval
+      tags:
+      - approvals
+  /api/v1/auth/logout:
+    post:
+      description: Clears the web session cookie and deletes the session from the
+        database.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.StatusResponse'
+      summary: Logout
+      tags:
+      - auth
   /api/v1/auth/passkeys:
     get:
       consumes:
@@ -703,6 +957,24 @@ paths:
       summary: Verify WebAuthn registration
       tags:
       - passkey
+  /api/v1/auth/sessions/me:
+    get:
+      description: Returns the authenticated user's ID and web session ID from the
+        session cookie.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.WebSessionResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+      summary: Get current web session
+      tags:
+      - auth
   /api/v1/data/blobs/{namespace}/{id}:
     get:
       description: Retrieves a blob from the data store
@@ -716,6 +988,51 @@ paths:
       summary: Get blob
       tags:
       - data
+  /api/v1/governance/envelopes:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Accepts a GovernanceEnvelope, verifies it through the 5-layer gauntlet (L1–L3 pre-flight,
+        L4 warden, L5 actuator), and returns the signed ActionReceipt. Transport-to-envelope
+        identity binding is enforced via mTLS certificate URI SAN matching.
+      parameters:
+      - description: GovernanceEnvelope (protojson)
+        in: body
+        name: envelope
+        required: true
+        schema:
+          items:
+            type: integer
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ActionReceipt
+          schema:
+            items:
+              type: integer
+            type: array
+        "400":
+          description: Bad Request — malformed envelope
+          schema:
+            type: string
+        "403":
+          description: Forbidden — governance verification failed
+          schema:
+            type: string
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "503":
+          description: Service Unavailable — processor not initialized
+          schema:
+            type: string
+      summary: Submit governance envelope
+      tags:
+      - governance
   /api/v1/pki/apps/delegated:
     post:
       consumes:
@@ -794,6 +1111,176 @@ paths:
       summary: PKI device enrollment
       tags:
       - pki
+  /api/v1/sse/events:
+    get:
+      description: |-
+        Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session
+        cookie for browser. Exactly one routing target must be set via query string.
+      parameters:
+      - description: Web session ID
+        in: query
+        name: web_session_id
+        type: string
+      - description: CLI session ID
+        in: query
+        name: cli_session_id
+        type: string
+      - description: User ID
+        in: query
+        name: user_id
+        type: string
+      - description: Return events after this ID
+        in: query
+        name: since_id
+        type: integer
+      - description: Maximum events to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SSEEventsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "403":
+          description: Forbidden — unauthorized
+          schema:
+            type: string
+      summary: Poll SSE events
+      tags:
+      - telemetry
+  /api/v1/sse/push:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Appends an event to the SSE event store and publishes it to the pub/sub channel.
+        Requires mTLS app workload identity. Exactly one routing target must be set:
+        web_session_id, cli_session_id, or user_id.
+      parameters:
+      - description: SSE push payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/models.SSEPushPayload'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SSEPushResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized — mTLS required
+          schema:
+            type: string
+        "403":
+          description: Forbidden — not app workload or unauthorized target
+          schema:
+            type: string
+      summary: Push SSE event
+      tags:
+      - telemetry
+  /api/v1/sse/stream:
+    get:
+      description: |-
+        Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for
+        CLI/operator, web session cookie for browser. Supports Last-Event-ID header for
+        reconnection. Exactly one routing target must be set via query string.
+      parameters:
+      - description: Web session ID
+        in: query
+        name: web_session_id
+        type: string
+      - description: CLI session ID
+        in: query
+        name: cli_session_id
+        type: string
+      - description: User ID
+        in: query
+        name: user_id
+        type: string
+      - description: Replay events after this ID
+        in: query
+        name: since_id
+        type: integer
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "403":
+          description: Forbidden — unauthorized
+          schema:
+            type: string
+      summary: Stream SSE events
+      tags:
+      - telemetry
+  /api/v1/users:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Creates a new user with a generated ID. Zero-PII: users are created with only
+        a generated ID and passkey credentials.
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.UserCreateResponse'
+        "405":
+          description: Method Not Allowed
+          schema:
+            type: string
+        "409":
+          description: Conflict — user creation failed
+          schema:
+            type: string
+      summary: Create user
+      tags:
+      - users
+  /api/v1/users/me:
+    get:
+      description: |-
+        Returns the authenticated user's profile. Identity comes from the auth context
+        (mTLS or web session cookie).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.UserMeResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: User not found
+          schema:
+            type: string
+      summary: Get current user
+      tags:
+      - users
   /bootstrap-ca:
     get:
       description: Returns the Linux CA trust bootstrap script
@@ -921,4 +1408,20 @@ paths:
       summary: State root
       tags:
       - state
+  /ws/v1/pubsub:
+    get:
+      description: |-
+        Upgrades to a WebSocket connection for bidirectional publish/subscribe messaging.
+        Requires mTLS authentication. Topic ACLs enforce that subscribers can only
+        subscribe to channels matching their mTLS workload identity.
+      produces:
+      - text/event-stream
+      responses:
+        "101":
+          description: WebSocket Upgrade
+          schema:
+            type: string
+      summary: WebSocket pub/sub
+      tags:
+      - pubsub
 swagger: "2.0"

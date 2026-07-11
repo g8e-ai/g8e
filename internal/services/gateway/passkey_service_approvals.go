@@ -24,10 +24,19 @@ import (
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 )
 
+// handleApprovalAction dispatches approval sub-actions (challenge, verify) based on
+// the path segment after /api/v1/approvals/{txHash}/. It is not a standalone REST
+// endpoint — see handleApprovalChallenge and handleApprovalVerify for the annotated
+// sub-handlers.
 func (h *PasskeyHandler) handleApprovalAction(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, constants.APIPaths.ApprovalsPrefix)
 	parts := strings.Split(path, "/")
 	if len(parts) < 1 {
+		h.responder.Error(w, http.StatusBadRequest, "invalid request path")
+		return
+	}
+
+	if len(parts) < 2 {
 		h.responder.Error(w, http.StatusBadRequest, "invalid request path")
 		return
 	}
@@ -54,6 +63,15 @@ func (h *PasskeyHandler) handleApprovalAction(w http.ResponseWriter, r *http.Req
 	}
 }
 
+// @Summary		Get approval challenge
+// @Description	Generates a WebAuthn assertion challenge for approving a suspended transaction.
+// @Tags			approvals
+// @Produce		json
+// @Param		txHash	path		string	true	"Transaction hash"
+// @Success		200		{object}	json.RawMessage	"WebAuthn assertion options"
+// @Failure		404		{string}	string			"Transaction not found or expired"
+// @Failure		403		{string}	string			"Forbidden — belongs to another user"
+// @Router			/api/v1/approvals/{txHash}/challenge [get]
 func (h *PasskeyHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	if r.Method != http.MethodGet {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -85,6 +103,18 @@ func (h *PasskeyHandler) handleApprovalChallenge(w http.ResponseWriter, r *http.
 	h.responder.JSON(w, http.StatusOK, options)
 }
 
+// @Summary		Verify approval
+// @Description	Verifies a WebAuthn assertion response to approve a suspended transaction. On success,
+// @Description	the transaction resumes execution with the L3 proof attached and an SSE event is emitted.
+// @Tags			approvals
+// @Accept		json
+// @Produce		json
+// @Param		txHash	path		string						true	"Transaction hash"
+// @Param		body	body		models.WebAuthnAssertionResponse	true	"WebAuthn assertion response"
+// @Success		200		{object}	json.RawMessage						"ActionReceipt"
+// @Failure		403		{string}	string						"Forbidden — verification failed"
+// @Failure		404		{string}	string						"Transaction not found or expired"
+// @Router			/api/v1/approvals/{txHash}/verify [post]
 func (h *PasskeyHandler) handleApprovalVerify(w http.ResponseWriter, r *http.Request, txHash, userID string) {
 	if r.Method != http.MethodPost {
 		h.responder.Error(w, http.StatusMethodNotAllowed, "method not allowed")
@@ -261,6 +291,13 @@ func (h *PasskeyHandler) handleCLIListSuspended(w http.ResponseWriter, r *http.R
 	h.listSuspendedTransactions(w, r, true)
 }
 
+// @Summary		List pending approvals
+// @Description	Lists suspended transactions pending L3 passkey approval for the authenticated user.
+// @Tags			approvals
+// @Produce		json
+// @Success		200	{object}	models.SuspendedTransactionsResponse
+// @Failure		401	{string}	string	"Unauthorized"
+// @Router			/api/v1/approvals [get]
 func (h *PasskeyHandler) handleListSuspendedTransactions(w http.ResponseWriter, r *http.Request) {
 	h.listSuspendedTransactions(w, r, false)
 }
