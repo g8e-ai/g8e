@@ -52,7 +52,28 @@ Display all enrolled frontend origins and configuration snippets.
 
 ```bash
 g8e gui show
+g8e gui show --json    # machine-readable JSON output for scripting
+g8e gui list           # alias for "show"
 ```
+
+### `g8e gui remove`
+
+Remove an enrolled frontend application origin from the enrollment file and restart the gateway.
+
+```bash
+g8e gui remove --origin <url> [flags]
+```
+
+Flags:
+- `--origin` (required) — Frontend application origin URL to remove
+- `--no-restart` — Skip gateway restart (save enrollment only)
+
+The command:
+1. Validates the origin URL
+2. Removes the origin from `.g8e/gui_enrollments.json`
+3. Restarts the gateway with the updated CORS and passkey RP origins
+
+Returns `not found` error if the origin is not enrolled.
 
 ### `g8e gui verify`
 

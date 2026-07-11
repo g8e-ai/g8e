@@ -32,7 +32,7 @@ func TestGuiCmdRegistration(t *testing.T) {
 	require.NotNil(t, cmd)
 	assert.Equal(t, "gui", cmd.Use)
 	assert.Contains(t, cmd.Short, "frontend")
-	assert.Len(t, cmd.Commands(), 3)
+	assert.Len(t, cmd.Commands(), 4)
 }
 
 func TestValidateOrigin(t *testing.T) {
@@ -321,4 +321,184 @@ func TestGuiVerifyCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
 	err := cmd.Execute()
 	require.Error(t, err)
 	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestGuiRemoveCmdWithDeps_RemovesEnrolledOrigin(t *testing.T) {
+	tmpDir := t.TempDir()
+	runtimeDir := filepath.Join(tmpDir, ".g8e")
+	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
+
+	enrollmentPath := filepath.Join(runtimeDir, GUIEnrollmentFile)
+	require.NoError(t, saveGUIEnrollment(enrollmentPath, &GUIEnrollment{
+		Origins: []string{"https://app1.lovable.app", "http://localhost:3003"},
+	}))
+
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	restarter := func(*config.Config, []string, []string) error { return nil }
+
+	cmd := guiRemoveCmdWithDeps(loader, restarter)
+	cmd.SetArgs([]string{"--origin", "https://app1.lovable.app", "--no-restart"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+
+	loaded, err := loadGUIEnrollment(enrollmentPath)
+	require.NoError(t, err)
+	assert.Len(t, loaded.Origins, 1)
+	assert.Equal(t, "http://localhost:3003", loaded.Origins[0])
+}
+
+func TestGuiRemoveCmdWithDeps_RemovesLastOrigin(t *testing.T) {
+	tmpDir := t.TempDir()
+	runtimeDir := filepath.Join(tmpDir, ".g8e")
+	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
+
+	enrollmentPath := filepath.Join(runtimeDir, GUIEnrollmentFile)
+	require.NoError(t, saveGUIEnrollment(enrollmentPath, &GUIEnrollment{
+		Origins: []string{"https://app1.lovable.app"},
+	}))
+
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	restarter := func(*config.Config, []string, []string) error { return nil }
+
+	cmd := guiRemoveCmdWithDeps(loader, restarter)
+	cmd.SetArgs([]string{"--origin", "https://app1.lovable.app", "--no-restart"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+
+	loaded, err := loadGUIEnrollment(enrollmentPath)
+	require.NoError(t, err)
+	assert.Empty(t, loaded.Origins)
+}
+
+func TestGuiRemoveCmdWithDeps_NotEnrolledReturnsNotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	runtimeDir := filepath.Join(tmpDir, ".g8e")
+	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
+
+	enrollmentPath := filepath.Join(runtimeDir, GUIEnrollmentFile)
+	require.NoError(t, saveGUIEnrollment(enrollmentPath, &GUIEnrollment{
+		Origins: []string{"https://app1.lovable.app"},
+	}))
+
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	restarter := func(*config.Config, []string, []string) error { return nil }
+
+	cmd := guiRemoveCmdWithDeps(loader, restarter)
+	cmd.SetArgs([]string{"--origin", "http://localhost:9999", "--no-restart"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrNotFound)
+}
+
+func TestGuiRemoveCmdWithDeps_MissingOriginReturnsError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	restarter := func(*config.Config, []string, []string) error { return nil }
+
+	cmd := guiRemoveCmdWithDeps(loader, restarter)
+	cmd.SetArgs([]string{"--no-restart"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrMissingRequiredField)
+}
+
+func TestGuiRemoveCmdWithDeps_InvalidOriginReturnsError(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+	restarter := func(*config.Config, []string, []string) error { return nil }
+
+	cmd := guiRemoveCmdWithDeps(loader, restarter)
+	cmd.SetArgs([]string{"--origin", "ftp://bad-origin", "--no-restart"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, constants.ErrValidationFailed)
+}
+
+func TestGuiRemoveCmdWithDeps_ConfigLoadError(t *testing.T) {
+	failLoader := func(string) (*config.Config, error) {
+		return nil, errors.New("config load error")
+	}
+	restarter := func(*config.Config, []string, []string) error { return nil }
+
+	cmd := guiRemoveCmdWithDeps(failLoader, restarter)
+	cmd.SetArgs([]string{"--origin", "https://example.com", "--no-restart"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "load config")
+}
+
+func TestGuiShowCmdWithDeps_JSONOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	runtimeDir := filepath.Join(tmpDir, ".g8e")
+	require.NoError(t, os.MkdirAll(runtimeDir, 0700))
+
+	enrollmentPath := filepath.Join(runtimeDir, GUIEnrollmentFile)
+	require.NoError(t, saveGUIEnrollment(enrollmentPath, &GUIEnrollment{
+		Origins: []string{"https://app1.lovable.app", "http://localhost:3003"},
+	}))
+
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: runtimeDir}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+
+	cmd := guiShowCmdWithDeps(loader)
+	cmd.SetArgs([]string{"--json"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	output := buf.String()
+	assert.Contains(t, output, `"origins"`)
+	assert.Contains(t, output, "https://app1.lovable.app")
+	assert.Contains(t, output, "http://localhost:3003")
+	assert.NotContains(t, output, "Enrolled Frontend Applications")
+}
+
+func TestGuiShowCmdWithDeps_JSONOutputEmpty(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := &config.Config{ProjectRoot: tmpDir, RuntimeDir: filepath.Join(tmpDir, ".g8e")}
+	loader := func(string) (*config.Config, error) { return cfg, nil }
+
+	cmd := guiShowCmdWithDeps(loader)
+	cmd.SetArgs([]string{"--json"})
+	var buf bytes.Buffer
+	cmd.SetOut(&buf)
+	cmd.SetErr(&buf)
+
+	require.NoError(t, cmd.Execute())
+	output := buf.String()
+	assert.Contains(t, output, `"origins"`)
+	assert.Contains(t, output, "[]")
+}
+
+func TestGuiShowCmdHasListAlias(t *testing.T) {
+	cmd := guiShowCmd()
+	assert.Contains(t, cmd.Aliases, "list")
 }

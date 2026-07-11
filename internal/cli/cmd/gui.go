@@ -59,6 +59,7 @@ connect securely to the g8e platform.`,
 		guiEnrollCmd(),
 		guiShowCmd(),
 		guiVerifyCmd(),
+		guiRemoveCmd(),
 	)
 
 	return cmd
@@ -160,11 +161,16 @@ func guiShowCmd() *cobra.Command {
 }
 
 func guiShowCmdWithDeps(configLoader func(string) (*config.Config, error)) *cobra.Command {
+	var jsonOutput bool
+
 	cmd := &cobra.Command{
-		Use:   "show",
-		Short: "Display enrolled frontend origins and configuration",
+		Use:     "show",
+		Aliases: []string{"list"},
+		Short:   "Display enrolled frontend origins and configuration",
 		Long: `Display all enrolled frontend application origins and generate a
-configuration snippet for integrating with the g8e Gateway.`,
+configuration snippet for integrating with the g8e Gateway.
+
+Use --json for machine-readable output suitable for scripting.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := configLoader("")
 			if err != nil {
@@ -175,6 +181,15 @@ configuration snippet for integrating with the g8e Gateway.`,
 			enrollment, err := loadGUIEnrollment(enrollmentPath)
 			if err != nil {
 				return fmt.Errorf("gui: load enrollment: %w", err)
+			}
+
+			if jsonOutput {
+				data, err := json.MarshalIndent(enrollment, "", "  ")
+				if err != nil {
+					return fmt.Errorf("gui: marshal enrollment: %w", err)
+				}
+				cmd.Println(string(data))
+				return nil
 			}
 
 			if len(enrollment.Origins) == 0 {
@@ -201,6 +216,91 @@ configuration snippet for integrating with the g8e Gateway.`,
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output enrollment data as JSON")
+
+	return cmd
+}
+
+func guiRemoveCmd() *cobra.Command {
+	return guiRemoveCmdWithDeps(loadConfig, restartGateway)
+}
+
+func guiRemoveCmdWithDeps(configLoader func(string) (*config.Config, error), restarter func(*config.Config, []string, []string) error) *cobra.Command {
+	var origin string
+	var noRestart bool
+
+	cmd := &cobra.Command{
+		Use:   "remove",
+		Short: "Remove an enrolled frontend application origin",
+		Long: `Remove a frontend application origin from the enrollment file and
+restart the gateway so the origin is no longer accepted for CORS or
+passkey RP.
+
+The gateway must be running. Use --no-restart to skip the gateway
+restart (you will need to restart manually for the removal to take
+effect).`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if origin == "" {
+				return fmt.Errorf("%w: --origin is required", constants.ErrMissingRequiredField)
+			}
+
+			if err := validateOrigin(origin); err != nil {
+				return err
+			}
+
+			cfg, err := configLoader("")
+			if err != nil {
+				return fmt.Errorf("gui: load config: %w", err)
+			}
+
+			enrollmentPath := guiEnrollmentFilePath(cfg)
+			enrollment, err := loadGUIEnrollment(enrollmentPath)
+			if err != nil {
+				return fmt.Errorf("gui: load enrollment: %w", err)
+			}
+
+			found := false
+			var remaining []string
+			for _, existing := range enrollment.Origins {
+				if existing == origin {
+					found = true
+					continue
+				}
+				remaining = append(remaining, existing)
+			}
+
+			if !found {
+				return fmt.Errorf("%w: origin %s is not enrolled", constants.ErrNotFound, origin)
+			}
+
+			enrollment.Origins = remaining
+			if err := saveGUIEnrollment(enrollmentPath, enrollment); err != nil {
+				return fmt.Errorf("gui: save enrollment: %w", err)
+			}
+
+			cmd.Printf("Removed origin: %s\n", origin)
+			cmd.Printf("Saved to: %s\n", enrollmentPath)
+
+			if !noRestart {
+				cmd.Println("\nRestarting gateway to update CORS and passkey RP origins...")
+				if err := restarter(cfg, enrollment.Origins, enrollment.Origins); err != nil {
+					cmd.Printf("Warning: gateway restart failed: %v\n", err)
+					cmd.Println("The origin has been removed from the enrollment file. Restart the gateway manually to apply changes.")
+				} else {
+					cmd.Println("Gateway restarted successfully.")
+				}
+			} else {
+				cmd.Println("\n--no-restart specified. Restart the gateway manually to apply changes:")
+				cmd.Printf("  g8e gw restart\n")
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&origin, "origin", "", "Frontend application origin URL to remove")
+	cmd.Flags().BoolVar(&noRestart, "no-restart", false, "Skip gateway restart (save enrollment only)")
 
 	return cmd
 }
