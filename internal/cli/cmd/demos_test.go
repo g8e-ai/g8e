@@ -676,7 +676,7 @@ func TestHarnessRun(t *testing.T) {
 		cfg := defaultHarnessConfig("agent-runtime")
 		cmd := harnessRun("gov-cui-exfil-block", cfg)
 		assert.Equal(t, []string{
-			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "agent", "run",
+			"docker", "compose", "exec", "-T", "agent-runtime", "/g8e", "demos", "scenarios", "run",
 			"--mtls-url", "https://g8e.local:8443",
 			"--public-url", "http://g8e.local:8080",
 			"--cert", "/root/.g8e/pki/operator.crt",

@@ -53,4 +53,4 @@ Write-Host "g8e deployed successfully!" -ForegroundColor Green
 
 Write-Host "Starting g8e Operator to connect to Gateway at ${GatewayHost}..." -ForegroundColor Yellow
 Write-Host "DEBUG: GatewayHost = ${GatewayHost}" -ForegroundColor Yellow
-& .\g8e.exe -e $GatewayHost
+& .\g8e.exe operator start -e $GatewayHost

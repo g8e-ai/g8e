@@ -99,7 +99,7 @@ The endpoint is the gateway IP address. The HTTP port (8080) is appended automat
 On the remote host, start the operator with the enrolled certificates:
 
 ```bash
-./g8e operator run -e <gateway-ip>
+./g8e operator start -e <gateway-ip>
 ```
 
 The operator will:

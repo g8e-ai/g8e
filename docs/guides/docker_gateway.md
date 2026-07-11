@@ -38,7 +38,7 @@ The repository includes a root `docker-compose.yml` that deploys both the Gatewa
 ### Core Services
 
 - **g8e-gateway**: Provides the persistence layer and governance enforcement. Starts via the `gw start -f` CLI subcommand, which defaults to `doctrine` posture.
-- **g8e-operator**: Connects to the gateway to provide execution capabilities. Uses the `operator run -e g8e.local` command with `extra_hosts` mapping `g8e.local` to the host gateway, ensuring the operator resolves the gateway by the hostname matching its certificate SANs.
+- **g8e-operator**: Connects to the gateway to provide execution capabilities. Uses the `operator start -e g8e.local` command with `extra_hosts` mapping `g8e.local` to the host gateway, ensuring the operator resolves the gateway by the hostname matching its certificate SANs.
 
 The operator service depends on the gateway health check passing before starting (`depends_on` with `condition: service_healthy`).
 

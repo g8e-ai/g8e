@@ -235,7 +235,28 @@ func demosListCmd() *cobra.Command {
 func demosScenariosCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "scenarios",
-		Short: "List all demo scenarios (agent harness)",
+		Short: "List and run demo scenarios against a real Gateway/Operator",
+		Long: `List and run agent harness scenarios against a REAL g8e Gateway + Operator,
+exercising the full protocol surface (MCP, A2A, A2A protobuf, and official
+governance envelopes with mock consensus + principal signing).
+
+Subcommands:
+  list    List all scenarios in run order
+  run     Run one or more scenarios against a real Gateway/Operator`,
+	}
+
+	cmd.AddCommand(
+		demosScenariosListCmd(),
+		demosScenariosRunCmd(),
+	)
+
+	return cmd
+}
+
+func demosScenariosListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all demo scenarios",
 		Long: `List all agent harness scenarios in run order, grouped by governance posture.
 Each scenario shows its name, required posture, agent persona, and description.`,
 		RunE: runDemosScenarios,
@@ -1408,9 +1429,9 @@ func defaultHarnessConfig(container string) harnessConfig {
 func harnessRun(scenario string, cfg harnessConfig) []string {
 	var cmd []string
 	if cfg.UseRun {
-		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps", cfg.Container, "agent", "run"}
+		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps", cfg.Container, "demos", "scenarios", "run"}
 	} else {
-		cmd = []string{"docker", "compose", "exec", "-T", cfg.Container, "/g8e", "agent", "run"}
+		cmd = []string{"docker", "compose", "exec", "-T", cfg.Container, "/g8e", "demos", "scenarios", "run"}
 	}
 	cmd = append(cmd,
 		"--mtls-url", cfg.MTLSURL,

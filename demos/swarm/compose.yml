@@ -732,7 +732,7 @@ services:
     ports:
       - "5005:5000"
 
-  # Agent runtime for g8e agent-harness scenario execution
+  # Agent runtime for g8e demos scenarios execution
   agent-runtime:
     build:
       context: ..

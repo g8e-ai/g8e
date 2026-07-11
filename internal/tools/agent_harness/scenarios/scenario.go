@@ -77,20 +77,6 @@ func Registry() []Scenario {
 	return s
 }
 
-// Personas returns the distinct list of agents (personas) used across all
-// scenarios, in the order they are first encountered in the Registry.
-func Personas() []clientpkg.Persona {
-	var out []clientpkg.Persona
-	seen := map[string]bool{}
-	for _, s := range Registry() {
-		if !seen[s.Persona.ID] {
-			seen[s.Persona.ID] = true
-			out = append(out, s.Persona)
-		}
-	}
-	return out
-}
-
 // Find returns the scenario with the given name, if any.
 func Find(name string) (Scenario, bool) {
 	for _, sc := range Registry() {

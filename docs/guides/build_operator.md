@@ -31,20 +31,20 @@ Additional Gateway mode flags for consensus posture:
 - `--tribunal-url <url>`, URL of the Tribunal service for L2 deliberation.
 
 #### Operator Mode (PEP)
-An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator run`:
-- `operator run -e, --endpoint <host>`, Connects to the specified Gateway.
-- `operator run -k, --key <path>`, Specifies the Operator private key.
-- `operator run --cert <path>`, Specifies the Operator certificate.
-- `operator run --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
-- `operator run --working-dir <path>`, Working directory for command execution.
-- `operator run -c, --cloud`, Cloud operator mode.
-- `operator run --provider <provider>`, Cloud provider (aws, gcp, azure).
-- `operator run -s, --execution-vault`, Enable execution vault (data stays in working directory).
-- `operator run -G, --no-git`, Disable Git integration.
-- `operator run -l, --log <level>`, Log level: info, error, debug.
-- `operator run --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
+An Operator executes tools on a host and connects back to a Gateway. Start an operator worker with `operator start`:
+- `operator start -e, --endpoint <host>`, Connects to the specified Gateway.
+- `operator start -k, --key <path>`, Specifies the Operator private key.
+- `operator start --cert <path>`, Specifies the Operator certificate.
+- `operator start --trust-bundle <path>`, Specifies the trust bundle PEM file for mTLS validation.
+- `operator start --working-dir <path>`, Working directory for command execution.
+- `operator start -c, --cloud`, Cloud operator mode.
+- `operator start --provider <provider>`, Cloud provider (aws, gcp, azure).
+- `operator start -s, --execution-vault`, Enable execution vault (data stays in working directory).
+- `operator start -G, --no-git`, Disable Git integration.
+- `operator start -l, --log <level>`, Log level: info, error, debug.
+- `operator start --heartbeat-interval <seconds>`, Heartbeat interval in seconds (default: 30).
 
-The binary always starts in CLI mode. Use `gw start` or `operator run` subcommands to launch worker processes.
+The binary always starts in CLI mode. Use `gw start` or `operator start` subcommands to launch worker processes.
 
 ---
 

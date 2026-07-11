@@ -10,7 +10,7 @@ name: dhs-demo
 # The gateway boots with --posture consensus --tribunal-id dhs-tribunal
 # --tribunal-bootstrap /etc/g8e/tribunal-bootstrap.json, which seeds a
 # TribunalPolicy and trusted signer from a deterministic Ed25519 seed shared
-# with the agent-harness. L3 notary is deferred (Phase 3).
+# with the demos scenarios runner. L3 notary is deferred (Phase 3).
 #
 # Teaming model: the "fusion-cop" service represents a partner company's data
 # product (the COP / fusion engine). g8e provides everything that data product
@@ -118,7 +118,7 @@ services:
       start_period: 30s
     command: ["operator", "run", "-e", "10.62.0.10", "--execution-vault"]
 
-  # ── Real g8e agent (runs agent-harness scenarios via docker compose run) ───
+  # ── Real g8e agent (runs demos scenarios via docker compose run) ───
   # One real agent container — personas are set inside the scenario code, not
   # by the container. Mirrors the dow agent-sigint pattern: shares the
   # operator's enrolled mTLS creds via operator_state:ro.

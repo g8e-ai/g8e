@@ -34,9 +34,14 @@ func NewRootCmd(version string, vi serve.VersionInfo) *cobra.Command {
 		Version: version,
 		Short:   "g8e Platform Manager - CLI for the g8e Gateway, g8e Operator, and platform setup",
 		Long: `g8e is a zero-trust execution platform for agentic infrastructure.
-The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.`,
+The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
+
+Running './g8e' with no arguments launches the Tactical Governance Console (TUI).`,
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runTUI(cmd, args, defaultTUIDeps())
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			endpoint, err := cmd.Flags().GetString("endpoint")
@@ -80,7 +85,6 @@ The CLI manages the g8e Gateway (g8eg), g8e Operator (g8eo), and platform setup.
 		auditCmd(),
 		reportCmd(),
 		swaggerCmd(),
-		agentHarnessCmd(),
 		tuiCmd(),
 	)
 

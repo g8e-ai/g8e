@@ -126,15 +126,6 @@ func TestPrintAgentHarnessSummary(t *testing.T) {
 	})
 }
 
-func TestAgentHarnessListCmdRun(t *testing.T) {
-	t.Run("list command Run executes without panic", func(t *testing.T) {
-		cmd := agentHarnessListCmd()
-		assert.NotPanics(t, func() {
-			cmd.Run(cmd, []string{})
-		})
-	})
-}
-
 func TestSelectAgentHarnessScenarios_Consensus(t *testing.T) {
 	t.Run("consensus phase returns doctrine+consensus but not notary", func(t *testing.T) {
 		result := selectAgentHarnessScenarios("consensus", nil)
