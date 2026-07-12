@@ -47,6 +47,18 @@ jobs:
           sudo chmod +x /usr/local/bin/protoc
           rm /tmp/protoc.zip
 
+      - name: Verify Version Sync
+        run: |
+          VERSION=$(cat VERSION | tr -d '\n' | sed 's/^v//')
+          PY_VERSION=$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          PY_INIT_VERSION=$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ "$PY_VERSION" != "$VERSION" ] || [ "$PY_INIT_VERSION" != "$VERSION" ]; then
+            echo "Error: pyproject.toml ($PY_VERSION), __init__.py ($PY_INIT_VERSION) != VERSION ($VERSION)"
+            echo "Run 'make release' to sync."
+            exit 1
+          fi
+          echo "Version sync OK: $VERSION"
+
       - name: Verify Proto & Doctrines
         run: |
           make proto
