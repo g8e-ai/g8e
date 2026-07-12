@@ -662,7 +662,9 @@ release:
 	@VERSION=$$(cat VERSION | tr -d '\n' | sed 's/^v//'); \
 	echo "=== release: v$$VERSION ==="; \
 	PY_FILE=protocol/python/pyproject.toml; \
+	PY_INIT=protocol/python/g8e/__init__.py; \
 	PY_VERSION=$$(grep -E '^version = ' $$PY_FILE | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	PY_INIT_VERSION=$$(grep -E '^__version__ = ' $$PY_INIT | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
 	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
 		echo "Syncing $$PY_FILE: $$PY_VERSION -> $$VERSION"; \
 		sed -i.bak -E 's/^version = "[^"]+"/version = "'$$VERSION'"/' $$PY_FILE; \
@@ -670,6 +672,14 @@ release:
 		echo "  pyproject.toml synced."; \
 	else \
 		echo "  pyproject.toml already in sync."; \
+	fi; \
+	if [ "$$PY_INIT_VERSION" != "$$VERSION" ]; then \
+		echo "Syncing $$PY_INIT: $$PY_INIT_VERSION -> $$VERSION"; \
+		sed -i.bak -E 's/^__version__ = "[^"]+"/__version__ = "'$$VERSION'"/' $$PY_INIT; \
+		rm -f $$PY_INIT.bak; \
+		echo "  __init__.py synced."; \
+	else \
+		echo "  __init__.py already in sync."; \
 	fi; \
 	echo "Running protocol tests..."; \
 	(cd protocol && go test -race -count=1 ./...); \
@@ -687,12 +697,13 @@ release-tag:
 	TAG="v$$VERSION"; \
 	PROTO_TAG="protocol/v$$VERSION"; \
 	PY_VERSION=$$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	PY_INIT_VERSION=$$(grep -E '^__version__ = ' protocol/python/g8e/__init__.py | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
 	echo "=== release-tag: $$TAG + $$PROTO_TAG ==="; \
 	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Error: working tree is dirty; commit or stash before tagging."; exit 1; \
 	fi; \
-	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
-		echo "Error: pyproject.toml version ($$PY_VERSION) != VERSION ($$VERSION)."; \
+	if [ "$$PY_VERSION" != "$$VERSION" ] || [ "$$PY_INIT_VERSION" != "$$VERSION" ]; then \
+		echo "Error: Python version mismatch — pyproject.toml ($$PY_VERSION), __init__.py ($$PY_INIT_VERSION) != VERSION ($$VERSION)."; \
 		echo "Run 'make release' first, commit, then retry."; exit 1; \
 	fi; \
 	if git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null; then \
