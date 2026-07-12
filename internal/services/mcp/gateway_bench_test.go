@@ -36,7 +36,7 @@ func BenchmarkJSONRPCMarshal(b *testing.B) {
 	resp := response.JSONRPCResponse{
 		JSONRPC: "2.0",
 		ID:      1,
-		Result: json.RawMessage(`{"content":[{"type":"text","text":"127.0.0.1 localhost"}]}`),
+		Result:  json.RawMessage(`{"content":[{"type":"text","text":"127.0.0.1 localhost"}]}`),
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

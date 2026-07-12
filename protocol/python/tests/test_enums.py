@@ -1,9 +1,10 @@
 """Tests for g8e dynamic enum generation from protocol constants."""
 
-from enum import StrEnum, IntEnum
+from enum import IntEnum
 
 import pytest
 
+from g8e.constants import StrEnum
 import g8e.enums
 from g8e.enums import _build_enum, _build_event_type_enum, _to_pascal, _pascal_to_screaming_snake, _to_snake
 
