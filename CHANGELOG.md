@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
+| 1.4.1 | 2026-07-12 | Release tooling and CI automation. Introduces `make release` / `make release-tag` workflow for unified version syncing, testing, building, and tagging. Adds binary release GitHub workflow and CI version sync verification. | [v1.4.1](docs/release_notes/v1.4.x/v1.4.1.md) |
 | 1.4.0 | 2026-07-12 | Frontend enrollment, Cloudflare Tunnel, L5 Actuator refactor, and Swagger annotations. Adds `g8e gui` and `g8e tunnel` command suites, `operator start` rename, default TUI launch, consolidated web-cert trust scripts, OpenAPI annotations across gateway endpoints, and Windows build fixes. | [v1.4.0](docs/release_notes/v1.4.x/v1.4.0.md) |
 
 ## v1.3.x
