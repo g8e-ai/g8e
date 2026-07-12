@@ -6,7 +6,7 @@ parent: Guides
 # Build a g8e Gateway
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 ---
 
@@ -142,6 +142,49 @@ To start the gateway, use the CLI gateway command:
 - `--public-base-url <url>` - Public base URL for approval links and host validation behind reverse proxies or Cloudflare Tunnels (e.g., `https://demo.g8e.ai`)
 - `--cors-origin <origin>` - Allowed CORS origin for cross-origin browser access (repeatable, e.g., `https://lovable.dev`)
 - `-f, --follow` - Run gateway in foreground instead of background (Ctrl+C stops gateway)
+
+---
+
+## Protocol Library Dependencies
+
+Custom gateway implementations need the g8e Protocol Library for protobuf schema definitions, SPIFFE workload identity helpers, and JSON protocol constants. The protocol is published as both a Go module and a Python package, both sharing the same version number as the platform binary.
+
+### Go Module
+
+The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+Import the protobuf types and SPIFFE workload identity helpers:
+
+```go
+import (
+    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+    pubsubv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/pubsub/v1"
+    "github.com/g8e-ai/g8e/protocol"
+)
+```
+
+The Go package provides:
+- **`protocol/proto/g8e/common/v1`**: `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote`), `L3Metadata` (with `L3Proof`), `Component` enum
+- **`protocol/proto/g8e/operator/v1`**: `OperatorService` gRPC service definition, `CommandRequested`, `ActionReceipt`, and all typed payload/result messages
+- **`protocol/proto/g8e/pubsub/v1`**: `PubSubMessage`, `PubSubEvent` for WebSocket pub/sub broker implementation
+- **`protocol`**: `WorkloadIdentity` for SPIFFE URI SAN generation and validation across all identity types (Operator, CLI, App, User, Hub, GatewayPeer)
+
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, and `protocol/examples/` for complete Go example programs.
+
+### Python Package
+
+For gateway-side tooling, testing, or Python-based services that need to consume protocol constants:
+
+```bash
+pip install g8e==1.5.0
+```
+
+The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
 
 ---
 
@@ -424,3 +467,4 @@ Requires `cloudflared` installed and a Cloudflare account with a registered doma
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)** - Connect to, authenticate, use, maintain, and pull reports from a Gateway.
 - **[Build Operator](build_operator.md)** - Build a custom g8e-compatible g8e Operator.
+- **[Protocol Library](../architecture/protocol.md)** - Go module and Python package API reference, constants, models, and usage examples.

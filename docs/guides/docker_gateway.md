@@ -1,7 +1,7 @@
 # Docker Gateway Guide
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 This document describes the procedures for building and deploying the g8e Gateway using Docker and Docker Compose.
 
@@ -156,7 +156,16 @@ The `Dockerfile` employs a multi-stage build process:
 The image includes:
 - The `g8e` binary at `/g8e`.
 - Protocol constants at `/protocol/constants`.
+- Protocol protobuf schemas at `/protocol/proto`.
 - Required utilities including `curl`, `wget`, and `ca-certificates`.
+
+The protocol constants and protobuf schemas are bundled from the `protocol/` directory. The Python package (`g8e`) is not included in the Docker image by default. If you need Python protocol access inside a container, install it separately:
+
+```bash
+pip install g8e==1.5.0
+```
+
+Or set `G8E_PROTOCOL_DIR=/protocol` to point the Python package at the bundled constants. See the [Protocol Library documentation](../architecture/protocol.md) for details.
 
 ### Health Monitoring
 

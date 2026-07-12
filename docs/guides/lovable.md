@@ -6,7 +6,7 @@ parent: Guides
 # Lovable Frontend Integration
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 ---
 
@@ -610,3 +610,4 @@ After the Lovable AI agent generates the app, verify:
 - [Connect Apps to Gateway](./connect_apps_to_gateway.md) — General application connectivity patterns
 - [Architecture: Auth](../architecture/auth.md) — WebAuthn passkey authentication architecture
 - [Architecture: Gateway](../architecture/gateway.md) — Gateway service architecture
+- [Protocol Library](../architecture/protocol.md) — Go module and Python package API reference for building g8e-compatible clients and services

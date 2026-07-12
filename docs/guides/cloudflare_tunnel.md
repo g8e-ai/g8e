@@ -6,7 +6,7 @@ parent: Guides
 # Cloudflare Tunnel Integration
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 ---
 
@@ -308,3 +308,10 @@ cloudflared --version
 wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O /tmp/cloudflared.deb
 sudo dpkg -i /tmp/cloudflared.deb
 ```
+
+---
+
+## See Also
+
+- **[Lovable Frontend Integration](./lovable.md)**: Build a g8e Governance Console UI with Lovable.
+- **[Protocol Library](../architecture/protocol.md)**: Go module and Python package API reference for building g8e-compatible clients and services.

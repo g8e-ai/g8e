@@ -6,7 +6,7 @@ parent: Guides
 # Connect Apps to g8e Gateway
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 ---
 
@@ -333,6 +333,61 @@ The document store uses the `/api/v1/data/{collection}/{id}` pattern for CRUD op
 #### Governed Collections
 
 Direct `/api/v1/data/` mutations are restricted to platform infrastructure collections. Governed collections (cases, investigations, tasks, memories, reputation_state, reputation_commitments, stake_resolutions, agent_activity_metadata) must use `POST /api/v1/governance/envelopes` for mutations.
+
+---
+
+## Protocol Library for Client Development
+
+Applications connecting to the g8e Gateway can use the g8e Protocol Library to construct `GovernanceEnvelope` transactions, parse `ActionReceipt` responses, and access protocol constants. The library is published as both a Go module and a Python package, both sharing the same version number as the platform binary.
+
+### Go Module
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+Import the protobuf types for envelope construction and receipt parsing:
+
+```go
+import (
+    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+    "github.com/g8e-ai/g8e/protocol"
+)
+
+// Construct an envelope
+envelope := &commonv1.GovernanceEnvelope{
+    EventType:       "g8e.v1.operator.command.requested",
+    ActionType:      "EXECUTE_BASH",
+    OperatorId:      "op-456",
+    OperatorSessionId: "session-789",
+}
+
+// Generate SPIFFE workload identity for mTLS
+wid := protocol.NewWorkloadIdentity()
+cliSPIFFE := wid.CLISPIFFEID("user-123", "session-789")
+// spiffe://g8e.local/cli/user-123/session-789
+```
+
+### Python Package
+
+```bash
+pip install g8e==1.5.0
+```
+
+```python
+from g8e.constants import EVENTS, ComponentName, WEB_SESSION_ID_HEADER
+from g8e.enums import EventType
+from g8e.models import RequestContext
+
+# Access event type constants for envelope construction
+print(EventType.OPERATOR_COMMAND_REQUESTED)  # "g8e.v1.operator.command.requested"
+
+# Build HTTP headers for gateway communication
+headers = {WEB_SESSION_ID_HEADER: "web-session-xyz"}
+```
+
+Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and usage examples.
 
 ---
 
@@ -743,3 +798,4 @@ curl -k https://localhost:8443/api/v1/health
 - **[MCP Protocol](../../protocol/docs/mcp.md)** - Detailed MCP protocol specification
 - **[A2A Protocol](../../protocol/docs/a2a.md)** - Detailed A2A protocol specification
 - **[Gateway Architecture](../architecture/gateway.md)** - Gateway architecture and internals
+- **[Protocol Library](../architecture/protocol.md)** - Go module and Python package API reference, constants, models, and usage examples

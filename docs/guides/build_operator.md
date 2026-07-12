@@ -6,7 +6,7 @@ parent: Guides
 # Build a g8e Operator
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 ---
 
@@ -127,6 +127,47 @@ The `operator` subcommand provides tools for managing remote Operator instances:
 - `./g8e operator stream [host...] [flags]`, Streams the binary to remote hosts via native Go crypto/ssh and executes it directly on each host. Supports concurrent streaming and advanced SSH configuration. Flags: `--arch` (target architecture: amd64, arm64, 386), `--hosts` (file of hosts, one per line, or `-` for stdin), `--concurrency` (max parallel SSH sessions, default: 50), `--timeout` (per-host dial and inject timeout in seconds, default: 60), `--endpoint` (platform endpoint; if set, starts Operator on each remote host), `--no-git` (disable ledger), `--ssh-config` (path to SSH config file), `--known-hosts` (path to SSH known_hosts file), `--binary-dir` (directory containing arch-specific Operator builds), `--ssh-identity-file` (SSH identity file path), `--ssh-user` (SSH username), `--ssh-passphrase` (passphrase for encrypted SSH private keys), `--preflight` (enable pre-flight SSH connectivity check).
 - `./g8e operator cp <target>`, Copies the binary to a local path.
 - `./g8e operator scp <user@host:path>`, Copies the binary to a remote host. Flags: `--port` (`-P`), `--identity` (`-i`), `--recursive` (`-r`), `--preserve`, `--verbose` (`-v`), `--compression` (`-C`), `--prompt`.
+
+---
+
+## Protocol Library Dependencies
+
+Custom operator implementations need the g8e Protocol Library for protobuf schema definitions, SPIFFE workload identity helpers, and JSON protocol constants. The protocol is published as both a Go module and a Python package, both sharing the same version number as the platform binary.
+
+### Go Module
+
+The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+Import the protobuf types and SPIFFE workload identity helpers:
+
+```go
+import (
+    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+    "github.com/g8e-ai/g8e/protocol"
+)
+```
+
+The Go package provides:
+- **`protocol/proto/g8e/common/v1`**: `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote`), `L3Metadata` (with `L3Proof`), `Component` enum — the core types for envelope construction and verification
+- **`protocol/proto/g8e/operator/v1`**: `OperatorService` gRPC service definition, `CommandRequested`, `FileEditRequested`, `ActionReceipt`, `CommandResult`, and all typed payload/result messages for L5 Actuator execution
+- **`protocol`**: `WorkloadIdentity` for SPIFFE URI SAN generation and validation. Operators use `OperatorSPIFFEID("org_id", "op_id", "session_id")` to generate `spiffe://g8e.local/operator/<org_id>/<op_id>/<session_id>` and `MatchesOperator` to validate identities on mTLS handshakes
+
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, and `protocol/examples/` for complete Go example programs including `governance_envelope/main.go` (envelope construction) and `workload_identity/main.go` (SPIFFE identity generation).
+
+### Python Package
+
+For operator-side tooling, testing, or Python-based actuator services that need to consume protocol constants:
+
+```bash
+pip install g8e==1.5.0
+```
+
+The package provides `g8e.constants` (JSON protocol constants), `g8e.enums` (dynamic enums from protocol constants), and `g8e.models` (Pydantic v2 models). Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference.
 
 ---
 
@@ -309,3 +350,4 @@ For detailed vault architecture and security guarantees, see [Encryption Archite
 
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**, Deploy and use a g8e Operator.
 - **[Build Apps](build_apps.md)**, Build g8e-compatible applications using a Gateway.
+- **[Protocol Library](../architecture/protocol.md)**, Go module and Python package API reference, constants, models, and usage examples.

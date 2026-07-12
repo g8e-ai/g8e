@@ -6,7 +6,7 @@ parent: Guides
 # Build g8e-Compatible Applications
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 ---
 
@@ -92,6 +92,66 @@ The protocol defines canonical event types for all first-class operations. The f
 - **Shutdown**: `g8e.v1.operator.shutdown.requested`
 
 This list is not exhaustive. The complete set of event type constants and payload schema definitions are available in the protocol constants and protobuf schemas.
+
+### Protocol Library Dependencies
+
+Applications constructing `GovernanceEnvelope` transactions or parsing `ActionReceipt` responses should use the g8e Protocol Library, which is published as both a Go module and a Python package. Both share the same version number as the platform binary.
+
+#### Go Module
+
+The protocol is part of the root Go module `github.com/g8e-ai/g8e`. Add it to your project:
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+Import the protobuf types and SPIFFE workload identity helpers:
+
+```go
+import (
+    commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+    operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
+    "github.com/g8e-ai/g8e/protocol"
+)
+```
+
+The Go package provides:
+- **`protocol/proto/g8e/common/v1`**: `GovernanceEnvelope`, `GovernanceMetadata`, `L1Metadata`, `L2Metadata` (with `L2Vote`), `L3Metadata` (with `L3Proof`), `Component` enum
+- **`protocol/proto/g8e/operator/v1`**: `CommandRequested`, `FileEditRequested`, `ActionReceipt`, and all typed payload messages for first-class operations
+- **`protocol`**: `WorkloadIdentity` for SPIFFE URI SAN generation and validation (`OperatorSPIFFEID`, `CLISPIFFEID`, `AppSPIFFEID`, `MatchesOperator`, etc.)
+
+See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference, and `protocol/examples/governance_envelope/main.go` for a complete envelope construction example.
+
+#### Python Package
+
+Install from PyPI:
+
+```bash
+pip install g8e==1.5.0
+```
+
+The package provides:
+- **`g8e.constants`**: JSON protocol constants (events, status, collections, headers, channels, API paths, and more) loaded from `protocol/constants/` at import time
+- **`g8e.enums`**: Dynamic `StrEnum` and `IntEnum` generation from `STATUS` and `EVENTS` protocol constants (e.g., `g8e.enums.EventType`, `g8e.enums.OperatorToolName`)
+- **`g8e.models`**: Pydantic v2 models for protocol data structures (`RequestContext`, `BoundOperator`, `PlatformSettings`, SSE event wire models, internal API request/response models)
+
+```python
+from g8e.constants import EVENTS, ComponentName
+from g8e.enums import EventType
+from g8e.models import RequestContext
+
+# Access event type constants
+print(EventType.OPERATOR_COMMAND_REQUESTED)  # "g8e.v1.operator.command.requested"
+
+# Build a request context
+ctx = RequestContext(
+    web_session_id="web-session-abc",
+    user_id="user-xyz",
+    source_component=ComponentName.CLIENT,
+)
+```
+
+Requires Python 3.10+. Set `G8E_PROTOCOL_DIR` to override the default protocol constants directory. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and `protocol/python/examples/` for working examples.
 
 ---
 
@@ -1050,3 +1110,4 @@ yours to design.
 
 - **[Connect Apps to Gateway](connect_apps_to_gateway.md)**: Connect to, authenticate, use, maintain, and pull reports from a Gateway.
 - **[Connect Operator to Gateway](connect_operator_to_gateway.md)**: Deploy and use a g8e Operator.
+- **[Protocol Library](../architecture/protocol.md)**: Go module and Python package API reference, constants, models, and usage examples.
