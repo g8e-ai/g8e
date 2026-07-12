@@ -64,7 +64,7 @@ func TestCanonicalDBService_GetDB(t *testing.T) {
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	assert.NotNil(t, db.GetDB(), "GetDB should return non-nil database")
 }
@@ -93,7 +93,7 @@ func TestCanonicalDBService_SSEEventsListAllSince(t *testing.T) {
 	ks := newTestKeystore(t, secretsDir, logger)
 	db, err := OpenCanonicalDBService(dataDir, secretsDir, filepath.Join(dataDir, constants.VaultDirname), logger, true, "", false, ks)
 	require.NoError(t, err)
-	defer db.Close()
+	t.Cleanup(func() { db.Close() })
 
 	// Append some SSE events
 	route := SSERoute{WebSessionID: "test-session"}
