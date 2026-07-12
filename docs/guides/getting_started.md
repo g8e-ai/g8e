@@ -6,7 +6,7 @@ parent: Guides
 # Getting Started
 
 Last Updated: 2026-07-12
-Version: v1.4.0
+Version: v1.5.0
 
 ---
 
@@ -41,7 +41,7 @@ Everything, including the Go compiler and build dependencies, runs inside the co
 | Go | 1.26.5, required to build from source |
 | Make | Any recent version, required to run build targets |
 | Git | Any recent version, required to clone the repository |
-| Python | 3.11+, optional, required only for protocol library development |
+| Python | 3.10+, optional, required only for protocol library development |
 
 > **Don't have `make` or `go` installed?** Run the setup script for your platform to detect and install them automatically (see [scripts.md](../architecture/scripts.md) for details):
 > - **Linux:** `bash scripts/linux-setup.sh`
@@ -58,6 +58,59 @@ Both paths start with cloning the repository:
 git clone https://github.com/g8e-ai/g8e.git
 cd g8e
 ```
+
+---
+
+## Use the Protocol Library (Go Module or Python Package)
+
+If you only need the g8e wire protocol — constants, models, enums, or protobuf definitions — for your own client or service, you can consume the published packages without building the full platform. Both packages share the same version number as the platform binary.
+
+### Go module
+
+As of v1.5.0, the protocol is part of the root Go module. Add it to your project:
+
+```bash
+go get github.com/g8e-ai/g8e@v1.5.0
+```
+
+Import the protocol packages in your Go code:
+
+```go
+import (
+    "github.com/g8e-ai/g8e/protocol"
+    "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
+)
+```
+
+> **Migrating from v1.4.x?** The previous `go get github.com/g8e-ai/g8e/protocol@vX.Y.Z` is no longer needed. The root module now includes all protocol packages. See the [v1.5.0 release notes](../release_notes/v1.5.x/v1.5.0.md) for the full migration guide.
+
+### Python package
+
+Install from PyPI:
+
+```bash
+pip install g8e
+```
+
+Pinned to a specific version:
+
+```bash
+pip install g8e==1.5.0
+```
+
+The package provides:
+- `g8e.constants` — JSON protocol constants (events, status, collections, headers, etc.)
+- `g8e.enums` — Dynamic `StrEnum` and `IntEnum` generation from protocol constants
+- `g8e.models` — Pydantic v2 models for protocol data structures
+
+```python
+from g8e.constants import EVENTS, ComponentName
+from g8e.models import RequestContext
+
+print(ComponentName.CLIENT)  # "client"
+```
+
+Requires Python 3.10+. See the [Protocol Library documentation](../architecture/protocol.md) for the full API reference and usage examples.
 
 ---
 
@@ -424,4 +477,5 @@ After the gateway is running and the CLI is authenticated:
 - **[Docker Gateway Guide](docker_gateway.md)**, Docker-specific configuration, volumes, and production considerations
 - **[Architecture](../architecture/gateway.md)**, Platform architecture and 5-layer verification sequence
 - **[MCP Protocol](../../protocol/docs/mcp.md)**, Connect AI clients via Model Context Protocol
+- **[Protocol Library](../architecture/protocol.md)**, Go module and Python package API reference, constants, models, and usage examples
 - **[A2A Protocol](../../protocol/docs/a2a.md)**, Agent-to-agent communication patterns

@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Description | Notes |
 |---------|------|-------------|-------|
-| 1.5.0 | 2026-07-12 | Go protocol module merge. Merges the separate `github.com/g8e-ai/g8e/protocol` Go module into the root `github.com/g8e-ai/g8e` module, simplifying dependency management and versioning for external consumers. | [v1.5.0](docs/release_notes/v1.5.x/v1.5.0.md) |
+| 1.5.0 | 2026-07-12 | Go protocol module merge and CI modernization. Merges the separate `github.com/g8e-ai/g8e/protocol` Go module into the root module. Adds cross-OS CI matrix (ubuntu/macOS/Windows), Python pytest suite (94 tests), protocol conformance suite (151 tests), Go performance benchmarks (13 benchmarks), smoke test scripts, gitleaks secret scanning, go-licenses license compliance, cosign/sigstore artifact signing, fresh-install verification jobs, pip-audit dependency scanning, and py.typed PEP 561 marker. | [v1.5.0](docs/release_notes/v1.5.x/v1.5.0.md) |
 
 ## v1.4.x
 

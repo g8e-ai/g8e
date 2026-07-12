@@ -27,6 +27,8 @@ jobs:
   release:
     name: Release Python Protocol
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse_version.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -38,6 +40,22 @@ jobs:
         with:
           python-version: '3.14'
           cache: 'pip'
+
+      - name: Validate package metadata
+        working-directory: ./protocol/python
+        run: |
+          python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              meta = tomllib.load(f)['project']
+          required = ['name', 'version', 'description', 'license', 'authors', 'classifiers', 'urls']
+          for key in required:
+              assert key in meta, f'Missing: {key}'
+          assert meta['name'] == 'g8e'
+          assert 'Homepage' in meta['urls']
+          assert 'Repository' in meta['urls']
+          print('Package metadata OK')
+          "
 
       - name: Build package
         working-directory: ./protocol/python
@@ -79,4 +97,45 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+
+  verify-install:
+    name: Verify PyPI Install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: release
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Fresh install from PyPI
+        shell: bash
+        run: |
+          python -m venv testenv
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            source testenv/Scripts/activate
+          else
+            source testenv/bin/activate
+          fi
+          pip install --upgrade pip
+          pip install g8e==${{ needs.release.outputs.version }}
+          python -c "import g8e; print(f'g8e version: {g8e.__version__}'); assert g8e.__version__ == '${{ needs.release.outputs.version }}'"
+          echo "Fresh PyPI install verified successfully"
+
+      - name: Verify imports work
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            source testenv/Scripts/activate
+          else
+            source testenv/bin/activate
+          fi
+          python -c "from g8e.constants import EVENTS, STATUS, ComponentName; print('Constants OK')"
+          python -c "from g8e.models import RequestContext, PlatformSettings; print('Models OK')"
+          python -c "import g8e.enums; print('Enums OK')"
 
