@@ -15,7 +15,6 @@ package cmd
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -430,18 +429,18 @@ func getTunnelID(tunnelName string) (string, error) {
 func generateTunnelConfig(tunnelID, credentialsFile, hostname string, httpsPort int, caBundle, originServerName string) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("tunnel: %s\n", tunnelID))
-	sb.WriteString(fmt.Sprintf("credentials-file: %s\n", credentialsFile))
+	fmt.Fprintf(&sb, "tunnel: %s\n", tunnelID)
+	fmt.Fprintf(&sb, "credentials-file: %s\n", credentialsFile)
 	sb.WriteString("\n")
 	sb.WriteString("ingress:\n")
-	sb.WriteString(fmt.Sprintf("  - hostname: %s\n", hostname))
-	sb.WriteString(fmt.Sprintf("    service: https://localhost:%d\n", httpsPort))
+	fmt.Fprintf(&sb, "  - hostname: %s\n", hostname)
+	fmt.Fprintf(&sb, "    service: https://localhost:%d\n", httpsPort)
 	sb.WriteString("    originRequest:\n")
 
 	if caBundle != "" {
-		sb.WriteString(fmt.Sprintf("      originCaPool: %s\n", caBundle))
+		fmt.Fprintf(&sb, "      originCaPool: %s\n", caBundle)
 		if originServerName != "" {
-			sb.WriteString(fmt.Sprintf("      originServerName: %s\n", originServerName))
+			fmt.Fprintf(&sb, "      originServerName: %s\n", originServerName)
 		}
 	} else {
 		sb.WriteString("      noTLSVerify: true\n")
@@ -451,14 +450,4 @@ func generateTunnelConfig(tunnelID, credentialsFile, hostname string, httpsPort 
 	sb.WriteString("  - service: http_status:404\n")
 
 	return sb.String()
-}
-
-// runCloudflaredContext runs cloudflared with context cancellation support.
-// This is used by tunnel run to allow graceful shutdown.
-func runCloudflaredContext(ctx context.Context, cmd *cobra.Command, args ...string) error {
-	c := exec.CommandContext(ctx, cloudflaredBin, args...)
-	c.Stdout = cmd.OutOrStdout()
-	c.Stderr = cmd.ErrOrStderr()
-	c.Stdin = os.Stdin
-	return c.Run()
 }

@@ -124,14 +124,14 @@
         },
         "/.well-known/g8e/pki/trust-windows": {
             "get": {
-                "description": "Alias for /web-cert.ps1 — returns the Windows CA trust script",
+                "description": "Returns the Windows CA trust script (alias endpoint)",
                 "produces": [
                     "text/plain"
                 ],
                 "tags": [
                     "bootstrap"
                 ],
-                "summary": "Web cert trust script alias (Windows)",
+                "summary": "Web cert trust script (Windows alias)",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -927,46 +927,6 @@
                 }
             }
         },
-        "/web-cert.sh": {
-            "get": {
-                "description": "Returns the Linux/macOS CA trust script for remote workstations",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "bootstrap"
-                ],
-                "summary": "Web cert trust script (Linux/macOS)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
-        "/web-cert.ps1": {
-            "get": {
-                "description": "Returns the Windows CA trust script for remote workstations",
-                "produces": [
-                    "text/plain"
-                ],
-                "tags": [
-                    "bootstrap"
-                ],
-                "summary": "Web cert trust script (Windows)",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/console/": {
             "get": {
                 "description": "Serves the single-page application dashboard for WebAuthn/passkey operations.",
@@ -1094,6 +1054,46 @@
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.StateResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/web-cert.ps1": {
+            "get": {
+                "description": "Returns the Windows CA trust script for remote workstations",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "bootstrap"
+                ],
+                "summary": "Web cert trust script (Windows)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/web-cert.sh": {
+            "get": {
+                "description": "Returns a combined Linux/macOS CA trust script for remote workstations",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "bootstrap"
+                ],
+                "summary": "Web cert trust script (Linux/macOS)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
