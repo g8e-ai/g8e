@@ -102,7 +102,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.42.0.10", "--execution-vault"]
+    command: ["operator", "start", "-e", "10.42.0.10", "--execution-vault"]
 
   agent-sigint:
     build:
@@ -131,7 +131,7 @@ services:
     environment:
       - SENSOR_ID=SIGINT-01
       - SENSOR_TYPE=sigint
-    command: ["agent-harness", "run",
+    command: ["demos", "scenarios", "run",
               "--mtls-url", "https://g8e.local:8443",
               "--public-url", "http://g8e.local:8080",
               "--cert", "/root/.g8e/pki/operator.crt",

@@ -137,12 +137,24 @@ func sseApproveServer(t *testing.T, userID, txHash string) *httptest.Server {
 
 // sseNoEventServer returns an httptest.Server that accepts SSE connections
 // but never sends any events, causing the client to block until context cancel.
+// The server registers its own cleanup to ensure the handler unblocks before
+// Close is called, which is necessary on Windows where the TCP stack does not
+// promptly notify the server of client-side connection closure.
 func sseNoEventServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithCancel(context.Background())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		<-r.Context().Done()
+		select {
+		case <-r.Context().Done():
+		case <-ctx.Done():
+		}
 	}))
+	t.Cleanup(func() {
+		cancel()
+		srv.Close()
+	})
+	return srv
 }
 
 // withEndpointOverride sets the config endpoint override to the given URL and
@@ -183,7 +195,6 @@ func TestApproveCmd_SSE_Timeout(t *testing.T) {
 	cfg, _ := setupApproveSSETestEnv(t)
 
 	srv := sseNoEventServer(t)
-	t.Cleanup(srv.Close)
 	withEndpointOverride(t, srv.URL)
 
 	mockClient := &mockAPIClient{

@@ -88,4 +88,4 @@ chmod +x g8e
 echo -e "${GREEN}g8e deployed successfully!${NC}"
 
 echo "Starting g8e Operator to connect to Gateway at ${GATEWAY_HOST}..."
-./g8e operator run -e "${GATEWAY_HOST}"
+./g8e operator start -e "${GATEWAY_HOST}"

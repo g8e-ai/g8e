@@ -1,8 +1,8 @@
 # Compliance Alignment Report
 
-**Document Version:** 1.3.6  
-**Last Updated:** 2026-07-03  
-**Platform:** g8e v1.3.6  
+**Document Version:** 1.4.0  
+**Last Updated:** 2026-07-12  
+**Platform:** g8e v1.4.0  
 **Maintained by:** Lateralus Labs, LLC.
 
 ---
@@ -492,6 +492,11 @@ The NSA ZIG framework aligns with the DoD Zero Trust pillars. g8e implements the
 - **g8e Console SPA** for browser-based passkey registration and transaction approval
 - **PrivilegedRouteRegistry** blocking app certificates from governance envelope submission
 - **JIT capability minting** with self-dissolving execution scopes
+- **One-time enrollment tokens** replacing raw session identifiers in browser enrollment URLs with cryptographically random, 5-minute-TTL tokens consumed on first use
+- **SSE-based L3 approval notifications** replacing polling with real-time event subscriptions for passkey approval delivery
+- **Thread-safe dependency wiring** via atomic pointers for late-bound gateway dependencies, eliminating data races in concurrent request handling
+- **Configurable CORS middleware** validating request origins against an allowlist for cross-origin browser access
+- **75% test coverage threshold** enforced in CI/CD across gateway, governance, storage, and CLI subsystems
 
 ### Planned Enhancements
 
@@ -587,6 +592,8 @@ For specific compliance questions or audit support, contact:
 | 1.3.1 | 2026-06-28 | Lateralus Labs | Updated platform version to v1.3.1; updated L3 Notary description to reflect two-layer model (passkey authorization plus mTLS transport); added PrivilegedRouteRegistry and JIT capability minting evidence; added g8e Console SPA to current strengths; corrected `.github/SECURITY.md` references to repository-relative paths; added governance architecture documentation to evidence repository; added reporting verification and L3 approval pipeline test evidence |
 | 1.3.5 | 2026-07-02 | Lateralus Labs | Updated platform version to v1.3.5; clarified zero runtime dependencies (statically linked binary, `CGO_ENABLED=0`); removed OpenSSL and Git from runtime dependency lists |
 | 1.3.6 | 2026-07-03 | Lateralus Labs | Updated platform version to v1.3.6; added missing v1.3.5 document control entry |
+| 1.3.11 | 2026-07-12 | Lateralus Labs | Updated platform version to v1.3.11; added one-time enrollment tokens, SSE-based L3 approval notifications, thread-safe dependency wiring, configurable CORS middleware, and 75% test coverage threshold to current strengths; verified all evidence paths against live codebase |
+| 1.4.0 | 2026-07-12 | Lateralus Labs | Updated platform version to v1.4.0; added frontend enrollment (`g8e gui`), Cloudflare Tunnel management (`g8e tunnel`), L5 Actuator `ExecutionHandler` interface refactor, OpenAPI/Swagger annotations across gateway endpoints, consolidated web-cert trust scripts, `operator start` rename, and default TUI launch to current strengths |
 
 ---
 

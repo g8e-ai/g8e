@@ -361,7 +361,7 @@ func buildOperatorArgs(endpoint string, noGit bool) string {
 	if endpoint == "" {
 		return ""
 	}
-	parts := []string{"operator", "run", "-e", shellQuote(endpoint)}
+	parts := []string{"operator", "start", "-e", shellQuote(endpoint)}
 	if noGit {
 		parts = append(parts, "--no-git")
 	}

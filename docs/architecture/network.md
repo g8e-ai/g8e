@@ -1,7 +1,7 @@
 # Network Architecture
 
-Last Updated: 2026-07-06
-Version: v1.3.7
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 This document details the networking architecture of the g8e platform, including PKI, mTLS, identity management, and communication patterns.
 
@@ -97,9 +97,8 @@ Since the g8e Gateway acts as a self-signed CA, clients must explicitly trust th
 
 | Platform | Endpoint | Action |
 | :--- | :--- | :--- |
-| **Linux** | `/bootstrap-ca` | Downloads CA and installs to system store via `update-ca-certificates`. |
-| **macOS** | `/bootstrap-ca-macos` | Downloads CA and installs to System Keychain via `security add-trusted-cert`. |
-| **Windows** | `/bootstrap-ca.ps1` | Downloads CA and installs to Root store via `Import-Certificate`. |
+| **Linux/macOS** | `/web-cert.sh` | Downloads CA and installs to system store via `update-ca-certificates`. |
+| **Windows** | `/web-cert.ps1` | Downloads CA and installs to Root store via `Import-Certificate`. |
 
 **Browser Restart**: After running any trust script, users **must restart all open browsers**. Browsers often cache certificate trust state, and WebAuthn registration will fail if the browser does not yet recognize the new platform CA.
 
@@ -133,7 +132,7 @@ Default ports are defined in `protocol/constants/ports.json`:
 
 ### Port Constraints
 
-- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/bootstrap-ca` etc.), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS via a permanent 301 redirect.
+- **HTTP Surface** (`8080`): Serves plain HTTP for health checks, state endpoint, trust scripts (`/web-cert.sh`, `/web-cert.ps1`), CA bundle and fingerprint discovery, enrollment endpoints, deploy scripts, and node binary distribution. All other requests are redirected to HTTPS via a permanent 301 redirect.
 - **HTTPS Surface** (`8443`): Uses `tls.VerifyClientCertIfGiven`, overriding the stricter `tls.RequireAndVerifyClientCert` default from `PKIAuthority.TLSConfig()`. Operates with application-layer mTLS validation. All governed execution endpoints and operator routes require a verified SPIFFE identity via client certificate, while public routes (the Console SPA, static assets, CA bundle, CRL, and WebAuthn browser endpoints) are accessible directly.
 - **Collision Prevention**: The gateway fails startup if multiple logical surfaces are assigned to the same port, ensuring no downgrade of the mTLS execution boundary.
 

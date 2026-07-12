@@ -106,7 +106,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 2 - Recon
   operator-2:
@@ -138,7 +138,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 3 - Recon
   operator-3:
@@ -170,7 +170,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 4 - Recon
   operator-4:
@@ -202,7 +202,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 5 - Recon
   operator-5:
@@ -234,7 +234,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 6 - Recon
   operator-6:
@@ -266,7 +266,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 7 - Recon
   operator-7:
@@ -298,7 +298,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 8 - Recon
   operator-8:
@@ -330,7 +330,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 9 - Attack
   operator-9:
@@ -362,7 +362,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 10 - Attack
   operator-10:
@@ -394,7 +394,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 11 - Attack
   operator-11:
@@ -426,7 +426,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 12 - Attack
   operator-12:
@@ -458,7 +458,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 13 - Attack
   operator-13:
@@ -490,7 +490,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 14 - Attack
   operator-14:
@@ -522,7 +522,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 15 - Support
   operator-15:
@@ -554,7 +554,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 16 - Support
   operator-16:
@@ -586,7 +586,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 17 - Support
   operator-17:
@@ -618,7 +618,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 18 - Support
   operator-18:
@@ -650,7 +650,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 19 - Relay
   operator-19:
@@ -682,7 +682,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Drone Operator 20 - Relay
   operator-20:
@@ -714,7 +714,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    command: ["operator", "run", "-e", "10.32.0.10"]
+    command: ["operator", "start", "-e", "10.32.0.10"]
 
   # Command and Control Interface
   command-interface:
@@ -732,7 +732,7 @@ services:
     ports:
       - "5005:5000"
 
-  # Agent runtime for g8e agent-harness scenario execution
+  # Agent runtime for g8e demos scenarios execution
   agent-runtime:
     build:
       context: ..

@@ -1,4 +1,4 @@
-# g8e-protocol
+# g8e
 
 Python protocol library for the g8e zero-trust execution platform. Provides protocol constants, dynamic enums, and Pydantic models for building g8e-compatible clients and services.
 
@@ -7,7 +7,7 @@ Python protocol library for the g8e zero-trust execution platform. Provides prot
 Requires Python 3.10 or later. Dependencies are `pydantic>=2.0.0` and `protobuf>=4.0.0`.
 
 ```bash
-pip install g8e-protocol
+pip install g8e
 ```
 
 ## Usage

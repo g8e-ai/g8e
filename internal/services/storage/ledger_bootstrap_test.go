@@ -333,10 +333,11 @@ func TestBootstrap_NilVaultReturnsError(t *testing.T) {
 func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 	t.Parallel()
 
-	// Create a read-only parent directory
-	readOnlyParent := t.TempDir()
-	require.NoError(t, os.Chmod(readOnlyParent, 0555))
-	t.Cleanup(func() { os.Chmod(readOnlyParent, 0755) })
+	// Create a file to block directory creation — os.MkdirAll will fail because
+	// the path component is a file, not a directory. This is cross-platform,
+	// unlike chmod 0555 which doesn't prevent writes on Windows.
+	blocker := filepath.Join(t.TempDir(), "blocker")
+	require.NoError(t, os.WriteFile(blocker, []byte("x"), 0644))
 
 	_, privKey, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
@@ -350,7 +351,7 @@ func TestBootstrap_BootstrapFailureOnUnwritableBaseDir(t *testing.T) {
 	t.Cleanup(func() { testVault.Close() })
 
 	config := &LedgerConfig{
-		BaseDir:         filepath.Join(readOnlyParent, "subdir", "ledger"),
+		BaseDir:         filepath.Join(blocker, "subdir", "ledger"),
 		GitPath:         testGitPath(t),
 		EncryptionVault: testVault,
 	}

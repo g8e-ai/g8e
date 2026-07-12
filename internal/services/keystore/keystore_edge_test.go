@@ -18,6 +18,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
@@ -68,6 +69,9 @@ func TestFileKeyring_RetrieveMasterKey_EmptyFile(t *testing.T) {
 
 func TestFileKeyring_RetrieveMasterKey_PermissionDenied(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod 0000 does not prevent reads on Windows")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root can read any file")
 	}

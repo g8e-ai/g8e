@@ -48,38 +48,7 @@ var (
 	harnessTribunalID    string
 )
 
-func agentHarnessCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:     "agent",
-		Aliases: []string{"agent-harness"},
-		Short:   "Universal agent harness for a real g8e Gateway/Operator",
-		Long: `agent impersonates arbitrary AI tools and agents against a REAL g8e
-Gateway + Operator, exercising the full protocol surface (MCP, A2A, A2A
-protobuf, and official governance envelopes with mock consensus + principal
-signing), then audits every result against the Operator's signed receipts.`,
-	}
-
-	cmd.AddCommand(agentHarnessListCmd())
-	cmd.AddCommand(agentHarnessRunCmd())
-	cmd.AddCommand(agentHarnessAuditCmd())
-
-	return cmd
-}
-
-func agentHarnessListCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: "List available scenarios",
-		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Println("scenarios (in run order):")
-			for _, s := range scenarios.Registry() {
-				cmd.Printf("  %-18s %-9s %-18s %s\n", s.Name, s.RequiresPosture, s.Persona.ID, s.Title)
-			}
-		},
-	}
-}
-
-func agentHarnessRunCmd() *cobra.Command {
+func demosScenariosRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run [flags] [scenario ...]",
 		Short: "Run scenarios against a real Gateway/Operator",
@@ -105,33 +74,13 @@ func agentHarnessRunCmd() *cobra.Command {
 	return cmd
 }
 
-func agentHarnessAuditCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "audit [flags]",
-		Short: "Audit signed receipts from the Operator",
-		RunE:  runAgentHarnessAudit,
-	}
-
-	cmd.Flags().StringVar(&harnessConfigPath, "config", "", "JSON config overlay")
-	cmd.Flags().StringVar(&harnessMTLSURL, "mtls-url", "", "Gateway mTLS surface")
-	cmd.Flags().StringVar(&harnessPublicURL, "public-url", "", "Gateway public surface")
-	cmd.Flags().StringVar(&harnessCert, "cert", "", "client cert PEM")
-	cmd.Flags().StringVar(&harnessKey, "key", "", "client key PEM")
-	cmd.Flags().StringVar(&harnessCA, "ca", "", "gateway CA bundle PEM")
-	cmd.Flags().StringVar(&harnessAPIKey, "api-key", "", "operator API key")
-	cmd.Flags().StringVar(&harnessSessionID, "operator-session", "", "operator session id")
-	cmd.Flags().StringVar(&harnessOutDir, "out", "", "report output dir")
-
-	return cmd
-}
-
 func runAgentHarness(cmd *cobra.Command, args []string) error {
 	cfg := config.Default()
 	applyAgentHarnessFlags(&cfg)
 
 	if harnessConfigPath != "" {
 		if err := cfg.LoadFile(harnessConfigPath); err != nil {
-			return fmt.Errorf("agent run: load config: %w", err)
+			return fmt.Errorf("scenarios run: load config: %w", err)
 		}
 	}
 
@@ -141,17 +90,17 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 
 	client, err := clientpkg.New(cfg)
 	if err != nil {
-		return fmt.Errorf("agent run: client: %w", err)
+		return fmt.Errorf("scenarios run: client: %w", err)
 	}
 
 	selected := selectAgentHarnessScenarios(harnessPhase, names)
 	if len(selected) == 0 {
-		return fmt.Errorf("agent run: %w", constants.ErrHarnessNoScenarios)
+		return fmt.Errorf("scenarios run: %w", constants.ErrHarnessNoScenarios)
 	}
 
 	if needsGovKit(selected) {
 		if err := setupGovKit(ctx, client, cfg); err != nil {
-			return fmt.Errorf("agent run: gov kit setup: %w", err)
+			return fmt.Errorf("scenarios run: gov kit setup: %w", err)
 		}
 	}
 
@@ -166,55 +115,14 @@ func runAgentHarness(cmd *cobra.Command, args []string) error {
 	}
 	if export, err := client.ExportReceipts(ctx, opSession); err == nil && len(export) > 0 {
 		if mkErr := os.MkdirAll(cfg.OutDir, constants.PermDirStandard); mkErr != nil {
-			return fmt.Errorf("agent run: create output dir: %w", mkErr)
+			return fmt.Errorf("scenarios run: create output dir: %w", mkErr)
 		}
 		if writeErr := os.WriteFile(filepath.Join(cfg.OutDir, constants.ReceiptsExportFilename), export, constants.PermFilePublic); writeErr != nil {
-			return fmt.Errorf("agent run: write receipts export: %w", writeErr)
+			return fmt.Errorf("scenarios run: write receipts export: %w", writeErr)
 		}
 	}
 
 	printAgentHarnessSummary(cmd.OutOrStdout(), results)
-	return nil
-}
-
-func runAgentHarnessAudit(cmd *cobra.Command, args []string) error {
-	cfg := config.Default()
-	applyAgentHarnessFlags(&cfg)
-
-	if harnessConfigPath != "" {
-		if err := cfg.LoadFile(harnessConfigPath); err != nil {
-			return fmt.Errorf("agent audit: load config: %w", err)
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(cmd.Context(), time.Minute)
-	defer cancel()
-
-	client, err := clientpkg.New(cfg)
-	if err != nil {
-		return fmt.Errorf("agent audit: client: %w", err)
-	}
-	opSession := cfg.OperatorSessionID
-	if opSession == "" {
-		opSession = client.DiscoverOperatorSession(ctx)
-	}
-	receipts, raw, err := client.AuditReceipts(ctx, opSession)
-	if err != nil {
-		return fmt.Errorf("agent audit: %w", err)
-	}
-	if err := os.MkdirAll(cfg.OutDir, constants.PermDirStandard); err != nil {
-		return fmt.Errorf("agent audit: create output dir: %w", err)
-	}
-	receiptsPath := filepath.Join(cfg.OutDir, constants.ReceiptsFilename)
-	if err := os.WriteFile(receiptsPath, raw, constants.PermFilePublic); err != nil {
-		return fmt.Errorf("agent audit: write receipts: %w", err)
-	}
-	w := cmd.OutOrStdout()
-	fmt.Fprintf(w, "operator session: %s\n", opSession)
-	fmt.Fprintf(w, "signed receipts: %d (raw written to %s)\n", len(receipts), receiptsPath)
-	for _, r := range receipts {
-		fmt.Fprintf(w, "  %-12s %-14s %s\n", trunc(r.TransactionHash, 12), r.ActionType, r.Status)
-	}
 	return nil
 }
 
@@ -370,11 +278,4 @@ func printAgentHarnessSummary(w io.Writer, results []scenarios.Result) {
 		fmt.Fprintf(w, "  %-18s %-9s %-18s %s\n", r.Name, r.RequiresPosture, r.Persona, status)
 	}
 	fmt.Fprintf(w, "\n%d/%d scenarios ok\n", ok, len(results))
-}
-
-func trunc(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n]
 }

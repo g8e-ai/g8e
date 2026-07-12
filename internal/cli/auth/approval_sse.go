@@ -53,8 +53,10 @@ func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, u
 
 	approved := make(chan struct{}, 1)
 	var once sync.Once
+	done := make(chan struct{})
 
 	go func() {
+		defer close(done)
 		sseClient.Run(waitCtx, func(eventType, data string) {
 			if eventType != constants.SSEEventTypeApprovalCompleted {
 				return
@@ -80,8 +82,11 @@ func WaitForApprovalSSE(ctx context.Context, httpClient *http.Client, baseURL, u
 
 	select {
 	case <-approved:
+		cancel()
+		<-done
 		return nil
 	case <-waitCtx.Done():
+		<-done
 		return constants.ErrApprovalSSETimeout
 	}
 }

@@ -215,7 +215,7 @@ func NewOperatorPubSubService(c CommandServiceConfig, govDeps GovernanceDeps) (*
 	// Mutations requiring L3 will fail-closed at TransactionVerifier if L3Notary is nil
 
 	// Initialize governance services after trusted signers are loaded
-	rs.initializeGovernance(c, govDeps, serviceCtx)
+	rs.initializeGovernance(c, govDeps)
 
 	c.Logger.Info("g8e connectivity initialized")
 	if c.Config.OperatorID != "" {
@@ -272,16 +272,14 @@ func NewGatewayOperatorPubSubService(c GatewayCommandServiceConfig) (*OperatorPu
 	return rs, nil
 }
 
-func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, govDeps GovernanceDeps, serviceCtx context.Context) {
+func (rs *OperatorPubSubService) initializeGovernance(c CommandServiceConfig, govDeps GovernanceDeps) {
 	// Initialize L5Actuator with trusted nodes and audit store
 	// ScrubbingService handles data scrubbing/rehydration at the execution boundary
 	rs.actuator = &governance.L5Actuator{
 		Logger:            c.Logger,
-		Execution:         c.Execution,
 		SQLAuditStore:     c.AuditStore,
 		ConsoleAuditStore: govDeps.TransactionAudit,
 		StateRootProvider: govDeps.StateRootProvider,
-		Ctx:               serviceCtx,
 		ExecutionHandler:  rs, // OperatorPubSubService implements ExecutionHandler
 		Scrubbing:         c.Scrubbing,
 		SigningKey:        c.ActuatorSigningKey,

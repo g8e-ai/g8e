@@ -1,7 +1,7 @@
 # g8e Scripts
 
-Last Updated: 2026-07-10
-Version: v1.3.11
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 g8e provides platform-specific bootstrap scripts for local development and gateway-served deploy scripts for remote operator installation. The `g8e demos` CLI also supports air-gapped image export and import for demo environments.
 
@@ -14,7 +14,7 @@ g8e provides platform-specific bootstrap scripts for local development and gatew
 | Dev bootstrap | `windows-setup.ps1` | Fresh-clone to working binary on Windows |
 | Remote deploy | `g8e-deploy.sh` | Served by gateway; downloads binary on Linux/macOS hosts |
 | Remote deploy | `g8e-deploy.ps1` | Served by gateway; downloads binary on Windows hosts |
-| Air-gapped deploy | `g8e demos export/import` | Export/import Docker images for air-gapped demo deployments |
+| Air-gapped deploy | `g8e demos` CLI | Pull, export, import, and list Docker images for air-gapped demo deployments |
 
 ## Dev Bootstrap Scripts
 
@@ -57,7 +57,7 @@ On Linux or macOS, run `curl -fsSL http://<gateway-ip>:8080/g8e-deploy.sh | bash
 
 ## Air-Gapped Deployment Commands
 
-The `g8e demos` CLI provides export and import commands for air-gapped demo environments. They read `demos/images.json` for pinned image digests.
+The `g8e demos` CLI provides `pull`, `export`, `import`, and `images` commands for air-gapped demo environments. The manifest at `demos/images.json` pins all external Docker images to sha256 digests.
 
 ### Usage
 

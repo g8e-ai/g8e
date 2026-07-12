@@ -92,23 +92,6 @@ func TestBuildReExecArgs(t *testing.T) {
 				"--rate-limit-burst 200",
 			},
 		},
-		{
-			name: "with identity data",
-			opts: OperatorStartOptions{
-				GatewayConfig: serve.GatewayConfig{
-					Posture:    g8econfig.GatewayPosture("consensus"),
-					HTTPPort:   8080,
-					HTTPSPort:  8443,
-					DataDir:    "/data",
-					PKIDir:     "/pki",
-					SecretsDir: "/secrets",
-					LogLevel:   "info",
-				},
-				IdentityData: []byte(`{"hostname":"test"}`),
-			},
-			needsDirs:   true,
-			wantSubstrs: []string{"--network-identity-file"},
-		},
 	}
 
 	for _, tt := range tests {
@@ -120,9 +103,10 @@ func TestBuildReExecArgs(t *testing.T) {
 			args, err := pm.BuildReExecArgs(tt.opts)
 			require.NoError(t, err)
 
-			require.GreaterOrEqual(t, len(args), 2)
-			assert.Equal(t, "gateway", args[0])
-			assert.Equal(t, "serve", args[1])
+			require.GreaterOrEqual(t, len(args), 3)
+			assert.Equal(t, "gw", args[0])
+			assert.Equal(t, "start", args[1])
+			assert.Equal(t, "--follow", args[2])
 
 			joined := strings.Join(args, " ")
 			for _, expected := range tt.wantSubstrs {

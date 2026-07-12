@@ -74,7 +74,7 @@ PID=$!
 wait "$PID"`
 
 	// RemoteInjectedBinaryMessage is shown when only the binary is injected without execution.
-	RemoteInjectedBinaryMessage = "[g8e]Node Binary injected into %s -- run it manually: %s operator run -e <endpoint> [options]"
+	RemoteInjectedBinaryMessage = "[g8e]Node Binary injected into %s -- run it manually: %s operator start -e <endpoint> [options]"
 
 	// RemoteInjectedScriptMinimal is the minimal script for binary injection.
 	RemoteInjectedScriptMinimal = `set -e; B=$(mktemp); cat > "$B"; chmod +x "$B"; trap 'rm -f "$B"' EXIT; echo "%s"`

@@ -31,6 +31,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/cli/tui"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/pathutil"
+	"github.com/g8e-ai/g8e/internal/tools/agent_harness/scenarios"
 )
 
 // demoVerbose controls demo output verbosity. When false (default), step-by-step
@@ -211,6 +212,7 @@ Each org environment is hermetically sealed with no shared state, volumes, or cr
 		demosResetCmd(),
 		demosRebuildCmd(),
 		demosRunCmd(),
+		demosScenariosCmd(),
 		demosPullCmd(),
 		demosExportCmd(),
 		demosImportCmd(),
@@ -228,6 +230,47 @@ func demosListCmd() *cobra.Command {
 	}
 
 	return cmd
+}
+
+func demosScenariosCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "scenarios",
+		Short: "List and run demo scenarios against a real Gateway/Operator",
+		Long: `List and run demo scenarios against a REAL g8e Gateway + Operator,
+exercising the full protocol surface (MCP, A2A, A2A protobuf, and official
+governance envelopes with mock consensus + principal signing).
+
+Subcommands:
+  list    List all scenarios in run order
+  run     Run one or more scenarios against a real Gateway/Operator`,
+	}
+
+	cmd.AddCommand(
+		demosScenariosListCmd(),
+		demosScenariosRunCmd(),
+	)
+
+	return cmd
+}
+
+func demosScenariosListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all demo scenarios",
+		Long: `List all demo scenarios in run order, grouped by governance posture.
+Each scenario shows its name, required posture, agent persona, and description.`,
+		RunE: runDemosScenarios,
+	}
+
+	return cmd
+}
+
+func runDemosScenarios(cmd *cobra.Command, args []string) error {
+	cmd.Println("scenarios (in run order):")
+	for _, s := range scenarios.Registry() {
+		cmd.Printf("  %-18s %-9s %-18s %s\n", s.Name, s.RequiresPosture, s.Persona.ID, s.Title)
+	}
+	return nil
 }
 
 func runDemosList(cmd *cobra.Command, args []string) error {
@@ -579,6 +622,11 @@ func printDemoEndpoints(cmd *cobra.Command, org string) {
 		cmd.Println("  Gateway HTTP:  http://localhost:8085")
 		cmd.Println("  Gateway HTTPS: https://localhost:8448")
 		cmd.Println("  Console:       https://localhost:8448/console/")
+	case constants.DemosOrgFrontend:
+		cmd.Println("  Gateway HTTP:  http://localhost:8083")
+		cmd.Println("  Gateway HTTPS: https://localhost:8446")
+		cmd.Println("  Console:       https://localhost:8446/console/")
+		cmd.Println("  Frontend App:  http://localhost:3003")
 	default:
 		cmd.Printf("  No endpoint information available for '%s'\n", org)
 	}
@@ -611,6 +659,8 @@ func demoHTTPPort(org string) string {
 		return "8087"
 	case constants.DemosOrgSwarm:
 		return "8085"
+	case constants.DemosOrgFrontend:
+		return "8083"
 	default:
 		return ""
 	}
@@ -1036,6 +1086,7 @@ var scenarioCounts = map[string]int{
 	constants.DemosOrgDoW:        3,
 	constants.DemosOrgDHS:        5,
 	constants.DemosOrgSwarm:      3,
+	constants.DemosOrgFrontend:   1,
 }
 
 func demosRunCmd() *cobra.Command {
@@ -1073,7 +1124,9 @@ Available scenarios:
   swarm: 1-3
     1 - Authorized Recon Mission (Governed Drone Deployment)
     2 - Weapons Safety Doctrine Block
-    3 - Navigation Boundary Violation Block`,
+    3 - Navigation Boundary Violation Block
+  frontend: 1
+    1 - Third-Party Frontend Enrollment`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDemosRun(cmd, args, useTUI)
@@ -1251,6 +1304,8 @@ func runScenarioWithResult(org, demoDir, scenario string) (scenarioResult, error
 		return runDHSScenario(demoDir, scenario)
 	case constants.DemosOrgSwarm:
 		return runSwarmScenario(demoDir, scenario)
+	case constants.DemosOrgFrontend:
+		return runFrontendScenario(demoDir, scenario)
 	default:
 		return scenarioResult{}, fmt.Errorf("%w: no scenarios defined for demo environment '%s'", constants.ErrNotFound, org)
 	}
@@ -1347,7 +1402,7 @@ type twoLayerScenarioConfig struct {
 }
 
 // harnessConfig holds the parameters for building a docker compose exec/run
-// command for an agent-harness scenario. Centralising these in a struct
+// command for a demos scenarios run. Centralising these in a struct
 // avoids positional-argument drift as flags are added across demos.
 type harnessConfig struct {
 	Container     string
@@ -1380,15 +1435,15 @@ func defaultHarnessConfig(container string) harnessConfig {
 	}
 }
 
-// harnessRun builds the docker compose command for an agent-harness scenario.
+// harnessRun builds the docker compose command for a demos scenarios run.
 // Uses exec by default (long-running sleep-infinity container with a fixed IP).
 // When cfg.UseRun is true, uses `docker compose run --rm` instead.
 func harnessRun(scenario string, cfg harnessConfig) []string {
 	var cmd []string
 	if cfg.UseRun {
-		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps", cfg.Container, "agent", "run"}
+		cmd = []string{"docker", "compose", "run", "--rm", "-T", "--no-deps", cfg.Container, "demos", "scenarios", "run"}
 	} else {
-		cmd = []string{"docker", "compose", "exec", "-T", cfg.Container, "/g8e", "agent", "run"}
+		cmd = []string{"docker", "compose", "exec", "-T", cfg.Container, "/g8e", "demos", "scenarios", "run"}
 	}
 	cmd = append(cmd,
 		"--mtls-url", cfg.MTLSURL,

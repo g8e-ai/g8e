@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Example usage of g8e-protocol constants."""
+"""Example usage of g8e constants."""
 
 from g8e.constants import (
     EVENTS,

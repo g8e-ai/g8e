@@ -26,4 +26,4 @@ The Gateway receives signed `GovernanceEnvelope` messages via two paths: MCP and
 
 The L4 Warden (`internal/services/governance/l4_warden.go`) performs pre-dispatch verification: nonce reservation and replay prevention, expiry validation, stateless validation (transaction hash and L1 Doctrine pattern matching), stateful validation (state Merkle root), and posture-aware L2 Consensus and L3 Notary checks.
 
-The L5 Actuator (`internal/services/governance/l5_actuator.go`) is the single execution boundary. It mints a just-in-time capability, signs and logs an initial receipt to the audit vault, dispatches to the registered execution handler, dissolves the capability, then signs and logs the final receipt.
+The L5 Actuator (`internal/services/governance/l5_actuator.go`) is the single execution boundary. It signs and logs an initial receipt to the audit vault, mints a just-in-time capability, dispatches to the registered execution handler, dissolves the capability, then signs and logs the final receipt.

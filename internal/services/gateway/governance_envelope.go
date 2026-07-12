@@ -136,6 +136,21 @@ func isAppComponent(c commonv1.Component) bool {
 //     action type, or transport-to-envelope identity mismatch) - no state mutated, no receipt produced.
 //   - 503 Service Unavailable: envelope processor not yet initialized.
 //   - 405 Method Not Allowed: non-POST methods.
+//
+// @Summary		Submit governance envelope
+// @Description	Accepts a GovernanceEnvelope, verifies it through the 5-layer gauntlet (L1–L3 pre-flight,
+// @Description	L4 warden, L5 actuator), and returns the signed ActionReceipt. Transport-to-envelope
+// @Description	identity binding is enforced via mTLS certificate URI SAN matching.
+// @Tags			governance
+// @Accept			json
+// @Produce		json
+// @Param			envelope	body		[]byte		true	"GovernanceEnvelope (protojson)"
+// @Success		200			{object}	json.RawMessage	"ActionReceipt"
+// @Failure		400			{string}	string			"Bad Request — malformed envelope"
+// @Failure		403			{string}	string			"Forbidden — governance verification failed"
+// @Failure		405			{string}	string			"Method Not Allowed"
+// @Failure		503			{string}	string			"Service Unavailable — processor not initialized"
+// @Router			/api/v1/governance/envelopes [post]
 func (h *HTTPHandler) handleGovernanceEnvelope(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		h.responder.Error(w, http.StatusMethodNotAllowed, constants.ErrMethodNotAllowed.Error())

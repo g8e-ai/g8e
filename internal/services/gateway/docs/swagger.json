@@ -124,19 +124,165 @@
         },
         "/.well-known/g8e/pki/trust-windows": {
             "get": {
-                "description": "Returns the Windows CA trust bootstrap script (alias endpoint)",
+                "description": "Returns the Windows CA trust script (alias endpoint)",
                 "produces": [
                     "text/plain"
                 ],
                 "tags": [
                     "bootstrap"
                 ],
-                "summary": "Bootstrap CA Windows script (alias)",
+                "summary": "Web cert trust script (Windows alias)",
                 "responses": {
                     "200": {
                         "description": "OK",
                         "schema": {
                             "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/approvals": {
+            "get": {
+                "description": "Lists suspended transactions pending L3 passkey approval for the authenticated user.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approvals"
+                ],
+                "summary": "List pending approvals",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SuspendedTransactionsResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/approvals/{txHash}/challenge": {
+            "get": {
+                "description": "Generates a WebAuthn assertion challenge for approving a suspended transaction.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approvals"
+                ],
+                "summary": "Get approval challenge",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction hash",
+                        "name": "txHash",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "WebAuthn assertion options",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — belongs to another user",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Transaction not found or expired",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/approvals/{txHash}/verify": {
+            "post": {
+                "description": "Verifies a WebAuthn assertion response to approve a suspended transaction. On success,\nthe transaction resumes execution with the L3 proof attached and an SSE event is emitted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "approvals"
+                ],
+                "summary": "Verify approval",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Transaction hash",
+                        "name": "txHash",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "WebAuthn assertion response",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.WebAuthnAssertionResponse"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ActionReceipt",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — verification failed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Transaction not found or expired",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "description": "Clears the web session cookie and deletes the session from the database.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Logout",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.StatusResponse"
                         }
                     }
                 }
@@ -312,6 +458,32 @@
                 }
             }
         },
+        "/api/v1/auth/sessions/me": {
+            "get": {
+                "description": "Returns the authenticated user's ID and web session ID from the session cookie.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Get current web session",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.WebSessionResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/data/blobs/{namespace}/{id}": {
             "get": {
                 "description": "Retrieves a blob from the data store",
@@ -327,6 +499,70 @@
                         "description": "OK",
                         "schema": {
                             "type": "file"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/governance/envelopes": {
+            "post": {
+                "description": "Accepts a GovernanceEnvelope, verifies it through the 5-layer gauntlet (L1–L3 pre-flight,\nL4 warden, L5 actuator), and returns the signed ActionReceipt. Transport-to-envelope\nidentity binding is enforced via mTLS certificate URI SAN matching.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "governance"
+                ],
+                "summary": "Submit governance envelope",
+                "parameters": [
+                    {
+                        "description": "GovernanceEnvelope (protojson)",
+                        "name": "envelope",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ActionReceipt",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "type": "integer"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request — malformed envelope",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — governance verification failed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable — processor not initialized",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -450,19 +686,63 @@
                 }
             }
         },
-        "/bootstrap-ca": {
+        "/api/v1/sse/events": {
             "get": {
-                "description": "Returns the Linux CA trust bootstrap script",
+                "description": "Polls stored SSE events since a given ID. Dual auth: mTLS for CLI/operator, web session\ncookie for browser. Exactly one routing target must be set via query string.",
                 "produces": [
-                    "text/plain"
+                    "application/json"
                 ],
                 "tags": [
-                    "bootstrap"
+                    "telemetry"
                 ],
-                "summary": "Bootstrap CA Linux script",
+                "summary": "Poll SSE events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Web session ID",
+                        "name": "web_session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "CLI session ID",
+                        "name": "cli_session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Return events after this ID",
+                        "name": "since_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum events to return",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SSEEventsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — unauthorized",
                         "schema": {
                             "type": "string"
                         }
@@ -470,19 +750,51 @@
                 }
             }
         },
-        "/bootstrap-ca-macos": {
-            "get": {
-                "description": "Returns the macOS CA trust bootstrap script",
+        "/api/v1/sse/push": {
+            "post": {
+                "description": "Appends an event to the SSE event store and publishes it to the pub/sub channel.\nRequires mTLS app workload identity. Exactly one routing target must be set:\nweb_session_id, cli_session_id, or user_id.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
-                    "text/plain"
+                    "application/json"
                 ],
                 "tags": [
-                    "bootstrap"
+                    "telemetry"
                 ],
-                "summary": "Bootstrap CA macOS script",
+                "summary": "Push SSE event",
+                "parameters": [
+                    {
+                        "description": "SSE push payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.SSEPushPayload"
+                        }
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.SSEPushResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized — mTLS required",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — not app workload or unauthorized target",
                         "schema": {
                             "type": "string"
                         }
@@ -490,19 +802,124 @@
                 }
             }
         },
-        "/bootstrap-ca.ps1": {
+        "/api/v1/sse/stream": {
             "get": {
-                "description": "Returns the Windows CA trust bootstrap script",
+                "description": "Streams events via Server-Sent Events (text/event-stream). Dual auth: mTLS for\nCLI/operator, web session cookie for browser. Supports Last-Event-ID header for\nreconnection. Exactly one routing target must be set via query string.",
                 "produces": [
-                    "text/plain"
+                    "text/event-stream"
                 ],
                 "tags": [
-                    "bootstrap"
+                    "telemetry"
                 ],
-                "summary": "Bootstrap CA Windows script",
+                "summary": "Stream SSE events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Web session ID",
+                        "name": "web_session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "CLI session ID",
+                        "name": "cli_session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Replay events after this ID",
+                        "name": "since_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "SSE stream",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden — unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users": {
+            "post": {
+                "description": "Creates a new user with a generated ID. Zero-PII: users are created with only\na generated ID and passkey credentials.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Create user",
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/models.UserCreateResponse"
+                        }
+                    },
+                    "405": {
+                        "description": "Method Not Allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict — user creation failed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/me": {
+            "get": {
+                "description": "Returns the authenticated user's profile. Identity comes from the auth context\n(mTLS or web session cookie).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Get current user",
                 "responses": {
                     "200": {
                         "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.UserMeResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
                         "schema": {
                             "type": "string"
                         }
@@ -641,6 +1058,66 @@
                     }
                 }
             }
+        },
+        "/web-cert.ps1": {
+            "get": {
+                "description": "Returns the Windows CA trust script for remote workstations",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "bootstrap"
+                ],
+                "summary": "Web cert trust script (Windows)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/web-cert.sh": {
+            "get": {
+                "description": "Returns a combined Linux/macOS CA trust script for remote workstations",
+                "produces": [
+                    "text/plain"
+                ],
+                "tags": [
+                    "bootstrap"
+                ],
+                "summary": "Web cert trust script (Linux/macOS)",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/ws/v1/pubsub": {
+            "get": {
+                "description": "Upgrades to a WebSocket connection for bidirectional publish/subscribe messaging.\nRequires mTLS authentication. Topic ACLs enforce that subscribers can only\nsubscribe to channels matching their mTLS workload identity.",
+                "produces": [
+                    "text/event-stream"
+                ],
+                "tags": [
+                    "pubsub"
+                ],
+                "summary": "WebSocket pub/sub",
+                "responses": {
+                    "101": {
+                        "description": "WebSocket Upgrade",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -653,6 +1130,17 @@
             "x-enum-varnames": [
                 "GatewayModeGateway",
                 "GatewayModeStatusOK"
+            ]
+        },
+        "constants.UserStatus": {
+            "type": "string",
+            "enum": [
+                "active",
+                "disabled"
+            ],
+            "x-enum-varnames": [
+                "UserStatusActive",
+                "UserStatusDisabled"
             ]
         },
         "gateway.AppEnrollResponse": {
@@ -707,6 +1195,9 @@
                 "mode": {
                     "$ref": "#/definitions/constants.GatewayMode"
                 },
+                "pid": {
+                    "type": "integer"
+                },
                 "state_merkle_root": {
                     "type": "string"
                 },
@@ -714,6 +1205,26 @@
                     "$ref": "#/definitions/constants.GatewayMode"
                 },
                 "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.LocalOSUser": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string"
+                },
+                "gid": {
+                    "type": "string"
+                },
+                "sid": {
+                    "type": "string"
+                },
+                "uid": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -863,6 +1374,77 @@
                 }
             }
         },
+        "models.SSEEventRow": {
+            "type": "object",
+            "properties": {
+                "cli_session_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "payload": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.SSEEventsResponse": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.SSEEventRow"
+                    }
+                }
+            }
+        },
+        "models.SSEPushPayload": {
+            "type": "object",
+            "properties": {
+                "cli_session_id": {
+                    "type": "string"
+                },
+                "event": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "web_session_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.SSEPushResponse": {
+            "type": "object",
+            "properties": {
+                "delivered": {
+                    "type": "integer"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
         "models.StateResponse": {
             "type": "object",
             "properties": {
@@ -879,6 +1461,124 @@
                 }
             }
         },
+        "models.SuspendedTransactionsResponse": {
+            "type": "object",
+            "properties": {
+                "transactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.SuspendedTxResponse"
+                    }
+                }
+            }
+        },
+        "models.SuspendedTxResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "operator_id": {
+                    "type": "string"
+                },
+                "tool_name": {
+                    "type": "string"
+                },
+                "transaction_hash": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.User": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "is_bootstrap": {
+                    "type": "boolean"
+                },
+                "local_os_user": {
+                    "$ref": "#/definitions/models.LocalOSUser"
+                },
+                "organization_id": {
+                    "type": "string"
+                },
+                "passkey_credentials": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.PasskeyCredential"
+                    }
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "status": {
+                    "$ref": "#/definitions/constants.UserStatus"
+                },
+                "webauthn_user_id": {
+                    "description": "GUID for WebAuthn v4 compliance (Windows Hello)",
+                    "type": "string"
+                }
+            }
+        },
+        "models.UserCreateResponse": {
+            "type": "object",
+            "properties": {
+                "success": {
+                    "type": "boolean"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.UserMeResponse": {
+            "type": "object",
+            "properties": {
+                "success": {
+                    "type": "boolean"
+                },
+                "user": {
+                    "$ref": "#/definitions/models.User"
+                }
+            }
+        },
+        "models.WebAuthnAssertionResponse": {
+            "type": "object",
+            "properties": {
+                "authenticatorData": {
+                    "type": "string"
+                },
+                "clientDataJSON": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "rawId": {
+                    "type": "string"
+                },
+                "signature": {
+                    "type": "string"
+                },
+                "userHandle": {
+                    "type": "string"
+                }
+            }
+        },
         "models.WebSessionInfo": {
             "type": "object",
             "properties": {
@@ -886,6 +1586,20 @@
                     "type": "integer"
                 },
                 "id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.WebSessionResponse": {
+            "type": "object",
+            "properties": {
+                "success": {
+                    "type": "boolean"
+                },
+                "user_id": {
+                    "type": "string"
+                },
+                "web_session_id": {
                     "type": "string"
                 }
             }

@@ -5,8 +5,8 @@ parent: Guides
 
 # Connect g8e Operator to g8e Gateway
 
-Last Updated: 2026-07-10
-Version: v1.3.11
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -26,7 +26,12 @@ For development or single-host deployments, start the gateway locally:
 ./g8e gw start
 ```
 
-This starts the gateway in doctrine mode (L1 enforced, L2/L3 audited). The gateway performs network identity detection at startup and defaults to full certificate identity mode (all hostnames/IPs).
+By default, the gateway starts in background mode with doctrine posture (L1 enforced, L2/L3 audited). Use `--follow` or `-f` to run in the foreground for debugging. The gateway performs network identity detection at startup and defaults to full certificate identity mode (all hostnames/IPs). Use `--cert-mode localhost` to restrict certificates to localhost only.
+
+Available posture modes via `--posture`:
+- **doctrine** (default): L1 enforced, L2/L3 audited
+- **consensus**: L1/L2 enforced, L3 audited
+- **notary**: L1/L2/L3 strictly enforced
 
 ### Remote Deployment
 
@@ -82,7 +87,7 @@ Hosts are specified as positional arguments or via `--hosts <file>` (one host pe
 ./g8e operator scp <user@host:path>
 ```
 
-This command uses SCP to copy the operator binary to a remote host. Supports common SCP flags including `-P` for SSH port, `-i` for identity file, `-r` for recursive copy, `-p` to preserve attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
+This command uses SCP to copy the operator binary to a remote host. Supports common SCP flags including `-P` for SSH port, `-i` for identity file, `-r` for recursive copy, `--preserve` to preserve file attributes, `-v` for verbose output, and `-C` for compression. Use `--prompt` to interactively configure options.
 
 #### 3. CSR-Based Enrollment
 
@@ -99,7 +104,7 @@ The endpoint is the gateway IP address. The HTTP port (8080) is appended automat
 On the remote host, start the operator with the enrolled certificates:
 
 ```bash
-./g8e operator run -e <gateway-ip>
+./g8e operator start -e <gateway-ip>
 ```
 
 The operator will:
@@ -114,7 +119,7 @@ The operator will:
 
 ### Gateway Endpoint
 
-The gateway endpoint is configured via the `-e` or `--endpoint` flag during CSR enrollment. The gateway itself does not require an endpoint flag at startup, as it binds to the configured ports.
+The `-e` or `--endpoint` persistent flag specifies the remote gateway address for client-side commands including CSR enrollment (`g8e gw security pki enroll`) and operator startup (`g8e operator start`). The gateway itself does not require an endpoint flag at startup, as it binds to the configured ports. Use `-p` or `--port` to override the default HTTPS port (8443) when connecting to a gateway on a non-standard port.
 
 ### PKI Directory
 
@@ -139,7 +144,15 @@ Check status:
 This reports:
 - Gateway running state (RUNNING or STOPPED)
 - Gateway endpoint URLs (Operator Bootstrap, Public API, Console UI, MCP HTTP)
-- Process PID (when detected via ProcessManager fallback)
+- Process PID (when available)
+
+List all operators currently connected to the gateway:
+
+```bash
+./g8e operator list
+```
+
+This displays each operator's ID, type, and status.
 
 ---
 
@@ -169,6 +182,12 @@ curl -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"shell.execute","arguments":{"command":"ls -la"}}}'
 ```
 
+**List supported agents:**
+
+```bash
+./g8e mcp agent list
+```
+
 **View MCP client configuration matrix:**
 
 ```bash
@@ -176,6 +195,16 @@ curl -X POST http://localhost:8080/mcp \
 ```
 
 Replace `<agent>` with a supported agent (claude, codex, cursor, devin, vscode, continue, aider, codeium, tabby, ollama, gemini, goose, generic). This displays configurations side-by-side for different transport modes (g8e.local mTLS, IP Address mTLS, Stdio Transport).
+
+### L3 Transaction Approval
+
+When the gateway is running in doctrine or consensus posture, certain transactions suspend at L3 (Notary) pending human approval. Approve a suspended transaction using:
+
+```bash
+./g8e auth approve <transaction_hash>
+```
+
+This opens a browser for WebAuthn/passkey verification and waits for the approval to complete. CLI mTLS credentials are required.
 
 ### Direct Envelope Submission
 

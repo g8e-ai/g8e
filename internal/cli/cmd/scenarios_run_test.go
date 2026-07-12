@@ -23,24 +23,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAgentHarnessCmd(t *testing.T) {
-	t.Run("agent command has correct Use and description", func(t *testing.T) {
-		cmd := agentHarnessCmd()
-		assert.Equal(t, "agent", cmd.Use)
-		assert.Contains(t, cmd.Short, "Universal agent harness")
-		assert.Contains(t, cmd.Long, "impersonates arbitrary AI tools")
+func TestDemosScenariosCmd(t *testing.T) {
+	t.Run("scenarios command has correct Use and description", func(t *testing.T) {
+		cmd := demosScenariosCmd()
+		assert.Equal(t, "scenarios", cmd.Use)
+		assert.Contains(t, cmd.Short, "List and run demo scenarios")
 	})
 
-	t.Run("agent has agent-harness alias", func(t *testing.T) {
-		cmd := agentHarnessCmd()
-		assert.Contains(t, cmd.Aliases, "agent-harness")
-	})
-
-	t.Run("agent has expected subcommands", func(t *testing.T) {
-		cmd := agentHarnessCmd()
+	t.Run("scenarios has expected subcommands", func(t *testing.T) {
+		cmd := demosScenariosCmd()
 		require.NotNil(t, cmd)
 
-		expectedSubcommands := []string{"list", "run", "audit"}
+		expectedSubcommands := []string{"list", "run"}
 
 		for _, subcmd := range expectedSubcommands {
 			found := false
@@ -50,40 +44,32 @@ func TestAgentHarnessCmd(t *testing.T) {
 					break
 				}
 			}
-			assert.True(t, found, "agent command should have %s subcommand", subcmd)
+			assert.True(t, found, "scenarios command should have %s subcommand", subcmd)
 		}
 	})
 }
 
-func TestAgentHarnessListCmd(t *testing.T) {
-	t.Run("agent list command has correct use", func(t *testing.T) {
-		cmd := agentHarnessListCmd()
-		assert.Equal(t, "list", cmd.Use)
-		assert.Contains(t, cmd.Short, "List available scenarios")
-	})
-}
-
-func TestAgentHarnessRunCmd(t *testing.T) {
-	t.Run("agent run command has correct use", func(t *testing.T) {
-		cmd := agentHarnessRunCmd()
+func TestDemosScenariosRunCmd(t *testing.T) {
+	t.Run("scenarios run command has correct use", func(t *testing.T) {
+		cmd := demosScenariosRunCmd()
 		assert.Contains(t, cmd.Use, "run")
 		assert.Contains(t, cmd.Short, "Run scenarios")
 	})
 
-	t.Run("agent run has required flags", func(t *testing.T) {
-		cmd := agentHarnessRunCmd()
+	t.Run("scenarios run has required flags", func(t *testing.T) {
+		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
 		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "out", "l3-mode", "ensemble", "verbose", "phase"}
 
 		for _, flagName := range flags {
 			flag := cmd.Flags().Lookup(flagName)
-			assert.NotNil(t, flag, "agent run should have --%s flag", flagName)
+			assert.NotNil(t, flag, "scenarios run should have --%s flag", flagName)
 		}
 	})
 
-	t.Run("agent run ensemble flag has default value", func(t *testing.T) {
-		cmd := agentHarnessRunCmd()
+	t.Run("scenarios run ensemble flag has default value", func(t *testing.T) {
+		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
 		flag := cmd.Flags().Lookup("ensemble")
@@ -91,33 +77,13 @@ func TestAgentHarnessRunCmd(t *testing.T) {
 		assert.Equal(t, "3", flag.DefValue)
 	})
 
-	t.Run("agent run phase flag has default value", func(t *testing.T) {
-		cmd := agentHarnessRunCmd()
+	t.Run("scenarios run phase flag has default value", func(t *testing.T) {
+		cmd := demosScenariosRunCmd()
 		require.NotNil(t, cmd)
 
 		flag := cmd.Flags().Lookup("phase")
 		require.NotNil(t, flag)
 		assert.Equal(t, "all", flag.DefValue)
-	})
-}
-
-func TestAgentHarnessAuditCmd(t *testing.T) {
-	t.Run("agent audit command has correct use", func(t *testing.T) {
-		cmd := agentHarnessAuditCmd()
-		assert.Contains(t, cmd.Use, "audit")
-		assert.Contains(t, cmd.Short, "Audit signed receipts")
-	})
-
-	t.Run("agent audit has required flags", func(t *testing.T) {
-		cmd := agentHarnessAuditCmd()
-		require.NotNil(t, cmd)
-
-		flags := []string{"config", "mtls-url", "public-url", "cert", "key", "ca", "api-key", "operator-session", "out"}
-
-		for _, flagName := range flags {
-			flag := cmd.Flags().Lookup(flagName)
-			assert.NotNil(t, flag, "agent audit should have --%s flag", flagName)
-		}
 	})
 }
 
@@ -209,27 +175,5 @@ func TestApplyAgentHarnessFlags(t *testing.T) {
 		applyAgentHarnessFlags(&cfg)
 		assert.True(t, cfg.Verbose)
 		harnessVerbose = false
-	})
-}
-
-func TestTrunc(t *testing.T) {
-	t.Run("trunc returns string when shorter than limit", func(t *testing.T) {
-		result := trunc("short", 10)
-		assert.Equal(t, "short", result)
-	})
-
-	t.Run("trunc returns string when equal to limit", func(t *testing.T) {
-		result := trunc("exactlen", 8)
-		assert.Equal(t, "exactlen", result)
-	})
-
-	t.Run("trunc truncates string when longer than limit", func(t *testing.T) {
-		result := trunc("verylongstring", 5)
-		assert.Equal(t, "veryl", result)
-	})
-
-	t.Run("trunc handles empty string", func(t *testing.T) {
-		result := trunc("", 5)
-		assert.Empty(t, result)
 	})
 }

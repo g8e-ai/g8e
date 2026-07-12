@@ -5,8 +5,8 @@ parent: Guides
 
 # Cloudflare Tunnel Integration
 
-Last Updated: 2026-07-10
-Version: v1.3.11
+Last Updated: 2026-07-12
+Version: v1.4.0
 
 ---
 
@@ -14,7 +14,7 @@ Version: v1.3.11
 
 A Cloudflare Tunnel securely exposes the g8e Gateway's HTTPS console to the internet without opening firewall ports or managing public DNS records. The tunnel runs `cloudflared` as a sidecar process alongside the gateway. Cloudflare terminates TLS at the edge; the tunnel forwards traffic to the gateway's HTTPS listener on `localhost:8443`.
 
-This guide also covers integrating a [Lovable](https://lovable.dev) frontend with the g8e Gateway backend for a data-sovereign web application architecture.
+For integrating a [Lovable](https://lovable.dev) frontend with the g8e Gateway, see the [Lovable Frontend Integration guide](./lovable.md).
 
 ### Architecture
 
@@ -47,33 +47,51 @@ This guide also covers integrating a [Lovable](https://lovable.dev) frontend wit
 
 ## Step 1: Create a Cloudflare Tunnel
 
-Authenticate `cloudflared` with your Cloudflare account:
+The `g8e gw tunnel create` command automates tunnel creation, DNS routing, and config generation in a single step:
+
+```bash
+g8e gw tunnel create --name g8e --hostname console.g8e.ai
+```
+
+This command:
+1. Authenticates with Cloudflare (runs `cloudflared tunnel login` if not already authenticated)
+2. Creates a named tunnel
+3. Routes DNS to the tunnel (creates a CNAME record `console.g8e.ai` → `<tunnel-id>.cfargotunnel.com`)
+4. Generates `~/.cloudflared/config.yml` with the correct ingress rules
+
+**Flags:**
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--name` | `g8e` | Tunnel name |
+| `--hostname` | (required) | Public hostname for the tunnel |
+| `--https-port` | `8443` | Gateway HTTPS port |
+| `--config-dir` | `~/.cloudflared` | cloudflared config directory |
+| `--ca-bundle` | (none) | Path to CA bundle for origin TLS verification (see below) |
+| `--origin-server-name` | `g8e.local` | Origin server name for TLS SNI (used with `--ca-bundle`) |
+| `--skip-dns` | `false` | Skip DNS routing if the CNAME already exists |
+
+### Origin TLS Verification
+
+By default, the generated config uses `noTLSVerify: true` because the gateway uses self-signed certificates from its internal PKI. This is safe because the connection is local (localhost). For stricter verification, pass `--ca-bundle` with the gateway's CA bundle path. The generated config then uses `originCaPool` and `originServerName` instead of `noTLSVerify`.
+
+### Manual Alternative
+
+If you prefer to run `cloudflared` commands directly:
 
 ```bash
 cloudflared tunnel login
-```
-
-Create a named tunnel:
-
-```bash
 cloudflared tunnel create g8e
-```
-
-Note the tunnel ID from the output. The credentials file is saved to `~/.cloudflared/<tunnel-id>.json`.
-
-Route DNS to the tunnel:
-
-```bash
 cloudflared tunnel route dns g8e console.g8e.ai
 ```
 
-This creates a CNAME record `console.g8e.ai` → `<tunnel-id>.cfargotunnel.com`.
+The credentials file is saved to `~/.cloudflared/<tunnel-id>.json`.
 
 ---
 
 ## Step 2: Configure cloudflared
 
-Create or edit `~/.cloudflared/config.yml`:
+The `g8e gw tunnel create` command generates `~/.cloudflared/config.yml` automatically. The generated content looks like:
 
 ```yaml
 tunnel: <tunnel-id>
@@ -90,9 +108,9 @@ ingress:
 
 **Key settings:**
 
-- **`noTLSVerify: true`** — The gateway uses self-signed certificates from its internal PKI. `cloudflared` does not verify the upstream cert. This is safe because the connection is local (localhost).
-- **`http2Origin: true`** — Enables HTTP/2 to the origin for SSE streaming performance.
-- **`http_status:404` catch-all** — Rejects requests for unmatched hostnames.
+- **`noTLSVerify: true`**: The gateway uses self-signed certificates from its internal PKI. `cloudflared` does not verify the upstream cert. This is safe because the connection is local (localhost).
+- **`http2Origin: true`**: Enables HTTP/2 to the origin for SSE streaming performance.
+- **`http_status:404` catch-all**: Rejects requests for unmatched hostnames.
 
 ---
 
@@ -137,25 +155,33 @@ Environment variables are resolved when the corresponding CLI flag is empty. CLI
 
 ## Step 4: Start the Tunnel
 
-In a separate terminal:
+In a separate terminal, start the tunnel using the CLI wrapper:
+
+```bash
+g8e gw tunnel run --name g8e
+```
+
+This runs `cloudflared tunnel run` in the foreground with the generated config. Press Ctrl+C to stop.
+
+Alternatively, run `cloudflared` directly:
 
 ```bash
 cloudflared tunnel run g8e
 ```
 
-Verify the tunnel is connected:
-
-```bash
-cloudflared tunnel info g8e
-```
-
-You should see active edge connections (e.g., `1xsea01, 2xsea09`).
-
 ---
 
 ## Step 5: Verify End-to-End
 
-Check the health endpoint through the tunnel:
+Check tunnel connectivity and gateway health in one step:
+
+```bash
+g8e gw tunnel status --hostname console.g8e.ai --name g8e
+```
+
+This checks `cloudflared tunnel info` and hits the gateway health endpoint through the public hostname.
+
+Alternatively, verify manually:
 
 ```bash
 curl -s https://console.g8e.ai/api/v1/health
@@ -164,7 +190,7 @@ curl -s https://console.g8e.ai/api/v1/health
 Expected response:
 
 ```json
-{"status":"ok","mode":"gateway","version":"dev","governance_ready":true,"state_merkle_root":"..."}
+{"status":"ok","mode":"gateway","version":"v1.4.0","pid":12345,"governance_ready":true,"state_merkle_root":"..."}
 ```
 
 Open the console in a browser:
@@ -222,110 +248,9 @@ curl -s https://console.g8e.ai/api/v1/health \
 
 ## Lovable Frontend Integration
 
-[Lovable](https://lovable.dev) generates React frontends that can connect to any backend via `fetch`. The g8e Gateway serves as a data-sovereign backend with WebAuthn authentication, governance enforcement, and audit logging.
+For building a g8e Governance Console UI with [Lovable](https://lovable.dev), including gateway-side CORS and passkey RP configuration, frontend enrollment, API reference, WebAuthn flows, and SSE streaming, see the [Lovable Frontend Integration guide](./lovable.md).
 
-### Architecture
-
-```
-[Lovable React App] → (fetch) → https://console.g8e.ai/api/v1/* → [Cloudflare Edge] → [g8e Gateway]
-```
-
-### Gateway-Side Configuration
-
-The gateway must allow CORS from the Lovable app's origin. Start the gateway with the Lovable domain:
-
-```bash
-./g8e gw start -f \
-  --posture doctrine \
-  --passkey-rp-id console.g8e.ai \
-  --passkey-rp-origin https://console.g8e.ai \
-  --public-base-url https://console.g8e.ai \
-  --cors-origin https://console.g8e.ai \
-  --cors-origin https://your-app.lovable.app \
-  --cors-origin https://your-custom-domain.com
-```
-
-Or via environment variables:
-
-```bash
-export G8E_ALLOWED_ORIGINS=https://console.g8e.ai,https://your-app.lovable.app,https://your-custom-domain.com
-```
-
-The gateway's CORS middleware:
-- Reflects the request `Origin` if it matches an allowed origin
-- Sets `Access-Control-Allow-Credentials: true`
-- Handles `OPTIONS` preflight with `204 No Content`
-- Adds `Vary: Origin` to all responses
-
-### Lovable-Side Configuration
-
-In your Lovable project:
-
-1. **Set the API base URL as a secret:**
-   - Go to **Cloud** tab → **Secrets**
-   - Add `VITE_API_BASE_URL` = `https://console.g8e.ai`
-   - Use the `VITE_` prefix so it's accessible in React code
-
-2. **Create a config file:**
-   ```typescript
-   // src/config/api.ts
-   export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
-   ```
-
-3. **Create an API service layer:**
-   ```typescript
-   // src/services/g8eApi.ts
-   import { API_BASE_URL } from '@/config/api';
-
-   class G8eApi {
-     private baseUrl: string;
-
-     constructor() {
-       this.baseUrl = API_BASE_URL;
-     }
-
-     private async request<T>(path: string, options?: RequestInit): Promise<T> {
-       const response = await fetch(`${this.baseUrl}${path}`, {
-         ...options,
-         headers: {
-           'Content-Type': 'application/json',
-           ...options?.headers,
-         },
-       });
-       if (!response.ok) {
-         throw new Error(`g8e API error: ${response.status} ${response.statusText}`);
-       }
-       return response.json();
-     }
-
-     async health() {
-       return this.request<{ status: string; mode: string }>('/api/v1/health');
-     }
-
-     async listSuspendedTransactions() {
-       return this.request<{ transactions: any[] }>('/api/v1/approvals');
-     }
-   }
-
-   export const g8eApi = new G8eApi();
-   ```
-
-4. **Use in components:**
-   ```typescript
-   import { g8eApi } from '@/services/g8eApi';
-
-   async function checkHealth() {
-     const health = await g8eApi.health();
-     console.log('Gateway status:', health.status);
-   }
-   ```
-
-### Important Lovable Notes
-
-- **CORS is required:** The g8e Gateway must have the Lovable app's origin in `--cors-origin` (or `G8E_ALLOWED_ORIGINS`). Without this, the browser blocks cross-origin requests.
-- **WebAuthn requires same-origin:** Passkey enrollment and login only work when the browser origin matches the `--passkey-rp-id` domain. For Lovable-hosted frontends, the passkey flow must redirect to `https://console.g8e.ai/console/` for enrollment, then redirect back. Alternatively, use a custom domain on Lovable that matches the RP ID.
-- **No API keys in frontend code:** For authenticated endpoints, route requests through Lovable Edge Functions (Supabase) that add credentials server-side. Store secrets without the `VITE_` prefix so they stay server-side only.
-- **SSE streaming:** The gateway's SSE endpoints (`/api/v1/sse/stream`) work through Cloudflare Tunnels with `http2Origin: true`. Use `EventSource` in the Lovable app to consume live audit events.
+When configuring the gateway for a Lovable frontend, add the Lovable app's origin to `--cors-origin` (or `G8E_ALLOWED_ORIGINS`) in addition to the tunnel hostname. The `http2Origin: true` setting in the tunnel config ensures SSE streaming works through the tunnel.
 
 ---
 
@@ -353,8 +278,8 @@ The tunnel is connected but the gateway is not running or not listening on `loca
 # Check if the gateway is running
 curl -sk https://localhost:8443/api/v1/health
 
-# Check if cloudflared is running
-cloudflared tunnel info g8e
+# Check tunnel and gateway status in one step
+g8e gw tunnel status --hostname console.g8e.ai --name g8e
 ```
 
 ### CORS Errors in Browser Console
@@ -371,7 +296,7 @@ The `--passkey-rp-id` must match the browser's registrable domain. If accessing 
 
 ### DNS Record Conflict
 
-If `cloudflared tunnel route dns` fails with "record already exists," delete the old DNS record in the Cloudflare dashboard or use a different hostname.
+If DNS routing fails with "record already exists," use `--skip-dns` with `g8e gw tunnel create` to skip the DNS step. Alternatively, delete the old DNS record in the Cloudflare dashboard or use a different hostname.
 
 ### Tunnel Version Outdated
 
