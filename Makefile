@@ -132,7 +132,8 @@ help:
 	@echo "  ci-platform   Run platform-only CI (operator, protocol, proto, docs)"
 	@echo ""
 	@echo "Release:"
-	@echo "  release-protocol  Tag & push protocol/v<VERSION> (releases Go + Python protocol)"
+	@echo "  release          Sync version, run tests, build binaries (no git ops)"
+	@echo "  release-tag      Tag & push v<VERSION> + protocol/v<VERSION> (run after commit)"
 	@echo ""
 	@echo "Protocol Generation:"
 	@echo "  generate      Generate all protocol artifacts (proto)"
@@ -646,28 +647,60 @@ _ci-test:
 # =============================================================================
 # RELEASE
 # =============================================================================
-# The protocol library (Go + Python) is published purely via a `protocol/v*`
-# git tag — pushing the tag fires both release-go-protocol.yml and
-# release-python-protocol.yml. VERSION is the single source of truth; the root
-# binary always builds against ./protocol via the replace directive in go.mod,
-# so its `require ... v0.0.0` placeholder is intentional and never bumped.
-.PHONY: release-protocol
-release-protocol:
+# VERSION is the single source of truth. `make release` syncs pyproject.toml
+# from VERSION, runs tests, and builds binaries — but does NOT touch git.
+# Review the changes, commit, then run `make release-tag` to tag and push.
+#
+# The protocol/v* tag is required by the Go module proxy — a module at
+# github.com/g8e-ai/g8e/protocol needs protocol/vX.Y.Z tags to be `go get`-able.
+# The root binary always builds against ./protocol via the replace directive
+# in go.mod, so its `require ... v0.0.0` placeholder is intentional and never
+# bumped.
+
+.PHONY: release
+release:
 	@VERSION=$$(cat VERSION | tr -d '\n' | sed 's/^v//'); \
-	TAG="protocol/v$$VERSION"; \
+	echo "=== release: v$$VERSION ==="; \
+	PY_FILE=protocol/python/pyproject.toml; \
+	PY_VERSION=$$(grep -E '^version = ' $$PY_FILE | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
+	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
+		echo "Syncing $$PY_FILE: $$PY_VERSION -> $$VERSION"; \
+		sed -i.bak -E 's/^version = "[^"]+"/version = "'$$VERSION'"/' $$PY_FILE; \
+		rm -f $$PY_FILE.bak; \
+		echo "  pyproject.toml synced."; \
+	else \
+		echo "  pyproject.toml already in sync."; \
+	fi; \
+	echo "Running protocol tests..."; \
+	(cd protocol && go test -race -count=1 ./...); \
+	echo "  protocol tests passed."; \
+	echo "Building binaries..."; \
+	$(MAKE) build; \
+	echo ""; \
+	echo "Release prep complete. Review changes, then:"; \
+	echo "  git add -A && git commit -m \"release: v$$VERSION\""; \
+	echo "  make release-tag"
+
+.PHONY: release-tag
+release-tag:
+	@VERSION=$$(cat VERSION | tr -d '\n' | sed 's/^v//'); \
+	TAG="v$$VERSION"; \
+	PROTO_TAG="protocol/v$$VERSION"; \
 	PY_VERSION=$$(grep -E '^version = ' protocol/python/pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/'); \
-	echo "=== release-protocol: $$TAG ==="; \
+	echo "=== release-tag: $$TAG + $$PROTO_TAG ==="; \
 	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Error: working tree is dirty; commit or stash before tagging."; exit 1; \
 	fi; \
 	if [ "$$PY_VERSION" != "$$VERSION" ]; then \
-		echo "Error: pyproject.toml version ($$PY_VERSION) != VERSION ($$VERSION)."; exit 1; \
+		echo "Error: pyproject.toml version ($$PY_VERSION) != VERSION ($$VERSION)."; \
+		echo "Run 'make release' first, commit, then retry."; exit 1; \
 	fi; \
 	if git rev-parse -q --verify "refs/tags/$$TAG" >/dev/null; then \
 		echo "Error: tag $$TAG already exists."; exit 1; \
 	fi; \
-	echo "Running protocol tests..."; \
-	(cd protocol && go test -race -count=1 ./...); \
-	git tag "$$TAG"; \
-	git push origin "$$TAG"; \
-	echo "Pushed $$TAG — Go + Python protocol releases will run in CI."
+	if git rev-parse -q --verify "refs/tags/$$PROTO_TAG" >/dev/null; then \
+		echo "Error: tag $$PROTO_TAG already exists."; exit 1; \
+	fi; \
+	git tag "$$TAG" && git tag "$$PROTO_TAG"; \
+	git push origin "$$TAG" && git push origin "$$PROTO_TAG"; \
+	echo "Pushed $$TAG + $$PROTO_TAG — binary, Go protocol, and Python protocol releases will run in CI."
