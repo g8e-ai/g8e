@@ -358,6 +358,10 @@ type counters struct {
 
 // Run executes the chaos test with the given configuration
 func Run(cfg Config) error {
+	if cfg.Count <= 0 {
+		return fmt.Errorf("chaos: count must be positive, got %d", cfg.Count)
+	}
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	// Initialize paths relative to current working directory

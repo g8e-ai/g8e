@@ -17,14 +17,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"time"
 
 	"github.com/g8e-ai/g8e/internal/config"
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/scrubbing"
-	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
 	storage "github.com/g8e-ai/g8e/internal/services/storage"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	operatorv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -115,7 +114,7 @@ func (hs *HistoryService) publishFetchLogsResult(ctx context.Context, msg *PubSu
 			Stderr:      string(record.StderrCompressed),
 			StdoutSize:  int32(record.StdoutSize), //nolint:gosec // bounded by storage limits
 			StderrSize:  int32(record.StderrSize), //nolint:gosec // bounded by storage limits
-			Timestamp:   record.TimestampUTC.Format(time.RFC3339Nano),
+			Timestamp:   timesvc.FormatTimestamp(record.TimestampUTC),
 		}, hs.auditStore, hs.scrubbing)
 	hs.logger.Info("Fetch logs result transmitted (Consolidated Execution Vault)",
 		"execution_id", record.ID,
@@ -242,7 +241,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 
 		diffEntry := &operatorv1.FileDiffEntry{
 			Id:                record.ID,
-			Timestamp:         sqliteutil.FormatTimestamp(record.TimestampUTC),
+			Timestamp:         timesvc.FormatTimestamp(record.TimestampUTC),
 			FilePath:          record.FilePath,
 			Operation:         record.Operation,
 			LedgerHashBefore:  record.LedgerHashBefore,
@@ -276,7 +275,7 @@ func (hs *HistoryService) HandleFetchFileDiffRequest(ctx context.Context, msg *P
 			}
 			diffs = append(diffs, &operatorv1.FileDiffEntry{
 				Id:                record.ID,
-				Timestamp:         sqliteutil.FormatTimestamp(record.TimestampUTC),
+				Timestamp:         timesvc.FormatTimestamp(record.TimestampUTC),
 				FilePath:          record.FilePath,
 				Operation:         record.Operation,
 				LedgerHashBefore:  record.LedgerHashBefore,

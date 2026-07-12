@@ -439,10 +439,6 @@ var (
 	ErrSQLiteDecompressGzipInit = errors.New("gzip reader init failed")
 	ErrSQLiteDecompressGzipRead = errors.New("gzip read failed")
 
-	// Timestamp errors
-	ErrTimestampParseEmpty         = errors.New("timestamp: parse: empty string")
-	ErrTimestampParseInvalidFormat = errors.New("timestamp: parse: unrecognized format")
-
 	// Passkey bootstrap errors
 	ErrPasskeyRegistrationTimedOut = errors.New("passkey registration timed out")
 	ErrPasskeyRegistrationFailed   = errors.New("passkey registration failed")

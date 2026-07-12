@@ -25,6 +25,7 @@ import (
 
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // StateRootService provides state merkle root calculation with caching.
@@ -121,7 +122,7 @@ func (s *StateRootService) GetCurrentStateRoot() (string, error) {
 		 VALUES (1, ?, ?)
 		 ON CONFLICT(id) DO UPDATE SET root = excluded.root, updated_at = excluded.updated_at`,
 		root,
-		sqliteutil.FormatTimestamp(time.Now().UTC()),
+		timesvc.FormatTimestamp(time.Now().UTC()),
 	)
 
 	// Check state_version after persistence
@@ -170,7 +171,7 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 		return "", fmt.Errorf("%w: %v", constants.ErrStateRootHashDocuments, err)
 	}
 
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 
 	// 2. KV Store (Bound state only)
 	// Filter for active entries only. Exclude created_at.
@@ -233,7 +234,7 @@ func (s *StateRootService) calculateStateRoot() (string, error) {
 // bound root that in-flight envelopes depend on.
 func (s *StateRootService) calculateObservedStateRoot() (string, error) {
 	h := sha256.New()
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 
 	// Observed KV entries (state_tier = 'observed')
 	if err := s.hashTableToStream(h, "SELECT key, value, COALESCE(expires_at, '') FROM kv_store WHERE key NOT LIKE 'g8e:cache:%' AND state_tier = 'observed' AND (expires_at IS NULL OR expires_at > ?) ORDER BY key", []interface{}{now}, func(r *sql.Rows) error {

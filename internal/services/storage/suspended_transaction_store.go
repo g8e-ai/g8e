@@ -24,6 +24,7 @@ import (
 	"github.com/g8e-ai/g8e/internal/constants"
 	"github.com/g8e-ai/g8e/internal/models"
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 //go:generate mockery --name SuspendedTransactionStore --output ./mocks --dir .
@@ -187,7 +188,7 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 
 	var approvedAtStr *string
 	if tx.ApprovedAt != nil {
-		ts := sqliteutil.FormatTimestamp(*tx.ApprovedAt)
+		ts := timesvc.FormatTimestamp(*tx.ApprovedAt)
 		approvedAtStr = &ts
 	}
 
@@ -195,8 +196,8 @@ func (sts *SuspendedTransactionService) StoreSuspendedTransaction(ctx context.Co
 		query,
 		tx.TransactionHash,
 		string(tx.Envelope),
-		sqliteutil.FormatTimestamp(tx.CreatedAt),
-		sqliteutil.FormatTimestamp(tx.ExpiresAt),
+		timesvc.FormatTimestamp(tx.CreatedAt),
+		timesvc.FormatTimestamp(tx.ExpiresAt),
 		tx.ToolName,
 		string(tx.ToolArguments),
 		tx.UserID,
@@ -229,7 +230,7 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 	var approvedAtStr sql.NullString
 	err := sts.db.QueryRowWithRetry(
 		"SELECT envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE transaction_hash = ? AND expires_at > ?",
-		txHash, sqliteutil.NowTimestamp(),
+		txHash, timesvc.NowTimestamp(),
 	).Scan(&envelopeStr, &createdAtStr, &expiresAtStr, &toolName, &toolArgsStr, &userID, &operatorID, &approved, &approvedAtStr, &approvedBy, &approvalSignature, &expectedCertFingerprint, &approvalPublicKey, &passkeyCredentialID, &passkeyClientDataJSON, &passkeyAuthenticatorData, &passkeySignature)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -239,8 +240,8 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 		return nil, false, fmt.Errorf("suspended_transaction_store: get transaction: %w", err)
 	}
 
-	createdAt, _ := sqliteutil.ParseTimestamp(createdAtStr.String)
-	expiresAt, _ := sqliteutil.ParseTimestamp(expiresAtStr.String)
+	createdAt, _ := timesvc.ParseTimestamp(createdAtStr.String)
+	expiresAt, _ := timesvc.ParseTimestamp(expiresAtStr.String)
 
 	var toolArgs []byte
 	if toolArgsStr.Valid {
@@ -249,7 +250,7 @@ func (sts *SuspendedTransactionService) GetSuspendedTransaction(ctx context.Cont
 
 	var approvedAt *time.Time
 	if approvedAtStr.Valid {
-		ts, _ := sqliteutil.ParseTimestamp(approvedAtStr.String)
+		ts, _ := timesvc.ParseTimestamp(approvedAtStr.String)
 		approvedAt = &ts
 	}
 
@@ -287,10 +288,10 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 
 	if userID != "" {
 		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE user_id = ? AND expires_at > ? ORDER BY created_at DESC"
-		args = []interface{}{userID, sqliteutil.NowTimestamp()}
+		args = []interface{}{userID, timesvc.NowTimestamp()}
 	} else {
 		query = "SELECT transaction_hash, envelope, created_at, expires_at, tool_name, tool_arguments, user_id, operator_id, approved, approved_at, approved_by, approval_signature, expected_cert_fingerprint, approval_public_key, passkey_credential_id, passkey_client_data_json, passkey_authenticator_data, passkey_signature FROM suspended_transactions WHERE expires_at > ? ORDER BY created_at DESC"
-		args = []interface{}{sqliteutil.NowTimestamp()}
+		args = []interface{}{timesvc.NowTimestamp()}
 	}
 
 	type suspendedTxRow struct {
@@ -325,8 +326,8 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 
 	var transactions []*models.SuspendedTransaction
 	for _, row := range rows {
-		createdAt, _ := sqliteutil.ParseTimestamp(row.createdAtStr.String)
-		expiresAt, _ := sqliteutil.ParseTimestamp(row.expiresAtStr.String)
+		createdAt, _ := timesvc.ParseTimestamp(row.createdAtStr.String)
+		expiresAt, _ := timesvc.ParseTimestamp(row.expiresAtStr.String)
 
 		var toolArgs []byte
 		if row.toolArgsStr.Valid {
@@ -335,7 +336,7 @@ func (sts *SuspendedTransactionService) ListSuspendedTransactions(ctx context.Co
 
 		var approvedAt *time.Time
 		if row.approvedAtStr.Valid {
-			ts, _ := sqliteutil.ParseTimestamp(row.approvedAtStr.String)
+			ts, _ := timesvc.ParseTimestamp(row.approvedAtStr.String)
 			approvedAt = &ts
 		}
 
@@ -374,7 +375,7 @@ func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(ctx context.
 	defer sts.wg.Done()
 
 	now := time.Now().UTC()
-	nowStr := sqliteutil.FormatTimestamp(now)
+	nowStr := timesvc.FormatTimestamp(now)
 
 	result, err := sts.db.ExecWithRetry(
 		`UPDATE suspended_transactions 
@@ -383,7 +384,7 @@ func (sts *SuspendedTransactionService) ApproveSuspendedTransaction(ctx context.
 		 WHERE transaction_hash = ? AND expires_at > ?`,
 		nowStr, proof.ApprovedBy, proof.CliSignature, proof.CertFingerprint, proof.ApprovalPublicKey,
 		proof.CredentialID, proof.ClientDataJSON, proof.AuthenticatorData, proof.Signature,
-		txHash, sqliteutil.NowTimestamp(),
+		txHash, timesvc.NowTimestamp(),
 	)
 	if err != nil {
 		return fmt.Errorf("suspended_transaction_store: approve transaction: %w", err)
@@ -419,7 +420,7 @@ func (sts *SuspendedTransactionService) CleanupExpiredSuspendedTransactions(ctx 
 	if sts == nil || sts.db == nil {
 		return 0, fmt.Errorf("suspended_transaction_store: cleanup expired: store not initialized")
 	}
-	result, err := sts.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
+	result, err := sts.db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", timesvc.NowTimestamp())
 	if err != nil {
 		return 0, fmt.Errorf("suspended_transaction_store: cleanup expired: %w", err)
 	}
@@ -456,7 +457,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 		passkeySignature         sql.NullString
 	}
 
-	rows, err := sqliteutil.MaterializeRows(sts.db, query, []interface{}{sqliteutil.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
+	rows, err := sqliteutil.MaterializeRows(sts.db, query, []interface{}{timesvc.NowTimestamp()}, func(r *sql.Rows) (suspendedTxRow, error) {
 		var row suspendedTxRow
 		err := r.Scan(&row.txHash, &row.envelopeStr, &row.createdAtStr, &row.expiresAtStr, &row.toolName, &row.toolArgsStr, &row.userID, &row.operatorID, &row.approved, &row.approvedAtStr, &row.approvedBy, &row.approvalSignature, &row.expectedCertFingerprint, &row.approvalPublicKey, &row.passkeyCredentialID, &row.passkeyClientDataJSON, &row.passkeyAuthenticatorData, &row.passkeySignature)
 		return row, err
@@ -467,8 +468,8 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 
 	var transactions []*models.SuspendedTransaction
 	for _, row := range rows {
-		createdAt, _ := sqliteutil.ParseTimestamp(row.createdAtStr.String)
-		expiresAt, _ := sqliteutil.ParseTimestamp(row.expiresAtStr.String)
+		createdAt, _ := timesvc.ParseTimestamp(row.createdAtStr.String)
+		expiresAt, _ := timesvc.ParseTimestamp(row.expiresAtStr.String)
 
 		var toolArgs []byte
 		if row.toolArgsStr.Valid {
@@ -477,7 +478,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 
 		var approvedAt *time.Time
 		if row.approvedAtStr.Valid {
-			ts, _ := sqliteutil.ParseTimestamp(row.approvedAtStr.String)
+			ts, _ := timesvc.ParseTimestamp(row.approvedAtStr.String)
 			approvedAt = &ts
 		}
 
@@ -509,7 +510,7 @@ func (sts *SuspendedTransactionService) GetExpiredSuspendedTransactions(ctx cont
 // suspendedTransactionPrune returns a PruneFunc for retention and size-based pruning.
 func suspendedTransactionPrune(config *SuspendedTransactionConfig) sqliteutil.PruneFunc {
 	return func(ctx context.Context, db *sqliteutil.DB, logger *slog.Logger) error {
-		result, err := db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", sqliteutil.NowTimestamp())
+		result, err := db.ExecWithRetry("DELETE FROM suspended_transactions WHERE expires_at < ?", timesvc.NowTimestamp())
 		if err != nil {
 			logger.Error("Failed to prune expired suspended transactions", "error", err)
 			return err

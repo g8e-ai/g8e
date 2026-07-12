@@ -377,7 +377,7 @@ Shell command execution constants:
 Timestamp format constants:
 
 - `FormatRFC3339`: canonical RFC3339 format string with timezone offset
-- `TimestampFormat`: RFC3339 with nanosecond precision (`time.RFC3339Nano`)
+- `TimestampFormat`: RFC3339 with fixed microsecond precision (`2006-01-02T15:04:05.000000Z07:00`) for lexicographic ordering
 
 ### Mappings (`mappings.go`)
 

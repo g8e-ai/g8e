@@ -114,7 +114,7 @@ All envelopes use canonical JSON (protojson) encoding for client-facing surfaces
 - **Signing basis**: deterministic `transaction_hash` computed from normalized envelope fields in proto field order
 - **Internal storage**: protobuf bytes (implementation detail)
 
-The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC RFC3339Nano), `intent_data` (canonicalized map with sorted keys), `requestor_user_id`, and `acting_app_id`. The result is hashed with SHA-256 and hex-encoded. The L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked to authorize.
+The transaction hash is computed from the following fields in order: `action_type`, `target_resource`, `payload` (base64-encoded), `state_merkle_root`, `nonce`, `expires_at` (UTC fixed microsecond precision), `intent_data` (canonicalized map with sorted keys), `requestor_user_id`, and `acting_app_id`. The result is hashed with SHA-256 and hex-encoded. The L3 proof is intentionally excluded from the hash so that L2 consensus can sign before the human notary is asked to authorize.
 
 This ensures compatibility with JSON-based ecosystems while maintaining typed schema validation.
 

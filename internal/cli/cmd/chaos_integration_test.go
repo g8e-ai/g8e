@@ -31,10 +31,9 @@ func TestRunChaosErrorHandling(t *testing.T) {
 		cmd := chaosCmd()
 		require.NotNil(t, cmd)
 
-		// Set up a config that will cause chaos.Run to fail
-		// (e.g., invalid directory paths)
-		chaosCount = 1
-		chaosDataDir = "/nonexistent/path/that/does/not/exist"
+		// Use count=0 to trigger validation error deterministically on all platforms
+		chaosCount = 0
+		chaosDataDir = ""
 		chaosPKIDir = ""
 
 		var buf bytes.Buffer

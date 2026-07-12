@@ -19,9 +19,9 @@ import (
 	"testing"
 
 	"github.com/g8e-ai/g8e/internal/constants"
-	"github.com/g8e-ai/g8e/internal/models"
 	pubsubtest "github.com/g8e-ai/g8e/internal/services/pubsub/pubsubtest"
 	"github.com/g8e-ai/g8e/internal/testutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 	commonv1 "github.com/g8e-ai/g8e/protocol/proto/g8e/common/v1"
 	pb "github.com/g8e-ai/g8e/protocol/proto/g8e/operator/v1"
 	"github.com/stretchr/testify/assert"
@@ -73,7 +73,7 @@ func TestPubSubResultsService_PublishHeartbeat(t *testing.T) {
 			OperatorId:        cfg.OperatorID,
 			OperatorSessionId: cfg.OperatorSessionId,
 			Status:            "healthy",
-			Timestamp:         models.NowTimestamp(),
+			Timestamp:         timesvc.NowTimestamp(),
 		}
 
 		err = svc.PublishHeartbeat(context.Background(), heartbeat)

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/g8e-ai/g8e/internal/services/sqliteutil"
+	"github.com/g8e-ai/g8e/internal/timesvc"
 )
 
 // replayStoreDB defines the database operations required by ReplayStoreService.
@@ -81,7 +82,7 @@ func (s *ReplayStoreService) ReserveNonce(nonce string, expiresAt time.Time) (bo
 	}
 
 	// 2. Not used, insert as reserved
-	expStr := sqliteutil.FormatTimestamp(expiresAt)
+	expStr := timesvc.FormatTimestamp(expiresAt)
 	_, err = s.db.ExecWithRetry("INSERT INTO nonces (nonce, expires_at, status) VALUES (?, ?, 'reserved')", nonce, expStr)
 	if err != nil {
 		// Concurrent insert might fail with constraint violation - that's a replay
@@ -119,7 +120,7 @@ func (s *ReplayStoreService) Close() error {
 
 // CleanupExpiredNonces removes expired nonces from the database.
 func (s *ReplayStoreService) CleanupExpiredNonces() error {
-	now := sqliteutil.NowTimestamp()
+	now := timesvc.NowTimestamp()
 	_, err := s.db.ExecWithRetry("DELETE FROM nonces WHERE expires_at < ?", now)
 	if err != nil {
 		return fmt.Errorf("cleanup expired nonces: %w", err)

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqliteutil
+package timesvc
 
 import (
 	"strings"
@@ -20,9 +20,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/g8e-ai/g8e/internal/constants"
 )
+
+func TestNowUTC(t *testing.T) {
+	t.Run("returns current UTC time", func(t *testing.T) {
+		before := time.Now().UTC()
+		result := NowUTC()
+		after := time.Now().UTC()
+
+		assert.True(t, result.After(before) || result.Equal(before))
+		assert.True(t, result.Before(after) || result.Equal(after))
+	})
+}
 
 func TestFormatTimestamp_NormalizesToUTC(t *testing.T) {
 	t.Parallel()
@@ -32,33 +41,33 @@ func TestFormatTimestamp_NormalizesToUTC(t *testing.T) {
 	eastern := time.Date(2025, 6, 15, 12, 0, 0, 0, loc)
 	result := FormatTimestamp(eastern)
 
-	parsed, err := time.Parse(constants.TimestampFormat, result)
+	parsed, err := time.Parse(Format, result)
 	require.NoError(t, err)
 	assert.Equal(t, time.UTC, parsed.Location())
 	assert.True(t, eastern.Equal(parsed))
 }
 
-func TestFormatTimestamp_RFC3339Nano(t *testing.T) {
+func TestFormatTimestamp_FixedMicrosecondPrecision(t *testing.T) {
 	t.Parallel()
 	ts := time.Date(2025, 1, 2, 3, 4, 5, 123456789, time.UTC)
 	result := FormatTimestamp(ts)
 
-	assert.Equal(t, "2025-01-02T03:04:05.123456789Z", result)
+	assert.Equal(t, "2025-01-02T03:04:05.123456Z", result)
 }
 
 func TestFormatTimestamp_AlreadyUTC(t *testing.T) {
 	t.Parallel()
 	ts := time.Date(2025, 3, 10, 8, 30, 0, 0, time.UTC)
-	assert.Equal(t, "2025-03-10T08:30:00Z", FormatTimestamp(ts))
+	assert.Equal(t, "2025-03-10T08:30:00.000000Z", FormatTimestamp(ts))
 }
 
-func TestNowTimestamp_IsUTCRFC3339Nano(t *testing.T) {
+func TestNowTimestamp_IsUTCFixedMicrosecond(t *testing.T) {
 	t.Parallel()
-	before := time.Now().UTC()
+	before := time.Now().UTC().Truncate(time.Microsecond)
 	result := NowTimestamp()
-	after := time.Now().UTC()
+	after := time.Now().UTC().Truncate(time.Microsecond)
 
-	parsed, err := time.Parse(constants.TimestampFormat, result)
+	parsed, err := time.Parse(Format, result)
 	require.NoError(t, err)
 	assert.False(t, parsed.Before(before) || parsed.After(after))
 	assert.True(t, strings.HasSuffix(result, "Z"), "expected UTC suffix 'Z', got %q", result)
@@ -90,7 +99,7 @@ func TestParseTimestamp_UnrecognizedFormat(t *testing.T) {
 
 func TestFormatParseRoundTrip(t *testing.T) {
 	t.Parallel()
-	original := time.Date(2025, 12, 31, 23, 59, 59, 987654321, time.UTC)
+	original := time.Date(2025, 12, 31, 23, 59, 59, 987654000, time.UTC)
 	formatted := FormatTimestamp(original)
 
 	parsed, err := ParseTimestamp(formatted)
@@ -108,11 +117,11 @@ func TestFormatTimestamp_ZSuffixNotOffsetNotation(t *testing.T) {
 	assert.NotContains(t, result, "-00:00", "must not use offset notation")
 }
 
-func TestFormatTimestamp_WholeSectionOmitsFractional(t *testing.T) {
+func TestFormatTimestamp_WholeSecondsIncludesZeroFractional(t *testing.T) {
 	t.Parallel()
 	ts := time.Date(2026, 3, 3, 19, 5, 0, 0, time.UTC)
 	result := FormatTimestamp(ts)
-	assert.Equal(t, "2026-03-03T19:05:00Z", result)
+	assert.Equal(t, "2026-03-03T19:05:00.000000Z", result)
 }
 
 func TestNowTimestamp_NoOffsetNotation(t *testing.T) {
@@ -131,7 +140,7 @@ func TestNowTimestamp_LexicographicOrderIsChronological(t *testing.T) {
 
 func TestFormatTimestamp_ParseableByStdlibRFC3339Nano(t *testing.T) {
 	t.Parallel()
-	ts := time.Date(2026, 6, 15, 10, 20, 30, 123456789, time.UTC)
+	ts := time.Date(2026, 6, 15, 10, 20, 30, 123456000, time.UTC)
 	formatted := FormatTimestamp(ts)
 
 	parsed, err := time.Parse(time.RFC3339Nano, formatted)
@@ -165,4 +174,16 @@ func TestParseTimestamp_AcceptsNanosecondPrecision(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, time.UTC, parsed.Location())
 	assert.Equal(t, 123456789, parsed.Nanosecond())
+}
+
+func TestParseTimestamp_ConvertsNonUTCOffsetToUTC(t *testing.T) {
+	t.Parallel()
+	result, err := ParseTimestamp("2026-01-02T15:04:05+08:00")
+
+	require.NoError(t, err)
+	assert.Equal(t, 2026, result.Year())
+	assert.Equal(t, time.January, result.Month())
+	assert.Equal(t, 2, result.Day())
+	assert.Equal(t, 7, result.Hour()) // 15:04:05+08:00 = 07:04:05 UTC
+	assert.Same(t, time.UTC, result.Location())
 }
